@@ -48,10 +48,16 @@ fi
 
 mkdir -p "$BUILD"
 # A failed compile must not install yesterday's binary.
-rm -f "$BUILD/release/turnover" "$BUILD/release/turnover-probe" "$BUILD/release/turnover-plugin" "$BUILD/release/turnover-key" "$BUILD/release/libTurnOverCore.dylib"
+for f in turnover turnover-probe turnover-plugin turnover-key turnover-settings turnover-tests turnover-coretest libTurnOverCore.dylib; do
+  rm -f "$BUILD/release/$f"
+done
 # The recipes and official listings, built into the program (make-embedded.py).
 python3 make-embedded.py || { echo "STOP: make-embedded.py failed"; exit 1; }
-swift build -c release --scratch-path "$BUILD" $SWIFTFLAGS 2>&1 | grep -vE '^\[[0-9]+/[0-9]+\]' || true
+set +e
+swift build -c release --scratch-path "$BUILD" $SWIFTFLAGS 2>&1 | grep -vE '^\[[0-9]+/[0-9]+\]'
+BUILD_STATUS=${PIPESTATUS[0]}
+set -e
+[ "$BUILD_STATUS" -eq 0 ] || { echo "build failed"; exit "$BUILD_STATUS"; }
 [ -x "$BUILD/release/turnover" ] && [ -x "$BUILD/release/turnover-key" ] && [ -f "$BUILD/release/libTurnOverCore.dylib" ] || { echo "build failed"; exit 1; }
 # The unit tests (Sources/TurnOverTests): a failing test stops the install (8 Oct 2026). TURNOVER_SKIP_TESTS=1 to skip.
 if [ "$TURNOVER_SKIP_TESTS" != 1 ]; then
