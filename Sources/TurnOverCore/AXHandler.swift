@@ -138,6 +138,8 @@ public final class AXHandler {
         guard g.keyName == "escape", g.modifiers.isEmpty, let f = API.focusObject,
               let bundle = NSRunningApplication(processIdentifier: f.pid)?.bundleIdentifier,
               ["com.apple.campo", "com.apple.Spotlight"].contains(bundle) else { return }
+        // Siri AI draws other windows too: only Escape in Spotlight's own panel (code review, 21 Oct 2026).
+        if bundle == "com.apple.campo", SpotlightAppModule.panel(of: f.element) == nil { return }
         let pid = f.pid
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             guard let self, self.running, API.focusObject?.pid == pid else { return }
