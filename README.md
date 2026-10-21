@@ -101,6 +101,12 @@ repository. The plans in docs/ say which decisions are settled and which are ope
 
 ## Finding your way around the code
 
+- [docs/HOW-A-KEY-BECOMES-SPEECH.md](docs/HOW-A-KEY-BECOMES-SPEECH.md): the story of one key press, from the event
+  tap to the voice, with the log line for each step. Start here.
+- [docs/HOW-FOCUS-BECOMES-AN-OBJECT.md](docs/HOW-FOCUS-BECOMES-AN-OBJECT.md): how an app's focus change becomes
+  something spoken, and where a rule for one app goes.
+- [docs/LOG.md](docs/LOG.md): how to read a TurnOver log, the main instrument.
+- [docs/DECISIONS.md](docs/DECISIONS.md): what is settled, what is parked, what is open.
 - [ARCHITECTURE.md](ARCHITECTURE.md): the map from each mechanism to its files and tests.
 - [TESTING.md](TESTING.md): the unit tests, recorded windows (fixtures) and the key driver.
 - [PATTERNS.md](PATTERNS.md): how Mac apps misbehave for screen readers, and TurnOver's answers.

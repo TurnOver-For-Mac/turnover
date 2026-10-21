@@ -1,0 +1,27 @@
+name: Build and test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: xcode-27   # GitHub's image with Xcode 27 and the macOS 27 SDK, which the code needs
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - name: Xcode
+        run: xcodebuild -version
+      - name: Swift version
+        run: swift --version
+      - name: Build and run the unit tests (no signing, no install)
+        run: ./build.sh --no-install
+        env:
+          TURNOVER_BUILD: ${{ runner.temp }}/turnover-build
+          TURNOVER_IDENTITY: "-"
+      - name: Generated files are up to date
+        run: git diff --exit-code -- Sources/TurnOverCore/EmbeddedResources.swift "Resources/TurnOver Guide.txt"

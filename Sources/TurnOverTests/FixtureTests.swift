@@ -40,6 +40,33 @@ func fixtureTests() {
         expect(obj.name, "OK")
     }
 
+    test("an outline with no rows is empty, not its columns") {
+        // Finder's list view of an empty folder: the outline's children are its four columns and the header group,
+        // and no rows. It was "5 items, nothing selected", and Down arrow walked "column, 1 of 5" (21 Oct 2026).
+        var f = AXFixture(app: "Finder", bundle: "com.apple.finder", recorded: "", root: 0, application: nil, focus: 1, nodes: [])
+        var nodes: [AXFixture.Node] = [
+            .init(id: 0, attrs: ["AXRole": .string("AXWindow"), "AXTitle": .string("Empty"), "AXChildren": .elements([1])], params: [], actions: []),
+            .init(id: 1, attrs: ["AXRole": .string("AXOutline"), "AXDescription": .string("list view"), "AXParent": .element(0), "AXRows": .elements([]), "AXSelectedRows": .elements([]),
+                                 "AXChildren": .elements([2, 3, 4, 5, 6])], params: [], actions: []),
+            .init(id: 6, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(1)], params: [], actions: []),
+        ]
+        for (i, name) in ["Name", "Date Modified", "Size", "Kind"].enumerated() {
+            nodes.append(.init(id: i + 2, attrs: ["AXRole": .string("AXColumn"), "AXDescription": .string(name), "AXParent": .element(1)], params: [], actions: []))
+        }
+        f.nodes = nodes
+        AXReplay.load(f)
+        defer { AXReplay.unload() }
+        guard let focus = AXReplay.focus else { return Harness.fail("no focus in the fixture") }
+        let list = ObjectFactory.make(focus)
+        var said = ""
+        let keep = Speech.sink
+        Speech.sink = { said += $0 + " " }
+        Speech.speakObject(list, reason: .focus)
+        Speech.sink = keep
+        check(said.contains("empty"), "an outline without rows is empty: \(said)")
+        check(!said.contains("items"), "its columns are not counted as items: \(said)")
+    }
+
     // Recorded windows: each test names what it expects of TurnOver's reading of that window.
     test("textedit: a document window reads as a document") {
         let url = fixtureURL("textedit-guide")

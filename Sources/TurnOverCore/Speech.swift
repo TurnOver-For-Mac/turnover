@@ -298,7 +298,9 @@ public enum Speech {
             } else {
                 var count: CFIndex = 0
                 AXUIElementGetAttributeValueCount(obj.element, kAXRowsAttribute as CFString, &count)
-                if count == 0 { AXUIElementGetAttributeValueCount(obj.element, kAXChildrenAttribute as CFString, &count) }
+                // A plain list holds its items as children; a table or outline with no rows is empty (its children
+                // are its columns: Finder's empty folder was "5 items", 21 Oct 2026).
+                if count == 0, !["AXOutline", "AXTable"].contains(obj.element.role) { AXUIElementGetAttributeValueCount(obj.element, kAXChildrenAttribute as CFString, &count) }
                 parts.append(count == 0 ? "empty" : "\(count) item\(count == 1 ? "" : "s"), nothing selected")
             }
         }

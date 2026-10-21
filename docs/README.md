@@ -1,5 +1,9 @@
 # The plans
 
+Read first, if you are new: [HOW-A-KEY-BECOMES-SPEECH.md](HOW-A-KEY-BECOMES-SPEECH.md), then
+[HOW-FOCUS-BECOMES-AN-OBJECT.md](HOW-FOCUS-BECOMES-AN-OBJECT.md), then [LOG.md](LOG.md) for reading a session.
+[DECISIONS.md](DECISIONS.md) says what is settled, parked and open. The rest of this folder is the plans.
+
 The design documents behind the code: each was written before its feature was built and says why it is the way it
 is. The code's comments point here ("docs/MENU-PLAN.md"). The files at the root (README, ARCHITECTURE, TESTING,
 PATTERNS, PLUGIN-GUIDE, PUBLIC-ROADMAP, CHANGELOG) are the ones to read first; these are the detail.

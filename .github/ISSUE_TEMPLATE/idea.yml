@@ -1,0 +1,28 @@
+name: An idea or request
+description: Something TurnOver could do, or an app it could read better
+labels: [idea]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ideas are welcome and weighed, not queued: TurnOver is a spare-time project with no roadmap promises.
+        If VoiceOver or NVDA already does what you're after, say which key does it there; that's the quickest kind to build.
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like TurnOver to do?
+    validations:
+      required: true
+  - type: textarea
+    id: elsewhere
+    attributes:
+      label: How do VoiceOver, NVDA or another reader do it, if they do?
+  - type: dropdown
+    id: help
+    attributes:
+      label: Could you help make it?
+      options:
+        - No, just suggesting
+        - I could test it
+        - I could write a plugin for it
+        - I could write the code

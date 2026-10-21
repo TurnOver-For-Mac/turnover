@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// PARKED (20 Oct 2026): off (`on` below is false). Following VoiceOver's rate, volume and pitch was not reliable; the
+// code is kept for a better attempt, and nothing calls it while `on` is false. docs/DECISIONS.md lists what is parked.
 // One setting, two readers (reference/keyboard-styles/settings-parity.md; 19 Oct 2026: "that lack of parity I
 // want to avoid"). Rate, volume and pitch are changed in VoiceOver first, with its own commands through AppleScript,
 // and TurnOver takes the value VoiceOver reports, so the two never drift apart, whichever style's key was pressed and
