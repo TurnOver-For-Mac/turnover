@@ -579,8 +579,7 @@ public enum Speech {
             if !typedWord.isEmpty { typedWord.removeLast() }
             backspacedSinceWord = true
             return
-        } else if let word = ((!typedWord.isEmpty || backspacedSinceWord) ? wordBefore?() : nil).flatMap({ $0.isEmpty ? nil : $0 })
-                    ?? (typedWord.isEmpty ? nil : String(typedWord)) {
+        } else if let word = wordJustTyped(field: (!typedWord.isEmpty || backspacedSinceWord) ? wordBefore?() : nil) {
             // (Only after typing or deleting since the last word: a second space would otherwise say the word again.)
             typedWord.removeAll()
             backspacedSinceWord = false
@@ -606,6 +605,19 @@ public enum Speech {
         if ch != " ", ch != "'", ch != "’", !ch.isLetter, !ch.isNumber, words == .always || (words == .editControls && editable) {
             echo(Symbols.name(of: ch))
         }
+    }
+
+    /// The word to echo: the field's own after a Backspace (the letters typed no longer match it); otherwise the
+    /// letters typed, unless the field's word ends with them (typed onto the end of a word already there). Typed
+    /// fast, the field can lag the keys: its word then lacked the last letters or held the next word's first, and
+    /// the echo sounded misspelt (21 Oct 2026).
+    private static func wordJustTyped(field: String?) -> String? {
+        let typed = String(typedWord)
+        let field = field.flatMap { $0.isEmpty ? nil : $0 }
+        if backspacedSinceWord { return field ?? (typed.isEmpty ? nil : typed) }
+        if typed.isEmpty { return field }
+        if let field, field.hasSuffix(typed) { return field }
+        return typed
     }
 
     public static func clearTypedWordBuffer() { typedWord.removeAll(); backspacedSinceWord = false }
