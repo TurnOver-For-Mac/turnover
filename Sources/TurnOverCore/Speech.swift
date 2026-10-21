@@ -625,13 +625,14 @@ public enum Speech {
     /// sounded misspelt (21 Oct 2026). Taken means the text holds the ending character at or after `notBefore` (where
     /// the word began, a UTF-16 offset into `text`, as the caret's are), with nothing after it but the next word's
     /// letters, typed on meanwhile.
-    public static func fieldWord(endedBy ch: Character, before text: String, notBefore: Int? = nil) -> (taken: Bool, word: String?) {
+    public static func fieldWord(endedBy ch: Character, before text: String, notBefore: Int? = nil) -> (taken: Bool, word: String?, next: Int?) {
         func inWord(_ c: Character) -> Bool { c.isLetter || c.isNumber || c == "'" || c == "’" }
         let t = Array(text)
         guard let i = t.lastIndex(where: { $0 == ch || (ch.isNewline && $0.isNewline) }),
-              t[(i + 1)...].allSatisfy(inWord), String(t[..<i]).utf16.count >= (notBefore ?? 0) else { return (false, nil) }
+              t[(i + 1)...].allSatisfy(inWord), String(t[..<i]).utf16.count >= (notBefore ?? 0) else { return (false, nil, nil) }
         let word = String(t[..<i].reversed().prefix(while: inWord).reversed())
-        return (true, word.isEmpty ? nil : word)
+        // (next: where the word after starts, in UTF-16 units of text.)
+        return (true, word.isEmpty ? nil : word, String(t[...i]).utf16.count)
     }
 
     public static func clearTypedWordBuffer() { typedWord.removeAll(); backspacedSinceWord = false }

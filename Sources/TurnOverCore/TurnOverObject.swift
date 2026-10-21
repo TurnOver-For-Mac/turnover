@@ -533,7 +533,8 @@ open class TurnOverObject: ScriptableObject {
         let inWord = ch.isLetter || ch.isNumber || ch == "'" || ch == "’"
         let editable = hasNavigableText && !states.contains(.readOnly)
         if inWord, hasNavigableText, Speech.typedWordSoFar.isEmpty, !Speech.typedWordWasEdited {
-            Self.wordStart = (try? makeTextInfo(.caret))?.start
+            // (A key held back starts its word where the field put it, not at the caret, which is past it by now.)
+            Self.wordStart = Self.replayWordStart ?? (try? makeTextInfo(.caret))?.start
         }
         guard !inWord, ch != "\u{8}", hasNavigableText, !Speech.typedWordSoFar.isEmpty || Speech.typedWordWasEdited else {
             Speech.speakTypedCharacter(ch, inEditable: editable)
@@ -544,19 +545,24 @@ open class TurnOverObject: ScriptableObject {
         Self.waitingForField = true
         let start = Speech.typedWordWasEdited ? nil : Self.wordStart   // (a Backspace may have gone back past it)
         func attempt(_ n: Int) {
-            var found = (taken: false, word: String?.none)
+            var found = (taken: false, word: String?.none, next: Int?.none)
+            var nextStart: Int?
             if let info = try? makeTextInfo(.caret) {
                 let from = max(0, info.start - 80)
                 found = Speech.fieldWord(endedBy: ch, before: info.textRange(from, info.start), notBefore: start.map { $0 - from })
+                nextStart = found.next.map { $0 + from }
             }
             if !found.taken, n < 10 { DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) { attempt(n + 1) }; return }
             if !found.taken { Log.io("typed word: the field hadn't taken the key after 100 ms; the letters typed") }
             Speech.speakTypedCharacter(ch, inEditable: editable, wordBefore: { found.word })
             Self.waitingForField = false
+            Self.replayWordStart = nextStart
             while !Self.waitingForField, !Self.heldTyped.isEmpty {
                 let (o, c) = Self.heldTyped.removeFirst()
                 o.event_typedCharacter(c)
+                Self.replayWordStart = nil   // only for the key straight after the word's end
             }
+            Self.replayWordStart = nil
         }
         attempt(0)
     }
@@ -565,6 +571,8 @@ open class TurnOverObject: ScriptableObject {
     /// A word's end is waiting for the field; keys typed meanwhile are held back.
     private(set) static var waitingForField = false
     private static var heldTyped: [(TurnOverObject, Character)] = []
+    /// Where the field put the word after the one just ended, for a key held back that starts it.
+    private static var replayWordStart: Int?
 
     /// Dispatch (NVDA: eventHandler.executeEvent's last step).
     open func handleEvent(_ event: Event) {

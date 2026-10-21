@@ -26,7 +26,7 @@ func pureTests() {
         let a = Speech.fieldWord(endedBy: " ", before: "one two ", notBefore: 4)
         check(a.taken && a.word == "two", "taken: \(a)")
         let b = Speech.fieldWord(endedBy: " ", before: "one two th", notBefore: 4)
-        check(b.taken && b.word == "two", "typed on into the next word: \(b)")
+        check(b.taken && b.word == "two" && b.next == 8, "typed on into the next word: \(b)")
         // Not yet: the field lags; the only space is the word before's.
         let c = Speech.fieldWord(endedBy: " ", before: "one tw", notBefore: 4)
         check(!c.taken, "lagging field: \(c)")
