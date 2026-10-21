@@ -60,6 +60,9 @@ public final class BrailleDisplays {
     private var bluetoothLooking = false
 
     private func useApple() -> Bool {
+        // While a Bluetooth display is connecting (up to 8 s, on the braille thread), a USB display found would wait
+        // to load behind it, and the main thread with it (code review, 21 Oct 2026): looked for when it is done.
+        guard !bluetoothLooking else { return false }
         // Bluetooth only when asked for, and not more than every 15 s (connecting takes a few seconds, on the
         // braille thread; the answer comes back here).
         // Just after VoiceOver's braille server let go, the display can take a few seconds to be free: look again
