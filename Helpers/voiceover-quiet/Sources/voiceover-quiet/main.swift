@@ -11,13 +11,17 @@
 //   still  TurnOver is still there and still wants it silent (sent every second; not answered)
 //   off    VoiceOver heard
 //   quit   VoiceOver heard, and the helper ends
-// and it answers on standard output: "on", "off", or "error <what>".
+// and it answers on standard output: "on", "off", or "error <what>". While no muting tap is up, "off" is answered at
+// once from the reading thread, even with the main thread waiting on macOS's audio-permission question; and an "on"
+// whose start TurnOver called off meanwhile is answered "off". So an "on" may be answered "off", and TurnOver may
+// read two "off"s in a row.
 // When TurnOver goes, for any reason, its end of the pipe closes, the helper ends, the tap ends with it, and
 // VoiceOver is heard. When TurnOver is still there but stuck (frozen, stopped in a debugger) the "still" stops
 // coming: after 3 seconds without it VoiceOver is heard, until the next word. A helper can never leave VoiceOver
 // silent on its own.
 //
-// voiceover-quiet --self-test checks it can find its way round Core Audio, without silencing anything.
+// voiceover-quiet --self-test checks it can find its way round Core Audio, without silencing anything, and that a
+// "quit" ends it within a second while its main thread is held up.
 //
 // MIT licence. Copyright (c) 2026 Oliver Kennett.
 import Foundation
@@ -183,13 +187,30 @@ if CommandLine.arguments.contains("--self-test") {
     var address = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyTranslatePIDToProcessObject, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
     var p = getpid(); var object = AudioObjectID(kAudioObjectUnknown); var size = UInt32(MemoryLayout<AudioObjectID>.size)
     let r = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, UInt32(MemoryLayout<pid_t>.size), &p, &size, &object)
-    print(r == noErr ? "voiceover-quiet self-test: all passed" : "voiceover-quiet self-test: Core Audio said \(r)")
-    exit(r == noErr ? 0 : 1)
+    guard r == noErr else { print("voiceover-quiet self-test: Core Audio said \(r)"); exit(1) }
+    // A quit with the main thread held (as by a start waiting on macOS's question) ends the helper within a second.
+    let held = Process()
+    held.executableURL = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
+    held.arguments = ["--hold-main-for-test"]
+    let input = Pipe()
+    held.standardInput = input; held.standardOutput = FileHandle.nullDevice
+    do { try held.run() } catch { print("voiceover-quiet self-test: couldn't start itself: \(error)"); exit(1) }
+    Thread.sleep(forTimeInterval: 0.3)
+    let asked = Date()
+    try? input.fileHandleForWriting.write(contentsOf: Data("quit\n".utf8))
+    while held.isRunning, Date().timeIntervalSince(asked) < 2 { Thread.sleep(forTimeInterval: 0.02) }
+    let took = Date().timeIntervalSince(asked)
+    if held.isRunning { held.terminate() }
+    guard took < 1 else { print(String(format: "voiceover-quiet self-test: quit with the main thread held took %.2f s", took)); exit(1) }
+    print("voiceover-quiet self-test: all passed")
+    exit(0)
 }
 
 let quiet = Quiet()
 /// The helper's end with the main thread busy (a start waiting on macOS's question): ending the process ends the tap.
-func endSoon() { DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) { exit(0) } }
+/// _exit, not exit: exit runs the exit handlers, which can wait behind a main thread stuck in Core Audio, leaving
+/// VoiceOver muted with nothing to end the helper (review, 21 Oct 2026).
+func endSoon() { DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) { _exit(0) } }
 
 // Commands from TurnOver, read off the main thread and acted on on it.
 Thread.detachNewThread {
@@ -216,4 +237,6 @@ Thread.detachNewThread {
 }
 // VoiceOver restarting followed, and TurnOver's word checked, once a second.
 Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in quiet.follow(); quiet.checkLease() }
+// The self-test's second helper: its main thread held, as a start waiting on macOS's question holds it.
+if CommandLine.arguments.contains("--hold-main-for-test") { Thread.sleep(forTimeInterval: 10); exit(1) }
 RunLoop.main.run()
