@@ -206,7 +206,7 @@ final class TurnOverApp {
         // late in a 1.8 s Safari stall went to Safari ahead of an earlier one still held (10 Oct 2026).
         ScriptHandler.mainStuck = { Watchdog.shared.secondsSinceBeat > 4 }
         Watchdog.shared.installTestHook()
-        voiceOverObservation = NSWorkspace.shared.observe(\.isVoiceOverEnabled, options: [.initial, .new]) { [weak self] ws, _ in
+        voiceOverObservation = NSWorkspace.shared.observe(\.isVoiceOverEnabled, options: [.new]) { [weak self] ws, _ in
             DispatchQueue.main.async { self?.voiceOverChanged(NSWorkspace.shared.isVoiceOverEnabled) }
         }
         watchForVoiceOverGone()
@@ -226,16 +226,12 @@ final class TurnOverApp {
         // Started while VoiceOver has the Mac (a login, a restart): no words, VoiceOver is talking, but a tone ().
         if NSWorkspace.shared.isVoiceOverEnabled { DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { Tones.startup() } }
         watchForInputMonitoring()
-        // The front application at launch may already be one of TurnOver's.
-        if let front = NSWorkspace.shared.frontmostApplication, let b = front.bundleIdentifier, config.applications.automaticHandOver,
-           lead.shouldLead(b), NSWorkspace.shared.isVoiceOverEnabled || Coexist.on {
-            Log.info("start: \(b) is TurnOver's and VoiceOver is on; handing over in a second")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-                Log.info("start: the hand-over step runs (self \(self == nil ? "gone" : "here"))")
-                self?.lead.handOver(voiceOverOn: false)
-            }
-        } else {
-            Log.info("start: no hand-over at launch (front \(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "none"), VoiceOver \(NSWorkspace.shared.isVoiceOverEnabled ? "on" : "off"))")
+        // Synchronize the existing VoiceOver state without treating it as the user's manual reader choice.
+        voiceOverChanged(NSWorkspace.shared.isVoiceOverEnabled, initial: true)
+        // Launching TurnOver selects the configured reader even when switching readers between apps is off.
+        // The watcher rechecks the app in front, and ignores this if a reader has already been chosen.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            self?.lead.selectInitialReader()
         }
     }
 
@@ -329,7 +325,7 @@ final class TurnOverApp {
         }
     }
 
-    private func voiceOverChanged(_ on: Bool) {
+    private func voiceOverChanged(_ on: Bool, initial: Bool = false) {
         Log.info("VoiceOver is \(on ? "on" : "off")")
         defer { refreshWindowsLayer() }
         // Coexisting: VoiceOver off means TurnOver reads every app (LeadWatcher.shouldLead), on again means it goes back
@@ -340,7 +336,7 @@ final class TurnOverApp {
             if let front = NSWorkspace.shared.frontmostApplication { lead.look(at: front) }
             return
         }
-        lead.voiceOverChanged(on: on)
+        if !initial { lead.voiceOverChanged(on: on) }
         if on { deactivate() } else { activate() }
     }
 
