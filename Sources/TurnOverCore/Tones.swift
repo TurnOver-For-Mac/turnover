@@ -44,8 +44,8 @@ public enum Tones {
     }
     /// Taking over from VoiceOver: two bell notes a fifth apart, rising (G5, D6). Handing back: the same falling.
     /// Short and soft, as it is heard every time an application changes hands.
-    /// TurnOver has started while VoiceOver has the Mac: a short rising pair, so a tester with Open at login knows it is
-    /// there (NVDA's start-up sound; a tester, 9 Oct 2026). Speech would be silent with VoiceOver on; a tone is not.
+    /// TurnOver has started: a short rising pair, including when VoiceOver already has the Mac and speech is silent.
+    /// Ordinary launches use this; the Key helper plays its own bell for launches it announces.
     public static func startup() { if !own { return }; if fresh("startup") { return }; Speech.player?.playBell(frequencies: [659, 880], spacingMs: 90, ringMs: 160, volume: 0.18) }
     public static func takeOver() { if !own { return }; if fresh("take_over") { return }; Speech.player?.playBell(frequencies: [784, 1175], spacingMs: 70, ringMs: 150) }
     /// A braille display connected (three notes up) and gone (three down), as VoiceOver gives a sound for it.

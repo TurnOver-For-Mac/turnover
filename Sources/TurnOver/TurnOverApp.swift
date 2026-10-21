@@ -223,8 +223,11 @@ final class TurnOverApp {
             }
         }
         Trackpad.startIfWanted()   // the Trackpad gestures plugin, or the "trackpad" default (Trackpad.swift)   // an AI making a plugin may ask TurnOver to try keys in that app (PluginTry.swift)
-        // Started while VoiceOver has the Mac (a login, a restart): no words, VoiceOver is talking, but a tone ().
-        if NSWorkspace.shared.isVoiceOverEnabled { DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { Tones.startup() } }
+        // Ordinary launches get the startup sound with either reader. The Key helper already played its bell
+        // for --announced launches; use the original argument because activation consumes announcedAtLaunch.
+        if !CommandLine.arguments.contains("--announced") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { Tones.startup() }
+        }
         watchForInputMonitoring()
         // Synchronize the existing VoiceOver state without treating it as the user's manual reader choice.
         voiceOverChanged(NSWorkspace.shared.isVoiceOverEnabled, initial: true)
