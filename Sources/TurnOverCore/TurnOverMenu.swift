@@ -915,7 +915,7 @@ public final class TurnOverMenu {
 
     private func chooseCommandForKey() {
         let commands = UserGestures.availableCommands()
-        let items = commands.map { s in MenuItem("\(s.description) (\(s.category))", .action {
+        let items = commands.map { s in MenuItem("\(s.description) (\(s.category))", .action { [weak self] in
             Self.captureKey(prompt: "Press the key for: \(s.description)") { [weak self] g in
                 UserGestures.set(g, to: .script(s.name))
                 Speech.speakMessage("\(UserGestures.spoken(UserGestures.storedIdentifier(of: g))) now: \(s.description)")
@@ -928,7 +928,7 @@ public final class TurnOverMenu {
 
     private func chooseAppForKey() {
         let apps = Self.installedApps().sorted { $0.1.lowercased() < $1.1.lowercased() }
-        let items = apps.map { a in MenuItem(a.1, .action {
+        let items = apps.map { a in MenuItem(a.1, .action { [weak self] in
             Self.captureKey(prompt: "Press the key to open \(a.1). Right Option and a letter, as VoiceOver's Keyboard Commander, is a good choice") { [weak self] g in
                 UserGestures.set(g, to: .app(a.0))
                 Speech.speakMessage("\(UserGestures.spoken(UserGestures.storedIdentifier(of: g))) now opens \(a.1)")
