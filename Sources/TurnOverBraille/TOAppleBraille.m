@@ -316,12 +316,19 @@ static NSMutableString *btReport;
     @synchronized (self) { _pendingCells = d; schedule = !_writeScheduled; _writeScheduled = YES; }
     if (!schedule) return;   // the write already on its way takes this frame
     id driver = _driver; NSInteger n = _cellCount;
+    // The write stays marked under way until the driver has returned: a USB driver waits by running this thread's
+    // run loop, and a second write scheduled meanwhile entered setMainCells: inside the first (code review,
+    // 21 Oct 2026). Frames that came in during a write are drained here, the latest only.
     dispatch_block_t write = ^{
-        NSData *frame;
-        @synchronized (self) { frame = self->_pendingCells; self->_pendingCells = nil; self->_writeScheduled = NO; }
-        if (!frame || !self->_driver) return;   // closed meanwhile
-        BOOL ok = [driver setMainCells:frame.bytes length:n];
-        dispatch_async(dispatch_get_main_queue(), ^{ completion(ok); });
+        for (;;) {
+            NSData *frame;
+            @synchronized (self) {
+                frame = self->_pendingCells; self->_pendingCells = nil;
+                if (!frame || !self->_driver) { self->_writeScheduled = NO; return; }   // done, or closed meanwhile
+            }
+            BOOL ok = [driver setMainCells:frame.bytes length:n];
+            dispatch_async(dispatch_get_main_queue(), ^{ completion(ok); });
+        }
     };
     if (!_thread) { write(); return; }
     [self performSelector:@selector(runBlock:) onThread:_thread withObject:write waitUntilDone:NO];
