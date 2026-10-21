@@ -344,13 +344,15 @@ final class TurnOverApp {
         if on { deactivate() } else { activate() }
     }
 
-    /// "Windows keys everywhere": the small key layer runs while VoiceOver leads (TurnOver's own layer does the same
-    /// translations while TurnOver leads).
+    /// "NVDA and JAWS keys where VoiceOver reads too": the small key layer runs while VoiceOver leads (TurnOver's own
+    /// layer does the same translations while TurnOver leads).
     private func refreshWindowsLayer() {
         // NVDA keys where VoiceOver reads (docs/KEYBOARD-STYLES-PLAN.md step 2, 19 Oct 2026; shelved since 6 Oct, back with
         // Windy folded in): on in a Windows-family style while TurnOver is running but not the reader of the app in
         // front. Off where TurnOver reads (its own tap has the keys) and when TurnOver is switched off.
-        if config.general.windowsKeys, !active, !lead.suspended, InputAccess.granted, NSWorkspace.shared.isVoiceOverEnabled {
+        // Its setting turns it off: the layer takes Caps Lock where VoiceOver reads, so VoiceOver's own Caps Lock keys
+        // (VO-F7, VO-F8, VO-M) are the NVDA key's there (21 Oct 2026).
+        if config.general.windowsKeys, config.general.keysWhereVoiceOverReads, !active, !lead.suspended, InputAccess.granted, NSWorkspace.shared.isVoiceOverEnabled {
             WindowsKeyLayer.shared.start()
         } else {
             WindowsKeyLayer.shared.stop()

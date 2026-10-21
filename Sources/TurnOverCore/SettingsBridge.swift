@@ -91,6 +91,8 @@ public enum SettingsBridge {
             if before.general.keyboardStyle != next.general.keyboardStyle { GlobalCommands.setKeyboardStyle(next.general.style) }
             if before.braille.bluetooth != next.braille.bluetooth, next.braille.bluetooth { BrailleDisplays.shared.lookNow() }
             if before.speech.voice != next.speech.voice { Languages.forget() }
+            // The key layer where VoiceOver reads follows its own setting too (the style's change starts or stops it above).
+            if before.general.keysWhereVoiceOverReads != next.general.keysWhereVoiceOverReads { GlobalCommands.onKeyboardStyleChanged?() }
             Log.info("settings app: \(filePatch.keys.sorted().joined(separator: ", ")) changed")
         }
         sendState()

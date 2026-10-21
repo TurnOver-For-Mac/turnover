@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // The Windows keyboard style's translations (WINDOWS-MODE.md): Windows keys rewritten, as they are typed, into the
 // Mac keys that do the same, matched by position (the PC's Alt is where the Mac's Command is; its Control is the Mac's
-// Control). Used by TurnOver's own key layer where TurnOver leads, and, with "Windows keys everywhere", by a small
+// Control). Used by TurnOver's own key layer where TurnOver leads, and, with "NVDA and JAWS keys where VoiceOver reads too", by a small
 // layer of its own while VoiceOver leads, so the whole Mac answers to Windows keys (6 Oct 2026).
 //
 // Never touched: anything with Control and Option together (VoiceOver's keys), anything already with Command (Mac

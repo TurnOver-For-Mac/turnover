@@ -18,6 +18,9 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- With NVDA or JAWS keys, the layer that makes Caps Lock the NVDA key where VoiceOver reads can be turned off: Settings,
+  Keyboard, "NVDA and JAWS keys where VoiceOver reads too" (on, as before). Off, VoiceOver's own Caps Lock keys
+  (VO-F7, VO-F8, VO-M) work in the apps VoiceOver reads. The old setting for it was never read.
 - The speech settings are TurnOver's own again: the rate, volume and pitch keys change TurnOver's voice only, and
   TurnOver no longer reads VoiceOver's rate when it takes over. The link between the two readers' settings wasn't
   reliable.

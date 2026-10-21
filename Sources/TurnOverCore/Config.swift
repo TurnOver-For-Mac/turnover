@@ -43,9 +43,11 @@ public struct Config: Codable {
         /// NVDA, Narrator and JAWS keys share the Windows family's habits (role before the words, the cursor not
         /// moving the focus, flat review); VoiceOver keys are the Mac family.
         public var windowsKeys: Bool { style.family == .windows }
-        /// The Windows keys also where VoiceOver leads (a small key layer that translates them), not only where
-        /// TurnOver does (WINDOWS-MODE.md).
-        public var windowsKeysEverywhere = false
+        /// With NVDA or JAWS keys, the same keys where VoiceOver reads too: a small layer turns them into VoiceOver's,
+        /// Caps Lock the NVDA key there as well. On by default, so a key keeps its meaning whichever reader has the app
+        /// (the maintainer, 21 Oct 2026); off, VoiceOver's own Caps Lock chords work in VoiceOver's apps. (A new key:
+        /// the old windowsKeysEverywhere was never read, but every settings file holds it as false.)
+        public var keysWhereVoiceOverReads = true
         /// In the Mac style, the VoiceOver keys move as VoiceOver's cursor does: within a group (a toolbar, a list, a
         /// named pane), into it with VO Shift Down and out with VO Shift Up, in screen order (a tester, agreed 7 Oct
         /// 2026). Off: they walk the whole window, as NVDA's object navigation does.
@@ -78,7 +80,7 @@ public struct Config: Codable {
         public var sounds = ""
         public var effectiveSounds: String { sounds.isEmpty ? (edition != "experimental" ? "voiceover" : "turnover") : sounds }
         public init() {}
-        enum Keys: String, CodingKey { case openAtLogin, showInMenuBar, windowsKeys, keyboardStyle, windowsKeysEverywhere, navigateByGroups, groupsInWindowsStyle, focusFollowsCursor, turnOverKey = "bosunKey", handOverChimes, navigationSounds, screenCurtain, edition, handOverNothing, sounds }
+        enum Keys: String, CodingKey { case openAtLogin, showInMenuBar, windowsKeys, keyboardStyle, keysWhereVoiceOverReads, navigateByGroups, groupsInWindowsStyle, focusFollowsCursor, turnOverKey = "bosunKey", handOverChimes, navigationSounds, screenCurtain, edition, handOverNothing, sounds }
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: Keys.self)
             openAtLogin = (try? c.decodeIfPresent(Bool.self, forKey: .openAtLogin)) ?? false
@@ -88,7 +90,7 @@ public struct Config: Codable {
             keyboardStyle = (try? c.decodeIfPresent(String.self, forKey: .keyboardStyle)).flatMap { KeyboardStyle(rawValue: $0)?.rawValue } ?? "mac"
             edition = (try? c.decodeIfPresent(String.self, forKey: .edition)) == "experimental" ? "experimental" : "standard"
             handOverNothing = (try? c.decodeIfPresent(Bool.self, forKey: .handOverNothing)) ?? false
-            windowsKeysEverywhere = (try? c.decodeIfPresent(Bool.self, forKey: .windowsKeysEverywhere)) ?? false
+            keysWhereVoiceOverReads = (try? c.decodeIfPresent(Bool.self, forKey: .keysWhereVoiceOverReads)) ?? true
             navigateByGroups = (try? c.decodeIfPresent(Bool.self, forKey: .navigateByGroups)) ?? true
             groupsInWindowsStyle = (try? c.decodeIfPresent(Bool.self, forKey: .groupsInWindowsStyle)) ?? false
             focusFollowsCursor = (try? c.decodeIfPresent(String.self, forKey: .focusFollowsCursor)).flatMap { ["auto", "on", "off"].contains($0) ? $0 : nil } ?? "auto"
@@ -103,7 +105,7 @@ public struct Config: Codable {
             try c.encode(openAtLogin, forKey: .openAtLogin)
             try c.encode(showInMenuBar, forKey: .showInMenuBar)
             try c.encode(keyboardStyle, forKey: .keyboardStyle); try c.encode(edition, forKey: .edition); try c.encode(handOverNothing, forKey: .handOverNothing)
-            try c.encode(windowsKeysEverywhere, forKey: .windowsKeysEverywhere)
+            try c.encode(keysWhereVoiceOverReads, forKey: .keysWhereVoiceOverReads)
             try c.encode(groupsInWindowsStyle, forKey: .groupsInWindowsStyle)
             try c.encode(navigateByGroups, forKey: .navigateByGroups); try c.encode(focusFollowsCursor, forKey: .focusFollowsCursor)
             try c.encode(turnOverKey, forKey: .turnOverKey)

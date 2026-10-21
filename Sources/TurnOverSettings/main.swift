@@ -210,6 +210,8 @@ struct KeyboardView: View {
             Picker("Keyboard style", selection: model.string("general", "keyboardStyle", "mac")) {
                 Text("VoiceOver keys").tag("mac"); Text("NVDA keys").tag("windows"); Text("JAWS keys").tag("jaws")
             }
+            Toggle("NVDA and JAWS keys where VoiceOver reads too", isOn: model.bool("general", "keysWhereVoiceOverReads"))
+            Text("On, Caps Lock is the NVDA key in every app, whichever reader is speaking. Off, VoiceOver's own Caps Lock keys work in the apps VoiceOver reads.").font(.caption)
             Picker("TurnOver key", selection: model.string("general", "bosunKey", "both")) {
                 Text("Caps Lock or Control Option").tag("both"); Text("Caps Lock").tag("caps"); Text("Control Option").tag("controlOption")
             }
