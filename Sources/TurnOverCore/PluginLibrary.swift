@@ -20,6 +20,13 @@ import CryptoKit
 
 public enum PluginLibrary {
     nonisolated public static let publicKey = "glpzeHM7UV1IAwoisZ0SbNLDV5oPWRgJDogDgIZs74w="
+    /// The signed list caps compressed bytes; these caps keep a trusted archive from expanding into an unreasonable
+    /// number of files or amount of data before the plugin checks can run.
+    nonisolated public static let maxArchiveEntries = 256
+    nonisolated public static let maxArchiveExpandedBytes: UInt64 = 16 * 1024 * 1024
+    nonisolated public static func archiveExceedsLimits(entryCount: Int, expandedBytes: UInt64) -> Bool {
+        entryCount > maxArchiveEntries || expandedBytes > maxArchiveExpandedBytes
+    }
     /// The library's folder; the "pluginLibraryURL" default points it elsewhere for testing (a file:// folder works).
     /// Still signature-checked, but it cuts this Mac off from the real withdrawals, so it is logged at start.
     /// Honoured only in a developer's build (Edition.isDevBuild): another program could otherwise point the library at
@@ -249,12 +256,30 @@ public enum PluginLibrary {
                 let z = Process(); z.executableURL = URL(fileURLWithPath: "/usr/bin/zipinfo"); z.arguments = args
                 let o = Pipe(); z.standardOutput = o; z.standardError = FileHandle.nullDevice
                 try z.run(); let text = String(decoding: o.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self); z.waitUntilExit()
+                guard z.terminationStatus == 0 else { throw failure("it isn't a valid plugin archive") }
                 return text
             }
             for n in try zipinfo(["-1", zip.path]).split(separator: "\n") where n.hasPrefix("/") || n.hasPrefix("..") || n.contains("/../") {
                 throw failure("it holds a path outside its folder; nothing was installed")
             }
-            for line in try zipinfo([zip.path]).split(separator: "\n") where line.hasPrefix("l") {
+            let listing = try zipinfo([zip.path])
+            var entryCount = 0
+            var expandedBytes: UInt64 = 0
+            for line in listing.split(separator: "\n") {
+                guard let kind = line.first, kind == "-" || kind == "d" || kind == "l" else { continue }
+                let fields = line.split(whereSeparator: \.isWhitespace)
+                guard fields.count >= 4, let bytes = UInt64(fields[3].replacingOccurrences(of: ",", with: "")) else {
+                    throw failure("it isn't a valid plugin archive")
+                }
+                entryCount += 1
+                let (newTotal, overflow) = expandedBytes.addingReportingOverflow(bytes)
+                guard !overflow else { throw failure("it is too large when unpacked") }
+                expandedBytes = newTotal
+                if archiveExceedsLimits(entryCount: entryCount, expandedBytes: expandedBytes) {
+                    throw failure("it is too large when unpacked")
+                }
+            }
+            for line in listing.split(separator: "\n") where line.hasPrefix("l") {
                 throw failure("it holds a link; nothing was installed")
             }
             let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/ditto"); p.arguments = ["-x", "-k", zip.path, out.path]
