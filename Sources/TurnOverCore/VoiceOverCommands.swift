@@ -63,8 +63,10 @@ public enum VoiceOverCommands {
             Log.info("user keys: running the shortcut \"\(name)\"")
             // Disclaimed: a shortcut answers for its own permissions, as when run from the Shortcuts app, rather than
             // borrowing TurnOver's (a code review on 20 Oct 2026).
-            if DisclaimedSpawn.run("/usr/bin/shortcuts", arguments: ["run", name], directory: nil, exited: { _ in }) == nil {
-                Log.warning("user keys: the shortcut \"\(name)\" could not be started")
+            onMain {
+                if DisclaimedSpawn.run("/usr/bin/shortcuts", arguments: ["run", name], directory: nil, exited: { _ in }) == nil {
+                    Log.warning("user keys: the shortcut \"\(name)\" could not be started")
+                }
             }
         }
     }

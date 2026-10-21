@@ -256,7 +256,7 @@ public final class SpeechPlayer: @unchecked Sendable {
             self.queue.async { self.followOutputChoice() }
             // The kept device list refreshed on its own queue; the choice looked at again once it has (a chosen
             // device that just arrived is then found).
-            Self.refreshDevices { [weak self] in self?.queue.async { self?.followOutputChoice() } }
+            Self.refreshDevices { [weak self] in self?.queue.async { [weak self] in self?.followOutputChoice() } }
         }
         var defaultAddress = Self.defaultOutputAddress, devicesAddress = Self.devicesAddress
         let r = AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &defaultAddress, queue, block)
