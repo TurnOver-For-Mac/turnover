@@ -22,6 +22,7 @@ final class LeadWatcher {
     private var lastHandOverAt = Date.distantPast
     private var postedAt: Date?
     private var wantedOn: Bool?
+    private var readerSelection = ReaderSelection()
 
     func start() {
         token = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] n in
@@ -35,6 +36,14 @@ final class LeadWatcher {
         }
         Log.info("lead watcher: TurnOver leads in \(config.applications.leadBundles.joined(separator: ", "))\(config.applications.leadEverywhereElse ? " (and everywhere else)" : "")")
         watchSleepAndLock()
+    }
+
+    /// Startup is independent of switching readers as applications change. Read the front app when this runs:
+    /// launch alerts may have closed, or the user may have moved to another app during startup.
+    func selectInitialReader() {
+        guard readerSelection.needsInitialSelection,
+              let front = NSWorkspace.shared.frontmostApplication else { return }
+        appActivated(front)
     }
 
     // MARK: Sleep and the lock screen
@@ -72,7 +81,7 @@ final class LeadWatcher {
         Watchdog.shared.noteAsleepOrLocked()
         guard !NSWorkspace.shared.isVoiceOverEnabled else { Log.info("lead watcher: \(why); VoiceOver already on"); return }
         Log.info("lead watcher: \(why); VoiceOver on for the lock screen")
-        handOver(voiceOverOn: true)
+        handOver(voiceOverOn: true, reason: .lock)
     }
 
     private func back(_ why: String) {
@@ -107,7 +116,14 @@ final class LeadWatcher {
 
     /// Does TurnOver lead in this application?
     /// TurnOver off by Command Control Period while coexisting: still running, VoiceOver has every app.
-    var suspended = false
+    var suspended = false {
+        didSet {
+            if suspended {
+                handOverGeneration += 1
+                readerSelection.readerChosen()
+            }
+        }
+    }
     func shouldLead(_ bundle: String) -> Bool {
         if suspended { return false }
         // A direct app: TurnOver's key tap sends its keys, so TurnOver leads (and says nothing there).
@@ -177,8 +193,14 @@ final class LeadWatcher {
         if direct { Log.info("lead watcher: \(app.localizedName ?? directKey) is direct: its keys go straight to it") }
         // A Wine program has no bundle at all (CrossOver runs it through a bare loader stub); game speech gives it a key.
         // A direct program without one (a Godot game run from Terminal) is known by its name.
-        guard config.applications.automaticHandOver, app.activationPolicy == .regular || own,
+        guard readerSelection.needsInitialSelection || config.applications.automaticHandOver,
+              app.activationPolicy == .regular || own,
               let bundle = app.bundleIdentifier ?? Games.leadKey(for: app) ?? (direct ? directKey : nil), bundle != "com.apple.VoiceOver" else { return }
+        // Wait for the application behind our launch/permission windows. A missing permission must not use up
+        // the initial choice: inputMonitoringGranted will try it again, even with automatic switching off.
+        if readerSelection.needsInitialSelection {
+            guard !own, InputAccess.granted, !Self.screenIsLocked else { return }
+        }
         // TurnOver in front with no window of its own showing: a moment's activation macOS reports as a window
         // changes hands (Finder's Command Up and Command Down), not the user moving. Handing over on it put
         // VoiceOver on for a few seconds, which felt like a crash (a tester, 8 Oct 2026).
@@ -187,10 +209,15 @@ final class LeadWatcher {
         guard Date() > AppWake.nudgingUntil else { return }
         // Locked or asleep: VoiceOver keeps the screen until it is unlocked.
         guard !locked else { return }
+        // Keep the same VoiceOver-unavailable fallback at startup as during normal use.
         let lead = shouldLead(bundle)
-        // Coexisting: who reads is whether TurnOver is active, since VoiceOver is always on.
-        let reading = Coexist.on ? turnOverActive() : !NSWorkspace.shared.isVoiceOverEnabled
-        guard lead != reading else { return }   // already the right reader
+        var nextSelection = readerSelection
+        guard let selected = nextSelection.select(shouldLead: lead, automaticHandOver: config.applications.automaticHandOver,
+                                                  coexist: Coexist.on, voiceOverEnabled: NSWorkspace.shared.isVoiceOverEnabled,
+                                                  voiceOverRunning: HandOver.voiceOverRunning, turnOverActive: turnOverActive()) else {
+            readerSelection = nextSelection
+            return
+        }
         // Coexisting there is no toggle to wait for: the guard gave 1.7 s of silence into a TurnOver app and 1.6 s of
         // two voices out of one (a code review on 17 Oct 2026). It stays only while a game's VoiceOver toggle is under way.
         let toggling = !Coexist.on || !NSWorkspace.shared.isVoiceOverEnabled || Games.leads(bundle)
@@ -204,8 +231,10 @@ final class LeadWatcher {
             }
             return
         }
-        Log.info("lead watcher: \(app.localizedName ?? bundle) is \(lead ? "TurnOver's" : "VoiceOver's"); turning VoiceOver \(lead ? "off" : "on")")
-        handOver(voiceOverOn: !lead)
+        let reason: HandOverReason = readerSelection.needsInitialSelection ? .startup : .readerChoice
+        readerSelection = nextSelection
+        Log.info("lead watcher: \(app.localizedName ?? bundle) is \(selected ? "TurnOver's" : "VoiceOver's"); turning VoiceOver \(selected ? "off" : "on")")
+        handOver(voiceOverOn: !selected, reason: reason)
     }
 
     /// Post the toggle and time it: the flag flip, and VoiceOver's process appearing or going. Nothing here waits on
@@ -217,7 +246,16 @@ final class LeadWatcher {
     var onCoexistLead: ((Bool) -> Void)?
     /// A reader choice for an app was saved: coexisting, the Activity's app list follows it (the app).
     var onChoiceSaved: (() -> Void)?
-    func handOver(voiceOverOn: Bool) {
+    enum HandOverReason { case readerChoice, startup, lock }
+
+    func handOver(voiceOverOn: Bool, reason: HandOverReason = .readerChoice) {
+        // Every hand-over supersedes pending work, including CoExist changes that need no VoiceOver toggle.
+        handOverGeneration += 1
+        let generation = handOverGeneration
+        let selectionGeneration = choiceGeneration
+        // A manual choice supersedes startup. Startup's unavailable-VoiceOver fallback and a temporary lock
+        // hand-over leave the initial choice pending until VoiceOver returns or the screen is unlocked.
+        if reason == .readerChoice { readerSelection.readerChosen() }
         if Coexist.on {
             lastHandOverAt = Date()
             // The Steam exception (16 Oct 2026, late: Finder kept coming forward under VoiceOver in Big
@@ -238,8 +276,14 @@ final class LeadWatcher {
         ourChangeUntil = Date().addingTimeInterval(3)
         postedAt = Date()
         wantedOn = voiceOverOn
-        handOverGeneration += 1
-        let generation = handOverGeneration
+        let failed = { [weak self] in
+            guard let self, reason == .startup, generation == self.handOverGeneration,
+                  selectionGeneration == self.choiceGeneration else { return }
+            // The next startup check or app activation retries using the app then in front. A newer hand-over
+            // invalidates this callback through its generation, so a manual choice is never undone.
+            self.readerSelection = ReaderSelection()
+            Log.info("start: hand-over did not finish; initial reader selection remains pending")
+        }
         let t0 = Date()
         let isOn = { NSWorkspace.shared.isVoiceOverEnabled }
         let running = { HandOver.voiceOverRunning }
@@ -248,7 +292,7 @@ final class LeadWatcher {
             guard let self else { return }
             if isOn() == voiceOverOn { Log.info("hand-over: VoiceOver already \(voiceOverOn ? "on" : "off")"); return }
             // Toggled mid-change, VoiceOver can end up off for good: left for the next activation to try again.
-            guard settled else { Log.warning("hand-over: VoiceOver still changing after 2 s; not toggled (next activation tries again)"); return }
+            guard settled else { Log.warning("hand-over: VoiceOver still changing after 2 s; not toggled (next activation tries again)"); failed(); return }
             self.ourChangeUntil = Date().addingTimeInterval(3)   // the change about to come is ours, not a pin by hand
             HandOver.postToggle()
             // 2. The flag flips.
@@ -261,11 +305,12 @@ final class LeadWatcher {
                     Log.info("hand-over: VoiceOver did not go \(voiceOverOn ? "on" : "off"); waiting for it to settle, then again")
                     self.poll(generation, every: 0.1, upTo: 6, until: { isOn() == running() }) { settled in
                         guard isOn() != voiceOverOn else { return }
-                        guard settled else { Log.warning("hand-over: VoiceOver still changing after 6 s more; not toggled again"); return }
+                        guard settled else { Log.warning("hand-over: VoiceOver still changing after 6 s more; not toggled again"); failed(); return }
                         self.ourChangeUntil = Date().addingTimeInterval(3)   // (a late second toggle was read as the user's choice and pinned the app, 8 Oct 2026)
                         HandOver.postToggle()
                         self.poll(generation, every: 0.05, upTo: 2, until: { isOn() == voiceOverOn }) { again in
                             Log.info("hand-over: second toggle \(again ? "worked" : "did not work either"): VoiceOver \(isOn() ? "on" : "off")")
+                            if !again { failed() }
                         }
                     }
                     return
@@ -296,7 +341,13 @@ final class LeadWatcher {
     /// Each change of reader by hand (a mode, Switch reader): a hand-over or word queued for later is dropped when a
     /// newer change has come since (code review, 13 Oct: A pressed twice, or Command Tab within the second, turned
     /// VoiceOver on over TurnOver).
-    private var choiceGeneration = 0
+    private var choiceGeneration = 0 {
+        didSet {
+            // A choice still counts when that reader is already active and no hand-over is needed.
+            handOverGeneration += 1
+            readerSelection.readerChosen()
+        }
+    }
 
     /// Said by whichever reader is talking: TurnOver's speech is muted while VoiceOver is on, so then it goes through
     /// VoiceOver as an accessibility announcement (the new mode was silent when VoiceOver kept reading).
@@ -465,13 +516,13 @@ final class LeadWatcher {
     /// VoiceOver's state changed (from the app's observation). A change we did not post is the user's choice: pin it.
     /// VoiceOver's state as TurnOver starts is not a choice the user made: after a quit or a watchdog restart
     /// VoiceOver is on (TurnOver turns it on as it goes), and reading that as "pinned to VoiceOver by hand" left Mail
-    /// with VoiceOver (3 Oct 2026). Only changes after the first few seconds count.
-    private let startedAt = Date()
-
+    /// with VoiceOver (3 Oct 2026). The app synchronizes the initial state separately; only actual changes reach here.
     func voiceOverChanged(on: Bool) {
-        guard Date().timeIntervalSince(startedAt) > 3 else { return }
+        guard Date() > ourChangeUntil else { return }
+        handOverGeneration += 1
+        readerSelection.readerChosen()
         if let t = Watchdog.shared.lastTrip, Date().timeIntervalSince(t) < 30 { return }
-        guard Date() > ourChangeUntil, config.applications.automaticHandOver else { return }
+        guard config.applications.automaticHandOver else { return }
         guard let app = NSWorkspace.shared.frontmostApplication, app.activationPolicy == .regular, let b = app.bundleIdentifier, b != Bundle.main.bundleIdentifier else { return }
         if shouldLead(b) == on {   // the user went against the list for this app
             pins[b] = !on
