@@ -645,21 +645,31 @@ public final class TurnOverMenu {
     /// The beta's unverified apps (6 Oct 2026): any app that is open, and any already given to TurnOver, can be
     /// switched to TurnOver to try. VoiceOver leads in them unless chosen; TurnOver's general reading applies, with no
     /// app-specific work, so some read badly.
-    /// Bundle identifier and name of every app in /Applications, /System/Applications and ~/Applications.
-    static func installedApps() -> [(String, String)] {
+    /// Bundle identifier and name of apps in the supplied roots, or the standard Applications folders.
+    public static func installedApps(in roots: [URL]? = nil) -> [(String, String)] {
         let fm = FileManager.default
-        let roots = ["/Applications", "/System/Applications", NSHomeDirectory() + "/Applications"].map { URL(fileURLWithPath: $0) }
+        let roots = roots ?? ["/Applications", "/System/Applications", NSHomeDirectory() + "/Applications"].map { URL(fileURLWithPath: $0) }
         var out: [(String, String)] = []
+        func entries(in directory: URL) -> [URL] {
+            let keys: Set<URLResourceKey> = [.isHiddenKey, .isSymbolicLinkKey]
+            return ((try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: Array(keys))) ?? []).filter { url in
+                let values = try? url.resourceValues(forKeys: keys)
+                guard values?.isHidden == true else { return true }
+                // Safari's Applications entry is a hidden link to a visible app on the system volume.
+                guard url.pathExtension == "app", !url.lastPathComponent.hasPrefix("."), values?.isSymbolicLink == true else { return false }
+                return (try? url.resolvingSymlinksInPath().resourceValues(forKeys: [.isHiddenKey]).isHidden) == false
+            }
+        }
         func add(_ url: URL) {
             guard url.pathExtension == "app", let b = Bundle(url: url)?.bundleIdentifier, b != Bundle.main.bundleIdentifier,
                   !out.contains(where: { $0.0 == b }) else { return }
             out.append((b, fm.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")))
         }
         for root in roots {
-            for u in (try? fm.contentsOfDirectory(at: root, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? [] {
+            for u in entries(in: root) {
                 if u.pathExtension == "app" { add(u) }
                 else if (try? u.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
-                    for v in (try? fm.contentsOfDirectory(at: u, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? [] where v.pathExtension == "app" { add(v) }
+                    for v in entries(in: u) where v.pathExtension == "app" { add(v) }
                 }
             }
         }

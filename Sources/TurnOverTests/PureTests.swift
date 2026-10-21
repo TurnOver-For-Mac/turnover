@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Tests of the pure parts: no application, no speech, no keyboard.
 import Foundation
+import Darwin
 import AppKit
 import AVFoundation
 import CoreGraphics
@@ -10,6 +11,40 @@ import TurnOverSpeech
 import AXFixtures
 
 func pureTests() {
+    test("applications: hidden links to visible apps appear once, hidden apps stay out") {
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent("turnover-app-list-test-\(UUID().uuidString)")
+        let root = dir.appendingPathComponent("Applications")
+        let targets = dir.appendingPathComponent("Targets")
+        try fm.createDirectory(at: root.appendingPathComponent("Utilities"), withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+        func app(_ name: String, id: String, in directory: URL) throws -> URL {
+            let url = directory.appendingPathComponent(name + ".app")
+            try fm.createDirectory(at: url.appendingPathComponent("Contents"), withIntermediateDirectories: true)
+            let plist = ["CFBundleIdentifier": id, "CFBundleName": name, "CFBundlePackageType": "APPL"]
+            try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
+                .write(to: url.appendingPathComponent("Contents/Info.plist"))
+            return url
+        }
+        let browser = try app("Browser", id: "org.example.browser", in: targets)
+        let link = root.appendingPathComponent("Browser.app")
+        try fm.createSymbolicLink(atPath: link.path, withDestinationPath: "../Targets/Browser.app")
+        check(lchflags(link.path, UInt32(UF_HIDDEN)) == 0, "hide the link without hiding its target")
+        let nestedLink = root.appendingPathComponent("Utilities/Browser.app")
+        try fm.createSymbolicLink(at: nestedLink, withDestinationURL: browser)
+        check(lchflags(nestedLink.path, UInt32(UF_HIDDEN)) == 0, "hide the duplicate link in Utilities")
+        _ = try app("Visible", id: "org.example.visible", in: root)
+        _ = try app("Tool", id: "org.example.tool", in: root.appendingPathComponent("Utilities"))
+        let hidden = try app("Hidden", id: "org.example.hidden", in: root)
+        check(lchflags(hidden.path, UInt32(UF_HIDDEN)) == 0, "hide the ordinary app")
+        let hiddenLink = root.appendingPathComponent("Hidden link.app")
+        try fm.createSymbolicLink(at: hiddenLink, withDestinationURL: hidden)
+        check(lchflags(hiddenLink.path, UInt32(UF_HIDDEN)) == 0, "hide the link to the hidden app")
+        try fm.createSymbolicLink(at: root.appendingPathComponent("Missing.app"), withDestinationURL: targets.appendingPathComponent("Missing.app"))
+        let apps = TurnOverMenu.installedApps(in: [root])
+        expect(apps.map(\.0).sorted(), ["org.example.browser", "org.example.tool", "org.example.visible"])
+        expect(apps.first { $0.0 == "org.example.browser" }?.1, "Browser")
+    }
     test("keyboard help: the description in a few words") {
         func brief(_ d: String) -> String { Script.brief(d) }
         expect(brief("Moves to the next heading"), "Moves to the next heading")
