@@ -12,14 +12,18 @@ The repository is a substantial macOS screen-reader implementation: 449 tracked 
 tap and Caps Lock/HID layer, AX calls and virtual-buffer construction, speech rendering and device changes, VoiceOver
 audio handover, watchdog/restart behavior, plugin/control-channel trust, and build/install signing.
 
-Two verified defects were fixed:
+Four verified defects or hardening gaps were fixed:
 
 1. Control-channel writes assumed one Unix-socket `write()` transferred a complete JSON line. Short writes could
    truncate replies or requests. All control-channel writes now use a retrying `writeAll` loop, including server
    replies, broadcasts, one-shot clients, and persistent clients. A 256 KiB pipe regression test covers partial writes.
 2. `build.sh` suppressed the `swift build` exit status and did not clear every release product before rebuilding. A
    failed or partial build could therefore proceed with stale tool/test artifacts. The script now preserves the build
-   status and clears all release products used by the build.
+   status and clears all release products used by the build, including the Intel/universal path.
+3. The VoiceOver quiet helper response reader treated each pipe read as a complete response. It now frames newline-
+   delimited responses across arbitrary reads, with split/coalesced response coverage.
+4. Plugin ZIPs were limited by compressed download size but not by pre-extraction entry count or expanded bytes. The
+   library now rejects archives over 256 entries or 16 MiB uncompressed before `ditto` runs.
 
 No installed application was replaced or launched. No macOS Accessibility, Input Monitoring, Screen/System Audio
 Recording, TCC, or other security setting was changed. No upstream repository was modified and nothing was pushed.
@@ -59,14 +63,15 @@ path is rejected by `ControlServer.start`.
 
 ### A-02 — build failure could be masked and stale products reused — fixed, verified
 
-Files: `build.sh:49-63`.
+Files: `build.sh:49-63, 72-88`.
 Severity: Medium.
 Status: Verified in code; the corrected full build completed successfully.
 
 The old `swift build ... | grep ... || true` discarded the compiler's exit code. Only the main reader, key helper, and
 core library were removed before rebuilding; a failed build could leave old settings/plugin/test/core-test products in
 the release directory. The script now records `PIPESTATUS[0]`, exits on a compiler failure, and clears all release
-products it later packages or runs.
+products it later packages or runs. The same checks now apply to the Intel build used for universal output, and all
+universal inputs are required before `lipo`.
 
 ### A-03 — concurrent speech callback captures — unresolved, suspected
 
@@ -91,40 +96,46 @@ especially sensitive because the spawn is used to keep helper processes from inh
 current compiler emits a Swift 6 actor-isolation warning. The API should be explicitly marked with its intended
 isolation (or moved to a clearly owned actor) and tested for both permission-disclaim behavior and responsiveness.
 
-### A-05 — plugin archive extraction has no uncompressed-size cap — unresolved, suspected
+### A-05 — plugin archive extraction had no uncompressed-size cap — fixed, verified
 
-File: `Sources/TurnOverCore/PluginLibrary.swift:231-268`.
+File: `Sources/TurnOverCore/PluginLibrary.swift:21-29, 240-294`.
 Severity: Medium.
-Status: Suspected security/availability issue.
+Status: Verified in code and policy-regression-tested; the limit values have not been tuned against production archives.
 
 The signed index caps the downloaded ZIP's compressed byte count and validates its SHA-256, then extracts it with
-`ditto`. There is no explicit cap on the expanded size or file count before extraction. A trusted-index compromise or
-maliciously packaged signed entry could cause excessive disk use or extraction work before the post-extraction checks.
-The signature and policy checks substantially reduce attacker reach, so this is recorded for a focused follow-up rather
-than changed in this audit.
+`ditto`. That did not cap expanded size or file count before extraction. A trusted-index compromise or maliciously
+packaged signed entry could cause excessive disk use or extraction work before the post-extraction checks. The library
+now parses `zipinfo` metadata and rejects more than 256 entries or 16 MiB of uncompressed content; malformed `zipinfo`
+output and nonzero `zipinfo` status are also refused. The existing signature and policy checks remain in place.
 
-### A-06 — VoiceOver helper output assumes one read equals one line — unresolved, suspected
+### A-06 — VoiceOver helper output assumed one read equals one line — fixed, verified
 
-File: `Sources/TurnOver/VoiceOverTap.swift:72-76`.
+Files: `Sources/TurnOver/VoiceOverTap.swift:72-119`, `Sources/TurnOverCore/DelimitedLineBuffer.swift`,
+`Sources/TurnOverTests/PureTests.swift`.
 Severity: Low/Medium.
-Status: Suspected; no live VoiceOver audio test was run.
+Status: Verified by protocol reasoning and regression-tested; no live VoiceOver audio test was run.
 
 The readability handler converts one `availableData` chunk to a trimmed string and compares it with a complete response
-such as `on`. Pipe reads can combine multiple newline-delimited responses or split one response. A combined chunk can be
-ignored, leaving `said` and retry state out of sync. The helper protocol should use a persistent line buffer, with a
-fixture test for split/coalesced responses.
+such as `on`. Pipe reads can combine multiple newline-delimited responses or split one response. A combined chunk could
+be ignored, leaving `said` and retry state out of sync. `DelimitedLineBuffer` now retains incomplete UTF-8 response
+lines and returns every complete trimmed line; the main-actor response actions are unchanged. The test feeds both a
+split response and two responses in one later chunk.
 
 ### A-07 — slow virtual-buffer timing remains an architectural risk — known upstream context
 
-Files: `Sources/TurnOverCore/WebBuffer.swift:98-105` and browse-mode callers.
+Files: `Sources/TurnOverCore/WebBuffer.swift:98-105, 143-154`, `Sources/TurnOverCore/BrowseMode.swift:513-531, 561-590`,
+`Sources/TurnOverCore/ScriptHandler.swift:81-105`, `Sources/TurnOver/KeyboardHandler.swift:479-485`.
 Severity: Medium.
-Status: Suspected/known design risk, not newly fixed.
+Status: Verified behavior and known upstream design risk; no fix made.
 
 Buffer construction is bounded to two seconds on the main actor because AX tree reads are currently coupled to the
-object model. This avoids an unbounded freeze but can still delay key resolution and produce a partial page. Upstream's
-open issues #1 (“Keys pile up while a slow page's buffer is built, then run all at once”) and #4 (“Browse mode: timing of
-keys in the virtual buffer”) directly cover this risk. The audit confirms the relevant deadline and partial-buffer
-contract but does not claim an independent fix.
+object model. This avoids an unbounded freeze but can still delay key resolution and produce a partial page. While the
+main actor is busy, `ScriptHandler.askMain` times out after 150 ms, `KeyboardHandler` swallows the key as deferred,
+and the queued main-actor closures later replay it. A reproducible harness can block the main run loop for longer than
+the lookup limit, send repeated browse gestures, then drain the run loop and observe the deferred actions execute in a
+burst; the existing late-answer test demonstrates the single-key half of this behavior. Upstream's open issues #1 and
+#4 directly cover it. A minimal eventual fix would coalesce or bound only repeated browse-navigation deferrals, but
+that needs a product decision about whether dropped repeats are preferable to replayed repeats, so it was not changed.
 
 ## Areas reviewed without a verified new defect
 
@@ -157,20 +168,28 @@ browse-mode and architecture work as new fixes.
 
 ## Changes and commits
 
-The audit changes are intended as two logical commits:
+The audit changes are in logically separated commits:
 
 1. `Control channel: handle short socket writes` — implementation plus `controlChannelTests` regression coverage.
 2. `Build: fail closed on compiler errors` — stale-product cleanup and build-status propagation.
+3. `VoiceOver: frame helper responses by newline` — line buffering and regression coverage.
+4. `Plugins: cap archive expansion before extraction` — entry/expanded-byte limits and policy coverage.
+5. `Build: validate Intel universal inputs` — Intel status propagation and universal product checks.
+6. `Tests: use a socket pair for control writes` — makes the existing partial-write regression test exercise the actual
+   stream-socket primitive.
 
-The audit report is kept in a separate documentation commit so the implementation commits remain easy to review.
+The audit report is kept in documentation commits so implementation commits remain easy to review.
 
 ## Test results
 
 - Native environment: macOS 27.2, Xcode 27.0, Swift 6.4, arm64.
 - `python3 -m unittest discover -s Tools -p 'test_*.py' -v`: 16 passed, 0 failed.
-- `TURNOVER_BUILD=/private/tmp/turnover-audit-build ./build.sh --no-install`: completed; native build passed,
-  `turnover-tests` reported 107 passed, 0 failed, and Steam/trackpad/VoiceOver-quiet helper self-tests passed.
-- Focused rebuilt test: `control channel completes a large socket write`: 1 passed, 0 failed.
+- `TURNOVER_BUILD=/private/tmp/turnover-audit-build-v2 ./build.sh --no-install`: completed; native build passed,
+  `turnover-tests` reported 109 passed, 0 failed, and Steam/trackpad/VoiceOver-quiet helper self-tests passed.
+- `TURNOVER_BUILD=/private/tmp/turnover-audit-universal TURNOVER_UNIVERSAL=1 TURNOVER_SKIP_TESTS=1 ./build.sh --no-install`:
+  completed; `lipo` reported `x86_64 arm64`, and all three universal helper self-tests passed.
+- The control regression now uses `socketpair(AF_UNIX, SOCK_STREAM, ...)`; its large-write test passed as part of the
+  109-test run.
 - Rebuilt full native tests outside the sandbox: 107 passed, 0 failed; the existing real VoiceOver export test reports
   skipped because `TURNOVER_VOPREFS` is unset.
 - A direct non-elevated test invocation produced one environment failure in the existing macOS spell-check test because
@@ -181,6 +200,7 @@ The audit report is kept in a separate documentation commit so the implementatio
 
 ## Remaining concerns
 
-The suspected items A-03 through A-07 should be follow-up work, especially a line-buffered VoiceOver helper protocol,
-expanded-size ZIP limits, and concurrency tests around audio-device changes and disclaimed helper spawning. The upstream
-browse-mode timing issues remain the largest user-visible architectural risk.
+The unresolved items are A-03 (SpeechPlayer concurrent callback capture, Medium, suspected), A-04
+(DisclaimedSpawn actor isolation, Medium, suspected), and A-07 (browse-mode timing/key replay, Medium, verified
+behavior and known upstream risk). The upstream browse-mode timing issue remains the largest user-visible architectural
+risk. The archive limits are conservative policy choices and should be reviewed against future plugin packages.
