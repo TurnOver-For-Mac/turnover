@@ -87,14 +87,49 @@ public final class BrailleDisplays {
             }
             }
         }
-        guard let d = TOAppleBrailleDisplay.detect().first else { return false }
+        guard let d = TOAppleBrailleDisplay.detect().first else { noteUnopened(); return false }
         adopt(d)
         return true
     }
 
+    /// A display a driver claims but couldn't load: with VoiceOver off, its braille server (scrod) can still hold a USB
+    /// display too, showing "VoiceOver off" for ever (a Focus 5 by USB with CoExist off, 20 Oct 2026). Ask scrod to
+    /// quit and look again; if the display still won't open, say so once, as nothing on the display can.
+    private var lastDetectReport = ""
+    private var lastUSBFree = Date.distantPast
+    private var toldUnopened = false
+
+    private func noteUnopened() {
+        let report = TOAppleBrailleDisplay.lastDetectReport
+        if report != lastDetectReport {
+            lastDetectReport = report
+            Log.info("braille: looked for displays:\(report.isEmpty ? " none connected that a driver claims" : report)")
+        }
+        guard TOAppleBrailleDisplay.lastDetectFoundUnopened else { return }
+        // VoiceOver still on (a hand-over under way): it has the display by right; the scan looks again in 3 s.
+        if NSWorkspace.shared.isVoiceOverEnabled { return }
+        if Date().timeIntervalSince(lastUSBFree) > 30 {
+            lastUSBFree = Date()
+            guard Self.quitVoiceOversBrailleServer() else { tellUnopened(); return }
+            // Give the display a moment to be free, then look again (the 3 s scan would too, later).
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+                guard let self, self.apple == nil, self.lookAgain != nil || self.manager != nil else { return }
+                if self.useApple() { self.stopOwn() }
+            }
+            return
+        }
+        tellUnopened()
+    }
+
+    private func tellUnopened() {
+        guard !toldUnopened else { return }
+        toldUnopened = true
+        Speech.speakMessage("A braille display is connected, but TurnOver couldn't open it. If VoiceOver is on, it may be holding the display.")
+    }
+
     /// VoiceOver's braille server (scrod) keeps a Bluetooth display's one connection open even with VoiceOver off,
     /// so TurnOver could never connect (6 Oct 2026). While TurnOver leads, it asks scrod to quit; VoiceOver starts
-    /// it again when it comes back, and it reconnects the display by itself. USB displays never need this.
+    /// it again when it comes back, and it reconnects the display by itself. A USB display can need it too (noteUnopened).
     private var quickRetryUntil = Date.distantPast
 
     @discardableResult

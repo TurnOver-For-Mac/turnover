@@ -102,8 +102,16 @@ static NSNumber *number(io_service_t s, NSString *key) {
     return v ? (__bridge_transfer NSNumber *)v : nil;
 }
 
+static NSMutableString *detectReport;
+static BOOL detectFoundUnopened;
++ (NSString *)lastDetectReport { return detectReport ?: @""; }
++ (BOOL)lastDetectFoundUnopened { return detectFoundUnopened; }
+
 + (NSArray<TOAppleBrailleDisplay *> *)detect {
     [self loadFrameworks];
+    detectReport = [NSMutableString string];
+    detectFoundUnopened = NO;
+    NSMutableSet *unopened = [NSMutableSet set];   // "vendor:product" claimed by a driver that wouldn't load
     NSMutableArray *found = [NSMutableArray array];
     NSMutableSet *taken = [NSMutableSet set];   // "vendor:product" already driven (a display is both a USB and a HID device)
     NSArray *names = [[NSFileManager.defaultManager contentsOfDirectoryAtPath:kDrivers error:nil] sortedArrayUsingSelector:@selector(compare:)];
@@ -133,12 +141,16 @@ static NSNumber *number(io_service_t s, NSString *key) {
             NSString *key = [NSString stringWithFormat:@"%@:%@", v, p];
             if (![taken containsObject:key]) {
                 TOAppleBrailleDisplay *display = [[self alloc] initWithService:s hid:hid bundlePath:c[@"path"]];
-                if (display) { [found addObject:display]; [taken addObject:key]; }
+                [detectReport appendFormat:@" %@ %@ (%@): %@;", [[c[@"path"] lastPathComponent] stringByDeletingPathExtension],
+                    key, d[@"IOProviderClass"], display ? [NSString stringWithFormat:@"loaded, %ld cells", (long)display.cellCount] : @"would not load"];
+                if (display) { [found addObject:display]; [taken addObject:key]; [unopened removeObject:key]; }
+                else [unopened addObject:key];
             }
             IOObjectRelease(s);
         }
         IOObjectRelease(it);
     }
+    detectFoundUnopened = unopened.count > 0;
     return found;
 }
 

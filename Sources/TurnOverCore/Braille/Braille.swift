@@ -165,10 +165,24 @@ public enum Braille {
         if wasPrivate { Speech.asPrivate { Speech.speakText(s) } } else { Speech.speakText(s) }
         source = .message
         messagePrivate = wasPrivate   // a two-factor code, a copied password: never in the log
-        text = s.replacingOccurrences(of: "\n", with: " "); cursor = nil; windowStart = 0; selection = nil
+        text = displayed(s); cursor = nil; windowStart = 0; selection = nil
         layout()
         messageUntil = .distantFuture
         show()
+    }
+
+    /// Text as the display gets it: every line break, control character and object placeholder becomes a blank cell,
+    /// one for one, so offsets still match the text's. A table with no cell for them showed its "unknown" sign at the
+    /// end of every line (VoiceOver's Slovenian table, reported 20 Oct 2026); U+2028, U+2029 and U+FFFC reached the
+    /// translator before.
+    public static func displayed(_ s: String) -> String {
+        guard s.utf16.contains(where: isBlankOnDisplay) else { return s }
+        let units = s.utf16.map { isBlankOnDisplay($0) ? 0x20 : $0 }
+        return String(decoding: units, as: UTF16.self)
+    }
+
+    private static func isBlankOnDisplay(_ u: UInt16) -> Bool {
+        u < 0x20 || (0x7F...0x9F).contains(u) || u == 0x2028 || u == 0x2029 || u == 0xFFFC
     }
 
     // MARK: Short forms (NVDA: braille.roleLabels and positiveStateLabels)
@@ -216,7 +230,7 @@ public enum Braille {
 
     public static func item(_ s: String) {
         // (Commas kept: a message or a chat's name has its own.)
-        let t = brailleText(s.replacingOccurrences(of: "\n", with: " ").components(separatedBy: ", "), separator: ", ")
+        let t = brailleText(displayed(s).components(separatedBy: ", "), separator: ", ")
         let focus = API.focusObject?.element
         let caret = API.caretObject.flatMap { try? $0.makeTextInfo(.caret) }?.start
         let changed = heldItem?.text != t
@@ -261,7 +275,7 @@ public enum Braille {
         guard historyIndex == nil else { return }
         guard let d = display, !s.isEmpty, config.braille.showMessages != "off" else { return }
         source = .message
-        text = s.replacingOccurrences(of: "\n", with: " "); cursor = nil; windowStart = 0; selection = nil
+        text = displayed(s); cursor = nil; windowStart = 0; selection = nil
         layout()
         let widths = Double((cells.count + d.cellCount - 1) / max(d.cellCount, 1))
         holdMessage(min(300, Double(max(1, config.braille.messageSeconds)) * max(1, widths)))
@@ -284,9 +298,9 @@ public enum Braille {
         if let until = messageUntil, Date() < until { return }
         messageUntil = nil
         if let m = modalLine?() {
-            let changed = !modalShowing || text != m.0.replacingOccurrences(of: "\n", with: " ")
+            let changed = !modalShowing || text != displayed(m.0)
             source = .message; modalShowing = true
-            text = m.0.replacingOccurrences(of: "\n", with: " "); cursor = m.1; selection = nil
+            text = displayed(m.0); cursor = m.1; selection = nil
             layout()
             if changed { windowStart = 0 }
             if let c = cursorCell, c < windowStart || c >= windowEnd(windowStart) { windowStart = window(containing: c) }
@@ -298,8 +312,8 @@ public enum Braille {
         // NVDA's "display speech output": the display shows what was last spoken.
         if config.braille.mode == "speechOutput" {
             let said = Speech.lastSpoken
-            let fresh = text != said
-            source = .message; text = said; cursor = nil; selection = nil
+            let fresh = text != displayed(said)
+            source = .message; text = displayed(said); cursor = nil; selection = nil
             layout()
             if fresh { windowStart = 0 }
             if !windows.contains(windowStart) { windowStart = window(containing: windowStart) }
@@ -323,7 +337,7 @@ public enum Braille {
         if let caret = reviewed ?? API.caretObject.flatMap({ hasText($0) ? try? $0.makeTextInfo(.caret) : nil }) {
             let line = caret.copy(); line.expand(.line)
             source = .text(line, lineStart: line.start)
-            text = line.text.replacingOccurrences(of: "\r\n", with: " ").replacingOccurrences(of: "\n", with: " ").replacingOccurrences(of: "\r", with: " ")
+            text = displayed(line.text)
             cursor = caret.start - line.start
             selection = caret.selectionOffsets().map { ($0.0 - line.start, $0.1 - line.start) }
             layout()

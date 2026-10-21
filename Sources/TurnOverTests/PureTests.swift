@@ -470,6 +470,15 @@ func pureTests() {
         expect(Braille.brailleText(["a", "b"], separator: ", "), "a, b")
     }
 
+    test("braille: line breaks and placeholders are blank cells, offsets kept") {
+        expect(Braille.displayed("one\ntwo"), "one two")
+        expect(Braille.displayed("end\r\n"), "end  ")
+        expect(Braille.displayed("a\u{2028}b\u{2029}c\u{FFFC}d\te"), "a b c d e")
+        expect(Braille.displayed("šumniki čćž"), "šumniki čćž")
+        let s = "x\u{2029}y"
+        expect((Braille.displayed(s) as NSString).length, (s as NSString).length)
+    }
+
     test("media: labels are tidied") {
         expect(MediaView.tidy("Show · Example Podcast"), "Show, Example Podcast")
     }

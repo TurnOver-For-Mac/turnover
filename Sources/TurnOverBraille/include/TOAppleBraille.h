@@ -10,6 +10,11 @@ NS_ASSUME_NONNULL_BEGIN
 @interface TOAppleBrailleDisplay : NSObject
 /// Every display connected now that one of the drivers takes (USB and HID, including HID over Bluetooth).
 + (NSArray<TOAppleBrailleDisplay *> *)detect;
+/// What the last `detect` saw: each connected device a driver claims, and whether its driver loaded, for TurnOver's log.
+@property (class, readonly) NSString *lastDetectReport;
+/// The last `detect` found a device a driver claims, but no driver would load for it (another process, such as
+/// VoiceOver's braille server, may hold it).
+@property (class, readonly) BOOL lastDetectFoundUnopened;
 /// Displays paired with the Mac over Bluetooth whose names a driver lists (asks for Bluetooth permission once).
 /// Connecting takes a few seconds, on TurnOver's braille thread; the answer comes back on the main thread.
 + (void)detectBluetoothWithCompletion:(void (^)(TOAppleBrailleDisplay *_Nullable display))completion;
