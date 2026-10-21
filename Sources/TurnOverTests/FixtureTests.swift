@@ -68,6 +68,29 @@ func fixtureTests() {
     }
 
     // Recorded windows: each test names what it expects of TurnOver's reading of that window.
+    test("finder: a list view window reads as a tree view with the selected row and its position") {
+        // Recorded on 21 Oct 2026: /Applications in list view, the first item selected. A contributor can record a
+        // window of their own the same way (TESTING.md) and write what they expect TurnOver to say of it.
+        let url = fixtureURL("finder-applications")
+        guard FileManager.default.fileExists(atPath: url.path) else { print("     (no fixture, skipped)"); return }
+        let f = try AXFixture.load(url)
+        var said = ""
+        let keep = Speech.sink
+        Speech.sink = { said += $0 + " " }
+        defer { Speech.sink = keep }
+        AXReplay.load(f)
+        defer { AXReplay.unload() }
+        let w = ObjectFactory.make(AXReplay.root!)
+        expect(w.role, .window)
+        guard let focus = AXReplay.focus else { return Harness.fail("no focus recorded") }
+        let list = ObjectFactory.make(focus)
+        check([.treeView, .table, .list].contains(list.role), "the focus is the file list: \(list.role)")
+        Speech.speakObject(list, reason: .focus)
+        check(said.contains("list view"), "the view is named: \(said.prefix(120))")
+        check(said.range(of: #"\b\d+ of \d+"#, options: .regularExpression) != nil, "the selected row and its position are read: \(said.prefix(120))")
+        check(!said.contains("nothing selected"), "a selected row is not read as nothing selected")
+    }
+
     test("textedit: a document window reads as a document") {
         let url = fixtureURL("textedit-guide")
         guard FileManager.default.fileExists(atPath: url.path) else { print("     (no fixture, skipped)"); return }

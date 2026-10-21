@@ -275,13 +275,6 @@ public enum Speech {
     private static var lastFocusWordsAt = Date.distantPast
     public static func speakObject(_ obj: TurnOverObject, reason: OutputReason) {
         var parts = objectPropertiesSpeech(obj, reason: reason)
-        // The same focus reported twice within half a second says it once (Excel after Return and Up: "12, A1" twice;
-        // the stress test of 17 Oct 2026).
-        if reason == .focus {
-            let words = parts.joined(separator: ", ")
-            if words == lastFocusWords, Date().timeIntervalSince(lastFocusWordsAt) < 0.5 { Log.io("focus: the same words again within 0.5 s; not repeated"); return }
-            lastFocusWords = words; lastFocusWordsAt = Date()
-        }
         // A password field while coexisting: the keyboard is the Mac's alone there (secure input), so the VoiceOver
         // keys are off and TurnOver echoes a count; said once an hour (a code review on 17 Oct 2026).
         if reason == .focus, obj.role == .passwordEdit, Coexist.on, Date().timeIntervalSince(passwordHintSaid) > 3600 {
@@ -325,6 +318,13 @@ public enum Speech {
             parts.append(v.count > 500 ? String(v.prefix(500)) : v)
         }
         let words = joined(parts)
+        // The same focus reported twice within half a second says it once (Excel after Return and Up: "12, A1" twice;
+        // the stress test of 17 Oct 2026). Compared once the words are whole: compared on the object alone, two
+        // "list view" outlines in a row (Finder opening a folder) looked the same with different rows selected.
+        if reason == .focus {
+            if words == lastFocusWords, Date().timeIntervalSince(lastFocusWordsAt) < 0.5 { Log.io("focus: the same words again within 0.5 s; not repeated"); return }
+            lastFocusWords = words; lastFocusWordsAt = Date()
+        }
         if reason == .focus, let until = dropForFocusUntil {
             dropForFocusUntil = nil
             if Date() < until, !words.isEmpty { cancel(); Log.io("focus moved on at once: the speech for the focus before it dropped") }

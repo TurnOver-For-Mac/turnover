@@ -24,6 +24,11 @@ from a running application, with the window you want in front:
 
 ```bash
 ~/Library/Developer/TurnOver/build/release/turnover-coretest --record com.apple.TextEdit Tests/Fixtures/textedit-guide.json --limit 3000
+
+The worked example to copy is the Finder test in Sources/TurnOverTests/FixtureTests.swift: /Applications in list
+view was recorded as Tests/Fixtures/finder-applications.json (Apple's own content, nothing private), and the test
+says what TurnOver should say of it (the view's name, the selected row and its position). Record a window of the
+app you are working on the same way, write what you expect, and the test runs on every pull request.
 ```
 
 In a test, `AXReplay.load(fixture)` serves it: `AXReplay.root`, `AXReplay.focus` and `AXReplay.application` are
