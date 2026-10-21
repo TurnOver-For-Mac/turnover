@@ -132,9 +132,10 @@ public final class AXHandler {
         let pid = f.pid
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             guard let self, self.running, API.focusObject?.pid == pid else { return }
-            // Closed: the field TurnOver is on is gone or no longer focused, or the panel has no focused window.
+            // Closed: the field TurnOver is on is gone or no longer focused, or the panel has no focused window. (On
+            // the microphone button, which TurnOver may only be holding, its focus says nothing: only gone counts.)
             let field = API.focusObject?.element
-            let gone = field.map { $0.role == "?" || ($0.attr(kAXFocusedAttribute) as? Bool) != true } ?? true
+            let gone = field.map { $0.role == "?" || ($0.role == "AXTextField" && ($0.attr(kAXFocusedAttribute) as? Bool) != true) } ?? true
             guard gone || AXUIElementCreateApplication(pid).element(kAXFocusedWindowAttribute) == nil else { return }
             Log.io("spotlight: closed; back to the application")
             Speech.speakMessage("Spotlight closed")

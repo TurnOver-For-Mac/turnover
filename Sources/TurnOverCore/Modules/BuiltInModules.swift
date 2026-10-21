@@ -8,6 +8,7 @@ public enum BuiltInModules {
         let h = AppModuleHandler.shared
         h.register(WordAppModule.self, for: WordAppModule.bundleID)
         h.register(DockAppModule.self, for: "com.apple.dock")
+        h.register(SpotlightAppModule.self, for: SpotlightAppModule.bundleID)
         h.register(TurnOverSettingsAppModule.self, for: TurnOverSettingsAppModule.bundleID)
         h.register(TerminalAppModule.self, for: TerminalAppModule.bundleID)
         // iTerm2's text is Terminal's shape (a text area described "shell", the same line queries): new output wasn't
