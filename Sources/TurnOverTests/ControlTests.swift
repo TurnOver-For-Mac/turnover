@@ -7,7 +7,7 @@ import TurnOverControl
 func controlChannelTests() {
     test("control channel completes a large socket write") {
         var fds = [Int32](repeating: -1, count: 2)
-        guard pipe(&fds) == 0 else { Harness.fail("pipe failed"); return }
+        guard socketpair(AF_UNIX, SOCK_STREAM, 0, &fds) == 0 else { Harness.fail("socketpair failed"); return }
         defer { close(fds[0]); close(fds[1]) }
 
         let expected = Data(repeating: 0x5A, count: 256 * 1024)
