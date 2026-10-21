@@ -579,7 +579,7 @@ public enum Speech {
             if !typedWord.isEmpty { typedWord.removeLast() }
             backspacedSinceWord = true
             return
-        } else if let word = wordJustTyped(field: (!typedWord.isEmpty || backspacedSinceWord) ? wordBefore?() : nil) {
+        } else if let word = wordJustTyped(field: (!typedWord.isEmpty || backspacedSinceWord) ? wordBefore?() : nil, typed: String(typedWord)) {
             // (Only after typing or deleting since the last word: a second space would otherwise say the word again.)
             typedWord.removeAll()
             backspacedSinceWord = false
@@ -607,17 +607,26 @@ public enum Speech {
         }
     }
 
-    /// The word to echo: the field's own after a Backspace (the letters typed no longer match it); otherwise the
-    /// letters typed, unless the field's word ends with them (typed onto the end of a word already there). Typed
-    /// fast, the field can lag the keys: its word then lacked the last letters or held the next word's first, and
-    /// the echo sounded misspelt (21 Oct 2026).
-    private static func wordJustTyped(field: String?) -> String? {
-        let typed = String(typedWord)
-        let field = field.flatMap { $0.isEmpty ? nil : $0 }
-        if backspacedSinceWord { return field ?? (typed.isEmpty ? nil : typed) }
-        if typed.isEmpty { return field }
-        if let field, field.hasSuffix(typed) { return field }
-        return typed
+    /// The word to echo: the field's own, as it holds it once it has taken the key that ended the word (autocorrect's
+    /// "the" for "teh", a dead key's "café", an input method's kana: the field's text is the truth, 4 Oct 2026); the
+    /// letters typed only when the field gives none.
+    public static func wordJustTyped(field: String?, typed: String) -> String? {
+        if let field, !field.isEmpty { return field }
+        return typed.isEmpty ? nil : typed
+    }
+
+    /// The word a key ended, read from the text before the caret once the field has taken that key. Typed fast, the
+    /// field lags the keys: read at once, its word lacked the last letters or was the word before, and the echo
+    /// sounded misspelt (21 Oct 2026). Taken means the text holds the ending character at or after `notBefore` (where
+    /// the word began, a UTF-16 offset into `text`, as the caret's are), with nothing after it but the next word's
+    /// letters, typed on meanwhile.
+    public static func fieldWord(endedBy ch: Character, before text: String, notBefore: Int? = nil) -> (taken: Bool, word: String?) {
+        func inWord(_ c: Character) -> Bool { c.isLetter || c.isNumber || c == "'" || c == "’" }
+        let t = Array(text)
+        guard let i = t.lastIndex(where: { $0 == ch || (ch.isNewline && $0.isNewline) }),
+              t[(i + 1)...].allSatisfy(inWord), String(t[..<i]).utf16.count >= (notBefore ?? 0) else { return (false, nil) }
+        let word = String(t[..<i].reversed().prefix(while: inWord).reversed())
+        return (true, word.isEmpty ? nil : word)
     }
 
     public static func clearTypedWordBuffer() { typedWord.removeAll(); backspacedSinceWord = false }

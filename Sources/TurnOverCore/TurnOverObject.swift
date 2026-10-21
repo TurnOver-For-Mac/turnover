@@ -527,21 +527,43 @@ open class TurnOverObject: ScriptableObject {
     public static var contextMenuRequestedAt = Date.distantPast
     open func event_menuEnd() {}
     open func event_typedCharacter(_ ch: Character) {
+        // Keys that come while a word's end waits for the field are held back, so they reach the echo in order.
+        if Self.waitingForField { Self.heldTyped.append((self, ch)); return }
         if role == .passwordEdit || Speech.typingIntoSecretField { Speech.speakSecureCharacter(); return }
-        let wordEnds = !(ch.isLetter || ch.isNumber || ch == "'" || ch == "’") && ch != "\u{8}"
-        Speech.speakTypedCharacter(ch, inEditable: hasNavigableText && !states.contains(.readOnly),
-                                   wordBefore: wordEnds && hasNavigableText ? { [weak self] in self?.wordBeforeCaret(typed: ch) } : nil)
+        let inWord = ch.isLetter || ch.isNumber || ch == "'" || ch == "’"
+        let editable = hasNavigableText && !states.contains(.readOnly)
+        if inWord, hasNavigableText, Speech.typedWordSoFar.isEmpty, !Speech.typedWordWasEdited {
+            Self.wordStart = (try? makeTextInfo(.caret))?.start
+        }
+        guard !inWord, ch != "\u{8}", hasNavigableText, !Speech.typedWordSoFar.isEmpty || Speech.typedWordWasEdited else {
+            Speech.speakTypedCharacter(ch, inEditable: editable)
+            return
+        }
+        // A word ends: its word is read from the field once the field has taken this key, looked for every 10 ms for
+        // up to 100 ms; the letters typed if it hasn't by then.
+        Self.waitingForField = true
+        let start = Speech.typedWordWasEdited ? nil : Self.wordStart   // (a Backspace may have gone back past it)
+        func attempt(_ n: Int) {
+            var found = (taken: false, word: String?.none)
+            if let info = try? makeTextInfo(.caret) {
+                let from = max(0, info.start - 80)
+                found = Speech.fieldWord(endedBy: ch, before: info.textRange(from, info.start), notBefore: start.map { $0 - from })
+            }
+            if !found.taken, n < 10 { DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) { attempt(n + 1) }; return }
+            if !found.taken { Log.io("typed word: the field hadn't taken the key after 100 ms; the letters typed") }
+            Speech.speakTypedCharacter(ch, inEditable: editable, wordBefore: { found.word })
+            Self.waitingForField = false
+            while !Self.waitingForField, !Self.heldTyped.isEmpty {
+                let (o, c) = Self.heldTyped.removeFirst()
+                o.event_typedCharacter(c)
+            }
+        }
+        attempt(0)
     }
-
-    /// The word just before the caret, from the field's text (the character just typed left off if it is already in).
-    func wordBeforeCaret(typed ch: Character) -> String? {
-        guard let info = try? makeTextInfo(.caret) else { return nil }
-        let end = info.start
-        var t = info.textRange(max(0, end - 80), end)
-        if t.last == ch { t.removeLast() }
-        let word = t.reversed().prefix { $0.isLetter || $0.isNumber || $0 == "'" || $0 == "’" }
-        return word.isEmpty ? nil : String(word.reversed())
-    }
+    /// Where the caret was when the word being typed began, so its end is told from the word before's.
+    private static var wordStart: Int?
+    private static var waitingForField = false
+    private static var heldTyped: [(TurnOverObject, Character)] = []
 
     /// Dispatch (NVDA: eventHandler.executeEvent's last step).
     open func handleEvent(_ event: Event) {
