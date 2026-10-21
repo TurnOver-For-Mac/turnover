@@ -39,7 +39,8 @@ static NSString *const kDrivers = @"/System/Library/ScreenReader/BrailleDrivers"
     NSTimer *_poll;      // on the braille thread
     NSData *_pendingCells;   // the latest frame not yet written (guarded by @synchronized(self))
     BOOL _writeScheduled;
-    dispatch_block_t _pendingClose;   // a close that came during a write, run when the write is done
+    BOOL _polling;   // the poll timer is inside the driver
+    dispatch_block_t _pendingClose;   // a close that came during a write or a poll, run when that is done
 }
 
 /// The braille thread: a run loop of its own, as VoiceOver gives its drivers, so a Bluetooth driver's channel
@@ -327,7 +328,7 @@ static NSMutableString *btReport;
                 frame = self->_pendingCells; self->_pendingCells = nil;
                 if (!frame || !self->_driver) {   // done, or closed meanwhile
                     self->_writeScheduled = NO; frame = nil;
-                    closing = self->_pendingClose; self->_pendingClose = nil;
+                    if (!self->_polling) { closing = self->_pendingClose; self->_pendingClose = nil; }
                 }
             }
             if (!frame) { if (closing) closing(); return; }
@@ -349,9 +350,20 @@ static NSMutableString *btReport;
         [me->_poll invalidate];
         __block NSInteger checks = 0;
         me->_poll = [NSTimer scheduledTimerWithTimeInterval:0.03 repeats:YES block:^(NSTimer *timer) {
+            // Marked inside the driver like a write, and for the same reason: a close that came while the driver
+            // waited ran inside getInputEvents and unloaded it under the call (code review, 21 Oct 2026).
+            TOAppleBrailleDisplay *display = weakSelf;
+            if (!display) { [timer invalidate]; return; }
+            @synchronized (display) { if (!display->_driver) return; display->_polling = YES; }
             id events = [driver getInputEvents];
             NSArray *list = [events isKindOfClass:NSArray.class] ? events : @[];
             BOOL loaded = (++checks % 33 != 0) || [driver isDriverLoaded];
+            dispatch_block_t closing = nil;
+            @synchronized (display) {
+                display->_polling = NO;
+                if (!display->_writeScheduled) { closing = display->_pendingClose; display->_pendingClose = nil; }
+            }
+            if (closing) { closing(); return; }
             if (list.count == 0 && loaded) return;
             if (!loaded) [timer invalidate];
             dispatch_async(dispatch_get_main_queue(), ^{ handler(list, loaded); });
@@ -376,10 +388,10 @@ static NSMutableString *btReport;
         [driver setMainCells:blank length:MIN(n, 256)];
         [driver unloadDriver];
     };
-    // A write under way waits by running the braille thread's run loop, where this would run inside it and unload
-    // the driver mid-write (code review, 21 Oct 2026): the write runs it when it is done instead.
+    // A write or poll under way waits by running the braille thread's run loop, where this would run inside it and
+    // unload the driver mid-call (code review, 21 Oct 2026): whichever of them finishes last runs it instead.
     BOOL deferred;
-    @synchronized (self) { _driver = nil; deferred = _writeScheduled; if (deferred) _pendingClose = unload; }
+    @synchronized (self) { _driver = nil; deferred = _writeScheduled || _polling; if (deferred) _pendingClose = unload; }
     if (!deferred) [self onThread:unload];
 }
 
