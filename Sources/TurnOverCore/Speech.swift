@@ -37,6 +37,9 @@ public enum Speech {
     public static var typedWordSoFar: String { String(typedWord) }
     /// The word being typed had a Backspace in it, so typedWordSoFar is only its end.
     public static var typedWordWasEdited: Bool { backspacedSinceWord }
+    /// The word said when the last word ended, nil if none was (Mail's autocorrect check: the field's word, already
+    /// corrected, was said, so the correction isn't announced again).
+    public private(set) static var lastTypedWordSpoken: String?
 
     // MARK: - Primitives
 
@@ -584,8 +587,10 @@ public enum Speech {
             typedWord.removeAll()
             backspacedSinceWord = false
             Log.io("typed word (\(word.count) characters)")
+            lastTypedWordSpoken = nil
             let mode = config.keyboard.speakTypedWords
             if mode == .always || (mode == .editControls && editable) {
+                lastTypedWordSpoken = word
                 // The word and the character that ended it in one breath ("fast period"): the next key cuts speech
                 // short, and two separate echoes lost the second.
                 let chars = config.keyboard.speakTypedCharacters

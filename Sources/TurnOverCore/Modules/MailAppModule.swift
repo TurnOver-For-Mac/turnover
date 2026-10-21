@@ -295,8 +295,10 @@ final class MailMessageBody: EditableWebArea {
         let typed = Speech.typedWordSoFar
         // After a Backspace in the word, TurnOver holds only the letters typed since: no comparison is possible.
         let edited = Speech.typedWordWasEdited
+        // A key held back while the word before waits for the field comes here again when it is echoed.
+        let held = TurnOverObject.waitingForField
         super.event_typedCharacter(ch)
-        guard typed.count >= 2, !edited, ch == " " || ".,;:!?".contains(ch) else { return }
+        guard !held, typed.count >= 2, !edited, ch == " " || ".,;:!?".contains(ch) else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
             guard let self, API.focusObject?.isSameElement(as: self) == true,
                   let caret = try? self.makeTextInfo(.caret), caret.start > 1 else { return }
@@ -310,6 +312,8 @@ final class MailMessageBody: EditableWebArea {
             func plain(_ w: String) -> String { w.lowercased().replacingOccurrences(of: "’", with: "'") }
             guard let now = words.last.map(String.init), !now.isEmpty, plain(now) != plain(typed),
                   !plain(now).hasPrefix(plain(typed)) else { return }
+            // The typed word was read from the field after Mail had corrected it: already said as corrected.
+            if let said = Speech.lastTypedWordSpoken, plain(said) == plain(now) { return }
             Log.io("autocorrect: a word was changed (\(typed.count) to \(now.count) characters)")
             Speech.speakMessage("corrected to \(now)")
         }

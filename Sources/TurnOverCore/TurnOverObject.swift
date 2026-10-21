@@ -562,7 +562,8 @@ open class TurnOverObject: ScriptableObject {
     }
     /// Where the caret was when the word being typed began, so its end is told from the word before's.
     private static var wordStart: Int?
-    private static var waitingForField = false
+    /// A word's end is waiting for the field; keys typed meanwhile are held back.
+    private(set) static var waitingForField = false
     private static var heldTyped: [(TurnOverObject, Character)] = []
 
     /// Dispatch (NVDA: eventHandler.executeEvent's last step).
