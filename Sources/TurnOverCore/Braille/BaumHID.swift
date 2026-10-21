@@ -130,7 +130,8 @@ public final class BrailleDisplays {
     private func tellUnopened() {
         guard !toldUnopened else { return }
         toldUnopened = true
-        Speech.speakMessage("A braille display is connected, but TurnOver couldn't open it. If VoiceOver is on, it may be holding the display.")
+        // Only ever said with VoiceOver off (noteUnopened returns while it is on), so it doesn't blame VoiceOver.
+        Speech.speakMessage("A braille display was found, but TurnOver couldn't open it.")
     }
 
     /// VoiceOver's braille server (scrod) keeps a Bluetooth display's one connection open even with VoiceOver off,

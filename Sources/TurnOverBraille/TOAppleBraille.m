@@ -90,7 +90,11 @@ static NSString *const kDrivers = @"/System/Library/ScreenReader/BrailleDrivers"
 /// A driver's matching dictionary as IOKit wants it: "*" means any value, so the key is left out. USB matching takes
 /// idVendor only together with idProduct, so a vendor-only dictionary (Freedom Scientific's, any product) matched
 /// nothing and a Focus 5 by USB was never found (macOS 27, 21 Oct 2026); its properties go through IOPropertyMatch,
-/// which compares them as they are.
+/// which compares them as they are. FTDI's vendor (Brailliant's and VarioPro's dictionaries list it alone) is left
+/// out: it is a serial chip in countless adapters and boards, which would match, fail to load, and set TurnOver
+/// asking VoiceOver's braille server to quit and warning about a display that isn't there (review, 21 Oct 2026).
+static const NSInteger kFTDIVendor = 1027;   // 0x0403
+
 static NSMutableDictionary *matching(NSDictionary *autodetect) {
     NSMutableDictionary *m = [NSMutableDictionary dictionary];
     [autodetect enumerateKeysAndObjectsUsingBlock:^(id key, id value, BOOL *stop) {
@@ -98,6 +102,7 @@ static NSMutableDictionary *matching(NSDictionary *autodetect) {
         m[key] = value;
     }];
     if (![m[@"IOProviderClass"] isEqual:@"IOHIDDevice"] && m[@"idVendor"] && !m[@"idProduct"]) {
+        if ([m[@"idVendor"] respondsToSelector:@selector(integerValue)] && [m[@"idVendor"] integerValue] == kFTDIVendor) return nil;
         NSMutableDictionary *props = [NSMutableDictionary dictionary];
         for (NSString *key in m.allKeys) if (![key isEqual:@"IOProviderClass"]) { props[key] = m[key]; [m removeObjectForKey:key]; }
         m[@"IOPropertyMatch"] = props;
@@ -142,7 +147,9 @@ static BOOL detectFoundUnopened;
         NSDictionary *d = c[@"match"];
         BOOL hid = [d[@"IOProviderClass"] isEqual:@"IOHIDDevice"];
         io_iterator_t it = 0;
-        if (IOServiceGetMatchingServices(kIOMainPortDefault, (__bridge_retained CFDictionaryRef)matching(d), &it) != KERN_SUCCESS) continue;
+        NSMutableDictionary *m = matching(d);
+        if (!m) continue;
+        if (IOServiceGetMatchingServices(kIOMainPortDefault, (__bridge_retained CFDictionaryRef)m, &it) != KERN_SUCCESS) continue;
         io_service_t s;
         while ((s = IOIteratorNext(it))) {
             NSNumber *v = number(s, hid ? @"VendorID" : @"idVendor"), *p = number(s, hid ? @"ProductID" : @"idProduct");
