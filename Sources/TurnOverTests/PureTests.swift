@@ -34,6 +34,14 @@ func pureTests() {
         check(d.taken && d.word == "かな", "kana: \(d)")
         let e = Speech.fieldWord(endedBy: "\r", before: "line\n", notBefore: 0)
         check(e.taken && e.word == "line", "Return against the field's line break: \(e)")
+        // The end of a sentence typed fast: the full stop is in, with a space and the next word after it.
+        let f = Speech.fieldWord(endedBy: ".", before: "one the. Ne", notBefore: 4)
+        check(f.taken && f.word == "the" && f.next == 9, "a full stop, then a space and the next word: \(f)")
+        let g = Speech.fieldWord(endedBy: ",", before: "one two, ", notBefore: 4)
+        check(g.taken && g.word == "two", "a comma and a space: \(g)")
+        // A closing double quote the field made curly.
+        let h = Speech.fieldWord(endedBy: "\"", before: "say “hi” ", notBefore: 5)
+        check(h.taken && h.word == "hi", "a closing smart quote: \(h)")
     }
     test("applications: hidden links to visible apps appear once, hidden apps stay out") {
         let fm = FileManager.default

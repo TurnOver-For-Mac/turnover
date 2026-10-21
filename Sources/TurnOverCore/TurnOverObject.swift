@@ -535,6 +535,7 @@ open class TurnOverObject: ScriptableObject {
         if inWord, hasNavigableText, Speech.typedWordSoFar.isEmpty, !Speech.typedWordWasEdited {
             // (A key held back starts its word where the field put it, not at the caret, which is past it by now.)
             Self.wordStart = Self.replayWordStart ?? (try? makeTextInfo(.caret))?.start
+            Self.replayWordStart = nil   // only for the first word after the word that waited
         }
         guard !inWord, ch != "\u{8}", hasNavigableText, !Speech.typedWordSoFar.isEmpty || Speech.typedWordWasEdited else {
             Speech.speakTypedCharacter(ch, inEditable: editable)
@@ -560,7 +561,6 @@ open class TurnOverObject: ScriptableObject {
             while !Self.waitingForField, !Self.heldTyped.isEmpty {
                 let (o, c) = Self.heldTyped.removeFirst()
                 o.event_typedCharacter(c)
-                Self.replayWordStart = nil   // only for the key straight after the word's end
             }
             Self.replayWordStart = nil
         }
