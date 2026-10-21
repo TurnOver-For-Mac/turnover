@@ -69,50 +69,55 @@ enum VoiceOverTap {
         p.standardInput = toHelper
         p.standardOutput = fromHelper
         p.standardError = FileHandle.nullDevice
+        let responseBuffer = Locked(DelimitedLineBuffer())
         fromHelper.fileHandleForReading.readabilityHandler = { h in
             let data = h.availableData
             // The helper gone: nothing more to read (left set, the handler was called again and again on the end).
             guard !data.isEmpty else { h.readabilityHandler = nil; return }
-            let text = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-            if text == "on" {
-                DispatchQueue.main.async { MainActor.assumeIsolated {
-                    if waitingForVoiceOver { waitingForVoiceOver = false; Log.io("VoiceOver quiet: on (VoiceOver back)") }
-                } }
-            } else if text.contains("isn't running") {
-                // No VoiceOver to quiet (quit, or not started yet): asked again every 2 s while TurnOver wants it
-                // quiet, not counted towards giving up; it was, and the five misses spoke the audio-permission message
-                // for a VoiceOver that simply wasn't there (19 Oct 2026). Logged once.
-                DispatchQueue.main.async { MainActor.assumeIsolated {
-                    if !waitingForVoiceOver { waitingForVoiceOver = true; Log.info("VoiceOver quiet: VoiceOver isn't running; asking again every 2 s") }
-                } }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { MainActor.assumeIsolated {
-                    guard wantedSilent else { return }
-                    let tries = errorsInARow
-                    said = nil; set(true, why: "VoiceOver back")
-                    errorsInARow = tries
-                } }
-            } else if text.contains("error") {
-                Log.warning("VoiceOver quiet: helper said \(text)")
-                // VoiceOver not running or not sounding yet (just started): asked again in a moment, up to five times.
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { MainActor.assumeIsolated {
-                    guard wantedSilent else { return }
-                    errorsInARow += 1
-                    guard errorsInARow <= 5 else {
-                        if errorsInARow == 6 {
-                            Log.warning("VoiceOver quiet: giving up until TurnOver next takes an app")
-                            // Said, once a run: two voices with no reason given is the worst first impression (a tester
-                            // who said no to macOS's audio question, or a macOS that changed the tap; 19 Oct 2026).
-                            if !toldCantSilence {
-                                toldCantSilence = true
-                                Speech.speakMessage("TurnOver can't keep VoiceOver quiet, so you may hear both. In System Settings, Privacy and Security, Screen and System Audio Recording, turn TurnOver on; or turn CoExist off in TurnOver's Settings, Experimental.")
+            responseBuffer.lock.lock()
+            let lines = responseBuffer.unsafeValue.append(data)
+            responseBuffer.lock.unlock()
+            for text in lines {
+                if text == "on" {
+                    DispatchQueue.main.async { MainActor.assumeIsolated {
+                        if waitingForVoiceOver { waitingForVoiceOver = false; Log.io("VoiceOver quiet: on (VoiceOver back)") }
+                    } }
+                } else if text.contains("isn't running") {
+                    // No VoiceOver to quiet (quit, or not started yet): asked again every 2 s while TurnOver wants it
+                    // quiet, not counted towards giving up; it was, and the five misses spoke the audio-permission message
+                    // for a VoiceOver that simply wasn't there (19 Oct 2026). Logged once.
+                    DispatchQueue.main.async { MainActor.assumeIsolated {
+                        if !waitingForVoiceOver { waitingForVoiceOver = true; Log.info("VoiceOver quiet: VoiceOver isn't running; asking again every 2 s") }
+                    } }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) { MainActor.assumeIsolated {
+                        guard wantedSilent else { return }
+                        let tries = errorsInARow
+                        said = nil; set(true, why: "VoiceOver back")
+                        errorsInARow = tries
+                    } }
+                } else if text.contains("error") {
+                    Log.warning("VoiceOver quiet: helper said \(text)")
+                    // VoiceOver not running or not sounding yet (just started): asked again in a moment, up to five times.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) { MainActor.assumeIsolated {
+                        guard wantedSilent else { return }
+                        errorsInARow += 1
+                        guard errorsInARow <= 5 else {
+                            if errorsInARow == 6 {
+                                Log.warning("VoiceOver quiet: giving up until TurnOver next takes an app")
+                                // Said, once a run: two voices with no reason given is the worst first impression (a tester
+                                // who said no to macOS's audio question, or a macOS that changed the tap; 19 Oct 2026).
+                                if !toldCantSilence {
+                                    toldCantSilence = true
+                                    Speech.speakMessage("TurnOver can't keep VoiceOver quiet, so you may hear both. In System Settings, Privacy and Security, Screen and System Audio Recording, turn TurnOver on; or turn CoExist off in TurnOver's Settings, Experimental.")
+                                }
                             }
+                            return
                         }
-                        return
-                    }
-                    let tries = errorsInARow
-                    said = nil; set(true, why: "again after: \(text)")
-                    errorsInARow = tries
-                } }
+                        let tries = errorsInARow
+                        said = nil; set(true, why: "again after: \(text)")
+                        errorsInARow = tries
+                    } }
+                }
             }
         }
         // Only if it's still the current helper: one ended by the watchdog can report after its successor started.

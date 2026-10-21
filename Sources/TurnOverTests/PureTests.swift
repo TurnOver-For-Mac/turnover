@@ -281,6 +281,17 @@ func pureTests() {
         for ok in ["bambustudio-profile", "a", "my-com-apple-TextEdit"] { check(PluginManifest.isValidID(ok), "\(ok) refused") }
         for bad in ["..", ".", "", "-x", "a/b", "../settings", "a b", String(repeating: "a", count: 65)] { check(!PluginManifest.isValidID(bad), "\(bad) allowed") }
     }
+    test("voiceover helper responses: split and combined lines are framed correctly") {
+        var buffer = DelimitedLineBuffer()
+        expect(buffer.append(Data("on\nerror no sound".utf8)), ["on"], "complete line and partial line")
+        expect(buffer.append(Data(" yet\nerror VoiceOver isn't running\n".utf8)),
+               ["error no sound yet", "error VoiceOver isn't running"], "continued and combined lines")
+    }
+    test("plugin archives: expansion limits reject oversized trusted input") {
+        check(!PluginLibrary.archiveExceedsLimits(entryCount: 256, expandedBytes: 16 * 1024 * 1024), "the limits themselves are allowed")
+        check(PluginLibrary.archiveExceedsLimits(entryCount: 257, expandedBytes: 0), "too many entries are rejected")
+        check(PluginLibrary.archiveExceedsLimits(entryCount: 1, expandedBytes: 16 * 1024 * 1024 + 1), "too many expanded bytes are rejected")
+    }
     test("plugin policy: ways out of the app refused anywhere; the library's rules for community plugins") {
         func plugin(_ apps: [String], _ profile: String) -> LoadedPlugin {
             LoadedPlugin(folder: URL(fileURLWithPath: "/tmp/p"), manifest: PluginManifest(id: "t", name: "T", version: "1", apps: apps),
