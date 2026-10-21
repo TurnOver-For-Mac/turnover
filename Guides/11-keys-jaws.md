@@ -1,6 +1,6 @@
 # JAWS keys: every key
 
-This page is made from TurnOver's own command tables (`turnover-coretest --keys-reference`, 20 Oct 2026), so it matches the build it came with. Don't edit it by hand.
+This page is made from TurnOver's own command tables (`turnover-coretest --keys-reference`, 21 Oct 2026), so it matches the build it came with. Don't edit it by hand.
 
 The JAWS keys style: JAWS's laptop layout. **TurnOver** in a key means the JAWS key: Caps Lock, or Control and Option together. Only the keys that differ from NVDA's are JAWS's own; every other key is NVDA's, so the [NVDA keys page](keys-nvda.html) lists the rest. Keyboard help (the TurnOver menu, Keys) says what any key does without doing it; Command Control Comma, then Slash, lists the keys that work where you are.
 
@@ -58,7 +58,7 @@ Switch styles with Command Control Comma, then K. TurnOver's own commands behind
 | TurnOver Shift N | Reports the status bar, if the window has one (NVDA+Shift+End) |
 | TurnOver Shift Y | Reports the title of the current window. Pressed twice, spells it |
 | TurnOver Control Shift H | Shortcuts list; lists the shortcuts that work here, the application's own first; Enter runs one |
-| TurnOver Control Shift J | Opens the TurnOver menu: preferences, help, quit |
+| TurnOver Control Shift J | Opens the TurnOver menu: settings, keys, tools, help, quit |
 | TurnOver Option Shift C | In a table, the column header (twice, the column from here down); elsewhere the character (twice, phonetically) (VO-C, VO-C-C) |
 | TurnOver Option Shift R | Reads the row header; twice, the row from here to its end (VO-R, VO-R-R) |
 | TurnOver Shift Page down | Moves the review cursor to the next page (NVDA+Page Down; laptop: NVDA+Shift+Page Down) |
@@ -156,6 +156,7 @@ Switch styles with Command Control Comma, then K. TurnOver's own commands behind
 | TurnOver Slash | Shortcuts list; lists the shortcuts that work here, the application's own first; Enter runs one |
 | TurnOver T | Reports the title of the current window. Pressed twice, spells it |
 | TurnOver Tab | Reports the object with focus |
+| Control Command M | Opens the TurnOver menu: settings, keys, tools, help, quit |
 | TurnOver Shift B | Reports the battery level |
 
 ## Browse mode

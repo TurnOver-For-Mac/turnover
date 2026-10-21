@@ -1,6 +1,6 @@
 # VoiceOver keys: every key
 
-This page is made from TurnOver's own command tables (`turnover-coretest --keys-reference`, 20 Oct 2026), so it matches the build it came with. Don't edit it by hand.
+This page is made from TurnOver's own command tables (`turnover-coretest --keys-reference`, 21 Oct 2026), so it matches the build it came with. Don't edit it by hand.
 
 The VoiceOver keys style (the Mac style): VoiceOver's own keys, doing what they do in VoiceOver. **TurnOver** in a key means the TurnOver key: Control and Option together (VO), or Caps Lock. Keys VoiceOver has that aren't listed here go to VoiceOver as usual where VoiceOver reads, and do nothing special where TurnOver reads. Keyboard help (the TurnOver menu, Keys) says what any key does without doing it; Command Control Comma, then Slash, lists the keys that work where you are.
 
@@ -236,6 +236,7 @@ Switch styles with Command Control Comma, then K. TurnOver's own commands behind
 | Key | What it does |
 |---|---|
 | TurnOver F12 | Reports the time. Pressed twice, reports the date |
+| Control Command M | Opens the TurnOver menu: settings, keys, tools, help, quit |
 | TurnOver Shift B | Reports the battery level |
 
 ## Menus

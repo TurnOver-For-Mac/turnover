@@ -11,6 +11,9 @@ fixes code that is not live. Each has a date and a reason. To reopen one, open a
 - **The keys follow the reader they are named after** (15 Oct 2026). VoiceOver keys do what VoiceOver's do; NVDA keys
   what NVDA's do; JAWS keys what JAWS's do. Where a key clashes with a Mac shortcut, the Mac shortcut wins. A change
   that alters what an existing key does needs a very good reason (CONTRIBUTING.md, Keep what works).
+- **Settings live in the Settings window; the menu holds actions** (21 Oct 2026, NVDA's shape). The menu is This
+  app, Settings, Keys, Tools, Help, Support TurnOver, Quit; Command Control M opens it. A new setting gets a control in
+  the window, never a menu item.
 - **TurnOver's own features live on one layer** (Command Control Comma, then a letter) in every style, so a user
   learns one new thing at a time; new direct keys are rare.
 - **App rules go in app modules, not shared code** (PATTERNS.md). A rule that helps one app can silently break

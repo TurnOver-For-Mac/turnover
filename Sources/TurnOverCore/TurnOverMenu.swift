@@ -301,30 +301,31 @@ public final class TurnOverMenu {
 
     // MARK: The tree
 
-    /// The menu (docs/MENU-PLAN.md, 12 Oct 2026: "This app" first; hand over and quit in one submenu).
+    /// The menu (docs/MENU-PLAN.md, 12 Oct 2026: "This app" first), in NVDA's shape since 21 Oct 2026: no settings in
+    /// the menu, every setting in the Settings window; the menu is This app, Settings, Keys, Tools, Help, Support and
+    /// Quit ("way too busy", Oliver; "should all settings be moved there and the menu cleaned up", a contributor).
     private func rootItems() -> [MenuItem] {
         var items: [MenuItem] = []
         if let app = thisAppItem() { items.append(app) }
-        items.append(MenuItem("Settings", .submenu { self.preferences() }))
-        items.append(MenuItem("Apps", .submenu { self.applicationItems() }, hint: "Which apps TurnOver reads, and which VoiceOver reads"))
+        items.append(MenuItem("Settings", .action { SettingsBridge.open() }, hint: "Every setting, in a window with sections down the side"))
         items.append(MenuItem("Keys", .submenu { self.keysItems() }, hint: "Every shortcut here, keyboard help, and your own keys"))
-        if Trackpad.available {
-            items.append(MenuItem("Gesture control", .toggle(get: { Trackpad.controlOn }, set: { Trackpad.set($0) }), hint: "The trackpad's gestures: VoiceOver's, or NVDA's in the Windows style. Also Command Control Comma, G; or hold the TurnOver key and turn two fingers, clockwise for on"))
-        }
-        if let l = NewToTry.latest { items.append(MenuItem("What to test in build \(l.build)", .submenu { NewToTry.menuItems() })) }
-        items.append(MenuItem("Tools", .submenu { self.toolItems() }, hint: "Force quit an app\(Edition.includesPlugins ? ", plugins" : "")"))
-        items.append(MenuItem("Send feedback", .submenu { self.feedbackItems() }, hint: "A report on your Desktop, and the problem form on GitHub"))
+        items.append(MenuItem("Tools", .submenu { self.toolItems() }, hint: "The apps TurnOver reads, the VoiceOver settings copy, feedback, force quit, plugins"))
+        items.append(MenuItem("Help", .submenu { self.helpItems() }, hint: "The guide, about TurnOver, updates and previous builds"))
         items.append(Self.supportItem)
         items.append(contentsOf: extraItems)
-        items.append(MenuItem("About and updates", .submenu { [
-            MenuItem("About TurnOver", .action {
-                Speech.speakMessage("TurnOver \(Edition.version), build \(Edition.build), a screen reader for the Mac. It reads the apps you give it under Apps\(Coexist.on ? "; with CoExist on, VoiceOver reads the rest" : ""). Features still settling are under Settings, Experimental. TurnOver is free and made in spare time: Support TurnOver, in this menu, helps cover its costs.")
-            }),
-        ] + self.aboutItems }))
-        items.append(MenuItem("Hand over or quit", .submenu { (self.handOverItem.map { [$0] } ?? []) + [
-            MenuItem("Quit TurnOver", .action { Speech.speakMessage("TurnOver quitting"); DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { (TurnOverMenu.shared.quit ?? { NSApp.terminate(nil) })() } },
-                     hint: "VoiceOver takes over everywhere. Command Control Period starts TurnOver again"),
-        ] }))
+        items.append(MenuItem("Quit TurnOver", .action { Speech.speakMessage("TurnOver quitting"); DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { (TurnOverMenu.shared.quit ?? { NSApp.terminate(nil) })() } },
+                              hint: "VoiceOver takes over everywhere. Command Control Period starts TurnOver again"))
+        return items
+    }
+
+    /// Help: what is new to try, about, then the guide, updates, previous builds and uninstall (aboutItems, set by the app).
+    private func helpItems() -> [MenuItem] {
+        var items: [MenuItem] = []
+        if let l = NewToTry.latest { items.append(MenuItem("What to test in build \(l.build)", .submenu { NewToTry.menuItems() })) }
+        items.append(MenuItem("About TurnOver", .action {
+            Speech.speakMessage("TurnOver \(Edition.version), build \(Edition.build), a screen reader for the Mac. It reads the apps you give it under Tools\(Coexist.on ? "; with CoExist on, VoiceOver reads the rest" : ""). Feature requests and bug reports through GitHub.")
+        }))
+        items.append(contentsOf: aboutItems)
         return items
     }
 
@@ -391,8 +392,21 @@ public final class TurnOverMenu {
     }
 
     private func toolItems() -> [MenuItem] {
-        var items = [MenuItem("Force quit an app", .action { ForceQuit.open() }, hint: "Lists the apps that are running; the Mac's own window is silent while TurnOver reads")]
+        var items: [MenuItem] = [
+            MenuItem("Apps TurnOver reads", .submenu { self.applicationItems() }, hint: "Which apps TurnOver reads, and which VoiceOver reads"),
+            Self.copyVoiceOverItem,
+            MenuItem("Send feedback", .submenu { self.feedbackItems() }, hint: "A report in TurnOver's reports folder, and the problem form on GitHub"),
+            MenuItem("Force quit an app", .action { ForceQuit.open() }, hint: "Lists the apps that are running; the Mac's own window is silent while TurnOver reads"),
+        ]
+        if let h = handOverItem { items.append(h) }
         if Edition.includesPlugins { items.append(MenuItem("Plugins", .submenu { self.pluginItems() }, hint: "Make, install and reload plugins")) }
+        if Trackpad.available {
+            items.append(MenuItem("Gesture control", .toggle(get: { Trackpad.controlOn }, set: { Trackpad.set($0) }), hint: "The trackpad's gestures: VoiceOver's, or NVDA's in the Windows style. Also Command Control Comma, G"))
+        }
+        if Games.available { items.append(MenuItem("Games", .submenu { Games.menuItems() }, hint: "Steam and Windows games speaking through TurnOver")) }
+        // Until the Settings window has these two sections (braille is a contributor's, 21 Oct 2026), they stay here.
+        items.append(MenuItem("Braille", .submenu { self.brailleItems() }, hint: "Until braille has its section in Settings"))
+        items.append(MenuItem("Voices for other languages", .submenu { self.languageItems() }, hint: "Until it has its place in Settings"))
         return items
     }
 
@@ -415,14 +429,6 @@ public final class TurnOverMenu {
         }
     }
 
-    /// What you hear as TurnOver takes over and hands back: words, a sound, or nothing.
-    static var handOverItem: MenuItem {
-        MenuItem("When TurnOver takes over", .cycle(options: ["words", "a sound", "nothing"],
-            get: { config.general.handOverNothing ? 2 : config.general.handOverChimes ? 1 : 0 },
-            set: { i in config.general.handOverNothing = i == 2; config.general.handOverChimes = i == 1; config.save() }),
-            hint: "What you hear as TurnOver takes over from VoiceOver and hands back: \"TurnOver on\", a sound, or nothing")
-    }
-
     /// The VoiceOver settings copy: one item in Settings opening out to the copy and its revert (18 Oct 2026:
     /// "should be in there… it should also open out to copy and then revert").
     static var copyVoiceOverItem: MenuItem {
@@ -432,62 +438,6 @@ public final class TurnOverMenu {
             MenuItem("Revert", .action { Speech.speakMessage(VoiceOverSettings.undo()) },
                      hint: "Puts back TurnOver's settings from before the last copy"),
         ] }, hint: "Copy your VoiceOver settings into TurnOver, or revert the last copy")
-    }
-
-    /// The coexist option restarts TurnOver and changes VoiceOver's settings, so it is not a switch that Right Arrow
-    /// flips: a plainly named action that only Return runs. Right on a switch had restarted TurnOver three times in a
-    /// minute while someone looked round Settings (17 Oct 2026: "completely lost focus").
-    /// CoExist: one line, on or off (17 Oct 2026: "it should either be on or off").
-    static var coexistItem: MenuItem {
-        let on = Coexist.wouldBeOn
-        return MenuItem("CoExist: \(on ? "on" : "off")", .action { Self.setCoexist(!on) },
-                        hint: "CoExist keeps VoiceOver running alongside TurnOver: TurnOver reads the apps on your list and VoiceOver, kept quiet there, reads every other app, password fields and macOS's own prompts straight away. Return switches it; TurnOver restarts")
-    }
-    /// Whose sounds: VoiceOver's files or TurnOver's tones (17 Oct 2026: "people seemed to like those").
-    static var soundsItem: MenuItem {
-        MenuItem("Sounds", .cycle(options: ["VoiceOver's", "TurnOver's"], get: { config.general.effectiveSounds == "turnover" ? 1 : 0 },
-                                  set: { config.general.sounds = $0 == 1 ? "turnover" : "voiceover"; config.save() }),
-                 hint: "VoiceOver's sounds for links, misspellings, edges, the rotor and the trackpad, or TurnOver's own tones and bells")
-    }
-
-    private func preferences() -> [MenuItem] {
-        // The VoiceOver settings copy and its undo first (15 Oct 2026), then the sections.
-        var items: [MenuItem] = [MenuItem("Open the Settings window", .action { SettingsBridge.open() }, hint: "Every setting in a window, sections down the side")]
-            + [MenuItem("Speech", .submenu { self.speechItems() }), Self.copyVoiceOverItem] + [
-            MenuItem("Keyboard", .submenu { self.keyboardItems() }),
-            MenuItem("Braille", .submenu { self.brailleItems() }),
-            MenuItem("Documents", .submenu { self.formattingItems() }, hint: "Headings, links, lists, tables, graphics and fonts: said, a tone, or nothing"),
-            MenuItem("Web pages", .submenu { self.browseModeItems() }),
-        ] + [
-            MenuItem("Item details", .submenu { self.presentationItems() }, hint: "What is said about each item: its help text, shortcut and position"),
-            MenuItem("Sounds and alerts", .submenu { self.generalItems() }),
-            MenuItem("Apps that speak through TurnOver", .submenu { SpeechPort.shared.menuItems() },
-                     hint: "Apps that asked TurnOver to speak for them (a game, say), and whether you allowed it"),
-            MenuItem("Screen recognition", .submenu { [
-                MenuItem("Read new text as it appears", .toggle(get: { config.recognition.autoRefresh }, set: { config.recognition.autoRefresh = $0 }), hint: "While a recognition result is open"),
-                MenuItem("Read the whole result as it opens", .toggle(get: { config.recognition.autoSayAll }, set: { config.recognition.autoSayAll = $0 })),
-            ] }),
-            MenuItem("Starting", .submenu { [
-                MenuItem("Open TurnOver at login", .toggle(get: { config.general.openAtLogin }, set: { config.general.openAtLogin = $0; config.save(); self.onGeneralChanged?() })),
-                MenuItem("Show TurnOver in the menu bar", .toggle(get: { config.general.showInMenuBar }, set: { config.general.showInMenuBar = $0; config.save(); self.onGeneralChanged?() })),
-            ] }),
-        ]
-        items.append(MenuItem("Experimental", .submenu { self.experimentalItems() },
-                              hint: "Newer features still settling: CoExist and others. Each says what it does"))
-        return items
-    }
-
-    /// The newer features, still settling (18 Oct 2026: "all the newer stuff which is a bit shaky we can
-    /// label experimental").
-    private func experimentalItems() -> [MenuItem] {
-        var items: [MenuItem] = [Self.coexistItem]
-        // This Mac only (the "games" default): Steam and CrossOver games speaking through TurnOver.
-        if Games.available { items.append(MenuItem("Games", .submenu { Games.menuItems() }, hint: "Steam and Windows games speaking through TurnOver")) }
-        if Trackpad.available {
-            items.append(MenuItem("Gesture haptics", .cycle(options: Trackpad.HapticLevel.allCases.map(\.name), get: { Trackpad.HapticLevel.allCases.firstIndex(of: Trackpad.hapticLevel) ?? 0 },
-                                                         set: { Trackpad.hapticLevel = Trackpad.HapticLevel.allCases[$0] }), hint: "What you feel under your finger in gesture control"))
-        }
-        return items
     }
 
     /// Making, reloading and listing plugins (the plugin design notes).
@@ -563,20 +513,6 @@ public final class TurnOverMenu {
 
     /// Installed by the app: applying "open at login" and "show in the menu bar" is the Mac layer's job.
     public var onGeneralChanged: (() -> Void)?
-    private func generalItems() -> [MenuItem] {
-        [
-            Self.soundsItem,
-            MenuItem("Sounds as I move and press", .toggle(get: { config.general.navigationSounds }, set: { config.general.navigationSounds = $0; config.save() }),
-                     hint: "A tick as the focus moves, a click as an item is pressed"),
-            Self.handOverItem,
-            MenuItem("Notifications from other apps", .toggle(get: { config.presentation.reportNotifications }, set: { config.presentation.reportNotifications = $0; config.save() }),
-                     hint: "Read as they appear"),
-            MenuItem("Screen Curtain while TurnOver reads", .cycle(options: ["the same as VoiceOver's", "always on", "off"],
-                get: { ["follow", "on", "off"].firstIndex(of: config.general.screenCurtain) ?? 0 },
-                set: { config.general.screenCurtain = ["follow", "on", "off"][$0]; TurnOverMenu.shared.onScreenCurtainChanged?() }), hint: "The screen goes black; TurnOver reads as normal"),
-        ]
-    }
-
     /// Which applications TurnOver leads in: the listed ones and every regular application running now.
     private func applicationItems() -> [MenuItem] {
         // Each app is in one list or another, so where it is says who reads it (docs/MENU-PLAN.md).
@@ -687,112 +623,6 @@ public final class TurnOverMenu {
         return bundle
     }
 
-    private func speechItems() -> [MenuItem] {
-        // Say all's own voice (18 Oct 2026: "Kokoro needs to be under Say All Voice"): the speech voice, or a
-        // natural one made on the Mac where it is installed. Moving around always uses the speech voice.
-        let kokoro: [MenuItem] = KokoroVoice.available ? [MenuItem("Say all voice: \(KokoroVoice.mode == "reading" ? KokoroVoice.displayName(KokoroVoice.voice) : "same as speech")", .submenu {
-            [MenuItem("Same as speech" + (KokoroVoice.mode == "off" ? ", current" : ""), .select { KokoroVoice.mode = "off"; Speech.speakMessage("Say all uses the speech voice") },
-                      hint: "Say all reads in the voice you hear everywhere")]
-            + KokoroVoice.englishVoices.map { v in
-                MenuItem("\(KokoroVoice.displayName(v)), natural" + (KokoroVoice.mode == "reading" && v == KokoroVoice.voice ? ", current" : ""), .select {
-                    KokoroVoice.voice = v; KokoroVoice.mode = "reading"
-                    KokoroVoice.preview(v)
-                }, hint: "A natural voice for say all, made on this Mac; moving around stays in your speech voice")
-            }
-            + [MenuItem("Natural voice speed", .number(get: { KokoroVoice.speed }, set: { KokoroVoice.speed = $0; KokoroVoice.preview(KokoroVoice.voice, text: String(format: "Speed %.1f.", $0)) },
-                                                   step: 0.1, min: 0.6, max: 2.0, format: { String(format: "%.1f", $0) }),
-                        hint: "Also on the speech settings keys: VO-Command-Shift with the arrows")]
-        }, hint: "The voice say all reads in")] : []
-        // Say all voice comes last (18 Oct 2026: "the say all should be further down the list").
-        return [
-            MenuItem("Voice", .submenu { self.voiceItems() }),
-            MenuItem("Voices in the rotor: \(config.speech.rotorVoices.isEmpty ? "all" : "\(config.speech.rotorVoices.count) chosen")", .submenu { self.rotorVoiceItems() },
-                     hint: "Which voices VO-Command-Shift steps through: tick the ones you want, Alex and Eddy say, not every voice on the Mac"),
-            MenuItem("Language switching", .toggle(get: { config.speech.autoLanguageSwitching }, set: { config.speech.autoLanguageSwitching = $0 }),
-                     hint: "Text marked as another language is read in that language's voice"),
-            MenuItem("Voices for other languages", .submenu { self.languageItems() }),
-            MenuItem("Where speech plays", .submenu { self.outputItems() }, hint: "The Mac's default output, or one device by name"),
-            MenuItem("Lower other sounds while TurnOver speaks", .cycle(options: Ducking.modes.map(Ducking.name),
-                get: { Ducking.modes.firstIndex(of: config.speech.ducking) ?? 0 },
-                set: { i in config.speech.ducking = Ducking.modes[i]; config.save(); Ducking.apply() }),
-                     hint: "NVDA's audio ducking: other apps are lowered while TurnOver speaks, with macOS's own ducking. Nothing is recorded"),
-            MenuItem("Volume", .number(get: { Double(config.speech.volume) }, set: { config.speech.volume = Int($0); Speech.player.volume = Float($0) / 100 }, step: 10, min: 10, max: 200, format: { "\(Int($0.rounded())) percent" })),
-            MenuItem("Pitch", .number(get: { Double(config.speech.pitch) * 100 }, set: { config.speech.pitch = Float($0 / 100); Speech.player.pitch = config.speech.pitchMultiplier }, step: 5, min: 0, max: 100, format: { "\(Int($0.rounded()))" }),
-                     hint: "VoiceOver's scale: 50 is the voice's own"),
-            MenuItem("Rate", .number(get: { Double(config.speech.rate) * 100 }, set: { config.speech.rate = Float($0 / 100); Speech.player.rate = config.speech.rate }, step: 5, min: 10, max: 100, format: { "\(Int($0.rounded()))" })),
-            MenuItem("Punctuation level", .cycle(options: SymbolLevel.allCases.map(\.name), get: { config.speech.symbolLevel.rawValue }, set: { config.speech.symbolLevel = SymbolLevel(rawValue: $0)! })),
-            MenuItem("Capitals", .submenu { [
-                MenuItem("Say cap before a capital", .toggle(get: { config.speech.sayCapForCapitals }, set: { config.speech.sayCapForCapitals = $0 })),
-                MenuItem("Raise the pitch", .number(get: { Double(config.speech.capitalPitch) }, set: { config.speech.capitalPitch = Int($0) }, step: 10, min: 0, max: 100,
-                    format: { $0 == 0 ? "off" : "\(Int($0)) percent" }), hint: "For a capital said on its own: spelling, moving by character, typing"),
-            ] }),
-        ] + kokoro
-    }
-
-    private func voiceItems() -> [MenuItem] {
-        // English, and every language set on this Mac (System Settings, Language & Region): a Spanish speaker can make
-        // a Spanish voice TurnOver's own (a tester, 10 Oct 2026: English voices are harder to follow). The
-        // Mac's own languages come first.
-        let mine = Locale.preferredLanguages.map { String($0.prefix(2)) }
-        let wanted = Set(mine + ["en"])
-        let voices = AVSpeechSynthesisVoice.speechVoices().filter { wanted.contains(String($0.language.prefix(2))) }
-            .sorted { a, b in
-                let la = mine.firstIndex(of: String(a.language.prefix(2))) ?? 99, lb = mine.firstIndex(of: String(b.language.prefix(2))) ?? 99
-                if la != lb { return la < lb }
-                let ea = a.identifier.contains("eloquence"), eb = b.identifier.contains("eloquence")
-                if ea != eb { return ea }
-                return a.name < b.name
-            }
-        return voices.map { v in
-            let label = "\(v.name), \(v.language)\(v.identifier == config.speech.voice ? ", current" : "")"
-            return MenuItem(label, .select {
-                config.speech.voice = v.identifier
-                Speech.player.voiceIdentifier = v.identifier
-                config.save(); Languages.forget()
-                Speech.speakMessage("This is \(v.name).")
-            })
-        }
-    }
-
-    /// The speech rotor's voices: a tick for each, so the rotor steps through your own few (18 Oct 2026). None
-    /// ticked: every voice, as before.
-    private func rotorVoiceItems() -> [MenuItem] {
-        let mine = Locale.preferredLanguages.map { String($0.prefix(2)) }
-        let wanted = Set(mine + ["en"])
-        let voices = AVSpeechSynthesisVoice.speechVoices().filter { wanted.contains(String($0.language.prefix(2))) }
-            .sorted { $0.name == $1.name ? $0.language < $1.language : $0.name < $1.name }
-        var items: [MenuItem] = [MenuItem("Every voice" + (config.speech.rotorVoices.isEmpty ? ", current" : ""), .action {
-            config.speech.rotorVoices = []; config.save(); Speech.speakMessage("The rotor has every voice")
-        }, hint: "Clears your list")]
-        items += voices.map { v in
-            MenuItem("\(v.name), \(v.language)", .toggle(get: { config.speech.rotorVoices.contains(v.identifier) }, set: { on in
-                config.speech.rotorVoices.removeAll { $0 == v.identifier }
-                if on { config.speech.rotorVoices.append(v.identifier) }
-                config.save()
-            }))
-        }
-        return items
-    }
-
-    /// One submenu per language with an installed voice: Automatic (the best installed) or a voice of the user's.
-    /// Where speech plays: the Mac's default output, or one device by name (VoiceOver Utility's Sound pane, NVDA's
-    /// output device setting; 10 Oct 2026). Chosen while the headphones are off, the choice waits for them.
-    private func outputItems() -> [MenuItem] {
-        let chosen = config.speech.outputDevice
-        func pick(_ uid: String) {
-            config.speech.outputDevice = uid; config.save()
-            Speech.player.outputDeviceUID = uid.isEmpty ? nil : uid
-            Log.io("speech output set to \(uid.isEmpty ? "the default output" : uid)")
-            // Said once the player has moved: where speech really is (a device that is absent: the default).
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { Speech.speakMessage("Speech on \(Speech.player.outputDescription)") }
-        }
-        var items = [MenuItem("The Mac's default output\(chosen.isEmpty ? ", current" : "")", .select { pick("") })]
-        items += SpeechPlayer.outputDevices().map { d in
-            MenuItem("\(d.name)\(d.uid == chosen ? ", current" : "")", .select { pick(d.uid) })
-        }
-        return items
-    }
-
     private func languageItems() -> [MenuItem] {
         let languages = Languages.otherLanguages()
         guard !languages.isEmpty else { return [MenuItem("No voices for other languages are installed", .action {})] }
@@ -870,37 +700,6 @@ public final class TurnOverMenu {
         ]
     }
 
-    private func keyboardItems() -> [MenuItem] {
-        let echo = TypingEcho.allCases.map(\.name)
-        return [
-            MenuItem("Keyboard style", .cycle(options: GlobalCommands.offeredStyles.map(\.spokenName),
-                get: { GlobalCommands.offeredStyles.firstIndex(of: config.general.style) ?? 0 },
-                set: { i in if GlobalCommands.offeredStyles.indices.contains(i), GlobalCommands.offeredStyles[i] != config.general.style { GlobalCommands.setKeyboardStyle(GlobalCommands.offeredStyles[i]) } }), hint: "Command Control Comma, then K, goes round them"),
-            MenuItem("Keypad commands, Mac style", .toggle(get: { config.keyboard.numpadCommander }, set: { config.keyboard.numpadCommander = $0; KeySettings.refresh() }),
-                     hint: "VoiceOver's NumPad Commander: the keypad runs VoiceOver's commands. VO Clear switches"),
-            MenuItem("Keypad commands, Windows style", .toggle(get: { config.keyboard.keypadCommands }, set: { config.keyboard.keypadCommands = $0; KeySettings.refresh() }),
-                     hint: "NVDA's keypad commands, as with Num Lock off. Clear switches between commands and numbers"),
-            MenuItem("TurnOver key", .cycle(options: ["Caps Lock", "Control Option, VoiceOver's keys", "Caps Lock or Control Option"],
-                get: { ["caps", "controlOption", "both"].firstIndex(of: config.general.turnOverKey) ?? 0 },
-                set: { config.general.turnOverKey = ["caps", "controlOption", "both"][$0] })),
-            MenuItem("Typing echo", .submenu { [
-                MenuItem("Characters", .cycle(options: echo, get: { config.keyboard.speakTypedCharacters.rawValue }, set: { config.keyboard.speakTypedCharacters = TypingEcho(rawValue: $0)! })),
-                MenuItem("Words", .cycle(options: echo, get: { config.keyboard.speakTypedWords.rawValue }, set: { config.keyboard.speakTypedWords = TypingEcho(rawValue: $0)! })),
-                MenuItem("New line on Return", .toggle(get: { config.keyboard.speakNewLine }, set: { config.keyboard.speakNewLine = $0 })),
-                MenuItem("Command keys", .toggle(get: { config.keyboard.speakCommandKeys }, set: { config.keyboard.speakCommandKeys = $0 }), hint: "Command C, Command V and the like are said as you press them"),
-            ] }),
-            MenuItem("Groups, Mac style", .toggle(get: { config.general.navigateByGroups }, set: { config.general.navigateByGroups = $0 }),
-                     hint: "VoiceOver's keys move by groups, as VoiceOver does"),
-            MenuItem("Groups, Windows style", .toggle(get: { config.general.groupsInWindowsStyle }, set: { config.general.groupsInWindowsStyle = $0; if $0 { config.general.navigateByGroups = true } }),
-                     hint: "TurnOver Left and Right move by groups too"),
-            MenuItem("Moving the cursor moves the keyboard focus", .cycle(options: ["by style: in the Mac style only", "always", "never"],
-                get: { ["auto", "on", "off"].firstIndex(of: config.general.focusFollowsCursor) ?? 0 },
-                set: { config.general.focusFollowsCursor = ["auto", "on", "off"][$0] })),
-            MenuItem("Keyboard layout", .cycle(options: ["laptop", "desktop"], get: { config.keyboard.layout == "desktop" ? 1 : 0 }, set: { config.keyboard.layout = $0 == 1 ? "desktop" : "laptop" }),
-                     hint: "Desktop gives the number pad its NVDA keys"),
-        ]
-    }
-
     /// The keyboard commands editor (NVDA's Input Gestures; VoiceOver's Keyboard and NumPad Commanders).
     private func userKeyItems() -> [MenuItem] {
         var items = [
@@ -957,44 +756,6 @@ public final class TurnOverMenu {
                 done(g)
             }
         }
-    }
-
-    private func element(_ title: String, _ get: @escaping () -> ElementReport, _ set: @escaping (ElementReport) -> Void) -> MenuItem {
-        MenuItem(title, .cycle(options: ElementReport.allCases.map(\.name), get: { ElementReport.allCases.firstIndex(of: get()) ?? 0 }, set: { set(ElementReport.allCases[$0]) }))
-    }
-
-    private func formattingItems() -> [MenuItem] {
-        [
-            element("Headings", { config.documentFormatting.headings }, { config.documentFormatting.headings = $0 }),
-            MenuItem("Heading level", .toggle(get: { config.documentFormatting.reportHeadingLevel }, set: { config.documentFormatting.reportHeadingLevel = $0 })),
-            element("Links", { config.documentFormatting.links }, { config.documentFormatting.links = $0 }),
-            element("Lists", { config.documentFormatting.lists }, { config.documentFormatting.lists = $0 }),
-            element("Landmarks", { config.documentFormatting.landmarks }, { config.documentFormatting.landmarks = $0 }),
-            MenuItem("Tables", .submenu { [
-                self.element("Tables", { config.documentFormatting.tables }, { config.documentFormatting.tables = $0 }),
-                MenuItem("Cell coordinates", .toggle(get: { config.documentFormatting.tableCellCoordinates }, set: { config.documentFormatting.tableCellCoordinates = $0 })),
-                MenuItem("Row and column headers", .toggle(get: { config.documentFormatting.tableHeaders }, set: { config.documentFormatting.tableHeaders = $0 })),
-            ] }),
-            element("Graphics", { config.documentFormatting.graphics }, { config.documentFormatting.graphics = $0 }),
-            element("Block quotes", { config.documentFormatting.blockQuotes }, { config.documentFormatting.blockQuotes = $0 }),
-            element("Spelling errors", { config.documentFormatting.spellingErrors }, { config.documentFormatting.spellingErrors = $0 }),
-            MenuItem("Fonts", .submenu { [
-                MenuItem("Font name", .toggle(get: { config.documentFormatting.reportFontName }, set: { config.documentFormatting.reportFontName = $0 })),
-                MenuItem("Font size", .toggle(get: { config.documentFormatting.reportFontSize }, set: { config.documentFormatting.reportFontSize = $0 })),
-                MenuItem("Bold, italic and the like", .toggle(get: { config.documentFormatting.reportFontAttributes }, set: { config.documentFormatting.reportFontAttributes = $0 })),
-            ] }, hint: "Said as the caret moves into new formatting"),
-        ]
-    }
-
-    private func browseModeItems() -> [MenuItem] {
-        [
-            MenuItem("Read the page automatically when it loads", .toggle(get: { config.virtualBuffers.autoSayAllOnPageLoad }, set: { config.virtualBuffers.autoSayAllOnPageLoad = $0; config.save() })),
-            MenuItem("Quick keys go round the page", .toggle(get: { config.virtualBuffers.wrapQuickNav }, set: { config.virtualBuffers.wrapQuickNav = $0; config.save() }), hint: "H, K and the rest go on from the other end, and say so"),
-            MenuItem("Links and buttons in the line, as on screen", .toggle(get: { config.virtualBuffers.screenLayout }, set: { config.virtualBuffers.screenLayout = $0; config.save() }), hint: "Off: each link and control on a line of its own"),
-            MenuItem("Name undescribed pictures by their file name", .toggle(get: { config.virtualBuffers.imageFileNames }, set: { config.virtualBuffers.imageFileNames = $0; config.save() })),
-            MenuItem("Focus mode when a field takes the focus", .toggle(get: { config.virtualBuffers.autoFocusMode }, set: { config.virtualBuffers.autoFocusMode = $0; config.save() })),
-            MenuItem("Maximum line length", .number(get: { Double(config.virtualBuffers.maxLineLength) }, set: { config.virtualBuffers.maxLineLength = Int($0) }, step: 10, min: 40, max: 250, format: { "\(Int($0)) characters" })),
-        ]
     }
 
     /// VO-V, VoiceOver's Verbosity rotor: punctuation, item details and hints, in one short list.

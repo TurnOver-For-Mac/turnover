@@ -221,6 +221,15 @@ final class SpeechPort {
     }
 
     /// Settings, Apps that speak through TurnOver: each app asked about, allowed or not, Right Arrow to change.
+    /// The apps that have asked to speak through TurnOver, for the Settings window: id, name, allowed.
+    public var appDecisions: [(id: String, name: String, allowed: Bool)] {
+        decisions.sorted { $0.value.name.lowercased() < $1.value.name.lowercased() }.map { ($0.key, $0.value.name, $0.value.allowed) }
+    }
+    public func setAllowed(_ id: String, _ on: Bool) {
+        guard decisions[id] != nil else { return }
+        decisions[id]?.allowed = on; save(); tellAll(id)
+    }
+
     func menuItems() -> [MenuItem] {
         guard !decisions.isEmpty else { return [MenuItem("No app has asked yet", .action {})] }
         return decisions.sorted { $0.value.name.lowercased() < $1.value.name.lowercased() }.map { id, v in

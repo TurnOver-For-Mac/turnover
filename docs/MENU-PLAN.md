@@ -1,5 +1,11 @@
 # The TurnOver menu: a tidier layout (proposed 11 Oct 2026; built 12 Oct 2026)
 
+Superseded on 21 Oct 2026 by NVDA's shape: no settings in the menu at all. Every setting lives in the Settings window
+(Sources/TurnOverSettings), in sections in NVDA's order: General, Speech, Keyboard, Item details, Web pages, Documents,
+Screen recognition, Other apps' speech, Experimental (Braille to come, a contributor's). The menu is This app, Settings,
+Keys, Tools, Help, Support TurnOver, Quit, and Command Control M opens it in one press. Two settings wait in Tools
+until they have a section: Braille and Voices for other languages. The rest of this file is the 12 Oct design, kept.
+
 The request: "it's getting a little busy, especially in the allowed apps menu … some of the descriptions are a bit
 abstract." Built 12 Oct 2026, with these choices: "This app" first; hand over and quit in one submenu. Changed from the
 proposal: Reading stays two sections (Documents, Item details), because one would have held 21 items; long

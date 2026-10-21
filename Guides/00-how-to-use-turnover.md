@@ -8,6 +8,8 @@ This page is the short tour. Each section links to the guide that goes into deta
 
 1. **Command Control Comma** is the way in to everything TurnOver: press it, hear "TurnOver", then a letter. M is the
    TurnOver menu, S the Settings window, K the keyboard style, H these guides. Any other key reads the list.
+   **Command Control M** opens the menu in one press. The menu is short: This app, Settings, Keys, Tools, Help,
+   Support TurnOver, Quit. Every setting lives in the Settings window, in sections down the side.
 2. **Command Control Period** turns TurnOver off and on, from anywhere. Off, VoiceOver reads as usual.
 3. **Command Control Shift T** gives the app in front to VoiceOver, or back to TurnOver, and remembers it.
 

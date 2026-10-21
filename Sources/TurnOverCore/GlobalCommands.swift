@@ -120,7 +120,9 @@ public final class GlobalCommands: ScriptableObject {
         script("recognizeScreen", "Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return. Pressed again in the result, recognises again", gestures: ["kb:turnover+r"], category: sys) { _ in
             DispatchQueue.main.async { ScreenRecognition.shared.recognize() }
         }
-        script("turnOverMenu", "Opens the TurnOver menu: preferences, help, quit", gestures: ["kb:turnover+n"], category: sys) { _ in
+        // Command Control M, one key for the menu in every style, as NVDA N is (Oliver, 21 Oct 2026); Command Control Comma
+        // then M is still the layer's way.
+        script("turnOverMenu", "Opens the TurnOver menu: settings, keys, tools, help, quit", gestures: ["kb:turnover+n", "kb:command+control+m"], category: sys) { _ in
             TurnOverMenu.shared.open()
         }
         // Mac style (VoiceOver's keys, key for key) or Windows style (a Mac that feels like a Windows machine with NVDA).

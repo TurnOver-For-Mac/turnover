@@ -10,6 +10,8 @@ Three things to remember
 
 1. Command Control Comma is the way in to everything TurnOver: press it, hear "TurnOver", then a letter. M is the
    TurnOver menu, S the Settings window, K the keyboard style, H these guides. Any other key reads the list.
+   Command Control M opens the menu in one press. The menu is short: This app, Settings, Keys, Tools, Help,
+   Support TurnOver, Quit. Every setting lives in the Settings window, in sections down the side.
 2. Command Control Period turns TurnOver off and on, from anywhere. Off, VoiceOver reads as usual.
 3. Command Control Shift T gives the app in front to VoiceOver, or back to TurnOver, and remembers it.
 
@@ -467,7 +469,7 @@ could expose what a person reads or types is best reported privately, through th
 
 VOICEOVER KEYS: EVERY KEY
 
-This page is made from TurnOver's own command tables (`turnover-coretest --keys-reference`, 20 Oct 2026), so it matches the build it came with. Don't edit it by hand.
+This page is made from TurnOver's own command tables (`turnover-coretest --keys-reference`, 21 Oct 2026), so it matches the build it came with. Don't edit it by hand.
 
 The VoiceOver keys style (the Mac style): VoiceOver's own keys, doing what they do in VoiceOver. TurnOver in a key means the TurnOver key: Control and Option together (VO), or Caps Lock. Keys VoiceOver has that aren't listed here go to VoiceOver as usual where VoiceOver reads, and do nothing special where TurnOver reads. Keyboard help (the TurnOver menu, Keys) says what any key does without doing it; Command Control Comma, then Slash, lists the keys that work where you are.
 
@@ -699,6 +701,7 @@ System
 
   Key: What it does
   TurnOver F12: Reports the time. Pressed twice, reports the date
+  Control Command M: Opens the TurnOver menu: settings, keys, tools, help, quit
   TurnOver Shift B: Reports the battery level
 
 Menus
@@ -938,7 +941,7 @@ TV
 
 NVDA KEYS: EVERY KEY
 
-This page is made from TurnOver's own command tables (`turnover-coretest --keys-reference`, 20 Oct 2026), so it matches the build it came with. Don't edit it by hand.
+This page is made from TurnOver's own command tables (`turnover-coretest --keys-reference`, 21 Oct 2026), so it matches the build it came with. Don't edit it by hand.
 
 The NVDA keys style (the Windows style): NVDA's own keys, doing what they do in NVDA. TurnOver in a key means the NVDA key: Caps Lock, or Control and Option together. NVDA's Alt is the Mac's Command key, by position. Keyboard help (the TurnOver menu, Keys) says what any key does without doing it; Command Control Comma, then Slash, lists the keys that work where you are.
 
@@ -1048,12 +1051,13 @@ System
   Key: What it does
   TurnOver 1: Turns input help on or off: every key says what it does
   TurnOver F12: Reports the time. Pressed twice, reports the date
-  TurnOver N: Opens the TurnOver menu: preferences, help, quit
+  TurnOver N: Opens the TurnOver menu: settings, keys, tools, help, quit
   TurnOver Q: Quits TurnOver
   TurnOver R: Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return. Pressed again in the result, recognises again
   TurnOver Slash: Shortcuts list; lists the shortcuts that work here, the application's own first; Enter runs one
   TurnOver T: Reports the title of the current window. Pressed twice, spells it
   TurnOver Tab: Reports the object with focus
+  Control Command M: Opens the TurnOver menu: settings, keys, tools, help, quit
   TurnOver Shift B: Reports the battery level
 
 Browse mode
@@ -1340,7 +1344,7 @@ TV
 
 JAWS KEYS: EVERY KEY
 
-This page is made from TurnOver's own command tables (`turnover-coretest --keys-reference`, 20 Oct 2026), so it matches the build it came with. Don't edit it by hand.
+This page is made from TurnOver's own command tables (`turnover-coretest --keys-reference`, 21 Oct 2026), so it matches the build it came with. Don't edit it by hand.
 
 The JAWS keys style: JAWS's laptop layout. TurnOver in a key means the JAWS key: Caps Lock, or Control and Option together. Only the keys that differ from NVDA's are JAWS's own; every other key is NVDA's, so the NVDA keys page lists the rest. Keyboard help (the TurnOver menu, Keys) says what any key does without doing it; Command Control Comma, then Slash, lists the keys that work where you are.
 
@@ -1397,7 +1401,7 @@ JAWS keys
   TurnOver Shift N: Reports the status bar, if the window has one (NVDA+Shift+End)
   TurnOver Shift Y: Reports the title of the current window. Pressed twice, spells it
   TurnOver Control Shift H: Shortcuts list; lists the shortcuts that work here, the application's own first; Enter runs one
-  TurnOver Control Shift J: Opens the TurnOver menu: preferences, help, quit
+  TurnOver Control Shift J: Opens the TurnOver menu: settings, keys, tools, help, quit
   TurnOver Option Shift C: In a table, the column header (twice, the column from here down); elsewhere the character (twice, phonetically) (VO-C, VO-C-C)
   TurnOver Option Shift R: Reads the row header; twice, the row from here to its end (VO-R, VO-R-R)
   TurnOver Shift Page down: Moves the review cursor to the next page (NVDA+Page Down; laptop: NVDA+Shift+Page Down)
@@ -1491,6 +1495,7 @@ System
   TurnOver Slash: Shortcuts list; lists the shortcuts that work here, the application's own first; Enter runs one
   TurnOver T: Reports the title of the current window. Pressed twice, spells it
   TurnOver Tab: Reports the object with focus
+  Control Command M: Opens the TurnOver menu: settings, keys, tools, help, quit
   TurnOver Shift B: Reports the battery level
 
 Browse mode

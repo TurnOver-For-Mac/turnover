@@ -4,6 +4,15 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ## 2.0, build 22 (in progress)
 
+### Changed
+
+- The menu is short, in NVDA's shape: This app, Settings, Keys, Tools, Help, Support TurnOver, Quit. Every setting
+  now lives in the Settings window, in sections down the side: General, Speech, Keyboard, Item details, Web pages,
+  Documents, Screen recognition, Other apps' speech, Experimental. Two wait in Tools until they have a section:
+  Braille, and voices for other languages.
+- Command Control M opens the TurnOver menu in one press, in every keyboard style. Command Control Comma then M
+  still works.
+
 ### Fixed
 
 - The speech settings are TurnOver's own again: the rate, volume and pitch keys change TurnOver's voice only, and
@@ -16,6 +25,10 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   every repeated Backspace back by a quarter of a second).
 - A list focused twice within half a second with a different row selected (Finder opening a folder) is read
   each time; it was taken for the same focus and read once.
+- Word's own dictionary decides what is misspelled in Word; the choice now lives in Word's app module instead of
+  shared code, with tests (a contributor's change).
+- The app shortcut picker offers every application once: Safari and other apps reached through a link were missing,
+  and some appeared twice (a contributor's change).
 - Finder: an empty folder is read as empty, and Down Arrow in it says so. It was read as a list of four or five
   items, and the arrows walked through the columns.
 - A menu item, button or link with no name of its own is named by the text it holds (GitHub Desktop's lists of
