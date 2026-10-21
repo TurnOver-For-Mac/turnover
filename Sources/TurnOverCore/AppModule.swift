@@ -21,6 +21,9 @@ open class AppModule: ScriptableObject {
     /// NVDA: chooseNVDAObjectOverlayClasses — a class for this element, or nil for the default.
     open func objectClass(for element: AXUIElement, role: Role, subrole: String?) -> TurnOverObject.Type? { nil }
 
+    /// Supplement the app's spelling marks with macOS's checker. With no marks, the checker is always a fallback.
+    open var supplementsSpellingMarks: Bool { true }
+
     /// A grid's selection changed while the focus is in it (AXSelectedCellsChanged; `count` cells now selected). True
     /// if the module has said what is needed; false for TurnOver's own handling (one cell selected: it is the focus).
     open func gridSelectionChanged(_ table: AXUIElement, count: Int) -> Bool { false }

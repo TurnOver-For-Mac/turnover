@@ -91,8 +91,8 @@ open class EditableText: TurnOverObject {
             goToMisspelling(forward: forward, in: a, info: info, length: n)
         }
     }
-    private func goToMisspelling(forward: Bool, in a: NSAttributedString, info: TextInfo, length n: Int) {
-        let attributed: NSAttributedString? = a
+    /// Spelling marks for navigation, supplemented by macOS according to the app module's preference.
+    public static func misspellingRanges(in a: NSAttributedString, appModule: AppModule) -> [NSRange] {
         let ns = a.string as NSString
         var words: [NSRange] = []
         // Either of WebKit's two marks: the one for a word the page has underlined (AXMarkedMisspelled) and the one
@@ -113,8 +113,8 @@ open class EditableText: TurnOverObject {
         // the first word and missed the rest ("toste" after "Thiss"); the whole-text check finds them all.
         // The app's marks can be only some of them: TextEdit marks the one word Command Semicolon found, and the search
         // then knew no other, coming back to that word (19 Oct 2026: "TO E is being a bit funky"). So the Mac's
-        // checker is asked as well and its words added, except in Word, whose own dictionary is the one that counts.
-        if words.isEmpty || appModule.bundleIdentifier != "com.microsoft.Word" {
+        // checker is asked as well unless the app module trusts its own marks alone.
+        if words.isEmpty || appModule.supplementsSpellingMarks {
             let marked = words.count
             let results = NSSpellChecker.shared.check(a.string, range: NSRange(location: 0, length: ns.length),
                 types: NSTextCheckingResult.CheckingType.spelling.rawValue, options: nil, inSpellDocumentWithTag: 0, orthography: nil, wordCount: nil)
@@ -122,6 +122,12 @@ open class EditableText: TurnOverObject {
             words.sort { $0.location < $1.location }
             Log.io("spelling: \(marked) marked by the app, \(words.count - marked) more from the Mac's spell checker")
         }
+        return words
+    }
+    private func goToMisspelling(forward: Bool, in a: NSAttributedString, info: TextInfo, length n: Int) {
+        let attributed: NSAttributedString? = a
+        let ns = a.string as NSString
+        let words = Self.misspellingRanges(in: a, appModule: appModule)
         let caret = info.start
         Log.io("spelling: \(type(of: info)) length \(n), attributed \(attributed?.length ?? -1), marked \(words.count), caret \(caret)")
         // Forward: a word starting after the caret, or at it unless this search put the caret there (typing

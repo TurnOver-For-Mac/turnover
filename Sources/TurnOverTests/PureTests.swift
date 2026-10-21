@@ -633,6 +633,49 @@ func pureTests() {
             types: NSTextCheckingResult.CheckingType.spelling.rawValue, options: nil, inSpellDocumentWithTag: 0, orthography: nil, wordCount: nil)
         expect(found.map(\.range.location), [0, 11], "both words, not only the first")
     }
+    test("spelling: ordinary apps supplement partial marks without duplicating them") {
+        let text = NSMutableAttributedString(string: "Thiss is a toste of spelling ")
+        text.addAttribute(NSAttributedString.Key("AXMarkedMisspelled"), value: true, range: NSRange(location: 0, length: 6))
+        text.addAttribute(NSAttributedString.Key("AXMisspelled"), value: true, range: NSRange(location: 0, length: 5))
+        let module = AppModule(pid: 0, bundleIdentifier: "test.editor", appName: "Editor")
+        let words = EditableText.misspellingRanges(in: text, appModule: module)
+        expect(words, [NSRange(location: 0, length: 5), NSRange(location: 11, length: 5)], "trimmed app mark and the additional system result")
+        expect(EditableText.misspellingTarget(words, caret: 0, forward: true, placedHere: true)?.location, 11, "navigation reaches the unmarked error")
+    }
+    test("spelling: Word keeps its dictionary's marks in shared editing controls") {
+        BuiltInModules.register()
+        guard let type = AppModuleHandler.shared.moduleType(for: "com.microsoft.Word") else { return Harness.fail("Word's module is registered") }
+        let module = type.init(pid: 0, bundleIdentifier: "com.microsoft.Word", appName: "Word")
+        // These ranges go through EditableText's shared path, also used by dialog fields without a Word overlay.
+        for key in ["AXMarkedMisspelled", "AXMisspelled"] {
+            let text = NSMutableAttributedString(string: "Thiss is a toste of spelling ")
+            text.addAttribute(NSAttributedString.Key(key), value: true, range: NSRange(location: 0, length: 5))
+            let words = EditableText.misspellingRanges(in: text, appModule: module)
+            expect(words, [NSRange(location: 0, length: 5)], "\(key): the system checker must not add a word Word accepted")
+            expect(EditableText.misspellingTarget(words, caret: 0, forward: true, placedHere: true), nil, "no additional error after Word's mark")
+        }
+    }
+    test("spelling: Word falls back to the system checker without usable marks") {
+        BuiltInModules.register()
+        guard let type = AppModuleHandler.shared.moduleType(for: "com.microsoft.Word") else { return Harness.fail("Word's module is registered") }
+        let module = type.init(pid: 0, bundleIdentifier: "com.microsoft.Word", appName: "Word")
+        let text = NSMutableAttributedString(string: "Thiss is a toste of spelling ")
+        let expected = [NSRange(location: 0, length: 5), NSRange(location: 11, length: 5)]
+        expect(EditableText.misspellingRanges(in: text, appModule: module), expected, "no marks")
+        text.addAttribute(NSAttributedString.Key("AXMarkedMisspelled"), value: true, range: NSRange(location: 5, length: 1))
+        expect(EditableText.misspellingRanges(in: text, appModule: module), expected, "a whitespace-only mark still needs the fallback")
+    }
+    test("spelling: the module's preference controls supplementation") {
+        final class OwnDictionaryModule: AppModule {
+            override var supplementsSpellingMarks: Bool { false }
+        }
+        let text = NSMutableAttributedString(string: "Thiss is a toste of spelling ")
+        text.addAttribute(NSAttributedString.Key("AXMisspelled"), value: true, range: NSRange(location: 0, length: 5))
+        let ownDictionary = OwnDictionaryModule(pid: 0, bundleIdentifier: "test.dictionary", appName: "Dictionary")
+        expect(EditableText.misspellingRanges(in: text, appModule: ownDictionary), [NSRange(location: 0, length: 5)], "a module can trust its own dictionary")
+        let base = AppModule(pid: 0, bundleIdentifier: "com.microsoft.Word", appName: "Word")
+        expect(EditableText.misspellingRanges(in: text, appModule: base), [NSRange(location: 0, length: 5), NSRange(location: 11, length: 5)], "the bundle identifier alone does not select the preference")
+    }
     test("slow drip: slow answers add up to a rest; a quiet spell starts the count again") {
         let ms: UInt64 = 1_000_000
         var state: AXHealth.DripCount? = nil

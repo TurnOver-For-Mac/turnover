@@ -24,6 +24,9 @@ final class WordAppModule: AppModule {
     static let bundleID = "com.microsoft.Word"
     let script = WordScript()
 
+    // Word's own dictionary is the one that counts when it supplies spelling marks, including in dialog fields.
+    override var supplementsSpellingMarks: Bool { false }
+
     required init(pid: pid_t, bundleIdentifier: String, appName: String) {
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
         declareTableScripts()
