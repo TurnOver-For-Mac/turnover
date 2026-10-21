@@ -95,7 +95,7 @@ public final class BrailleDisplays {
     /// A display a driver claims but couldn't load: with VoiceOver off, its braille server (scrod) can still hold a USB
     /// display too, showing "VoiceOver off" for ever (a Focus 5 by USB with CoExist off, 20 Oct 2026). Ask scrod to
     /// quit and look again; if the display still won't open, say so once, as nothing on the display can.
-    private var lastDetectReport = ""
+    private var lastDetectReport: String?   // nil until the first look, which is always logged, even finding nothing
     private var lastUSBFree = Date.distantPast
     private var toldUnopened = false
 

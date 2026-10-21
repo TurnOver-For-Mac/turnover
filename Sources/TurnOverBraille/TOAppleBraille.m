@@ -87,13 +87,21 @@ static NSString *const kDrivers = @"/System/Library/ScreenReader/BrailleDrivers"
     });
 }
 
-/// A driver's matching dictionary as IOKit wants it: "*" means any value, so the key is left out.
+/// A driver's matching dictionary as IOKit wants it: "*" means any value, so the key is left out. USB matching takes
+/// idVendor only together with idProduct, so a vendor-only dictionary (Freedom Scientific's, any product) matched
+/// nothing and a Focus 5 by USB was never found (macOS 27, 21 Oct 2026); its properties go through IOPropertyMatch,
+/// which compares them as they are.
 static NSMutableDictionary *matching(NSDictionary *autodetect) {
     NSMutableDictionary *m = [NSMutableDictionary dictionary];
     [autodetect enumerateKeysAndObjectsUsingBlock:^(id key, id value, BOOL *stop) {
         if ([value isKindOfClass:NSString.class] && [value isEqual:@"*"]) return;
         m[key] = value;
     }];
+    if (![m[@"IOProviderClass"] isEqual:@"IOHIDDevice"] && m[@"idVendor"] && !m[@"idProduct"]) {
+        NSMutableDictionary *props = [NSMutableDictionary dictionary];
+        for (NSString *key in m.allKeys) if (![key isEqual:@"IOProviderClass"]) { props[key] = m[key]; [m removeObjectForKey:key]; }
+        m[@"IOPropertyMatch"] = props;
+    }
     return m;
 }
 
