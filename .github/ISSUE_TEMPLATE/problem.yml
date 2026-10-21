@@ -1,0 +1,57 @@
+name: Something isn't right
+description: TurnOver said the wrong thing, said nothing, or a key didn't work
+labels: [problem]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. TurnOver is a spare-time project: every report is read, but replies may take a while.
+        Please don't paste anything private (emails, messages, passwords) into the report.
+  - type: input
+    id: app
+    attributes:
+      label: Which app were you in?
+      placeholder: Mail, Word, Safari, Finder…
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What did you do, what happened, and what did you expect?
+      description: The keys you pressed, in order, and what you heard. Exact words help most.
+    validations:
+      required: true
+  - type: dropdown
+    id: style
+    attributes:
+      label: Keyboard style
+      options:
+        - Mac (VoiceOver's keys)
+        - Windows (NVDA's keys)
+        - Narrator or JAWS keys
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: TurnOver build and macOS version
+      description: TurnOver's menu, About and updates, says the build; Apple menu, About This Mac, says macOS.
+      placeholder: TurnOver build 21, macOS 27.2
+    validations:
+      required: true
+  - type: dropdown
+    id: again
+    attributes:
+      label: Does it happen every time?
+      options:
+        - Every time
+        - Sometimes
+        - Once
+  - type: textarea
+    id: report
+    attributes:
+      label: Report (optional)
+      description: |
+        TurnOver's menu, Send feedback, saves a report. You can drag the zip here. Choose the private kind of report
+        if you were reading anything personal: it leaves out what was read.

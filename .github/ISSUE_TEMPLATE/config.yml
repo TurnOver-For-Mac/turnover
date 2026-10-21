@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: The guides
+    url: https://doll-eye.github.io/turnover-updates/guide.html
+    about: Getting started, the keys, the apps and troubleshooting.
+  - name: Security problem
+    url: https://github.com/TurnOver-For-Mac/turnover/security/advisories/new
+    about: Something that could expose what a person reads or types. Reported privately, please.

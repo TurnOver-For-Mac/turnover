@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// PARKED (20 Oct 2026): off (`on` below is false). Following VoiceOver's rate, volume and pitch was not reliable; the
+// code is kept for a better attempt, and nothing calls it while `on` is false. docs/DECISIONS.md lists what is parked.
 // One setting, two readers (reference/keyboard-styles/settings-parity.md; 19 Oct 2026: "that lack of parity I
 // want to avoid"). Rate, volume and pitch are changed in VoiceOver first, with its own commands through AppleScript,
 // and TurnOver takes the value VoiceOver reports, so the two never drift apart, whichever style's key was pressed and
@@ -18,9 +20,12 @@ public enum SpeechParity {
     nonisolated(unsafe) private static var refused = false   // main thread
     nonisolated(unsafe) private static var toldRefused = false   // main thread
 
-    /// Whether this setting goes through VoiceOver now.
+    /// Whether this setting goes through VoiceOver now. Off since 20 Oct 2026 (Oliver: "get rid of that bonding of
+    /// VoiceOver and TurnOver voices, it's not working correctly"): the keys change TurnOver's own voice only, and
+    /// TurnOver no longer reads VoiceOver's rate as it takes over. The code stays for a better attempt.
+    public static let on = false
     public static func applies(_ setting: String) -> Bool {
-        paired.contains(setting) && Coexist.on && !refused
+        on && paired.contains(setting) && Coexist.on && !refused
             && !NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.VoiceOver").isEmpty
     }
 

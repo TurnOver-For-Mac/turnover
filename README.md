@@ -94,14 +94,19 @@ person is never without speech, and TurnOver can concentrate on the apps where i
 
 TurnOver has its own settings (the Settings window, Command Control Comma then S). "Copy VoiceOver settings" is a
 one-time import of your voice, rate, pitch, verbosity and typing echo, so a new user starts where they were; it is not
-how settings are meant to be managed. Rate, volume and pitch are kept in step with VoiceOver's so the two readers
-sound the same when they hand over.
+how settings are meant to be managed.
 
 Whether TurnOver should aim to stand entirely on its own is a fair question, and one for Discussions on this
 repository. The plans in docs/ say which decisions are settled and which are open.
 
 ## Finding your way around the code
 
+- [docs/HOW-A-KEY-BECOMES-SPEECH.md](docs/HOW-A-KEY-BECOMES-SPEECH.md): the story of one key press, from the event
+  tap to the voice, with the log line for each step. Start here.
+- [docs/HOW-FOCUS-BECOMES-AN-OBJECT.md](docs/HOW-FOCUS-BECOMES-AN-OBJECT.md): how an app's focus change becomes
+  something spoken, and where a rule for one app goes.
+- [docs/LOG.md](docs/LOG.md): how to read a TurnOver log, the main instrument.
+- [docs/DECISIONS.md](docs/DECISIONS.md): what is settled, what is parked, what is open.
 - [ARCHITECTURE.md](ARCHITECTURE.md): the map from each mechanism to its files and tests.
 - [TESTING.md](TESTING.md): the unit tests, recorded windows (fixtures) and the key driver.
 - [PATTERNS.md](PATTERNS.md): how Mac apps misbehave for screen readers, and TurnOver's answers.

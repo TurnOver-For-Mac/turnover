@@ -624,6 +624,8 @@ public var config: Config {
 /// The four keyboard styles (docs/KEYBOARD-STYLES-PLAN.md, 19 Oct 2026): VoiceOver's keys, and NVDA's, Narrator's and
 /// JAWS's on Mac keys. The raw values are what the settings file keeps ("mac" and "windows" from before).
 nonisolated public enum KeyboardStyle: String, CaseIterable, Sendable {
+    // Narrator keys are parked: the style exists and its table (Resources/keymaps/narrator.json) is empty, and K does not
+    // offer it (GlobalCommands.offeredStyles). docs/DECISIONS.md.
     case voiceOver = "mac", nvda = "windows", narrator, jaws
     public enum Family: Sendable { case mac, windows }
     public var family: Family { self == .voiceOver ? .mac : .windows }

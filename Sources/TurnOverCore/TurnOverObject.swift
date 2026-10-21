@@ -97,6 +97,9 @@ open class TurnOverObject: ScriptableObject {
            let h = element.string(kAXHelpAttribute)?.trimmingCharacters(in: .whitespacesAndNewlines), !h.isEmpty, h.count <= 60 { return h }
         // A row or cell with no name of its own is the text of what it holds (Mail's message list: sender, subject, date, preview).
         if [.tableRow, .tableCell, .listItem, .treeViewItem, .cell].contains(role) { return contentText(limit: 8) }
+        // An item, button or link whose name is only in the text it holds (Electron apps: GitHub Desktop's repository
+        // list is menu items with the repository's name in a child, so each was a nameless "menu item", 21 Oct 2026).
+        if [.menuItem, .button, .link].contains(role) { return contentText(limit: 4) }
         return ""
     }
 

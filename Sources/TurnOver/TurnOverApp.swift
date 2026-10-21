@@ -372,7 +372,7 @@ final class TurnOverApp {
         SecureInputWatch.start()
         if Coexist.on { VoiceOverTap.set(true, why: "TurnOver takes \(NSWorkspace.shared.frontmostApplication?.localizedName ?? "an app")") }
         // VoiceOver's speech settings may have been changed where it read: TurnOver takes them up (SpeechParity).
-        if Coexist.on { SpeechParity.followVoiceOver() }
+        if Coexist.on, SpeechParity.on { SpeechParity.followVoiceOver() }
         ScreenCurtain.apply()
         // Started by Command+Control+T: TurnOver Key has just said "TurnOver on"; the first take-over is not said again.
         // At launch TurnOver names itself ("TurnOver on"); later take-overs say the usual "TurnOver on" or play the chime.

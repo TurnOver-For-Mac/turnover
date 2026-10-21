@@ -6,10 +6,20 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- The speech settings are TurnOver's own again: the rate, volume and pitch keys change TurnOver's voice only, and
+  TurnOver no longer reads VoiceOver's rate when it takes over. The link between the two readers' settings wasn't
+  reliable.
+
 - VoiceOver keys: Right Arrow reads the character you just passed, as VoiceOver does, so what you hear is what
   Backspace will delete. NVDA keys and JAWS keys keep reading the character after the caret, as on Windows.
 - Backspace speaks the deleted character at once, instead of after waiting for the caret (Mail's compose window held
   every repeated Backspace back by a quarter of a second).
+- A list focused twice within half a second with a different row selected (Finder opening a folder) is read
+  each time; it was taken for the same focus and read once.
+- Finder: an empty folder is read as empty, and Down Arrow in it says so. It was read as a list of four or five
+  items, and the arrows walked through the columns.
+- A menu item, button or link with no name of its own is named by the text it holds (GitHub Desktop's lists of
+  repositories and branches were nameless menu items).
 
 ## 2.0, build 21
 

@@ -1,0 +1,4 @@
+# Who is asked to review a pull request that touches these paths. GitHub requests the review automatically.
+# The maintainer reviews everything; add a contributor's handle after the paths they look after, for example:
+#   /Sources/TurnOverCore/Modules/MailAppModule.swift  @Doll-Eye @their-handle
+*  @Doll-Eye
