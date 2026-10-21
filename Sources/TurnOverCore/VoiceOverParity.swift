@@ -515,6 +515,14 @@ public enum ArrowQuickNav {
 
     static func toggle() {
         set(!on, sound: true)
+        // In a document the chord is also the way between browse mode and focus mode (VoiceOver has no focus mode:
+        // Quick Nav off is when the arrows go to the page). Quick Nav off: focus mode, kept until the focus leaves, as
+        // NVDA's by-hand switch is; on: browse mode. The VoiceOver keys had no deliberate way into focus mode, since
+        // TurnOver Space is VO-Space there (a contributor, 21 Oct 2026). The Quick Nav sound says enough.
+        if config.general.macKeys, let d = API.focusTreeInterceptor {
+            d.disableAutoPassThrough = !on
+            d.setPassThrough(!on, announce: false)
+        }
         // VoiceOver's follows: its own chord, posted where VoiceOver hears it. Only when it differs, so two out of step
         // come back into step. (Tried on 17 Oct 2026 and undone, because VoiceOver's Quick Nav then took the arrows
         // TurnOver passed to its apps; those now go to the app alone, so it can be on.)

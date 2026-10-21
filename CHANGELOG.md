@@ -10,6 +10,9 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   now lives in the Settings window, in sections down the side: General, Speech, Keyboard, Item details, Web pages,
   Documents, Screen recognition, Other apps' speech, Experimental. Two wait in Tools until they have a section:
   Braille, and voices for other languages.
+- VoiceOver keys: Left and Right pressed together, which turn Quick Nav off and on, now also switch a document between
+  focus mode and browse mode: off is focus mode (the keys go to the page, until the focus leaves), on is browse mode.
+  There was no deliberate way into focus mode in this style, since TurnOver Space is VO-Space.
 - Command Control M opens the TurnOver menu in one press, in every keyboard style. Command Control Comma then M
   still works.
 
