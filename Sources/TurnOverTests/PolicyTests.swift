@@ -34,6 +34,76 @@ func policyTests() {
         ]
         for (what, inputs, want) in table { expect(LeadPolicy.leads(inputs), want, what) }
     }
+    test("reader selection: startup chooses the configured reader with automatic hand-over on or off") {
+        let states: [(coexist: Bool, voiceOver: Bool, turnOver: Bool, chooseTurnOver: Bool?, chooseVoiceOver: Bool?)] = [
+            (false, false, false, nil, false),
+            (false, false, true, nil, false),
+            (false, true, false, true, nil),
+            (false, true, true, true, nil),
+            (true, false, false, true, false),   // Neither reader is active: start the configured one.
+            (true, false, true, nil, false),
+            (true, true, false, true, nil),
+            (true, true, true, nil, false),
+        ]
+        for state in states {
+            for automatic in [false, true] {
+                for shouldLead in [false, true] {
+                    var selection = ReaderSelection()
+                    let context = "CoExist \(state.coexist), VoiceOver \(state.voiceOver), TurnOver \(state.turnOver), automatic \(automatic), TurnOver owns app \(shouldLead)"
+                    let choice = selection.select(shouldLead: shouldLead, automaticHandOver: automatic,
+                                                  coexist: state.coexist, voiceOverEnabled: state.voiceOver,
+                                                  turnOverActive: state.turnOver)
+                    expect(choice, shouldLead ? state.chooseTurnOver : state.chooseVoiceOver, context)
+                    check(!selection.needsInitialSelection, "\(context): startup choice is consumed")
+                }
+            }
+        }
+    }
+    test("reader selection: automatic hand-over controls app switches after startup") {
+        for coexist in [false, true] {
+            for automatic in [false, true] {
+                var selection = ReaderSelection()
+                expect(selection.select(shouldLead: true, automaticHandOver: automatic, coexist: coexist,
+                                        voiceOverEnabled: true, turnOverActive: false), true,
+                       "TurnOver takes its app at startup, including when automatic hand-over is off")
+                expect(selection.select(shouldLead: false, automaticHandOver: automatic, coexist: coexist,
+                                        voiceOverEnabled: coexist, turnOverActive: true), automatic ? false : nil,
+                       "switching to a VoiceOver app only hands back when automatic hand-over is on")
+                // VoiceOver was selected automatically above, or explicitly by the user with automatic hand-over off.
+                selection.readerChosen()
+                expect(selection.select(shouldLead: true, automaticHandOver: automatic, coexist: coexist,
+                                        voiceOverEnabled: true, turnOverActive: false), automatic ? true : nil,
+                       "returning to a TurnOver app only takes over when automatic hand-over is on")
+            }
+        }
+    }
+    test("reader selection: an already correct startup reader does not leave a later startup choice pending") {
+        for coexist in [false, true] {
+            var selection = ReaderSelection()
+            expect(selection.select(shouldLead: true, automaticHandOver: false, coexist: coexist,
+                                    voiceOverEnabled: coexist, turnOverActive: true), nil,
+                   "TurnOver already has its startup app")
+            expect(selection.select(shouldLead: false, automaticHandOver: false, coexist: coexist,
+                                    voiceOverEnabled: coexist, turnOverActive: true), nil,
+                   "a later app change cannot masquerade as the startup choice")
+            expect(selection.select(shouldLead: false, automaticHandOver: true, coexist: coexist,
+                                    voiceOverEnabled: coexist, turnOverActive: true), false,
+                   "enabling automatic hand-over applies the current app's reader")
+        }
+    }
+    test("reader selection: an explicit reader choice supersedes deferred startup") {
+        for coexist in [false, true] {
+            for manuallyChoseTurnOver in [false, true] {
+                var selection = ReaderSelection()
+                selection.readerChosen()
+                check(!selection.needsInitialSelection, "the explicit choice completes startup selection")
+                expect(selection.select(shouldLead: !manuallyChoseTurnOver, automaticHandOver: false,
+                                        coexist: coexist, voiceOverEnabled: coexist || !manuallyChoseTurnOver,
+                                        turnOverActive: manuallyChoseTurnOver), nil,
+                       "a delayed startup check preserves the user's reader even when the configured owner differs")
+            }
+        }
+    }
     test("speech: a capital's pitch is used up by the next utterance even when nothing is said") {
         Speech.mode = .off
         Speech.speakMessage(Speech.capitalMark + "A")
