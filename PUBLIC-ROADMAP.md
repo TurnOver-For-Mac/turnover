@@ -27,8 +27,12 @@ PLUGIN-GUIDE.md says how to write one.
 
 ## Soon
 
-- **A shortcuts manager** in the Settings window: every command by category with its keys; add, change or remove
-  keys; clashes with VoiceOver's or NVDA's keys pointed out.
+- **A key mapping manager** in the Settings window: every command by category with its keys; add, change or remove
+  keys; clashes with VoiceOver's or NVDA's keys pointed out; hybrids of the styles, saved as profiles; a quick switch
+  between profiles, or a profile that comes on by itself for an app, as VoiceOver's Activities do.
+- **A verbosity manager**: the order in which an item's pieces are said, and which are said at all, set per app.
+  In Mail, for example, subject first, then sender, then the time, or any order you like; the same for lists in
+  other apps.
 - **Your VoiceOver scripts, on keys.** AppleScripts written for VoiceOver ("tell application VoiceOver to output")
   run as they are with TurnOver speaking, and each can go on a key, as with VoiceOver's Keyboard Commander.
 - **Voices.** A tidy list (the voices for your languages, best quality first), and changing voice, rate and pitch on
