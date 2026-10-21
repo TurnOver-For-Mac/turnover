@@ -106,7 +106,7 @@ let package = Package(
         // The unit tests: pure functions, and views against recorded trees (Tests/Fixtures). build.sh runs it.
         .executableTarget(
             name: "TurnOverTests",
-            dependencies: ["TurnOverCore", "TurnOverSpeech", "AXFixtures", "PluginTestKit"],
+            dependencies: ["TurnOverCore", "TurnOverSpeech", "TurnOverControl", "AXFixtures", "PluginTestKit"],
             path: "Sources/TurnOverTests",
             swiftSettings: [.defaultIsolation(MainActor.self)],
             linkerSettings: [.linkedFramework("ApplicationServices"), .linkedFramework("AppKit")]
