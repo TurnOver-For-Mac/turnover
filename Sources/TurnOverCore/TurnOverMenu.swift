@@ -651,10 +651,6 @@ public final class TurnOverMenu {
                     step: 1, min: 1, max: 30, format: { "\(Int($0.rounded())) second\(Int($0.rounded()) == 1 ? "" : "s")" }), hint: "For each display's width of message"),
             ] }),
             MenuItem("Keep words whole", .toggle(get: { config.braille.wordWrap }, set: { config.braille.wordWrap = $0; Braille.refreshSoon() }), hint: "A word is not split across the end of the display"),
-            MenuItem("Panning moves the cursor", .cycle(options: ["line by line", "to the text shown", "off"],
-                get: { ["line", "window", "off"].firstIndex(of: config.braille.panMovesCaret) ?? 0 },
-                set: { config.braille.panMovesCaret = ["line", "window", "off"][$0] }),
-                hint: "Where you read on the display, the arrows carry on from: line by line, or exactly from the text shown"),
             MenuItem("Cursor", .submenu { [
                 MenuItem("Show the cursor", .toggle(get: { config.braille.showCursor }, set: { config.braille.showCursor = $0; Braille.refreshSoon() })),
                 MenuItem("Blink", .toggle(get: { config.braille.blinkCursor }, set: { config.braille.blinkCursor = $0; Braille.refreshSoon() })),

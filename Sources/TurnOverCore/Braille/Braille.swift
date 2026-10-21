@@ -608,10 +608,11 @@ public enum Braille {
         guard r.move(.line, direction) != 0 else { Tones.edge(); return }
         // The caret follows the display (Panning moves the cursor), so the arrows carry on from the line read on the
         // display, not from where reading began (VoiceOver left the caret behind: a tester, 21 Oct 2026).
-        let caretWas = API.caretObject.flatMap { try? $0.makeTextInfo(.caret) }?.start
-        if config.braille.panMovesCaret != "off" { r.updateCaret(); heldLine = nil }
-        else if config.braille.tether != "review", let c = caretWas { heldLine = (r.copy(), c) }
-        if config.braille.tether == "review" { TextReview.set(r) }
+        switch panFollow(setting: config.braille.panMovesCaret, tether: config.braille.tether) {
+        case .review: TextReview.set(r)
+        case .caret: r.updateCaret(); heldLine = nil
+        case .hold: if let c = API.caretObject.flatMap({ try? $0.makeTextInfo(.caret) })?.start { heldLine = (r.copy(), c) }
+        }
         // The line is spoken as well as shown, as VoiceOver does (the display moved on silently, 6 Oct 2026).
         SayAll.stop()
         Speech.cancel()
@@ -624,6 +625,15 @@ public enum Braille {
     /// The line reached by panning with "Panning moves the cursor" off, and the caret then: shown until the caret moves.
     private static var heldLine: (info: TextInfo, caret: Int)?
 
+    /// What panning on to another line moves. Tethered to review, the review cursor only, as NVDA's braille does, and
+    /// the caret stays where it is; otherwise the caret, unless "Panning moves the cursor" is off, when the display
+    /// holds the line reached until the caret moves.
+    public enum PanFollow: Equatable { case review, caret, hold }
+    public static func panFollow(setting: String, tether: String) -> PanFollow {
+        if tether == "review" { return .review }
+        return setting == "off" ? .hold : .caret
+    }
+
     /// "Panning moves the cursor" set to the text shown: the caret goes to the start of each display's width of the
     /// line as it is panned to, so the arrows and typing carry on from exactly what was read.
     private static func caretToWindow() {
@@ -631,8 +641,7 @@ public enum Braille {
               windowStart < cellMap.count else { return }
         let r = info.copy()
         r.start = lineStart + cellMap[windowStart]; r.end = r.start
-        r.updateCaret()
-        if config.braille.tether == "review" { TextReview.set(r) }
+        if panFollow(setting: config.braille.panMovesCaret, tether: config.braille.tether) == .review { TextReview.set(r) } else { r.updateCaret() }
     }
 
     private static func onActionable(_ e: AXUIElement?) -> Bool {
