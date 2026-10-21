@@ -241,10 +241,18 @@ static NSMutableString *btReport;
     // The model's key table, beside the driver's code.
     NSMutableDictionary *keys = [NSMutableDictionary dictionary];
     NSString *table = [_bundle pathForResource:_modelIdentifier ofType:@"plist"];
+    NSMutableDictionary *chords = [NSMutableDictionary dictionary];
     for (NSDictionary *e in (table ? [NSArray arrayWithContentsOfFile:table] : nil) ?: @[]) {
-        NSInteger ident = [e[@"SCRBrailleInputIdentifier"] integerValue];
-        if (e[@"SCRCommand"]) keys[@(ident)] = e[@"SCRCommand"];
+        id raw = e[@"SCRBrailleInputIdentifier"];
+        if (!e[@"SCRCommand"] || !raw) continue;
+        // A chord is two identifiers joined by a dot ("65793.68097", rocker down with a selector key): read whole, it
+        // came out as its first key and overwrote that key's own command (the Focus 40's table, 21 Oct 2026).
+        NSString *text = [raw description];
+        if ([text containsString:@"."]) { chords[text] = e[@"SCRCommand"]; continue; }
+        NSNumber *ident = @([raw integerValue]);
+        keys[ident] = e[@"SCRCommand"];
     }
+    _chordCommands = chords;
     _keyCommands = keys;
     return self;
 }

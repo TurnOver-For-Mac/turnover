@@ -33,6 +33,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSArray<NSNumber *> *)readInputEvents;
 /// The model's key table: input identifier (pressed) to VoiceOver command ("SCRBraille.panLeft").
 @property (readonly) NSDictionary<NSNumber *, NSString *> *keyCommands;
+/// The model's chords: "first.second" input identifiers (pressed) to VoiceOver command.
+@property (readonly) NSDictionary<NSString *, NSString *> *chordCommands;
 - (void)close;
 @end
 
