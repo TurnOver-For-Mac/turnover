@@ -53,13 +53,14 @@ final class WordAppModule: AppModule {
         }
     }
 
-    /// The sheet a control is in, if any.
+    /// The sheet a control is in, if any. Word can report the sheet as its focused window with subrole AXDialog
+    /// instead of role AXSheet (review, 21 Oct 2026); either is taken.
     static func sheet(of e: AXUIElement) -> AXUIElement? {
         var p: AXUIElement? = e; var hops = 0
         while let x = p, hops < 15 {
             let r = x.role
             if r == "AXSheet" { return x }
-            if r == "AXWindow" { return nil }
+            if r == "AXWindow" { return x.string(kAXSubroleAttribute) == "AXDialog" ? x : nil }
             p = x.element(kAXParentAttribute); hops += 1
         }
         return nil
@@ -67,7 +68,10 @@ final class WordAppModule: AppModule {
 
     private func sheetMove(_ g: KeyboardGesture, forward: Bool) {
         guard let f = API.focusObject?.element, let sheet = Self.sheet(of: f) else { g.send(); return }
-        let all = SettingsPanePlugin.controlsInOrder(in: sheet).filter { ($0.attr(kAXEnabledAttribute) as? Bool) != false }
+        // Enabled and on screen: the collapsed Save As sheet keeps its file browser at zero size (review, 21 Oct 2026).
+        let all = SettingsPanePlugin.controlsInOrder(in: sheet).filter {
+            ($0.attr(kAXEnabledAttribute) as? Bool) != false && (TurnOverObject.frame($0).map { $0.width > 0 && $0.height > 0 } ?? false)
+        }
         // Where the focus is: the control itself, or the control it is inside (a field's completion list).
         var here: Int?
         var p: AXUIElement? = f; var hops = 0
