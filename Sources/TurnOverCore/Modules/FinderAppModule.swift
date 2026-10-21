@@ -6,6 +6,7 @@
 import Foundation
 import UniformTypeIdentifiers
 import ApplicationServices
+import AppKit
 
 final class FinderAppModule: AppModule {
     static let bundleID = "com.apple.finder"
@@ -24,6 +25,19 @@ final class FinderAppModule: AppModule {
             let hasItems = !(e.elements(kAXRowsAttribute).isEmpty && e.elements(kAXChildrenAttribute).isEmpty)
             return hasItems && selected.isEmpty && [Role.outline, .list, .table].contains(f.role)
         }
+        // Command Down on a folder and Command Up are sometimes ignored by Finder: about one press in twenty did nothing,
+        // the key reached Finder (a tap after VoiceOver's saw it, 21 Oct 2026) and no synthetic press ever failed.
+        // A symptom fix, the cause in Finder unknown: the key is sent on, and if nothing changes within 350 ms it is
+        // sent once more. Down only for a folder (a file would open twice), and only while Finder is still in front.
+        script("finder_openSelected", "Opens the selected item (Command Down); a folder is asked for again if Finder ignored it", gestures: ["kb:command+downArrow"], category: cat) { [weak self] g in
+            self?.sendAgainIfIgnored(g, what: "Command Down", foldersOnly: true)
+        }.isAvailable = { [weak self] in
+            guard let self, inFileView(), let f = API.focusObject else { return false }
+            return !(f.element.elements(kAXSelectedRowsAttribute) + f.element.elements(kAXSelectedChildrenAttribute)).isEmpty
+        }
+        script("finder_enclosingFolder", "Goes to the enclosing folder (Command Up); asked for again if Finder ignored it", gestures: ["kb:command+upArrow"], category: cat) { [weak self] g in
+            self?.sendAgainIfIgnored(g, what: "Command Up", foldersOnly: false)
+        }.isAvailable = { [weak self] in self?.inFileView() ?? false }
         // Windows style only: in Mac style Finder keeps its own keys (Return renames, Command Down opens), the muscle
         // memory VoiceOver users have (6 Oct 2026).
         script("finder_open", "Opens the selected item, as in Windows Explorer (Windows style; on a Mac, Command Down)", gestures: ["kb:enter", "kb:numpadEnter"], category: cat) { [weak self] g in
@@ -118,6 +132,46 @@ final class FinderAppModule: AppModule {
     }
 
     /// The focus is a file view (list, icon, column or gallery view) in an ordinary Finder window.
+    /// The key goes to Finder; if Finder shows no change within 350 ms (no focus or selection event, the same window
+    /// title and selected row), it is sent once more. See the comment at the scripts.
+    private func sendAgainIfIgnored(_ g: KeyboardGesture, what: String, foldersOnly: Bool) {
+        let before = Self.viewState()
+        g.send()
+        let changed = Poll.pumping(limit: 0.35) {
+            EventHandler.isPending(.gainFocus) || EventHandler.isPending(.selection) || !Self.same(Self.viewState(), before)
+        }
+        if changed { return }
+        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { Log.io("finder: \(what) did nothing within 350 ms; another app is in front, not sent again"); return }
+        if foldersOnly, let f = API.focusObject, !Self.selectedIsFolder(in: f.element) { Log.io("finder: \(what) did nothing within 350 ms on a file; not sent again"); return }
+        Log.io("finder: \(what) did nothing within 350 ms (Finder ignored the key, 21 Oct 2026); sent again")
+        g.send()
+    }
+
+    /// The window's title and the selected row's identity, as a view-change check.
+    private static func viewState() -> (String, AXUIElement?) {
+        guard let f = API.focusObject else { return ("", nil) }
+        let title = f.element.element(kAXWindowAttribute)?.string(kAXTitleAttribute) ?? ""
+        let sel = (f.element.elements(kAXSelectedRowsAttribute) + f.element.elements(kAXSelectedChildrenAttribute)).first
+        return (title, sel)
+    }
+    private static func same(_ a: (String, AXUIElement?), _ b: (String, AXUIElement?)) -> Bool {
+        guard a.0 == b.0 else { return false }
+        switch (a.1, b.1) {
+        case (nil, nil): return true
+        case let (x?, y?): return x.isSame(y)
+        default: return false
+        }
+    }
+
+    /// Whether the selected row is a folder: in list view its Kind cell says Folder, or its Size cell is the folder's
+    /// dashes. Icon and column views give no cells: not known, so no second send.
+    static func selectedIsFolder(in list: AXUIElement) -> Bool {
+        guard let row = list.elements(kAXSelectedRowsAttribute).first else { return false }
+        let cells = row.elements(kAXChildrenAttribute)
+        let texts = cells.map { c in c.elements(kAXChildrenAttribute).compactMap { $0.string(kAXValueAttribute) }.joined(separator: " ") }
+        return FinderRows.isFolderRow(cellTexts: texts)
+    }
+
     private func inFileView() -> Bool {
         guard let f = API.focusObject, f.pid == pid else { return false }
         let fileRoles: [Role] = [.outline, .list, .browser, .table, .tableRow, .listItem, .treeViewItem]
@@ -198,5 +252,13 @@ final class FinderColumnItem: TurnOverObject {
         var count: CFIndex = 0
         AXUIElementGetAttributeValueCount(parent, kAXChildrenAttribute as CFString, &count)
         return PositionInfo(index: i + 1, count: count > 0 ? count : nil, level: nil)
+    }
+}
+
+/// Finder's list rows as text, for the rules above and their tests.
+public enum FinderRows {
+    /// A folder: the Kind cell says Folder, or the Size cell holds the folder's dashes (the Kind column may be hidden).
+    nonisolated public static func isFolderRow(cellTexts: [String]) -> Bool {
+        cellTexts.contains("Folder") || (cellTexts.count >= 3 && cellTexts[2] == "--")
     }
 }

@@ -29,6 +29,9 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   shared code, with tests (a contributor's change).
 - The app shortcut picker offers every application once: Safari and other apps reached through a link were missing,
   and some appeared twice (a contributor's change).
+- Finder: Command Down on a folder, and Command Up, are sent again if Finder ignored them. About one press in
+  twenty did nothing although the key reached Finder; now, if nothing has changed a third of a second later, the key
+  goes once more. Only for a folder, never for a file, so nothing opens twice. A symptom fix; the cause is in Finder.
 - Finder: an empty folder is read as empty, and Down Arrow in it says so. It was read as a list of four or five
   items, and the arrows walked through the columns.
 - A menu item, button or link with no name of its own is named by the text it holds (GitHub Desktop's lists of

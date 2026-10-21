@@ -11,6 +11,12 @@ import TurnOverSpeech
 import AXFixtures
 
 func pureTests() {
+    test("finder: a list row is a folder by its Kind cell or the folder's dashes in Size") {
+        expect(FinderRows.isFolderRow(cellTexts: ["Reports", "Today at 10:14", "--", "Folder"]), true)
+        expect(FinderRows.isFolderRow(cellTexts: ["Notes.docx", "8 Oct 2026 at 15:57", "244 KB", "Microsoft Word document (.docx)"]), false)
+        expect(FinderRows.isFolderRow(cellTexts: ["Reports", "Today at 10:14", "--"]), true, "the Kind column hidden")
+        expect(FinderRows.isFolderRow(cellTexts: []), false, "an icon view item has no cells")
+    }
     test("applications: hidden links to visible apps appear once, hidden apps stay out") {
         let fm = FileManager.default
         let dir = fm.temporaryDirectory.appendingPathComponent("turnover-app-list-test-\(UUID().uuidString)")
