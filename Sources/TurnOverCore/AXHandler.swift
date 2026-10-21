@@ -115,7 +115,10 @@ public final class AXHandler {
                   Self.systemUIAgents.contains(app.bundleIdentifier ?? "") else { return }
             // A moment for the new process to answer accessibility questions before its notifications are asked for.
             let pid = app.processIdentifier
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.observe(pid) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+                guard let self, self.running else { return }   // stopped meanwhile: no observer left behind
+                self.observe(pid)
+            }
         })
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.seedNotifications() }
         for bundle in Self.systemUIAgents {
