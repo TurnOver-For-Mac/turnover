@@ -80,14 +80,23 @@ public final class SettingsPanePlugin: GlobalPlugin {
 
     private func trapMove(_ g: KeyboardGesture, forward: Bool) {
         // From TurnOver's held place when the app's buttons do not take the focus, else from the focus.
+        Self.dropDeadHold()
         guard let current = Self.virtual ?? API.focusObject?.element, let window = Self.windowOf(current) else { g.send(); return }
         var all: [AXUIElement]
         if let c = Self.trapList, c.window.isSame(window), Date().timeIntervalSince(c.at) < 5 { all = c.controls }
         else { all = Self.controls(in: window, toolbars: true); Self.trapList = (window, all, Date()) }
         var here = all.firstIndex { $0.isSame(current) }
         if here == nil { all = Self.controls(in: window, toolbars: true); Self.trapList = (window, all, Date()); here = all.firstIndex { $0.isSame(current) } }
-        guard let i = here, !all.isEmpty else { g.send(); return }
-        let n = ((forward ? i + 1 : i - 1) + all.count) % all.count   // round, as the app's own Tab goes
+        guard var i = here, !all.isEmpty else { g.send(); return }
+        var n = ((forward ? i + 1 : i - 1) + all.count) % all.count   // round, as the app's own Tab goes
+        // The list kept from a moment ago can name controls the app has since thrown away: TurnOver Settings rebuilds
+        // its pane on a new section, and Tab from the sidebar went to a dead check box, held it, and was silent from
+        // then on (21 Oct 2026). Walk the window again.
+        if all[n].role == "?" {
+            all = Self.controls(in: window, toolbars: true); Self.trapList = (window, all, Date())
+            guard let j = all.firstIndex(where: { $0.isSame(current) }), !all.isEmpty else { g.send(); return }
+            i = j; n = ((forward ? i + 1 : i - 1) + all.count) % all.count
+        }
         Self.trapList = (window, all, Date())
         Self.focus(all[n])
         Self.setTrapState(for: all[n])
@@ -215,6 +224,8 @@ public final class SettingsPanePlugin: GlobalPlugin {
     }
 
     static func holdVirtual(_ target: AXUIElement, speak: Bool = true) {
+        // A control the app has thrown away meanwhile is no place to hold: the keys would go nowhere from it.
+        guard target.role != "?" else { Log.io("settings: the control moved to is gone; not held"); return }
         virtual = target
         lock.lock(); _holding = true; lock.unlock()
         let obj = ObjectFactory.make(target)
@@ -232,6 +243,16 @@ public final class SettingsPanePlugin: GlobalPlugin {
         if r == .success {
             Tones.press()
             if ["AXCheckBox", "AXRadioButton"].contains(v.role) { DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { Speech.speakCheckState(of: v) } }
+        }
+    }
+    /// A held place on a control the app has since thrown away (a pane rebuilt): let go, and back to the app's focus.
+    static func dropDeadHold() {
+        guard let v = virtual, v.role == "?" else { return }
+        virtual = nil; lock.lock(); _holding = false; lock.unlock()
+        Log.io("settings: the held control is gone; back to the app's focus")
+        if let pid = API.focusObject?.element.pid, let f = AXUIElementCreateApplication(pid).element(kAXFocusedUIElementAttribute) {
+            API.setFocusObject(ObjectFactory.make(f), ancestors: API.focusAncestors)
+            focusMoved(to: ObjectFactory.make(f))
         }
     }
     static var holdingVirtual: Bool { lock.lock(); defer { lock.unlock() }; return _holding }
@@ -317,6 +338,7 @@ public final class SettingsPanePlugin: GlobalPlugin {
     }
 
     private func move(_ g: KeyboardGesture, forward: Bool) {
+        Self.dropDeadHold()
         guard let focus = API.focusObject, let window = Self.windowOf(focus.element) else { g.send(); return }
         let commands = Self.ribbonCommands(of: focus.element)
         let all = Self.controls(in: commands ?? window)
