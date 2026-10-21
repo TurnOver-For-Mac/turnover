@@ -24,10 +24,15 @@ NS_ASSUME_NONNULL_BEGIN
 @property (readonly) NSString *driverName;        // "BrailleConnect"
 @property (readonly) NSInteger cellCount;
 @property (readonly) BOOL isLoaded;
-/// Connected over Bluetooth (its driver lives on the braille thread).
+/// Connected over Bluetooth.
 @property (readonly) BOOL isBluetooth;
 /// Cells as ISO 11548-1 bytes (dot n is bit n-1).
 - (BOOL)writeCells:(NSData *)cells;
+/// The same without waiting: written on the braille thread, frames sent faster than the display takes them give way
+/// to the latest; whether the display took it comes back on the main queue.
+- (void)writeCellsAsync:(NSData *)cells completion:(void (^)(BOOL ok))completion;
+/// Keys read on the braille thread every 30 ms; events, and the driver gone (loaded NO), come back on the main queue.
+- (void)startPollingWithHandler:(void (^)(NSArray<NSNumber *> *events, BOOL loaded))handler;
 /// Key events since the last call: bit 16 set while pressed, bits 8-15 the key, bits 0-7 its kind
 /// (0 routing key, 1 display key, 2 braille keyboard, 3 status routing key).
 - (NSArray<NSNumber *> *)readInputEvents;

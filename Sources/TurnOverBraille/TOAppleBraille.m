@@ -34,7 +34,11 @@ static NSString *const kDrivers = @"/System/Library/ScreenReader/BrailleDrivers"
 @implementation TOAppleBrailleDisplay {
     id _driver;
     NSBundle *_bundle;
-    NSThread *_thread;   // a Bluetooth display's driver lives on the braille thread, where its callbacks arrive
+    NSThread *_thread;   // the driver lives on the braille thread, where its callbacks arrive
+    BOOL _bluetooth;
+    NSTimer *_poll;      // on the braille thread
+    NSData *_pendingCells;   // the latest frame not yet written (guarded by @synchronized(self))
+    BOOL _writeScheduled;
 }
 
 /// The braille thread: a run loop of its own, as VoiceOver gives its drivers, so a Bluetooth driver's channel
@@ -66,7 +70,7 @@ static NSString *const kDrivers = @"/System/Library/ScreenReader/BrailleDrivers"
 + (void)detectBluetoothWithCompletion:(void (^)(TOAppleBrailleDisplay *))completion {
     dispatch_block_t work = ^{
         TOAppleBrailleDisplay *d = [self detectBluetooth].firstObject;
-        if (d) d->_thread = [self brailleThread];
+        if (d) { d->_thread = [self brailleThread]; d->_bluetooth = YES; }
         dispatch_async(dispatch_get_main_queue(), ^{ completion(d); });
     };
     [self performSelector:@selector(runBlock:) onThread:[self brailleThread] withObject:work waitUntilDone:NO];
@@ -155,7 +159,18 @@ static BOOL detectFoundUnopened;
             NSNumber *v = number(s, hid ? @"VendorID" : @"idVendor"), *p = number(s, hid ? @"ProductID" : @"idProduct");
             NSString *key = [NSString stringWithFormat:@"%@:%@", v, p];
             if (![taken containsObject:key]) {
-                TOAppleBrailleDisplay *display = [[self alloc] initWithService:s hid:hid bundlePath:c[@"path"]];
+                // Loaded on the braille thread, and driven there from now on: a USB driver waits for each answer
+                // by running the run loop of the thread it is called on, and polled from the main thread every
+                // 30 ms it held that thread 70% of the time, so speech after a key came 100 to 200 ms late (a
+                // Focus 5, 21 Oct 2026).
+                __block TOAppleBrailleDisplay *display = nil;
+                NSString *bundlePath = c[@"path"];
+                dispatch_block_t load = ^{
+                    display = [[self alloc] initWithService:s hid:hid bundlePath:bundlePath];
+                    if (display) display->_thread = [self brailleThread];
+                };
+                if ([NSThread currentThread] == [self brailleThread]) load();
+                else [self performSelector:@selector(runBlock:) onThread:[self brailleThread] withObject:load waitUntilDone:YES];
                 [detectReport appendFormat:@" %@ %@ (%@): %@;", [[c[@"path"] lastPathComponent] stringByDeletingPathExtension],
                     key, d[@"IOProviderClass"], display ? [NSString stringWithFormat:@"loaded, %ld cells", (long)display.cellCount] : @"would not load"];
                 if (display) { [found addObject:display]; [taken addObject:key]; [unopened removeObject:key]; }
@@ -291,7 +306,46 @@ static NSMutableString *btReport;
     return [events isKindOfClass:NSArray.class] ? events : @[];
 }
 
-- (BOOL)isBluetooth { return _thread != nil; }
+- (BOOL)isBluetooth { return _bluetooth; }
+
+- (void)writeCellsAsync:(NSData *)cells completion:(void (^)(BOOL))completion {
+    if (!_driver) { completion(NO); return; }
+    NSMutableData *d = [cells mutableCopy];
+    if ((NSInteger)d.length < _cellCount) [d increaseLengthBy:_cellCount - d.length];
+    BOOL schedule;
+    @synchronized (self) { _pendingCells = d; schedule = !_writeScheduled; _writeScheduled = YES; }
+    if (!schedule) return;   // the write already on its way takes this frame
+    id driver = _driver; NSInteger n = _cellCount;
+    dispatch_block_t write = ^{
+        NSData *frame;
+        @synchronized (self) { frame = self->_pendingCells; self->_pendingCells = nil; self->_writeScheduled = NO; }
+        if (!frame || !self->_driver) return;   // closed meanwhile
+        BOOL ok = [driver setMainCells:frame.bytes length:n];
+        dispatch_async(dispatch_get_main_queue(), ^{ completion(ok); });
+    };
+    if (!_thread) { write(); return; }
+    [self performSelector:@selector(runBlock:) onThread:_thread withObject:write waitUntilDone:NO];
+}
+
+- (void)startPollingWithHandler:(void (^)(NSArray<NSNumber *> *, BOOL))handler {
+    id driver = _driver;
+    if (!driver || !_thread) return;
+    __weak TOAppleBrailleDisplay *weakSelf = self;
+    [self performSelector:@selector(runBlock:) onThread:_thread withObject:^{
+        TOAppleBrailleDisplay *me = weakSelf;
+        if (!me) return;
+        [me->_poll invalidate];
+        __block NSInteger checks = 0;
+        me->_poll = [NSTimer scheduledTimerWithTimeInterval:0.03 repeats:YES block:^(NSTimer *timer) {
+            id events = [driver getInputEvents];
+            NSArray *list = [events isKindOfClass:NSArray.class] ? events : @[];
+            BOOL loaded = (++checks % 33 != 0) || [driver isDriverLoaded];
+            if (list.count == 0 && loaded) return;
+            if (!loaded) [timer invalidate];
+            dispatch_async(dispatch_get_main_queue(), ^{ handler(list, loaded); });
+        }];
+    } waitUntilDone:NO];
+}
 
 - (BOOL)isLoaded {
     if (!_driver) return NO;
@@ -306,6 +360,7 @@ static NSMutableString *btReport;
     id driver = _driver; NSInteger n = _cellCount;
     _driver = nil;
     [self onThread:^{
+        [self->_poll invalidate]; self->_poll = nil;
         char blank[256] = {0};
         [driver setMainCells:blank length:MIN(n, 256)];
         [driver unloadDriver];
