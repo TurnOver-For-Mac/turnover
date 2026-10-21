@@ -532,6 +532,13 @@ func pureTests() {
         check(r.contains("event gainFocus: AXTextArea"), "events kept")
     }
 
+    test("braille: what panning on to another line moves") {
+        expect(Braille.panFollow(setting: "line", tether: "auto"), .caret, "the default: the caret goes to the line reached")
+        expect(Braille.panFollow(setting: "window", tether: "focus"), .caret, "to the text shown: the caret too")
+        expect(Braille.panFollow(setting: "off", tether: "auto"), .hold, "off: the caret stays, the line reached is held")
+        expect(Braille.panFollow(setting: "line", tether: "review"), .review, "tethered to review: the review cursor only")
+        expect(Braille.panFollow(setting: "off", tether: "review"), .review, "tethered to review, whatever the setting")
+    }
     test("braille: short forms") {
         expect(Braille.brailleText(["Save", "button"]), "Save btn")
         expect(Braille.brailleText(["Wrap", "check box", "checked"]), "Wrap chk (x)")
