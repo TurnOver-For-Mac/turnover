@@ -115,8 +115,10 @@ public final class AXHandler {
         if let front = NSWorkspace.shared.frontmostApplication { appActivated(front) }
         SystemPrompts.shared.start()
     }
-    /// Processes that take the keyboard without becoming the active application.
-    public static let systemUIAgents = ["com.apple.dock", "com.apple.Spotlight", "com.apple.notificationcenterui", "com.apple.controlcenter"]
+    /// Processes that take the keyboard without becoming the active application. On macOS 27 Spotlight's panel is
+    /// drawn by "Siri AI" (com.apple.campo): unwatched, Command Space said nothing and the letters typed went to
+    /// browse mode's quick navigation behind it (21 Oct 2026).
+    public static let systemUIAgents = ["com.apple.dock", "com.apple.Spotlight", "com.apple.campo", "com.apple.notificationcenterui", "com.apple.controlcenter"]
 
     public func stop() {
         guard running else { return }

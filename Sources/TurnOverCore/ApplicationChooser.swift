@@ -22,7 +22,7 @@ public enum ApplicationChooser {
             let layer = w[kCGWindowLayer as String] as? Int ?? 0
             // The menu bar, the Dock and wallpaper are above or below the ordinary layers; alerts sit at 0 to a few hundred.
             guard layer >= 0, layer < 1000, !order.contains(pid) else { continue }
-            if let app = NSRunningApplication(processIdentifier: pid), ["com.apple.dock", "com.apple.WindowManager", "com.apple.controlcenter", "com.apple.Spotlight", "com.apple.notificationcenterui"].contains(app.bundleIdentifier ?? "") { continue }
+            if let app = NSRunningApplication(processIdentifier: pid), ["com.apple.dock", "com.apple.WindowManager", "com.apple.controlcenter", "com.apple.Spotlight", "com.apple.campo", "com.apple.notificationcenterui"].contains(app.bundleIdentifier ?? "") { continue }
             order.append(pid)
         }
         for app in NSWorkspace.shared.runningApplications where app.activationPolicy == .regular && !order.contains(app.processIdentifier) && app.processIdentifier != own {
