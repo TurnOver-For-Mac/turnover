@@ -135,21 +135,20 @@ public final class AXHandler {
 
     /// Escape in Spotlight: its panel closes, but the application in front never changed, so no news came and
     /// TurnOver stayed on the gone search field, saying nothing (macOS 27, 21 Oct 2026). As VoiceOver does, it says
-    /// so and reads the application's focus again.
+    /// so and reads the application's focus again. Only from Siri AI's search field itself: Escape on a result row
+    /// clears the query and the row goes while the panel stays open, and Spotlight on macOS 26 (com.apple.Spotlight)
+    /// may already read the application again, which would say it twice (review, 21 Oct 2026).
     private var watchingSpotlightEscape = false
     private func spotlightEscape(_ g: KeyboardGesture) {
         guard g.keyName == "escape", g.modifiers.isEmpty, let f = API.focusObject,
-              let bundle = NSRunningApplication(processIdentifier: f.pid)?.bundleIdentifier,
-              ["com.apple.campo", "com.apple.Spotlight"].contains(bundle) else { return }
-        // Siri AI draws other windows too: only Escape in Spotlight's own panel (code review, 21 Oct 2026).
-        if bundle == "com.apple.campo", SpotlightAppModule.panel(of: f.element) == nil { return }
+              NSRunningApplication(processIdentifier: f.pid)?.bundleIdentifier == "com.apple.campo",
+              f.element.string(kAXIdentifierAttribute) == "SpotlightSearchField" else { return }
         let pid = f.pid
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             guard let self, self.running, API.focusObject?.pid == pid else { return }
-            // Closed: the field TurnOver is on is gone or no longer focused, or the panel has no focused window. (On
-            // the microphone button, which TurnOver may only be holding, its focus says nothing: only gone counts.)
+            // Closed: the field TurnOver is on is gone or no longer focused, or the panel has no focused window.
             let field = API.focusObject?.element
-            let gone = field.map { $0.role == "?" || ($0.role == "AXTextField" && ($0.attr(kAXFocusedAttribute) as? Bool) != true) } ?? true
+            let gone = field.map { $0.role == "?" || ($0.attr(kAXFocusedAttribute) as? Bool) != true } ?? true
             guard gone || AXUIElementCreateApplication(pid).element(kAXFocusedWindowAttribute) == nil else { return }
             Log.io("spotlight: closed; back to the application")
             Speech.speakMessage("Spotlight closed")
