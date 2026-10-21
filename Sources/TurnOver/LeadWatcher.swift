@@ -3,6 +3,8 @@
 // the rest, and the hand-over happens by itself as the front application
 // changes (NVDA's sleep mode, the other way round). Always awake, even while
 // VoiceOver is on: it needs only the application-switch notifications.
+// Startup can stay pending while CoExist covers for an unavailable VoiceOver; when VoiceOver returns,
+// the app then in front completes that choice even with automatic switching off.
 //
 // Caps+V pins the current application to VoiceOver; turning VoiceOver off by
 // hand while in an application pins it to TurnOver. Pins last until TurnOver quits.
@@ -282,7 +284,7 @@ final class LeadWatcher {
             // The next startup check or app activation retries using the app then in front. A newer hand-over
             // invalidates this callback through its generation, so a manual choice is never undone.
             self.readerSelection = ReaderSelection()
-            Log.info("start: hand-over did not finish; initial reader selection remains pending")
+            Log.info("start: hand-over did not finish; initial reader selection re-armed (automatic hand-over \(config.applications.automaticHandOver ? "on" : "off"))")
         }
         let t0 = Date()
         let isOn = { NSWorkspace.shared.isVoiceOverEnabled }
@@ -516,8 +518,12 @@ final class LeadWatcher {
     /// VoiceOver's state changed (from the app's observation). A change we did not post is the user's choice: pin it.
     /// VoiceOver's state as TurnOver starts is not a choice the user made: after a quit or a watchdog restart
     /// VoiceOver is on (TurnOver turns it on as it goes), and reading that as "pinned to VoiceOver by hand" left Mail
-    /// with VoiceOver (3 Oct 2026). The app synchronizes the initial state separately; only actual changes reach here.
+    /// with VoiceOver (3 Oct 2026). Only changes after the first few seconds count, even though the app synchronizes
+    /// the initial state separately.
+    private let startedAt = Date()
+
     func voiceOverChanged(on: Bool) {
+        guard Date().timeIntervalSince(startedAt) > 3 else { return }
         guard Date() > ourChangeUntil else { return }
         handOverGeneration += 1
         readerSelection.readerChosen()

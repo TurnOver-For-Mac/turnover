@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Startup chooses a reader once. Automatic hand-over controls subsequent application changes.
+// CoExist's temporary fallback leaves that choice pending until VoiceOver returns, unless the user chooses first.
 
 nonisolated public struct ReaderSelection {
     public private(set) var needsInitialSelection = true
