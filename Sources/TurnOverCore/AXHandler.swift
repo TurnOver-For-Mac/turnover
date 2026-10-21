@@ -108,6 +108,15 @@ public final class AXHandler {
             guard let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
             MainActor.assumeIsolated { self?.appTerminated(app.processIdentifier) }
         })
+        // A system agent never activates, so one launched after TurnOver (Siri AI is started on demand and relaunched)
+        // is observed when it starts, or Spotlight went unread until TurnOver restarted (code review, 21 Oct 2026).
+        workspaceTokens.append(nc.addObserver(forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main) { [weak self] n in
+            guard let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                  Self.systemUIAgents.contains(app.bundleIdentifier ?? "") else { return }
+            // A moment for the new process to answer accessibility questions before its notifications are asked for.
+            let pid = app.processIdentifier
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.observe(pid) }
+        })
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.seedNotifications() }
         for bundle in Self.systemUIAgents {
             for app in NSRunningApplication.runningApplications(withBundleIdentifier: bundle) { observe(app.processIdentifier) }
