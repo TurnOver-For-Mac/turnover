@@ -111,7 +111,22 @@ struct ContentView: View {
 
 struct SpeechView: View {
     @EnvironmentObject var model: Model
-    private let voices = AVSpeechSynthesisVoice.speechVoices().sorted { ($0.language, $0.name) < ($1.language, $1.name) }
+    /// The voices offered: English and the Mac's own languages (System Settings, Language and Region), the Mac's
+    /// languages first and Eloquence before the rest, as the menu offered them; every voice on the Mac was far too
+    /// many (Oliver, 21 Oct 2026). A voice set earlier from outside that list stays selectable.
+    private var voices: [AVSpeechSynthesisVoice] {
+        let mine = Locale.preferredLanguages.map { String($0.prefix(2)) }
+        let wanted = Set(mine + ["en"])
+        let current = model.get("speech", "voice") as? String ?? ""
+        return AVSpeechSynthesisVoice.speechVoices().filter { wanted.contains(String($0.language.prefix(2))) || $0.identifier == current }
+            .sorted { a, b in
+                let la = mine.firstIndex(of: String(a.language.prefix(2))) ?? 99, lb = mine.firstIndex(of: String(b.language.prefix(2))) ?? 99
+                if la != lb { return la < lb }
+                let ea = a.identifier.contains("eloquence"), eb = b.identifier.contains("eloquence")
+                if ea != eb { return ea }
+                return a.name < b.name
+            }
+    }
     private let natural = ["af_alloy", "af_aoede", "af_bella", "af_heart", "af_jessica", "af_kore", "af_nicole", "af_nova", "af_river",
                            "af_sarah", "af_sky", "am_adam", "am_echo", "am_eric", "am_fenrir", "am_liam", "am_michael", "am_onyx",
                            "am_puck", "am_santa", "bf_alice", "bf_emma", "bf_isabella", "bf_lily", "bm_daniel", "bm_fable", "bm_george", "bm_lewis"]
@@ -159,7 +174,8 @@ struct SpeechView: View {
                     .accessibilityValue(model.number("speech", "capitalPitch").wrappedValue == 0 ? "off" : "\(Int(model.number("speech", "capitalPitch").wrappedValue)) percent")
             }
             // The speech rotor's own short list (18 Oct 2026): none ticked, every voice.
-            Section("Voices in the rotor") {
+            // Folded away: the list is long by nature (every voice the rotor could step through).
+            DisclosureGroup(rotorChosen.isEmpty ? "Voices in the rotor: every voice" : "Voices in the rotor: \(rotorChosen.count) chosen") {
                 Text(rotorChosen.isEmpty ? "Every voice: tick the ones you want VO-Command-Shift to step through." : "\(rotorChosen.count) chosen for VO-Command-Shift.").font(.caption)
                 ForEach(rotorCandidates, id: \.identifier) { v in
                     Toggle("\(v.name), \(Locale.current.localizedString(forIdentifier: v.language) ?? v.language)", isOn: Binding(
