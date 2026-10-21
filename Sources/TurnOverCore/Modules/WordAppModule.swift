@@ -38,6 +38,44 @@ final class WordAppModule: AppModule {
             guard let self, API.focusPid == self.pid, !AXHandler.shared.isMenuOpen, let f = API.focusObject?.element else { return false }
             return Self.inBars(f) && f.attr("AXExpanded") as? Bool != true
         }
+        // Word's sheets (Save changes on Command Q, Save As) keep Tab among their text fields, passing through the page:
+        // Don't Save, Cancel and Save were never reached (21 Oct 2026; VoiceOver gets them with its own cursor).
+        // In a sheet, Tab and Shift+Tab are TurnOver's: every control in the sheet, in order, round.
+        for forward in [true, false] {
+            script(forward ? "word_sheetNext" : "word_sheetPrevious",
+                   forward ? "In a sheet: the next control, its buttons included" : "In a sheet: the previous control, its buttons included",
+                   gestures: [forward ? "kb:tab" : "kb:shift+tab"], category: "Microsoft Word") { [weak self] g in
+                self?.sheetMove(g, forward: forward)
+            }.isAvailable = { [weak self] in
+                guard let self, API.focusPid == self.pid, !AXHandler.shared.isMenuOpen, let f = API.focusObject?.element else { return false }
+                return Self.sheet(of: f) != nil
+            }
+        }
+    }
+
+    /// The sheet a control is in, if any.
+    static func sheet(of e: AXUIElement) -> AXUIElement? {
+        var p: AXUIElement? = e; var hops = 0
+        while let x = p, hops < 15 {
+            let r = x.role
+            if r == "AXSheet" { return x }
+            if r == "AXWindow" { return nil }
+            p = x.element(kAXParentAttribute); hops += 1
+        }
+        return nil
+    }
+
+    private func sheetMove(_ g: KeyboardGesture, forward: Bool) {
+        guard let f = API.focusObject?.element, let sheet = Self.sheet(of: f) else { g.send(); return }
+        let all = SettingsPanePlugin.controlsInOrder(in: sheet).filter { ($0.attr(kAXEnabledAttribute) as? Bool) != false }
+        // Where the focus is: the control itself, or the control it is inside (a field's completion list).
+        var here: Int?
+        var p: AXUIElement? = f; var hops = 0
+        while let x = p, hops < 5, here == nil { here = all.firstIndex { $0.isSame(x) }; p = x.element(kAXParentAttribute); hops += 1 }
+        guard !all.isEmpty else { g.send(); return }
+        let n = here.map { (($0 + (forward ? 1 : -1)) + all.count) % all.count } ?? (forward ? 0 : all.count - 1)
+        Log.io("Word sheet: \(forward ? "Tab" : "Shift+Tab") to \(all[n].role) \(n + 1) of \(all.count)")
+        SettingsPanePlugin.focus(all[n])
     }
 
     /// In the ribbon, sidebar, status bar or the window's toolbar.
