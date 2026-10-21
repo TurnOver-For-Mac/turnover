@@ -39,6 +39,7 @@ static NSString *const kDrivers = @"/System/Library/ScreenReader/BrailleDrivers"
     NSTimer *_poll;      // on the braille thread
     NSData *_pendingCells;   // the latest frame not yet written (guarded by @synchronized(self))
     BOOL _writeScheduled;
+    dispatch_block_t _pendingClose;   // a close that came during a write, run when the write is done
 }
 
 /// The braille thread: a run loop of its own, as VoiceOver gives its drivers, so a Bluetooth driver's channel
@@ -321,11 +322,15 @@ static NSMutableString *btReport;
     // 21 Oct 2026). Frames that came in during a write are drained here, the latest only.
     dispatch_block_t write = ^{
         for (;;) {
-            NSData *frame;
+            NSData *frame; dispatch_block_t closing = nil;
             @synchronized (self) {
                 frame = self->_pendingCells; self->_pendingCells = nil;
-                if (!frame || !self->_driver) { self->_writeScheduled = NO; return; }   // done, or closed meanwhile
+                if (!frame || !self->_driver) {   // done, or closed meanwhile
+                    self->_writeScheduled = NO; frame = nil;
+                    closing = self->_pendingClose; self->_pendingClose = nil;
+                }
             }
+            if (!frame) { if (closing) closing(); return; }
             BOOL ok = [driver setMainCells:frame.bytes length:n];
             dispatch_async(dispatch_get_main_queue(), ^{ completion(ok); });
         }
@@ -365,13 +370,17 @@ static NSMutableString *btReport;
 - (void)close {
     if (!_driver) return;
     id driver = _driver; NSInteger n = _cellCount;
-    _driver = nil;
-    [self onThread:^{
+    dispatch_block_t unload = ^{
         [self->_poll invalidate]; self->_poll = nil;
         char blank[256] = {0};
         [driver setMainCells:blank length:MIN(n, 256)];
         [driver unloadDriver];
-    }];
+    };
+    // A write under way waits by running the braille thread's run loop, where this would run inside it and unload
+    // the driver mid-write (code review, 21 Oct 2026): the write runs it when it is done instead.
+    BOOL deferred;
+    @synchronized (self) { _driver = nil; deferred = _writeScheduled; if (deferred) _pendingClose = unload; }
+    if (!deferred) [self onThread:unload];
 }
 
 - (void)dealloc { [self close]; }
