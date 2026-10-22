@@ -86,22 +86,36 @@ final class Watchdog: @unchecked Sendable {   // its state is under `lock`
         // 2026). Watched always there.
         guard isActive || Coexist.on, stuck > 4 else { return }
         lock.lock(); trippedAt = Date(); _lastTrip = trippedAt; lock.unlock()
-        Log.error("watchdog: the main thread has not run for \(Int(stuck)) s; letting keys through and turning VoiceOver back on")
+        // The Mac asleep, locked or just awake: the beat stopped because the Mac did, not TurnOver. Keys through and
+        // VoiceOver heard as below, in case; but not announced. Each wake said "TurnOver is not responding" in the
+        // system's voice, several copies over each other (Oliver, 22 Oct 2026), while TurnOver was simply waking.
+        let sleeping = inGrace
+        Log.error("watchdog: the main thread has not run for \(Int(stuck)) s\(sleeping ? " (the Mac asleep, locked or just awake)" : ""); letting keys through and turning VoiceOver back on")
         KeyboardHandler.bypass = true
         // VoiceOver's sound back first: the tap silencing it would otherwise outlive a hang (18 Oct 2026).
         VoiceOverTap.emergencyOff()
         if !NSWorkspace.shared.isVoiceOverEnabled, !Coexist.on { HandOver.postToggle() }   // (coexisting, VoiceOver is already on)
         // Said with the system's own voice, which needs neither TurnOver's main thread nor its engine, nor VoiceOver's
         // speech (silent in TurnOver's apps): the only voice left.
-        if Coexist.on { Self.sayOutside("TurnOver is not responding. If it doesn't recover, it restarts in twenty seconds.") }
+        if Coexist.on, !sleeping { Self.sayOutside("TurnOver is not responding. If it doesn't recover, it restarts in twenty seconds.") }
     }
 
-    /// The system's `say`, from any thread: the voice of last resort while the main thread is stuck.
+    /// The system's `say`, from any thread: the voice of last resort while the main thread is stuck. One at a time:
+    /// a second warning while the first is still being said waits for it (they spoke over each other, 22 Oct 2026).
+    nonisolated(unsafe) private static var saying: Process?
+    nonisolated private static let sayLock = NSLock()
     nonisolated static func sayOutside(_ text: String) {
+        sayLock.lock(); defer { sayLock.unlock() }
+        if let s = saying, s.isRunning { return }
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/say")
         p.arguments = [text]
         try? p.run()
+        saying = p
+    }
+    nonisolated static func waitForSaying() {
+        sayLock.lock(); let s = saying; sayLock.unlock()
+        s?.waitUntilExit()
     }
 
     /// The speech queue stuck (SpeechPlayer.onQueueStuck): told with the system's voice, which needs nothing of
@@ -131,9 +145,8 @@ final class Watchdog: @unchecked Sendable {   // its state is under `lock`
         Thread.sleep(forTimeInterval: 3)
         if rebuilt.isSet { return }
         Log.error("speech: the speech queue has not run for \(Int(seconds)) s; restarting TurnOver")
-        let say = Process(); say.executableURL = URL(fileURLWithPath: "/usr/bin/say"); say.arguments = ["TurnOver's voice stopped. Restarting TurnOver."]
-        try? say.run()
-        say.waitUntilExit()
+        Self.sayOutside("TurnOver's voice stopped. Restarting TurnOver.")
+        Self.waitForSaying()   // said before the restart cuts it
         try? FileManager.default.createDirectory(at: AppPaths.file("restarting").deletingLastPathComponent(), withIntermediateDirectories: true)
         FileManager.default.createFile(atPath: AppPaths.file("restarting").path, contents: nil)
         relaunch(stuckFor: seconds)

@@ -32,6 +32,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   shared code, with tests (a contributor's change).
 - The app shortcut picker offers every application once: Safari and other apps reached through a link were missing,
   and some appeared twice (a contributor's change).
+- Waking the Mac no longer says TurnOver is not responding in the system's voice, several times over itself. The
+  watchdog took the sleep for a hang; it now knows the difference, and its warnings are said one at a time.
 - Finder: Command Down on a folder, and Command Up, are sent again if Finder ignored them. About one press in
   twenty did nothing although the key reached Finder; now, if nothing has changed a third of a second later, the key
   goes once more. Only for a folder, never for a file, so nothing opens twice. A symptom fix; the cause is in Finder.
