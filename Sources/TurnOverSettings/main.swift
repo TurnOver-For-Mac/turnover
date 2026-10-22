@@ -143,6 +143,18 @@ struct SpeechView: View {
             return (uid, name)
         }
     }
+    /// The languages with an installed voice other than the main voice's, each with its voices (from the bridge).
+    private var otherLanguages: [OtherLanguage] {
+        let raw = (model.special("_otherLanguages") as? [[String: Any]]) ?? []
+        return raw.compactMap { entry in
+            guard let code = entry["code"] as? String, let name = entry["name"] as? String else { return nil }
+            let voices = ((entry["voices"] as? [[String: Any]]) ?? []).compactMap { voice -> OtherLanguage.Voice? in
+                guard let id = voice["id"] as? String, let voiceName = voice["name"] as? String else { return nil }
+                return OtherLanguage.Voice(id: id, name: voiceName, language: voice["language"] as? String ?? "")
+            }
+            return OtherLanguage(code: code, name: name, voices: voices)
+        }
+    }
     private func naturalName(_ v: String) -> String { "\(v.dropFirst(3).capitalized), \(v.hasPrefix("b") ? "British" : "American")" }
     var body: some View {
         Form {
@@ -174,6 +186,16 @@ struct SpeechView: View {
                     .accessibilityValue(model.number("speech", "capitalPitch").wrappedValue == 0 ? "off" : "\(Int(model.number("speech", "capitalPitch").wrappedValue)) percent")
             }
             // The speech rotor's own short list (18 Oct 2026): none ticked, every voice.
+            Section("Voices for other languages") {
+                if otherLanguages.isEmpty {
+                    Text("No voices for other languages are installed.").font(.caption)
+                } else {
+                    Text("Text marked as another language is read in that language's voice, when language switching is on.").font(.caption)
+                    ForEach(otherLanguages, id: \.code) { language in
+                        OtherLanguageRow(language: language)
+                    }
+                }
+            }
             // Folded away: the list is long by nature (every voice the rotor could step through).
             DisclosureGroup(rotorChosen.isEmpty ? "Voices in the rotor: every voice" : "Voices in the rotor: \(rotorChosen.count) chosen") {
                 Text(rotorChosen.isEmpty ? "Every voice: tick the ones you want VO-Command-Shift to step through." : "\(rotorChosen.count) chosen for VO-Command-Shift.").font(.caption)
@@ -200,6 +222,47 @@ struct SpeechView: View {
                 }
             }
         }.formStyle(.grouped).navigationTitle("Speech")
+    }
+}
+
+struct OtherLanguage {
+    struct Voice { let id: String; let name: String; let language: String }
+    let code: String
+    let name: String
+    let voices: [Voice]
+}
+
+/// One language: its voice (Automatic is the best installed one) and its own rate (the main rate until changed).
+struct OtherLanguageRow: View {
+    @EnvironmentObject var model: Model
+    let language: OtherLanguage
+    private var chosenVoices: [String: String] { model.get("speech", "languageVoices") as? [String: String] ?? [:] }
+    private var rates: [String: Double] {
+        let raw = model.get("speech", "languageRates") as? [String: Any] ?? [:]
+        return raw.compactMapValues { ($0 as? NSNumber)?.doubleValue }
+    }
+    private var mainRatePercent: Double { ((model.get("speech", "rate") as? NSNumber)?.doubleValue ?? 0.55) * 100 }
+    private var voiceChoice: Binding<String> {
+        Binding(get: { chosenVoices[language.code] ?? "" }, set: { chosen in
+            var all = chosenVoices
+            if chosen.isEmpty { all.removeValue(forKey: language.code) } else { all[language.code] = chosen }
+            model.set("speech", "languageVoices", all)
+        })
+    }
+    private var ratePercent: Binding<Double> {
+        Binding(get: { (rates[language.code] ?? (mainRatePercent / 100)) * 100 }, set: { percent in
+            var all = rates
+            all[language.code] = (percent / 100 * 100).rounded() / 100
+            model.set("speech", "languageRates", all)
+        })
+    }
+    var body: some View {
+        Picker("\(language.name) voice", selection: voiceChoice) {
+            Text("Automatic\(language.voices.first.map { ": \($0.name)" } ?? "")").tag("")
+            ForEach(language.voices, id: \.id) { voice in Text("\(voice.name), \(voice.language)").tag(voice.id) }
+        }
+        Slider(value: ratePercent, in: 10...100, step: 5) { Text("\(language.name) rate") }
+            .accessibilityValue(rates[language.code] == nil ? "\(Int(ratePercent.wrappedValue)), same as the main voice" : "\(Int(ratePercent.wrappedValue))")
     }
 }
 

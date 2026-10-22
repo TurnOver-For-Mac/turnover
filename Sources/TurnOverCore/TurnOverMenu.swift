@@ -404,9 +404,8 @@ public final class TurnOverMenu {
             items.append(MenuItem("Gesture control", .toggle(get: { Trackpad.controlOn }, set: { Trackpad.set($0) }), hint: "The trackpad's gestures: VoiceOver's, or NVDA's in the Windows style. Also Command Control Comma, G"))
         }
         if Games.available { items.append(MenuItem("Games", .submenu { Games.menuItems() }, hint: "Steam and Windows games speaking through TurnOver")) }
-        // Until the Settings window has these two sections (braille is a contributor's, 21 Oct 2026), they stay here.
+        // Until the Settings window has a Braille section (a contributor's, 21 Oct 2026), braille stays here.
         items.append(MenuItem("Braille", .submenu { self.brailleItems() }, hint: "Until braille has its section in Settings"))
-        items.append(MenuItem("Voices for other languages", .submenu { self.languageItems() }, hint: "Until it has its place in Settings"))
         return items
     }
 
@@ -621,34 +620,6 @@ public final class TurnOverMenu {
     private static func appName(for bundle: String) -> String {
         if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundle) { return FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "") }
         return bundle
-    }
-
-    private func languageItems() -> [MenuItem] {
-        let languages = Languages.otherLanguages()
-        guard !languages.isEmpty else { return [MenuItem("No voices for other languages are installed", .action {})] }
-        return languages.map { lang in
-            MenuItem(lang.name, .submenu {
-                let picked = config.speech.languageVoices[lang.code]
-                let voices = Languages.voices(for: lang.code)
-                var items = [MenuItem("Automatic\(voices.first.map { ": \($0.name)" } ?? "")\(picked == nil ? ", current" : "")", .select {
-                    config.speech.languageVoices[lang.code] = nil
-                    config.save(); Languages.forget()
-                    Speech.speakMessage("\(lang.name): automatic")
-                })]
-                items += voices.map { v in
-                    MenuItem("\(v.name), \(v.language)\(v.identifier == picked ? ", current" : "")", .select {
-                        config.speech.languageVoices[lang.code] = v.identifier
-                        config.save(); Languages.forget()
-                        Speech.speakMessage("\(lang.name): \(v.name)")
-                    })
-                }
-                // Its own rate, last (a tester): "same as the main voice" until changed.
-                items.append(MenuItem("Rate", .number(get: { Double(config.speech.languageRates[lang.code] ?? config.speech.rate) * 100 },
-                    set: { config.speech.languageRates[lang.code] = Float($0 / 100) }, step: 5, min: 10, max: 100,
-                    format: { v in config.speech.languageRates[lang.code] == nil ? "\(Int(v.rounded())), same as the main voice" : "\(Int(v.rounded()))" })))
-                return items
-            })
-        }
     }
 
     /// Braille: the table (macOS's own, the ones VoiceOver offers) and the word at the cursor.

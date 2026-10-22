@@ -43,6 +43,10 @@ public enum SettingsBridge {
         dict["_coexist"] = Coexist.wouldBeOn
         dict["_outputDevices"] = SpeechPlayer.outputDevices().map { ["uid": $0.uid, "name": $0.name] }
         dict["_speechPortApps"] = SpeechPort.shared.appDecisions.map { ["id": $0.id, "name": $0.name, "allowed": $0.allowed] }
+        dict["_otherLanguages"] = Languages.otherLanguages().map { language in
+            let voices = Languages.voices(for: language.code).map { ["id": $0.identifier, "name": $0.name, "language": $0.language] }
+            return ["code": language.code, "name": language.name, "voices": voices]
+        }
         guard let out = try? JSONSerialization.data(withJSONObject: dict), let s = String(data: out, encoding: .utf8) else { return }
         if let reply { reply(["op": "state", "json": s]) } else { ControlServer.shared.broadcast(["op": "state", "json": s]) }
     }
@@ -90,7 +94,9 @@ public enum SettingsBridge {
             }
             if before.general.keyboardStyle != next.general.keyboardStyle { GlobalCommands.setKeyboardStyle(next.general.style) }
             if before.braille.bluetooth != next.braille.bluetooth, next.braille.bluetooth { BrailleDisplays.shared.lookNow() }
-            if before.speech.voice != next.speech.voice { Languages.forget() }
+            let voiceChanged = before.speech.voice != next.speech.voice
+            let languageVoicesChanged = before.speech.languageVoices != next.speech.languageVoices
+            if voiceChanged || languageVoicesChanged { Languages.forget() }
             // The key layer where VoiceOver reads follows its own setting too (the style's change starts or stops it above).
             if before.general.keysWhereVoiceOverReads != next.general.keysWhereVoiceOverReads { GlobalCommands.onKeyboardStyleChanged?() }
             Log.info("settings app: \(filePatch.keys.sorted().joined(separator: ", ")) changed")

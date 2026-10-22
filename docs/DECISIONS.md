@@ -24,6 +24,10 @@ fixes code that is not live. Each has a date and a reason. To reopen one, open a
 - **Plugins are data** (20 Oct 2026). Reading rules, labels and keys for an app, written as files; no scripts run
   from a plugin. The toolkit's sandboxed scripts are not built (docs/PLUGIN-TOOLKIT-PLAN.md).
 - **Feedback through GitHub** (20 Oct 2026): the issue forms, not email.
+- **Anything found goes on the list** (22 Oct 2026). A problem or a shortcoming noticed anywhere, in a review, a
+  thread, a log or a conversation, becomes a GitHub issue with its evidence, unless it is a small contained fix
+  already in hand, which is just done. The list is where work is chosen from; nothing is carried in anyone's head.
+  Private matters (a named person, a tester's content) go to the maintainer's own list, never a public issue.
 - **Main takes pull requests only** (21 Oct 2026), the maintainer's included, with the build check green. The
   publish script opens one for each sync from the maintainer's tree, and refuses to run over a contributor's merged
   work until it has been ported.
