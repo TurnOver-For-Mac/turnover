@@ -19,6 +19,8 @@ final class LeadWatcher {
     private var pins: [String: Bool] = [:]
     private var warnedNoInput = false          // bundle → true means TurnOver leads
     private var ourChangeUntil = Date.distantPast
+    /// Whether a VoiceOver change arriving now is TurnOver's own (a hand-over it posted, within its window), not the hand's.
+    var isOurChange: Bool { Date() < ourChangeUntil }
     private var lastHandOverAt = Date.distantPast
     private var postedAt: Date?
     private var wantedOn: Bool?
@@ -79,6 +81,7 @@ final class LeadWatcher {
         Watchdog.shared.noteAwake()
         guard locked else { return }
         locked = false
+        initialTakeOverPending = true   // the lock gave VoiceOver the Mac; the app in front is taken again once (22 Oct 2026)
         Log.info("lead watcher: \(why); the app in front decides again once secure input is off")
         // The lock screen's password field turns on secure input, and it stays on for a few seconds after the unlock.
         // While it is on, TurnOver's key tap gets only the modifiers, never a key: handed over at once, TurnOver said
@@ -102,12 +105,19 @@ final class LeadWatcher {
     /// Input Monitoring has just been granted: look at the application in front again.
     func inputMonitoringGranted() {
         warnedNoInput = false
+        initialTakeOverPending = true   // the take-over that waited for the permission
         if let front = NSWorkspace.shared.frontmostApplication { appActivated(front) }
     }
 
     /// Does TurnOver lead in this application?
     /// TurnOver off by Command Control Period while coexisting: still running, VoiceOver has every app.
     var suspended = false
+    /// VoiceOver turned on by hand while TurnOver read (not coexisting): TurnOver stepped back by the swap setting and
+    /// does not take the next app by itself. Cleared when VoiceOver goes off or TurnOver is turned on by its key.
+    var yieldedToVoiceOverByHand = false
+    /// Without readers per app, TurnOver takes the app in front once: at launch, and again once Input Monitoring is
+    /// granted. After that an app change changes nothing; a hand-over to VoiceOver by its command stands.
+    var initialTakeOverPending = true
     func shouldLead(_ bundle: String) -> Bool {
         if suspended { return false }
         // A direct app: TurnOver's key tap sends its keys, so TurnOver leads (and says nothing there).
@@ -132,8 +142,8 @@ final class LeadWatcher {
         // VoiceOver everywhere: TurnOver steps back from every app (Command Control Comma, A).
         // The rules themselves are LeadPolicy.leads (pure, with a table test); this gathers what they need.
         return LeadPolicy.leads(.init(gameLeads: Games.leads(bundle), pin: pins[bundle],
-                                      leadMode: config.applications.leadMode, supported: Edition.supports(bundle),
-                                      inVoiceOverList: config.applications.voiceOverBundles.contains(bundle), inLeadList: config.applications.leadBundles.contains(bundle)))
+                                      leadMode: config.applications.effectiveLeadMode, supported: Edition.supports(bundle),
+                                      inVoiceOverList: config.applications.effectiveVoiceOverBundles.contains(bundle), inLeadList: config.applications.leadBundles.contains(bundle)))
     }
 
     /// The game VoiceOver was turned off for, and when: VoiceOver's quit hands the front to the app it was started
@@ -177,7 +187,15 @@ final class LeadWatcher {
         if direct { Log.info("lead watcher: \(app.localizedName ?? directKey) is direct: its keys go straight to it") }
         // A Wine program has no bundle at all (CrossOver runs it through a bare loader stub); game speech gives it a key.
         // A direct program without one (a Godot game run from Terminal) is known by its name.
-        guard config.applications.automaticHandOver, app.activationPolicy == .regular || own,
+        // Without readers per app TurnOver reads everywhere, so the first take-over (at launch, or once Input Monitoring
+        // is granted) still happens; after it, apps changing hands is only with the switch on (a second reviewer, 22 Oct 2026).
+        // Not after VoiceOver was turned on by hand (the swap gave it the Mac): that choice stands until VoiceOver goes
+        // off again or TurnOver is turned on by its own key (a second reviewer, 22 Oct 2026).
+        // And never by turning VoiceOver off when the swap is off: then TurnOver's own key is the only way it comes on.
+        let mayTurnVoiceOverOff = Coexist.on || config.applications.swapWithVoiceOver
+        // And never while TurnOver is off by its own key (suspended): an app change then changes nothing.
+        let firstTakeOver = !config.applications.perAppReaders && initialTakeOverPending && !suspended && !turnOverActive() && !yieldedToVoiceOverByHand && mayTurnVoiceOverOff
+        guard config.applications.switchesAsAppsChange || firstTakeOver, app.activationPolicy == .regular || own,
               let bundle = app.bundleIdentifier ?? Games.leadKey(for: app) ?? (direct ? directKey : nil), bundle != "com.apple.VoiceOver" else { return }
         // TurnOver in front with no window of its own showing: a moment's activation macOS reports as a window
         // changes hands (Finder's Command Up and Command Down), not the user moving. Handing over on it put
@@ -205,6 +223,7 @@ final class LeadWatcher {
             return
         }
         Log.info("lead watcher: \(app.localizedName ?? bundle) is \(lead ? "TurnOver's" : "VoiceOver's"); turning VoiceOver \(lead ? "off" : "on")")
+        if lead { initialTakeOverPending = false }
         handOver(voiceOverOn: !lead)
     }
 
@@ -397,6 +416,12 @@ final class LeadWatcher {
     }
 
     func switchCurrent(toTurnOver wanted: Bool? = nil) {
+        // Without readers per app there is nothing to give an app to: TurnOver is on or off (22 Oct 2026).
+        guard config.applications.perAppReaders else {
+            Log.info("switch reader: readers per app are off; nothing to switch")
+            Speech.speakMessage("Readers per app are off: TurnOver reads everywhere while it is on. Command Control Period turns it off and on; Settings, Experimental, turns readers per app on.")
+            return
+        }
         guard let app = NSWorkspace.shared.frontmostApplication, app.activationPolicy == .regular,
               let bundle = app.bundleIdentifier ?? Games.leadKey(for: app), bundle != Bundle.main.bundleIdentifier else {
             Log.info("switch reader: nothing to switch in front"); Tones.edge(); return
@@ -471,7 +496,7 @@ final class LeadWatcher {
     func voiceOverChanged(on: Bool) {
         guard Date().timeIntervalSince(startedAt) > 3 else { return }
         if let t = Watchdog.shared.lastTrip, Date().timeIntervalSince(t) < 30 { return }
-        guard Date() > ourChangeUntil, config.applications.automaticHandOver else { return }
+        guard Date() > ourChangeUntil, config.applications.switchesAsAppsChange else { return }
         guard let app = NSWorkspace.shared.frontmostApplication, app.activationPolicy == .regular, let b = app.bundleIdentifier, b != Bundle.main.bundleIdentifier else { return }
         if shouldLead(b) == on {   // the user went against the list for this app
             pins[b] = !on

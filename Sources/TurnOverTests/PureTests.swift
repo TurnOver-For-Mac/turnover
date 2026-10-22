@@ -11,6 +11,20 @@ import TurnOverSpeech
 import AXFixtures
 
 func pureTests() {
+    test("readers per app: a fresh file is off, a file with a list or another mode keeps working as it did") {
+        let decode: (String) -> Config.Applications = { json in
+            try! JSONDecoder().decode(Config.Applications.self, from: json.data(using: .utf8)!)
+        }
+        expect(Config.Applications().perAppReaders, false, "a fresh install: TurnOver everywhere while it is on")
+        expect(decode("{}").perAppReaders, true, "a file from before the modes starts in apps mode, so its lists are kept")
+        expect(decode("{\"leadMode\": \"everywhere\", \"voiceOverBundles\": []}").perAppReaders, false, "everywhere with no list: nothing to keep")
+        expect(decode("{\"leadMode\": \"everywhere\", \"voiceOverBundles\": [\"com.apple.Safari\"]}").perAppReaders, true, "an app given to VoiceOver is kept")
+        expect(decode("{\"leadMode\": \"apps\"}").perAppReaders, true, "TurnOver in its apps is kept")
+        expect(decode("{\"perAppReaders\": false, \"leadMode\": \"apps\"}").perAppReaders, false, "a choice made is kept over the lists")
+        let off = decode("{\"leadMode\": \"everywhere\"}")
+        expect(off.effectiveLeadMode, "everywhere"); expect(off.switchesAsAppsChange, false); expect(off.handsOverAtLaunch, true)
+        expect(decode("{}").swapWithVoiceOver, true, "the swap with VoiceOver is on unless turned off")
+    }
     test("finder: a list row is a folder by its Kind cell or the folder's dashes in Size") {
         expect(FinderRows.isFolderRow(cellTexts: ["Reports", "Today at 10:14", "--", "Folder"]), true)
         expect(FinderRows.isFolderRow(cellTexts: ["Notes.docx", "8 Oct 2026 at 15:57", "244 KB", "Microsoft Word document (.docx)"]), false)
@@ -92,6 +106,7 @@ func pureTests() {
     }
     test("reading modes: each mode's own list, for showing and for moving") {
         var a = Config.Applications()
+        a.perAppReaders = true   // the lists only count with readers per app on (22 Oct 2026)
         a.leadBundles = ["com.apple.mail"]; a.voiceOverBundles = ["com.apple.Safari"]
         a.leadMode = "apps"
         expect(a.listedForTurnOver("com.apple.mail"), true); expect(a.listedForTurnOver("com.apple.Safari"), false)

@@ -94,6 +94,7 @@ public enum SettingsBridge {
             }
             if before.general.keyboardStyle != next.general.keyboardStyle { GlobalCommands.setKeyboardStyle(next.general.style) }
             if before.braille.bluetooth != next.braille.bluetooth, next.braille.bluetooth { BrailleDisplays.shared.lookNow() }
+            if before.applications.perAppReaders != next.applications.perAppReaders { TurnOverMenu.shared.leadModeChanged?() }
             let voiceChanged = before.speech.voice != next.speech.voice
             let languageVoicesChanged = before.speech.languageVoices != next.speech.languageVoices
             if voiceChanged || languageVoicesChanged { Languages.forget() }

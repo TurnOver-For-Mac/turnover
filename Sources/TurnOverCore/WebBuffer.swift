@@ -111,6 +111,14 @@ public final class WebBuffer {
         docCursor = 0; lastTextEnd = nil
         visit(webArea, depth: 0)
         flush()
+        // A modal dialog up (Squarespace's Cancel domain registration, 22 Oct 2026): Safari's web area reports a
+        // single child with nothing to read in it, while the focused buttons are inside the dialog. Then the dialog
+        // is read instead: the focused element's outermost ancestor below the web area.
+        if newLines.isEmpty, let dialog = focusedPartOfPage() {
+            Log.info("virtual buffer: the web area gave nothing; reading the focused element's part of the page (\(dialog.role))")
+            visit(dialog, depth: 1)
+            flush()
+        }
         text = out as NSString
         lines = newLines
         segments = newSegments
@@ -125,6 +133,20 @@ public final class WebBuffer {
         if isPartial, !loggedPartial { loggedPartial = true; Log.error("virtual buffer: stopped at 2 s after \(visited) elements; the page is read only in part") }
         lastBuildMs = Int(Date().timeIntervalSince(t0) * 1000)
         Log.info("virtual buffer: \(lines.count) lines, \(text.length) characters from \(visited) elements in \(Int(Date().timeIntervalSince(t0) * 1000)) ms")
+    }
+
+    /// The focused element's outermost ancestor below the web area, if the focus is inside this web area.
+    private func focusedPartOfPage() -> AXUIElement? {
+        guard let focus = API.focusObject?.element, focus.pid == webArea.pid, !focus.isSame(webArea) else { return nil }
+        var part = focus
+        var steps = 0
+        while steps < 60 {
+            guard let parent = part.element(kAXParentAttribute) else { return nil }   // no web area above: not this page
+            if parent.isSame(webArea) { return part }
+            part = parent
+            steps += 1
+        }
+        return nil
     }
 
     static let controlRoles: Set<String> = ["AXButton", "AXPopUpButton", "AXComboBox", "AXTextField", "AXTextArea", "AXCheckBox", "AXRadioButton", "AXMenuItem", "AXSlider", "AXMenuButton", "AXIncrementor", "AXDisclosureTriangle", "AXColorWell", "AXDateField", "AXTimeField"]

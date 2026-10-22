@@ -178,7 +178,10 @@ final class TurnOverApp {
             guard let text = message["text"] as? String, !text.isEmpty, text.count < 400, Core.active else { return }
             Log.io("say for a companion: \(Log.words(String(text.prefix(60))))"); Speech.speakMessage(text)
         }
-        MenuAnywhere.shared.cycleLeadMode = { [weak self] in self?.lead.cycleMode() }
+        MenuAnywhere.shared.cycleLeadMode = { [weak self] in
+            guard config.applications.perAppReaders else { Speech.speakMessage("Readers per app are off: TurnOver reads everywhere while it is on. Settings, Experimental, turns them on."); return }
+            self?.lead.cycleMode()
+        }
         TurnOverMenu.shared.leadModeChanged = { [weak self] in self?.lead.refreshAfterModeChange() }
         Core.lendToVoiceOver = { [weak self] s in self?.lead.lend(seconds: s) }
         MenuAnywhere.shared.register()
@@ -227,13 +230,19 @@ final class TurnOverApp {
         if NSWorkspace.shared.isVoiceOverEnabled { DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { Tones.startup() } }
         watchForInputMonitoring()
         // The front application at launch may already be one of TurnOver's.
-        if let front = NSWorkspace.shared.frontmostApplication, let b = front.bundleIdentifier, config.applications.automaticHandOver,
+        // Not coexisting, the launch hand-over turns VoiceOver off: only with the swap on, else neither changes the other.
+        let launchMayTurnVoiceOverOff = Coexist.on || config.applications.swapWithVoiceOver
+        if let front = NSWorkspace.shared.frontmostApplication, let b = front.bundleIdentifier, config.applications.handsOverAtLaunch, launchMayTurnVoiceOverOff,
            lead.shouldLead(b), NSWorkspace.shared.isVoiceOverEnabled || Coexist.on {
             Log.info("start: \(b) is TurnOver's and VoiceOver is on; handing over in a second")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 Log.info("start: the hand-over step runs (self \(self == nil ? "gone" : "here"))")
                 self?.lead.handOver(voiceOverOn: false)
             }
+        } else if !Coexist.on, !config.applications.swapWithVoiceOver, !lead.suspended {
+            // Neither reader changes the other: TurnOver comes on as it starts, VoiceOver stays as it is (22 Oct 2026).
+            Log.info("start: TurnOver on without a hand-over (the swap is off)")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in self?.activate() }
         } else {
             Log.info("start: no hand-over at launch (front \(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "none"), VoiceOver \(NSWorkspace.shared.isVoiceOverEnabled ? "on" : "off"))")
         }
@@ -329,8 +338,12 @@ final class TurnOverApp {
         }
     }
 
+    /// The first report of VoiceOver's state is TurnOver starting, not a change by hand: the swap setting does not apply to it.
+    private var sawVoiceOverState = false
     private func voiceOverChanged(_ on: Bool) {
         Log.info("VoiceOver is \(on ? "on" : "off")")
+        let starting = !sawVoiceOverState
+        sawVoiceOverState = true
         defer { refreshWindowsLayer() }
         // Coexisting: VoiceOver off means TurnOver reads every app (LeadWatcher.shouldLead), on again means it goes back
         // to its own; the app in front is looked at afresh either way. (It stayed as it was, and with VoiceOver off the
@@ -341,6 +354,15 @@ final class TurnOverApp {
             return
         }
         lead.voiceOverChanged(on: on)
+        // Screen reader behaviour (22 Oct 2026): the swap is a setting. Off, VoiceOver's key changes nothing of TurnOver's.
+        // VoiceOver going off ends any yielding, whatever the swap setting says.
+        if !on { lead.yieldedToVoiceOverByHand = false }
+        guard config.applications.swapWithVoiceOver || starting else {
+            Log.info("VoiceOver \(on ? "on" : "off"); TurnOver stays as it is (the swap is off)")
+            return
+        }
+        // Only a change made by hand counts as yielding: a hand-over TurnOver posted itself (the lock screen) does not.
+        if on, !starting, !lead.isOurChange { lead.yieldedToVoiceOverByHand = true }
         if on { deactivate() } else { activate() }
     }
 
@@ -425,8 +447,13 @@ final class TurnOverApp {
     private func toggleCoexist() {
         if lead.suspended {
             lead.suspended = false
+            lead.yieldedToVoiceOverByHand = false   // turned on by its own key: it takes the app in front again
             Speech.speakMessage("TurnOver on")
-            if let front = NSWorkspace.shared.frontmostApplication { lead.look(at: front) }
+            if !Coexist.on, !config.applications.swapWithVoiceOver {
+                activate()   // on by its key, whatever VoiceOver is doing: the swap is off
+            } else if let front = NSWorkspace.shared.frontmostApplication {
+                lead.look(at: front)
+            }
             refreshWindowsLayer()
         } else {
             lead.suspended = true

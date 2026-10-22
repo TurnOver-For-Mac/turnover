@@ -392,8 +392,11 @@ public final class TurnOverMenu {
     }
 
     private func toolItems() -> [MenuItem] {
-        var items: [MenuItem] = [
-            MenuItem("Apps TurnOver reads", .submenu { self.applicationItems() }, hint: "Which apps TurnOver reads, and which VoiceOver reads"),
+        var items: [MenuItem] = []
+        if config.applications.perAppReaders {
+            items.append(MenuItem("Apps TurnOver reads", .submenu { self.applicationItems() }, hint: "Which apps TurnOver reads, and which VoiceOver reads (readers per app, Settings, Experimental)"))
+        }
+        items += [
             Self.copyVoiceOverItem,
             MenuItem("Send feedback", .submenu { self.feedbackItems() }, hint: "A report in TurnOver's reports folder, and the problem form on GitHub"),
             MenuItem("Force quit an app", .action { ForceQuit.open() }, hint: "Lists the apps that are running; the Mac's own window is silent while TurnOver reads"),

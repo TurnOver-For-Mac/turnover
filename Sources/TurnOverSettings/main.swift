@@ -75,8 +75,8 @@ final class Model: ObservableObject {
 
 enum Pane: String, CaseIterable, Identifiable {
     // NVDA's order, with TurnOver's own at the end: every setting the menu offered lives here since 21 Oct 2026.
-    case general = "General", speech = "Speech", keyboard = "Keyboard", items = "Item details", webPages = "Web pages", documents = "Documents",
-         recognition = "Screen recognition", otherApps = "Other apps' speech", experimental = "Experimental"
+    case general = "General", readers = "Screen reader behaviour", speech = "Speech", keyboard = "Keyboard", items = "Item details", webPages = "Web pages",
+         documents = "Documents", recognition = "Screen recognition", otherApps = "Other apps' speech", experimental = "Experimental"
     var id: String { rawValue }
 }
 
@@ -94,6 +94,7 @@ struct ContentView: View {
             } else {
                 switch section ?? .general {
                 case .general: GeneralView()
+                case .readers: ReadersView()
                 case .speech: SpeechView()
                 case .keyboard: KeyboardView()
                 case .items: ItemsView()
@@ -109,34 +110,58 @@ struct ContentView: View {
     }
 }
 
-struct SpeechView: View {
-    @EnvironmentObject var model: Model
-    /// The voices offered: English and the Mac's own languages (System Settings, Language and Region), the Mac's
-    /// languages first and Eloquence before the rest, as the menu offered them; every voice on the Mac was far too
-    /// many (Oliver, 21 Oct 2026). A voice set earlier from outside that list stays selectable.
-    private var voices: [AVSpeechSynthesisVoice] {
+/// The voices on the Mac, listed once and again each time the window comes to the front: listing and sorting them on
+/// every redraw made the window slow to answer accessibility questions, and the arrow keys in the sidebar waited half
+/// a second (22 Oct 2026). A voice installed or a language added while the window is open shows up on the next return.
+@MainActor
+final class VoiceLists: ObservableObject {
+    static let shared = VoiceLists()
+    @Published private(set) var all: [AVSpeechSynthesisVoice] = []
+    @Published private(set) var offered: [AVSpeechSynthesisVoice] = []
+    @Published private(set) var rotorCandidates: [AVSpeechSynthesisVoice] = []
+    private var observer: NSObjectProtocol?
+
+    private init() {
+        refresh()
+        observer = NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refresh() }
+        }
+    }
+
+    func refresh() {
         let mine = Locale.preferredLanguages.map { String($0.prefix(2)) }
         let wanted = Set(mine + ["en"])
+        let voices = AVSpeechSynthesisVoice.speechVoices()
+        all = voices
+        // English and the Mac's own languages, the Mac's languages first and Eloquence before the rest.
+        offered = voices.filter { wanted.contains(String($0.language.prefix(2))) }.sorted { a, b in
+            let la = mine.firstIndex(of: String(a.language.prefix(2))) ?? 99, lb = mine.firstIndex(of: String(b.language.prefix(2))) ?? 99
+            if la != lb { return la < lb }
+            let ea = a.identifier.contains("eloquence"), eb = b.identifier.contains("eloquence")
+            if ea != eb { return ea }
+            return a.name < b.name
+        }
+        // The voices of the Mac's own languages and English, as the rotor offers them.
+        rotorCandidates = voices.filter { wanted.contains(String($0.language.prefix(2))) }
+            .sorted { $0.name == $1.name ? $0.language < $1.language : $0.name < $1.name }
+    }
+}
+
+struct SpeechView: View {
+    @EnvironmentObject var model: Model
+    @ObservedObject private var voiceLists = VoiceLists.shared
+    /// The voices offered, listed once (VoiceLists); a voice set earlier from outside the list stays selectable.
+    private var voices: [AVSpeechSynthesisVoice] {
         let current = model.get("speech", "voice") as? String ?? ""
-        return AVSpeechSynthesisVoice.speechVoices().filter { wanted.contains(String($0.language.prefix(2))) || $0.identifier == current }
-            .sorted { a, b in
-                let la = mine.firstIndex(of: String(a.language.prefix(2))) ?? 99, lb = mine.firstIndex(of: String(b.language.prefix(2))) ?? 99
-                if la != lb { return la < lb }
-                let ea = a.identifier.contains("eloquence"), eb = b.identifier.contains("eloquence")
-                if ea != eb { return ea }
-                return a.name < b.name
-            }
+        if voiceLists.offered.contains(where: { $0.identifier == current }) || current.isEmpty { return voiceLists.offered }
+        let extra = voiceLists.all.filter { $0.identifier == current }
+        return voiceLists.offered + extra
     }
     private let natural = ["af_alloy", "af_aoede", "af_bella", "af_heart", "af_jessica", "af_kore", "af_nicole", "af_nova", "af_river",
                            "af_sarah", "af_sky", "am_adam", "am_echo", "am_eric", "am_fenrir", "am_liam", "am_michael", "am_onyx",
                            "am_puck", "am_santa", "bf_alice", "bf_emma", "bf_isabella", "bf_lily", "bm_daniel", "bm_fable", "bm_george", "bm_lewis"]
     private var rotorChosen: [String] { (model.state["speech"] as? [String: Any])?["rotorVoices"] as? [String] ?? [] }
-    /// The voices of the Mac's own languages (and English), as the rotor offers them.
-    private var rotorCandidates: [AVSpeechSynthesisVoice] {
-        let wanted = Set(Locale.preferredLanguages.map { String($0.prefix(2)) } + ["en"])
-        return AVSpeechSynthesisVoice.speechVoices().filter { wanted.contains(String($0.language.prefix(2))) }
-            .sorted { $0.name == $1.name ? $0.language < $1.language : $0.name < $1.name }
-    }
+    private var rotorCandidates: [AVSpeechSynthesisVoice] { voiceLists.rotorCandidates }
     private var outputDevices: [(uid: String, name: String)] {
         ((model.special("_outputDevices") as? [[String: Any]]) ?? []).compactMap { d in
             guard let uid = d["uid"] as? String, let name = d["name"] as? String else { return nil }
@@ -433,13 +458,33 @@ struct GeneralView: View {
     }
 }
 
+/// TurnOver is on or off; VoiceOver is on or off. The two things that relate them live here (22 Oct 2026).
+struct ReadersView: View {
+    @EnvironmentObject var model: Model
+    private var coexist: Binding<Bool> {
+        Binding(get: { model.special("_coexist") as? Bool ?? false }, set: { model.setSpecial("_coexist", $0) })
+    }
+    var body: some View {
+        Form {
+            Section {
+                Toggle("TurnOver comes on when VoiceOver turns off, and off when VoiceOver comes on", isOn: model.bool("applications", "swapWithVoiceOver"))
+                Text("Off: each reader has its own switch and neither changes the other. Command Control Period is TurnOver's; Command F5 is VoiceOver's.").font(.caption)
+            }
+            Section {
+                Toggle("CoExist: VoiceOver stays running alongside TurnOver", isOn: coexist)
+                Text("VoiceOver is kept quiet where TurnOver reads and keeps passwords and macOS's own prompts. Changing it restarts TurnOver.").font(.caption)
+            }
+        }.formStyle(.grouped).navigationTitle("Screen reader behaviour")
+    }
+}
+
 struct ExperimentalView: View {
     @EnvironmentObject var model: Model
     var body: some View {
         Form {
             Section {
-                Toggle("CoExist", isOn: Binding(get: { model.special("_coexist") as? Bool ?? false }, set: { model.setSpecial("_coexist", $0) }))
-                Text("CoExist keeps VoiceOver running alongside TurnOver: TurnOver reads the apps on its list, and VoiceOver, kept quiet there, reads every other app straight away. Changing it restarts TurnOver.").font(.caption)
+                Toggle("Readers per app", isOn: model.bool("applications", "perAppReaders"))
+                Text("A list of apps for each reader, a mode (TurnOver in its apps, everywhere, or VoiceOver everywhere), and switching between the readers as you change apps. The list is under Tools in the TurnOver menu while this is on. Off, TurnOver reads everywhere while it is on.").font(.caption)
             } header: { Text("Newer features, still settling") }
         }.formStyle(.grouped).navigationTitle("Experimental")
     }

@@ -6,6 +6,11 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Changed
 
+- Screen reader behaviour: TurnOver is on or off, VoiceOver is on or off, and that is all. TurnOver reads everywhere
+  while it is on; no apps are labelled for either reader and nothing switches as you change apps. A new Settings
+  section, Screen reader behaviour, holds the two things that relate them: CoExist, and whether TurnOver comes on
+  when VoiceOver turns off and off when it comes on. Readers per app (the lists, the modes, switching as apps change)
+  moved to Experimental, off for a new install; a set-up that already uses them keeps working as it did.
 - The menu is short, in NVDA's shape: This app, Settings, Keys, Tools, Help, Support TurnOver, Quit. Every setting
   now lives in the Settings window, in sections down the side: General, Speech, Keyboard, Item details, Web pages,
   Documents, Screen recognition, Other apps' speech, Experimental. Two wait in Tools until they have a section:

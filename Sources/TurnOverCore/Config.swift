@@ -317,13 +317,28 @@ public struct Config: Codable {
         /// VoiceOver never sees it, and TurnOver says nothing; for a game that speaks for itself. By bundle identifier,
         /// or "process:<name>" for a program without one (a Godot game run from Terminal). Command Control Comma, D.
         public var directApps: [String] = []
+        /// Readers per app (experimental since 22 Oct 2026): the modes, the app lists and switching as apps change.
+        /// Off, TurnOver is simply on or off and reads everywhere while on; VoiceOver is on or off by its own key.
+        /// A settings file that already holds a list or a mode other than everywhere reads as on, so nobody's set-up
+        /// changes with the build.
+        public var perAppReaders = false
+        /// TurnOver comes on when VoiceOver turns off, and goes off when VoiceOver comes on (not coexisting).
+        public var swapWithVoiceOver = true
         public init() {}
         public static let leadModes = ["apps", "everywhere", "voiceover"]
+        /// The mode in force: the chosen one with readers per app, everywhere without.
+        public var effectiveLeadMode: String { perAppReaders ? leadMode : "everywhere" }
+        /// The apps VoiceOver keeps, in force: none without readers per app.
+        public var effectiveVoiceOverBundles: [String] { perAppReaders ? voiceOverBundles : [] }
+        /// Whether readers switch as the front app changes: only with readers per app, and the switch on.
+        public var switchesAsAppsChange: Bool { perAppReaders && automaticHandOver }
+        /// Whether TurnOver takes over at launch: always without readers per app; with them, when switching is on.
+        public var handsOverAtLaunch: Bool { !perAppReaders || automaticHandOver }
         /// Whether the saved lists give `bundle` to TurnOver in the current mode (not pins or games: LeadWatcher).
         public func listedForTurnOver(_ bundle: String) -> Bool {
-            switch leadMode {
+            switch effectiveLeadMode {
             case "voiceover": return false
-            case "everywhere": return !voiceOverBundles.contains(bundle)
+            case "everywhere": return !effectiveVoiceOverBundles.contains(bundle)
             default: return leadBundles.contains(bundle)
             }
         }
@@ -342,7 +357,7 @@ public struct Config: Codable {
         public static func leadModeName(_ m: String) -> String {
             m == "everywhere" ? "TurnOver everywhere" : m == "voiceover" ? "VoiceOver everywhere" : "TurnOver in its apps"
         }
-        enum Keys: String, CodingKey { case leadBundles, leadEverywhereElse, automaticHandOver, leadMode, voiceOverBundles, directApps }
+        enum Keys: String, CodingKey { case leadBundles, leadEverywhereElse, automaticHandOver, leadMode, voiceOverBundles, directApps, perAppReaders, swapWithVoiceOver }
         // Each field falls back on its own: a new field must never wipe the list of apps TurnOver leads in (8 Oct 2026).
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: Keys.self)
@@ -358,6 +373,14 @@ public struct Config: Codable {
                 // Settings from before the modes (code review, 13 Oct) had an "everywhere else" switch; it was never
                 // honoured, so such a file starts in apps mode.
                 leadMode = "apps"
+            }
+            swapWithVoiceOver = (try? c.decodeIfPresent(Bool.self, forKey: .swapWithVoiceOver)) ?? d.swapWithVoiceOver
+            if let chosen = try? c.decodeIfPresent(Bool.self, forKey: .perAppReaders) {
+                perAppReaders = chosen
+            } else {
+                // A set-up from before the switch that uses the lists keeps working as it did.
+                let usesLists = leadMode != "everywhere" || !voiceOverBundles.isEmpty
+                perAppReaders = usesLists
             }
         }
     }

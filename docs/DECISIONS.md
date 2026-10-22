@@ -8,6 +8,11 @@ fixes code that is not live. Each has a date and a reason. To reopen one, open a
 - **VoiceOver stays on** (16 Oct 2026). TurnOver reads the apps it is given; VoiceOver is silenced there by a sound
   tap and keeps passwords, macOS's own prompts and every other app. A blind person is never without speech, and
   TurnOver can concentrate on the apps where it reads better. The README says the rest under Where TurnOver stands.
+- **On or off, and that is all** (22 Oct 2026). TurnOver is on or off; VoiceOver is on or off; TurnOver reads
+  everywhere while it is on. No apps labelled for a reader, no switching as apps change, unless the experimental
+  readers-per-app switch is on. The two things that relate the readers are in Settings, Screen reader behaviour:
+  CoExist, and the swap (TurnOver on when VoiceOver goes off, and off when it comes on). Discussion 46 asked the
+  community about the default behind this.
 - **The keys follow the reader they are named after** (15 Oct 2026). VoiceOver keys do what VoiceOver's do; NVDA keys
   what NVDA's do; JAWS keys what JAWS's do. Where a key clashes with a Mac shortcut, the Mac shortcut wins. A change
   that alters what an existing key does needs a very good reason (CONTRIBUTING.md, Keep what works).
