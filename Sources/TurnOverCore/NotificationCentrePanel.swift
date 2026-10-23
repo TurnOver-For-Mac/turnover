@@ -22,6 +22,9 @@ public enum NotificationCentrePanel {
     static let openTries = 20
     /// Counts presses of the key: a landing scheduled for an earlier press is dropped.
     private static var generation = 0
+    /// True from the press until the review cursor has landed or the wait gave up: a second press meanwhile is a
+    /// close, not a second opening.
+    private static var opening = false
 
     /// The list of notifications when the panel is open, nil when it is closed.
     public static func list() -> AXUIElement? {
@@ -39,13 +42,16 @@ public enum NotificationCentrePanel {
     /// Opens the panel and goes in, or closes it if it is open.
     public static func toggle() {
         generation += 1
-        if isOpen {
+        if opening || isOpen {
+            opening = false
             close()
             return
         }
         let pressed = VoiceOverKeysPlugin.pressMenuExtra("com.apple.menuextra.clock", "Notification Centre")
         guard pressed else { return }
-        waitAndEnter(tries: 0, generation: generation)
+        opening = true
+        let activePid = AXHandler.shared.activePid
+        waitAndEnter(tries: 0, generation: generation, activePid: activePid)
     }
 
     /// Closes the panel with the clock, and the review cursor goes back to the keyboard focus.
@@ -60,20 +66,29 @@ public enum NotificationCentrePanel {
     }
 
     /// Looks for the list every tenth of a second; when it is there, the review cursor lands on the first
-    /// notification (or on the empty list), with the panel's name said first.
-    private static func waitAndEnter(tries: Int, generation pressGeneration: Int) {
+    /// notification (or on the empty list), with the panel's name said first. The wait is dropped when the key was
+    /// pressed again meanwhile, or when the user has moved to another application: the panel stays open, but the
+    /// cursor is not pulled away from where they went.
+    private static func waitAndEnter(tries: Int, generation pressGeneration: Int, activePid: pid_t) {
         guard pressGeneration == generation else { return }
+        if AXHandler.shared.activePid != activePid {
+            Log.io("notification centre: the focus moved to another application while the panel opened; not entered")
+            opening = false
+            return
+        }
         if let list = list() {
+            opening = false
             enter(list)
             return
         }
         if tries >= openTries {
+            opening = false
             Log.io("notification centre: the panel did not appear within \(openTries) tenths of a second")
             Speech.speakMessage("Notification Centre did not open")
             return
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            waitAndEnter(tries: tries + 1, generation: pressGeneration)
+            waitAndEnter(tries: tries + 1, generation: pressGeneration, activePid: activePid)
         }
     }
 
@@ -82,6 +97,19 @@ public enum NotificationCentrePanel {
         Log.io("notification centre: open, \(alerts.count) notifications")
         Speech.speakMessage(alerts.isEmpty ? "Notification Centre, no notifications" : "Notification Centre")
         ObjectNavigator.shared.moveTo(alerts.first ?? list)
+    }
+
+    /// Called on every layout change in Notification Centre, whether or not banners are read: if Escape (or a click
+    /// elsewhere) closed the panel while the review cursor was inside, the cursor goes back to the keyboard focus,
+    /// as it does when the key closes the panel. Nothing takes the focus when the panel opens or closes, so no focus
+    /// event does this. The panel is only looked for when the cursor is in Notification Centre, so the ordinary
+    /// banner traffic costs nothing here.
+    public static func cursorBackIfStranded() {
+        guard let pid = centrePid() else { return }
+        guard ObjectNavigator.shared.reviewElement?.pid == pid else { return }
+        guard !isOpen else { return }
+        Log.io("notification centre: closed from outside; the cursor goes back to the focus")
+        ObjectNavigator.shared.toFocus()
     }
 
     static func centrePid() -> pid_t? {

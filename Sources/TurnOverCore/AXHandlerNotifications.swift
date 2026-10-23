@@ -28,6 +28,7 @@ extension AXHandler {
         // (a tester, 6 Oct 2026). The banner is a group of subrole AXNotificationCenterAlert, with title, subtitle and
         // body texts, in a "Notification Center" window (measured 8 Oct 2026).
         if pid == notificationCentrePid, [kAXCreatedNotification, kAXWindowCreatedNotification, kAXLayoutChangedNotification].contains(name) {
+            NotificationCentrePanel.cursorBackIfStranded()
             announceNotificationsSoon()
             return
         }
