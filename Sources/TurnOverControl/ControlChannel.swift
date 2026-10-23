@@ -43,6 +43,24 @@ public enum ControlChannel {
         return d
     }
 
+    /// A blocking Unix-socket write is allowed to transfer fewer bytes than requested. Control messages are newline
+    /// framed, so losing the tail of one line leaves the peer waiting forever or trying to decode incomplete JSON.
+    /// Retry interruptions and continue until the complete message is written.
+    @discardableResult
+    public static func writeAll(_ data: Data, to fd: Int32) -> Bool {
+        var offset = 0
+        while offset < data.count {
+            let wrote = data.withUnsafeBytes { raw -> Int in
+                guard let base = raw.baseAddress else { return 0 }
+                return Darwin.write(fd, base.advanced(by: offset), data.count - offset)
+            }
+            if wrote > 0 { offset += wrote; continue }
+            if wrote < 0, errno == EINTR { continue }
+            return false
+        }
+        return true
+    }
+
     // MARK: Who is on the other end
 
     /// This program's own Team ID (nil when it isn't signed by a developer: a build on a Mac without one).
@@ -124,7 +142,8 @@ public final class ControlServer: @unchecked Sendable {
     public func start(path: String) -> Bool {
         guard listener < 0 else { return true }
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-        guard fd >= 0, var addr = ControlChannel.address(path) else { log("control: no socket"); return false }
+        guard fd >= 0 else { log("control: no socket"); return false }
+        guard var addr = ControlChannel.address(path) else { close(fd); log("control: socket path is too long"); return false }
         unlink(path)   // one left by a TurnOver that crashed
         let bound = withUnsafePointer(to: &addr) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) } }
         guard bound == 0 else { log("control: couldn't bind (\(errno))"); close(fd); return false }
@@ -188,7 +207,7 @@ public final class ControlServer: @unchecked Sendable {
         guard let data = ControlChannel.encode(message) else { return }
         queue.async { [weak self] in
             guard self?.clients[fd] != nil else { return }
-            data.withUnsafeBytes { _ = write(fd, $0.baseAddress, data.count) }
+            _ = ControlChannel.writeAll(data, to: fd)
         }
     }
 
@@ -197,7 +216,7 @@ public final class ControlServer: @unchecked Sendable {
         guard let data = ControlChannel.encode(message) else { return }
         queue.async { [weak self] in
             guard let self else { return }
-            for fd in self.subscribers { data.withUnsafeBytes { _ = write(fd, $0.baseAddress, data.count) } }
+            for fd in self.subscribers { _ = ControlChannel.writeAll(data, to: fd) }
         }
     }
 }
@@ -221,7 +240,7 @@ public enum ControlClient {
     public static func send(_ message: [String: Any], folder: String = "TurnOver", waitFor seconds: Double? = nil) -> (sent: Bool, answer: [String: Any]?) {
         guard let fd = connect(folder: folder) else { return (false, nil) }
         defer { close(fd) }
-        guard let data = ControlChannel.encode(message), write(fd, (data as NSData).bytes, data.count) == data.count else { return (false, nil) }
+        guard let data = ControlChannel.encode(message), ControlChannel.writeAll(data, to: fd) else { return (false, nil) }
         guard let seconds else {
             // Stay connected until TurnOver has read it (it closes its end): closed at once, TurnOver could no longer
             // ask the system who had sent it ("no audit token") and turned every message away; the plugin tool's
@@ -279,7 +298,7 @@ public enum ControlClient {
         @discardableResult
         public func send(_ message: [String: Any]) -> Bool {
             guard let data = ControlChannel.encode(message) else { return false }
-            return write(fd, (data as NSData).bytes, data.count) == data.count
+            return ControlChannel.writeAll(data, to: fd)
         }
 
         deinit { source.cancel() }
