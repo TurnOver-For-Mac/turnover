@@ -22,7 +22,15 @@ public enum ImageDescriber {
         var element: AXUIElement?
         if let doc = API.focusTreeInterceptor, !doc.passThrough { element = doc.elementAtPosition() }
         element = element ?? ObjectNavigator.shared.element ?? API.focusObject?.element
-        guard let element, let frame = TurnOverObject.frame(element), frame.width >= 8, frame.height >= 8 else { Speech.speakMessage("nothing to describe here"); return }
+        // Not on a picture: the window's text from the screen instead, as the menu's screen recognition gives
+        // (VO-Shift-L is VoiceOver's Describe an image; Oliver, 23 Oct 2026, issue 94: a direct key for recognition
+        // in the VoiceOver style, without the TurnOver layer).
+        guard let element, element.role == "AXImage" else {
+            Log.io("describe: not on a picture; recognising the screen")
+            ScreenRecognition.shared.recognize()
+            return
+        }
+        guard let frame = TurnOverObject.frame(element), frame.width >= 8, frame.height >= 8 else { Speech.speakMessage("nothing to describe here"); return }
         let pid = element.pid
         let windowFrame = element.element(kAXWindowAttribute).flatMap { TurnOverObject.frame($0) }
         busy = true
