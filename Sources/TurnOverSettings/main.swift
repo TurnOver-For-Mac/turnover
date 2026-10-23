@@ -75,8 +75,8 @@ final class Model: ObservableObject {
 
 enum Pane: String, CaseIterable, Identifiable {
     // NVDA's order, with TurnOver's own at the end: every setting the menu offered lives here since 21 Oct 2026.
-    case general = "General", readers = "Screen reader behaviour", speech = "Speech", keyboard = "Keyboard", items = "Item details", webPages = "Web pages",
-         documents = "Documents", recognition = "Screen recognition", otherApps = "Other apps' speech", experimental = "Experimental"
+    case general = "General", speech = "Speech", keyboard = "Keyboard", items = "Item details", webPages = "Web pages", documents = "Documents",
+         recognition = "Screen recognition", otherApps = "Other apps' speech", readers = "Screen reader behaviour"
     var id: String { rawValue }
 }
 
@@ -94,7 +94,6 @@ struct ContentView: View {
             } else {
                 switch section ?? .general {
                 case .general: GeneralView()
-                case .readers: ReadersView()
                 case .speech: SpeechView()
                 case .keyboard: KeyboardView()
                 case .items: ItemsView()
@@ -102,7 +101,7 @@ struct ContentView: View {
                 case .documents: DocumentsView()
                 case .recognition: RecognitionView()
                 case .otherApps: OtherAppsView()
-                case .experimental: ExperimentalView()
+                case .readers: ReadersView()
                 }
             }
         }
@@ -128,6 +127,10 @@ final class VoiceLists: ObservableObject {
         }
     }
 
+    /// A voice's label in the picker, made once per refresh rather than on every redraw.
+    private var labels: [String: String] = [:]
+    func label(for voice: AVSpeechSynthesisVoice) -> String { labels[voice.identifier] ?? voice.name }
+
     func refresh() {
         let mine = Locale.preferredLanguages.map { String($0.prefix(2)) }
         let wanted = Set(mine + ["en"])
@@ -144,6 +147,13 @@ final class VoiceLists: ObservableObject {
         // The voices of the Mac's own languages and English, as the rotor offers them.
         rotorCandidates = voices.filter { wanted.contains(String($0.language.prefix(2))) }
             .sorted { $0.name == $1.name ? $0.language < $1.language : $0.name < $1.name }
+        var made: [String: String] = [:]
+        for v in voices {
+            let language = Locale.current.localizedString(forIdentifier: v.language) ?? v.language
+            let quality = v.quality == .premium ? ", premium" : v.quality == .enhanced ? ", enhanced" : ""
+            made[v.identifier] = "\(v.name), \(language)\(quality)"
+        }
+        labels = made
     }
 }
 
@@ -184,9 +194,7 @@ struct SpeechView: View {
     var body: some View {
         Form {
             Picker("Voice", selection: model.string("speech", "voice", "")) {
-                ForEach(voices, id: \.identifier) { v in
-                    Text("\(v.name), \(Locale.current.localizedString(forIdentifier: v.language) ?? v.language)\(v.quality == .premium ? ", premium" : v.quality == .enhanced ? ", enhanced" : "")").tag(v.identifier)
-                }
+                ForEach(voices, id: \.identifier) { v in Text(voiceLists.label(for: v)).tag(v.identifier) }
             }
             Slider(value: model.percent("speech", "rate"), in: 10...100, step: 5) { Text("Rate") }
                 .accessibilityValue("\(Int(model.percent("speech", "rate").wrappedValue)) percent")
@@ -205,13 +213,14 @@ struct SpeechView: View {
                 Text("The Mac's default output").tag("")
                 ForEach(outputDevices, id: \.uid) { d in Text(d.name).tag(d.uid) }
             }
-            Section("Capitals") {
+            DisclosureGroup("Capitals") {
                 Toggle("Say cap before a capital", isOn: model.bool("speech", "sayCapForCapitals"))
                 Slider(value: model.number("speech", "capitalPitch"), in: 0...100, step: 10) { Text("Raise the pitch for a capital") }
                     .accessibilityValue(model.number("speech", "capitalPitch").wrappedValue == 0 ? "off" : "\(Int(model.number("speech", "capitalPitch").wrappedValue)) percent")
             }
             // The speech rotor's own short list (18 Oct 2026): none ticked, every voice.
-            Section("Voices for other languages") {
+            // Folded until opened: a picker per language is the costliest part of the pane to draw (23 Oct 2026).
+            DisclosureGroup("Voices for other languages") {
                 if otherLanguages.isEmpty {
                     Text("No voices for other languages are installed.").font(.caption)
                 } else {
@@ -458,7 +467,8 @@ struct GeneralView: View {
     }
 }
 
-/// TurnOver is on or off; VoiceOver is on or off. The two things that relate them live here (22 Oct 2026).
+/// TurnOver is on or off; VoiceOver is on or off. The two things that relate them live here, and the experimental
+/// readers per app, folded away (22 Oct 2026; last in the list, the place for the things most people never touch).
 struct ReadersView: View {
     @EnvironmentObject var model: Model
     private var coexist: Binding<Bool> {
@@ -474,19 +484,11 @@ struct ReadersView: View {
                 Toggle("CoExist: VoiceOver stays running alongside TurnOver", isOn: coexist)
                 Text("VoiceOver is kept quiet where TurnOver reads and keeps passwords and macOS's own prompts. Changing it restarts TurnOver.").font(.caption)
             }
-        }.formStyle(.grouped).navigationTitle("Screen reader behaviour")
-    }
-}
-
-struct ExperimentalView: View {
-    @EnvironmentObject var model: Model
-    var body: some View {
-        Form {
-            Section {
+            DisclosureGroup("Experimental: readers per app") {
                 Toggle("Readers per app", isOn: model.bool("applications", "perAppReaders"))
                 Text("A list of apps for each reader, a mode (TurnOver in its apps, everywhere, or VoiceOver everywhere), and switching between the readers as you change apps. The list is under Tools in the TurnOver menu while this is on. Off, TurnOver reads everywhere while it is on.").font(.caption)
-            } header: { Text("Newer features, still settling") }
-        }.formStyle(.grouped).navigationTitle("Experimental")
+            }
+        }.formStyle(.grouped).navigationTitle("Screen reader behaviour")
     }
 }
 
