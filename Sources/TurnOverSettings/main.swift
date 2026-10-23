@@ -11,6 +11,9 @@ import TurnOverControl
 final class Model: ObservableObject {
     @Published var state: [String: Any] = [:]
     @Published var connected = false
+    /// A section TurnOver asked the window to show (a settings key pressed): with the first state, or on its own
+    /// while the window is open. The sidebar follows it and then clears it.
+    @Published var requestedSection: Pane?
     private var connection: ControlClient.Connection?
 
     init() {
@@ -21,9 +24,14 @@ final class Model: ObservableObject {
     /// and again if TurnOver restarts.
     private func connect() {
         connection = ControlClient.Connection(received: { [weak self] message in
+            if message["op"] as? String == "show", let name = message["section"] as? String {
+                self?.requestedSection = Pane(rawValue: name)
+                return
+            }
             guard message["op"] as? String == "state", let json = message["json"] as? String, let data = json.data(using: .utf8),
                   let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
             self?.state = dict; self?.connected = true
+            if let name = dict["_showSection"] as? String { self?.requestedSection = Pane(rawValue: name) }
         }, ended: { [weak self] in
             self?.connected = false; self?.connection = nil
             self?.retry()
@@ -106,6 +114,11 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 700, minHeight: 500)
+        .onReceive(model.$requestedSection) { requested in
+            guard let requested else { return }
+            section = requested
+            model.requestedSection = nil
+        }
     }
 }
 

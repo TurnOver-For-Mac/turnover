@@ -76,21 +76,13 @@ public final class TurnOverMenu {
         announce()
     }
 
-    /// NVDA's settings keys (NVDA+Control+V and the rest, Windows style): the menu opened at Settings, or at one of
-    /// its sections by title.
+    /// NVDA's settings keys (NVDA+Control+V and the rest, Windows style), JAWS's Insert+F2, and VO-F8 when VoiceOver
+    /// Utility isn't there: the Settings window, at one of its sections by title. The section names are the Settings
+    /// window's own (Speech, Keyboard, Item details, Web pages, Documents); any other name opens the window as it was.
+    /// Until 23 Oct 2026 this walked a Settings submenu of the TurnOver menu that no longer existed (Settings became
+    /// an action opening the window), so every settings key fell through to the plain menu.
     public func openSettings(_ section: String? = nil) {
-        let root = rootItems()
-        guard let si = root.firstIndex(where: { $0.title == "Settings" }), case .submenu(let make) = root[si].kind else { open(); return }
-        let sections = make()
-        stack = [("TurnOver menu", root, si), ("Settings", sections, 0)]
-        if let section, let i = sections.firstIndex(where: { $0.title == section }), case .submenu(let inner) = sections[i].kind {
-            stack[1].index = i
-            stack.append((section, inner(), 0))
-        }
-        isOpen = true
-        Speech.cancel()
-        Speech.speakMessage("TurnOver menu, \(stack.last?.title ?? "Settings")")
-        announce()
+        SettingsBridge.open(section: section)
     }
 
     /// For tests: the open list as an outline, submenus expanded.

@@ -36,6 +36,10 @@ public enum SettingsBridge {
     static func sendState(to reply: (@Sendable ([String: Any]) -> Void)? = nil) {
         guard let data = try? JSONEncoder().encode(config),
               var dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
+        if let section = pendingSection, reply != nil {
+            dict["_showSection"] = section
+            pendingSection = nil
+        }
         dict["_kokoroAvailable"] = KokoroVoice.available
         dict["_kokoroMode"] = KokoroVoice.mode
         dict["_kokoroVoice"] = KokoroVoice.voice
@@ -105,8 +109,18 @@ public enum SettingsBridge {
         sendState()
     }
 
-    /// Opens TurnOver Settings (inside TurnOver.app).
-    public static func open() {
+    /// The section the Settings window is asked to show when it next connects: set by `open(section:)`, sent once
+    /// with the state, and forgotten after five seconds if no window asked.
+    private static var pendingSection: String?
+
+    /// Opens TurnOver Settings (inside TurnOver.app), at a section by its sidebar title when one is given. A window
+    /// already open is told the section over the control channel; a new one is told with its first state.
+    public static func open(section: String? = nil) {
+        if let section {
+            pendingSection = section
+            ControlServer.shared.broadcast(["op": "show", "section": section])
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) { if pendingSection == section { pendingSection = nil } }
+        }
         let url = Bundle.main.bundleURL.appendingPathComponent("Contents/Applications/TurnOver Settings.app")
         guard FileManager.default.fileExists(atPath: url.path) else { Speech.speakMessage("TurnOver Settings isn't in this build"); return }
         NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration()) { _, error in
