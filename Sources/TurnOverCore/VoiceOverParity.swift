@@ -152,8 +152,8 @@ extension VoiceOverKeysPlugin {
 
         // MARK: Places: the desktop, Notification Centre, Control Centre, the parent folder, scroll bars, groups
         add("desktop", "Moves to the desktop (VO-Shift-D)", ["kb:turnover+shift+d"]) { _ in Self.goToDesktop() }
-        add("notificationCentre", "Opens or closes Notification Centre (VO-O)", ["kb:turnover+o"]) { _ in Self.pressMenuExtra("com.apple.menuextra.clock", "Notification Centre") }
-        add("controlCentre", "Opens or closes Control Centre (VO-Shift-O)", ["kb:turnover+shift+o"]) { _ in Self.pressMenuExtra("com.apple.menuextra.controlcenter", "Control Centre") }
+        add("notificationCentre", "Opens Notification Centre and goes to its first notification; again closes it (VO-O)", ["kb:turnover+o"]) { _ in NotificationCentrePanel.toggle() }
+        add("controlCentre", "Opens or closes Control Centre (VO-Shift-O)", ["kb:turnover+shift+o"]) { _ in _ = Self.pressMenuExtra("com.apple.menuextra.controlcenter", "Control Centre") }
         add("parentFolder", "Jumps back to the parent folder (VO-Command-Backslash)", ["kb:turnover+command+\\"]) { _ in KeyboardGesture(identifier: "kb:command+upArrow")?.send() }
         add("scrollBars", "Scrolls the area the VoiceOver cursor is in: arrows, Page Up and Page Down, Shift Page Up and Down to the top and bottom; Escape stops (VO-Shift-S)", ["kb:turnover+shift+s"]) { _ in
             var p = Self.cursorElement(); var hops = 0
@@ -320,12 +320,22 @@ extension VoiceOverKeysPlugin {
 
     // MARK: Places
 
-    static func pressMenuExtra(_ identifier: String, _ spoken: String) {
-        guard let cc = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.controlcenter").first else { Speech.speakMessage("\(spoken) is not available"); return }
-        let app = AXUIElementCreateApplication(cc.processIdentifier)
-        let items = app.element("AXExtrasMenuBar")?.elements(kAXChildrenAttribute) ?? []
-        guard let item = items.first(where: { $0.string(kAXIdentifierAttribute) == identifier }) else { Speech.speakMessage("\(spoken) is not available"); return }
-        _ = AXUIElementPerformAction(item, kAXPressAction as CFString)
+    /// Presses one of the system's menu bar items (the clock opens Notification Centre, the Control Centre item opens
+    /// Control Centre). The item is looked for in the system processes that host such items, with the status menus
+    /// list's unwrapping of the holder: until 23 Oct 2026 only Control Centre's own process was asked, which on
+    /// macOS 27.2 hosts none of them, and every press said the panel was not available.
+    /// Whether the item was found and pressed. A press that answers an error can still have opened the panel (a
+    /// slow process), so the answer is logged and the press counts.
+    @discardableResult
+    static func pressMenuExtra(_ identifier: String, _ spoken: String) -> Bool {
+        guard let extra = StatusMenus.find(identifier: identifier) else {
+            Log.io("menu extra \(identifier): not found in any process")
+            Speech.speakMessage("\(spoken) is not available")
+            return false
+        }
+        let result = AXUIElementPerformAction(extra.element, kAXPressAction as CFString)
+        Log.io("menu extra \(identifier): pressed in pid \(extra.pid) → \(result.rawValue)")
+        return true
     }
 
     static func goToDesktop() {

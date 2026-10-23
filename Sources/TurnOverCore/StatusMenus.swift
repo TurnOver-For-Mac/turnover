@@ -15,10 +15,33 @@ import ApplicationServices
 public enum StatusMenus {
     /// The status item just opened from the list: its menu carries no name of its own ("a VPN app's menu").
     public static var lastOpened: (String, Date)?
-    struct Extra { let element: AXUIElement; let pid: pid_t; let name: String; let x: Double }
+    struct Extra {
+        let element: AXUIElement
+        let pid: pid_t
+        let name: String
+        let x: Double
+        /// The system's own items carry one ("com.apple.menuextra.clock"); most apps' items carry none.
+        let identifier: String?
+    }
 
     /// The names, in order, for tests.
     public static func names() -> [String] { gather().map(\.name) }
+
+    /// The processes that host the system's own items (the clock, Control Centre, battery, Wi-Fi): MenuBarAgent on
+    /// macOS 27.2 (measured 23 Oct 2026), Control Centre and SystemUIServer on earlier systems.
+    static let systemHosts = ["com.apple.MenuBarAgent", "com.apple.controlcenter", "com.apple.systemuiserver"]
+
+    /// One of the system's items by its identifier ("com.apple.menuextra.clock"). Only the system hosts are asked,
+    /// each with the quarter-second timeout, so a slow third-party app cannot hold the key up: until 23 Oct 2026
+    /// only Control Centre's own process was asked, and on macOS 27.2 it answers no value for its extras bar.
+    static func find(identifier: String) -> Extra? {
+        for bundle in systemHosts {
+            for app in NSRunningApplication.runningApplications(withBundleIdentifier: bundle) {
+                if let extra = extras(of: app).first(where: { $0.identifier == identifier }) { return extra }
+            }
+        }
+        return nil
+    }
 
     static func gather() -> [Extra] {
         let me = getpid()
@@ -28,28 +51,33 @@ public enum StatusMenus {
         }
         let found = Locked([[Extra]](repeating: [], count: apps.count))
         DispatchQueue.concurrentPerform(iterations: apps.count) { i in
-            let app = apps[i]
-            let ax = AXUIElementCreateApplication(app.processIdentifier)
-            AXUIElementSetMessagingTimeout(ax, 0.25)
-            guard let bar = ax.element("AXExtrasMenuBar") else { return }
-            // Each element keeps the timeout it was given: the bar and its items too, or a hung app costs 2 s apiece.
-            AXUIElementSetMessagingTimeout(bar, 0.25)
-            var mine: [Extra] = []
-            for outer in bar.elements(kAXChildrenAttribute) {
-                AXUIElementSetMessagingTimeout(outer, 0.25)
-                // macOS's own items (MenuBarAgent) are unlabelled holders of a labelled item: Wi-Fi, Battery, Clock.
-                var item = outer
-                if (outer.string(kAXDescriptionAttribute) ?? "").isEmpty, (outer.string(kAXTitleAttribute) ?? "").isEmpty,
-                   let inner = outer.elements(kAXChildrenAttribute).first(where: { !($0.string(kAXDescriptionAttribute) ?? $0.string(kAXTitleAttribute) ?? "").isEmpty }) {
-                    item = inner
-                }
-                var x = 0.0
-                if let v = item.attr(kAXPositionAttribute), CFGetTypeID(v as CFTypeRef) == AXValueGetTypeID() { var p = CGPoint.zero; axValue(v, .cgPoint, &p); x = p.x }
-                mine.append(Extra(element: item, pid: app.processIdentifier, name: name(of: item, app: app), x: x))
-            }
-            found.value[i] = mine
+            found.value[i] = extras(of: apps[i])
         }
         return found.value.flatMap { $0 }.sorted { $0.x < $1.x }
+    }
+
+    /// One application's items in its extras bar, each call given a quarter of a second.
+    nonisolated static func extras(of app: NSRunningApplication) -> [Extra] {
+        let ax = AXUIElementCreateApplication(app.processIdentifier)
+        AXUIElementSetMessagingTimeout(ax, 0.25)
+        guard let bar = ax.element("AXExtrasMenuBar") else { return [] }
+        // Each element keeps the timeout it was given: the bar and its items too, or a hung app costs 2 s apiece.
+        AXUIElementSetMessagingTimeout(bar, 0.25)
+        var mine: [Extra] = []
+        for outer in bar.elements(kAXChildrenAttribute) {
+            AXUIElementSetMessagingTimeout(outer, 0.25)
+            // macOS's own items (MenuBarAgent) are unlabelled holders of a labelled item: Wi-Fi, Battery, Clock.
+            var item = outer
+            if (outer.string(kAXDescriptionAttribute) ?? "").isEmpty, (outer.string(kAXTitleAttribute) ?? "").isEmpty,
+               let inner = outer.elements(kAXChildrenAttribute).first(where: { !($0.string(kAXDescriptionAttribute) ?? $0.string(kAXTitleAttribute) ?? "").isEmpty }) {
+                item = inner
+            }
+            var x = 0.0
+            if let v = item.attr(kAXPositionAttribute), CFGetTypeID(v as CFTypeRef) == AXValueGetTypeID() { var p = CGPoint.zero; axValue(v, .cgPoint, &p); x = p.x }
+            let identifier = item.string(kAXIdentifierAttribute) ?? outer.string(kAXIdentifierAttribute)
+            mine.append(Extra(element: item, pid: app.processIdentifier, name: name(of: item, app: app), x: x, identifier: identifier))
+        }
+        return mine
     }
 
     /// A spoken name: the item's label, else its owner's name, with the tooltip when it says more ("a Bluetooth device, Disconnected").

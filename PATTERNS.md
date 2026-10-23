@@ -367,3 +367,20 @@ and no title. A tooltip names an icon button, but never the window's own buttons
 - **Preview gives accessibility none of a PDF's annotations** (highlights, notes, text boxes, drawings). Fix: read the
   file with PDFKit (the window's AXDocument) and say each mark after the line it marks (PreviewAppModule.marks).
 
+
+## The system's menu bar items live in MenuBarAgent (23 Oct 2026)
+- **On macOS 27.2 the clock, Control Centre, battery, Wi-Fi and user items belong to MenuBarAgent**
+  (com.apple.MenuBarAgent), each an unlabelled AXGroup holding the labelled AXMenuExtra; asking Control Centre's own
+  process for its extras bar answers no value, and SystemUIServer's is empty. The status menus list already asked
+  every process; the Notification Centre and Control Centre keys asked only Control Centre and said the panel was
+  not available. Fix: StatusMenus.find(identifier:) over the three system hosts (StatusMenus.systemHosts).
+- **Notification Centre's panel is not a window.** Notification Centre keeps one full-screen window for banners; the
+  open panel is a scroll area in it holding the AXNotificationListItems group, one AXNotificationCenterAlert per
+  notification. Nothing takes the keyboard focus; Escape or the clock closes it. Fix: NotificationCentrePanel waits
+  for the list and moves the review cursor in; the banner reader remembers the panel's history instead of reading it.
+
+## A window with nothing in it by accessibility (Parallels Desktop, 23 Oct 2026)
+- **Parallels Desktop's installation assistant (App Store edition) exposes a toolbar and the three title-bar
+  buttons and nothing else:** no content in the tree, every hit test answers the window, and the app does not
+  implement the enhanced-interface flags VoiceOver sets. Screen recognition is the only way in and it works, but
+  cards laid out in columns are read row by row (issue 73), and TurnOver says only window on arrival (issue 74).

@@ -31,8 +31,10 @@ extension AXHandler {
     /// Banners already up when TurnOver starts are not news: remember them without reading them.
     func seedNotifications() { announceNotifications(speak: false) }
 
-    func announceNotifications(speak: Bool = true) {
-        guard !speak || activePid != notificationCentrePid else { return }   // the user is in Notification Centre itself
+    func announceNotifications(speak wanted: Bool = true) {
+        guard !wanted || activePid != notificationCentrePid else { return }   // the user is in Notification Centre itself
+        // The open panel lists the history as the same alert groups: remembered, not read as news (23 Oct 2026).
+        let speak = wanted && !NotificationCentrePanel.isOpen
         let app = AXUIElementCreateApplication(notificationCentrePid)
         AXUIElementSetMessagingTimeout(app, 0.5)
         var alerts: [AXUIElement] = []
