@@ -27,9 +27,21 @@ public enum InputManager {
     /// Set by the keyboard commands editor: the next key is handed here, not run (nil: Escape, cancelled).
     public static var captureNext: ((KeyboardGesture?) -> Void)? {
         get { _captureNext }
-        set { _captureNext = newValue; _capturing.value = newValue != nil }
+        set { _captureNext = newValue; captureOwner = nil; captureAllowed = nil; _capturing.value = newValue != nil }
     }
     private static var _captureNext: ((KeyboardGesture?) -> Void)?
+    private static var captureOwner: UUID?
+    private static var captureAllowed: (() -> Bool)?
+
+    public static func beginCapture(owner: UUID, while allowed: @escaping () -> Bool, done: @escaping (KeyboardGesture?) -> Void) {
+        captureNext = done
+        captureOwner = owner
+        captureAllowed = allowed
+    }
+
+    public static func cancelCapture(owner: UUID) {
+        if captureOwner == owner { captureNext = nil }
+    }
     nonisolated private static let _capturing = Locked(false)
     /// Something of TurnOver's waits for the next key (the layer after Command Control Comma): read on the keyboard
     /// thread, so a direct app's keys don't go past it.
@@ -95,7 +107,9 @@ public enum InputManager {
         Hints.cancel()
         lastKeyDownAt = Date()
         // The keyboard commands editor is waiting for a key: this one is it (Escape cancels). Nothing else runs.
-        if let capture = captureNext, !gesture.isRepeat {
+        if captureNext != nil, captureAllowed?() == false { captureNext = nil }
+        if let capture = captureNext {
+            if gesture.isRepeat { return true }
             captureNext = nil
             DispatchQueue.main.async { capture(gesture.keyName == "escape" && gesture.modifiers.isEmpty ? nil : gesture) }
             return true

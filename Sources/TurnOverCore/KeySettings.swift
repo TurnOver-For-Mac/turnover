@@ -14,6 +14,13 @@ nonisolated public struct KeySettings: Sendable {
     public var optionCommander = true
     public var numpadCommander = false
     public var keypadCommands = true
+    public var userGestureIdentifiers: Set<String> = []
+    public var layout = "laptop"
+
+    public func hasUserGesture(_ gesture: KeyboardGesture) -> Bool {
+        let id = gesture.identifier
+        return userGestureIdentifiers.contains(id) || userGestureIdentifiers.contains("kb(\(layout)):" + id.dropFirst(3))
+    }
 
     private static let lock = NSLock()
     nonisolated(unsafe) private static var _current = KeySettings()   // under `lock`
@@ -26,7 +33,8 @@ nonisolated public struct KeySettings: Sendable {
         let s = KeySettings(capsIsTurnOver: config.general.capsIsTurnOver, controlOptionIsTurnOver: config.general.controlOptionIsTurnOver,
                             windowsKeys: config.general.windowsKeys, speakCommandKeys: config.keyboard.speakCommandKeys,
                             optionCommander: config.keyboard.optionCommander, numpadCommander: config.keyboard.numpadCommander,
-                            keypadCommands: config.keyboard.keypadCommands)
+                            keypadCommands: config.keyboard.keypadCommands,
+                            userGestureIdentifiers: Set(config.keyboard.userGestures.keys), layout: config.keyboard.layout)
         lock.lock(); _current = s; lock.unlock()
     }
 }

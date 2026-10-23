@@ -117,6 +117,7 @@ public enum ScriptHandler {
         // The global plugins' commands too (VoiceOver's and NVDA's keys live there): a key the user gave to one of them
         // ("vo_nextParagraph") found nothing and did nothing (a tester, and 19 Oct 2026).
         for p in GlobalPluginHandler.shared.plugins { if let s = p.script(named: name) { return s } }
+        if let s = KeypadCommands.shared.script(named: name) { return s }
         return GlobalCommands.shared.script(named: name)
     }
 

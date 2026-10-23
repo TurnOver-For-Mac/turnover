@@ -52,6 +52,17 @@ public enum UserGestures {
     /// TurnOver's normal form, keeping "rightoption", which the general normaliser does not know (it dropped it).
     static func normal(_ id: String) -> String { id.hasPrefix("kb:rightoption+") ? id : normalizeGestureIdentifier(id) }
 
+    /// The editor must round-trip right Option without turning it into either Option key.
+    public static func gesture(for id: String) -> KeyboardGesture? {
+        guard id.hasPrefix("kb:") || id.hasPrefix("kb(laptop):") || id.hasPrefix("kb(desktop):") else { return nil }
+        let right = id.hasPrefix("kb:rightoption+")
+        let plain = right ? id.replacingOccurrences(of: "kb:rightoption+", with: "kb:option+") : id
+        guard let g = KeyboardGesture(identifier: plain) else { return nil }
+        return KeyboardGesture(keyCode: g.keyCode, modifiers: g.modifiers, characters: g.characters,
+                               timestamp: g.timestamp, isRepeat: false,
+                               flags: right ? g.flags.union(CGEventFlags(rawValue: 0x40)) : g.flags)
+    }
+
     /// TurnOver's own right Option keys, used unless the user gives the key something else (or takes it away):
     /// right Option T, the time and, pressed twice, the date (12 Oct 2026; TurnOver Shift T does the same).
     public static let defaults: [String: String] = ["kb:rightoption+t": "script:dateTime"]

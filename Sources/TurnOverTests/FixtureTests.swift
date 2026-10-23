@@ -6,6 +6,43 @@ import TurnOverCore
 import AXFixtures
 
 func fixtureTests() {
+    test("navigation: flattened segments can be crossed in both directions without interacting") {
+        let saved = config, sink = Speech.sink
+        config.general.focusFollowsCursor = "off"
+        Speech.sink = { _ in }
+        var fixture = AXFixture(app: "TurnOver Settings", bundle: "com.turnover.settings", recorded: "", root: 0, application: nil, focus: 1, nodes: [])
+        fixture.nodes = [
+            .init(id: 0, attrs: ["AXRole": .string("AXWindow"), "AXChildren": .elements([1, 2, 5])]),
+            .init(id: 1, attrs: ["AXRole": .string("AXButton"), "AXTitle": .string("Before"), "AXParent": .element(0), "AXWindow": .element(0)]),
+            .init(id: 2, attrs: ["AXRole": .string("AXRadioGroup"), "AXTitle": .string("Show"), "AXChildren": .elements([3, 4]), "AXParent": .element(0), "AXWindow": .element(0)]),
+            .init(id: 3, attrs: ["AXRole": .string("AXRadioButton"), "AXSubrole": .string("AXSegment"), "AXTitle": .string("Commands"), "AXParent": .element(2), "AXWindow": .element(0)]),
+            .init(id: 4, attrs: ["AXRole": .string("AXRadioButton"), "AXSubrole": .string("AXSegment"), "AXTitle": .string("Changed keys"), "AXParent": .element(2), "AXWindow": .element(0)]),
+            .init(id: 5, attrs: ["AXRole": .string("AXButton"), "AXTitle": .string("After"), "AXParent": .element(0), "AXWindow": .element(0)]),
+        ]
+        AXReplay.load(fixture)
+        defer {
+            AXReplay.unload(); ObjectNavigator.forgetGroupItems()
+            config = saved; Speech.sink = sink
+        }
+        let navigator = ObjectNavigator.shared
+        navigator.focusMoved(to: AXReplay.focus!, pid: AXReplay.focus!.pid)
+        ObjectNavigator.forgetGroupItems()
+        expect(ObjectNavigator.groupItems(AXReplay.root!).compactMap { AXReplay.id(of: $0) }, [1, 3, 4, 5])
+        for id in [3, 4, 5] {
+            navigator.groupStep(forward: true)
+            expect(navigator.reviewElement.flatMap { AXReplay.id(of: $0) }, id)
+        }
+        for id in [4, 3, 1] {
+            navigator.groupStep(forward: false)
+            expect(navigator.reviewElement.flatMap { AXReplay.id(of: $0) }, id)
+        }
+        // Real radio groups still require interaction; only segmented controls are flattened.
+        fixture.nodes[3].attrs["AXSubrole"] = nil
+        fixture.nodes[4].attrs["AXSubrole"] = nil
+        AXReplay.load(fixture); ObjectNavigator.forgetGroupItems()
+        expect(ObjectNavigator.groupItems(AXReplay.root!).compactMap { AXReplay.id(of: $0) }, [1, 2, 5])
+    }
+
     test("replay: a recording answers like the application") {
         var f = AXFixture(app: "Test", bundle: "test", recorded: "", root: 0, application: nil, focus: 2, nodes: [])
         f.nodes = [
