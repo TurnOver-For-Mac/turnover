@@ -599,40 +599,29 @@ public final class BrowseModeDocument: ScriptableObject {
     // (An override cannot live in an extension: the pass-through decision itself is in FocusModePolicy.swift.)
     /// Scripts answer only in browse mode (NVDA: passThrough filters the tree interceptor's scripts).
     public override func script(for gesture: KeyboardGesture) -> Script? {
-        // Reading with the VO keys from inside a field (Mac style: VO Command Shift H from Claude's prompt) put the
-        // page in browse mode quietly while the keyboard stayed in the field; the next letter typed was a quick-nav
-        // key instead, and only later ones went in (8 Oct 2026). A typed key while the keyboard focus is a
-        // field you can type in goes back to focus mode and types.
-        // (Not after a switch by hand, TurnOver Space: NVDA's letters stay letter commands then, and automatic
-        // focus mode off means the same.)
-        // Mac style: a letter typed while the reading position is on a field you can type in goes into that field, as
-        // typing does once VoiceOver's cursor lands on one. The field takes the focus, focus mode, and the letter is
-        // sent again once it has it. (E to AppleVis's comment field, then typing, typed nothing, 9 Oct 2026.)
-        // Windows style keeps NVDA's way: letters stay quick-nav keys until Enter or Tab goes into the field.
-        // (Return and Tab count as typed characters for the echo, but here they would be sent into the field: Return
-        // on a search box submitted it. They stay activatePosition and tabFromCaret: code review, 16 Oct 2026.)
-        if !passThrough, !disableAutoPassThrough, config.virtualBuffers.autoFocusMode, !config.general.windowsKeys,
-           let c = gesture.typedCharacter, !c.isNewline, c != "\t", gesture.modifiers.subtracting(.shift).isEmpty,
-           let e = editableAtPosition(), API.focusObject.map({ !$0.isSameElement(as: e) }) ?? true {
-            return Script(name: "typeIntoField", description: "Types into the field at the reading position", category: "navigation", owner: self) { [weak self] g in
-                guard let self else { return }
-                // (The module first: Kindle's fields answer the request with success and do nothing.)
-                if !AppModuleHandler.shared.appModule(for: e.pid).takeFocus(e) { _ = e.set(kAXFocusedAttribute, kCFBooleanTrue) }
-                self.setPassThrough(true, announce: true)
-                Log.io("browse mode: typing at the reading position's \(e.role); focus mode, the key sent again")
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { g.send() }
+        // NVDA's way, in both styles (Oliver, 23 Oct 2026, issue 82): in browse mode a letter is always a command. A
+        // field is typed into after Return or Tab has entered it (focus mode), or after the switch by hand. Until then
+        // a letter typed while the reading position was on a field went into it (Mac style, 9 Oct 2026), and a letter
+        // typed while a page field still had the keyboard resumed focus mode quietly (8 Oct 2026); the Safari stress
+        // test of 23 Oct 2026 showed both typing h into a field the user had just left with Escape, on four pages.
+        if let s = super.script(for: gesture) {
+            if passThrough && s.name != "disablePassThrough" { return nil }
+            return s
+        }
+        // A letter or digit with no command of its own (z, 0) is kept from the page in browse mode, as NVDA's trap
+        // non-command gestures does: otherwise it would reach a field that still has the keyboard after Escape.
+        // Punctuation and Backspace still reach the page (a page's own ? for its shortcut help). Not with single-letter
+        // navigation off, when the page's own letter keys are wanted (a second reviewer, 23 Oct 2026).
+        let inBrowseMode = !passThrough
+        let lettersAreCommands = singleLetterNavigation
+        let isLetterOrDigit = gesture.typedCharacter.map { $0.isLetter || $0.isNumber } ?? false
+        let isPlainKey = gesture.modifiers.subtracting(.shift).isEmpty
+        if inBrowseMode, lettersAreCommands, isLetterOrDigit, isPlainKey {
+            return Script(name: "browseModeTrap", description: "A letter or digit with no command in browse mode: nothing", category: "navigation", owner: self) { _ in
+                Log.io("browse mode: a letter or digit with no command; kept from the page")
             }
         }
-        if !passThrough, !disableAutoPassThrough, config.virtualBuffers.autoFocusMode, let c = gesture.typedCharacter, !c.isNewline, c != "\t", gesture.modifiers.subtracting(.shift).isEmpty,
-           let f = API.focusObject, f.pid == webArea.pid, f.states.contains(.editable), !f.states.contains(.unavailable),
-           (f.element.attr(kAXFocusedAttribute) as? Bool) != false {
-            Log.io("browse mode: typing into the focused \(f.axRole); focus mode")
-            setPassThrough(true, announce: false)
-            return nil
-        }
-        guard let s = super.script(for: gesture) else { return nil }
-        if passThrough && s.name != "disablePassThrough" { return nil }
-        return s
+        return nil
     }
 
     /// The text field, text area or combo box at the reading position, if that is what is there.

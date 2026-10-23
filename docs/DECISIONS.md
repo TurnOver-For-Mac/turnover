@@ -37,6 +37,10 @@ fixes code that is not live. Each has a date and a reason. To reopen one, open a
   publish script opens one for each sync from the maintainer's tree, and refuses to run over a contributor's merged
   work until it has been ported.
 
+- **In browse mode a letter is always a command** (Oliver, 23 Oct 2026, issue 82): NVDA's way in both styles. A
+  field is typed into after Return or Tab has entered it, or after the switch by hand; TurnOver no longer types a
+  letter into the field under the reading position, nor resumes typing into a page field that still has the keyboard.
+
 ## Parked
 
 Kept in the tree, not live. Each file says so at the top.
