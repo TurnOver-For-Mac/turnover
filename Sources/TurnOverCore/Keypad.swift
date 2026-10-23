@@ -91,8 +91,31 @@ public enum Keypad {
         (windows ? Self.windows : mac)["\(layer(g.modifiers, windows: windows)):\(g.keyName)"]
     }
 
+    /// The same tables for the keyboard editor; key forwarding entries are not named commands.
+    public static func bindings(windows: Bool, voiceOverCommand: (String) -> String?) -> [(String, String)] {
+        (windows ? Self.windows : mac).compactMap { key, action in
+            let parts = key.split(separator: ":", omittingEmptySubsequences: false)
+            guard parts.count == 2 else { return nil }
+            let layer = parts[0] == "zero" ? "turnover" : String(parts[0])
+            let id = normalizeGestureIdentifier("kb:" + (layer.isEmpty ? "" : layer + "+") + parts[1])
+            if action.hasPrefix("run:") { return (id, String(action.dropFirst(4))) }
+            if action.hasPrefix("vo:"), let name = voiceOverCommand("kb:" + action.dropFirst(3)) { return (id, name) }
+            return nil
+        }
+    }
+
     /// Runs the keypad key's action (main thread). In keyboard help, says what it does instead.
     public static func run(_ g: KeyboardGesture, windows: Bool) {
+        // User keys must win over the keypad's separate table too (keyboard manager, 23 Oct 2026).
+        switch UserGestures.lookup(g) {
+        case .script(let script):
+            Speech.cancel(); SayAll.stop(byGesture: true)
+            if InputManager.isInputHelpActive { InputManager.handleInputHelp(g, script: script) }
+            else { ScriptHandler.queueScript(script, gesture: g) }
+            return
+        case .removed: g.send(); return
+        case nil: break
+        }
         guard let a = action(for: g, windows: windows) else { return }
         guard !TurnOverMenu.shared.isOpen else { return }   // the menu has the keys: the keypad does nothing there
         let parts = a.split(separator: ":", maxSplits: 1).map(String.init)
