@@ -26,7 +26,8 @@ public enum NotificationCentrePanel {
     /// close, not a second opening.
     private static var opening = false
 
-    /// The list of notifications when the panel is open, nil when it is closed.
+    /// The list of notifications: the group is in the tree whether the panel shows or not (measured 23 Oct 2026,
+    /// after the first build took its presence for the panel being open and closed it instead).
     public static func list() -> AXUIElement? {
         guard let centre = NSRunningApplication.runningApplications(withBundleIdentifier: bundle).first else { return nil }
         let app = AXUIElementCreateApplication(centre.processIdentifier)
@@ -37,7 +38,50 @@ public enum NotificationCentrePanel {
         return nil
     }
 
-    public static var isOpen: Bool { list() != nil }
+    /// Set by the foreground transitions and nothing else (so a panel already open when TurnOver starts reads as
+    /// closed until the first transition; the first press then closes it and says press again): the panel opening
+    /// posts a focused-window change from
+    /// Notification Centre about 85 ms after the press, and closing it (Escape, the clock, a click elsewhere) brings
+    /// the application's window back as the foreground (the log, 23 Oct 2026). The handler's own focus-window field
+    /// is not used for this: a focus change in the application beneath the panel rewrites that field while the
+    /// panel stays up (a second reviewer, 23 Oct 2026).
+    private static var open = false
+    /// The Notification Centre process the flag was set for: a relaunched Notification Centre starts closed.
+    private static var openPid: pid_t = 0
+
+    public static var isOpen: Bool {
+        guard let pid = centrePid() else { return false }
+        guard pid == openPid else { return false }
+        return open
+    }
+
+    /// When the reader stops (deactivation): what happens to the panel meanwhile is not seen, so nothing is assumed.
+    public static func reset() {
+        open = false
+        openPid = 0
+        opening = false
+        generation += 1
+    }
+
+    /// Called from every foreground window change, before anything is said about it.
+    static func noteForeground(_ window: AXUIElement) {
+        guard let pid = centrePid() else { return }
+        let isPanel = window.pid == pid
+        if isPanel != open {
+            Log.io("notification centre: panel \(isPanel ? "open" : "closed") (foreground window)")
+        }
+        open = isPanel
+        openPid = pid
+        if !isPanel, opening {
+            // Closed (Escape, a click, the clock) before the cursor got in, or it was open before TurnOver started and
+            // the press closed it: said, so the press is not silent; the next press opens.
+            Log.io("notification centre: closed before it was entered")
+            opening = false
+            generation += 1
+            Speech.speakMessage("Notification Centre closed")
+        }
+        cursorBackIfStranded()
+    }
 
     /// Opens the panel and goes in, or closes it if it is open.
     public static func toggle() {
@@ -46,6 +90,12 @@ public enum NotificationCentrePanel {
             opening = false
             close()
             return
+        }
+        // Observed again before the press: a relaunched Notification Centre is a new process, and the foreground
+        // change that marks the panel open comes through its observer.
+        if let pid = centrePid() {
+            AXHandler.shared.notificationCentrePid = pid   // the handler's copy is taken once; a relaunch changes it
+            AXHandler.shared.observe(pid)
         }
         let pressed = VoiceOverKeysPlugin.pressMenuExtra("com.apple.menuextra.clock", "Notification Centre")
         guard pressed else { return }
@@ -58,7 +108,7 @@ public enum NotificationCentrePanel {
     static func close() {
         let pressed = VoiceOverKeysPlugin.pressMenuExtra("com.apple.menuextra.clock", "Notification Centre")
         if pressed {
-            Log.io("notification centre: closed")
+            Log.io("notification centre: closed by the key")
         }
         if ObjectNavigator.shared.reviewElement?.pid == centrePid() {
             ObjectNavigator.shared.toFocus()
@@ -76,15 +126,17 @@ public enum NotificationCentrePanel {
             opening = false
             return
         }
-        if let list = list() {
+        if isOpen, let list = list() {
             opening = false
             enter(list)
             return
         }
         if tries >= openTries {
+            // Either the panel never came, or it was open before TurnOver started (no transition was seen, so the
+            // flag said closed) and this press closed it: the next press opens it either way.
             opening = false
-            Log.io("notification centre: the panel did not appear within \(openTries) tenths of a second")
-            Speech.speakMessage("Notification Centre did not open")
+            Log.io("notification centre: no foreground change within \(openTries) tenths of a second; press again")
+            Speech.speakMessage("Notification Centre did not open; press again")
             return
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -99,17 +151,24 @@ public enum NotificationCentrePanel {
         ObjectNavigator.shared.moveTo(alerts.first ?? list)
     }
 
-    /// Called on every layout change in Notification Centre, whether or not banners are read: if Escape (or a click
-    /// elsewhere) closed the panel while the review cursor was inside, the cursor goes back to the keyboard focus,
-    /// as it does when the key closes the panel. Nothing takes the focus when the panel opens or closes, so no focus
-    /// event does this. The panel is only looked for when the cursor is in Notification Centre, so the ordinary
-    /// banner traffic costs nothing here.
+    /// Called when the foreground window changes and on every layout change in Notification Centre, whether or not
+    /// banners are read: if Escape (or a click elsewhere) closed the panel while the review cursor was inside, the
+    /// cursor goes back to the keyboard focus, as it does when the key closes the panel. The first check is the
+    /// cursor's process, so the ordinary banner traffic costs nothing here.
     public static func cursorBackIfStranded() {
         guard let pid = centrePid() else { return }
         guard ObjectNavigator.shared.reviewElement?.pid == pid else { return }
         guard !isOpen else { return }
         Log.io("notification centre: closed from outside; the cursor goes back to the focus")
         ObjectNavigator.shared.toFocus()
+    }
+
+    /// Whether this foreground change is the panel opening for the key: the window is read as a dialog otherwise
+    /// (all its notifications in one breath), and the key's own landing says the panel and the first notification.
+    static func isPanelOpeningForKey(_ window: AXUIElement) -> Bool {
+        guard opening else { return false }
+        guard let pid = centrePid() else { return false }
+        return window.pid == pid
     }
 
     static func centrePid() -> pid_t? {

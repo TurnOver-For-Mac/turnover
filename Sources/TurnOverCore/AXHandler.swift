@@ -128,6 +128,7 @@ public final class AXHandler {
         API.setFocusObject(nil, ancestors: [])
         API.setForegroundObject(nil)
         focusWindow = nil
+        NotificationCentrePanel.reset()
         activePid = 0
         AppModuleHandler.shared.terminateAll()
     }

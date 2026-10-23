@@ -497,12 +497,18 @@ extension AXHandler {
         let subrole = obj.axSubrole ?? ""
         if subrole == "AXFloatingWindow" || subrole == "AXUnknown" { return }   // Word's "Cursor Actions" helper and the like
         let title = obj.name
+        // Before the repeat check: a page titled Notification Center beneath the panel must not hide the transition.
+        NotificationCentrePanel.noteForeground(window)
         if title == lastForegroundTitle, appName == nil { return }
         lastForegroundTitle = title
         lastForegroundAt = Date()
         focusWindow = window
         API.setForegroundObject(obj)
         EventHandler.queue(Event(.foreground, obj))
+        if NotificationCentrePanel.isPanelOpeningForKey(window) {
+            Log.io("foreground: Notification Centre's panel, for the key; the key says it")
+            return
+        }
         let kind = obj.role == .dialog || obj.role == .sheet ? "dialog" : "window"
         let text = Speech.joined([appName ?? "", appName == title ? "" : title, kind])
         if obj is Dialog { EventHandler.queue(Event(.focusEntered, obj)) } else { Speech.speakOnly(text) }   // a window's name: the display shows the focus in it
