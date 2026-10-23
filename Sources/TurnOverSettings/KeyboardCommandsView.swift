@@ -5,19 +5,21 @@ import TurnOverControl
 struct KeyboardCommandsView: View {
     @ObservedObject var editor: KeyboardEditorModel
     @State private var search = ""
-    @State private var category = "All categories"
+    private enum Category: Hashable {
+        case all, changed, commands(String)
+    }
+    @State private var category: Category? = .all
     @State private var selection: String?
     @State private var changedSelection: String?
-    @State private var showingChanges = false
     @State private var edit: KeyboardEditRequest?
     @AccessibilityFocusState private var addKeyFocused: Bool
 
     private var commands: [KeyboardEditing.Command] { editor.state?.commands ?? [] }
-    private var selected: KeyboardEditing.Command? { commands.first { $0.id == selection } }
+    private var selected: KeyboardEditing.Command? { filtered.first { $0.id == selection } }
     private var categories: [String] { Array(Set(commands.map(\.category))).sorted() }
     private var filtered: [KeyboardEditing.Command] {
         commands.filter { command in
-            (category == "All categories" || command.category == category) &&
+            (category == .all || category == .commands(command.category)) &&
             (search.isEmpty || ([command.title, command.category] + command.keys.map(\.label)).contains { $0.localizedCaseInsensitiveContains(search) })
         }
     }
@@ -27,21 +29,29 @@ struct KeyboardCommandsView: View {
             if let state = editor.state {
                 Text("\(state.style) · \(state.layout.capitalized) · \(state.context)").foregroundStyle(.secondary)
             }
-            Picker("Show", selection: $showingChanges) {
-                Text("Commands").tag(false)
-                Text("Changed keys").tag(true)
-            }.pickerStyle(.segmented)
-            TextField("Search commands or keys", text: $search)
-                .textFieldStyle(.roundedBorder)
-            if showingChanges {
-                changedKeys
-            } else {
-                Picker("Category", selection: $category) {
-                    Text("All categories").tag("All categories")
-                    ForEach(categories, id: \.self) { Text($0).tag($0) }
+            HSplitView {
+                List(selection: $category) {
+                    Text("All commands").tag(Category.all)
+                    Text("Changed keys").tag(Category.changed)
+                    Section("Categories") {
+                        ForEach(categories, id: \.self) { Text($0).tag(Category.commands($0)) }
+                    }
                 }
-                commandList
-                commandDetail
+                .listStyle(.sidebar)
+                .accessibilityLabel("Command categories")
+                .frame(minWidth: 150, idealWidth: 180, maxWidth: 230)
+                VStack(alignment: .leading, spacing: 8) {
+                    TextField("Search commands or keys", text: $search)
+                        .textFieldStyle(.roundedBorder)
+                    if category == .changed {
+                        changedKeys
+                    } else {
+                        commandList
+                        commandDetail
+                    }
+                }
+                .frame(minWidth: 360)
+                .padding(.leading, 8)
             }
             if !editor.message.isEmpty {
                 Text(editor.message).font(.callout).accessibilityLabel(editor.message)
@@ -52,6 +62,7 @@ struct KeyboardCommandsView: View {
         .padding(16)
         .navigationTitle("Keyboard commands")
         .onAppear { editor.refresh() }
+        .onChange(of: category) { _, _ in selection = nil; changedSelection = nil }
         .sheet(item: $edit, onDismiss: { addKeyFocused = true }) { request in
             KeyboardRecordingView(editor: editor, request: request)
         }

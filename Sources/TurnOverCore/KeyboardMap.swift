@@ -30,11 +30,13 @@ public struct KeyboardMap {
 
     private var commands: [String: KeyboardEditing.Command] = [:]
     private var defaults: [String: String] = [:]
+    private var sayAllDefaults: [String: String] = [:]
     private var references: [(id: String, command: String, style: String)] = []
     private let layout: String
 
     public init(sources: [Source], layout: String, keypad: [(String, String)] = [],
-                keypadReferences: [(String, String, String)] = [], styleKeys: [String: String] = [:]) {
+                keypadReferences: [(String, String, String)] = [], styleKeys: [String: String] = [:],
+                sayAllKeys: [String: String] = [:]) {
         self.layout = layout
         for source in sources {
             for command in source.commands where commands[command.id] == nil { commands[command.id] = command }
@@ -53,6 +55,11 @@ public struct KeyboardMap {
             }
         }
         let base = defaults
+        for (id, value) in sayAllKeys {
+            guard let key = keyInLayout(id) else { continue }
+            let name = value.hasPrefix("=") ? keyInLayout(String(value.dropFirst())).flatMap { base[$0] } : value
+            if let name, commands[name] != nil { sayAllDefaults[key] = name }
+        }
         for (id, value) in styleKeys {
             guard let key = keyInLayout(id) else { continue }
             let name = value.hasPrefix("=") ? keyInLayout(String(value.dropFirst())).flatMap { base[$0] } : value
@@ -76,8 +83,9 @@ public struct KeyboardMap {
         return UserGestures.gesture(for: key) == nil ? nil : key
     }
 
-    private func effective(_ overrides: [String: String]) -> [String: String] {
+    private func effective(_ overrides: [String: String], duringSayAll: Bool = false) -> [String: String] {
         var result = defaults
+        if duringSayAll { result.merge(sayAllDefaults) { _, new in new } }
         for key in Set(overrides.keys.compactMap(keyInLayout)) {
             guard !Self.isEssential(key), let value = override(for: key, in: overrides) else { continue }
             switch UserGestures.Target(value) {
@@ -96,9 +104,13 @@ public struct KeyboardMap {
 
     public func state(overrides: [String: String], context: String, style: String) -> KeyboardEditing.State {
         var rows = commands
-        for (id, name) in effective(overrides) {
+        let ordinary = effective(overrides)
+        for (id, name) in ordinary {
             let custom = overrides[id] != nil || overrides["kb(\(layout)):" + id.dropFirst(3)] != nil
             rows[name]?.keys.append(.init(id: id, label: UserGestures.spoken(id), custom: custom, editable: !Self.isEssential(id)))
+        }
+        for (id, name) in effective(overrides, duringSayAll: true) where ordinary[id] != name {
+            rows[name]?.keys.append(.init(id: id, label: UserGestures.spoken(id) + " (during Say All)", custom: false, editable: !Self.isEssential(id)))
         }
         for name in rows.keys { rows[name]?.keys.sort { $0.label < $1.label } }
         let changes = overrides.sorted { $0.key < $1.key }.map { id, value in
@@ -121,6 +133,9 @@ public struct KeyboardMap {
         } else if let value = override(for: id, in: overrides) ?? override(for: generic, in: overrides),
                   let target = UserGestures.Target(value), target != .script(command) {
             warnings.append("Currently \(UserGestures.describe(target)). Saving replaces that assignment.")
+        }
+        if let name = effective(overrides, duringSayAll: true)[id], name != existing, name != command {
+            warnings.append("During Say All: \(commands[name]?.title ?? name). Saving replaces that assignment too.")
         }
         for ref in references where (ref.id == id || ref.id == generic) && ref.command != command {
             let text = "\(ref.style): \(commands[ref.command]?.title ?? ref.command)."
@@ -147,7 +162,7 @@ public struct KeyboardMap {
         guard contains(command: command), !Self.isEssential(id) else { return nil }
         var next = overrides
         if let old, old != id {
-            guard !Self.isEssential(old), effective(overrides)[old] == command else { return nil }
+            guard !Self.isEssential(old), isAssigned(old, to: command, in: overrides) else { return nil }
             next[old] = "none"
             next["kb(\(layout)):" + old.dropFirst(3)] = nil
         }
@@ -157,10 +172,14 @@ public struct KeyboardMap {
     }
 
     public func removing(_ id: String, from command: String, in overrides: [String: String]) -> [String: String]? {
-        guard !Self.isEssential(id), effective(overrides)[id] == command else { return nil }
+        guard !Self.isEssential(id), isAssigned(id, to: command, in: overrides) else { return nil }
         var next = overrides
         next[id] = "none"
         next["kb(\(layout)):" + id.dropFirst(3)] = nil
         return next
+    }
+
+    private func isAssigned(_ id: String, to command: String, in overrides: [String: String]) -> Bool {
+        effective(overrides)[id] == command || effective(overrides, duringSayAll: true)[id] == command
     }
 }

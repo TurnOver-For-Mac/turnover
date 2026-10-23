@@ -80,7 +80,8 @@ public enum KeyboardEditor {
         let made = KeyboardMap(sources: sources, layout: config.keyboard.layout,
                                keypad: enabled ? (config.general.windowsKeys ? windowsPad : macPad) : [],
                                keypadReferences: macPad.map { ($0.0, $0.1, "VoiceOver keypad") } + windowsPad.map { ($0.0, $0.1, "NVDA keypad") },
-                               styleKeys: StyleKeymap.keys(for: config.general.style))
+                               styleKeys: StyleKeymap.keys(for: config.general.style),
+                               sayAllKeys: StyleKeymap.sayAllKeys(for: config.general.style))
         map = made; mapSignature = configurationSignature
         return made
     }

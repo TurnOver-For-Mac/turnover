@@ -293,8 +293,11 @@ In every style
 Changing keys
 
 Open Settings with Command Control Comma, then S, and choose Keyboard commands in the sidebar. Commands are
-grouped by category, including commands with no key. Search by a command's words or its key, or choose a category.
+grouped by category, including commands with no key. Choose a category in the Command categories list, or
+All commands to see everything. Search by a command's words or its key.
 Select a command to see its keys and the Add key, Change and Remove buttons.
+The keys shown belong to the active style and layout. Keys marked during Say All apply only while continuous
+reading is running. Custom assignments override those keys as well as the ordinary preset.
 
 For Add or Change, press the key you want. TurnOver records it without running its current command. Read the
 assignment and any warnings, then choose Save key. Escape or Cancel leaves the keys unchanged. Recording also
@@ -307,7 +310,7 @@ including Escape, the browse/focus-mode key, the TurnOver layer and startup keys
 switch, cannot be changed.
 
 Remove sends a key to the application. Change assigns the new key and sends the old one to the application. To undo
-either, choose Changed keys, select the key, then choose Restore default. This list also keeps existing assignments
+either, choose Changed keys in the categories list, select the key, then choose Restore default. This list also keeps existing assignments
 to applications, Shortcuts and script files.
 
 App and document commands come from the app where you opened Settings; open Settings from that app again to refresh
