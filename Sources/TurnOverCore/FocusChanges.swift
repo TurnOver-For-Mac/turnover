@@ -39,6 +39,7 @@ extension AXHandler {
         ("duplicate", ruleDuplicate),
         ("hidden scroll bar", ruleHiddenScrollBar),
         ("blank frame", ruleBlankFrame),
+        ("empty web area, no key pressed", ruleEmptyWebAreaUnbidden),
         ("field still has the keys", ruleFieldStillHasKeys),
         ("reported twice", ruleReportedTwice),
         ("no role", ruleNoRole),
@@ -202,6 +203,63 @@ extension AXHandler {
             return .ignore
         }
         return .go(target)
+    }
+
+    /// An empty web area that takes the focus with no key pressed: an advertisement or consent frame refreshing, or
+    /// the page's own web area emptied for a moment by a reload. Following it replaced the document, said blank, and
+    /// the heading keys found nothing until the page came back (bridgesandballoons.com, every thirty seconds or so,
+    /// 23 Oct 2026, issue 78). Left alone, the document in hand stays; if the page really went, the next key finds
+    /// the window's current web area (browse mode's replaced-on-reload check). Only while a page is being read: a
+    /// first page, or one reached by a key, is followed as before.
+    /// Only in the window of the page in hand: a frame refreshing, or the page's own web area emptied by a reload,
+    /// both arrive there; a page chosen with the mouse in another window or another app is followed as it was
+    /// (a second reviewer, 23 Oct 2026). A page that fills a moment later posts its focus again with content, and
+    /// is followed then.
+    func ruleEmptyWebAreaUnbidden(_ target: AXUIElement, _ pid: pid_t, _ element: AXUIElement) -> FocusVerdict {
+        guard target.role == "AXWebArea" else { return .go(target) }
+        guard let document = API.focusTreeInterceptor else { return .go(target) }
+        guard !document.passThrough else { return .go(target) }   // in focus mode the keys bypass browse mode's recovery
+        guard Date().timeIntervalSince(InputManager.lastKeyDownAt) > 1 else { return .go(target) }
+        guard target.elements(kAXChildrenAttribute).isEmpty else { return .go(target) }
+        guard let targetWindow = target.element(kAXWindowAttribute) else { return .go(target) }
+        let sameWindow: Bool
+        if let documentWindow = document.webArea.element(kAXWindowAttribute) {
+            sameWindow = targetWindow.isSame(documentWindow)
+        } else {
+            // The page's web area has been replaced and can no longer name its window: the same process is taken as
+            // the same window (a reload is the case this rule exists for; a second reviewer, 23 Oct 2026).
+            sameWindow = !document.isAlive && target.pid == document.webArea.pid
+        }
+        guard sameWindow else { return .go(target) }
+        Log.io("focus on an empty web area with no key pressed, in the window of the page in hand; ignored")
+        followIfPageWent(document, tries: 6)
+        return .ignore
+    }
+
+    /// After an ignored empty web area, looked at every 0.4 s for about two seconds: the application's focus is
+    /// asked again, and a web area that now has the focus and content, other than the page in hand, is followed
+    /// (the ignored one filled, or another tab was chosen with the mouse while it was still empty). Failing that,
+    /// if the page in hand has gone (its web area dead or emptied) and the window has a new one with content, that
+    /// one is followed. Now, not at the next key, which would have read the old buffer (a second reviewer, 23 Oct
+    /// 2026).
+    func followIfPageWent(_ document: BrowseModeDocument, tries: Int) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+            guard let self, API.focusTreeInterceptor === document else { return }
+            let app = AXUIElementCreateApplication(document.webArea.pid)
+            if let focused = app.element(kAXFocusedUIElementAttribute), focused.role == "AXWebArea",
+               !focused.isSame(document.webArea), !focused.elements(kAXChildrenAttribute).isEmpty {
+                Log.io("focus: the web area that took the focus has content now; following it")
+                self.focusChanged(focused, pid: focused.pid)
+                return
+            }
+            let oldGone = !document.isAlive || document.webArea.elements(kAXChildrenAttribute).isEmpty
+            if oldGone, let fresh = document.currentWebArea(), !fresh.isSame(document.webArea), !fresh.elements(kAXChildrenAttribute).isEmpty {
+                Log.io("focus: the page in hand went; following the window's new web area")
+                self.focusChanged(fresh, pid: fresh.pid)
+                return
+            }
+            if tries > 1 { self.followIfPageWent(document, tries: tries - 1) }
+        }
     }
 
     /// Safari reports the page focused while its address bar, with the suggestions popup up, still has the keyboard.
