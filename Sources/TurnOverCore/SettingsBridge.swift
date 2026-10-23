@@ -29,6 +29,7 @@ public enum SettingsBridge {
         server.handlers["subscribe"] = { _, reply in Log.info("settings app: connected"); sendState(to: reply) }
         server.handlers["ask"] = { _, reply in sendState(to: reply) }
         server.handlers["patch"] = { message, _ in if let json = message["json"] as? String { apply(json) } }
+        server.handlers["keyboard"] = { message, reply in KeyboardEditor.handle(message, reply: reply) }
     }
 
     /// The settings as they are now, and the ones kept outside the file, for the app to show: to the one that asked,
@@ -86,6 +87,9 @@ public enum SettingsBridge {
             }
             let before = config
             config = next
+            if filePatch["keyboard"] != nil || filePatch["general"] != nil {
+                KeyboardEditor.settingsChanged()
+            }
             config.save()
             SettingsProfiles.applyLive()
             KeySettings.refresh()
@@ -116,6 +120,7 @@ public enum SettingsBridge {
     /// Opens TurnOver Settings (inside TurnOver.app), at a section by its sidebar title when one is given. A window
     /// already open is told the section over the control channel; a new one is told with its first state.
     public static func open(section: String? = nil) {
+        KeyboardEditor.rememberContext()
         if let section {
             pendingSection = section
             ControlServer.shared.broadcast(["op": "show", "section": section])

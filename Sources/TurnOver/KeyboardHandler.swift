@@ -53,6 +53,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
     private var lastCapsUp: UInt64 = 0
     private var realCapsOn = false
     private var quarantined = Set<Int64>()
+    private var capturedKeys = Set<Int64>()
     /// Keys translated on the way down (the Windows style): their release is translated too.
     private var remapped = Set<Int64>()
     private var echoCode: Int64 = -1
@@ -148,7 +149,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         layer = mine
         // Nothing carried over from the tap before (a restart after the watchdog): a code still in `quarantined`
         // would swallow the next real key-up, and the app would see a key held down (a code review, 14 Oct 2026).
-        quarantined.removeAll(); remapped.removeAll(); capsDown = false; chordFired = false; keypadZeroDown = false
+        quarantined.removeAll(); capturedKeys.removeAll(); remapped.removeAll(); capsDown = false; chordFired = false; keypadZeroDown = false
         controlAlone = false; shiftAlone = false; optionAlone = false; commandAlone = false
         let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching(kIOHIDSystemClass))
         if service != 0 {
@@ -296,7 +297,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
 
     private func tapEvent(_ type: CGEventType, _ event: CGEvent) -> Unmanaged<CGEvent>? {
         if Self.bypass, type != .tapDisabledByTimeout, type != .tapDisabledByUserInput {
-            if !quarantined.isEmpty { quarantined.removeAll() }   // their key-ups pass now; none must be swallowed later
+            if !quarantined.isEmpty { quarantined.removeAll(); capturedKeys.removeAll() }   // their key-ups pass now; none must be swallowed later
             return Unmanaged.passUnretained(event)
         }
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
@@ -315,6 +316,11 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         // Our own re-posted keys (gesture.send) pass untouched.
         if event.getIntegerValueField(.eventSourceUserData) == Self.marker { return Unmanaged.passUnretained(event) }
         let code = event.getIntegerValueField(.keyboardEventKeycode)
+        // A recorded key stays swallowed until release: holding it must not run the old assignment after capture.
+        if capturedKeys.contains(code) {
+            if type == .keyUp { capturedKeys.remove(code); quarantined.remove(code) }
+            return nil
+        }
         // A direct app in front (Command Control Comma, D): every key goes to it alone, before TurnOver's commands and
         // without VoiceOver ever seeing it, as a game wants (18 Oct 2026: "like a direct touch"). Command and
         // its chords stay the system's, so Command Tab, Command Q and Command Control Comma (to leave) still work.
@@ -327,6 +333,11 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         }
         let settings = KeySettings.current   // a snapshot: never `config` itself on this thread
         if type == .flagsChanged {
+            // Modifiers prepare a recorded chord; tapping one must not open a menu or change speech meanwhile.
+            if InputManager.isCapturing {
+                controlAlone = false; shiftAlone = false; optionAlone = false; commandAlone = false
+                return code == 57 && settings.capsIsTurnOver ? nil : Unmanaged.passUnretained(event)
+            }
             // Keyboard help names a modifier key pressed on its own, as NVDA's input help does: it heard only keys
             // that type or run something (12 Oct 2026: "it isn't reading command, control, option").
             if InputManager.isInputHelpActive { announceModifier(code: code, flags: event.flags, capsIsTurnOver: settings.capsIsTurnOver) }
@@ -402,8 +413,16 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         shiftAlone = false
         optionAlone = false
         commandAlone = false
-        if let r = keypad(type, event, code, settings) { return r }
-        if let r = quickNavArrow(type, event, code, settings) { return r }
+        if InputManager.isCapturing, code == Keypad.zero,
+           settings.windowsKeys ? settings.keypadCommands : settings.numpadCommander {
+            // Keypad 0 is a modifier while its commander is on, including while recording a 0+key chord.
+            keypadZeroDown = type == .keyDown
+            return nil
+        }
+        if !InputManager.isCapturing {
+            if let r = keypad(type, event, code, settings) { return r }
+            if let r = quickNavArrow(type, event, code, settings) { return r }
+        }
         if type == .keyUp {
             if quarantined.contains(code) { quarantined.remove(code); return nil }
             if remapped.contains(code) { remapped.remove(code); WindowsRemap.apply(.keyUp, event) }
@@ -427,31 +446,13 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
             }
             return nil
         }
-        // Right Option+T: the date and time, as the owner has it under VoiceOver (4 Oct 2026). Right Option only, so
-        // left Option+T still types its character.
-        if code == 17, optionCode == 61, settings.optionCommander, event.flags.intersection([.maskControl, .maskCommand, .maskShift]).isEmpty, event.flags.contains(.maskAlternate) {
-            let g = KeyboardGesture(keyCode: code, modifiers: .option, characters: "", timestamp: 0, isRepeat: false, flags: event.flags)
-            // Through the user's keys, where right Option T is the time and date unless they gave it something else
-            // (UserGestures.defaults). It asked for "vo_dateTime", a name no command has had since, so it did nothing
-            // (12 Oct 2026).
-            onMain {
-                Log.io("input kb:rightoption+t")
-                Speech.cancel()   // as every key does: the second press (the date) no longer waits for the time to be said
-                switch UserGestures.lookup(g) {
-                case .script(let s): ScriptHandler.queueScript(s, gesture: g)
-                case .removed: Log.io("right Option T taken away by the user: nothing to do")
-                case nil: if let s = ScriptHandler.findScript(named: "dateTime") { ScriptHandler.queueScript(s, gesture: g) }
-                }
-            }
-            quarantined.insert(code)
-            return nil
-        }
         var mods = Modifiers()
         if event.flags.contains(.maskShift) { mods.insert(.shift) }
         if event.flags.contains(.maskControl) { mods.insert(.control) }
         if event.flags.contains(.maskAlternate) { mods.insert(.option) }
         if event.flags.contains(.maskCommand) { mods.insert(.command) }
         if capsDown { mods.insert(.turnover); chordFired = true }
+        if InputManager.isCapturing, keypadZeroDown, Keypad.codes.contains(code) { mods.insert(.turnover) }
         if event.getIntegerValueField(.eventSourceUserData) == Self.typedTurnOverMarker { mods.insert(.turnover) }
         // VO-Semicolon locked the TurnOver key: every key is a TurnOver key until it is unlocked (VoiceOver's own).
         if InputManager.turnOverKeyLocked, !mods.contains(.turnover) { mods.insert(.turnover) }
@@ -466,7 +467,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         // same (Control C to Command C, Control Left to Option Left). TurnOver's own bindings (browse mode's Home,
         // Control Home) keep their keys. The key's release is translated to match.
         // The lookup happens once, here, and is handed on; a TurnOver chord is not looked up on this thread at all.
-        if settings.windowsKeys, !mods.contains(.turnover), ScriptHandler.mainHasScript(for: gesture) == false, WindowsRemap.apply(.keyDown, event) {
+        if !InputManager.isCapturing, settings.windowsKeys, !mods.contains(.turnover), ScriptHandler.mainHasScript(for: gesture) == false, WindowsRemap.apply(.keyDown, event) {
             remapped.insert(code)
             let c2 = event.getIntegerValueField(.keyboardEventKeycode)
             var m2 = Modifiers()
@@ -476,8 +477,10 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
             if event.flags.contains(.maskCommand) { m2.insert(.command) }
             gesture = KeyboardGesture(keyCode: c2, modifiers: m2, characters: Self.characters(of: event), timestamp: gesture.timestamp, isRepeat: gesture.isRepeat, flags: event.flags)
         }
+        let capturing = InputManager.isCapturing
         switch ScriptHandler.askMain(gesture) {
         case .taken, .deferred:
+            if capturing { capturedKeys.insert(code) }
             quarantined.insert(code)
             return nil
         case .passed:
@@ -534,6 +537,8 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
             return nil
         }
         guard bare else { return nil }
+        let gesture = KeyboardGesture(keyCode: code, modifiers: [], characters: "", timestamp: 0, isRepeat: false, flags: event.flags)
+        if settings.hasUserGesture(gesture) { return nil }
         if let first = arrowHeld, first != code, let firstName = Self.arrowNames[first] {
             arrowChorded = true
             quarantined.insert(code)
@@ -579,7 +584,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         if capsDown || keypadZeroDown { mods.insert(.turnover); chordFired = true }
         let g = KeyboardGesture(keyCode: code, modifiers: mods, characters: "", timestamp: UInt64(Double(event.timestamp) / Self.machToNs), isRepeat: repeatKey, flags: f)
         // A key with nothing assigned goes to the application (numpad Enter, Equals: typing still works).
-        guard Keypad.action(for: g, windows: windows) != nil else { return nil }
+        guard Keypad.action(for: g, windows: windows) != nil || s.hasUserGesture(g) else { return nil }
         if type == .keyDown { onMain { Keypad.run(g, windows: windows) } }
         return .some(nil)
     }
