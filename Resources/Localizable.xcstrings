@@ -1,0 +1,412 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "%@ rate" : {
+
+    },
+    "%@ voice" : {
+
+    },
+    "%@, %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
+    "%@, natural" : {
+
+    },
+    "%lld" : {
+
+    },
+    "%lld characters" : {
+
+    },
+    "%lld chosen for VO-Command-Shift." : {
+
+    },
+    "%lld percent" : {
+
+    },
+    "%lld, same as the main voice" : {
+
+    },
+    "A list of apps for each reader, a mode (TurnOver in its apps, everywhere, or VoiceOver everywhere), and switching between the readers as you change apps. The list is under Tools in the TurnOver menu while this is on. Off, TurnOver reads everywhere while it is on." : {
+
+    },
+    "A sound" : {
+
+    },
+    "After the words, as VoiceOver" : {
+
+    },
+    "Alerts" : {
+
+    },
+    "All" : {
+
+    },
+    "Allowed: it can make TurnOver speak while it is the app in front." : {
+
+    },
+    "Always" : {
+
+    },
+    "Always on" : {
+
+    },
+    "Automatic%@" : {
+
+    },
+    "Before the words, as NVDA" : {
+
+    },
+    "Bold, italic and underline" : {
+
+    },
+    "By keyboard style" : {
+
+    },
+    "By style: VoiceOver keys only" : {
+
+    },
+    "Capitals" : {
+
+    },
+    "Caps Lock" : {
+
+    },
+    "Caps Lock or Control Option" : {
+
+    },
+    "Cell positions" : {
+
+    },
+    "Characters" : {
+
+    },
+    "CoExist: VoiceOver stays running alongside TurnOver" : {
+
+    },
+    "Command keys, as you press them" : {
+
+    },
+    "Control Option" : {
+
+    },
+    "Desktop, the number pad has its NVDA keys" : {
+
+    },
+    "Documents" : {
+
+    },
+    "Each item's keyboard shortcut" : {
+
+    },
+    "Every voice: tick the ones you want VO-Command-Shift to step through." : {
+
+    },
+    "Experimental: readers per app" : {
+
+    },
+    "Font name" : {
+
+    },
+    "Font size" : {
+
+    },
+    "Fonts, said as the caret moves into new formatting" : {
+
+    },
+    "General" : {
+
+    },
+    "Heading, link and button: when to say them" : {
+
+    },
+    "Help text of items" : {
+
+    },
+    "Hints after a pause" : {
+
+    },
+    "In edit fields" : {
+
+    },
+    "Item details" : {
+
+    },
+    "JAWS keys" : {
+
+    },
+    "Keyboard" : {
+
+    },
+    "Keyboard layout" : {
+
+    },
+    "Keyboard style" : {
+
+    },
+    "Keypad commands with NVDA keys (Clear switches)" : {
+
+    },
+    "Keypad commands with VoiceOver keys (VO Clear switches)" : {
+
+    },
+    "Laptop" : {
+
+    },
+    "Links and buttons in the line, as on screen" : {
+
+    },
+    "Longest line" : {
+
+    },
+    "Lower other sounds while TurnOver speaks" : {
+
+    },
+    "Most" : {
+
+    },
+    "Moving around" : {
+
+    },
+    "Moving the cursor moves the keyboard focus" : {
+
+    },
+    "NVDA and JAWS keys move by groups too" : {
+
+    },
+    "NVDA and JAWS keys where VoiceOver reads too" : {
+
+    },
+    "NVDA keys" : {
+
+    },
+    "Name undescribed pictures by their file name" : {
+
+    },
+    "Natural voice speed" : {
+
+    },
+    "Never" : {
+
+    },
+    "New line on Return" : {
+
+    },
+    "No" : {
+
+    },
+    "No app has asked to speak through TurnOver yet. A game or another program can ask; it appears here, and you choose whether it may." : {
+
+    },
+    "No voices for other languages are installed." : {
+
+    },
+    "None" : {
+
+    },
+    "Nothing" : {
+
+    },
+    "Off" : {
+
+    },
+    "Off: each reader has its own switch and neither changes the other. Command Control Period is TurnOver's; Command F5 is VoiceOver's." : {
+
+    },
+    "On, Caps Lock is the NVDA key in every app, whichever reader is speaking. Off, VoiceOver's own Caps Lock keys work in the apps VoiceOver reads." : {
+
+    },
+    "Open TurnOver at login" : {
+
+    },
+    "Other apps' speech" : {
+
+    },
+    "Pitch" : {
+
+    },
+    "Position, such as 3 of 10" : {
+
+    },
+    "Punctuation" : {
+
+    },
+    "Raise the pitch for a capital" : {
+
+    },
+    "Rate" : {
+
+    },
+    "Read a page through as it opens" : {
+
+    },
+    "Read changes on screen as they happen" : {
+
+    },
+    "Read new text as it appears, while a result is open" : {
+
+    },
+    "Read notifications from other apps" : {
+
+    },
+    "Read the whole result as it opens" : {
+
+    },
+    "Readers per app" : {
+
+    },
+    "Row and column headers" : {
+
+    },
+    "Said" : {
+
+    },
+    "Same as speech" : {
+
+    },
+    "Say all" : {
+
+    },
+    "Say all reads ahead in the natural voice; moving around and typing stay in your speech voice." : {
+
+    },
+    "Say all voice" : {
+
+    },
+    "Say cap before a capital" : {
+
+    },
+    "Say heading levels" : {
+
+    },
+    "Say which plugin an app has as it comes to the front" : {
+
+    },
+    "Screen Curtain while TurnOver reads" : {
+
+    },
+    "Screen reader behaviour" : {
+
+    },
+    "Screen recognition" : {
+
+    },
+    "Settings sections" : {
+
+    },
+    "Show TurnOver in the menu bar" : {
+
+    },
+    "Single-letter keys go round the page" : {
+
+    },
+    "Some" : {
+
+    },
+    "Sounds" : {
+
+    },
+    "Sounds as I move and press" : {
+
+    },
+    "Speech" : {
+
+    },
+    "Starting" : {
+
+    },
+    "Switch language when text says it is in another" : {
+
+    },
+    "Tables" : {
+
+    },
+    "Text marked as another language is read in that language's voice, when language switching is on." : {
+
+    },
+    "The Mac's default output" : {
+
+    },
+    "The keypad" : {
+
+    },
+    "The same as VoiceOver's" : {
+
+    },
+    "TurnOver Settings" : {
+
+    },
+    "TurnOver comes on when VoiceOver turns off, and off when VoiceOver comes on" : {
+
+    },
+    "TurnOver key" : {
+
+    },
+    "TurnOver's" : {
+
+    },
+    "Type into a field as soon as it has the focus" : {
+
+    },
+    "Typing echo" : {
+
+    },
+    "Voice" : {
+
+    },
+    "VoiceOver is kept quiet where TurnOver reads and keeps passwords and macOS's own prompts. Changing it restarts TurnOver." : {
+
+    },
+    "VoiceOver keys" : {
+
+    },
+    "VoiceOver keys move by groups" : {
+
+    },
+    "VoiceOver's" : {
+
+    },
+    "Voices for other languages" : {
+
+    },
+    "Voices in the rotor: %lld chosen" : {
+
+    },
+    "Voices in the rotor: every voice" : {
+
+    },
+    "Volume" : {
+
+    },
+    "Waiting for TurnOver. Start it with Command Control Period." : {
+
+    },
+    "Web pages" : {
+
+    },
+    "When TurnOver takes over from VoiceOver" : {
+
+    },
+    "Where speech plays" : {
+
+    },
+    "While speaking" : {
+
+    },
+    "Words" : {
+
+    },
+    "off" : {
+
+    }
+  },
+  "version" : "1.0"
+}

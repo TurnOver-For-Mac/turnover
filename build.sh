@@ -58,11 +58,15 @@ python3 make-embedded.py || { echo "STOP: make-embedded.py failed"; exit 1; }
 # The compiler's own exit status decides, not only whether the files exist: a build that failed after a product was
 # written went on to install (the same audit).
 set +e
+# The compiler lists the translatable strings as it goes (Package.swift's translatable), for the catalog.
+export TURNOVER_STRINGS="$BUILD/strings"
 swift build -c release --scratch-path "$BUILD" $SWIFTFLAGS 2>&1 | grep -vE '^\[[0-9]+/[0-9]+\]'
 BUILD_STATUS=${PIPESTATUS[0]}
 set -e
 [ "$BUILD_STATUS" -eq 0 ] || { echo "build failed"; exit "$BUILD_STATUS"; }
 [ -x "$BUILD/release/turnover" ] && [ -x "$BUILD/release/turnover-key" ] && [ -f "$BUILD/release/libTurnOverCore.dylib" ] || { echo "build failed"; exit 1; }
+# New strings into Resources/Localizable.xcstrings, untranslated until someone translates them (make-strings.py).
+python3 make-strings.py sync "$TURNOVER_STRINGS" || { echo "STOP: make-strings.py sync failed"; exit 1; }
 # The unit tests (Sources/TurnOverTests): a failing test stops the install (8 Oct 2026). TURNOVER_SKIP_TESTS=1 to skip.
 if [ "$TURNOVER_SKIP_TESTS" != 1 ]; then
   "$BUILD/release/turnover-tests" || { echo "build.sh: tests failed; not installing"; exit 1; }
@@ -179,6 +183,9 @@ cp "$BIN/turnover-key" "$KEYAPP/Contents/MacOS/turnover-key"
 cp Resources/TurnOverKey-Info.plist "$KEYAPP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :TOReaderID string $BUNDLEID" "$KEYAPP/Contents/Info.plist"   # the reader this helper starts
 printf 'APPL????' > "$KEYAPP/Contents/PkgInfo"
+# The translations, as <language>.lproj in each of the three apps: macOS picks the person's language, and English
+# where there is none (make-strings.py).
+python3 make-strings.py compile "$APP/Contents/Resources" "$SETAPP/Contents/Resources" "$KEYAPP/Contents/Resources" || { echo "STOP: make-strings.py compile failed"; exit 1; }
 # TURNOVER_STRIP=1 (for release builds): stripped before it is signed, to keep it small. Swift keeps
 # class names, which its runtime needs. The unstripped programs are
 # kept privately, by their UUID, to read crash reports: atos -o <copy> -l <load address> <addresses>.

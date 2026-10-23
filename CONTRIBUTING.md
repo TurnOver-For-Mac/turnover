@@ -59,6 +59,22 @@ mostly about not wasting your time or mine.
 
 Nothing is merged by itself, and not everything will be merged. If a pull request isn't a fit, I'll try to say why.
 
+## Words people hear or read, and translations
+
+TurnOver speaks and shows its words in the Mac's language where there is a translation, and in English where there
+isn't. Anything a person hears or reads (speech, menus, settings, alerts) is written so it can be translated:
+
+- In code, `String(localized: "check box", comment: "a role, spoken after the name")`. The comment tells the
+  translator where the words are heard. SwiftUI's `Text("Rate")` is translatable as it is.
+- A phrase with something in it is one string, `String(localized: "\(i) of \(n)")`, never English words joined in
+  code: other languages put the parts in another order.
+- Decide on the value, never on the words: compare the role or the state, not what it is spoken as, or the code
+  stops working in another language.
+- The log, identifiers and anything matched against an app's own text stay plain English strings.
+
+`./build.sh --no-install` adds new strings to Resources/Localizable.xcstrings, untranslated (make-strings.py); commit
+that file with the code. A new language is a translation in that file, in Xcode or as JSON, and needs no code.
+
 ## Signing off your work (DCO)
 
 TurnOver uses the [Developer Certificate of Origin](https://developercertificate.org): by adding a `Signed-off-by` line
