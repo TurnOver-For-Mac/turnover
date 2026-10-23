@@ -12,6 +12,7 @@ final class KeyboardEditorModel: ObservableObject {
     @Published private(set) var saving = false
     var send: (([String: Any]) -> Void)?
     private var request: String?
+    private var waitingForConnection = false
 
     func refresh() { send?(["op": "keyboard", "action": "list"]) }
 
@@ -43,7 +44,13 @@ final class KeyboardEditorModel: ObservableObject {
 
     func disconnected() {
         request = nil; candidate = nil; recording = false; saving = false; state = nil
-        message = "TurnOver disconnected. No pending key assignment was saved."
+        savedRequest = nil; waitingForConnection = true
+        message = "Waiting for TurnOver to reconnect."
+    }
+
+    func connected() {
+        if waitingForConnection { message = ""; waitingForConnection = false }
+        refresh()
     }
 
     func receive(_ message: [String: Any]) -> Bool {

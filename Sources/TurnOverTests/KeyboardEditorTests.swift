@@ -23,6 +23,47 @@ func keyboardEditorTests() {
         expect(keys(map, "first"), ["kb:turnover+t"])
         expect(state.context, "Test app")
     }
+    test("keyboard editor: every preset binding matches command resolution in both layouts") {
+        let saved = config
+        defer { config = saved }
+        config.keyboard.userGestures = [:]
+        config.keyboard.optionCommander = false
+        let owners: [ScriptableObject] = [VoiceOverKeysPlugin(), GlobalCommands.shared]
+        for style in KeyboardStyle.allCases {
+            config.general.keyboardStyle = style.rawValue
+            for layout in ["laptop", "desktop"] {
+                config.keyboard.layout = layout
+                let styleKeys = StyleKeymap.keys(for: style)
+                let map = KeyboardMap(sources: owners.map { .init($0) }, layout: layout, styleKeys: styleKeys)
+                let state = map.state(overrides: [:], context: "", style: style.rawValue)
+                let listed = Dictionary(uniqueKeysWithValues: state.commands.flatMap { command in command.keys.map { ($0.id, command.id) } })
+                let ids = Set(owners.flatMap { $0.everyBinding.map(\.0) } + Array(styleKeys.keys))
+                var checked = 0
+                for id in ids where id.hasPrefix("kb:") || id.hasPrefix("kb(\(layout)):") {
+                    guard let g = KeyboardGesture(identifier: id) else { continue }
+                    var expected = owners.lazy.compactMap { $0.script(for: g) }.first
+                    if let value = styleKeys[g.identifier] {
+                        let replacement: Script?
+                        if value.hasPrefix("="), let alias = KeyboardGesture(identifier: String(value.dropFirst())) {
+                            replacement = owners.lazy.compactMap { $0.script(for: alias) }.first
+                        } else {
+                            replacement = owners.lazy.compactMap { $0.script(named: value) }.first
+                        }
+                        if let replacement { expected = replacement }
+                    }
+                    let named = expected.flatMap { $0.description.isEmpty ? nil : $0.name }
+                    expect(listed[g.identifier], named, "\(style.rawValue) \(layout) \(g.identifier)")
+                    checked += 1
+                }
+                check(checked > 150, "the complete preset table was checked for \(style.rawValue) \(layout)")
+                for owner in owners {
+                    for command in owner.allScripts where !command.description.isEmpty {
+                        check(state.commands.contains { $0.id == command.name }, "\(command.name) is in the catalogue")
+                    }
+                }
+            }
+        }
+    }
     test("keyboard editor: changing a key removes the old default and preserves unrelated assignments") {
         let map = KeyboardMap(sources: [.init(owner())], layout: "laptop")
         let before = ["kb:rightoption+m": "app:com.apple.mail", "kb:turnover+9": "file:/tmp/example.applescript"]
@@ -35,6 +76,24 @@ func keyboardEditorTests() {
         expect(keys(map, "second", changed), [])
         var c = Config(); c.keyboard.userGestures = changed
         expect(try JSONDecoder().decode(Config.self, from: JSONEncoder().encode(c)).keyboard.userGestures, changed)
+    }
+    test("keyboard editor: Say All preset keys are labelled, editable and overridden before the style") {
+        let saved = config
+        defer { config = saved }
+        config.general.keyboardStyle = "jaws"
+        let map = KeyboardMap(sources: [.init(VoiceOverKeysPlugin()), .init(GlobalCommands.shared)], layout: "laptop",
+                              styleKeys: StyleKeymap.keys(for: .jaws), sayAllKeys: StyleKeymap.sayAllKeys(for: .jaws))
+        let state = map.state(overrides: [:], context: "", style: "jaws")
+        for (id, name) in StyleKeymap.sayAllKeys(for: .jaws) {
+            let key = state.commands.first { $0.id == name }?.keys.first { $0.id == id }
+            check(key?.label.contains("during Say All") == true, "\(id) is labelled as conditional")
+            let removed = map.removing(id, from: name, in: [:])!
+            check(!keys(map, name, removed).contains(id), "\(id) can be removed")
+            let changed = map.assigning("kb:turnover+8", to: name, replacing: id, in: [:])!
+            expect(changed[id], "none")
+            check(keys(map, name, changed).contains("kb:turnover+8"), "\(name) can be reassigned")
+        }
+        check(map.candidate("kb:rightArrow", for: "reportCurrentFocus", overrides: [:]).warnings.contains { $0.contains("During Say All") }, "conditional conflict is explained")
     }
     test("keyboard editor: remove and restore distinguish an override from a disabled default") {
         let map = KeyboardMap(sources: [.init(owner())], layout: "laptop")

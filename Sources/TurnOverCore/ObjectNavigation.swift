@@ -387,10 +387,20 @@ public final class ObjectNavigator {
     /// its items sit at the level above (so a window is not a nest of empty groups to dig through).
     public static func isGroup(_ e: AXUIElement) -> Bool {
         let role = e.role
+        guard groupRoles.contains(role) || layoutRoles.contains(role) else { return false }
+        // Segments are flattened by groupItems. Their parent must also be skipped on the way back up, or
+        // VO-Right enters the segments without interaction and cannot leave them (Settings, macOS 27, 23 Oct 2026).
+        // Ask the count first: checking a table must not fetch thousands of children just to rule out segments.
+        var count: CFIndex = 0
+        if AXUIElementGetAttributeValueCount(e, kAXChildrenAttribute as CFString, &count) == .success,
+           (1...6).contains(count), areSegments(e.elements(kAXChildrenAttribute)) { return false }
         if groupRoles.contains(role) { return true }
-        guard layoutRoles.contains(role) else { return false }
         let named = !(e.string(kAXTitleAttribute) ?? "").isEmpty || !(e.string(kAXDescriptionAttribute) ?? "").isEmpty
         return named && e.elements(kAXChildrenAttribute).count >= 2
+    }
+
+    private static func areSegments(_ children: [AXUIElement]) -> Bool {
+        !children.isEmpty && children.count <= 6 && children.allSatisfy { $0.string(kAXSubroleAttribute) == "AXSegment" }
     }
 
     /// What VoiceOver's cursor steps through inside a container, in screen order: items, and groups as single items;
@@ -441,7 +451,7 @@ public final class ObjectNavigator {
                 if role == "AXHeading", kids.count == 1, kids[0].role == role, (c.string(kAXDescriptionAttribute) ?? "").isEmpty, (c.string(kAXTitleAttribute) ?? "").isEmpty {
                     out.append(kids[0]); columnOf.append(column); continue
                 }
-                if !kids.isEmpty, kids.count <= 6, kids.allSatisfy({ $0.string(kAXSubroleAttribute) == "AXSegment" }) {
+                if areSegments(kids) {
                     out.append(contentsOf: kids); columnOf.append(contentsOf: kids.map { _ in column }); continue
                 }
                 if isGroup(c) { out.append(c); columnOf.append(column); continue }

@@ -33,7 +33,9 @@ final class Model: ObservableObject {
             }
             guard message["op"] as? String == "state", let json = message["json"] as? String, let data = json.data(using: .utf8),
                   let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
+            let reconnecting = self?.connected == false
             self?.state = dict; self?.connected = true
+            if reconnecting { self?.keyboardEditor.connected() }
             if let name = dict["_showSection"] as? String { self?.requestedSection = Pane(rawValue: name) }
         }, ended: { [weak self] in
             self?.keyboardEditor.disconnected()
@@ -118,7 +120,7 @@ struct ContentView: View {
                 }
             }
         }
-        .frame(minWidth: 700, minHeight: section == .commands ? 600 : 500)
+        .frame(minWidth: section == .commands ? 820 : 700, minHeight: section == .commands ? 600 : 500)
         .onReceive(model.$requestedSection) { requested in
             guard let requested else { return }
             section = requested
