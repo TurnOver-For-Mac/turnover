@@ -25,6 +25,9 @@ enum VoiceOverTap {
     /// "still" every second while VoiceOver is silent: the helper lets VoiceOver be heard if it stops coming (TurnOver
     /// frozen, which the watchdog's 4 s and its thread don't always catch: a code review on 18 Oct 2026).
     private static var stillTimer: Timer?
+    /// The helper answered the last "off". If it doesn't within a second (held up, as by macOS's audio-permission
+    /// question on 21 Oct 2026), it's ended, so VoiceOver is heard whatever it's waiting on.
+    private static var offAnswered = true
     private static var process: Process?
     private static var input: FileHandle?
     /// The helper's pid, for the watchdog's thread.
@@ -50,7 +53,16 @@ enum VoiceOverTap {
                 guard wantedSilent, let helper = VoiceOverTap.input, process?.isRunning == true else { return }
                 send("still", to: helper)
             } }
-        } else if !silent { stillTimer?.invalidate(); stillTimer = nil }
+        } else if !silent {
+            stillTimer?.invalidate(); stillTimer = nil
+            offAnswered = false
+            let helper = process
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { MainActor.assumeIsolated {
+                guard !offAnswered, !wantedSilent, let helper, helper === process, helper.isRunning else { return }
+                Log.warning("VoiceOver quiet: the helper didn't answer off; ended so VoiceOver is heard")
+                helper.terminate()
+            } }
+        }
     }
 
     /// A line to the helper: never the raising write, which ends TurnOver if the helper has just gone.
@@ -74,6 +86,7 @@ enum VoiceOverTap {
             // The helper gone: nothing more to read (left set, the handler was called again and again on the end).
             guard !data.isEmpty else { h.readabilityHandler = nil; return }
             let text = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+            if text.split(separator: "\n").contains("off") { DispatchQueue.main.async { MainActor.assumeIsolated { offAnswered = true } } }
             if text == "on" {
                 DispatchQueue.main.async { MainActor.assumeIsolated {
                     if waitingForVoiceOver { waitingForVoiceOver = false; Log.io("VoiceOver quiet: on (VoiceOver back)") }
