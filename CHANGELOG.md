@@ -13,8 +13,9 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   moved to Experimental, off for a new install; a set-up that already uses them keeps working as it did.
 - Braille: panning on to the next or previous line moves the caret there, as NVDA does, so after reading a long text
   on the display an arrow key or typing carries on from the line reached, not from where reading began. The braille
-  setting "Panning moves the cursor", in the new Braille section of the Settings window, can move it to the start of each display's width instead, or leave it where it was. Tethered to review,
-  the review cursor moves and the caret stays.
+  setting "Panning moves the cursor", in a new Braille section of the Settings window, can move it to the start of
+  each display's width instead, or leave it where it was. Tethered to review, the review cursor moves and the caret
+  stays.
 - The menu is short, in NVDA's shape: This app, Settings, Keys, Tools, Help, Support TurnOver, Quit. Every setting
   now lives in the Settings window, in sections down the side: General, Speech, Keyboard, Item details, Web pages,
   Documents, Screen recognition, Other apps' speech, Experimental. Two wait in Tools until they have a section:
