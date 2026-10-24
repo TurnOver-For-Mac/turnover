@@ -61,7 +61,8 @@ public final class BrailleDisplays {
 
     private func useApple() -> Bool {
         // While a Bluetooth display is connecting (up to 8 s, on the braille thread), a USB display found would wait
-        // to load behind it, and the main thread with it (code review, 21 Oct 2026): looked for when it is done.
+        // to load behind it, and the main thread with it (code review, 21 Oct 2026): it is looked for the moment the
+        // attempt ends.
         guard !bluetoothLooking else { return false }
         // Bluetooth only when asked for, and not more than every 15 s (connecting takes a few seconds, on the
         // braille thread; the answer comes back here).
@@ -82,10 +83,13 @@ public final class BrailleDisplays {
                 DispatchQueue.main.async { [weak self] in
                     guard let self else { return }
                     self.bluetoothLooking = false
+                    // The next attempt counts from this one's end, so the USB scan always has time between attempts.
+                    self.lastBluetoothLook = Date()
                     Log.info("braille: Bluetooth: \(TOAppleBrailleDisplay.lastBluetoothReport)")
-                    guard let found, self.apple == nil, self.lookAgain != nil || self.manager != nil else { found?.close(); return }
-                    self.adopt(found)
-                    self.stopOwn()
+                    guard self.apple == nil, self.lookAgain != nil || self.manager != nil else { found?.close(); return }
+                    if let found { self.adopt(found); self.stopOwn(); return }
+                    // A USB display plugged in while Bluetooth was connecting is looked for now, not at the next scan.
+                    if let usb = TOAppleBrailleDisplay.detect().first { self.adopt(usb); self.stopOwn() }
                 }
             }
             }
