@@ -9,36 +9,41 @@ final class AppleBrailleDriver: BrailleDisplayDriver {
     let display: TOAppleBrailleDisplay
     var name: String { display.modelIdentifier.components(separatedBy: ".").suffix(3).joined(separator: " ") }
     var cellCount: Int { display.cellCount }
-    private var timer: Timer?
-    private var checks = 0
+    private var closed = false
     var onLost: (() -> Void)?
 
     init(_ display: TOAppleBrailleDisplay) {
         self.display = display
         Log.info("braille: Apple's \(display.driverName) driver for \(display.modelIdentifier), \(display.cellCount) cells, \(display.keyCommands.count) keys in its table")
-        // The drivers are polled for keys, as VoiceOver does.
-        timer = Timer.scheduledTimer(withTimeInterval: 0.03, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.poll() } }
+        // The drivers are polled for keys, as VoiceOver does, on the braille thread: a USB driver waits on each read,
+        // and polled from the main thread it held TurnOver up most of the time (21 Oct 2026).
+        display.startPolling { [weak self] events, loaded in
+            MainActor.assumeIsolated {
+                guard let self, !self.closed else { return }
+                for e in events { self.handle(e.intValue) }
+                if !loaded { Log.info("braille: \(self.name) disconnected"); self.close(); self.onLost?() }
+            }
+        }
     }
 
     /// Writes the display turns down in a row: a Bluetooth link that has gone quiet (the display switched to USB, or
     /// out of range) still says it is loaded, so this is how it is noticed.
     private var failedWrites = 0
     func write(_ cells: [UInt8]) {
-        if display.writeCells(Data(cells)) { failedWrites = 0; return }
-        failedWrites += 1
-        if failedWrites >= 3 { Log.info("braille: \(name) stopped taking cells"); close(); onLost?() }
+        display.writeCellsAsync(Data(cells)) { [weak self] ok in
+            MainActor.assumeIsolated {
+                guard let self, !self.closed else { return }
+                if ok { self.failedWrites = 0; return }
+                self.failedWrites += 1
+                if self.failedWrites >= 3 { Log.info("braille: \(self.name) stopped taking cells"); self.close(); self.onLost?() }
+            }
+        }
     }
 
     func close() {
-        timer?.invalidate(); timer = nil
+        closed = true
         repeatTimer?.invalidate(); repeatTimer = nil; repeating = false   // (a held dot 7 kept deleting after the display went, 8 Oct 2026)
         display.close()
-    }
-
-    private func poll() {
-        for e in display.readInputEvents() { handle(e.intValue) }
-        checks += 1
-        if checks % 33 == 0, !display.isLoaded { Log.info("braille: \(name) disconnected"); close(); onLost?() }
     }
 
     /// The braille keyboard's keys held now, and all held since the chord began (kind 2: keys 0 to 7 are dots 1 to 8,
