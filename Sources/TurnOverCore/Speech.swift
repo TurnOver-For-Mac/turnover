@@ -37,6 +37,9 @@ public enum Speech {
     public static var typedWordSoFar: String { String(typedWord) }
     /// The word being typed had a Backspace in it, so typedWordSoFar is only its end.
     public static var typedWordWasEdited: Bool { backspacedSinceWord }
+    /// The word said when the last word ended, nil if none was (Mail's autocorrect check: the field's word, already
+    /// corrected, was said, so the correction isn't announced again).
+    public private(set) static var lastTypedWordSpoken: String?
 
     // MARK: - Primitives
 
@@ -579,14 +582,15 @@ public enum Speech {
             if !typedWord.isEmpty { typedWord.removeLast() }
             backspacedSinceWord = true
             return
-        } else if let word = ((!typedWord.isEmpty || backspacedSinceWord) ? wordBefore?() : nil).flatMap({ $0.isEmpty ? nil : $0 })
-                    ?? (typedWord.isEmpty ? nil : String(typedWord)) {
+        } else if let word = wordJustTyped(field: (!typedWord.isEmpty || backspacedSinceWord) ? wordBefore?() : nil, typed: String(typedWord)) {
             // (Only after typing or deleting since the last word: a second space would otherwise say the word again.)
             typedWord.removeAll()
             backspacedSinceWord = false
             Log.io("typed word (\(word.count) characters)")
+            lastTypedWordSpoken = nil
             let mode = config.keyboard.speakTypedWords
             if mode == .always || (mode == .editControls && editable) {
+                lastTypedWordSpoken = word
                 // The word and the character that ended it in one breath ("fast period"): the next key cuts speech
                 // short, and two separate echoes lost the second.
                 let chars = config.keyboard.speakTypedCharacters
@@ -606,6 +610,45 @@ public enum Speech {
         if ch != " ", ch != "'", ch != "’", !ch.isLetter, !ch.isNumber, words == .always || (words == .editControls && editable) {
             echo(Symbols.name(of: ch))
         }
+    }
+
+    /// The word to echo: the field's own, as it holds it once it has taken the key that ended the word (autocorrect's
+    /// "the" for "teh", a dead key's "café", an input method's kana: the field's text is the truth, 4 Oct 2026); the
+    /// letters typed only when the field gives none.
+    public static func wordJustTyped(field: String?, typed: String) -> String? {
+        if let field, !field.isEmpty { return field }
+        return typed.isEmpty ? nil : typed
+    }
+
+    /// The word a key ended, read from the text before the caret once the field has taken that key. Typed fast, the
+    /// field lags the keys: read at once, its word lacked the last letters or was the word before, and the echo
+    /// sounded misspelt (21 Oct 2026). Taken means the text holds the ending character at or after `notBefore` (where
+    /// the word began, a UTF-16 offset into `text`, as the caret's are): the first one there, whatever was typed on
+    /// after it (a space after a full stop, the next word). A straight double quote also matches the curly ones the
+    /// field puts in its place.
+    public static func fieldWord(endedBy ch: Character, before text: String, notBefore: Int? = nil) -> (taken: Bool, word: String?, next: Int?) {
+        func inWord(_ c: Character) -> Bool { c.isLetter || c.isNumber || c == "'" || c == "’" }
+        func ends(_ c: Character) -> Bool { c == ch || (ch.isNewline && c.isNewline) || (ch == "\"" && "“”„".contains(c)) }
+        let t = Array(text)
+        var found: Int?
+        if let start = notBefore {
+            var offset = 0
+            for (k, c) in t.enumerated() {
+                if offset >= start, ends(c) { found = k; break }
+                offset += String(c).utf16.count
+            }
+        } else if let i = t.lastIndex(where: ends), t[(i + 1)...].allSatisfy(inWord) {
+            // Where the word began isn't known (a Backspace went back past it): the last ending character, with only
+            // the next word's letters after it.
+            found = i
+        }
+        guard let i = found else { return (false, nil, nil) }
+        let word = String(t[..<i].reversed().prefix(while: inWord).reversed())
+        // (next: where the word after starts, past the ending character and any spaces or punctuation typed after it,
+        // in UTF-16 units of text.)
+        var j = i + 1
+        while j < t.count, !inWord(t[j]) { j += 1 }
+        return (true, word.isEmpty ? nil : word, String(t[..<j]).utf16.count)
     }
 
     public static func clearTypedWordBuffer() { typedWord.removeAll(); backspacedSinceWord = false }
