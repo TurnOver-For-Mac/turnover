@@ -83,7 +83,8 @@ extension AXHandler {
     /// (An application coming to the front is let through: it is frontmost before the activation news arrives.)
     func ruleBackgroundApplication(_ target: AXUIElement, _ pid: pid_t, _ element: AXUIElement) -> FocusVerdict {
         if pid != activePid, let app = NSRunningApplication(processIdentifier: pid), app.activationPolicy == .regular,
-           !isHelperOfActiveApp(app), NSWorkspace.shared.frontmostApplication?.processIdentifier != pid {
+           !isHelperOfActiveApp(app), !AXHandler.systemUIAgents.contains(app.bundleIdentifier ?? ""),
+           NSWorkspace.shared.frontmostApplication?.processIdentifier != pid {
             Log.io("focus from \(app.localizedName ?? "pid \(pid)") in the background; ignored")
             return .ignore
         }

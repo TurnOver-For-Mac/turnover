@@ -108,15 +108,53 @@ public final class AXHandler {
             guard let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
             MainActor.assumeIsolated { self?.appTerminated(app.processIdentifier) }
         })
+        // A system agent never activates, so one launched after TurnOver (Siri AI is started on demand and relaunched)
+        // is observed when it starts, or Spotlight went unread until TurnOver restarted (code review, 21 Oct 2026).
+        workspaceTokens.append(nc.addObserver(forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main) { [weak self] n in
+            guard let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                  Self.systemUIAgents.contains(app.bundleIdentifier ?? "") else { return }
+            // A moment for the new process to answer accessibility questions before its notifications are asked for.
+            let pid = app.processIdentifier
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+                guard let self, self.running else { return }   // stopped meanwhile: no observer left behind
+                self.observe(pid)
+            }
+        })
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.seedNotifications() }
         for bundle in Self.systemUIAgents {
             for app in NSRunningApplication.runningApplications(withBundleIdentifier: bundle) { observe(app.processIdentifier) }
         }
         if let front = NSWorkspace.shared.frontmostApplication { appActivated(front) }
         SystemPrompts.shared.start()
+        if !watchingSpotlightEscape { watchingSpotlightEscape = true; InputManager.passThroughWatchers.append { [weak self] g in self?.spotlightEscape(g) } }
     }
-    /// Processes that take the keyboard without becoming the active application.
-    public static let systemUIAgents = ["com.apple.dock", "com.apple.Spotlight", "com.apple.notificationcenterui", "com.apple.controlcenter"]
+    /// Processes that take the keyboard without becoming the active application. On macOS 27 Spotlight's panel is
+    /// drawn by "Siri AI" (com.apple.campo): unwatched, Command Space said nothing and the letters typed went to
+    /// browse mode's quick navigation behind it (21 Oct 2026).
+    public static let systemUIAgents = ["com.apple.dock", "com.apple.Spotlight", "com.apple.campo", "com.apple.notificationcenterui", "com.apple.controlcenter"]
+
+    /// Escape in Spotlight: its panel closes, but the application in front never changed, so no news came and
+    /// TurnOver stayed on the gone search field, saying nothing (macOS 27, 21 Oct 2026). As VoiceOver does, it says
+    /// so and reads the application's focus again. Only from Siri AI's search field itself: Escape on a result row
+    /// clears the query and the row goes while the panel stays open, and Spotlight on macOS 26 (com.apple.Spotlight)
+    /// may already read the application again, which would say it twice (review, 21 Oct 2026).
+    private var watchingSpotlightEscape = false
+    private func spotlightEscape(_ g: KeyboardGesture) {
+        guard g.keyName == "escape", g.modifiers.isEmpty, let f = API.focusObject,
+              NSRunningApplication(processIdentifier: f.pid)?.bundleIdentifier == "com.apple.campo",
+              f.element.string(kAXIdentifierAttribute) == "SpotlightSearchField" else { return }
+        let pid = f.pid
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            guard let self, self.running, API.focusObject?.pid == pid else { return }
+            // Closed: the field TurnOver is on is gone or no longer focused, or the panel has no focused window.
+            let field = API.focusObject?.element
+            let gone = field.map { $0.role == "?" || ($0.attr(kAXFocusedAttribute) as? Bool) != true } ?? true
+            guard gone || AXUIElementCreateApplication(pid).element(kAXFocusedWindowAttribute) == nil else { return }
+            Log.io("spotlight: closed; back to the application")
+            Speech.speakMessage("Spotlight closed")
+            self.refocus(pid: self.activePid)
+        }
+    }
 
     public func stop() {
         guard running else { return }
