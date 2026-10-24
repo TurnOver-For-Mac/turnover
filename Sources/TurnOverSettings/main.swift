@@ -83,7 +83,7 @@ final class Model: ObservableObject {
 
 enum Pane: String, CaseIterable, Identifiable {
     // NVDA's order, with TurnOver's own at the end: every setting the menu offered lives here since 21 Oct 2026.
-    case general = "General", speech = "Speech", keyboard = "Keyboard", items = "Item details", webPages = "Web pages", documents = "Documents",
+    case general = "General", speech = "Speech", braille = "Braille", keyboard = "Keyboard", items = "Item details", webPages = "Web pages", documents = "Documents",
          recognition = "Screen recognition", otherApps = "Other apps' speech", readers = "Screen reader behaviour"
     var id: String { rawValue }
 }
@@ -103,6 +103,7 @@ struct ContentView: View {
                 switch section ?? .general {
                 case .general: GeneralView()
                 case .speech: SpeechView()
+                case .braille: BrailleView()
                 case .keyboard: KeyboardView()
                 case .items: ItemsView()
                 case .webPages: WebPagesView()
@@ -310,6 +311,20 @@ struct OtherLanguageRow: View {
         }
         Slider(value: ratePercent, in: 10...100, step: 5) { Text("\(language.name) rate") }
             .accessibilityValue(rates[language.code] == nil ? "\(Int(ratePercent.wrappedValue)), same as the main voice" : "\(Int(ratePercent.wrappedValue))")
+    }
+}
+
+/// Braille: starts with the one setting that had no control once the menu lost its settings (#27, 22 Oct 2026); the
+/// rest of braille's settings, still in Tools, join it in their own change.
+struct BrailleView: View {
+    @EnvironmentObject var model: Model
+    var body: some View {
+        Form {
+            Picker("Panning moves the cursor", selection: model.string("braille", "panMovesCaret", "line")) {
+                Text("Line by line").tag("line"); Text("To the text shown").tag("window"); Text("Off").tag("off")
+            }
+            Text("Panning on to another line moves the caret there, so the arrows carry on from what was read. Tethered to review, panning moves only the review cursor.").font(.caption)
+        }.formStyle(.grouped).navigationTitle("Braille")
     }
 }
 
