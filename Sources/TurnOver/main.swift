@@ -219,9 +219,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard voiceOverOnAtQuit.value else { Log.info("quitting: VoiceOver left off (its setting)"); return }
         // macOS's flag can stay on with VoiceOver gone (quit by script, or crashed): then it is started, not toggled,
         // or the toggle turns the flag off and nobody speaks (a code review, 25 Oct 2026).
-        if NSWorkspace.shared.isVoiceOverEnabled { HandOver.bringVoiceOverBack("quitting", waitUpTo: 4); return }
-        Log.info("quitting: turning VoiceOver on")
-        HandOver.turnVoiceOverOn()
+        // Opened at once, and waited for within TurnOver Key's three seconds before it stops TurnOver outright (the
+        // signal handler may already have waited a second and a half for the main thread).
+        HandOver.bringVoiceOverBack("quitting", waitUpTo: 1.2)
     }
 
     /// TurnOver Key (Command+Control+T starts and quits TurnOver) runs from login, apart from TurnOver: register it

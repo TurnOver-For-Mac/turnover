@@ -12,6 +12,7 @@ import Foundation
 import AppKit
 import TurnOverControl
 import TurnOverSpeech
+import AVFoundation
 
 public enum SettingsBridge {
     private static var started = false
@@ -24,9 +25,27 @@ public enum SettingsBridge {
         let server = ControlServer.shared
         server.log = { Log.info($0) }
         server.start(path: AppPaths.file("control.sock").path)
-        server.handlers["subscribe"] = { _, reply in Log.info("settings app: connected"); sendState(to: reply) }
-        server.handlers["ask"] = { _, reply in sendState(to: reply) }
+        // A window connecting, or asking (it does as it comes to the front), gets the voices as they are now; a change
+        // made in the window is answered from the list kept since.
+        server.handlers["subscribe"] = { _, reply in Log.info("settings app: connected"); languagesState = nil; sendState(to: reply) }
+        server.handlers["ask"] = { _, reply in languagesState = nil; sendState(to: reply) }
         server.handlers["patch"] = { message, _ in if let json = message["json"] as? String { apply(json) } }
+    }
+
+    /// The voices for other languages, as the window shows them: kept, not made again for every change. Made again
+    /// it asked the system for every voice once per language, about 1.6 s on the main thread after each switch was
+    /// pressed, so the switch's new state was said late and the next key waited (25 Oct 2026). Cleared when a window
+    /// connects or asks, and when a voice changes.
+    private static var languagesState: [[String: Any]]?
+    private static func otherLanguagesState() -> [[String: Any]] {
+        if let languagesState { return languagesState }
+        let all = AVSpeechSynthesisVoice.speechVoices()
+        let made: [[String: Any]] = Languages.otherLanguages(from: all).map { language in
+            let voices = Languages.voices(for: language.code, from: all).map { ["id": $0.identifier, "name": $0.name, "language": $0.language] }
+            return ["code": language.code, "name": language.name, "voices": voices]
+        }
+        languagesState = made
+        return made
     }
 
     /// The settings as they are now, and the ones kept outside the file, for the app to show: to the one that asked,
@@ -44,10 +63,7 @@ public enum SettingsBridge {
         dict["_kokoroSpeed"] = KokoroVoice.speed
         dict["_outputDevices"] = SpeechPlayer.outputDevices().map { ["uid": $0.uid, "name": $0.name] }
         dict["_speechPortApps"] = SpeechPort.shared.appDecisions.map { ["id": $0.id, "name": $0.name, "allowed": $0.allowed] }
-        dict["_otherLanguages"] = Languages.otherLanguages().map { language in
-            let voices = Languages.voices(for: language.code).map { ["id": $0.identifier, "name": $0.name, "language": $0.language] }
-            return ["code": language.code, "name": language.name, "voices": voices]
-        }
+        dict["_otherLanguages"] = otherLanguagesState()
         guard let out = try? JSONSerialization.data(withJSONObject: dict), let s = String(data: out, encoding: .utf8) else { return }
         if let reply { reply(["op": "state", "json": s]) } else { ControlServer.shared.broadcast(["op": "state", "json": s]) }
     }
@@ -91,7 +107,7 @@ public enum SettingsBridge {
             if before.applications.perAppReaders != next.applications.perAppReaders { TurnOverMenu.shared.leadModeChanged?() }
             let voiceChanged = before.speech.voice != next.speech.voice
             let languageVoicesChanged = before.speech.languageVoices != next.speech.languageVoices
-            if voiceChanged || languageVoicesChanged { Languages.forget() }
+            if voiceChanged || languageVoicesChanged { Languages.forget(); languagesState = nil }
             // The key layer where VoiceOver reads follows its own setting too (the style's change starts or stops it above).
             if before.general.keysWhereVoiceOverReads != next.general.keysWhereVoiceOverReads { GlobalCommands.onKeyboardStyleChanged?() }
             Log.info("settings app: \(filePatch.keys.sorted().joined(separator: ", ")) changed")

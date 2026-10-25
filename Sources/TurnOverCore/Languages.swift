@@ -129,9 +129,11 @@ public enum Languages {
 
     /// The installed voices for a language, the likeliest first: the same region, then Eloquence (the voice family
     /// screen reader users know), then the highest quality; novelty voices last.
-    public static func voices(for language: String) -> [AVSpeechSynthesisVoice] {
+    /// `from`: the system's voices, asked for once by a caller that needs several languages (the Settings window's
+    /// list asked once per language, 25 Oct 2026).
+    public static func voices(for language: String, from all: [AVSpeechSynthesisVoice]? = nil) -> [AVSpeechSynthesisVoice] {
         let wanted = base(language), region = language.lowercased().replacingOccurrences(of: "_", with: "-")
-        return AVSpeechSynthesisVoice.speechVoices().filter { base($0.language) == wanted }.sorted { a, b in
+        return (all ?? AVSpeechSynthesisVoice.speechVoices()).filter { base($0.language) == wanted }.sorted { a, b in
             func score(_ v: AVSpeechSynthesisVoice) -> Int {
                 var s = 0
                 if v.language.lowercased() == region { s += 100 }
@@ -148,11 +150,11 @@ public enum Languages {
     static func best(for language: String) -> AVSpeechSynthesisVoice? { voices(for: language).first }
 
     /// Every language with an installed voice, other than the current voice's, as (code, name in English), by name.
-    public static func otherLanguages() -> [(code: String, name: String)] {
+    public static func otherLanguages(from all: [AVSpeechSynthesisVoice]? = nil) -> [(code: String, name: String)] {
         let current = AVSpeechSynthesisVoice(identifier: config.speech.voice).map { base($0.language) }
         var seen = Set<String>()
         var out: [(String, String)] = []
-        for v in AVSpeechSynthesisVoice.speechVoices() {
+        for v in all ?? AVSpeechSynthesisVoice.speechVoices() {
             let b = base(v.language)
             guard b != current, seen.insert(b).inserted else { continue }
             out.append((b, Locale(identifier: "en").localizedString(forLanguageCode: b) ?? b))

@@ -258,6 +258,15 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         set { bypassLock.lock(); _bypass = newValue; bypassLock.unlock() }
     }
 
+    /// VoiceOver's toggle shortcut as macOS has it (Keyboard Shortcuts, Accessibility), read once at launch.
+    nonisolated static let voiceOverToggle = HandOver.toggleShortcut()
+    nonisolated static func isVoiceOverToggle(code: Int64, flags: CGEventFlags) -> Bool {
+        let s = voiceOverToggle
+        guard code == Int64(s.keyCode) else { return false }
+        let mods: CGEventFlags = [.maskCommand, .maskControl, .maskAlternate, .maskShift]
+        return flags.intersection(mods) == s.flags.intersection(mods)
+    }
+
     private func tapEvent(_ type: CGEventType, _ event: CGEvent) -> Unmanaged<CGEvent>? {
         if Self.bypass, type != .tapDisabledByTimeout, type != .tapDisabledByUserInput {
             if !quarantined.isEmpty { quarantined.removeAll() }   // their key-ups pass now; none must be swallowed later
@@ -279,6 +288,14 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         // Our own re-posted keys (gesture.send) pass untouched.
         if event.getIntegerValueField(.eventSourceUserData) == Self.marker { return Unmanaged.passUnretained(event) }
         let code = event.getIntegerValueField(.keyboardEventKeycode)
+        // VoiceOver's own on-and-off shortcut goes straight on, never held for TurnOver's decision: held for a main
+        // thread that was busy, Option Apostrophe (the maintainer's) reached macOS a second late, or not at all, and
+        // VoiceOver seemed not to answer its key (25 Oct 2026). TurnOver has no command on it.
+        if (type == .keyDown || type == .keyUp), Self.isVoiceOverToggle(code: code, flags: event.flags) {
+            // A modifier pressed with it isn't a modifier pressed alone: no Dock or menu when it is let go.
+            controlAlone = false; shiftAlone = false; optionAlone = false; commandAlone = false
+            return Unmanaged.passUnretained(event)
+        }
         // A direct app in front (Command Control Comma, D): every key goes to it alone, before TurnOver's commands and
         // without VoiceOver ever seeing it, as a game wants (18 Oct 2026: "like a direct touch"). Command and
         // its chords stay the system's, so Command Tab, Command Q and Command Control Comma (to leave) still work.

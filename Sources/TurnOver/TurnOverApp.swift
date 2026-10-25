@@ -258,6 +258,7 @@ final class TurnOverApp {
     /// The first report of VoiceOver's state is TurnOver starting, not a change by hand: the swap setting does not apply to it.
     private var sawVoiceOverState = false
     private func voiceOverChanged(_ on: Bool) {
+        HandOver.newChoice()   // VoiceOver turned on or off, by hand too: a recovery's late fallback stands down
         Log.info("VoiceOver is \(on ? "on" : "off")")
         let starting = !sawVoiceOverState
         sawVoiceOverState = true

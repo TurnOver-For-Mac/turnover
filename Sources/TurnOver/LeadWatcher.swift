@@ -207,10 +207,18 @@ final class LeadWatcher {
         postedAt = Date()
         wantedOn = voiceOverOn
         handOverGeneration += 1
+        HandOver.newChoice()   // a recovery's late fallback stands down
         let generation = handOverGeneration
         let t0 = Date()
         let isOn = { NSWorkspace.shared.isVoiceOverEnabled }
         let running = { HandOver.voiceOverRunning }
+        // VoiceOver wanted, its flag on and no VoiceOver (crashed, or quit by script): opened, since there is nothing to
+        // wait for and the toggle would turn the flag off (a code review, 25 Oct 2026).
+        if voiceOverOn, isOn(), !running() {
+            Log.info("hand-over: VoiceOver's flag is on but it isn't running; opening it")
+            HandOver.openVoiceOver("hand-over")
+            return
+        }
         // 1. VoiceOver wholly on or wholly off before the toggle (toggling mid-change could leave it off).
         poll(generation, every: 0.05, upTo: 2, until: { isOn() == running() }) { [weak self] settled in
             guard let self else { return }
@@ -218,7 +226,8 @@ final class LeadWatcher {
             // Toggled mid-change, VoiceOver can end up off for good: left for the next activation to try again.
             guard settled else { Log.warning("hand-over: VoiceOver still changing after 2 s; not toggled (next activation tries again)"); return }
             self.ourChangeUntil = Date().addingTimeInterval(3)   // the change about to come is ours, not a pin by hand
-            HandOver.postToggle()
+            // On by opening VoiceOver.app, which works when its shortcut doesn't (25 Oct 2026); off by the shortcut.
+            if voiceOverOn { HandOver.openVoiceOver("hand-over") } else { HandOver.postToggle() }
             // 2. The flag flips.
             self.poll(generation, every: 0.05, upTo: 2, until: { isOn() == voiceOverOn }) { [weak self] flipped in
                 guard let self else { return }
@@ -231,7 +240,7 @@ final class LeadWatcher {
                         guard isOn() != voiceOverOn else { return }
                         guard settled else { Log.warning("hand-over: VoiceOver still changing after 6 s more; not toggled again"); return }
                         self.ourChangeUntil = Date().addingTimeInterval(3)   // (a late second toggle was read as the user's choice and pinned the app, 8 Oct 2026)
-                        HandOver.postToggle()
+                        if voiceOverOn { HandOver.openVoiceOver("hand-over, again") } else { HandOver.postToggle() }
                         self.poll(generation, every: 0.05, upTo: 2, until: { isOn() == voiceOverOn }) { again in
                             Log.info("hand-over: second toggle \(again ? "worked" : "did not work either"): VoiceOver \(isOn() ? "on" : "off")")
                         }

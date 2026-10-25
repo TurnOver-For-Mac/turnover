@@ -45,17 +45,27 @@ enum HandOver {
     /// TurnOver doesn't go before VoiceOver has come (the same review). Polled, as turnVoiceOverOn waits.
     nonisolated static func bringVoiceOverBack(_ why: String, waitUpTo: Double = 0) {
         if voiceOverReading { return }
-        if NSWorkspace.shared.isVoiceOverEnabled {
-            Log.info("\(why): VoiceOver's flag is on but it isn't running; starting it")
-            NSWorkspace.shared.openApplication(at: URL(fileURLWithPath: "/System/Library/CoreServices/VoiceOver.app"), configuration: NSWorkspace.OpenConfiguration()) { _, error in
-                if let error { Log.error("\(why): VoiceOver didn't open: \(error.localizedDescription)") }
-            }
-            let end = Date().addingTimeInterval(waitUpTo)
-            while Date() < end, !voiceOverRunning { usleep(100_000) }
-            if waitUpTo > 0 { Log.info("\(why): VoiceOver \(voiceOverRunning ? "running" : "still not running after \(Int(waitUpTo)) s")") }
-        } else {
-            Log.info("\(why): turning VoiceOver on")
+        // Opened, not toggled, whichever way the flag stands: the shortcut can stop working (turnVoiceOverOn), and with
+        // the flag on but VoiceOver gone the toggle would turn the flag off.
+        Log.info("\(why): \(NSWorkspace.shared.isVoiceOverEnabled ? "VoiceOver's flag is on but it isn't running" : "VoiceOver off"); opening VoiceOver")
+        let mine = newChoice()
+        openVoiceOver(why)
+        // VoiceOver.app failed to bring it: the shortcut, only once VoiceOver is wholly off (flag and process both), so
+        // a slow start isn't toggled back off (a code review, 25 Oct 2026). Waited for here when asked, else later.
+        // And only if no newer choice of reader came meanwhile: the user turning VoiceOver off in those seconds must not
+        // find it turned back on (the same review).
+        func fallBack() {
+            guard choice.value == mine, !NSWorkspace.shared.isVoiceOverEnabled, !voiceOverRunning else { return }
+            Log.error("\(why): VoiceOver.app didn't bring VoiceOver; its shortcut")
             postToggle()
+        }
+        if waitUpTo > 0 {
+            let end = Date().addingTimeInterval(waitUpTo)
+            while Date() < end, !voiceOverReading { usleep(100_000) }
+            Log.info("\(why): VoiceOver \(voiceOverReading ? "reading" : "still not reading after \(waitUpTo) s")")
+            if !voiceOverReading { fallBack() }
+        } else {
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 3) { fallBack() }
         }
     }
 
@@ -97,22 +107,38 @@ enum HandOver {
     /// toggled once more only if VoiceOver is wholly off. (Opening VoiceOver.app does not start it, measured.) Any thread.
     nonisolated static func turnVoiceOverOn() {
         waitForVoiceOverToSettle()
-        if NSWorkspace.shared.isVoiceOverEnabled { return }
-        postToggle()
-        let end = Date().addingTimeInterval(4)
+        // Reading, not just its flag: the flag alone stays on after VoiceOver crashed (a code review, 25 Oct 2026).
+        if voiceOverReading { return }
+        // VoiceOver.app opened first, the shortcut only if that fails: on the maintainer's Mac the shortcut (his own,
+        // Option Apostrophe) stopped reaching macOS on 23 Oct 2026, by hand as well as from TurnOver, and every
+        // hand-back since was silent, while opening VoiceOver.app started it at once (25 Oct 2026; it did on 8 Oct too).
+        openVoiceOver("hand-over")
+        let end = Date().addingTimeInterval(3)
         while Date() < end {
-            if NSWorkspace.shared.isVoiceOverEnabled { Log.info("hand-over: VoiceOver on"); return }
+            if voiceOverReading { Log.info("hand-over: VoiceOver on"); return }
             usleep(50_000)
         }
-        waitForVoiceOverToSettle()
-        if !NSWorkspace.shared.isVoiceOverEnabled, !voiceOverRunning { Log.info("hand-over: VoiceOver still off; toggling again"); postToggle(); usleep(300_000) }
-        // Last resort: the toggle shortcut may be switched off in Keyboard Shortcuts, or changed by macOS. Opening
-        // VoiceOver.app started VoiceOver on macOS 27 (8 Oct 2026); the user must never be left with no reader.
+        // Only when VoiceOver is wholly off: a start that is merely slow must not be toggled back off.
+        guard !NSWorkspace.shared.isVoiceOverEnabled, !voiceOverRunning else { Log.info("hand-over: VoiceOver still starting after 3 s; left to come"); return }
+        Log.error("hand-over: VoiceOver.app didn't bring VoiceOver on in 3 s; trying its shortcut")
+        postToggle()
         let again = Date().addingTimeInterval(2)
-        while Date() < again { if NSWorkspace.shared.isVoiceOverEnabled { return }; usleep(100_000) }
-        if !NSWorkspace.shared.isVoiceOverEnabled {
-            Log.error("hand-over: VoiceOver still off after two toggles; opening VoiceOver.app")
-            NSWorkspace.shared.openApplication(at: URL(fileURLWithPath: "/System/Library/CoreServices/VoiceOver.app"), configuration: NSWorkspace.OpenConfiguration())
+        while Date() < again { if NSWorkspace.shared.isVoiceOverEnabled { Log.info("hand-over: VoiceOver on (shortcut)"); return }; usleep(100_000) }
+    }
+
+    /// Counts choices of reader (a hand-over, a recovery): a late fallback for an older one stands down. Any thread.
+    nonisolated static let choice = Locked(0)
+    /// A new choice of reader, counted and returned in one step under the lock.
+    @discardableResult nonisolated static func newChoice() -> Int {
+        choice.lock.lock(); defer { choice.lock.unlock() }
+        choice.unsafeValue += 1
+        return choice.unsafeValue
+    }
+
+    /// VoiceOver.app opened, which turns VoiceOver on (macOS 14 to 27): from any thread, without waiting.
+    nonisolated static func openVoiceOver(_ why: String) {
+        NSWorkspace.shared.openApplication(at: URL(fileURLWithPath: "/System/Library/CoreServices/VoiceOver.app"), configuration: NSWorkspace.OpenConfiguration()) { _, error in
+            if let error { Log.error("\(why): VoiceOver didn't open: \(error.localizedDescription)") }
         }
     }
 }
