@@ -35,9 +35,11 @@ extension BrowseModeDocument {
            Speech.sinceFocusSpoken < Date().timeIntervalSince(positionMovedAt),
            !(e.map { f.isSameElement(as: $0) } ?? false) {
             Log.io("browse mode: \(gesture.keyName) to the focused \(f.axRole) (the keyboard moved there after the reading position)")
+            let y = f.element
+            let before = y.int(kAXValueAttribute)
             gesture.send()
             if ["AXButton", "AXLink", "AXMenuButton"].contains(f.axRole) { Tones.press() }
-            let y = f.element
+            if Self.checkable.contains(f.axRole) { watchCheckState(y, before: before); return }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.rebuildKeepingPlace(anchor: y) }
             return
         }
@@ -53,8 +55,10 @@ extension BrowseModeDocument {
                 // keyboard" (Enter on "Accept All" went to the "Privacy Settings" group around it, 10 Oct 2026).
                 if f.isSameElement(as: y), controls.contains(y.role), f.role != .passwordEdit {
                     Log.io("browse mode: \(gesture.keyName) to the focused \(y.role) itself")
+                    let before = y.int(kAXValueAttribute)
                     gesture.send()
                     if ["AXButton", "AXLink", "AXMenuButton"].contains(y.role) { Tones.press() }
+                    if Self.checkable.contains(y.role) { watchCheckState(y, before: before); return }
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.rebuildKeepingPlace(anchor: y) }
                     return
                 }
@@ -75,6 +79,44 @@ extension BrowseModeDocument {
         while let y = x, d < 6 { chain.append("\(y.role) \"\((y.string(kAXTitleAttribute) ?? y.string(kAXValueAttribute) ?? "").prefix(30))\""); x = y.element(kAXParentAttribute); d += 1 }
         Log.io("browse mode: nothing to activate at \"\(Log.words(String(text.prefix(40))))\"; buffer element: \(chain.isEmpty ? "none" : Log.words(chain.joined(separator: " < "))); live page: \(text.isEmpty ? "not searched" : "no link or button with that text")")
         Speech.speakMessage("nothing to activate")
+    }
+
+    static let checkable: Set<String> = ["AXCheckBox", "AXRadioButton", "AXSwitch"]
+    /// The newest press being watched: an older watch stops (a code review, 25 Oct 2026). Main thread.
+    static var checkWatch = 0
+
+    /// A check box, radio button or switch pressed by its own key: its new state said, and the buffer read again, once
+    /// the page has changed it. Squarespace's domain switches changed a moment after the press with no event, or with
+    /// one after the buffer had been read again: VO-Space said nothing, and the buffer went on saying "off" for a switch
+    /// that was on (25 Oct 2026). Looked at four times over a second and a half; said only if the page's own event
+    /// hasn't said it already.
+    /// Only while it is still the newest press and the focus is still on that control: the user may have moved on,
+    /// and must neither hear the old control nor be taken back to it. A state that can't be read (the page replaced
+    /// the control) is never guessed at.
+    func watchCheckState(_ element: AXUIElement, before: Int?) {
+        Self.checkWatch += 1
+        let watch = Self.checkWatch
+        let pressedAt = Date()
+        func look(_ tries: ArraySlice<Double>) {
+            guard let next = tries.first else {
+                Log.io("browse mode: the pressed \(element.role)'s state didn't change in 1.5 s")
+                rebuildKeepingPlace(anchor: element)
+                return
+            }
+            let delay = max(0, pressedAt.addingTimeInterval(next).timeIntervalSinceNow)
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self, watch == Self.checkWatch, API.focusTreeInterceptor === self,
+                      API.focusObject?.element.isSame(element) == true else { return }
+                guard let before, let now = element.int(kAXValueAttribute) else {
+                    self.rebuildKeepingPlace(anchor: element)   // can't read it: the page changed under it; nothing said
+                    return
+                }
+                guard now != before else { look(tries.dropFirst()); return }
+                if !Speech.checkStateSpoken(of: element, since: pressedAt) { Speech.speakCheckState(of: element) }
+                self.rebuildKeepingPlace(anchor: element)
+            }
+        }
+        look([0.25, 0.5, 1.0, 1.5][...])
     }
 
     /// NVDA's Elements List (NVDA+F7), VoiceOver's Item Chooser (VO-I): the page's headings, links, form fields,

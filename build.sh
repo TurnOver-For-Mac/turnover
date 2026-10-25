@@ -207,6 +207,9 @@ if [ "$1" != "--no-install" ]; then
   pkill -x turnover 2>/dev/null || true
   # TurnOver Key: launchd names it by its bundle identifier, not its executable. TurnOver starts the new one.
   pkill -x turnover-key 2>/dev/null || true
+  # A Settings window left open from the copy being replaced: the new TurnOver turns it away (its signature is checked
+  # against files no longer there) and it shows TurnOver as off until reopened (issue 77; again on 25 Oct 2026).
+  pkill -x turnover-settings 2>/dev/null || true
   pkill -f "com.turnover.key" 2>/dev/null || true
   pkill -x turnover 2>/dev/null || true
   sleep 0.5
