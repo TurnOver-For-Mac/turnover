@@ -121,7 +121,7 @@ final class TurnOverApp {
             Log.io("say for a companion: \(Log.words(String(text.prefix(60))))"); Speech.speakMessage(text)
         }
         MenuAnywhere.shared.cycleLeadMode = { [weak self] in
-            guard config.applications.perAppReaders else { Speech.speakMessage("Readers per app are off: TurnOver reads everywhere while it is on. Settings, Experimental, turns them on."); return }
+            guard config.applications.perAppReaders else { Speech.speakMessage("Readers per app are off: TurnOver reads everywhere while it is on. Settings, Screen reader behaviour, turns them on."); return }
             self?.lead.cycleMode()
         }
         TurnOverMenu.shared.leadModeChanged = { [weak self] in self?.lead.refreshAfterModeChange() }

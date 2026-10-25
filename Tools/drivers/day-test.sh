@@ -34,6 +34,7 @@ app:/" "$f" > "/tmp/day-$(basename $f)"
     rc=${pipestatus[1]}
     # The user back (3), the wrong app in front (4), a style switch that failed (5), a key being passed through (6):
     # nothing more is sent (10 Oct 2026).
+    if [ "$rc" -eq 7 ]; then continue; fi   # the app isn't on this Mac: the next scenario (25 Oct 2026)
     if [ "$rc" -ge 3 ]; then echo "stopped: scenario exit $rc"; break 2; fi
     idle=$(ioreg -c IOHIDSystem | awk '/HIDIdleTime/ {print int($NF/1000000000); exit}')
   done

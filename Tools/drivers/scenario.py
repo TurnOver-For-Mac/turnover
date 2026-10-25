@@ -79,7 +79,10 @@ if i < 25 and since - i > 3: print(f"USER ACTIVE ({int(i)} s idle, ours {int(sin
 # A scenario with something to open opens it every time (the app may be in front with no window left after the
 # previous scenario's Command W: TurnOver E was "unbound" and nothing had the caret, 8 Oct 2026).
 if opener or front() != app:
-    subprocess.run(["open", "-a", launcher or app] + ([opener] if opener else [])); time.sleep(4 if front() != app else 2.5)
+    # An app that isn't on this Mac (Excel went, 25 Oct 2026): exit 7, which day-test.sh treats as a skip, not a stop.
+    r = subprocess.run(["open", "-a", launcher or app] + ([opener] if opener else []), capture_output=True, text=True)
+    if r.returncode != 0 and "Unable to find" in (r.stderr + r.stdout): print(f"not installed here: {app}"); sys.exit(7)
+    time.sleep(4 if front() != app else 2.5)
     # A cold start can take longer (Word and Excel on 16 Oct 2026 weren't in front after 4 s): up to 12 s more.
     for _ in range(24):
         if front() == app: break
@@ -102,10 +105,14 @@ started_style = current_style()
 def switch_style(to):
     time.sleep(1.0)   # let TurnOver finish saving whatever the last key changed
     if current_style() == to: return
-    subprocess.run([os.path.join(T, "drive"), "control+command+,", "k", "clearmods"])
-    open("/tmp/to-drive-at", "w").write(str(int(time.time())))   # the switch is the test's key, not the user's (11 Oct 2026)
-    time.sleep(1.2)
-    if current_style() != to: print(f"could not switch to the {to} style"); sys.exit(5)
+    # K goes round three styles since build 22 (mac, windows, jaws): pressed until the wanted one comes, up to three
+    # times. One press from windows landed on jaws and stopped seven parts of the pass (25 Oct 2026).
+    for _ in range(3):
+        subprocess.run([os.path.join(T, "drive"), "control+command+,", "k", "clearmods"])
+        open("/tmp/to-drive-at", "w").write(str(int(time.time())))   # the switch is the test's key, not the user's (11 Oct 2026)
+        time.sleep(1.2)
+        if current_style() == to: return
+    print(f"could not switch to the {to} style"); sys.exit(5)
 if style: switch_style(style)
 log = newest_log()
 def log_len(): return sum(1 for _ in open(log, errors="replace"))
