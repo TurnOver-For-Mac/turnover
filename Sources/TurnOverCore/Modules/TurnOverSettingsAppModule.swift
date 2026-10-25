@@ -40,7 +40,38 @@ final class SettingsLabelledObject: TurnOverObject {
             }
         }
         if let l = lateLabel() { return l }
+        if let l = foundLabel { return l }
         return rawName
+    }
+
+    /// The label of the control standing where this nameless one stands. A switch handed over by Tab right after
+    /// arrowing to a section is SwiftUI's inner button, never named; the labelled switch (an AXCheckBox) appears at
+    /// the same place up to a second later (the log of 25 Oct 2026: the stand-in named only once the next control was
+    /// read). Looked for among the app's own focused element and the near neighbours, a dozen elements at most.
+    private var foundLabel: String?
+    private func labelFromTwin() -> String? {
+        guard let mine = Self.frame(element), mine.width > 0, mine.height > 0 else { return nil }
+        // The likeliest first, each group only if the one before gave nothing: the app's own focused element (usually
+        // the twin itself), the parent's children, then the grandparent's grandchildren. At most 24 looked at, none
+        // twice; two different labels at the same place are no answer (a code review, 25 Oct 2026).
+        var seen: [AXUIElement] = [element]
+        var found: [String] = []
+        func consider(_ c: AXUIElement) {
+            guard seen.count < 24, !seen.contains(where: { $0.isSame(c) }) else { return }
+            seen.append(c)
+            guard ["AXCheckBox", "AXButton", "AXSwitch"].contains(c.role), let f = Self.frame(c), f.width > 0, f.height > 0 else { return }
+            let close = abs(f.minX - mine.minX) <= 3 && abs(f.minY - mine.minY) <= 3 && abs(f.maxX - mine.maxX) <= 3 && abs(f.maxY - mine.maxY) <= 3
+            guard close else { return }
+            let words = [c.string(kAXTitleAttribute), c.string(kAXDescriptionAttribute), c.element(kAXTitleUIElementAttribute)?.string(kAXValueAttribute)]
+            if let l = words.compactMap({ $0?.trimmingCharacters(in: CharacterSet(charactersIn: ": \n")) }).first(where: { !$0.isEmpty && $0.count <= 120 }), !found.contains(l) { found.append(l) }
+        }
+        if let f = AXUIElementCreateApplication(pid).element(kAXFocusedUIElementAttribute) { consider(f) }
+        let parent = element.element(kAXParentAttribute)
+        if found.isEmpty, let p = parent { for c in p.elements(kAXChildrenAttribute) { consider(c) } }
+        if found.isEmpty, let gp = parent?.element(kAXParentAttribute) {
+            for c in gp.elements(kAXChildrenAttribute).prefix(8) where found.isEmpty { for g in c.elements(kAXChildrenAttribute).prefix(6) { consider(g) } }
+        }
+        return found.count == 1 ? found[0] : nil
     }
 
     /// The label as the element has it now: SwiftUI fills a switch's description a moment after the focus change hands
@@ -73,6 +104,7 @@ final class SettingsLabelledObject: TurnOverObject {
     private func waitForLabel(_ watch: Int, reportBy: Date, until end: Date, reported: Bool) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.04) { [weak self] in
             guard let self, watch == self.labelWatch, API.focusObject?.element.isSame(self.element) == true else { self?.labelWatchRunning = false; return }
+            if self.foundLabel == nil, let twin = self.labelFromTwin() { self.foundLabel = twin; Log.io("settings: the labelled control beside the \(self.element.role) has come") }
             let n = self.name
             if !n.isEmpty {
                 self.labelWatchRunning = false
