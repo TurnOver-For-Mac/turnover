@@ -99,20 +99,7 @@ open class TurnOverObject: ScriptableObject {
         if [.tableRow, .tableCell, .listItem, .treeViewItem, .cell].contains(role) { return contentText(limit: 8) }
         // An item, button or link whose name is only in the text it holds (Electron apps: GitHub Desktop's repository
         // list is menu items with the repository's name in a child, so each was a nameless "menu item", 21 Oct 2026).
-        if [.menuItem, .button, .link].contains(role) {
-            let held = contentText(limit: 4)
-            if !held.isEmpty { return held }
-        }
-        // The switch inside a SwiftUI toggle: Tab forward lands on it, a nameless button holding no text, while Shift
-        // Tab lands on the check box around it, which has the label (TurnOver Settings, Screen reader behaviour, 25
-        // Oct 2026: "switch, on" one way, the full name the other). Named by that check box, only when it has no name
-        // or text of its own and nothing else is inside it (a code review, 25 Oct 2026).
-        if [.button, .switchControl, .toggleButton].contains(role), element.elements(kAXChildrenAttribute).isEmpty,
-           let p = element.element(kAXParentAttribute), p.role == "AXCheckBox" {
-            let named = [p.string(kAXTitleAttribute), p.string(kAXDescriptionAttribute)]
-                .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.first { !$0.isEmpty }
-            if let named { return named }
-        }
+        if [.menuItem, .button, .link].contains(role) { return contentText(limit: 4) }
         return ""
     }
 

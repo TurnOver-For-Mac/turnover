@@ -25,19 +25,30 @@ final class SettingsLabelledObject: TurnOverObject {
             _ = row.elements(kAXChildrenAttribute)
             if let l = swiftUILabel() { return l }
         }
-        if !waitedForLabel, Thread.isMainThread, [.popUpButton, .slider, .checkBox, .comboBox, .radioButton, .spinButton, .editableText].contains(role),
+        // A switch arrives the same way: Tab forward from the sidebar, after arrowing to the section, handed over a
+        // stand-in AXButton with no name ("switch, on"), while the real control at the same place is an AXCheckBox
+        // whose label is its description (25 Oct 2026). So the label is also taken from a title or description.
+        if !waitedForLabel, Thread.isMainThread, [.popUpButton, .slider, .checkBox, .comboBox, .radioButton, .spinButton, .editableText, .switchControl].contains(role),
            let mine = Self.frame(element), let window = element.element(kAXWindowAttribute) {
             waitedForLabel = true
             var queue = [window], seen = 0
             let wanted = element.role
+            // Only the switch stand-in matches across roles (a switch that came as AXButton, matched to an AXCheckBox),
+            // and only a single named control at that place counts: two would be a guess (a code review, 25 Oct 2026).
+            let roles: Set<String> = role == .switchControl ? ["AXCheckBox", "AXButton"] : [wanted]
+            var found: [String] = []
             while !queue.isEmpty, seen < 600 {
                 let e = queue.removeFirst(); seen += 1
-                if e.role == wanted, let f = Self.frame(e), f == mine,
-                   let l = e.element(kAXTitleUIElementAttribute)?.string(kAXValueAttribute)?.trimmingCharacters(in: CharacterSet(charactersIn: ": \n")), !l.isEmpty, l.count <= 60 {
-                    return l
+                if roles.contains(e.role), !e.isSame(element), let f = Self.frame(e), f == mine {
+                    let candidates = [e.element(kAXTitleUIElementAttribute)?.string(kAXValueAttribute), e.string(kAXTitleAttribute), e.string(kAXDescriptionAttribute)]
+                    if let l = candidates.compactMap({ $0?.trimmingCharacters(in: CharacterSet(charactersIn: ": \n")) }).first(where: { !$0.isEmpty && $0.count <= 120 }) {
+                        found.append(l)
+                        if found.count > 1 { break }
+                    }
                 }
                 queue.append(contentsOf: e.elements(kAXChildrenAttribute))
             }
+            if found.count == 1 { return found[0] }
         }
         return rawName
     }
