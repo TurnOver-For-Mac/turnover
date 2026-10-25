@@ -9,41 +9,70 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 - CoExist is gone: TurnOver is a full screen reader from the first launch, and one reader speaks at a time. While
   TurnOver is on VoiceOver is off; Command Control Period quits TurnOver and starts it again. VoiceOver is no longer
   kept running and silenced alongside it, so nothing asks for audio recording permission any more, and TurnOver's own
-  braille and sounds are on. Discussion 46.
+  braille and sounds are on. Password fields and macOS's own prompts are TurnOver's to read; what you type in a
+  password field is still never spoken or logged. Discussion 46.
 - Screen reader behaviour: TurnOver is on or off, VoiceOver is on or off, and that is all. TurnOver reads everywhere
   while it is on; no apps are labelled for either reader and nothing switches as you change apps. A new Settings
   section, Screen reader behaviour, holds one switch: TurnOver and VoiceOver swap, one coming on as the other goes
   off (TurnOver turns VoiceOver off as it starts and on as it quits, comes on when VoiceOver turns off and steps aside
   when VoiceOver comes on). Off, each reader has its own switch and neither changes the other, for VoiceOver reading
-  inside a virtual machine such as Parallels. Readers per app (the lists, the modes, switching as apps change)
-  moved to Experimental, off for a new install; a set-up that already uses them keeps working as it did.
+  inside a virtual machine such as Parallels. Readers per app (the lists, the modes, switching as apps change) are
+  folded away inside that section, off for a new install; a set-up that already uses them keeps working as it did.
+- TurnOver turns VoiceOver on by starting it, not by its keyboard shortcut, which can be changed or stop working;
+  and VoiceOver's own shortcut passes straight through TurnOver's keys instead of waiting on them. Command Control
+  Period waits for Command and Control to be let go before TurnOver quits, so VoiceOver's shortcut arrives cleanly.
+- The welcome, on a first start and after this update, presents TurnOver as a full screen reader, and names the
+  three keyboard styles, the menu, the Settings window and the copy of your VoiceOver settings by their keys.
 - The menu is short, in NVDA's shape: This app, Settings, Keys, Tools, Help, Support TurnOver, Quit. Every setting
   now lives in the Settings window, in sections down the side: General, Speech, Keyboard, Item details, Web pages,
-  Documents, Screen recognition, Other apps' speech, Experimental. Two wait in Tools until they have a section:
-  Braille, and voices for other languages.
+  Documents, Screen recognition, Other apps' speech, Screen reader behaviour. Braille waits under Tools until it has
+  its section.
+- Settings: voices for other languages are in the Speech section (a voice and a rate for each language with a voice
+  installed); the Voice list is the Mac's languages and English, Eloquence first; Steam's two switches (game speech,
+  and reading Big Picture) and Restart Steam are in Other apps' speech as well as under Games in the menu; the
+  settings keys (Command Control Comma, then S, and the style's own) open the window at the asked section; Previous
+  builds, under About and updates, opens the releases page for going back to an earlier build.
+- Command Control M opens the TurnOver menu in one press, in every keyboard style. Command Control Comma then M
+  still works.
 - VoiceOver keys: Left and Right pressed together, which turn Quick Nav off and on, now also switch a document between
   focus mode and browse mode: off is focus mode (the keys go to the page, until the focus leaves), on is browse mode.
   There was no deliberate way into focus mode in this style, since TurnOver Space is VO-Space.
-- Voices for other languages are in the Settings window's Speech section (a voice and a rate for each language with
-  a voice installed), the last setting to leave the menu; Braille stays under Tools until it has its section.
-- Command Control M opens the TurnOver menu in one press, in every keyboard style. Command Control Comma then M
-  still works.
+- Browse mode: a letter is always a command, as in NVDA; a field is typed into after Return or Tab enters it.
+- Pressing a control on a web page now says what changed: on or off, checked or not, expanded or collapsed,
+  selected. A page that changes the control a moment later (Squarespace's switches take a second or two) is still
+  reported, with the control's name if you have moved on. VO-Space presses the control through accessibility, as
+  VoiceOver's VO-Space does; Enter and Space send the real key, as before, so a page that ignores one answers the
+  other. A menu button that ignores the accessibility press (the Claude app's More options) is opened by the keyboard.
+- Notification Centre: VO-O opens the panel and the key again closes it; the Notification Centre and Control Centre
+  keys find the clock wherever macOS puts it; a panel left open before TurnOver started is handled.
+- VO-Shift-L recognises the whole screen when the cursor is not on a picture, a direct recognition key in the Mac
+  style.
+- The typing echo is private: typed words are never written to the log or carried in a report.
 
 ### Fixed
 
+- VoiceOver comes back after a quit, a crash or a long hang, also when macOS says it is on but it is not running
+  (quit by a script, or crashed), and waking the Mac from sleep no longer toggles VoiceOver.
 - With NVDA or JAWS keys, the layer that makes Caps Lock the NVDA key where VoiceOver reads can be turned off: Settings,
   Keyboard, "NVDA and JAWS keys where VoiceOver reads too" (on, as before). Off, VoiceOver's own Caps Lock keys
   (VO-F7, VO-F8, VO-M) work in the apps VoiceOver reads. The old setting for it was never read.
 - The speech settings are TurnOver's own again: the rate, volume and pitch keys change TurnOver's voice only, and
   TurnOver no longer reads VoiceOver's rate when it takes over. The link between the two readers' settings wasn't
   reliable.
-
+- TurnOver Settings: the switches in Screen reader behaviour are read with their names on Tab (the window gives a
+  switch its label a moment after Tab lands on it; TurnOver now waits for it); changing a switch no longer pauses
+  for a second and a half; Tab never lands on a control the window has thrown away when the section changes (a
+  contributor's change); a Settings window left open through an update is closed, since it showed TurnOver as off.
+- Safari: a page that moves the focus into an empty frame by itself (an advertisement loading) no longer takes
+  TurnOver off the page.
 - VoiceOver keys: Right Arrow reads the character you just passed, as VoiceOver does, so what you hear is what
   Backspace will delete. NVDA keys and JAWS keys keep reading the character after the caret, as on Windows.
 - Backspace speaks the deleted character at once, instead of after waiting for the caret (Mail's compose window held
   every repeated Backspace back by a quarter of a second).
 - A list focused twice within half a second with a different row selected (Finder opening a folder) is read
   each time; it was taken for the same focus and read once.
+- Braille: a Focus 5 by USB is found, and freed from VoiceOver's braille server; a message held on the display gives
+  way to the next command, as in NVDA (two of a contributor's changes).
 - Word's own dictionary decides what is misspelled in Word; the choice now lives in Word's app module instead of
   shared code, with tests (a contributor's change).
 - The app shortcut picker offers every application once: Safari and other apps reached through a link were missing,
