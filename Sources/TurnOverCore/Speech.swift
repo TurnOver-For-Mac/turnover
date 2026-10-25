@@ -337,23 +337,35 @@ public enum Speech {
     }
 
     /// A check box or radio button just pressed: "checked", "not checked" or "half checked", read fresh.
-    private static var lastCheckSpoken: (AXUIElement, Date, String)?
+    /// What was last said for each box (the newest eight): the page's event and TurnOver's own look at a pressed box
+    /// share these, and several boxes pressed in a row each keep their own (a code review, 25 Oct 2026).
+    private static var checksSpoken: [(element: AXUIElement, at: Date, word: String)] = []
+    private static func lastCheckSpoken(_ element: AXUIElement) -> (at: Date, word: String)? {
+        checksSpoken.last { CFEqual($0.element, element) }.map { ($0.at, $0.word) }
+    }
+    private static func noteCheckSpoken(_ element: AXUIElement, _ word: String) {
+        checksSpoken.removeAll { CFEqual($0.element, element) }
+        checksSpoken.append((element, Date(), word))
+        if checksSpoken.count > 8 { checksSpoken.removeFirst() }
+    }
     /// Whether this box's state was said since `date` (the page's own event did it: no need to say it again).
     public static func checkStateSpoken(of element: AXUIElement, since date: Date) -> Bool {
-        guard let (e, t, _) = lastCheckSpoken else { return false }
-        return CFEqual(e, element) && t >= date
+        lastCheckSpoken(element).map { $0.at >= date } ?? false
     }
-    public static func speakCheckState(of element: AXUIElement) {
-        if let (e, t, _) = lastCheckSpoken, CFEqual(e, element), Date().timeIntervalSince(t) < 0.3 { return }   // event and press both
+    /// `named`: the control's name first ("turnoverformac.com, on"): for a change that lands after the reader has
+    /// moved on to another control, so it is clear which one changed (25 Oct 2026).
+    public static func speakCheckState(of element: AXUIElement, named: Bool = false) {
+        if let last = lastCheckSpoken(element), Date().timeIntervalSince(last.at) < 0.3 { return }   // event and press both
         let fresh = ObjectFactory.make(element)
         let s = fresh.states
         let word = fresh.role == .switchControl ? (s.contains(.on) ? "on" : "off")
                 : s.contains(.checked) ? "checked" : s.contains(.halfChecked) ? "half checked" : fresh.role == .toggleButton ? (s.contains(.pressed) ? "pressed" : "not pressed") : "not checked"
         // The same state again, within two seconds: the page's late event after TurnOver's own look at the box (a code
         // review, 25 Oct 2026). A different state is news and is said at once.
-        if let (e, t, w) = lastCheckSpoken, CFEqual(e, element), w == word, Date().timeIntervalSince(t) < 2 { return }
-        lastCheckSpoken = (element, Date(), word)
-        enqueue(word)
+        if let last = lastCheckSpoken(element), last.word == word, Date().timeIntervalSince(last.at) < 2 { return }
+        noteCheckSpoken(element, word)
+        let name = named ? fresh.name : ""
+        enqueue(name.isEmpty ? word : "\(name), \(word)")
     }
 
     /// NVDA: getObjectPropertiesSpeech / getPropertiesSpeech, in NVDA's order.

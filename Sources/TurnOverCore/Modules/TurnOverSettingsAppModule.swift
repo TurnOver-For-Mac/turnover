@@ -25,31 +25,76 @@ final class SettingsLabelledObject: TurnOverObject {
             _ = row.elements(kAXChildrenAttribute)
             if let l = swiftUILabel() { return l }
         }
-        // A switch arrives the same way: Tab forward from the sidebar, after arrowing to the section, handed over a
-        // stand-in AXButton with no name ("switch, on"), while the real control at the same place is an AXCheckBox
-        // whose label is its description (25 Oct 2026). So the label is also taken from a title or description.
-        if !waitedForLabel, Thread.isMainThread, [.popUpButton, .slider, .checkBox, .comboBox, .radioButton, .spinButton, .editableText, .switchControl].contains(role),
+        if !waitedForLabel, Thread.isMainThread, [.popUpButton, .slider, .checkBox, .comboBox, .radioButton, .spinButton, .editableText].contains(role),
            let mine = Self.frame(element), let window = element.element(kAXWindowAttribute) {
             waitedForLabel = true
             var queue = [window], seen = 0
             let wanted = element.role
-            // Only the switch stand-in matches across roles (a switch that came as AXButton, matched to an AXCheckBox),
-            // and only a single named control at that place counts: two would be a guess (a code review, 25 Oct 2026).
-            let roles: Set<String> = role == .switchControl ? ["AXCheckBox", "AXButton"] : [wanted]
-            var found: [String] = []
             while !queue.isEmpty, seen < 600 {
                 let e = queue.removeFirst(); seen += 1
-                if roles.contains(e.role), !e.isSame(element), let f = Self.frame(e), f == mine {
-                    let candidates = [e.element(kAXTitleUIElementAttribute)?.string(kAXValueAttribute), e.string(kAXTitleAttribute), e.string(kAXDescriptionAttribute)]
-                    if let l = candidates.compactMap({ $0?.trimmingCharacters(in: CharacterSet(charactersIn: ": \n")) }).first(where: { !$0.isEmpty && $0.count <= 120 }) {
-                        found.append(l)
-                        if found.count > 1 { break }
-                    }
+                if e.role == wanted, let f = Self.frame(e), f == mine,
+                   let l = e.element(kAXTitleUIElementAttribute)?.string(kAXValueAttribute)?.trimmingCharacters(in: CharacterSet(charactersIn: ": \n")), !l.isEmpty, l.count <= 60 {
+                    return l
                 }
                 queue.append(contentsOf: e.elements(kAXChildrenAttribute))
             }
-            if found.count == 1 { return found[0] }
         }
+        if let l = lateLabel() { return l }
         return rawName
     }
+
+    /// The label as the element has it now: SwiftUI fills a switch's description a moment after the focus change hands
+    /// the switch over (Tab from the sidebar right after arrowing to a section: "switch, on", the name a second later,
+    /// 25 Oct 2026). The name read at the focus is kept by the object, so it is asked for again here, live.
+    private func lateLabel() -> String? {
+        for attribute in [kAXDescriptionAttribute, kAXTitleAttribute] {
+            if let s = element.string(attribute)?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty, !Self.isClassName(s) { return s }
+        }
+        return swiftUILabel()
+    }
+
+    /// A control that takes the focus with no name yet: its label is waited for, and it is read with it. Up to three
+    /// tenths of a second of silence; then it is read as it is, and if the label comes within two seconds after that,
+    /// the label alone is said. Looked for every 40 ms, only while the control still has the focus: a Tab meanwhile
+    /// reads the next control, not this one. The label arriving as a name change is left to this watch, so it is
+    /// said once (a code review, 25 Oct 2026).
+    private var labelWatch = 0
+    private var labelWatchRunning = false
+    override func event_gainFocus() {
+        guard name.isEmpty, [.switchControl, .checkBox, .radioButton, .button, .toggleButton, .popUpButton, .slider, .disclosureTriangle].contains(role) else {
+            super.event_gainFocus(); return
+        }
+        Log.io("settings: the \(element.role) has no name yet; waiting for its label")
+        labelWatch += 1
+        labelWatchRunning = true
+        let start = Date()
+        waitForLabel(labelWatch, reportBy: start.addingTimeInterval(0.3), until: start.addingTimeInterval(2.3), reported: false)
+    }
+    private func waitForLabel(_ watch: Int, reportBy: Date, until end: Date, reported: Bool) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.04) { [weak self] in
+            guard let self, watch == self.labelWatch, API.focusObject?.element.isSame(self.element) == true else { self?.labelWatchRunning = false; return }
+            let n = self.name
+            if !n.isEmpty {
+                self.labelWatchRunning = false
+                if reported {
+                    Log.io("settings: the label came late; said on its own")
+                    TurnOverObject.lastName = (self.element, n)   // the name change that follows is the same news
+                    Speech.speakMessage(n)
+                } else { self.reportLateFocus() }
+                return
+            }
+            if Date() >= end {
+                self.labelWatchRunning = false
+                Log.io("settings: no label came for the \(self.element.role) in 2 s")
+                if !reported { self.reportLateFocus() }
+                return
+            }
+            var reported = reported
+            if !reported, Date() >= reportBy { reported = true; self.reportLateFocus() }
+            self.waitForLabel(watch, reportBy: reportBy, until: end, reported: reported)
+        }
+    }
+    private func reportLateFocus() { super.event_gainFocus() }   // (super can't be called from the closure above)
+    override func event_loseFocus() { labelWatch += 1; labelWatchRunning = false; super.event_loseFocus() }
+    override func event_nameChange() { if !labelWatchRunning { super.event_nameChange() } }
 }

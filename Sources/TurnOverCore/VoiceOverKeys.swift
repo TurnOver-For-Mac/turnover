@@ -107,7 +107,10 @@ public final class VoiceOverKeysPlugin: GlobalPlugin {
             else { ArrowQuickNav.toggle() }   // outside a document VoiceOver's Quick Nav toggles all the same (the code review, 17 Oct 2026)
         }
         add("defaultAction", "Activates the item under the VoiceOver cursor (VO-Space)", ["kb:turnover+space"]) { g in
-            if let d = API.focusTreeInterceptor, !d.passThrough, let s = d.script(named: "activatePosition") { s.handler(g); return }
+            // By accessibility's press, as VoiceOver's VO-Space is: a page that ignores the real key (Squarespace's
+            // switches are links styled as switches; Space scrolls, Enter and a click work, 25 Oct 2026) still answers
+            // the press. Enter and Space themselves go to the page as real keys (activatePosition).
+            if let d = API.focusTreeInterceptor, !d.passThrough { d.activate(g, byAccessibility: true); return }
             ObjectNavigator.shared.activate()
         }
         // The VoiceOver cursor: TurnOver's object navigation. In a page in browse mode, the next and previous line; in
