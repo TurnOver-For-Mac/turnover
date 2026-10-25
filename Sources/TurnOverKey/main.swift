@@ -221,8 +221,11 @@ final class Key {
                 voice.say("One moment: TurnOver is putting VoiceOver's settings back. Press again when it says done.")
                 return
             }
-            // Quit, as before CoExist: TurnOver no longer stays running while off (CoExist removed, 24 Oct 2026).
-            quitReader(app)
+            // Quit, as before CoExist: TurnOver no longer stays running while off (CoExist removed, 24 Oct 2026). Once
+            // the hand is off the keys: the hot key fires as the key goes down, and TurnOver's hand-back, posting
+            // VoiceOver's shortcut while Command and Control were still held, sent Command Control plus that shortcut,
+            // so VoiceOver never came on (the maintainer's Mac, 25 Oct 2026). Up to a second and a half, then anyway.
+            quitWhenKeysAreUp(app)
             return
         }
         start()
@@ -231,6 +234,30 @@ final class Key {
     private func oldActivityInstalled() -> Bool {
         let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/TurnOver/voiceover-activity.json")
         return (try? String(contentsOf: url, encoding: .utf8))?.contains("\"installed\":true") ?? false
+    }
+    private var quitPending = false
+    private func quitWhenKeysAreUp(_ app: NSRunningApplication) {
+        guard !quitPending, !quitting else { return }   // a second press while the first waits, or while TurnOver goes
+        quitPending = true
+        waitThenQuit(app, until: Date().addingTimeInterval(1.5))
+    }
+    private func waitThenQuit(_ app: NSRunningApplication, until end: Date) {
+        // The TurnOver that was pressed for, still running: it may have stopped meanwhile, and a quit of a stopped one
+        // would mark its crash as on purpose and skip the restart (a code review, 25 Oct 2026).
+        guard !app.isTerminated else { quitPending = false; return }
+        let held = NSEvent.modifierFlags.intersection([.command, .control, .option, .shift])
+        if !held.isEmpty, Date() < end {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { MainActor.assumeIsolated { self.waitThenQuit(app, until: end) } }
+            return
+        }
+        quitPending = false
+        // Still held: quitting now would leave VoiceOver's shortcut spoiled again, so TurnOver stays (the same review).
+        if !held.isEmpty {
+            note("Command+Control+Period: modifiers still held after 1.5 s; not quitting")
+            voice.say("Let go of the keys, then press Command Control Period again.")
+            return
+        }
+        quitReader(app)
     }
     private func quitReader(_ app: NSRunningApplication) {
         // Quit. SIGTERM, which TurnOver answers off its main thread (VoiceOver on, then gone) even if it is stuck;
