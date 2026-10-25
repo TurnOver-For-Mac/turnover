@@ -203,20 +203,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Core.stop()
         Watchdog.shared.active = false   // (or it could post a second toggle while VoiceOver was still starting, 8 Oct 2026)
         Log.info("terminating")
-        AppDelegate.voiceOverOnAtQuit.value = config.applications.voiceOverOnAtQuit
+        AppDelegate.swapAtQuit.value = config.applications.swapWithVoiceOver
         AppDelegate.giveBackToVoiceOver()
     }
 
-    /// VoiceOver on as TurnOver goes, unless this is a restart (an update installing: build.sh leaves a flag) or its
-    /// setting is off (Screen reader behaviour).
+    /// VoiceOver on as TurnOver goes, unless this is a restart (an update installing: build.sh leaves a flag) or the
+    /// swap is off (Screen reader behaviour: one switch for the two readers swapping, 25 Oct 2026).
     /// The setting, copied on main as TurnOver goes: this runs off main on a signal, where main may be stuck. Left
     /// at on when main never answers, so a stuck TurnOver still leaves speech behind.
-    nonisolated static let voiceOverOnAtQuit = Locked(true)
+    nonisolated static let swapAtQuit = Locked(true)
     nonisolated static func giveBackToVoiceOver() {
         let flag = AppPaths.file("restarting")
         if FileManager.default.fileExists(atPath: flag.path) { try? FileManager.default.removeItem(at: flag); Log.info("restart: VoiceOver left as it is"); return }
         guard !HandOver.voiceOverReading else { return }
-        guard voiceOverOnAtQuit.value else { Log.info("quitting: VoiceOver left off (its setting)"); return }
+        guard swapAtQuit.value else { Log.info("quitting: VoiceOver left as it is (the swap is off)"); return }
         // macOS's flag can stay on with VoiceOver gone (quit by script, or crashed): then it is started, not toggled,
         // or the toggle turns the flag off and nobody speaks (a code review, 25 Oct 2026).
         // Opened at once, and waited for within TurnOver Key's three seconds before it stops TurnOver outright (the
@@ -289,7 +289,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // may be stuck: that is why this handler isn't on main (a code review, 14 Oct 2026: it ran
             // main-actor code on its global queue).
             let done = DispatchSemaphore(value: 0)
-            DispatchQueue.main.async { MainActor.assumeIsolated { AppDelegate.voiceOverOnAtQuit.value = config.applications.voiceOverOnAtQuit; ScreenCurtain.off(); delegate.app?.shutDown(); Core.stop() }; done.signal() }
+            DispatchQueue.main.async { MainActor.assumeIsolated { AppDelegate.swapAtQuit.value = config.applications.swapWithVoiceOver; ScreenCurtain.off(); delegate.app?.shutDown(); Core.stop() }; done.signal() }
             if done.wait(timeout: .now() + 1.5) == .timedOut {
                 CGDisplayRestoreColorSyncSettings()   // the curtain's own undo, without main
                 Log.warning("stopped from outside: the main thread didn't answer; the displays restored directly")
@@ -297,7 +297,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Watchdog.shared.active = false
             // VoiceOver left off on purpose: the Key helper is told this was a quit, or it would start TurnOver
             // again (Codex review, 23 Oct 2026). A restart keeps its flag and the helper's recovery.
-            if !AppDelegate.voiceOverOnAtQuit.value, !FileManager.default.fileExists(atPath: AppPaths.file("restarting").path) {
+            if !AppDelegate.swapAtQuit.value, !FileManager.default.fileExists(atPath: AppPaths.file("restarting").path) {
                 DistributedNotificationCenter.default().postNotificationName(Notification.Name("com.turnover.quitting"), object: nil, userInfo: nil, deliverImmediately: true)
             }
             AppDelegate.giveBackToVoiceOver()

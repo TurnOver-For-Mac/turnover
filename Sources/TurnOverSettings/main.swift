@@ -501,16 +501,11 @@ struct ReadersView: View {
             Section {
                 // Named and described for accessibility explicitly: the long label came through empty, read as "switch, on"
                 // with nothing said about what it does (25 Oct 2026), while the shorter one below was read.
-                Toggle("TurnOver comes on when VoiceOver turns off, and off when VoiceOver comes on", isOn: model.bool("applications", "swapWithVoiceOver"))
-                    .accessibilityLabel("TurnOver comes on when VoiceOver turns off, and off when VoiceOver comes on")
+                // One switch for the two readers swapping (25 Oct 2026: a second, for the quit alone, said the same by halves).
+                Toggle("TurnOver and VoiceOver swap: one comes on as the other goes off", isOn: model.bool("applications", "swapWithVoiceOver"))
+                    .accessibilityLabel("TurnOver and VoiceOver swap: one comes on as the other goes off")
                     .accessibilityHint("Off: each reader has its own switch and neither changes the other.")
-                Text("Off: each reader has its own switch and neither changes the other. Command Control Period is TurnOver's; Command F5 is VoiceOver's.").font(.caption)
-            }
-            Section {
-                Toggle("VoiceOver comes on when TurnOver quits", isOn: model.bool("applications", "voiceOverOnAtQuit"))
-                    .accessibilityLabel("VoiceOver comes on when TurnOver quits")
-                    .accessibilityHint("Off: quitting TurnOver leaves VoiceOver as it is.")
-                Text("Off: quitting TurnOver leaves VoiceOver as it is, so with VoiceOver off the Mac has no speech until you press Command F5. For VoiceOver reading inside a virtual machine.").font(.caption)
+                Text("On: TurnOver turns VoiceOver off as it starts and on as it quits, comes on when VoiceOver turns off and steps aside when VoiceOver comes on. Off: each reader has its own switch and neither changes the other, for VoiceOver reading inside a virtual machine, say. Command Control Period is TurnOver's; Command F5 is VoiceOver's.").font(.caption)
             }
             DisclosureGroup("Experimental: readers per app") {
                 Toggle("Readers per app", isOn: model.bool("applications", "perAppReaders"))

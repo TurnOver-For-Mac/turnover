@@ -12,12 +12,11 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   braille and sounds are on. Discussion 46.
 - Screen reader behaviour: TurnOver is on or off, VoiceOver is on or off, and that is all. TurnOver reads everywhere
   while it is on; no apps are labelled for either reader and nothing switches as you change apps. A new Settings
-  section, Screen reader behaviour, holds whether TurnOver comes on when VoiceOver turns off and off when it comes
-  on. Readers per app (the lists, the modes, switching as apps change)
+  section, Screen reader behaviour, holds one switch: TurnOver and VoiceOver swap, one coming on as the other goes
+  off (TurnOver turns VoiceOver off as it starts and on as it quits, comes on when VoiceOver turns off and steps aside
+  when VoiceOver comes on). Off, each reader has its own switch and neither changes the other, for VoiceOver reading
+  inside a virtual machine such as Parallels. Readers per app (the lists, the modes, switching as apps change)
   moved to Experimental, off for a new install; a set-up that already uses them keeps working as it did.
-- Screen reader behaviour has a third switch: VoiceOver comes on when TurnOver quits (on, as before). Off, quitting
-  TurnOver leaves VoiceOver as it is, for VoiceOver reading inside a virtual machine such as Parallels. With VoiceOver
-  off too there is no speech until Command F5.
 - The menu is short, in NVDA's shape: This app, Settings, Keys, Tools, Help, Support TurnOver, Quit. Every setting
   now lives in the Settings window, in sections down the side: General, Speech, Keyboard, Item details, Web pages,
   Documents, Screen recognition, Other apps' speech, Experimental. Two wait in Tools until they have a section:
