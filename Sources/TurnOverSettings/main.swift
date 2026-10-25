@@ -86,6 +86,21 @@ enum Pane: String, CaseIterable, Identifiable {
     case general = "General", speech = "Speech", braille = "Braille", keyboard = "Keyboard", items = "Item details", webPages = "Web pages", documents = "Documents",
          recognition = "Screen recognition", otherApps = "Other apps' speech", readers = "Screen reader behaviour"
     var id: String { rawValue }
+    /// As the sidebar shows it. (The raw value stays English: TurnOver asks for a section by it.)
+    var title: String {
+        switch self {
+        case .general: return String(localized: "General", comment: "A section of the Settings window")
+        case .speech: return String(localized: "Speech", comment: "A section of the Settings window")
+        case .braille: return String(localized: "Braille", comment: "A section of the Settings window")
+        case .keyboard: return String(localized: "Keyboard", comment: "A section of the Settings window")
+        case .items: return String(localized: "Item details", comment: "A section of the Settings window")
+        case .webPages: return String(localized: "Web pages", comment: "A section of the Settings window")
+        case .documents: return String(localized: "Documents", comment: "A section of the Settings window")
+        case .recognition: return String(localized: "Screen recognition", comment: "A section of the Settings window")
+        case .otherApps: return String(localized: "Other apps' speech", comment: "A section of the Settings window")
+        case .readers: return String(localized: "Screen reader behaviour", comment: "A section of the Settings window")
+        }
+    }
 }
 
 struct ContentView: View {
@@ -93,7 +108,7 @@ struct ContentView: View {
     @State private var section: Pane? = .general
     var body: some View {
         NavigationSplitView {
-            List(Pane.allCases, selection: $section) { s in Text(s.rawValue).tag(s) }
+            List(Pane.allCases, selection: $section) { s in Text(s.title).tag(s) }
                 .navigationSplitViewColumnWidth(190)
                 .accessibilityLabel("Settings sections")
         } detail: {
@@ -164,8 +179,8 @@ final class VoiceLists: ObservableObject {
         var made: [String: String] = [:]
         for v in voices {
             let language = Locale.current.localizedString(forIdentifier: v.language) ?? v.language
-            let quality = v.quality == .premium ? ", premium" : v.quality == .enhanced ? ", enhanced" : ""
-            made[v.identifier] = "\(v.name), \(language)\(quality)"
+            made[v.identifier] = v.quality == .premium ? String(localized: "\(v.name), \(language), premium", comment: "A voice: its name, language and quality")
+                : v.quality == .enhanced ? String(localized: "\(v.name), \(language), enhanced", comment: "A voice: its name, language and quality") : "\(v.name), \(language)"
         }
         labels = made
     }
@@ -204,7 +219,10 @@ struct SpeechView: View {
             return OtherLanguage(code: code, name: name, voices: voices)
         }
     }
-    private func naturalName(_ v: String) -> String { "\(v.dropFirst(3).capitalized), \(v.hasPrefix("b") ? "British" : "American")" }
+    private func naturalName(_ v: String) -> String {
+        v.hasPrefix("b") ? String(localized: "\(v.dropFirst(3).capitalized), British", comment: "A natural voice: its name and accent")
+            : String(localized: "\(v.dropFirst(3).capitalized), American", comment: "A natural voice: its name and accent")
+    }
     var body: some View {
         Form {
             Picker("Voice", selection: model.string("speech", "voice", "")) {
@@ -230,7 +248,8 @@ struct SpeechView: View {
             DisclosureGroup("Capitals") {
                 Toggle("Say cap before a capital", isOn: model.bool("speech", "sayCapForCapitals"))
                 Slider(value: model.number("speech", "capitalPitch"), in: 0...100, step: 10) { Text("Raise the pitch for a capital") }
-                    .accessibilityValue(model.number("speech", "capitalPitch").wrappedValue == 0 ? "off" : "\(Int(model.number("speech", "capitalPitch").wrappedValue)) percent")
+                    .accessibilityValue(model.number("speech", "capitalPitch").wrappedValue == 0 ? String(localized: "off", comment: "A setting that is off")
+                        : String(localized: "\(String(Int(model.number("speech", "capitalPitch").wrappedValue))) percent", comment: "A slider's value"))
             }
             // The speech rotor's own short list (18 Oct 2026): none ticked, every voice.
             // Folded until opened: a picker per language is the costliest part of the pane to draw (23 Oct 2026).
@@ -245,8 +264,10 @@ struct SpeechView: View {
                 }
             }
             // Folded away: the list is long by nature (every voice the rotor could step through).
-            DisclosureGroup(rotorChosen.isEmpty ? "Voices in the rotor: every voice" : "Voices in the rotor: \(rotorChosen.count) chosen") {
-                Text(rotorChosen.isEmpty ? "Every voice: tick the ones you want VO-Command-Shift to step through." : "\(rotorChosen.count) chosen for VO-Command-Shift.").font(.caption)
+            DisclosureGroup(rotorChosen.isEmpty ? String(localized: "Voices in the rotor: every voice", comment: "A group in Speech settings")
+                            : String(localized: "Voices in the rotor: \(String(rotorChosen.count)) chosen", comment: "A group in Speech settings")) {
+                Text(rotorChosen.isEmpty ? String(localized: "Every voice: tick the ones you want VO-Command-Shift to step through.", comment: "Speech settings")
+                     : String(localized: "\(String(rotorChosen.count)) chosen for VO-Command-Shift.", comment: "Speech settings")).font(.caption)
                 ForEach(rotorCandidates, id: \.identifier) { v in
                     Toggle("\(v.name), \(Locale.current.localizedString(forIdentifier: v.language) ?? v.language)", isOn: Binding(
                         get: { rotorChosen.contains(v.identifier) },
@@ -310,7 +331,7 @@ struct OtherLanguageRow: View {
             ForEach(language.voices, id: \.id) { voice in Text("\(voice.name), \(voice.language)").tag(voice.id) }
         }
         Slider(value: ratePercent, in: 10...100, step: 5) { Text("\(language.name) rate") }
-            .accessibilityValue(rates[language.code] == nil ? "\(Int(ratePercent.wrappedValue)), same as the main voice" : "\(Int(ratePercent.wrappedValue))")
+            .accessibilityValue(rates[language.code] == nil ? String(localized: "\(String(Int(ratePercent.wrappedValue))), same as the main voice", comment: "A language's speech rate, when it is the main voice's") : "\(Int(ratePercent.wrappedValue))")
     }
 }
 
@@ -443,8 +464,11 @@ struct ItemsView: View {
 
 struct DocumentsView: View {
     @EnvironmentObject var model: Model
-    private let kinds: [(String, String)] = [("headings", "Headings"), ("links", "Links"), ("lists", "Lists"), ("tables", "Tables"),
-                                              ("landmarks", "Landmarks"), ("graphics", "Graphics"), ("blockQuotes", "Block quotes"), ("spellingErrors", "Spelling errors")]
+    private let kinds: [(String, String)] = [
+        ("headings", String(localized: "Headings", comment: "A kind of element in Documents settings")), ("links", String(localized: "Links", comment: "A kind of element in Documents settings")),
+        ("lists", String(localized: "Lists", comment: "A kind of element in Documents settings")), ("tables", String(localized: "Tables", comment: "A kind of element in Documents settings")),
+        ("landmarks", String(localized: "Landmarks", comment: "A kind of element in Documents settings")), ("graphics", String(localized: "Graphics", comment: "A kind of element in Documents settings")),
+        ("blockQuotes", String(localized: "Block quotes", comment: "A kind of element in Documents settings")), ("spellingErrors", String(localized: "Spelling errors", comment: "A kind of element in Documents settings"))]
     var body: some View {
         Form {
             ForEach(kinds, id: \.0) { k in

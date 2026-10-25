@@ -65,8 +65,6 @@ BUILD_STATUS=${PIPESTATUS[0]}
 set -e
 [ "$BUILD_STATUS" -eq 0 ] || { echo "build failed"; exit "$BUILD_STATUS"; }
 [ -x "$BUILD/release/turnover" ] && [ -x "$BUILD/release/turnover-key" ] && [ -f "$BUILD/release/libTurnOverCore.dylib" ] || { echo "build failed"; exit 1; }
-# New strings into Resources/Localizable.xcstrings, untranslated until someone translates them (make-strings.py).
-python3 make-strings.py sync "$TURNOVER_STRINGS" || { echo "STOP: make-strings.py sync failed"; exit 1; }
 # The unit tests (Sources/TurnOverTests): a failing test stops the install (8 Oct 2026). TURNOVER_SKIP_TESTS=1 to skip.
 if [ "$TURNOVER_SKIP_TESTS" != 1 ]; then
   "$BUILD/release/turnover-tests" || { echo "build.sh: tests failed; not installing"; exit 1; }
@@ -124,6 +122,10 @@ for H in steam-speech trackpad-gestures voiceover-quiet; do
   fi
   HELPERBINS+=("$H:$BINH")
 done
+
+# New strings into Resources/Localizable.xcstrings, untranslated until someone translates them (make-strings.py):
+# TurnOver's own and its helpers' (Steam speech's words are said too), so after the helpers are built.
+python3 make-strings.py sync "$TURNOVER_STRINGS" || { echo "STOP: make-strings.py sync failed"; exit 1; }
 
 # The probe: sign in place.
 sign --force --sign "$IDENTITY" --identifier com.turnover.probe "$BUILD/release/turnover-probe"

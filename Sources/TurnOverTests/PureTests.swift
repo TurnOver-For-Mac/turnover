@@ -332,8 +332,8 @@ func pureTests() {
 
     test("scripts: the latest declared wins, unless unavailable") {
         let o = ScriptableObject()
-        o.script("first", "", gestures: ["kb:turnover+f19"]) { _ in }
-        o.script("second", "", gestures: ["kb:turnover+f19"]) { _ in }
+        o.script("first", String(localized: "", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+f19"]) { _ in }
+        o.script("second", String(localized: "", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+f19"]) { _ in }
         let g = KeyboardGesture(identifier: "kb:turnover+f19")!
         expect(o.script(for: g)?.name, "second")
         o.script(named: "second")?.isAvailable = { false }
@@ -418,7 +418,7 @@ func pureTests() {
     }
     test("keys: the keyboard thread's question is answered on the main thread, and a late answer is kept") {
         let ran = Locked(false)
-        let s = GlobalCommands.shared.script("test_mainkey", "", gestures: ["kb:control+option+shift+f16"]) { _ in ran.value = true }
+        let s = GlobalCommands.shared.script("test_mainkey", String(localized: "", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:control+option+shift+f16"]) { _ in ran.value = true }
         defer { s.isAvailable = { false } }
         let g = KeyboardGesture(identifier: "kb:control+option+shift+f16")!
         // 1. The main thread is free: the key thread gets its answer within the limit, and the script runs.

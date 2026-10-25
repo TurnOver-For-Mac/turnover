@@ -164,21 +164,21 @@ public final class SettingsPanePlugin: GlobalPlugin {
                 Self.setTrapState(for: all[n])   // Mail's buttons do not take the focus: TurnOver holds the place
             }
         }
-        script("trap_next", "Where the app ignores Tab: the next control, in screen order", gestures: ["kb:tab"], category: "Settings") { [weak self] g in self?.trapMove(g, forward: true) }.isAvailable = { Self.inTrapZone }
-        script("trap_previous", "Where the app ignores Shift+Tab: the previous control, in screen order", gestures: ["kb:shift+tab"], category: "Settings") { [weak self] g in self?.trapMove(g, forward: false) }.isAvailable = { Self.inTrapZone }
-        script("settings_next", "In a settings pane: the next control, in screen order", gestures: ["kb:tab"], category: "Settings") { [weak self] g in self?.move(g, forward: true) }.isAvailable = { Self.inPane }
-        script("settings_previous", "In a settings pane: the previous control, in screen order", gestures: ["kb:shift+tab"], category: "Settings") { [weak self] g in self?.move(g, forward: false) }.isAvailable = { Self.inPane }
-        script("ribbon_into", "On a ribbon tab: into its commands (Tab or Down; Shift+Tab to the last)", gestures: ["kb:tab", "kb:downArrow", "kb:shift+tab"], category: "Settings") { [weak self] g in self?.intoRibbon(g) }.isAvailable = { Self.onRibbonTab }
+        script("trap_next", String(localized: "Where the app ignores Tab: the next control, in screen order", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:tab"], category: "Settings") { [weak self] g in self?.trapMove(g, forward: true) }.isAvailable = { Self.inTrapZone }
+        script("trap_previous", String(localized: "Where the app ignores Shift+Tab: the previous control, in screen order", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+tab"], category: "Settings") { [weak self] g in self?.trapMove(g, forward: false) }.isAvailable = { Self.inTrapZone }
+        script("settings_next", String(localized: "In a settings pane: the next control, in screen order", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:tab"], category: "Settings") { [weak self] g in self?.move(g, forward: true) }.isAvailable = { Self.inPane }
+        script("settings_previous", String(localized: "In a settings pane: the previous control, in screen order", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+tab"], category: "Settings") { [weak self] g in self?.move(g, forward: false) }.isAvailable = { Self.inPane }
+        script("ribbon_into", String(localized: "On a ribbon tab: into its commands (Tab or Down; Shift+Tab to the last)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:tab", "kb:downArrow", "kb:shift+tab"], category: "Settings") { [weak self] g in self?.intoRibbon(g) }.isAvailable = { Self.onRibbonTab }
         // Return on a focused button presses that button, as on Windows. A Mac alert sends Return to its default button
         // whatever has the focus: a tester tabbed to "Open System Settings", heard it, pressed Return, and the alert's
         // default, Deny, was pressed instead (7 Oct 2026). Only where the window's default is another button.
-        script("dialog_pressFocused", "On a button in a window with a different default button: presses the button you are on", gestures: ["kb:enter", "kb:numpadEnter"], category: "Settings") { g in
+        script("dialog_pressFocused", String(localized: "On a button in a window with a different default button: presses the button you are on", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:enter", "kb:numpadEnter"], category: "Settings") { g in
             guard let b = API.focusObject?.element else { g.send(); return }
             let r = AXUIElementPerformAction(b, kAXPressAction as CFString)
             Log.io("Return on a focused button that is not the default: pressed it → \(r.rawValue)")
             if r != .success { g.send() } else { SystemPrompts.checkPress(of: b, name: ObjectFactory.make(b).name) }
         }.isAvailable = { Self.returnWouldMissFocus }
-        script("settings_pressHeld", "In a settings pane: presses the control TurnOver is holding", gestures: ["kb:space", "kb:enter"], category: "Settings") { [weak self] g in self?.pressHeld(g) }.isAvailable = { Self.holdingVirtual }
+        script("settings_pressHeld", String(localized: "In a settings pane: presses the control TurnOver is holding", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:space", "kb:enter"], category: "Settings") { [weak self] g in self?.pressHeld(g) }.isAvailable = { Self.holdingVirtual }
     }
 
     // MARK: Holding the place on a control that will not take the focus
@@ -320,7 +320,7 @@ public final class SettingsPanePlugin: GlobalPlugin {
         // A collapsed ribbon shows a tab's commands only while it is open: open it, then go in.
         AXUIElementPerformAction(tab, kAXPressAction as CFString)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            if !enter() { Speech.speakMessage("no commands") }
+            if !enter() { Speech.speakMessage(String(localized: "no commands", comment: "Spoken message")) }
         }
     }
 

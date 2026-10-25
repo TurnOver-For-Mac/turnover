@@ -21,12 +21,12 @@ final class NumbersAppModule: AppModule {
     required init(pid: pid_t, bundleIdentifier: String, appName: String) {
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
         let cat = "Numbers"
-        script("nextTable", "The sheet's next table (VO-Command-T)", gestures: [], category: cat) { [weak self] g in self?.moveTable(forward: true, g) }
+        script("nextTable", String(localized: "The sheet's next table (VO-Command-T)", comment: "A command, as the key list and keyboard help say it"), gestures: [], category: cat) { [weak self] g in self?.moveTable(forward: true, g) }
             .isAvailable = { [weak self] in self?.sheet() != nil }
-        script("previousTable", "The sheet's previous table (VO-Command-Shift-T)", gestures: [], category: cat) { [weak self] g in self?.moveTable(forward: false, g) }
+        script("previousTable", String(localized: "The sheet's previous table (VO-Command-Shift-T)", comment: "A command, as the key list and keyboard help say it"), gestures: [], category: cat) { [weak self] g in self?.moveTable(forward: false, g) }
             .isAvailable = { [weak self] in self?.sheet() != nil }
         for key in ["upArrow", "downArrow", "leftArrow", "rightArrow", "tab", "enter"] {
-            script("numbers_enterTable_\(key)", "Into the sheet's first table (Numbers selects nothing from the keyboard)", gestures: ["kb:\(key)"], category: cat) { [weak self] g in
+            script("numbers_enterTable_\(key)", String(localized: "Into the sheet's first table (Numbers selects nothing from the keyboard)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:\(key)"], category: cat) { [weak self] g in
                 guard let self, self.enterFirstTable() else { g.send(); return }
             }.isAvailable = { [weak self] in self?.onEmptySheet() == true }
         }
@@ -37,13 +37,13 @@ final class NumbersAppModule: AppModule {
     /// VO-Command-T and Shift-T: the sheet's next or previous table (VoiceOverKeys' find asks the module for
     /// "nextTable" first), into its first cell, named as it is reached.
     private func moveTable(forward: Bool, _ g: KeyboardGesture) {
-        guard let layout = sheet() else { Speech.speakMessage("not in a sheet"); return }
+        guard let layout = sheet() else { Speech.speakMessage(String(localized: "not in a sheet", comment: "Spoken message")); return }
         let all = tables(in: layout)
-        guard !all.isEmpty else { Speech.speakMessage("no tables on this sheet"); return }
+        guard !all.isEmpty else { Speech.speakMessage(String(localized: "no tables on this sheet", comment: "Spoken message")); return }
         let current = all.firstIndex { !$0.elements("AXSelectedCells").isEmpty }
         let target: Int
         if let c = current { target = c + (forward ? 1 : -1) } else { target = forward ? 0 : all.count - 1 }
-        guard target >= 0, target < all.count else { Tones.edge(); Speech.speakMessage(forward ? "no next table" : "no previous table"); return }
+        guard target >= 0, target < all.count else { Tones.edge(); Speech.speakMessage(forward ? String(localized: "no next table", comment: "Spoken message") : String(localized: "no previous table", comment: "Spoken message")); return }
         let t = all[target]
         Speech.cancel(); Speech.speakMessage(t.string(kAXTitleAttribute) ?? "table \(target + 1)")
         lastPlace = nil

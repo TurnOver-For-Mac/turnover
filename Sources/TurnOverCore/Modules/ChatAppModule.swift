@@ -46,13 +46,13 @@ final class ChatAppModule: AppModule {
                   ![.editableText, .searchField, .comboBox, .passwordEdit].contains(f.role), !inSearch(), !view.inSheet else { return false }
             return view.composer == nil
         }
-        script("chat_noChatToConversations", "With no conversation open: to the conversations", gestures: ["kb:tab"], category: cat) { [weak self] _ in
+        script("chat_noChatToConversations", String(localized: "With no conversation open: to the conversations", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:tab"], category: cat) { [weak self] _ in
             self?.view.enter(.conversations)
         }.isAvailable = noChat
         // The arrows too: WhatsApp opened fresh puts its focus on a nameless group or the filter buttons, where its own
         // arrows do nothing and TurnOver said nothing until Tab (10 Oct 2026). From one of the sections
         // (WhatsApp moves its focus through them itself), the arrows and Return work the sections.
-        script("chat_noChatArrows", "With no conversation open: into the conversations (or the sections, from one of them)",
+        script("chat_noChatArrows", String(localized: "With no conversation open: into the conversations (or the sections, from one of them)", comment: "A command, as the key list and keyboard help say it"),
                gestures: ["kb:downArrow", "kb:upArrow", "kb:enter", "kb:numpadEnter"], category: cat) { [weak self] g in
             guard let self else { return }
             if let f = API.focusObject?.element, view.isSection(f) {
@@ -62,53 +62,53 @@ final class ChatAppModule: AppModule {
                 view.enter(.conversations)
             }
         }.isAvailable = noChat
-        script("chat_noChatToSections", "With no conversation open: to the sections (or the conversations)", gestures: ["kb:shift+tab"], category: cat) { [weak self] _ in
+        script("chat_noChatToSections", String(localized: "With no conversation open: to the sections (or the conversations)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+tab"], category: cat) { [weak self] _ in
             guard let self else { return }
             view.enter(view.spec.sectionsPrefix != nil ? .sections : .conversations)
         }.isAvailable = noChat
         // The app's search field (WhatsApp's): Tab and Down go to what it found.
         if searchID != nil {
-            script("chat_toResults", "From the search field: to the results", gestures: ["kb:tab", "kb:downArrow"], category: cat) { [weak self] _ in
+            script("chat_toResults", String(localized: "From the search field: to the results", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:tab", "kb:downArrow"], category: cat) { [weak self] _ in
                 self?.view.enter(.conversations)
             }.isAvailable = { API.focusPid == pid && inSearch() }
         }
         // Return in the box sends: say so (Messages says nothing, and TurnOver's text field said "new line" as the box
         // emptied). WhatsApp says "Message Sent" itself.
-        script("chat_send", "In the message box: sends the message", gestures: ["kb:enter"], category: cat) { [weak self] g in
+        script("chat_send", String(localized: "In the message box: sends the message", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:enter"], category: cat) { [weak self] g in
             guard let self else { g.send(); return }
             let had = !((view.composer?.string(kAXValueAttribute) ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             g.send()
             guard had, !view.spec.saysSent else { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                 guard let self, (view.composer?.string(kAXValueAttribute) ?? "").isEmpty else { return }
-                Speech.speakMessage("sent")
+                Speech.speakMessage(String(localized: "sent", comment: "Spoken message"))
             }
         }.isAvailable = { [weak self] in
             guard let self, let f = API.focusObject, f.pid == pid else { return false }
             return view.isPart(f.element, composerID)
         }
-        script("chat_sheetBack", "In a sheet (Settings): back a page, or close it", gestures: ["kb:escape"], category: cat) { [weak self] _ in
+        script("chat_sheetBack", String(localized: "In a sheet (Settings): back a page, or close it", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:escape"], category: cat) { [weak self] _ in
             self?.view.closeSheetPage()
         }.isAvailable = { [weak self] in
             guard let self, API.focusPid == pid, !AXHandler.shared.isMenuOpen, !TurnOverMenu.shared.isOpen else { return false }
             return view.inSheet
         }
-        script("chat_toMessages", "From the message box: on round to the sections or conversations (the screen's order)", gestures: ["kb:tab"], category: cat) { [weak self] _ in self?.view.cycle(forward: true) }.isAvailable = inBox
-        script("chat_toConversations", "From the message box: back to the messages, on the newest", gestures: ["kb:shift+tab"], category: cat) { [weak self] _ in self?.view.cycle(forward: false) }.isAvailable = inBox
+        script("chat_toMessages", String(localized: "From the message box: on round to the sections or conversations (the screen's order)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:tab"], category: cat) { [weak self] _ in self?.view.cycle(forward: true) }.isAvailable = inBox
+        script("chat_toConversations", String(localized: "From the message box: back to the messages, on the newest", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+tab"], category: cat) { [weak self] _ in self?.view.cycle(forward: false) }.isAvailable = inBox
         func add(_ name: String, _ description: String, _ keys: [String], _ run: @escaping () -> Void) {
             script("chat_\(name)", description, gestures: keys.map { "kb:" + $0 }, category: cat) { _ in run() }.isAvailable = browsing
         }
-        add("previous", "Previous message or conversation", ["upArrow"]) { [weak self] in self?.view.move(-1) }
-        add("next", "Next message or conversation", ["downArrow"]) { [weak self] in self?.view.move(1) }
-        add("first", "The first one", ["home", "command+upArrow"]) { [weak self] in self?.view.toEnd(false) }
-        add("last", "The last one", ["end", "command+downArrow"]) { [weak self] in self?.view.toEnd(true) }
-        add("open", "Opens the conversation, or presses the message (a link, a photo)", ["enter", "numpadEnter"]) { [weak self] in self?.view.activate() }
-        add("nextPart", "On to the next part, in the screen's order: sections, conversations, messages, the message box", ["tab"]) { [weak self] in self?.view.cycle(forward: true) }
-        add("previousPart", "Back to the previous part", ["shift+tab"]) { [weak self] in self?.view.cycle(forward: false) }
-        add("toBox", "Back to the message box", ["escape"]) { [weak self] in self?.view.toComposer() }
+        add("previous", String(localized: "Previous message or conversation", comment: "A command, as the key list and keyboard help say it"), ["upArrow"]) { [weak self] in self?.view.move(-1) }
+        add("next", String(localized: "Next message or conversation", comment: "A command, as the key list and keyboard help say it"), ["downArrow"]) { [weak self] in self?.view.move(1) }
+        add("first", String(localized: "The first one", comment: "A command, as the key list and keyboard help say it"), ["home", "command+upArrow"]) { [weak self] in self?.view.toEnd(false) }
+        add("last", String(localized: "The last one", comment: "A command, as the key list and keyboard help say it"), ["end", "command+downArrow"]) { [weak self] in self?.view.toEnd(true) }
+        add("open", String(localized: "Opens the conversation, or presses the message (a link, a photo)", comment: "A command, as the key list and keyboard help say it"), ["enter", "numpadEnter"]) { [weak self] in self?.view.activate() }
+        add("nextPart", String(localized: "On to the next part, in the screen's order: sections, conversations, messages, the message box", comment: "A command, as the key list and keyboard help say it"), ["tab"]) { [weak self] in self?.view.cycle(forward: true) }
+        add("previousPart", String(localized: "Back to the previous part", comment: "A command, as the key list and keyboard help say it"), ["shift+tab"]) { [weak self] in self?.view.cycle(forward: false) }
+        add("toBox", String(localized: "Back to the message box", comment: "A command, as the key list and keyboard help say it"), ["escape"]) { [weak self] in self?.view.toComposer() }
         // Messages: Command T opens the Tapback picker as a TurnOver list (a tester). Only where the recipe is Messages'.
         if bundleIdentifier == "com.apple.MobileSMS" {
-            script("chat_react", "Reacts to the message: a list of Tapbacks, Return to choose (Command T)", gestures: ["kb:command+t"], category: cat) { [weak self] _ in
+            script("chat_react", String(localized: "Reacts to the message: a list of Tapbacks, Return to choose (Command T)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+t"], category: cat) { [weak self] _ in
                 self?.view.reactionChooser()
             }.isAvailable = { [weak self] in
                 guard let self else { return false }
@@ -118,7 +118,7 @@ final class ChatAppModule: AppModule {
             }
         }
         for n in 1...9 {
-            script("chat_latest\(n)", n == 1 ? "Reads the newest message" : "Reads the message \(n) from the newest", gestures: ["kb:control+command+\(n)"], category: cat) { [weak self] _ in
+            script("chat_latest\(n)", n == 1 ? String(localized: "Reads the newest message", comment: "A command, as the key list and keyboard help say it") : String(localized: "Reads the message \(String(n)) from the newest", comment: "A command: %@ is how far back"), gestures: ["kb:control+command+\(n)"], category: cat) { [weak self] _ in
                 self?.view.readLatest(n)
             }.isAvailable = { API.focusPid == pid }
         }
@@ -146,7 +146,7 @@ final class ChatAppModule: AppModule {
             } else if let t = view.pageTitle() {
                 // No chat open (Calls, Updates): the section, and the way into it.
                 Speech.speakMessage(t)
-                Hints.schedule("Tab goes to the list.")
+                Hints.schedule(String(localized: "Tab goes to the list.", comment: "Spoken message"))
             }
         }
     }

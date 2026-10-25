@@ -183,7 +183,7 @@ extension AXHandler {
                 return
             }
             if count == 0, before.count > 0, focused, element.elements(kAXChildrenAttribute).first(where: { ($0.attr(kAXFocusedAttribute) as? Bool) == true }) == nil {
-                Speech.speakMessage("nothing selected"); return
+                Speech.speakMessage(String(localized: "nothing selected", comment: "Spoken message")); return
             }
             // The Dock's Cmd+Tab list marks its highlighted item focused rather than selected.
             guard let selected = all.first ?? element.elements(kAXChildrenAttribute).first(where: { ($0.attr(kAXFocusedAttribute) as? Bool) == true }) else { return }

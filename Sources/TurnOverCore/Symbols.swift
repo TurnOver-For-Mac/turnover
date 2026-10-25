@@ -10,23 +10,23 @@ nonisolated public enum Symbols {
     private struct Symbol { let name: String; let level: SymbolLevel }
 
     private static let table: [Character: Symbol] = [
-        "#": .init(name: "number", level: .some), "%": .init(name: "percent", level: .some), "&": .init(name: "and", level: .some),
-        "*": .init(name: "star", level: .some), "@": .init(name: "at", level: .some), "/": .init(name: "slash", level: .some),
-        "\\": .init(name: "backslash", level: .some), "+": .init(name: "plus", level: .some), "=": .init(name: "equals", level: .some),
-        "<": .init(name: "less than", level: .some), ">": .init(name: "greater than", level: .some), "^": .init(name: "caret", level: .some),
-        "|": .init(name: "bar", level: .some), "~": .init(name: "tilde", level: .some), "`": .init(name: "grave", level: .some),
-        "$": .init(name: "dollar", level: .some), "£": .init(name: "pound", level: .some), "€": .init(name: "euro", level: .some),
-        "¥": .init(name: "yen", level: .some), "©": .init(name: "copyright", level: .some), "®": .init(name: "registered", level: .some),
-        "™": .init(name: "trademark", level: .some), "°": .init(name: "degrees", level: .some), "§": .init(name: "section", level: .some),
-        "¶": .init(name: "pilcrow", level: .some), "•": .init(name: "bullet", level: .some), "·": .init(name: "middle dot", level: .some),
-        "\"": .init(name: "quote", level: .most), "'": .init(name: "apostrophe", level: .most), "‘": .init(name: "left single quote", level: .most),
-        "’": .init(name: "right single quote", level: .most), "“": .init(name: "left quote", level: .most), "”": .init(name: "right quote", level: .most),
-        "(": .init(name: "left paren", level: .most), ")": .init(name: "right paren", level: .most), "[": .init(name: "left bracket", level: .most),
-        "]": .init(name: "right bracket", level: .most), "{": .init(name: "left brace", level: .most), "}": .init(name: "right brace", level: .most),
-        "-": .init(name: "dash", level: .most), "–": .init(name: "en dash", level: .most), "—": .init(name: "em dash", level: .most),
-        ":": .init(name: "colon", level: .most), ";": .init(name: "semicolon", level: .most), "_": .init(name: "underscore", level: .most),
-        ",": .init(name: "comma", level: .all), ".": .init(name: "period", level: .all), "!": .init(name: "exclamation", level: .all),
-        "?": .init(name: "question mark", level: .all), "…": .init(name: "ellipsis", level: .all),
+        "#": .init(name: String(localized: "symbol.number", defaultValue: "number", comment: "The symbol #"), level: .some), "%": .init(name: String(localized: "symbol.percent", defaultValue: "percent", comment: "The symbol %"), level: .some), "&": .init(name: String(localized: "symbol.and", defaultValue: "and", comment: "The symbol &"), level: .some),
+        "*": .init(name: String(localized: "symbol.star", defaultValue: "star", comment: "The symbol *"), level: .some), "@": .init(name: String(localized: "symbol.at", defaultValue: "at", comment: "The symbol @"), level: .some), "/": .init(name: String(localized: "symbol.slash", defaultValue: "slash", comment: "The symbol /"), level: .some),
+        "\\": .init(name: String(localized: "symbol.backslash", defaultValue: "backslash", comment: "The symbol \\"), level: .some), "+": .init(name: String(localized: "symbol.plus", defaultValue: "plus", comment: "The symbol +"), level: .some), "=": .init(name: String(localized: "symbol.equals", defaultValue: "equals", comment: "The symbol ="), level: .some),
+        "<": .init(name: String(localized: "symbol.less than", defaultValue: "less than", comment: "The symbol <"), level: .some), ">": .init(name: String(localized: "symbol.greater than", defaultValue: "greater than", comment: "The symbol >"), level: .some), "^": .init(name: String(localized: "symbol.caret", defaultValue: "caret", comment: "The symbol ^"), level: .some),
+        "|": .init(name: String(localized: "symbol.bar", defaultValue: "bar", comment: "The symbol |"), level: .some), "~": .init(name: String(localized: "symbol.tilde", defaultValue: "tilde", comment: "The symbol ~"), level: .some), "`": .init(name: String(localized: "symbol.grave", defaultValue: "grave", comment: "The symbol `"), level: .some),
+        "$": .init(name: String(localized: "symbol.dollar", defaultValue: "dollar", comment: "The symbol $"), level: .some), "£": .init(name: String(localized: "symbol.pound", defaultValue: "pound", comment: "The symbol £"), level: .some), "€": .init(name: String(localized: "symbol.euro", defaultValue: "euro", comment: "The symbol €"), level: .some),
+        "¥": .init(name: String(localized: "symbol.yen", defaultValue: "yen", comment: "The symbol ¥"), level: .some), "©": .init(name: String(localized: "symbol.copyright", defaultValue: "copyright", comment: "The symbol ©"), level: .some), "®": .init(name: String(localized: "symbol.registered", defaultValue: "registered", comment: "The symbol ®"), level: .some),
+        "™": .init(name: String(localized: "symbol.trademark", defaultValue: "trademark", comment: "The symbol ™"), level: .some), "°": .init(name: String(localized: "symbol.degrees", defaultValue: "degrees", comment: "The symbol °"), level: .some), "§": .init(name: String(localized: "symbol.section", defaultValue: "section", comment: "The symbol §"), level: .some),
+        "¶": .init(name: String(localized: "symbol.pilcrow", defaultValue: "pilcrow", comment: "The symbol ¶"), level: .some), "•": .init(name: String(localized: "symbol.bullet", defaultValue: "bullet", comment: "The symbol •"), level: .some), "·": .init(name: String(localized: "symbol.middle dot", defaultValue: "middle dot", comment: "The symbol ·"), level: .some),
+        "\"": .init(name: String(localized: "symbol.quote", defaultValue: "quote", comment: "The symbol \""), level: .most), "'": .init(name: String(localized: "symbol.apostrophe", defaultValue: "apostrophe", comment: "The symbol '"), level: .most), "‘": .init(name: String(localized: "symbol.left single quote", defaultValue: "left single quote", comment: "The symbol ‘"), level: .most),
+        "’": .init(name: String(localized: "symbol.right single quote", defaultValue: "right single quote", comment: "The symbol ’"), level: .most), "“": .init(name: String(localized: "symbol.left quote", defaultValue: "left quote", comment: "The symbol “"), level: .most), "”": .init(name: String(localized: "symbol.right quote", defaultValue: "right quote", comment: "The symbol ”"), level: .most),
+        "(": .init(name: String(localized: "symbol.left paren", defaultValue: "left paren", comment: "The symbol ("), level: .most), ")": .init(name: String(localized: "symbol.right paren", defaultValue: "right paren", comment: "The symbol )"), level: .most), "[": .init(name: String(localized: "symbol.left bracket", defaultValue: "left bracket", comment: "The symbol ["), level: .most),
+        "]": .init(name: String(localized: "symbol.right bracket", defaultValue: "right bracket", comment: "The symbol ]"), level: .most), "{": .init(name: String(localized: "symbol.left brace", defaultValue: "left brace", comment: "The symbol {"), level: .most), "}": .init(name: String(localized: "symbol.right brace", defaultValue: "right brace", comment: "The symbol }"), level: .most),
+        "-": .init(name: String(localized: "symbol.dash", defaultValue: "dash", comment: "The symbol -"), level: .most), "–": .init(name: String(localized: "symbol.en dash", defaultValue: "en dash", comment: "The symbol –"), level: .most), "—": .init(name: String(localized: "symbol.em dash", defaultValue: "em dash", comment: "The symbol —"), level: .most),
+        ":": .init(name: String(localized: "symbol.colon", defaultValue: "colon", comment: "The symbol :"), level: .most), ";": .init(name: String(localized: "symbol.semicolon", defaultValue: "semicolon", comment: "The symbol ;"), level: .most), "_": .init(name: String(localized: "symbol.underscore", defaultValue: "underscore", comment: "The symbol _"), level: .most),
+        ",": .init(name: String(localized: "symbol.comma", defaultValue: "comma", comment: "The symbol ,"), level: .all), ".": .init(name: String(localized: "symbol.period", defaultValue: "period", comment: "The symbol ."), level: .all), "!": .init(name: String(localized: "symbol.exclamation", defaultValue: "exclamation", comment: "The symbol !"), level: .all),
+        "?": .init(name: String(localized: "symbol.question mark", defaultValue: "question mark", comment: "The symbol ?"), level: .all), "…": .init(name: String(localized: "symbol.ellipsis", defaultValue: "ellipsis", comment: "The symbol …"), level: .all),
     ]
 
     /// The name of one character, always (the caret-character and spelling rule).
@@ -40,15 +40,15 @@ nonisolated public enum Symbols {
     public static func name(of c: Character, sayCap: Bool) -> String {
         if let s = table[c] { return s.name }
         switch c {
-        case " ": return "space"
-        case "\u{a0}": return "space"   // a non-breaking space: to the listener, a space
-        case "\r", "\n", "\u{2029}", "\r\n": return "new line"
-        case "\u{b}", "\u{2028}": return "line break"
-        case "\u{c}": return "page break"
-        case "\t": return "tab"
-        case "\u{8}": return "backspace"
+        case " ": return String(localized: "symbol.space", defaultValue: "space", comment: "The space character")
+        case "\u{a0}": return String(localized: "symbol.space", defaultValue: "space", comment: "The space character")   // a non-breaking space: to the listener, a space
+        case "\r", "\n", "\u{2029}", "\r\n": return String(localized: "new line", comment: "A line ending, spoken as a character")
+        case "\u{b}", "\u{2028}": return String(localized: "line break", comment: "A line break inside a paragraph, spoken as a character")
+        case "\u{c}": return String(localized: "page break", comment: "A page break, spoken as a character")
+        case "\t": return String(localized: "symbol.tab", defaultValue: "tab", comment: "The tab character")
+        case "\u{8}": return String(localized: "key.backspace", defaultValue: "backspace", comment: "A key's name")
         default:
-            if c.isUppercase, sayCap { return "cap " + c.lowercased() }
+            if c.isUppercase, sayCap { return String(localized: "cap \(c.lowercased())", comment: "A capital letter: %@ is the letter") }
             return String(c)
         }
     }

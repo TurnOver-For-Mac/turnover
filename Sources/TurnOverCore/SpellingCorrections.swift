@@ -36,11 +36,11 @@ public enum SpellingCorrections {
         let guesses = checker.guesses(forWordRange: NSRange(location: 0, length: r.length), in: word, language: language, inSpellDocumentWithTag: 0) ?? []
         let start = lo + r.location, end = start + r.length
         Log.io("spelling: corrections offered (\(guesses.count))")
-        var items = guesses.prefix(12).map { g in MenuItem(g, .action { replace(info: info, element: f.element, start: start, end: end, with: g) }) }
-        items.append(MenuItem("Learn spelling", .action { checker.learnWord(word); Speech.speakMessage("\(word) learnt") }))
-        items.append(MenuItem("Ignore", .action { checker.ignoreWord(word, inSpellDocumentWithTag: 0); Speech.speakMessage("ignored") }))
+        var items = guesses.prefix(12).map { g in MenuItem(verbatim: g, .action { replace(info: info, element: f.element, start: start, end: end, with: g) }) }
+        items.append(MenuItem("Learn spelling", .action { checker.learnWord(word); Speech.speakMessage(String(localized: "\(word) learnt", comment: "A word added to the dictionary")) }))
+        items.append(MenuItem("Ignore", .action { checker.ignoreWord(word, inSpellDocumentWithTag: 0); Speech.speakMessage(String(localized: "ignored", comment: "Spoken message")) }))
         items.append(MenuItem("The app's own menu", .action { DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { _ = GlobalCommands.contextMenuAtCaret() } }))
-        TurnOverMenu.shared.openList(guesses.isEmpty ? "\(word), misspelled, no suggestions" : "\(word), misspelled", items: items)
+        TurnOverMenu.shared.openList(guesses.isEmpty ? "\(word), misspelled, no suggestions" : "\(word), misspelled", items: items)   // (both translatable: the list's title)
         return true
     }
 
@@ -87,7 +87,7 @@ public enum SpellingCorrections {
         let marked: Set<String> = ["org.nspasteboard.ConcealedType", "org.nspasteboard.TransientType"]
         if (board.types ?? []).contains(where: { marked.contains($0.rawValue) }) {
             Log.io("spelling: not pasted (the clipboard holds a concealed item)")
-            Speech.speakMessage("couldn't put it in here; the app's own menu")
+            Speech.speakMessage(String(localized: "couldn't put it in here; the app's own menu", comment: "Spoken message"))
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { _ = GlobalCommands.contextMenuAtCaret() }
             return
         }

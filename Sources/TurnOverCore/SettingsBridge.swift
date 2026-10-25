@@ -15,6 +15,18 @@ import TurnOverSpeech
 import AVFoundation
 
 public enum SettingsBridge {
+    /// A section of the Settings window by its name there, as the window says it in the reader's language.
+    nonisolated public static func sectionName(_ section: String) -> String {
+        switch section {
+        case "Speech": return String(localized: "Speech", comment: "A section of the Settings window")
+        case "Keyboard": return String(localized: "Keyboard", comment: "A section of the Settings window")
+        case "Item details": return String(localized: "Item details", comment: "A section of the Settings window")
+        case "Web pages": return String(localized: "Web pages", comment: "A section of the Settings window")
+        case "Documents": return String(localized: "Documents", comment: "A section of the Settings window")
+        case "Braille": return String(localized: "Braille", comment: "A section of the Settings window")
+        default: return section
+        }
+    }
     private static var started = false
     /// Restart TurnOver (set by the app): CoExist changes need it.
     public static var restart: (() -> Void)?
@@ -133,7 +145,7 @@ public enum SettingsBridge {
             if before.general.screenCurtain != next.general.screenCurtain { TurnOverMenu.shared.onScreenCurtainChanged?() }
             if before.speech.outputDevice != next.speech.outputDevice {
                 Speech.player.outputDeviceUID = next.speech.outputDevice.isEmpty ? nil : next.speech.outputDevice
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { Speech.speakMessage("Speech on \(Speech.player.outputDescription)") }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { Speech.speakMessage(String(localized: "Speech on \(Speech.player.outputDescription)", comment: "Speech moved to an audio device: %@ is the device")) }
             }
             if before.general.keyboardStyle != next.general.keyboardStyle { GlobalCommands.setKeyboardStyle(next.general.style) }
             if before.braille.bluetooth != next.braille.bluetooth, next.braille.bluetooth { BrailleDisplays.shared.lookNow() }
@@ -164,7 +176,7 @@ public enum SettingsBridge {
             DispatchQueue.main.asyncAfter(deadline: .now() + 5) { if pendingSection == section { pendingSection = nil } }
         }
         let url = Bundle.main.bundleURL.appendingPathComponent("Contents/Applications/TurnOver Settings.app")
-        guard FileManager.default.fileExists(atPath: url.path) else { Speech.speakMessage("TurnOver Settings isn't in this build"); return }
+        guard FileManager.default.fileExists(atPath: url.path) else { Speech.speakMessage(String(localized: "TurnOver Settings isn't in this build", comment: "Spoken message")); return }
         NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration()) { _, error in
             if let error { Log.warning("settings app: couldn't open: \(error)") }
         }

@@ -48,8 +48,8 @@ extension BrowseModeDocument {
         let changed = text(min(old, new), max(old, new))
         let growing = (new - anchor).signum() == (old - anchor).signum() || old == anchor ? abs(new - anchor) > abs(old - anchor) : false
         let said = changed.trimmingCharacters(in: .whitespacesAndNewlines)
-        let spoken = said.isEmpty ? (changed.contains("\n") ? "line break" : "space") : (said.count == 1 ? Symbols.name(of: said.first!) : said)
-        Speech.speakText(spoken + (growing ? ", selected" : ", unselected"))
+        let spoken = said.isEmpty ? (changed.contains("\n") ? Symbols.name(of: "\u{2028}") : Symbols.name(of: " ")) : (said.count == 1 ? Symbols.name(of: said.first!) : said)
+        Speech.speakText(growing ? String(localized: "\(spoken), selected", comment: "Text selected in browse mode: %@ is the text") : String(localized: "\(spoken), unselected", comment: "Text no longer selected in browse mode: %@ is the text"))
     }
 
     func clearSelection() { selectionAnchor = nil }
@@ -60,7 +60,7 @@ extension BrowseModeDocument {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(t, forType: .string)
         Log.io("browse mode: copied \(t.count) characters")
-        Speech.speakMessage("copied", remember: false)
+        Speech.speakMessage(String(localized: "copied", comment: "Spoken message"), remember: false)
     }
 
     func edgeOfLine(start: Bool) {

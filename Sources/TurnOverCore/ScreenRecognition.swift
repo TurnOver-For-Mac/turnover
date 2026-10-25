@@ -59,15 +59,15 @@ public final class ScreenRecognition {
 
     /// TurnOver+R: recognise the front window. While the result is open: recognise again, keeping the place.
     public func recognize() {
-        guard !working else { Speech.speakMessage("still recognising"); return }
+        guard !working else { Speech.speakMessage(String(localized: "still recognising", comment: "Spoken message")); return }
         guard ScreenCapturePermission.ensure() else { finished(); return }
         let reopen = isOpen
         let keepRow = reopen ? currentRowText() : nil
-        guard let target = Self.target() else { Speech.speakMessage("no window to recognise"); finished(); return }
+        guard let target = Self.target() else { Speech.speakMessage(String(localized: "no window to recognise", comment: "Spoken message")); finished(); return }
         working = true
         let started = Date()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-            if self?.working == true { Speech.speakMessage("recognising") }
+            if self?.working == true { Speech.speakMessage(String(localized: "recognising", comment: "Spoken message")) }
         }
         Task.detached(priority: .userInitiated) {
             let outcome = await Self.run(target)
@@ -136,18 +136,19 @@ public final class ScreenRecognition {
 
     private func show(_ r: Result, reopen: Bool, keepRow: String?) {
         guard r.text.length > 0 else {
-            if !reopen { Speech.speakMessage("no text found"); finished() } else { Speech.speakMessage("no text now") }
+            if !reopen { Speech.speakMessage(String(localized: "no text found", comment: "Spoken message")); finished() } else { Speech.speakMessage(String(localized: "no text now", comment: "Spoken message")) }
             return
         }
         result = r
         isOpen = true
         if let keepRow, let row = r.rows.first(where: { r.text.substring(with: $0.range) == keepRow }) {
             caret = row.range.location
-            Speech.speakMessage("recognised again")
+            Speech.speakMessage(String(localized: "recognised again", comment: "Spoken message"))
         } else {
             caret = 0
             let rows = r.rows.count
-            Speech.speakMessage(reopen ? "recognised again, \(rows) row\(rows == 1 ? "" : "s")" : "\(r.title.isEmpty ? "" : r.title + ", ")recognised text, \(rows) row\(rows == 1 ? "" : "s")")
+            let count = rows == 1 ? String(localized: "1 row", comment: "A table's size") : String(localized: "\(String(rows)) rows", comment: "A table's size")
+            Speech.speakMessage(reopen ? String(localized: "recognised again, \(count)", comment: "Screen recognition again: how many rows") : "\(r.title.isEmpty ? "" : r.title + ", ")" + String(localized: "recognised text, \(count)", comment: "Screen recognition: how many rows"))
         }
         if config.recognition.autoSayAll, keepRow == nil { sayAll() } else { speakRow() }
         Braille.modalLine = { [weak self] in self?.brailleLine() }
@@ -162,7 +163,7 @@ public final class ScreenRecognition {
         refreshTimer?.invalidate(); refreshTimer = nil
         Braille.modalLine = nil; Braille.modalKey = nil
         Braille.refreshSoon()
-        if !silently { Speech.speakMessage("closed recognition") }
+        if !silently { Speech.speakMessage(String(localized: "closed recognition", comment: "Spoken message")) }
         finished()
         result = nil   // the screen's text isn't kept once the view is closed (code review, 14 Oct 2026)
     }
@@ -241,9 +242,9 @@ public final class ScreenRecognition {
 
     private func speakCharacter() {
         guard let r = result else { return }
-        guard caret < r.text.length else { Speech.speakMessage("blank"); return }
+        guard caret < r.text.length else { Speech.speakMessage(String(localized: "blank", comment: "Spoken message")); return }
         let c = r.text.substring(with: r.text.rangeOfComposedCharacterSequence(at: caret))
-        if c == "\n" { Speech.speakMessage("line break") } else { Speech.speakSpelling(c) }
+        if c == "\n" { Speech.speakMessage(String(localized: "line break", comment: "Spoken message")) } else { Speech.speakSpelling(c) }
     }
 
     private func moveCharacter(_ forward: Bool) {
@@ -296,11 +297,11 @@ public final class ScreenRecognition {
     }
 
     private func click(_ kind: Click) {
-        guard let r = result, let rect = targetRect() else { Speech.speakMessage("nothing to click"); return }
+        guard let r = result, let rect = targetRect() else { Speech.speakMessage(String(localized: "nothing to click", comment: "Spoken message")); return }
         let point = CGPoint(x: rect.midX, y: rect.midY)
         // The window must still be where it was read: a click elsewhere would land on something else.
         if let now = Self.windowFrame(pid: r.pid), abs(now.minX - r.window.minX) > 4 || abs(now.minY - r.window.minY) > 4 {
-            Speech.speakMessage("the window has moved; recognising again")
+            Speech.speakMessage(String(localized: "the window has moved; recognising again", comment: "Spoken message"))
             recognize(); return
         }
         Log.io("screen recognition: \(kind) at \(Int(point.x)), \(Int(point.y))")
@@ -309,7 +310,7 @@ public final class ScreenRecognition {
         Mouse.move(to: point)
         switch kind {
         case .hover:
-            Speech.speakMessage("mouse moved here")
+            Speech.speakMessage(String(localized: "mouse moved here", comment: "Spoken message"))
             return
         case .left: Mouse.click(at: point, button: .left, count: 1)
         case .double: Mouse.click(at: point, button: .left, count: 2)
@@ -317,7 +318,7 @@ public final class ScreenRecognition {
         }
         // NVDA puts the mouse back after the click; a right-click's menu stays where it opened.
         if kind != .right, let home { DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { Mouse.move(to: home) } }
-        Speech.speakMessage(kind == .right ? "right clicked" : kind == .double ? "double clicked" : "clicked")
+        Speech.speakMessage(kind == .right ? String(localized: "right clicked", comment: "Spoken message") : kind == .double ? String(localized: "double clicked", comment: "Spoken message") : String(localized: "clicked", comment: "Spoken message"))
         // The screen changes after a click: the result is out of date. Recognised again after a moment (the setting;
         // the screen interface again where that was open), else TurnOver follows the app's focus from here.
         // (Developer builds only: a feature for a whole build. A setting saved as on by an earlier build is not
@@ -677,7 +678,7 @@ public enum ScreenCapturePermission {
     public static func ensure() -> Bool {
         if CGPreflightScreenCaptureAccess() { return true }
         if !asked { asked = true; _ = CGRequestScreenCaptureAccess() }
-        Speech.speakMessage("TurnOver needs Screen Recording to read the screen. Opening Privacy and Security, Screen and System Audio Recording: switch on TurnOver, then quit and reopen TurnOver.")
+        Speech.speakMessage(String(localized: "TurnOver needs Screen Recording to read the screen. Opening Privacy and Security, Screen and System Audio Recording: switch on TurnOver, then quit and reopen TurnOver.", comment: "Spoken message"))
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { NSWorkspace.shared.open(url) }
         }

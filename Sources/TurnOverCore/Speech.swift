@@ -262,7 +262,7 @@ public enum Speech {
 
     /// Spell text character by character (NVDA: speakSpelling).
     public static func speakSpelling(_ text: String) {
-        guard !text.isEmpty else { enqueue("blank"); return }
+        guard !text.isEmpty else { enqueue(Phrases.blank); return }
         // With capitals raised, each character is its own utterance, so each capital can have its pitch.
         if config.speech.capitalPitch > 0, text.contains(where: \.isUppercase) {
             for c in text.prefix(500) { enqueue(Symbols.name(of: c)) }
@@ -298,7 +298,8 @@ public enum Speech {
                 // A plain list holds its items as children; a table or outline with no rows is empty (its children
                 // are its columns: Finder's empty folder was "5 items", 21 Oct 2026).
                 if count == 0, !["AXOutline", "AXTable"].contains(obj.element.role) { AXUIElementGetAttributeValueCount(obj.element, kAXChildrenAttribute as CFString, &count) }
-                parts.append(count == 0 ? "empty" : "\(count) item\(count == 1 ? "" : "s"), nothing selected")
+                parts.append(count == 0 ? String(localized: "empty", comment: "A list or table with nothing in it")
+                    : String(localized: "\(Phrases.items(count)), nothing selected", comment: "A list or table reached: %@ is the count of items"))
             }
         }
         let reportText = reason != .focusEntered && reason != .mouse && obj.hasNavigableText
@@ -306,7 +307,7 @@ public enum Speech {
             parts.append(secureCount(obj))
         } else if reportText, let info = try? obj.makeTextInfo(.selection) {
             if !info.isCollapsed {
-                parts.append("selected " + processed(info.text))
+                parts.append(String(localized: "selected \(processed(info.text))", comment: "Selected text, read: %@ is the text"))
             } else {
                 let line = (try? obj.makeTextInfo(.caret)) ?? info
                 line.expand(.line)
@@ -369,8 +370,9 @@ public enum Speech {
         if let last = lastCheckSpoken(element), Date().timeIntervalSince(last.at) < 0.3 { return }   // event and press both
         let fresh = ObjectFactory.make(element)
         let s = fresh.states
-        let word = fresh.role == .switchControl ? (s.contains(.on) ? "on" : "off")
-                : s.contains(.checked) ? "checked" : s.contains(.halfChecked) ? "half checked" : fresh.role == .toggleButton ? (s.contains(.pressed) ? "pressed" : "not pressed") : "not checked"
+        let word = fresh.role == .switchControl ? (s.contains(.on) ? State.on.displayString : State.off.displayString)
+                : s.contains(.checked) ? State.checked.displayString : s.contains(.halfChecked) ? State.halfChecked.displayString
+                : fresh.role == .toggleButton ? (s.contains(.pressed) ? State.pressed.displayString : State.pressed.negativeDisplayString) : State.checked.negativeDisplayString
         // The same state again, within two seconds: the page's late event after TurnOver's own look at the box (a code
         // review, 25 Oct 2026). A different state is news and is said at once.
         if let last = lastCheckSpoken(element), last.word == word, Date().timeIntervalSince(last.at) < 2 { return }
@@ -396,15 +398,16 @@ public enum Speech {
         // then "scroll area", as VoiceOver says it. Silence there left the user nowhere. Passing through, still nothing.
         if role == .scrollPane, name.isEmpty, reason == .focus, obj.element.elements(kAXChildrenAttribute).contains(where: { $0.role != "AXScrollBar" }) {
             let held = obj.contentText(limit: 2)
-            return [held.isEmpty ? "scroll area" : "\(held), scroll area"]
+            return [held.isEmpty ? String(localized: "scroll area", comment: "A scroll area the keyboard lands on")
+                    : String(localized: "\(held), scroll area", comment: "A scroll area the keyboard lands on: %@ is what it holds")]
         }
         if (role == .groupBox || role == .tabControl || role == .scrollPane || role == .splitPane), name.isEmpty, reason == .focus || reason == .focusEntered { return [] }   // focus passing through nameless containers
         if role == .menu, reason == .focus { return [] }   // the menu was announced when it opened
         if obj.axRole == "AXMenuBarItem" {
             // "View menu, 5 of 10" (not "View, subMenu"); the menu that opens under it then says nothing more.
             lastMenuBarItemSpoken = Date()
-            var out = [name.isEmpty ? "menu" : "\(name) menu"]
-            if config.presentation.reportObjectPositionInformation, let p = obj.positionInfo, let i = p.index, let n = p.count, i > 0, i <= n { out.append("\(i) of \(n)") }
+            var out = [name.isEmpty ? Role.menu.displayString : String(localized: "\(name) menu", comment: "A menu bar item: %@ is its name (View menu)")]
+            if config.presentation.reportObjectPositionInformation, let p = obj.positionInfo, let i = p.index, let n = p.count, i > 0, i <= n { out.append(Phrases.position(i, of: n)) }
             return out
         }
         // A web page (Safari, a Mail message) is not announced as "document": where you are in it says it (NVDA says
@@ -415,8 +418,9 @@ public enum Speech {
         if !silentWebPage, role != .staticText, !(reason == .focus || reason == .focusEntered) || !Role.silentOnFocus.contains(role) {
             // Never "unknown": it tells nothing ("Download details, unknown, 722 MB of 787 MB" in an installer,
             // 18 Oct 2026).
-            let roleWords = obj.roleText ?? role.displayString
-            if roleWords.lowercased() != "unknown" { parts.append(roleWords) }
+            // (The app's own words are checked for "unknown"; TurnOver's by the role, as they may be translated.)
+            if let words = obj.roleText { if words.lowercased() != "unknown" { parts.append(words) } }
+            else if role != .unknown { parts.append(role.displayString) }
         }
         let reportsText = obj.hasNavigableText && reason != .focusEntered && reason != .mouse
         // The pieces, each as the rules above and below give it, then said in the order the verbosity list sets
@@ -431,8 +435,8 @@ public enum Speech {
         if let d = obj.description, !d.isEmpty, d != name { pieces.append(("description", [d])) }
         if reason != .focusEntered || role == .list, let k = obj.keyboardShortcut, !k.isEmpty { pieces.append(("shortcut", [k])) }
         if let p = obj.positionInfo {
-            if let i = p.index, let n = p.count, i > 0, i <= n { pieces.append(("position", ["\(i) of \(n)"])) }
-            if reason != .focusEntered, let l = p.level { pieces.append(("level", ["level \(l)"])) }
+            if let i = p.index, let n = p.count, i > 0, i <= n { pieces.append(("position", [Phrases.position(i, of: n)])) }
+            if reason != .focusEntered, let l = p.level { pieces.append(("level", [Phrases.level(l)])) }
         }
         let bundle = obj.element.pid > 0 ? bundleIdentifier(of: obj.element.pid) : nil
         parts = arranged(pieces, by: config.presentation.verbosity(for: bundle))
@@ -494,6 +498,7 @@ public enum Speech {
     private static var inMisspelling = false
 
     public static func textInfoSpeech(_ info: TextInfo, unit: TextUnit?, reason: OutputReason) -> String {
+        let spellingError = String(localized: "spelling error", comment: "Said before a misspelled word")
         var text = info.text
         var prefix: [String] = []
         if unit != .character {
@@ -510,7 +515,7 @@ public enum Speech {
         if unit == .character, reason != .sayAll {
             let now = format?.misspelled ?? false
             wasInMisspelling = inMisspelling
-            if !now, wasInMisspelling, config.documentFormatting.spellingErrors == .speech { prefix.append("out of spelling error") }
+            if !now, wasInMisspelling, config.documentFormatting.spellingErrors == .speech { prefix.append(String(localized: "out of spelling error", comment: "Moving by character out of a misspelled word")) }
             inMisspelling = now
         } else if reason != .sayAll {
             inMisspelling = false
@@ -519,15 +524,15 @@ public enum Speech {
             // NVDA reports formatting changes as the caret moves when configured; by default only spelling errors and headings.
             if f.misspelled, unit != .character || !wasInMisspelling {
                 switch config.documentFormatting.spellingErrors {
-                case .speech: prefix.append("spelling error")
+                case .speech: prefix.append(spellingError)
                 case .tone: Tones.spellingError()
                 case .off: break
                 }
             }
             if config.documentFormatting.reportFontName, let n = f.fontName { prefix.append(n) }
-            if config.documentFormatting.reportFontSize, let s = f.fontSize { prefix.append("\(s) point") }
+            if config.documentFormatting.reportFontSize, let s = f.fontSize { prefix.append(TextFormat.points(s)) }
             if config.documentFormatting.reportFontAttributes {
-                if f.bold { prefix.append("bold") }; if f.italic { prefix.append("italic") }; if f.underline { prefix.append("underlined") }
+                if f.bold { prefix.append(TextFormat.bold) }; if f.italic { prefix.append(TextFormat.italic) }; if f.underline { prefix.append(TextFormat.underlined) }
             }
         }
         if unit == .character {
@@ -535,7 +540,7 @@ public enum Speech {
             text = text.replacingOccurrences(of: "\r\n", with: "\n")
             // One character that stands for more (an attachment: Mail's recipient token) is said whole.
             if text.count > 1 { return (prefix + [text]).joined(separator: " ") }
-            return (prefix + [text.isEmpty ? "blank" : Symbols.spelled(text)]).joined(separator: " ")
+            return (prefix + [text.isEmpty ? Phrases.blank : Symbols.spelled(text)]).joined(separator: " ")
         }
         // A misspelled word inside the line, not only at its start: "spelling error" before it, as NVDA says it.
         if reason != .sayAll, unit == .line || unit == .paragraph || unit == .sentence, config.documentFormatting.spellingErrors != .off {
@@ -543,14 +548,14 @@ public enum Speech {
             if !ranges.isEmpty {
                 // By offset, last to first ("cat" after "concatenate" was marked in the wrong place: code review, 16 Oct 2026).
                 let ns = text as NSString
-                for r in ranges.sorted(by: { $0.location > $1.location }) where r.location + r.length <= ns.length && !(r.location == 0 && prefix.contains("spelling error")) {
-                    if config.documentFormatting.spellingErrors == .speech { text = ns.replacingCharacters(in: NSRange(location: r.location, length: 0), with: ui("spelling error") + " ") } else { Tones.spellingError() }
+                for r in ranges.sorted(by: { $0.location > $1.location }) where r.location + r.length <= ns.length && !(r.location == 0 && prefix.contains(spellingError)) {
+                    if config.documentFormatting.spellingErrors == .speech { text = ns.replacingCharacters(in: NSRange(location: r.location, length: 0), with: ui(spellingError) + " ") } else { Tones.spellingError() }
                 }
             } else {
                 var from = text.startIndex
-                for w in info.misspelledWords() where !(prefix.contains("spelling error") && text.hasPrefix(w)) {
+                for w in info.misspelledWords() where !(prefix.contains(spellingError) && text.hasPrefix(w)) {
                     guard let r = text.range(of: w, range: from..<text.endIndex) else { continue }
-                    if config.documentFormatting.spellingErrors == .speech { text.replaceSubrange(r, with: ui("spelling error") + " " + w); from = text.index(r.lowerBound, offsetBy: ui("spelling error").count + 1 + w.count) } else { Tones.spellingError(); from = r.upperBound }
+                    if config.documentFormatting.spellingErrors == .speech { text.replaceSubrange(r, with: ui(spellingError) + " " + w); from = text.index(r.lowerBound, offsetBy: ui(spellingError).count + 1 + w.count) } else { Tones.spellingError(); from = r.upperBound }
                 }
             }
         }
@@ -570,7 +575,7 @@ public enum Speech {
                 if isComment(m.label) {
                     // "light orange highlight, Comment: Check this by A. Reviewer": the comment, without the colour.
                     let l = m.label.range(of: "comment", options: .caseInsensitive).map { String(m.label[$0.lowerBound...]) } ?? m.label
-                    return m.text.isEmpty ? l : "\(l), on \(m.text)"
+                    return m.text.isEmpty ? l : String(localized: "\(l), on \(m.text)", comment: "A comment and the words it is on: the comment, then the words")
                 }
                 if hasComment, m.text.isEmpty { return nil }
                 return m.text.isEmpty ? m.label : "\(m.label): \(m.text)"
@@ -583,7 +588,7 @@ public enum Speech {
             // (Not a lone non-breaking space: Mail fills each empty line of a message with one, and it was read as
             // "non breaking space" on every blank line, 5 Oct 2026.)
             if text.count == 1, let c = text.first, c != "\r", c != "\n", c != "\u{2029}", c != "\u{a0}" { return (prefix + [Symbols.name(of: c)]).joined(separator: " ") }
-            return (prefix + ["blank"]).joined(separator: " ")
+            return (prefix + [Phrases.blank]).joined(separator: " ")
         }
         // VoiceOver's order: the words, then what they are, innermost first ("AppleVis, heading level 1").
         if config.documentFormatting.rolesAfterText, !prefix.isEmpty {
@@ -721,7 +726,7 @@ public enum Speech {
     /// if given, the value (bullets in a Mac field), the end of the selection or caret, the visible range.
     public static func secureCount(_ obj: TurnOverObject) -> String {
         let n = SecureEcho.length(obj.element)
-        return n == 0 ? "blank" : n == 1 ? "1 character" : "\(n) characters"
+        return n == 0 ? Phrases.blank : Phrases.characters(n)
     }
 
     /// Return and Tab end a word as a space does: say it (NVDA), then start afresh.
@@ -757,14 +762,16 @@ public enum Speech {
         }
         let added = outside(after, before).map { new.textRange($0.start, $0.end) }
         let removed = outside(before, after).map { old.textRange($0.start, $0.end) }
-        func spoken(_ t: String) -> String { t.count == 1 ? Symbols.name(of: t.first!) : (t.count > 1000 ? "\(t.count) characters" : processed(t)) }
+        func spoken(_ t: String) -> String { t.count == 1 ? Symbols.name(of: t.first!) : (t.count > 1000 ? Phrases.characters(t.count) : processed(t)) }
+        func selected(_ t: String) -> String { String(localized: "selected \(spoken(t))", comment: "Selected text, read: %@ is the text") }
         if generalize {
-            if !added.isEmpty { enqueue("selected " + spoken(new.text)) }
-            if !removed.isEmpty { enqueue(new.isCollapsed ? "selection removed" : "now selected " + spoken(new.text)) }
+            if !added.isEmpty { enqueue(selected(new.text)) }
+            if !removed.isEmpty { enqueue(new.isCollapsed ? String(localized: "selection removed", comment: "The selection went")
+                : String(localized: "now selected \(spoken(new.text))", comment: "The selection changed: %@ is what is selected now")) }
             return
         }
-        for t in added where !t.isEmpty { enqueue("selected " + spoken(t)) }
-        for t in removed where !t.isEmpty { enqueue(spoken(t) + " unselected") }
+        for t in added where !t.isEmpty { enqueue(selected(t)) }
+        for t in removed where !t.isEmpty { enqueue(String(localized: "\(spoken(t)) unselected", comment: "Text no longer selected: %@ is the text")) }
     }
 }
 
@@ -772,10 +779,10 @@ extension Speech {
     /// VoiceOver's VO-Shift-C: the last thing spoken, as written, to the clipboard.
     public static func copyLastSpoken() {
         let t = lastRaw.isEmpty ? lastSpoken : lastRaw
-        guard !t.isEmpty else { speakMessage("nothing spoken yet", remember: false); return }
+        guard !t.isEmpty else { speakMessage(String(localized: "nothing spoken yet", comment: "Copying the last phrase when there is none"), remember: false); return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(t, forType: .string)
         Log.io("copied the last spoken: \(Log.words(String(t.prefix(80))))")
-        speakMessage("last phrase copied to clipboard", remember: false)
+        speakMessage(String(localized: "last phrase copied to clipboard", comment: "VO-Shift-C done"), remember: false)
     }
 }

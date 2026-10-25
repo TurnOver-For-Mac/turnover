@@ -144,7 +144,7 @@ public enum InputManager {
             Log.io("input held back: TurnOver's focus is a password field in pid \(f.element.pid), the keyboard is with pid \(front)")
             DispatchQueue.main.async {
                 Tones.edge()
-                Speech.speakMessage("Not typed. The keyboard is not in this password field yet. Trying again; then type.")
+                Speech.speakMessage(String(localized: "Not typed. The keyboard is not in this password field yet. Trying again; then type.", comment: "Spoken message"))
                 SystemPrompts.shared.giveKeyboard(to: f.element)
             }
             return true
@@ -219,7 +219,7 @@ public enum InputManager {
         if gesture.keyName == "escape", gesture.modifiers.isEmpty {
             if Date().timeIntervalSince(lastHelpEscape) < 0.8 { lastHelpEscape = .distantPast; toggleInputHelp(); return }
             lastHelpEscape = Date()
-            Speech.speakMessage("escape; press again to leave input help")
+            Speech.speakMessage(String(localized: "escape; press again to leave input help", comment: "Spoken message"))
             return
         }
         // The key, then what it does in a few words (as VoiceOver's keyboard help and NVDA's input help).
@@ -230,6 +230,6 @@ public enum InputManager {
     public static func toggleInputHelp() {
         isInputHelpActive.toggle()
         onInputHelpChanged?(isInputHelpActive)
-        Speech.speakMessage(isInputHelpActive ? "input help on" : "input help off")
+        Speech.speakMessage(isInputHelpActive ? String(localized: "input help on", comment: "Spoken message") : String(localized: "input help off", comment: "Spoken message"))
     }
 }

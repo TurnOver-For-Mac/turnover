@@ -64,35 +64,35 @@ final class MenuAnywhere {
         var l: [String: (spoken: String, kind: Kind, action: @MainActor () -> Void)] = [
         // M for the menu (14 Oct 2026: clearer than NVDA's N, and the layer is TurnOver's own); N still opens
         // it, unlisted, for hands used to it. The plugin maker moved from M to W ("write a plugin").
-        "m": ("menu", .list, { TurnOverMenu.shared.open() }),
-        "n": ("menu", .list, { TurnOverMenu.shared.open() }),
-        "s": ("settings window", .run, { SettingsBridge.open() }),   // the window (18 Oct 2026); M, Settings is the spoken menu
-        "/": ("shortcuts here", .list, { GlobalCommands.openShortcutsList() }),
-        "r": ("screen recognition", .list, { MenuAnywhere.shared.recognize() }),
-        "t": ("switch reader", .run, { MenuAnywhere.shared.switchLead?(MenuAnywhere.shared.voiceOverWasReading) }),
-        "d": ("direct: this app's keys straight to it, TurnOver quiet", .run, { MenuAnywhere.shared.toggleDirect?() }),
-        "a": ("all apps: TurnOver in its apps, everywhere, or VoiceOver everywhere", .run, { MenuAnywhere.shared.cycleLeadMode?() }),
-        "k": ("keyboard style: VoiceOver, NVDA or JAWS keys", .run, { MenuAnywhere.runScript("toggleKeyboardStyle") }),
-        "j": ("that was wrong", .run, { MenuAnywhere.runScript("markProblem") }),
-        "h": ("guide", .run, { TurnOverGuide.open() }),
-        "i": ("describe image", .run, { MenuAnywhere.runScript("describeImage") }),
-        "c": ("copy last spoken", .run, { MenuAnywhere.runScript("copyLastSpoken") }),
+        "m": (String(localized: "menu", comment: "A letter's command in the TurnOver layer (Command Control Comma)"), .list, { TurnOverMenu.shared.open() }),
+        "n": (String(localized: "menu", comment: "A letter's command in the TurnOver layer (Command Control Comma)"), .list, { TurnOverMenu.shared.open() }),
+        "s": (String(localized: "settings window", comment: "A letter's command in the TurnOver layer (Command Control Comma)"), .run, { SettingsBridge.open() }),   // the window (18 Oct 2026); M, Settings is the spoken menu
+        "/": (String(localized: "shortcuts here", comment: "A letter's command in the TurnOver layer (Command Control Comma)"), .list, { GlobalCommands.openShortcutsList() }),
+        "r": (String(localized: "screen recognition", comment: "A letter's command in the TurnOver layer (Command Control Comma)"), .list, { MenuAnywhere.shared.recognize() }),
+        "t": (String(localized: "switch reader", comment: "A letter's command in the TurnOver layer (Command Control Comma)"), .run, { MenuAnywhere.shared.switchLead?(MenuAnywhere.shared.voiceOverWasReading) }),
+        "d": (String(localized: "direct: this app's keys straight to it, TurnOver quiet", comment: "A letter's command in the TurnOver layer (Command Control Comma)"), .run, { MenuAnywhere.shared.toggleDirect?() }),
+        "a": (String(localized: "all apps: TurnOver in its apps, everywhere, or VoiceOver everywhere", comment: "A letter's command in the TurnOver layer (Command Control Comma)"), .run, { MenuAnywhere.shared.cycleLeadMode?() }),
+        "k": (String(localized: "keyboard style: VoiceOver, NVDA or JAWS keys", comment: "A letter's command in the TurnOver layer (Command Control Comma)"), .run, { MenuAnywhere.runScript("toggleKeyboardStyle") }),
+        "j": (String(localized: "that was wrong", comment: "A letter's command in the TurnOver layer (Command Control Comma)"), .run, { MenuAnywhere.runScript("markProblem") }),
+        "h": (String(localized: "guide", comment: "A letter's command in the TurnOver layer (Command Control Comma)"), .run, { TurnOverGuide.open() }),
+        "i": (String(localized: "describe image", comment: "A letter's command in the TurnOver layer (Command Control Comma)"), .run, { MenuAnywhere.runScript("describeImage") }),
+        "c": (String(localized: "copy last spoken", comment: "A letter's command in the TurnOver layer (Command Control Comma)"), .run, { MenuAnywhere.runScript("copyLastSpoken") }),
         // G: gesture control (the trackpad) on and off (14 Oct 2026: in the layer as well as by a gesture and the menu).
-        "g": ("gesture control", .run, { Trackpad.toggle() }),
+        "g": (String(localized: "gesture control", comment: "A letter's command in the TurnOver layer (Command Control Comma)"), .run, { Trackpad.toggle() }),
         // V: copy VoiceOver's settings (15 Oct 2026: every TurnOver command through the layer, no direct keys;
         // direct keys clash with apps and will go).
-        "v": ("copy VoiceOver settings", .run, { VoiceOverSettings.startFlow() }),
+        "v": (String(localized: "copy VoiceOver settings", comment: "A letter's command in the TurnOver layer (Command Control Comma)"), .run, { VoiceOverSettings.startFlow() }),
         ]
         // The screen interface (a window's controls from its pixels) is a feature for a whole build, so the layer
         // offers it only in developer builds (Oliver, 29 Oct 2026: "that's not a bug fix, it's a feature").
-        if Edition.isDevBuild { l["e"] = ("screen interface: the window's controls from its pixels (experimental)", .list, { MenuAnywhere.shared.recognizeInterface() }) }
+        if Edition.isDevBuild { l["e"] = (String(localized: "screen interface: the window's controls from its pixels (experimental)", comment: "A letter's command in the TurnOver layer (Command Control Comma)"), .list, { MenuAnywhere.shared.recognizeInterface() }) }
         return l
     }
     /// The letters in the list's order, as said when the layer is pressed twice.
     static var letterList: String {
-        let names = ["m": "M menu", "s": "S settings", "t": "T switch reader", "a": "A ask for this app", "v": "V copy VoiceOver settings", "k": "K keyboard style", "j": "J that was wrong",
-                     "h": "H guide", "i": "I describe image", "c": "C copy last spoken", "g": "G gesture control", "r": "R recognition", "e": "E screen interface", "d": "D direct", "/": "Slash shortcuts"]
-        return listOrder.filter { letters[$0] != nil }.compactMap { names[$0] }.joined(separator: ", ") + ". Or Down Arrow for a list"
+        let names = ["m": String(localized: "M menu", comment: "A letter's command, as the TurnOver layer lists them"), "s": String(localized: "S settings", comment: "A letter's command, as the TurnOver layer lists them"), "t": String(localized: "T switch reader", comment: "A letter's command, as the TurnOver layer lists them"), "a": String(localized: "A ask for this app", comment: "A letter's command, as the TurnOver layer lists them"), "v": String(localized: "V copy VoiceOver settings", comment: "A letter's command, as the TurnOver layer lists them"), "k": String(localized: "K keyboard style", comment: "A letter's command, as the TurnOver layer lists them"), "j": String(localized: "J that was wrong", comment: "A letter's command, as the TurnOver layer lists them"),
+                     "h": String(localized: "H guide", comment: "A letter's command, as the TurnOver layer lists them"), "i": String(localized: "I describe image", comment: "A letter's command, as the TurnOver layer lists them"), "c": String(localized: "C copy last spoken", comment: "A letter's command, as the TurnOver layer lists them"), "g": String(localized: "G gesture control", comment: "A letter's command, as the TurnOver layer lists them"), "r": String(localized: "R recognition", comment: "A letter's command, as the TurnOver layer lists them"), "e": String(localized: "E screen interface", comment: "A letter's command, as the TurnOver layer lists them"), "d": String(localized: "D direct", comment: "A letter's command, as the TurnOver layer lists them"), "/": String(localized: "Slash shortcuts", comment: "A letter's command, as the TurnOver layer lists them")]
+        return String(localized: "\(listOrder.filter { letters[$0] != nil }.compactMap { names[$0] }.joined(separator: ", ")). Or Down Arrow for a list", comment: "The TurnOver layer's letters, then the list")
     }
 
     /// Said by whichever reader is talking: where VoiceOver leads, as an accessibility announcement VoiceOver reads
@@ -105,14 +105,14 @@ final class MenuAnywhere {
     func openLayerList() {
         let items = Self.listOrder.compactMap { k -> MenuItem? in
             guard let l = Self.letters[k] else { return nil }
-            return MenuItem("\(k == "/" ? "Slash" : k.uppercased()), \(l.spoken)", .action { DispatchQueue.main.async { l.action() } })
+            return MenuItem(verbatim: "\(k == "/" ? KeyNames.slashName : k.uppercased()), \(l.spoken)", .action { DispatchQueue.main.async { l.action() } })
         }
         if steppedIn { TurnOverMenu.shared.onClose = { [weak self] in self?.handBack() } }
         TurnOverMenu.shared.openList("TurnOver commands", items: items)
     }
 
     static func runScript(_ name: String) {
-        guard let s = GlobalCommands.shared.script(named: name) else { Log.warning("layer: no script \(name)"); Speech.speakMessage("not available"); return }
+        guard let s = GlobalCommands.shared.script(named: name) else { Log.warning("layer: no script \(name)"); Speech.speakMessage(String(localized: "not available", comment: "Spoken message")); return }
         ScriptHandler.queueScript(s, gesture: KeyboardGesture(keyCode: 0, modifiers: [], characters: "", timestamp: 0, isRepeat: false, flags: []))
     }
 
@@ -290,14 +290,14 @@ final class MenuAnywhere {
             if RegisterEventHotKey(UInt32(code), 0, id, GetApplicationEventTarget(), 0, &ref) == noErr { voKeys.append(ref) }
         }
         Log.io("layer: the commands as a list VoiceOver reads")
-        Self.say("TurnOver commands, \(voList.count). " + voItemText())
+        Self.say(String(localized: "TurnOver commands, \(String(voList.count)).", comment: "The TurnOver layer as a list: how many") + " " + voItemText())
         voTouch()
     }
 
     private func voItemText() -> String {
         guard voList.indices.contains(voIndex), let l = Self.letters[voList[voIndex]] else { return "" }
         let k = voList[voIndex]
-        return "\(k == "/" ? "Slash" : k.uppercased()), \(l.spoken), \(voIndex + 1) of \(voList.count)"
+        return "\(k == "/" ? KeyNames.slashName : k.uppercased()), \(l.spoken), \(Phrases.position(voIndex + 1, of: voList.count))"
     }
 
     private func voTouch() {
@@ -338,7 +338,7 @@ final class MenuAnywhere {
             guard let self, InputManager.captureNext != nil else { return }
             InputManager.captureNext = nil
             Log.io("layer: no letter in time")
-            Speech.speakMessage("cancelled")
+            Speech.speakMessage(String(localized: "cancelled", comment: "Spoken message"))
             if self.steppedIn { self.handBack() }
         }
         layerTimeout = w
@@ -347,7 +347,7 @@ final class MenuAnywhere {
 
     private func letter(_ g: KeyboardGesture?) {
         layerTimeout?.cancel()
-        guard let g else { Speech.speakMessage("cancelled"); if steppedIn { handBack() }; return }   // Escape
+        guard let g else { Speech.speakMessage(String(localized: "cancelled", comment: "Spoken message")); if steppedIn { handBack() }; return }   // Escape
         let key = g.keyName.lowercased()
         // The arrows open the commands as a list to arrow through, Return running one (Down Arrow pressed
         // after the layer key twice, 12 Oct 2026, gave only the letters).

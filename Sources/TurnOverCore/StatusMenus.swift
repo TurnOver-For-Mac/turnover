@@ -113,7 +113,7 @@ public enum StatusMenus {
     public static func openList() {
         let extras = gather()
         var items = extras.map { e in
-            MenuItem(e.name, .action {
+            MenuItem(verbatim: e.name, .action {
                 AXHandler.shared.observe(e.pid)
                 StatusMenus.lastOpened = (e.name, Date())
                 let r = AXUIElementPerformAction(e.element, kAXPressAction as CFString)
@@ -122,7 +122,7 @@ public enum StatusMenus {
                 // appears is a failure.
                 if r != .success {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                        if !AXHandler.shared.isMenuOpen { Speech.speakMessage("could not open \(e.name)") }
+                        if !AXHandler.shared.isMenuOpen { Speech.speakMessage(String(localized: "could not open \(e.name)", comment: "A menu could not be opened: %@ is its name")) }
                     }
                 }
             })

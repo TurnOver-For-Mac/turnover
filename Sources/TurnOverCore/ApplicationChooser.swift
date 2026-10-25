@@ -32,15 +32,15 @@ public enum ApplicationChooser {
         // password prompt was not in the list at build 18's publish (14 Oct 2026).
         let prompts = SystemPrompts.shared.waiting
         order.removeAll { pid in prompts.contains { $0.pid == pid } }
-        let promptEntries = prompts.map { p in Entry(pid: p.pid, name: "system dialog", windows: [(p.text, p.window)]) }
+        let promptEntries = prompts.map { p in Entry(pid: p.pid, name: String(localized: "system dialog", comment: "A role: a macOS system dialog"), windows: [(p.text, p.window)]) }
         return promptEntries + order.compactMap { pid in
             guard let app = NSRunningApplication(processIdentifier: pid) else { return nil }
             let name = app.localizedName ?? app.bundleIdentifier ?? "pid \(pid)"
             let ax = AXUIElementCreateApplication(pid)
             let windows = ax.elements(kAXWindowsAttribute).map { w -> (String, AXUIElement?) in
                 let t = (w.string(kAXTitleAttribute) ?? "").trimmingCharacters(in: .whitespaces)
-                let role = w.string(kAXSubroleAttribute) == "AXDialog" || w.string(kAXSubroleAttribute) == "AXSystemDialog" ? "dialog" : "window"
-                return (t.isEmpty ? "untitled \(role)" : t, w)
+                let dialog = w.string(kAXSubroleAttribute) == "AXDialog" || w.string(kAXSubroleAttribute) == "AXSystemDialog"
+                return (t.isEmpty ? (dialog ? String(localized: "untitled dialog", comment: "A dialog with no title") : String(localized: "untitled window", comment: "A window with no title")) : t, w)
             }
             return Entry(pid: pid, name: name, windows: windows)
         }
@@ -50,13 +50,13 @@ public enum ApplicationChooser {
         let entries = gather()
         let items: [MenuItem] = entries.map { e in
             let count = e.windows.count
-            let label = "\(e.name), \(count == 0 ? "no windows" : count == 1 ? e.windows[0].title : "\(count) windows")"
+            let label = "\(e.name), \(count == 0 ? String(localized: "no windows", comment: "An app with no windows") : count == 1 ? e.windows[0].title : String(localized: "\(String(count)) windows", comment: "How many windows an app has"))"
             if count > 1 {
-                return MenuItem(label, .submenu {
-                    e.windows.map { w in MenuItem(w.title, .action { switchTo(e, window: w.element) }) }
+                return MenuItem(verbatim: label, .submenu {
+                    e.windows.map { w in MenuItem(verbatim: w.title, .action { switchTo(e, window: w.element) }) }
                 })
             }
-            return MenuItem(label, .action { switchTo(e, window: e.windows.first?.element) })
+            return MenuItem(verbatim: label, .action { switchTo(e, window: e.windows.first?.element) })
         }
         Log.io("application chooser: \(entries.count) applications")
         TurnOverMenu.shared.openList("Application Chooser", items: items)   // named as VoiceOver names it (15 Oct 2026)

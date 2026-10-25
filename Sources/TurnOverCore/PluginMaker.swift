@@ -108,7 +108,7 @@ public enum PluginMaker {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             try enc.encode(m).write(to: dir.appendingPathComponent("manifest.json"), options: .atomic)
             try enc.encode(p).write(to: dir.appendingPathComponent("profile.json"), options: .atomic)
-        } catch { Log.error("plugin maker: could not save: \(error)"); Speech.speakMessage("Could not save the change"); return false }
+        } catch { Log.error("plugin maker: could not save: \(error)"); Speech.speakMessage(String(localized: "Could not save the change", comment: "Spoken message")); return false }
         ProfileStore.shared.reload(force: true, quiet: true)
         return true
     }
@@ -149,9 +149,9 @@ public enum PluginMaker {
     // MARK: The list (TurnOver Shift Slash)
 
     public static func open() {
-        guard Edition.includesPlugins else { Speech.speakMessage("Plugins are not on in this version"); return }
-        guard let (e, pid) = target(), let (bundle, appName) = app(pid) else { Speech.speakMessage("No item to change here"); return }
-        guard bundle != Bundle.main.bundleIdentifier else { Speech.speakMessage("TurnOver's own windows cannot be changed"); return }
+        guard Edition.includesPlugins else { Speech.speakMessage(String(localized: "Plugins are not on in this version", comment: "Spoken message")); return }
+        guard let (e, pid) = target(), let (bundle, appName) = app(pid) else { Speech.speakMessage(String(localized: "No item to change here", comment: "Spoken message")); return }
+        guard bundle != Bundle.main.bundleIdentifier else { Speech.speakMessage(String(localized: "TurnOver's own windows cannot be changed", comment: "Spoken message")); return }
         let obj = ObjectFactory.make(e)
         let itemName = obj.name.isEmpty ? obj.role.displayString : "\(obj.name), \(obj.role.displayString)"
         let items: [MenuItem] = [
@@ -164,7 +164,7 @@ public enum PluginMaker {
             MenuItem("My changes for \(appName)", .action { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { listChanges(bundle: bundle, appName: appName) } }),
             MenuItem("Share my changes for \(appName)", .action { share(bundle: bundle, appName: appName) }),
         ]
-        TurnOverMenu.shared.openList("Change \(itemName)", items: items)
+        TurnOverMenu.shared.openList(verbatim: String(localized: "Change \(itemName)", comment: "The plugin maker's list for an item: %@ is the item"), items: items)
     }
 
     static func whatIsThis(_ e: AXUIElement, pid: pid_t) {
@@ -181,12 +181,12 @@ public enum PluginMaker {
         let json = String(data: (try? enc.encode(m)) ?? Data(), encoding: .utf8) ?? ""
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(facts.joined(separator: "; ") + "\n\"match\": " + json, forType: .string)
-        Speech.speakMessage(facts.joined(separator: ". ") + ". Copied")
+        Speech.speakMessage(facts.joined(separator: ". ") + ". " + String(localized: "Copied", comment: "Copied to the clipboard"))
     }
 
     static func label(_ e: AXUIElement, pid: pid_t, bundle: String, appName: String) {
         let obj = ObjectFactory.make(e)
-        LineInput.ask("Name for this \(obj.role.displayString)", initial: "") { text in
+        LineInput.ask(String(localized: "Name for this \(obj.role.displayString)", comment: "Labelling an item: %@ is its role"), initial: "") { text in
             guard let text, !text.trimmingCharacters(in: .whitespaces).isEmpty else { return }
             let (m, _) = match(for: e, pid: pid)
             var acts: CFArray?; AXUIElementCopyActionNames(e, &acts)
@@ -195,7 +195,7 @@ public enum PluginMaker {
             let role: String? = pressable && ["AXImage", "AXGroup", "AXStaticText"].contains(e.role) ? "button" : nil
             let rule = LabelRule(match: m, name: text.trimmingCharacters(in: .whitespaces), nameFrom: nil, role: role)
             if add("label", bundle: bundle, appName: appName, change: { p in p.labels = (p.labels ?? []) + [rule]; return encode(rule) }) {
-                Speech.speakMessage("Labelled \(rule.name ?? ""). Saved in My changes for \(appName)")
+                Speech.speakMessage(String(localized: "Labelled \(rule.name ?? ""). Saved in My changes for \(appName)", comment: "An item labelled: %1$@ is the label, %2$@ the app"))
             }
         }
     }
@@ -206,9 +206,9 @@ public enum PluginMaker {
         TurnOverMenu.captureKey(prompt: "Press the key for \(name). Use the TurnOver key, Command, Control or Option with it") { g in
             // A plain letter, digit or the like would type in the app: it needs a modifier, or to be a function key.
             let fkey = g.keyName.hasPrefix("f") && Int(g.keyName.dropFirst()) != nil
-            guard !g.modifiers.isEmpty || fkey else { Speech.speakMessage("\(g.displayName) on its own types in \(appName). Not given; try again with a modifier"); return }
+            guard !g.modifiers.isEmpty || fkey else { Speech.speakMessage(String(localized: "\(g.displayName) on its own types in \(appName). Not given; try again with a modifier", comment: "A key that types can't be given: %1$@ is the key, %2$@ the app")); return }
             if let s = ScriptHandler.findScript(for: g), !s.name.hasPrefix("plugin_") {
-                Speech.speakMessage("\(g.displayName) already does: \(s.description). Not given; choose another key"); return
+                Speech.speakMessage(String(localized: "\(g.displayName) already does: \(s.description). Not given; choose another key", comment: "A key already taken: %1$@ is the key, %2$@ its command")); return
             }
             var acts: CFArray?; AXUIElementCopyActionNames(e, &acts)
             let canPress = ((acts as? [String]) ?? []).contains("AXPress")
@@ -220,7 +220,10 @@ public enum PluginMaker {
             let id = g.identifier.hasPrefix("kb:") ? String(g.identifier.dropFirst(3)) : g.identifier
             let rule = KeyRule(key: id, description: "\(words) \(name)", action: action, target: m, menu: nil, keys: nil, say: nil)
             if add("key", bundle: bundle, appName: appName, change: { p in p.keys = (p.keys ?? []) + [rule]; return encode(rule) }) {
-                Speech.speakMessage("\(g.displayName) \(words.lowercased()) \(name) in \(appName). Saved")
+                let key = g.displayName
+                Speech.speakMessage(action == "press" ? String(localized: "\(key) presses \(name) in \(appName). Saved", comment: "A key given to an item: the key, the item, the app")
+                    : action == "focus" ? String(localized: "\(key) moves to \(name) in \(appName). Saved", comment: "A key given to an item: the key, the item, the app")
+                    : String(localized: "\(key) reads \(name) in \(appName). Saved", comment: "A key given to an item: the key, the item, the app"))
             }
         }
     }
@@ -231,7 +234,8 @@ public enum PluginMaker {
         let hasValue = e.attr(kAXValueAttribute) != nil
         let rule = WatchRule(match: m, prefix: obj.name.isEmpty ? nil : obj.name, read: hasValue ? "value" : "text")
         if add("watch", bundle: bundle, appName: appName, change: { p in p.watch = (p.watch ?? []) + [rule]; return encode(rule) }) {
-            Speech.speakMessage("TurnOver will read \(obj.name.isEmpty ? "this" : obj.name) when it changes. Saved")
+            Speech.speakMessage(obj.name.isEmpty ? String(localized: "TurnOver will read this when it changes. Saved", comment: "An item watched for changes")
+                : String(localized: "TurnOver will read \(obj.name) when it changes. Saved", comment: "An item watched for changes: %@ is its name"))
         }
     }
 
@@ -239,13 +243,15 @@ public enum PluginMaker {
         let obj = ObjectFactory.make(e)
         let (m, _) = match(for: e, pid: pid)
         if add("silence", bundle: bundle, appName: appName, change: { p in p.silence = (p.silence ?? []) + [m]; return encode(m) }) {
-            Speech.speakMessage("\(obj.name.isEmpty ? "This" : obj.name) will not be announced. Saved")
+            Speech.speakMessage(obj.name.isEmpty ? String(localized: "This will not be announced. Saved", comment: "An item silenced")
+                : String(localized: "\(obj.name) will not be announced. Saved", comment: "An item silenced: %@ is its name"))
         }
     }
 
     static func undo() {
-        guard let last = history.popLast() else { Speech.speakMessage("Nothing to undo"); return }
-        Speech.speakMessage(remove(kind: last.kind, json: last.json, bundle: last.bundle, appName: last.appName) ? "Undone: the \(last.kind) taken out" : "Could not undo; it was already removed")
+        guard let last = history.popLast() else { Speech.speakMessage(String(localized: "Nothing to undo", comment: "Spoken message")); return }
+        Speech.speakMessage(remove(kind: last.kind, json: last.json, bundle: last.bundle, appName: last.appName) ? String(localized: "Undone: the \(last.kind) taken out", comment: "A plugin change undone: %@ is its kind (label, key)")
+            : String(localized: "Could not undo; it was already removed", comment: "Spoken message"))
     }
 
     static func listChanges(bundle: String, appName: String) {
@@ -257,13 +263,13 @@ public enum PluginMaker {
         }
         var items: [MenuItem] = []
         func item(_ title: String, kind: String, json: Data) {
-            items.append(MenuItem(title, .action { Speech.speakMessage(remove(kind: kind, json: json, bundle: bundle, appName: appName) ? "Removed" : "Could not remove it") }))
+            items.append(MenuItem(verbatim: title, .action { Speech.speakMessage(remove(kind: kind, json: json, bundle: bundle, appName: appName) ? String(localized: "Removed", comment: "Spoken message") : String(localized: "Could not remove it", comment: "Spoken message")) }))
         }
         for r in p.labels ?? [] { item("Label: \(words(r.match)) is called \(r.name ?? r.nameFrom ?? "")", kind: "label", json: encode(r)) }
         for r in p.keys ?? [] { item("Key: \(KeyboardGesture(identifier: "kb:" + r.key)?.displayName ?? r.key), \(r.description)", kind: "key", json: encode(r)) }
         for r in p.watch ?? [] { item("Read when it changes: \(words(r.match))", kind: "watch", json: encode(r)) }
         for m in p.silence ?? [] { item("Not announced: \(words(m))", kind: "silence", json: encode(m)) }
-        TurnOverMenu.shared.openList("My changes for \(appName). Return removes one", items: items)
+        TurnOverMenu.shared.openList(verbatim: String(localized: "My changes for \(appName). Return removes one", comment: "A list of your plugin changes: %@ is the app"), items: items)
     }
 
     static func share(bundle: String, appName: String) {
@@ -275,8 +281,9 @@ public enum PluginMaker {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
         p.arguments = ["-c", "-k", "--keepParent", dir.path, zip.path]
-        do { try p.run(); p.waitUntilExit() } catch { Speech.speakMessage("Could not make the file"); return }
-        Speech.speakMessage(p.terminationStatus == 0 ? "Saved My changes for \(appName).zip on the Desktop" : "Could not make the file")
+        do { try p.run(); p.waitUntilExit() } catch { Speech.speakMessage(String(localized: "Could not make the file", comment: "Spoken message")); return }
+        Speech.speakMessage(p.terminationStatus == 0 ? String(localized: "Saved My changes for \(appName).zip on the Desktop", comment: "Your plugin changes shared as a file: %@ is the app")
+            : String(localized: "Could not make the file", comment: "Spoken message"))
     }
 }
 
@@ -318,7 +325,7 @@ public enum LineInput {
         var text = initial
         func next() {
             InputManager.captureNext = { g in
-                guard let g else { Speech.speakMessage("cancelled"); done(nil); return }
+                guard let g else { Speech.speakMessage(String(localized: "cancelled", comment: "Spoken message")); done(nil); return }
                 switch g.keyName {
                 case "enter", "numpadEnter": done(text); return
                 case "backspace":
@@ -332,7 +339,7 @@ public enum LineInput {
             }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            Speech.speakMessage(prompt + ". Type it, then Return. Escape cancels")
+            Speech.speakMessage(String(localized: "\(prompt). Type it, then Return. Escape cancels", comment: "Waiting for typed words: %@ says what for"))
             next()
         }
     }

@@ -80,8 +80,8 @@ public enum Trackpad {
         // Said as VoiceOver says it (17 Oct 2026: "trackpad commands on, trackpad commands off, as it does in VoiceOver").
         // Coexisting, VoiceOver sees the same gesture and says it where it reads; TurnOver says it where it reads.
         let say = announce && (!Coexist.on || Core.active)
-        guard on != controlOn else { if say { Speech.speakMessage("trackpad commands \(on ? "on" : "off")") }; return }
-        if on, helper?.isRunning != true { if announce { Speech.speakMessage("the trackpad can't be read now") }; return }
+        guard on != controlOn else { if say { Speech.speakMessage(String(localized: "trackpad commands \(Phrases.onOff(on))", comment: "Gesture control turned on or off")) }; return }
+        if on, helper?.isRunning != true { if announce { Speech.speakMessage(String(localized: "the trackpad can't be read now", comment: "Spoken message")) }; return }
         controlOn = on
         PointerHold.set(on)
         Log.info("trackpad: control \(on ? "on" : "off")")
@@ -103,6 +103,19 @@ public enum Trackpad {
         ("tables", "turnover+command+t", "turnover+command+shift+t", true),
     ]
     private static var rotorIndex = 2   // lines
+    /// A rotor kind as spoken (the kinds stay English: they are the table's keys).
+    static func rotorName(_ kind: String) -> String {
+        switch kind {
+        case "characters": return String(localized: "characters", comment: "A trackpad rotor kind")
+        case "words": return String(localized: "words", comment: "A trackpad rotor kind")
+        case "lines": return String(localized: "lines", comment: "A trackpad rotor kind")
+        case "headings": return String(localized: "headings", comment: "A trackpad rotor kind")
+        case "links": return String(localized: "links", comment: "A trackpad rotor kind")
+        case "form controls": return String(localized: "form controls", comment: "A trackpad rotor kind")
+        case "tables": return String(localized: "tables", comment: "A trackpad rotor kind")
+        default: return kind
+        }
+    }
 
     /// NVDA's touch modes (the Windows style): what one-finger flicks move by.
     nonisolated(unsafe) static var textMode = false
@@ -165,7 +178,7 @@ public enum Trackpad {
             switch line {
             case "G tap 3":
                 textMode.toggle()
-                Speech.cancel(); Speech.speakMessage(textMode ? "text mode" : "object mode")
+                Speech.cancel(); Speech.speakMessage(textMode ? String(localized: "text mode", comment: "Spoken message") : String(localized: "object mode", comment: "Spoken message"))
             case "G tap 2": Speech.cancel()
             case "G double-tap 2": TurnOverMenu.shared.open()
             case "G double-tap 1" where explored != nil: ObjectNavigator.shared.activate()
@@ -183,7 +196,7 @@ public enum Trackpad {
             guard let at = kinds.firstIndex(of: rotorIndex) ?? kinds.first.map({ _ in 0 }) else { return }
             rotorIndex = kinds[(at + (line == "R cw" ? 1 : kinds.count - 1)) % kinds.count]
             Speech.cancel()
-            Speech.speakMessage(rotor[rotorIndex].name)
+            Speech.speakMessage(rotorName(rotor[rotorIndex].name))
         case "G flick-down 1", "G flick-up 1":
             let r = rotor[rotorIndex]
             press(line == "G flick-down 1" ? r.next : r.previous)
@@ -193,8 +206,8 @@ public enum Trackpad {
             ObjectNavigator.shared.readWindow()                        // the page from the top; the current scroll page
         case "G double-tap 3":
             let off = Speech.mode != .off                              // mute or unmute
-            if off { Speech.speakMessage("speech off"); DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { Speech.mode = .off } }
-            else { Speech.mode = .talk; Speech.speakMessage("speech on") }
+            if off { Speech.speakMessage(String(localized: "speech off", comment: "Spoken message")); DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { Speech.mode = .off } }
+            else { Speech.mode = .talk; Speech.speakMessage(String(localized: "speech on", comment: "Spoken message")) }
         case "G double-tap 1" where explored != nil:
             ObjectNavigator.shared.activate()
         case "E end":
@@ -227,7 +240,7 @@ public enum Trackpad {
     /// rotor's steps only (the default), or everywhere (items crossed while exploring, headings, edges, on and off).
     public enum HapticLevel: String, CaseIterable, Sendable {
         case off, rotor, everywhere
-        public var name: String { self == .off ? "off" : self == .rotor ? "rotor only" : "everywhere" }
+        public var name: String { self == .off ? State.off.displayString : self == .rotor ? String(localized: "rotor only", comment: "Where haptics are felt") : String(localized: "everywhere", comment: "Where haptics are felt") }
     }
     /// Off for now (17 Oct 2026: "remove the haptic stuff, we don't want it for now"); the code stays.
     public static var hapticLevel: HapticLevel {

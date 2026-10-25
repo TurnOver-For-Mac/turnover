@@ -22,14 +22,20 @@ public struct MenuItem {
     public let kind: Kind
     /// What it means, said after a pause on the item (docs/MENU-PLAN.md: names in titles, explanations after).
     public var hint: String?
-    public init(_ title: String, _ kind: Kind, hint: String? = nil) { self.title = title; self.kind = kind; self.hint = hint }
+    /// TurnOver's own words, translated (Resources/Localizable.xcstrings): a literal title or hint is listed for
+    /// translation as it is written. A number goes in as text ("\(String(n))"), so English reads as it did.
+    public init(_ title: LocalizedStringResource, _ kind: Kind, hint: LocalizedStringResource? = nil) {
+        self.init(verbatim: String(localized: title), kind, hint: hint.map { String(localized: $0) })
+    }
+    /// A title made elsewhere: an app's or a document's own words, or words already translated.
+    public init(verbatim title: String, _ kind: Kind, hint: String? = nil) { self.title = title; self.kind = kind; self.hint = hint }
 
     var valueText: String? {
         switch kind {
         case .cycle(let options, let get, _): return options[max(0, min(options.count - 1, get()))]
-        case .toggle(let get, _): return get() ? "on" : "off"
+        case .toggle(let get, _): return Phrases.onOff(get())
         case .number(let get, _, _, _, _, let format): return format(get())
-        case .submenu: return "submenu"
+        case .submenu: return State.hasPopup.displayString
         case .action, .select: return nil
         }
     }
@@ -59,7 +65,7 @@ public final class TurnOverMenu {
     /// where TurnOver reads. Needs a restart.
     public static func setCoexist(_ on: Bool) {
         UserDefaults.standard.set(on, forKey: "coexist")
-        Speech.speakMessage(on ? "CoExist on. TurnOver restarts, then VoiceOver Utility opens and closes by itself to set VoiceOver up." : "CoExist off. TurnOver restarts, and VoiceOver's settings are put back.")
+        Speech.speakMessage(on ? String(localized: "CoExist on. TurnOver restarts, then VoiceOver Utility opens and closes by itself to set VoiceOver up.", comment: "CoExist turned on") : String(localized: "CoExist off. TurnOver restarts, and VoiceOver's settings are put back.", comment: "CoExist turned off"))
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { TurnOverMenu.shared.relaunch?() }
     }
     /// Starts TurnOver again (set by the app): after a change of CoExist.
@@ -69,10 +75,11 @@ public final class TurnOverMenu {
     public var onScreenCurtainChanged: (() -> Void)?
 
     public func open() {
-        stack = [("TurnOver menu", rootItems(), 0)]
+        let title = String(localized: "TurnOver menu", comment: "The TurnOver menu, as it opens")
+        stack = [(title, rootItems(), 0)]
         isOpen = true
         Speech.cancel()
-        Speech.speakMessage("TurnOver menu")
+        Speech.speakMessage(title)
         announce()
     }
 
@@ -100,8 +107,9 @@ public final class TurnOverMenu {
     /// A spoken list of the caller's own items (NVDA's elements list): Enter runs the item and closes.
     /// The reading mode was changed in the menu: the app now gets its reader (set by the app).
     public var leadModeChanged: (() -> Void)?
-    public func openList(_ title: String, items: [MenuItem]) {
-        guard !items.isEmpty else { Speech.speakMessage("\(title): none"); return }
+    public func openList(_ title: LocalizedStringResource, items: [MenuItem]) { openList(verbatim: String(localized: title), items: items) }
+    public func openList(verbatim title: String, items: [MenuItem]) {
+        guard !items.isEmpty else { Speech.speakMessage(Self.none(title)); return }
         stack = [(title, items, 0)]
         isOpen = true
         Speech.cancel()
@@ -122,7 +130,7 @@ public final class TurnOverMenu {
         let hook = onClose; onClose = nil
         Braille.releaseItem()
         hook?()
-        Speech.speakMessage("closed")
+        Speech.speakMessage(String(localized: "closed", comment: "The TurnOver menu or a list closed"))
     }
 
     private var hintWork: DispatchWorkItem?
@@ -142,18 +150,19 @@ public final class TurnOverMenu {
         if valueOnly { Speech.speakItem("\(item.title): \(item.valueText ?? "")"); return }
         var parts = [item.title]
         if let v = item.valueText { parts.append(v) }
-        parts.append("\(top.index + 1) of \(top.items.count)")
+        parts.append(Phrases.position(top.index + 1, of: top.items.count))
         Speech.speakItem(Speech.joined(parts))
     }
 
     /// A list that narrows as you type (VoiceOver's Item Chooser): every item whose title contains the text.
-    public func openChooser(_ title: String, items: [MenuItem]) {
-        guard !items.isEmpty else { Speech.speakMessage("\(title): none"); return }
+    public func openChooser(_ title: LocalizedStringResource, items: [MenuItem]) { openChooser(verbatim: String(localized: title), items: items) }
+    public func openChooser(verbatim title: String, items: [MenuItem]) {
+        guard !items.isEmpty else { Speech.speakMessage(Self.none(title)); return }
         filterSource = items; filter = ""
         stack = [(title, items, 0)]
         isOpen = true
         Speech.cancel()
-        Speech.speakMessage("\(title), \(items.count) items, type to filter")
+        Speech.speakMessage(String(localized: "\(title), \(Phrases.items(items.count)), type to filter", comment: "A list that narrows as you type: its title, then the count of items"))
         announce()
     }
     private var filterSource: [MenuItem]?
@@ -164,12 +173,12 @@ public final class TurnOverMenu {
     /// used last, as VoiceOver's does.
     public func openRotor(_ categories: [(name: String, items: [MenuItem])]) {
         let kinds = categories.filter { !$0.items.isEmpty }
-        guard !kinds.isEmpty else { Speech.speakMessage("nothing to list here"); return }
+        guard !kinds.isEmpty else { Speech.speakMessage(String(localized: "nothing to list here", comment: "The rotor found nothing")); return }
         rotor = kinds
         rotorIndex = kinds.firstIndex { $0.name == lastRotorKind } ?? 0
         isOpen = true
         Speech.cancel()
-        showRotorKind(intro: "rotor")
+        showRotorKind(intro: String(localized: "rotor", comment: "VoiceOver's rotor, as it opens"))
     }
     private var rotor: [(name: String, items: [MenuItem])]?
     private var rotorIndex = 0
@@ -199,14 +208,18 @@ public final class TurnOverMenu {
             text += ch
         }
         let matches = text.isEmpty ? source : source.filter { $0.title.lowercased().contains(text.lowercased()) }
-        guard !matches.isEmpty else { Tones.edge(); Speech.speakMessage("no match for \(text)"); return true }
+        guard !matches.isEmpty else { Tones.edge(); Speech.speakMessage(String(localized: "no match for \(text)", comment: "Typing to filter a list found nothing: %@ is what was typed")); return true }
         filter = text
         stack[0] = (stack[0].title, matches, 0)
         Speech.cancel()
-        Speech.speakMessage(text.isEmpty ? "all \(matches.count) items" : "\(matches.count) matching")
+        Speech.speakMessage(text.isEmpty ? String(localized: "all \(String(matches.count)) items", comment: "A filtered list back to all its items")
+            : String(localized: "\(String(matches.count)) matching", comment: "A filtered list: how many items match"))
         announce()
         return true
     }
+
+    /// "Headings: none": a list with nothing in it.
+    nonisolated static func none(_ title: String) -> String { String(localized: "\(title): none", comment: "A list with nothing in it: %@ is its title") }
 
     /// A key while the menu is open (main thread).
     public func handle(_ g: KeyboardGesture) {
@@ -272,7 +285,7 @@ public final class TurnOverMenu {
         switch item.kind {
         case .submenu(let make):
             let items = make()
-            guard !items.isEmpty else { Speech.speakMessage("empty"); return }
+            guard !items.isEmpty else { Speech.speakMessage(String(localized: "empty", comment: "Spoken message")); return }
             stack.append((item.title, items, 0))
             Speech.speakMessage(item.title)
             announce()
@@ -305,7 +318,7 @@ public final class TurnOverMenu {
         items.append(MenuItem("Help", .submenu { self.helpItems() }, hint: "The guide, about TurnOver, updates and previous builds"))
         items.append(Self.supportItem)
         items.append(contentsOf: extraItems)
-        items.append(MenuItem("Quit TurnOver", .action { Speech.speakMessage("TurnOver quitting"); DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { (TurnOverMenu.shared.quit ?? { NSApp.terminate(nil) })() } },
+        items.append(MenuItem("Quit TurnOver", .action { Speech.speakMessage(String(localized: "TurnOver quitting", comment: "TurnOver is about to quit")); DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { (TurnOverMenu.shared.quit ?? { NSApp.terminate(nil) })() } },
                               hint: "VoiceOver takes over everywhere. Command Control Period starts TurnOver again"))
         return items
     }
@@ -313,9 +326,12 @@ public final class TurnOverMenu {
     /// Help: what is new to try, about, then the guide, updates, previous builds and uninstall (aboutItems, set by the app).
     private func helpItems() -> [MenuItem] {
         var items: [MenuItem] = []
-        if let l = NewToTry.latest { items.append(MenuItem("What to test in build \(l.build)", .submenu { NewToTry.menuItems() })) }
+        if let l = NewToTry.latest { items.append(MenuItem("What to test in build \(String(describing: l.build))", .submenu { NewToTry.menuItems() })) }
         items.append(MenuItem("About TurnOver", .action {
-            Speech.speakMessage("TurnOver \(Edition.version), build \(Edition.build), a screen reader for the Mac. It reads the apps you give it under Tools\(Coexist.on ? "; with CoExist on, VoiceOver reads the rest" : ""). Feature requests and bug reports through GitHub.")
+            let version = String(describing: Edition.version), build = String(describing: Edition.build)
+            Speech.speakMessage(Coexist.on
+                ? String(localized: "TurnOver \(version), build \(build), a screen reader for the Mac. It reads the apps you give it under Tools; with CoExist on, VoiceOver reads the rest. Feature requests and bug reports through GitHub.", comment: "About TurnOver")
+                : String(localized: "TurnOver \(version), build \(build), a screen reader for the Mac. It reads the apps you give it under Tools. Feature requests and bug reports through GitHub.", comment: "About TurnOver"))
         }))
         items.append(contentsOf: aboutItems)
         return items
@@ -328,33 +344,35 @@ public final class TurnOverMenu {
         func current() -> Config.Verbosity { config.presentation.verbosityByApp[bundle] ?? config.presentation.verbosity }
         func save(_ v: Config.Verbosity) { var t = v; t.tidy(); config.presentation.verbosityByApp[bundle] = t; config.save() }
         func title(_ piece: String, at i: Int, in v: Config.Verbosity) -> String {
-            "\(i + 1). \(Config.Verbosity.titles[piece] ?? piece), \(v.says(piece) ? "said" : "not said")"
+            let t = Config.Verbosity.titles[piece] ?? piece
+            return v.says(piece) ? String(localized: "\(String(i + 1)). \(t), said", comment: "A piece of an item's announcement in the reading order: its place and name")
+                : String(localized: "\(String(i + 1)). \(t), not said", comment: "A piece of an item's announcement in the reading order: its place and name")
         }
         func list() -> [MenuItem] {
             let v = current()
             var out: [MenuItem] = []
             for (i, piece) in v.order.enumerated() {
-                out.append(MenuItem(title(piece, at: i, in: v), .submenu {
+                out.append(MenuItem(verbatim: title(piece, at: i, in: v), .submenu {
                     [MenuItem("Said", .toggle(get: { current().says(piece) }, set: { [weak self] on in
                          var v = current(); v.set(piece, said: on); save(v)
                          self?.refreshParent(with: list())   // the list under this submenu says "said" or "not said" (a review, 28 Oct 2026)
                      }), hint: "Return switches whether this piece is spoken in \(name)"),
                      MenuItem("Move up", .select { [weak self] in
-                         var v = current(); guard let j = v.order.firstIndex(of: piece), j > 0 else { Speech.speakMessage("already first"); return }
+                         var v = current(); guard let j = v.order.firstIndex(of: piece), j > 0 else { Speech.speakMessage(String(localized: "already first", comment: "Spoken message")); return }
                          v.order.swapAt(j, j - 1); save(v)
-                         self?.popAndReplace(with: list(), index: j - 1, say: "\(Config.Verbosity.titles[piece] ?? piece) is now \(j)\(Self.ordinal(j))")
+                         self?.popAndReplace(with: list(), index: j - 1, say: Self.movedTo(Config.Verbosity.titles[piece] ?? piece, j))
                      }, hint: "Said earlier"),
                      MenuItem("Move down", .select { [weak self] in
-                         var v = current(); guard let j = v.order.firstIndex(of: piece), j < v.order.count - 1 else { Speech.speakMessage("already last"); return }
+                         var v = current(); guard let j = v.order.firstIndex(of: piece), j < v.order.count - 1 else { Speech.speakMessage(String(localized: "already last", comment: "Spoken message")); return }
                          v.order.swapAt(j, j + 1); save(v)
-                         self?.popAndReplace(with: list(), index: j + 1, say: "\(Config.Verbosity.titles[piece] ?? piece) is now \(j + 2)\(Self.ordinal(j + 2))")
+                         self?.popAndReplace(with: list(), index: j + 1, say: Self.movedTo(Config.Verbosity.titles[piece] ?? piece, j + 2))
                      }, hint: "Said later")]
                 }, hint: "Return: said or not, move up, move down"))
             }
             if config.presentation.verbosityByApp[bundle] != nil {
                 out.append(MenuItem("Use the default order in \(name) again", .select { [weak self] in
                     config.presentation.verbosityByApp[bundle] = nil; config.save()
-                    self?.replaceTop(with: list(), index: 0, say: "the default order")
+                    self?.replaceTop(with: list(), index: 0, say: String(localized: "the default order", comment: "Spoken message: an app's reading order back to the default"))
                 }, hint: "Forgets this app's own order; the Settings window's default applies"))
             }
             return out
@@ -362,8 +380,18 @@ public final class TurnOverMenu {
         return MenuItem("How items are read in \(name)", .submenu { list() },
                         hint: "The pieces of an announcement in the order they are said; each can be moved or switched off, for this app only")
     }
+    /// "Role is now 2nd": a piece moved in the reading order, its new place said as an ordinal.
+    private static func movedTo(_ piece: String, _ n: Int) -> String {
+        String(localized: "\(piece) is now \(ordinal(n))", comment: "A piece of the reading order moved: its name, then its new place (2nd)")
+    }
     private static func ordinal(_ n: Int) -> String {
-        switch n % 10 { case 1 where n % 100 != 11: return "st"; case 2 where n % 100 != 12: return "nd"; case 3 where n % 100 != 13: return "rd"; default: return "th" }
+        let s = String(n)
+        switch n % 10 {
+        case 1 where n % 100 != 11: return String(localized: "\(s)st", comment: "An ordinal number: 1st, 21st")
+        case 2 where n % 100 != 12: return String(localized: "\(s)nd", comment: "An ordinal number: 2nd, 22nd")
+        case 3 where n % 100 != 13: return String(localized: "\(s)rd", comment: "An ordinal number: 3rd, 23rd")
+        default: return String(localized: "\(s)th", comment: "An ordinal number: 4th, 11th")
+        }
     }
     /// The list on top of the menu rebuilt in place (a change made from a submenu of it): back to it, at `index`.
     private func popAndReplace(with items: [MenuItem], index: Int, say: String) {
@@ -387,15 +415,16 @@ public final class TurnOverMenu {
     private func thisAppItem() -> MenuItem? {
         guard let pid = API.focusPid, let app = NSRunningApplication(processIdentifier: pid), let bundle = app.bundleIdentifier,
               bundle != Bundle.main.bundleIdentifier else { return nil }
-        let name = app.bundleIdentifier == Games.steamHelperBundle ? "Steam" : (app.localizedName ?? "this app")   // Big Picture's process, to the person: Steam
+        let name = app.bundleIdentifier == Games.steamHelperBundle ? "Steam" : (app.localizedName ?? String(localized: "this app", comment: "An application with no name"))   // Big Picture's process, to the person: Steam
         let module = AppModuleHandler.shared.appModule(for: pid)
-        let settling = Edition.experimentalApps.contains(bundle) ? ", experimental support" : ""
+        let experimental = Edition.experimentalApps.contains(bundle)
         let own = module.menuItems()
-        return MenuItem("This app: \(name)\(settling)", .submenu {
+        return MenuItem(experimental ? "This app: \(name), experimental support" : "This app: \(name)", .submenu {
             var items: [MenuItem] = []
             let turnOver = self.readsApp?(bundle) ?? config.applications.listedForTurnOver(bundle)
-            items.append(MenuItem("\(name) is read by \(turnOver ? "TurnOver" : "VoiceOver")", .action { self.switchReader?() },
-                                  hint: "Return gives it to \(turnOver ? "VoiceOver" : "TurnOver"), and remembers"))
+            let reader = turnOver ? "TurnOver" : "VoiceOver", other = turnOver ? "VoiceOver" : "TurnOver"
+            items.append(MenuItem("\(name) is read by \(reader)", .action { self.switchReader?() },
+                                  hint: "Return gives it to \(other), and remembers"))
             items += own
             items.append(self.readingOrderItem(bundle: bundle, name: name))
             items.append(MenuItem("Describe the image at the cursor", .action { GlobalCommands.shared.script(named: "describeImage")?.handler(KeyboardGesture(keyCode: 0, modifiers: [], characters: "", timestamp: 0, isRepeat: false, flags: [])) },
@@ -426,18 +455,19 @@ public final class TurnOverMenu {
     static var supportItem: MenuItem {
         MenuItem("Support TurnOver", .action {
             NSWorkspace.shared.open(URL(string: Edition.kofiURL)!)
-            Speech.speakMessage("Ko-fi is open in your browser")
+            Speech.speakMessage(String(localized: "Ko-fi is open in your browser", comment: "Support TurnOver opened the tip page"))
         }, hint: "TurnOver is free, made in spare time; a tip on Ko-fi helps cover its running costs. No account needed")
     }
 
     private func feedbackItems() -> [MenuItem] {
         var items: [MenuItem] = []
         if !Feedback.marks.isEmpty {
-            items.append(MenuItem("Send your \(Feedback.marks.count) marked moment\(Feedback.marks.count == 1 ? "" : "s")", .action { Self.saveFeedback(includeSpeech: true) },
+            let n = Feedback.marks.count
+            items.append(MenuItem(n == 1 ? "Send your 1 marked moment" : "Send your \(String(n)) marked moments", .action { Self.saveFeedback(includeSpeech: true) },
                                   hint: "The moments you marked, with what TurnOver said"))
             // Marks only went with a report, so they mounted up (13 on one Mac, a tester's too, 13 Oct 2026): forget them here.
-            items.append(MenuItem("Forget the \(Feedback.marks.count) marked moment\(Feedback.marks.count == 1 ? "" : "s")", .action {
-                Feedback.clearMarks(); Speech.speakMessage("marked moments forgotten")
+            items.append(MenuItem(n == 1 ? "Forget the 1 marked moment" : "Forget the \(String(n)) marked moments", .action {
+                Feedback.clearMarks(); Speech.speakMessage(String(localized: "marked moments forgotten", comment: "Feedback: the marked moments cleared"))
             }, hint: "Starts the count again without sending anything"))
         }
         items.append(MenuItem("Send a report with what TurnOver said", .action { Self.saveFeedback(includeSpeech: true) },
@@ -469,20 +499,21 @@ public final class TurnOverMenu {
     }
 
     static func saveFeedback(includeSpeech: Bool) {
-        Speech.speakMessage("Saving a report")
+        Speech.speakMessage(String(localized: "Saving a report", comment: "Feedback: a report is being made"))
         DispatchQueue.main.async {
             do {
                 let zip = try Feedback.save(includeSpeech: includeSpeech)
                 defer { Feedback.clearMarks() }   // in this report now (and in the email's text, written below)
                 let name = zip.deletingPathExtension().lastPathComponent
-                let where_ = includeSpeech ? "Report saved in TurnOver's reports folder, open in Finder, as \(name). It includes what TurnOver said, which may be the text of emails and pages: issues are public, so attach it only if nothing private was read." : "Report saved on your Desktop, as \(name)."
+                let where_ = includeSpeech ? String(localized: "Report saved in TurnOver's reports folder, open in Finder, as \(name). It includes what TurnOver said, which may be the text of emails and pages: issues are public, so attach it only if nothing private was read.", comment: "Feedback: where the report is, with speech; %@ is its name")
+                    : String(localized: "Report saved on your Desktop, as \(name).", comment: "Feedback: where the report is; %@ is its name")
                 if Feedback.compose(with: zip, includesSpeech: includeSpeech) {
-                    Speech.speakMessage("\(where_) TurnOver's problem form is open in your browser: say what happened, and drag the report in if you like.")
+                    Speech.speakMessage(String(localized: "\(where_) TurnOver's problem form is open in your browser: say what happened, and drag the report in if you like.", comment: "Feedback: %@ says where the report is"))
                 } else {
-                    Speech.speakMessage("\(where_) Report the problem at github.com/TurnOver-For-Mac/turnover/issues.")
+                    Speech.speakMessage(String(localized: "\(where_) Report the problem at github.com/TurnOver-For-Mac/turnover/issues.", comment: "Feedback: %@ says where the report is"))
                 }
             } catch {
-                Speech.speakMessage("Could not save the report: \(error.localizedDescription)")
+                Speech.speakMessage(String(localized: "Could not save the report: \(error.localizedDescription)", comment: "Feedback: %@ is the error"))
             }
         }
     }
@@ -502,7 +533,7 @@ public final class TurnOverMenu {
     private func pluginItems() -> [MenuItem] {
         var items: [MenuItem] = []
         if let pid = API.focusPid, let app = NSRunningApplication(processIdentifier: pid), app.bundleIdentifier != Bundle.main.bundleIdentifier {
-            let name = app.bundleIdentifier == Games.steamHelperBundle ? "Steam" : (app.localizedName ?? "this app")   // Big Picture's process, to the person: Steam
+            let name = app.bundleIdentifier == Games.steamHelperBundle ? "Steam" : (app.localizedName ?? String(localized: "this app", comment: "An application with no name"))   // Big Picture's process, to the person: Steam
             for ai in PluginAI.allCases {
                 items.append(MenuItem("Make a plugin for \(name) with \(ai.rawValue)", .action { PluginAI.start(ai, pid: pid) },
                                       hint: "Gives \(ai.rawValue) the window's labels, text and menus, and TurnOver's log with typing and speech left out"))
@@ -523,7 +554,9 @@ public final class TurnOverMenu {
             ProfileStore.shared.reload(force: true)
             let all = ProfileStore.shared.plugins
             let bad = all.filter { $0.error != nil }.count
-            Speech.speakMessage("\(all.count - bad) plugin\(all.count - bad == 1 ? "" : "s") loaded" + (bad > 0 ? ", \(bad) with problems" : ""))
+            let good = all.count - bad
+            let loaded = good == 1 ? String(localized: "1 plugin loaded", comment: "Plugins reloaded") : String(localized: "\(String(good)) plugins loaded", comment: "Plugins reloaded")
+            Speech.speakMessage(bad > 0 ? String(localized: "\(loaded), \(String(bad)) with problems", comment: "Plugins reloaded: %1$@ says how many loaded, %2$@ how many have problems") : loaded)
         }))
         for (file, reason) in Recipes.problems { items.append(MenuItem("Recipe \(file) does not load: \(reason)", .action {})) }
         for p in ProfileStore.shared.plugins {
@@ -533,11 +566,14 @@ public final class TurnOverMenu {
                 let apps = m.apps.map { b in NSRunningApplication.runningApplications(withBundleIdentifier: b).first?.localizedName ?? Self.appName(for: b) }.joined(separator: ", ")
                 let folder = p.folder
                 let author = PluginLibrary.receipt(folder)?.author ?? m.author
-                items.append(MenuItem("\(m.name) \(m.version), for \(apps)\(author.map { ", by \($0)" } ?? "")\(p.profile?.view.map { ", a \($0.kind) view" } ?? "")", .submenu {[
+                var title = String(localized: "\(m.name) \(String(describing: m.version)), for \(apps)", comment: "A plugin: its name, version and apps")
+                if let author { title += String(localized: ", by \(author)", comment: "A plugin's author, after its name") }
+                if let view = p.profile?.view { title += String(localized: ", a \(String(describing: view.kind)) view", comment: "A plugin's kind of view (chat, media)") }
+                items.append(MenuItem(verbatim: title, .submenu {[
                     MenuItem("About", .action {
                         let p2 = ProfileStore.shared.plugins.first { $0.manifest?.id == m.id }?.profile
                         let n = (p2?.labels?.count ?? 0, p2?.keys?.count ?? 0, p2?.watch?.count ?? 0)
-                        Speech.speakMessage("\(m.description ?? m.name). \(n.0) labels, \(n.1) keys, \(n.2) watched.")
+                        Speech.speakMessage(String(localized: "\(m.description ?? m.name). \(String(n.0)) labels, \(String(n.1)) keys, \(String(n.2)) watched.", comment: "About a plugin: its description, then what it has"))
                     }),
                     MenuItem("Remove", .action { Self.removePlugin(at: folder, name: m.name) }, hint: "Moves it to the Trash; put it back from there to have it again"),
                 ]}))
@@ -562,10 +598,10 @@ public final class TurnOverMenu {
             Log.io("plugin removed to the Trash: \(folder.lastPathComponent)")
             ProfileStore.shared.reload(force: true, quiet: true)
             shared.close()
-            Speech.speakMessage("\(name) removed. It is in the Trash.")
+            Speech.speakMessage(String(localized: "\(name) removed. It is in the Trash.", comment: "A plugin removed: %@ is its name"))
         } catch {
             Log.warning("plugin remove failed: \(folder.lastPathComponent): \(error.localizedDescription)")
-            Speech.speakMessage("\(name) could not be removed: \(error.localizedDescription)")
+            Speech.speakMessage(String(localized: "\(name) could not be removed: \(error.localizedDescription)", comment: "A plugin not removed: %1$@ is its name, %2$@ the error"))
         }
     }
 
@@ -577,8 +613,10 @@ public final class TurnOverMenu {
         var items: [MenuItem] = []
         if let app = AppRequest.frontApp, let bundle = app.bundleIdentifier {
             let turnOver = readsApp?(bundle) ?? config.applications.listedForTurnOver(bundle)
-            items.append(MenuItem("\(app.localizedName ?? "The app in front"), the app in front: read by \(turnOver ? "TurnOver" : "VoiceOver")", .action { self.switchReader?() },
-                                  hint: "Return gives it to \(turnOver ? "VoiceOver" : "TurnOver")"))
+            let reader = turnOver ? "TurnOver" : "VoiceOver", other = turnOver ? "VoiceOver" : "TurnOver"
+            let front = app.localizedName ?? String(localized: "The app in front", comment: "The application in front, when it has no name")
+            items.append(MenuItem("\(front), the app in front: read by \(reader)", .action { self.switchReader?() },
+                                  hint: "Return gives it to \(other)"))
         }
         items.append(MenuItem("Switch between TurnOver and VoiceOver as I change apps", .toggle(get: { config.applications.automaticHandOver }, set: { config.applications.automaticHandOver = $0 })))
         // Who reads, everywhere at once (wishlist 2): also Command Control Comma, then A.
@@ -595,11 +633,12 @@ public final class TurnOverMenu {
             .action {
                 // The current mode's own list (code review, 13 Oct: these menus only ever changed the apps-mode list).
                 guard config.applications.leadMode != "voiceover" else {
-                    Speech.speakMessage("VoiceOver reads everywhere. Change Who reads first."); return
+                    Speech.speakMessage(String(localized: "VoiceOver reads everywhere. Change Who reads first.", comment: "Moving an app between readers when VoiceOver reads everything")); return
                 }
                 config.applications.give(b, toTurnOver: toTurnOver)
                 config.save()
-                Speech.speakMessage("\(name(b)): \(toTurnOver ? "TurnOver" : "VoiceOver") reads it now")
+                let reader = toTurnOver ? "TurnOver" : "VoiceOver"
+                Speech.speakMessage(String(localized: "\(name(b)): \(reader) reads it now", comment: "An app moved to a reader: %1$@ is the app, %2$@ TurnOver or VoiceOver"))
             }
         }
         let apps = config.applications
@@ -608,23 +647,25 @@ public final class TurnOverMenu {
         let byTurnOver = known.filter { b in b != Bundle.main.bundleIdentifier && apps.listedForTurnOver(b)
             && (apps.leadMode == "apps" || NSWorkspace.shared.urlForApplication(withBundleIdentifier: b) != nil) }
             .sorted { name($0).lowercased() < name($1).lowercased() }
-        items.append(MenuItem("Read by TurnOver, \(byTurnOver.count) app\(byTurnOver.count == 1 ? "" : "s")", .submenu {
+        items.append(MenuItem(byTurnOver.count == 1 ? "Read by TurnOver, 1 app" : "Read by TurnOver, \(String(byTurnOver.count)) apps", .submenu {
             byTurnOver.isEmpty ? [MenuItem("None yet", .action {})] : byTurnOver.map { b in
-                MenuItem(name(b) + (Edition.isVerified(b) ? "" : ", not yet checked"), move(b, toTurnOver: false), hint: "Return gives it to VoiceOver")
+                MenuItem(verbatim: Edition.isVerified(b) ? name(b) : String(localized: "\(name(b)), not yet checked", comment: "An app not yet checked with TurnOver"), move(b, toTurnOver: false),
+                         hint: String(localized: "Return gives it to VoiceOver", comment: "A hint in the TurnOver menu"))
             }
         }))
         let supported = (Edition.supportedApps + Edition.devApps).filter { a in
             !apps.listedForTurnOver(a.bundle) && NSWorkspace.shared.urlForApplication(withBundleIdentifier: a.bundle) != nil
         }
-        items.append(MenuItem("Read by VoiceOver, supported, \(supported.count) app\(supported.count == 1 ? "" : "s")", .submenu {
+        items.append(MenuItem(supported.count == 1 ? "Read by VoiceOver, supported, 1 app" : "Read by VoiceOver, supported, \(String(supported.count)) apps", .submenu {
             supported.isEmpty ? [MenuItem("None: TurnOver reads them all", .action {})] : supported.map { a in
-                MenuItem(Self.plainName(a.name) + (a.name.contains("preview") ? ", preview" : ""), move(a.bundle, toTurnOver: true), hint: "Return gives it to TurnOver")
+                MenuItem(verbatim: a.name.contains("preview") ? String(localized: "\(Self.plainName(a.name)), preview", comment: "An app TurnOver reads as a preview") : Self.plainName(a.name), move(a.bundle, toTurnOver: true),
+                         hint: String(localized: "Return gives it to TurnOver", comment: "A hint in the TurnOver menu"))
             }
         }, hint: "Apps TurnOver works with, which VoiceOver reads for now"))
         let others = installed.filter { !Edition.isVerified($0.0) && !apps.listedForTurnOver($0.0) }
-        items.append(MenuItem("Other apps on this Mac, \(others.count)", .submenu {
+        items.append(MenuItem("Other apps on this Mac, \(String(others.count))", .submenu {
             others.sorted { $0.1.lowercased() < $1.1.lowercased() }.map { a in
-                MenuItem(a.1, move(a.0, toTurnOver: true), hint: "Not yet checked with TurnOver; it may read badly. Return gives it to TurnOver")
+                MenuItem(verbatim: a.1, move(a.0, toTurnOver: true), hint: String(localized: "Not yet checked with TurnOver; it may read badly. Return gives it to TurnOver", comment: "A hint in the TurnOver menu"))
             }
         }, hint: "Not yet checked with TurnOver. Type the start of a name to move to it"))
         items += requestItem()
@@ -673,7 +714,7 @@ public final class TurnOverMenu {
     /// Last in the list: ask for the application in front to be supported (AppRequest).
     private func requestItem() -> [MenuItem] {
         guard let app = AppRequest.frontApp, !Edition.isVerified(app.bundleIdentifier ?? "") else { return [] }   // only for an app not yet supported
-        return [MenuItem("Ask for \(app.localizedName ?? "this app") to be tuned", .action { AppRequest.request() }, hint: "Finds what the app is built with and writes the request for you, by email.")]
+        return [MenuItem("Ask for \(app.localizedName ?? String(localized: "this app", comment: "An application with no name")) to be tuned", .action { AppRequest.request() }, hint: "Finds what the app is built with and writes the request for you, by email.")]
     }
 
     private static func appName(for bundle: String) -> String {
@@ -685,42 +726,42 @@ public final class TurnOverMenu {
     private func brailleItems() -> [MenuItem] {
         let current = BrailleOutput.tableIdentifier
         var tables = TOBrailleTranslatorTables.forUser()
-        if tables.isEmpty { tables = [("", "Computer braille")] }
+        if tables.isEmpty { tables = [("", String(localized: "Computer braille", comment: "A braille table"))] }
         return [
             MenuItem("Bluetooth displays", .toggle(get: { config.braille.bluetooth }, set: {
                 config.braille.bluetooth = $0
-                if $0 { Speech.speakMessage("Looking for a paired braille display. macOS may ask whether TurnOver can use Bluetooth."); BrailleDisplays.shared.lookNow() }
+                if $0 { Speech.speakMessage(String(localized: "Looking for a paired braille display. macOS may ask whether TurnOver can use Bluetooth.", comment: "Bluetooth braille displays turned on")); BrailleDisplays.shared.lookNow() }
             })),
             MenuItem("Braille table", .submenu {
                 @MainActor func item(_ t: (id: String, name: String)) -> MenuItem {
-                    MenuItem("\(t.name)\(t.id == current ? ", current" : "")", .select {
+                    MenuItem(verbatim: t.id == current ? String(localized: "\(t.name), current", comment: "The braille table in use") : t.name, .select {
                         config.braille.table = t.id; config.save(); Braille.refreshSoon()
                         Speech.speakMessage(t.name)
                     })
                 }
                 return tables.map(item) + [MenuItem("Other languages", .submenu {
-                    TOBrailleTranslatorTables.otherLanguages().map { lang in MenuItem(lang.language, .submenu { lang.tables.map(item) }) }
+                    TOBrailleTranslatorTables.otherLanguages().map { lang in MenuItem(verbatim: lang.language, .submenu { lang.tables.map(item) }) }
                 })]
             }),
-            MenuItem("Typing on the braille keyboard", .cycle(options: ["contracted, a word at a time", "uncontracted, letter by letter"],
+            MenuItem("Typing on the braille keyboard", .cycle(options: [String(localized: "contracted, a word at a time", comment: "A choice in the TurnOver menu"), String(localized: "uncontracted, letter by letter", comment: "A choice in the TurnOver menu")],
                 get: { config.braille.contractedInput ? 0 : 1 }, set: { config.braille.contractedInput = $0 == 0 })),
-            MenuItem("Speak braille typing", .cycle(options: ["words", "characters", "characters and words", "off"],
+            MenuItem("Speak braille typing", .cycle(options: [String(localized: "words", comment: "A choice in the TurnOver menu"), String(localized: "characters", comment: "A choice in the TurnOver menu"), String(localized: "characters and words", comment: "A choice in the TurnOver menu"), String(localized: "off", comment: "A choice in the TurnOver menu")],
                 get: { ["words", "characters", "both", "off"].firstIndex(of: config.braille.inputEcho) ?? 0 },
                 set: { config.braille.inputEcho = ["words", "characters", "both", "off"][$0] })),
             MenuItem("Messages", .submenu { [
-                MenuItem("Messages on the display", .cycle(options: ["for a time", "until a key is pressed", "off"],
+                MenuItem("Messages on the display", .cycle(options: [String(localized: "for a time", comment: "A choice in the TurnOver menu"), String(localized: "until a key is pressed", comment: "A choice in the TurnOver menu"), String(localized: "off", comment: "A choice in the TurnOver menu")],
                     get: { ["timeout", "indefinitely", "off"].firstIndex(of: config.braille.showMessages) ?? 0 },
                     set: { config.braille.showMessages = ["timeout", "indefinitely", "off"][$0] })),
                 MenuItem("How long", .number(get: { Double(config.braille.messageSeconds) }, set: { config.braille.messageSeconds = Int($0) },
-                    step: 1, min: 1, max: 30, format: { "\(Int($0.rounded())) second\(Int($0.rounded()) == 1 ? "" : "s")" }), hint: "For each display's width of message"),
+                    step: 1, min: 1, max: 30, format: { Int($0.rounded()) == 1 ? String(localized: "1 second", comment: "A time") : String(localized: "\(String(Int($0.rounded()))) seconds", comment: "A time") }), hint: "For each display's width of message"),
             ] }),
             MenuItem("Keep words whole", .toggle(get: { config.braille.wordWrap }, set: { config.braille.wordWrap = $0; Braille.refreshSoon() }), hint: "A word is not split across the end of the display"),
             MenuItem("Cursor", .submenu { [
                 MenuItem("Show the cursor", .toggle(get: { config.braille.showCursor }, set: { config.braille.showCursor = $0; Braille.refreshSoon() })),
                 MenuItem("Blink", .toggle(get: { config.braille.blinkCursor }, set: { config.braille.blinkCursor = $0; Braille.refreshSoon() })),
                 MenuItem("Blink rate", .number(get: { Double(config.braille.blinkRateMs) }, set: { config.braille.blinkRateMs = Int($0) },
-                    step: 100, min: 200, max: 2000, format: { "\(Int($0.rounded())) milliseconds" })),
-                MenuItem("Shape", .cycle(options: ["dots 7 and 8", "dot 8", "all dots"],
+                    step: 100, min: 200, max: 2000, format: { String(localized: "\(String(Int($0.rounded()))) milliseconds", comment: "A time") })),
+                MenuItem("Shape", .cycle(options: [String(localized: "dots 7 and 8", comment: "A choice in the TurnOver menu"), String(localized: "dot 8", comment: "A choice in the TurnOver menu"), String(localized: "all dots", comment: "A choice in the TurnOver menu")],
                     get: { ["78", "8", "all"].firstIndex(of: config.braille.cursorShape) ?? 0 },
                     set: { config.braille.cursorShape = ["78", "8", "all"][$0]; Braille.refreshSoon() })),
                 MenuItem("Selection with dots 7 and 8", .toggle(get: { config.braille.showSelection }, set: { config.braille.showSelection = $0; Braille.refreshSoon() })),
@@ -735,10 +776,12 @@ public final class TurnOverMenu {
         var items = [
             MenuItem("Give a key to a command", .action { [weak self] in self?.chooseCommandForKey() }),
             MenuItem("Give a key to open an app", .action { [weak self] in self?.chooseAppForKey() }, hint: "Right Option keys work, as in VoiceOver's Keyboard Commander"),
-            MenuItem("Take a key away from TurnOver, so it goes to the app", .action { Self.captureKey(prompt: "Press the key to take away") { g in
+            MenuItem("Take a key away from TurnOver, so it goes to the app", .action { Self.captureKey(prompt: String(localized: "Press the key to take away", comment: "Taking a key away from TurnOver")) { g in
                 let had = ScriptHandler.findScript(for: g)?.description
                 UserGestures.set(g, to: .removed)
-                Speech.speakMessage("\(UserGestures.spoken(UserGestures.storedIdentifier(of: g))) now goes to the application\(had.map { "; it was: \($0)" } ?? "")")
+                let key = UserGestures.spoken(UserGestures.storedIdentifier(of: g))
+                Speech.speakMessage(had.map { String(localized: "\(key) now goes to the application; it was: \($0)", comment: "A key taken away: %1$@ is the key, %2$@ what it did") }
+                    ?? String(localized: "\(key) now goes to the application", comment: "A key taken away: %@ is the key"))
             } }),
         ]
         let mine = config.keyboard.userGestures.sorted { $0.key < $1.key }
@@ -746,7 +789,7 @@ public final class TurnOverMenu {
         for (id, stored) in mine {
             guard let t = UserGestures.Target(stored) else { continue }
             items.append(MenuItem("\(UserGestures.spoken(id)): \(UserGestures.describe(t)). Return to remove", .select {
-                UserGestures.clear(id); Speech.speakMessage("\(UserGestures.spoken(id)) is back to TurnOver's own")
+                UserGestures.clear(id); Speech.speakMessage(String(localized: "\(UserGestures.spoken(id)) is back to TurnOver's own", comment: "A key of your own removed: %@ is the key"))
             }))
         }
         return items
@@ -754,10 +797,10 @@ public final class TurnOverMenu {
 
     private func chooseCommandForKey() {
         let commands = UserGestures.availableCommands()
-        let items = commands.map { s in MenuItem("\(s.description) (\(s.category))", .action { [weak self] in
-            Self.captureKey(prompt: "Press the key for: \(s.description)") { [weak self] g in
+        let items = commands.map { s in MenuItem(verbatim: "\(s.description) (\(s.categoryName))", .action { [weak self] in
+            Self.captureKey(prompt: String(localized: "Press the key for: \(s.description)", comment: "Giving a key to a command: %@ is the command")) { [weak self] g in
                 UserGestures.set(g, to: .script(s.name))
-                Speech.speakMessage("\(UserGestures.spoken(UserGestures.storedIdentifier(of: g))) now: \(s.description)")
+                Speech.speakMessage(String(localized: "\(UserGestures.spoken(UserGestures.storedIdentifier(of: g))) now: \(s.description)", comment: "A key given to a command: %1$@ is the key, %2$@ the command"))
                 // The list again, for the next key; Escape leaves it (a tester, 20 Oct 2026: it closed after each one).
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self?.chooseCommandForKey() }
             }
@@ -767,10 +810,10 @@ public final class TurnOverMenu {
 
     private func chooseAppForKey() {
         let apps = Self.installedApps().sorted { $0.1.lowercased() < $1.1.lowercased() }
-        let items = apps.map { a in MenuItem(a.1, .action { [weak self] in
-            Self.captureKey(prompt: "Press the key to open \(a.1). Right Option and a letter, as VoiceOver's Keyboard Commander, is a good choice") { [weak self] g in
+        let items = apps.map { a in MenuItem(verbatim: a.1, .action { [weak self] in
+            Self.captureKey(prompt: String(localized: "Press the key to open \(a.1). Right Option and a letter, as VoiceOver's Keyboard Commander, is a good choice", comment: "Giving a key to an app: %@ is the app")) { [weak self] g in
                 UserGestures.set(g, to: .app(a.0))
-                Speech.speakMessage("\(UserGestures.spoken(UserGestures.storedIdentifier(of: g))) now opens \(a.1)")
+                Speech.speakMessage(String(localized: "\(UserGestures.spoken(UserGestures.storedIdentifier(of: g))) now opens \(a.1)", comment: "A key given to an app: %1$@ is the key, %2$@ the app"))
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self?.chooseAppForKey() }
             }
         }) }
@@ -780,9 +823,9 @@ public final class TurnOverMenu {
     /// Wait for the next key, after the prompt; Escape cancels.
     static func captureKey(prompt: String, _ done: @escaping (KeyboardGesture) -> Void) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            Speech.speakMessage(prompt + ". Escape to cancel")
+            Speech.speakMessage(String(localized: "\(prompt). Escape to cancel", comment: "Waiting for a key: %@ says which"))
             InputManager.captureNext = { g in
-                guard let g else { Speech.speakMessage("cancelled"); return }
+                guard let g else { Speech.speakMessage(String(localized: "cancelled", comment: "Waiting for a key, cancelled with Escape")); return }
                 done(g)
             }
         }
@@ -803,7 +846,7 @@ public final class TurnOverMenu {
             MenuItem("Position, such as 3 of 10", .toggle(get: { config.presentation.reportObjectPositionInformation }, set: { config.presentation.reportObjectPositionInformation = $0 })),
             MenuItem("Hints after a pause", .toggle(get: { config.presentation.speakHints }, set: { config.presentation.speakHints = $0 }), hint: "What you can do with an item"),
             // A tester T, 7 Oct 2026: "AppleVis, heading level 1", as VoiceOver, rather than NVDA's "heading level 1, AppleVis".
-            MenuItem("Heading, link and button: when to say them", .cycle(options: ["by keyboard style", "before the words, as NVDA", "after the words, as VoiceOver"],
+            MenuItem("Heading, link and button: when to say them", .cycle(options: [String(localized: "by keyboard style", comment: "A choice in the TurnOver menu"), String(localized: "before the words, as NVDA", comment: "A choice in the TurnOver menu"), String(localized: "after the words, as VoiceOver", comment: "A choice in the TurnOver menu")],
                 get: { ["auto", "before", "after"].firstIndex(of: config.documentFormatting.roleOrder) ?? 0 },
                 set: { config.documentFormatting.roleOrder = ["auto", "before", "after"][$0] }), hint: "By keyboard style: after the words in the Mac style, before them in the Windows style"),
         ]

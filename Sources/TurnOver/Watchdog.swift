@@ -112,7 +112,7 @@ final class Watchdog: @unchecked Sendable {   // its state is under `lock`
             VoiceOverTap.emergencyOff()
             // VoiceOver off meanwhile (the game exception): brought back, or nobody reads (a review, 28 Oct 2026).
             if !sleeping, !HandOver.voiceOverReading { HandOver.bringVoiceOverBack("watchdog") }
-            if !sleeping { Self.sayOutside("TurnOver is not responding. If it doesn't recover, it restarts in twenty seconds.") }
+            if !sleeping { Self.sayOutside(String(localized: "TurnOver is not responding. If it doesn't recover, it restarts in twenty seconds.", comment: "Spoken message")) }
             return
         }
         // Not while the Mac sleeps or has just woken: the beat stopped because the Mac did. With VoiceOver off where
@@ -171,7 +171,7 @@ final class Watchdog: @unchecked Sendable {   // its state is under `lock`
         guard stall.isStillStalled, SpeechPlayer.current === old else { return true }
         guard !inGrace else { return false }
         Log.error("speech: the speech queue has not run for \(Int(seconds)) s; restarting TurnOver")
-        Self.sayOutside("TurnOver's voice stopped. Restarting TurnOver.")
+        Self.sayOutside(String(localized: "TurnOver's voice stopped. Restarting TurnOver.", comment: "Spoken message"))
         Self.waitForSaying()
         // The queue or reader choice can change while the warning is being said. Do not restart a recovered
         // reader or restart during a new sleep/lock grace (#155, 28 Oct 2026).

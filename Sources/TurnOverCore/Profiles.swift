@@ -470,8 +470,11 @@ public final class ProfileStore {
         // item 3: NVDA's scratchpad, without the reload key).
         if announceChanges, !quiet {
             for p in loaded where !current.contains(where: { $0.folder == p.folder && $0.modified == p.modified }) {
-                let text = p.error.map { "Plugin \(p.folder.lastPathComponent) not loaded. \($0)" }
-                    ?? "Plugin \(p.manifest?.name ?? p.folder.lastPathComponent) reloaded" + (p.warnings.isEmpty ? "" : ", with \(p.warnings.count) warning\(p.warnings.count == 1 ? "" : "s"). \(p.warnings[0])")
+                let name = p.manifest?.name ?? p.folder.lastPathComponent
+                let text = p.error.map { String(localized: "Plugin \(p.folder.lastPathComponent) not loaded. \($0)", comment: "A plugin saved but not loaded: its folder, then the problem (in English)") }
+                    ?? (p.warnings.isEmpty ? String(localized: "Plugin \(name) reloaded", comment: "A plugin saved and reloaded")
+                        : p.warnings.count == 1 ? String(localized: "Plugin \(name) reloaded, with 1 warning. \(p.warnings[0])", comment: "A plugin reloaded: its name, then the warning (in English)")
+                        : String(localized: "Plugin \(name) reloaded, with \(String(p.warnings.count)) warnings. \(p.warnings[0])", comment: "A plugin reloaded: its name, how many warnings, then the first (in English)"))
                 if Thread.isMainThread { Speech.speakMessage(text) } else { DispatchQueue.main.async { Speech.speakMessage(text) } }
             }
         }
@@ -511,17 +514,20 @@ public final class ProfileStore {
         UserDefaults.standard.set(Array(asked), forKey: "pluginLeadAsked")
         DispatchQueue.main.async {
             // One question, whatever the number of apps (two lists at once would cover each other).
-            let names = questions.map(\.name).joined(separator: " and ")
+            let names = questions.map(\.name).joined(separator: Phrases.and)
             let plugins = Array(Set(questions.map(\.plugin))).sorted().joined(separator: ", ")
             Log.info("plugins \(plugins): asking whether TurnOver should read \(questions.map(\.bundle).joined(separator: ", "))")
-            TurnOverMenu.shared.openList("TurnOver doesn't read \(names) yet. Read \(questions.count == 1 ? "it" : "them") with TurnOver from now on, for \(plugins)?", items: [
+            TurnOverMenu.shared.openList(verbatim: questions.count == 1
+                ? String(localized: "TurnOver doesn't read \(names) yet. Read it with TurnOver from now on, for \(plugins)?", comment: "A plugin's app TurnOver doesn't read: the app, then the plugin")
+                : String(localized: "TurnOver doesn't read \(names) yet. Read them with TurnOver from now on, for \(plugins)?", comment: "A plugin's apps TurnOver doesn't read: the apps, then the plugins"), items: [
                 MenuItem("Yes, read \(names) with TurnOver", .action {
                     for q in questions where !config.applications.leadBundles.contains(q.bundle) { config.applications.leadBundles.append(q.bundle) }
                     config.save()
-                    Speech.speakMessage("TurnOver reads \(names) from now on. Switch to \(questions.count == 1 ? "it" : "them") and back once.")
+                    Speech.speakMessage(questions.count == 1 ? String(localized: "TurnOver reads \(names) from now on. Switch to it and back once.", comment: "An app given to TurnOver for a plugin")
+                        : String(localized: "TurnOver reads \(names) from now on. Switch to them and back once.", comment: "Apps given to TurnOver for a plugin"))
                 }),
                 MenuItem("No, leave \(names) with VoiceOver", .action {
-                    Speech.speakMessage("\(plugins) waits until you hand \(names) to TurnOver: Command Control Comma, then T, in the app.")
+                    Speech.speakMessage(String(localized: "\(plugins) waits until you hand \(names) to TurnOver: Command Control Comma, then T, in the app.", comment: "A plugin waiting for its app: the plugin, then the app"))
                 }),
             ])
         }
@@ -626,7 +632,7 @@ final class ProfilesPlugin: GlobalPlugin {
         func target() -> AXUIElement? {
             guard let t = rule.target else { return nil }
             let e = ElementMatcher.findOne(t, pid: pid)
-            if e == nil { Speech.speakMessage("not found") }
+            if e == nil { Speech.speakMessage(String(localized: "not found", comment: "Spoken message")) }
             return e
         }
         switch rule.action {
@@ -645,13 +651,13 @@ final class ProfilesPlugin: GlobalPlugin {
             Speech.speakMessage(t.isEmpty ? Speech.objectPropertiesSpeech(obj, reason: .query).joined(separator: ", ") : t)
         case "menu":
             guard let path = rule.menu, !path.isEmpty else { return }
-            if !MenuPath.choose(path, pid: pid) { Speech.speakMessage("menu item not found: \(path.joined(separator: ", "))") }
+            if !MenuPath.choose(path, pid: pid) { Speech.speakMessage(String(localized: "menu item not found: \(path.joined(separator: ", "))", comment: "A plugin's menu item not found: %@ is its path")) }
         case "keys":
             if let k = rule.keys, let g = KeyboardGesture(identifier: "kb:" + k) { g.send() }
         case "say":
             break
         default:
-            Speech.speakMessage("unknown action \(rule.action)")
+            Speech.speakMessage(String(localized: "unknown action \(rule.action)", comment: "A plugin key with an action TurnOver doesn't know: %@ is the action"))
         }
         if let s = rule.say { Speech.speakMessage(s) }
     }
@@ -689,7 +695,7 @@ final class ProfilesPlugin: GlobalPlugin {
             announcedFor = bundle
             let names = Self.pluginNames(for: bundle)
             if config.presentation.announcePlugins, !names.isEmpty {
-                Speech.speakMessage("with " + names.map { "the \($0) plugin" }.joined(separator: " and "))
+                Speech.speakMessage(String(localized: "with \(names.map { String(localized: "the \($0) plugin", comment: "A plugin by name") }.joined(separator: Phrases.and))", comment: "An app coming to the front with plugins: %@ names them"))
             }
             return
         }

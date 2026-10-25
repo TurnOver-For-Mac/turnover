@@ -34,7 +34,8 @@ public enum BrailleInput {
 
     static func modifier(_ m: Modifiers, name: String, lock: Bool) {
         if lock {
-            if locked.contains(m) { locked.remove(m); Speech.speakMessage("\(name) off") } else { locked.insert(m); Speech.speakMessage("\(name) locked") }
+            if locked.contains(m) { locked.remove(m); Speech.speakMessage(String(localized: "\(name) off", comment: "A modifier key unlocked from the braille keyboard: %@ is the key")) }
+            else { locked.insert(m); Speech.speakMessage(String(localized: "\(name) locked", comment: "A modifier key locked from the braille keyboard: %@ is the key")) }
         } else {
             oneShot.insert(m); Speech.speakMessage(name)
         }

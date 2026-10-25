@@ -55,7 +55,7 @@ final class ExcelAppModule: AppModule {
             if !self.lent, let lend = Core.lendToVoiceOver {
                 self.lent = true
                 Log.io("excel: no grid; lending Excel to VoiceOver for a moment, once")
-                Speech.speakMessage("Getting Excel ready")
+                Speech.speakMessage(String(localized: "Getting Excel ready", comment: "Spoken message"))
                 lend(3)
                 return
             }

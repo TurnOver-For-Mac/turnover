@@ -10,33 +10,33 @@ package final class MailAppModule: AppModule {
 
     required init(pid: pid_t, bundleIdentifier: String, appName: String) {
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
-        script("mail_composeNext", "Writing a message: the next field, including the Priority, From and Signature pop-ups", gestures: ["kb:tab"], category: "Mail") { [weak self] g in
+        script("mail_composeNext", String(localized: "Writing a message: the next field, including the Priority, From and Signature pop-ups", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:tab"], category: "Mail") { [weak self] g in
             guard let self, let f = API.focusObject?.element else { g.send(); return }
             self.composeMove(forward: true, from: f, g)
         }.isAvailable = { Self.place.hasPrefix("compose:") && Self.place != "compose:body" }   // Tab in the message is the message's
-        script("mail_composePrevious", "Writing a message: the previous field, including the pop-ups", gestures: ["kb:shift+tab"], category: "Mail") { [weak self] g in
+        script("mail_composePrevious", String(localized: "Writing a message: the previous field, including the pop-ups", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+tab"], category: "Mail") { [weak self] g in
             guard let self, let f = API.focusObject?.element else { g.send(); return }
             self.composeMove(forward: false, from: f, g)
         }.isAvailable = { Self.place.hasPrefix("compose:") }
-        script("mail_toMailboxes", "From the message list: the mailbox list (Shift Tab)", gestures: ["kb:shift+tab"], category: "Mail") { [weak self] g in
+        script("mail_toMailboxes", String(localized: "From the message list: the mailbox list (Shift Tab)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+tab"], category: "Mail") { [weak self] g in
             guard let self, let f = API.focusObject?.element else { g.send(); return }
             self.focusList("mailboxes", from: f)
         }.isAvailable = { Self.place == "messages" }
         // Return in the search field: Mail searches and says nothing; the keys stayed in the field and Tab went to the
         // toolbar (8 Oct 2026). Say how many results, and go to them.
-        script("mail_submitSearch", "Searching: Return searches, says how many results, and goes to them", gestures: ["kb:enter"], category: "Mail") { [weak self] g in
+        script("mail_submitSearch", String(localized: "Searching: Return searches, says how many results, and goes to them", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:enter"], category: "Mail") { [weak self] g in
             guard let self else { g.send(); return }
             g.send()
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 guard let self else { return }
                 let title = AXUIElementCreateApplication(self.pid).element(kAXFocusedWindowAttribute)?.string(kAXTitleAttribute) ?? ""
                 if let r = title.range(of: #"\d[\d,]* results?"#, options: .regularExpression) { Speech.speakMessage(String(title[r])) }
-                else if title.lowercased().contains("search") { Speech.speakMessage("no results") }
+                else if title.lowercased().contains("search") { Speech.speakMessage(String(localized: "no results", comment: "Spoken message")) }
                 if let f = API.focusObject?.element { self.focusList("messages", from: f) }
             }
         }.isAvailable = { API.focusObject?.role == .searchField }
         // Command Shift D sends: say so once the compose window has gone (nothing confirmed it; a tester, 8 Oct 2026).
-        script("mail_send", "Writing a message: Command Shift D sends it, and says so", gestures: ["kb:command+shift+d"], category: "Mail") { g in
+        script("mail_send", String(localized: "Writing a message: Command Shift D sends it, and says so", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+shift+d"], category: "Mail") { g in
             g.send()
             // Said as the compose window goes, before the window behind it is read: said 1.2 s later, it queued behind
             // that window and its message list, and the next key cut it off (12 Oct 2026: "it's not saying sent").
@@ -53,11 +53,11 @@ package final class MailAppModule: AppModule {
                     guard let f = API.focusObject, let info = try? f.makeTextInfo(.caret) as? WebTextInfo else { return }
                     let lvl = (info.elementsAtStart().first?.attr("AXBlockQuoteLevel") as? NSNumber)?.intValue ?? 0
                     BufferTextInfo.lastQuoteLevel = lvl
-                    Speech.speakMessage(lvl > 0 ? "quote level \(lvl)" : "no quote")
+                    Speech.speakMessage(lvl > 0 ? String(localized: "quote level \(String(lvl))", comment: "How deep a quote is in a Mail message") : String(localized: "no quote", comment: "Spoken message"))
                 }
             }.isAvailable = { Self.place.hasPrefix("compose:") }
         }
-        script("mail_toMessages", "From the mailbox list: the message list (Tab)", gestures: ["kb:tab"], category: "Mail") { [weak self] g in
+        script("mail_toMessages", String(localized: "From the mailbox list: the message list (Tab)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:tab"], category: "Mail") { [weak self] g in
             guard let self, let f = API.focusObject?.element else { g.send(); return }
             self.focusList("messages", from: f)
         }.isAvailable = { Self.place == "mailboxes" }
@@ -65,18 +65,18 @@ package final class MailAppModule: AppModule {
         // window closes, and the keys go back to the message list; in the main window, the list takes the keys.
         // Only while reading (browse mode): in focus mode Escape first goes back to browse mode, and in a message
         // being written it is Mail's own.
-        script("mail_leaveMessage", "Reading a message: back to the message list (closes the message's own window)", gestures: ["kb:escape"], category: "Mail") { [weak self] g in
+        script("mail_leaveMessage", String(localized: "Reading a message: back to the message list (closes the message's own window)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:escape"], category: "Mail") { [weak self] g in
             guard let self, let d = API.focusTreeInterceptor else { g.send(); return }
             self.leaveMessage(from: d.webArea, g)
         }.isAvailable = {
             guard let d = API.focusTreeInterceptor, !d.passThrough, d.webArea.pid == pid else { return false }
             return !Self.place.hasPrefix("compose:") && !AXHandler.shared.isMenuOpen
         }
-        script("mail_getNewMail", "Checks for new mail and says so", gestures: ["kb:command+shift+n"], category: "Mail") { g in
+        script("mail_getNewMail", String(localized: "Checks for new mail and says so", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+shift+n"], category: "Mail") { g in
             g.send()
-            Speech.speakMessage("checking for new mail")
+            Speech.speakMessage(String(localized: "checking for new mail", comment: "Spoken message"))
         }
-        script("mail_toggleRead", "Marks the message read or unread, and says which", gestures: ["kb:command+shift+u"], category: "Mail") { g in
+        script("mail_toggleRead", String(localized: "Marks the message read or unread, and says which", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+shift+u"], category: "Mail") { g in
             g.send()
             // The focus is the message list (its rows are read as its selection) or, rarely, a row.
             guard let f = API.focusObject else { return }
@@ -85,7 +85,8 @@ package final class MailAppModule: AppModule {
             // Mail changes the rows' action a moment after the key.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                 let unread = rows.filter(MailMessageRow.isUnread).count
-                let said = rows.count == 1 ? (unread == 1 ? "unread" : "read") : "\(rows.count) messages marked \(unread == rows.count ? "unread" : "read")"
+                let said = rows.count == 1 ? (unread == 1 ? String(localized: "unread", comment: "A Mail message not yet read") : String(localized: "read", comment: "A Mail message marked read"))
+                    : unread == rows.count ? String(localized: "\(String(rows.count)) messages marked unread", comment: "Mail messages marked unread: how many") : String(localized: "\(String(rows.count)) messages marked read", comment: "Mail messages marked read: how many")
                 Speech.speakMessage(said)
             }
         }
@@ -231,7 +232,7 @@ package final class MailAppModule: AppModule {
         let windows = AXUIElementCreateApplication(s.window.pid).elements(kAXWindowsAttribute)
         guard !windows.contains(where: { $0.isSame(s.window) }) else { return }
         sending = nil
-        Speech.speakMessage("sent")
+        Speech.speakMessage(String(localized: "sent", comment: "Spoken message"))
     }
 
     package override func handleEvent(_ event: Event, next: () -> Void) {
@@ -275,8 +276,9 @@ final class MailPriorityPopup: TurnOverObject {
 final class MailMessageRow: TurnOverObject {
     override var name: String {
         let n = super.name
-        if n.hasPrefix("unread") { return n }
-        return Self.isUnread(element) || MailUnread.wasUnread(element) ? "unread, " + n : n
+        let unread = String(localized: "unread", comment: "A Mail message not yet read")
+        if n.hasPrefix(unread) { return n }
+        return Self.isUnread(element) || MailUnread.wasUnread(element) ? "\(unread), \(n)" : n
     }
 
     static func isMessageRow(_ e: AXUIElement) -> Bool {
@@ -291,7 +293,7 @@ final class MailMessageRow: TurnOverObject {
 }
 
 final class MailMessageBody: EditableWebArea {
-    override var name: String { let n = super.name; return n.isEmpty ? "message body" : n }
+    override var name: String { let n = super.name; return n.isEmpty ? String(localized: "message body", comment: "A Mail message's text, when it has no name") : n }
 
     /// Mail corrects a word as you finish it ("teh" becomes "the"); VoiceOver says so, and so does TurnOver now:
     /// the word as typed is compared with the word in the message a moment later (a tester, ; wishlist 5).
@@ -319,7 +321,7 @@ final class MailMessageBody: EditableWebArea {
             // The typed word was read from the field after Mail had corrected it: already said as corrected.
             if let said = Speech.lastTypedWordSpoken, plain(said) == plain(now) { return }
             Log.io("autocorrect: a word was changed (\(typed.count) to \(now.count) characters)")
-            Speech.speakMessage("corrected to \(now)")
+            Speech.speakMessage(String(localized: "corrected to \(now)", comment: "Mail corrected a typed word: %@ is the new word"))
         }
     }
 }

@@ -35,15 +35,15 @@ final class StatusItem: NSObject, NSMenuDelegate {
         // TurnOver cannot read its own item through accessibility (asking itself would block its own main thread), so the
         // item speaks for itself: when the status menus (Control-F8, VO-M three times) reach it, and in its menu.
         keyObserver = NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: it.button?.window, queue: .main) { _ in
-            MainActor.assumeIsolated { Speech.cancel(); Speech.speakMessage("TurnOver, menu extra") }
+            MainActor.assumeIsolated { Speech.cancel(); Speech.speakMessage(String(localized: "TurnOver, menu extra", comment: "Spoken message")) }
         }
     }
 
-    func menuWillOpen(_ menu: NSMenu) { Speech.cancel(); Speech.speakMessage("TurnOver menu") }
+    func menuWillOpen(_ menu: NSMenu) { Speech.cancel(); Speech.speakMessage(String(localized: "TurnOver menu", comment: "Spoken message")) }
     func menu(_ menu: NSMenu, willHighlight item: NSMenuItem?) {
         guard let item, !item.isSeparatorItem else { return }
         Speech.cancel()
-        Speech.speakMessage(item.state == .on ? "\(item.title), checked" : item.title)
+        Speech.speakMessage(item.state == .on ? "\(item.title), \(State.checked.displayString)" : item.title)
     }
 
     private func hide() {
@@ -62,7 +62,7 @@ final class StatusItem: NSObject, NSMenuDelegate {
             Log.info("login item \(want ? "registered" : "unregistered")")
         } catch {
             Log.error("login item: \(error)")
-            Speech.speakMessage("could not change open at login: \(error.localizedDescription)")
+            Speech.speakMessage(String(localized: "could not change open at login: \(error.localizedDescription)", comment: "Open at login failed: %@ is why"))
         }
         item?.menu?.items.first { $0.action == #selector(toggleLogin) }?.state = config.general.openAtLogin ? .on : .off
     }
@@ -72,7 +72,7 @@ final class StatusItem: NSObject, NSMenuDelegate {
     @objc private func toggleLogin() {
         config.general.openAtLogin.toggle(); config.save()
         applyLoginItem()
-        Speech.speakMessage("open at login \(config.general.openAtLogin ? "on" : "off")")
+        Speech.speakMessage(String(localized: "open at login \(Phrases.onOff(config.general.openAtLogin))", comment: "Open at login changed: %@ is on or off"))
     }
     @objc private func quit() { NSApp.terminate(nil) }
 }

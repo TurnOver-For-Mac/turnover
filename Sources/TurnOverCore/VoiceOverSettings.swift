@@ -210,7 +210,7 @@ extension VoiceOverSettings {
     /// Undo: the fields the copy changes go back to the kept values; everything else stays as it is now.
     public static func undo() -> String {
         guard let data = try? Data(contentsOf: beforeURL), let before = try? JSONDecoder().decode(Config.self, from: data) else {
-            return "There's nothing to put back: VoiceOver's settings haven't been copied on this Mac."
+            return String(localized: "There's nothing to put back: VoiceOver's settings haven't been copied on this Mac.", comment: "Reverting the VoiceOver settings copy")
         }
         config.speech.voice = before.speech.voice; config.speech.rate = before.speech.rate
         config.speech.pitch = before.speech.pitch; config.speech.volume = before.speech.volume
@@ -222,9 +222,9 @@ extension VoiceOverSettings {
         Speech.player.volume = Float(config.speech.volume) / 100
         config.save()
         try? FileManager.default.removeItem(at: beforeURL)
-        let voice = AVSpeechSynthesisVoice(identifier: config.speech.voice)?.name ?? "its voice"
+        let voice = AVSpeechSynthesisVoice(identifier: config.speech.voice)?.name ?? String(localized: "its voice", comment: "TurnOver's voice, when it has no name")
         Log.info("VoiceOver settings copy undone: back to \(voice), rate \(Int((config.speech.rate * 100).rounded()))")
-        return "Put back: \(voice), rate \(Int((config.speech.rate * 100).rounded())), and the verbosity and typing echo from before the copy."
+        return String(localized: "Put back: \(voice), \(Phrases.rate(Int((config.speech.rate * 100).rounded()))), and the verbosity and typing echo from before the copy.", comment: "The VoiceOver settings copy reverted: the voice, then the rate")
     }
 
     /// Applies what TurnOver can, saves, and returns what to say. A voice TurnOver can't use (a Siri voice) keeps
@@ -243,38 +243,40 @@ extension VoiceOverSettings {
             // Said at the end, apart from the list, or the copy sounded like a failure ("it fails because it can't
             // find a voice", a reader on AppleVis with a Siri voice, 26 Oct 2026). The Siri voices are Apple's own:
             // only Siri and VoiceOver may speak with them, and no other program is given them.
-            let current = AVSpeechSynthesisVoice(identifier: config.speech.voice)?.name ?? "its voice"
+            let current = AVSpeechSynthesisVoice(identifier: config.speech.voice)?.name ?? String(localized: "its voice", comment: "TurnOver's voice, when it has no name")
             let siri = c.voiceId.contains("gryphon") || c.voiceId.lowercased().contains("siri")
             voiceNote = siri
-                ? "VoiceOver's voice is a Siri voice, which Apple gives to Siri and VoiceOver alone, so TurnOver keeps \(current); choose a voice in Settings, Speech."
-                : "VoiceOver's voice isn't one TurnOver can use, so TurnOver keeps \(current); choose a voice in Settings, Speech."
+                ? String(localized: "VoiceOver's voice is a Siri voice, which Apple gives to Siri and VoiceOver alone, so TurnOver keeps \(current); choose a voice in Settings, Speech.", comment: "Copying VoiceOver's settings: %@ is TurnOver's voice")
+                : String(localized: "VoiceOver's voice isn't one TurnOver can use, so TurnOver keeps \(current); choose a voice in Settings, Speech.", comment: "Copying VoiceOver's settings: %@ is TurnOver's voice")
             Log.info("VoiceOver settings: voice \(c.voiceId) not usable; keeping \(config.speech.voice)")
         }
         config.speech.rate = min(1.0, max(0.1, c.rate))
         Speech.player?.rate = config.speech.rate
-        said.append("rate \(Int((config.speech.rate * 100).rounded()))")
+        said.append(Phrases.rate(Int((config.speech.rate * 100).rounded())))
         config.speech.pitch = min(1, max(0, c.pitch))
         Speech.player?.pitch = config.speech.pitchMultiplier
-        if abs(c.pitch - 0.5) > 0.01 { said.append("pitch \(Int((config.speech.pitch * 100).rounded()))") }
+        if abs(c.pitch - 0.5) > 0.01 { said.append(String(localized: "pitch \(String(Int((config.speech.pitch * 100).rounded())))", comment: "The speech pitch, out of 100")) }
         config.speech.volume = Int((min(1, max(0.1, c.volume)) * 100).rounded())
         Speech.player?.volume = Float(config.speech.volume) / 100
         switch c.verbosity {   // VoiceOver's low, medium and high: hints and descriptions
-        case "SCRVerbosityLow": config.presentation.speakHints = false; config.presentation.reportObjectDescriptions = false; said.append("low verbosity")
-        case "SCRVerbosityMedium": config.presentation.speakHints = false; config.presentation.reportObjectDescriptions = true; said.append("medium verbosity")
-        case "SCRVerbosityHigh": config.presentation.speakHints = true; config.presentation.reportObjectDescriptions = true; said.append("high verbosity")
+        case "SCRVerbosityLow": config.presentation.speakHints = false; config.presentation.reportObjectDescriptions = false; said.append(String(localized: "low verbosity", comment: "Copying VoiceOver's settings"))
+        case "SCRVerbosityMedium": config.presentation.speakHints = false; config.presentation.reportObjectDescriptions = true; said.append(String(localized: "medium verbosity", comment: "Copying VoiceOver's settings"))
+        case "SCRVerbosityHigh": config.presentation.speakHints = true; config.presentation.reportObjectDescriptions = true; said.append(String(localized: "high verbosity", comment: "Copying VoiceOver's settings"))
         default: break
         }
         // Links, misspelled words and text attributes as VoiceOver marks them: a sound (VoiceOver's own file), words,
         // or nothing (17 Oct 2026: "based on the VoiceOver archive and how that is set up").
         func level(_ v: String) -> ElementReport? { v.isEmpty ? nil : v.contains("Sound") || v.contains("Tone") ? .tone : v.contains("DoNothing") || v.contains("None") ? .off : .speech }
-        if let l = level(c.links) { config.documentFormatting.links = l; said.append("links \(l == .tone ? "by sound" : l == .off ? "not marked" : "said")") }
-        if let m = level(c.misspelled) { config.documentFormatting.spellingErrors = m; said.append("misspellings \(m == .tone ? "by sound" : m == .off ? "not marked" : "said")") }
-        if !c.textAttributes.isEmpty { let on = !c.textAttributes.contains("None"); config.documentFormatting.reportFontAttributes = on; if on { said.append("text attributes said") } }
+        if let l = level(c.links) { config.documentFormatting.links = l
+            said.append(l == .tone ? String(localized: "links by sound", comment: "Copying VoiceOver's settings") : l == .off ? String(localized: "links not marked", comment: "Copying VoiceOver's settings") : String(localized: "links said", comment: "Copying VoiceOver's settings")) }
+        if let m = level(c.misspelled) { config.documentFormatting.spellingErrors = m
+            said.append(m == .tone ? String(localized: "misspellings by sound", comment: "Copying VoiceOver's settings") : m == .off ? String(localized: "misspellings not marked", comment: "Copying VoiceOver's settings") : String(localized: "misspellings said", comment: "Copying VoiceOver's settings")) }
+        if !c.textAttributes.isEmpty { let on = !c.textAttributes.contains("None"); config.documentFormatting.reportFontAttributes = on; if on { said.append(String(localized: "text attributes said", comment: "Copying VoiceOver's settings")) } }
         // Punctuation: VoiceOver's none, some, most, all (the key's value, whatever its spelling, by its word or number).
         if !c.punctuation.isEmpty {
             let v = c.punctuation.lowercased()
             let level: SymbolLevel? = v.contains("none") || v == "0" ? SymbolLevel.none : v.contains("some") || v == "1" ? .some : v.contains("most") || v == "2" ? .most : v.contains("all") || v == "3" ? .all : nil
-            if let level { config.speech.symbolLevel = level; said.append("punctuation \(level.name)") }
+            if let level { config.speech.symbolLevel = level; said.append(String(localized: "punctuation \(level.name)", comment: "Copying VoiceOver's settings: %@ is the punctuation level")) }
         }
         // The Commanders and the custom bindings, cloned into TurnOver's own keys (17 Oct 2026).
         if let on = c.keyboardCommander { config.keyboard.optionCommander = on }
@@ -284,7 +286,7 @@ extension VoiceOverSettings {
             config.keyboard.userGestures["kb:rightoption+" + letter] = VoiceOverCommands.target(for: command).stored
             letters.append(letter.uppercased())
         }
-        if !letters.isEmpty { said.append("Keyboard Commander keys " + letters.sorted().joined(separator: ", ")) }
+        if !letters.isEmpty { said.append(String(localized: "Keyboard Commander keys \(letters.sorted().joined(separator: ", "))", comment: "Copying VoiceOver's settings: the letters given")) }
         var bound = 0
         for b in c.keyBindings {
             let name = KeyNames.code(for: b.key).map { KeyNames.name(for: $0) } ?? b.key
@@ -292,16 +294,19 @@ extension VoiceOverSettings {
             config.keyboard.userGestures[id] = b.removed ? UserGestures.Target.removed.stored : VoiceOverCommands.target(for: b.target).stored
             bound += 1
         }
-        if bound > 0 { said.append("\(bound) custom key binding\(bound == 1 ? "" : "s")") }
+        if bound > 0 { said.append(bound == 1 ? String(localized: "1 custom key binding", comment: "Copying VoiceOver's settings") : String(localized: "\(String(bound)) custom key bindings", comment: "Copying VoiceOver's settings")) }
         if !c.typingEcho.isEmpty {
             let chars = c.typingEcho.contains("Characters"), words = c.typingEcho.contains("Words")
             config.keyboard.speakTypedCharacters = chars ? .editControls : .off
             config.keyboard.speakTypedWords = words ? .editControls : .off
-            said.append(chars && words ? "typing echo characters and words" : chars ? "typing echo characters" : words ? "typing echo words" : "typing echo off")
+            said.append(chars && words ? String(localized: "typing echo characters and words", comment: "Copying VoiceOver's settings") : chars ? String(localized: "typing echo characters", comment: "Copying VoiceOver's settings")
+                        : words ? String(localized: "typing echo words", comment: "Copying VoiceOver's settings") : String(localized: "typing echo off", comment: "Copying VoiceOver's settings"))
         }
         config.save()
         Log.info("VoiceOver settings copied (archive version \(c.archiveVersion)): \(said.joined(separator: ", "))")
-        return "VoiceOver settings copied: " + said.joined(separator: ", ") + ". " + (voiceNote.isEmpty ? "" : voiceNote + " ") + "Run it again whenever you change VoiceOver's settings: the TurnOver menu, or the speech settings' last stop, sync with VoiceOver."
+        let copied = String(localized: "VoiceOver settings copied: \(said.joined(separator: ", ")).", comment: "The VoiceOver settings copy done: %@ lists what was copied")
+        let again = String(localized: "Run it again whenever you change VoiceOver's settings: the TurnOver menu, or the speech settings' last stop, sync with VoiceOver.", comment: "The VoiceOver settings copy done")
+        return [copied, voiceNote, again].filter { !$0.isEmpty }.joined(separator: " ")
     }
 
     /// Said by whichever reader is talking (VoiceOver leads in VoiceOver Utility).
@@ -319,19 +324,19 @@ extension VoiceOverSettings {
         guard !flowRunning else { return }
         if let auto = automaticExport {
             flowRunning = true
-            Speech.speakMessage("Copying VoiceOver's settings; a moment.")
+            Speech.speakMessage(String(localized: "Copying VoiceOver's settings; a moment.", comment: "Spoken message"))
             auto { file in
                 DispatchQueue.main.async {
-                    if let file { finish(with: file) } else { flowRunning = false; Speech.speakMessage("VoiceOver's settings couldn't be read this time.") }
+                    if let file { finish(with: file) } else { flowRunning = false; Speech.speakMessage(String(localized: "VoiceOver's settings couldn't be read this time.", comment: "Spoken message")) }
                 }
             }
             return
         }
         flowRunning = true
         let since = Date()
-        sayByEitherReader("VoiceOver Utility is opening, with VoiceOver. When the save sheet appears, press Return to save to Downloads; TurnOver copies the settings when the file appears.")
+        sayByEitherReader(String(localized: "VoiceOver Utility is opening, with VoiceOver. When the save sheet appears, press Return to save to Downloads; TurnOver copies the settings when the file appears.", comment: "Spoken message"))
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: utilityBundle) else {
-            Speech.speakMessage("VoiceOver Utility wasn't found."); flowRunning = false; return
+            Speech.speakMessage(String(localized: "VoiceOver Utility wasn't found.", comment: "Spoken message")); flowRunning = false; return
         }
         // The save sheet opens on Downloads: the Utility's save panel remembers its last folder in its own defaults
         // (15 Oct 2026: "set the destination it falls on").
@@ -359,7 +364,7 @@ extension VoiceOverSettings {
                 }
                 if looks < 240 { look() } else {
                     flowRunning = false
-                    sayByEitherReader("No VoiceOver settings file appeared; nothing was changed.")
+                    sayByEitherReader(String(localized: "No VoiceOver settings file appeared; nothing was changed.", comment: "Spoken message"))
                 }
             }
         }

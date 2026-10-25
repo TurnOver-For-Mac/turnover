@@ -31,7 +31,7 @@ public enum SayAll {
 
     /// NVDA: readText with CURSOR.CARET.
     public static func readText(from obj: TurnOverObject) {
-        guard let info = try? obj.makeTextInfo(.caret) else { stop(); Speech.speakMessage("no text"); return }
+        guard let info = try? obj.makeTextInfo(.caret) else { stop(); Speech.speakMessage(String(localized: "no text", comment: "Spoken message")); return }
         readText(info: info)
     }
 
@@ -64,7 +64,7 @@ public enum SayAll {
         r.collapse(toEnd: true)
         let text = Speech.textInfoSpeech(chunk, unit: .readingChunk, reason: .sayAll)
         nonisolated(unsafe) let tones = Speech.takeSayAllTones()   // sounded as this chunk starts, below (run on main there)
-        if text == "blank" || Speech.cleaned(text).isEmpty {
+        if text == Phrases.blank || Speech.cleaned(text).isEmpty {
             // Empty paragraphs are skipped, but not endlessly without yielding. (They never counted as queued speech:
             // counting them left "end of document" unsaid and the next arrow resuming say all, 8 Oct 2026.)
             blanks += 1
@@ -118,7 +118,7 @@ public enum SayAll {
            }) {
             Log.io("say all: the app carries on"); return
         }
-        if buffered == 0 { reader = nil; restoreRate(); Speech.speakOnly("end of document"); Log.io("say all finished") }   // (queued as the last line starts: on the display it hid that line)
+        if buffered == 0 { reader = nil; restoreRate(); Speech.speakOnly(String(localized: "end of document", comment: "Spoken message")); Log.io("say all finished") }   // (queued as the last line starts: on the display it hid that line)
         // Otherwise the last chunk's onStart will call nextLine again and land here with buffered 0.
     }
 

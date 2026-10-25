@@ -24,6 +24,8 @@ import AppKit
 import TurnOverAX
 
 public final class MediaView {
+    /// A shelf with no name of its own, until the page's title is known (and replaced by it).
+    nonisolated static var untitledShelf: String { Role.list.displayString.capitalized }
     nonisolated public struct Item: Sendable {
         public var label: String
         public var element: AXUIElement
@@ -211,7 +213,7 @@ public final class MediaView {
             let session = currentSession
             delay(0.6) { [weak self] in
                 guard let self, isCurrent(session), loadingMore, acceptsWindow(window) else { return }
-                Speech.speakMessage("please wait", remember: false)
+                Speech.speakMessage(String(localized: "please wait", comment: "Spoken message"), remember: false)
             }
             read(.build(keepSidebar: false, detectVideo: false), capturedWindow: window) { [weak self] result in
                 guard let self else { return }
@@ -387,7 +389,7 @@ public final class MediaView {
         let pageTitle = !windowName.isEmpty && windowName != appName ? windowName : (sidebar.first(where: { $0.selected })?.label ?? windowName)
         // A table with no name of its own is the page's list ("Songs", not the window's "Music").
         let windowTitle = window.string(kAXTitleAttribute) ?? ""
-        for i in shelves.indices where shelves[i].title == windowTitle || shelves[i].title == "List" { shelves[i].title = pageTitle }
+        for i in shelves.indices where shelves[i].title == windowTitle || shelves[i].title == Self.untitledShelf { shelves[i].title = pageTitle }
         // The scroll area holding the page: scrolling it loads more shelves. The first item's nearest ancestor that
         // scrolls up and down (a carousel inside may be a scroll area of its own, sideways). Podcasts' is a group
         // with a scroll bar ("podcasts.listen[viewState=loaded,sections=19]").
@@ -509,7 +511,7 @@ public final class MediaView {
                 let e = st.removeFirst(); n += 1
                 if ["AXButton", "AXMenuButton", "AXPopUpButton"].contains(e.role) {
                     let t = e.string(kAXDescriptionAttribute) ?? e.string(kAXTitleAttribute) ?? ""
-                    if !t.isEmpty, t != "Back", e.string(kAXIdentifierAttribute) != "BackButton" { bar.append(Item(label: t + (e.role == "AXButton" ? ", button" : ", menu button"), element: e, press: e)) }
+                    if !t.isEmpty, t != "Back", e.string(kAXIdentifierAttribute) != "BackButton" { bar.append(Item(label: t + ", " + (e.role == "AXButton" ? Role.button.displayString : Role.menuButton.displayString), element: e, press: e)) }
                     continue
                 }
                 st.append(contentsOf: e.elements(kAXChildrenAttribute))
@@ -593,7 +595,7 @@ public final class MediaView {
                     .filter { !$0.isEmpty && !["Show Now Playing", "Mini Player Artwork", "More", "Track Position"].contains($0) }
                     .map { $0.replacingOccurrences(of: "Mini Player Artwork, ", with: "").replacingOccurrences(of: ", Track Position, More", with: "") }
                 let label = ([t] + desc).filter { !$0.isEmpty }.joined(separator: ", ")
-                out.append(Item(label: label.isEmpty ? "Nothing playing" : label, element: e, press: nil))
+                out.append(Item(label: label.isEmpty ? String(localized: "Nothing playing", comment: "The player with nothing in it") : label, element: e, press: nil))
                 return
             }
             for c in e.elements(kAXChildrenAttribute) { walk(c) }
@@ -694,7 +696,7 @@ public final class MediaView {
             if id.contains("shelfItem"), id.contains("Header") { current.items.append(contentsOf: splitHeader(e)); return }
             if id.contains("shelfItem"), !id.contains("SubComponent") { let it = item(e); if !it.label.isEmpty { current.items.append(it) }; return }
             if role == "AXTable" || (role == "AXOutline" && desc != "Sidebar") {
-                startShelf(desc.isEmpty ? (title.isEmpty ? "List" : title) : desc)
+                startShelf(desc.isEmpty ? (title.isEmpty ? Self.untitledShelf : title) : desc)
                 // Rows are read when they are reached, not now: reading every song took seconds.
                 for row in e.elements(kAXRowsAttribute).prefix(20_000) {
                     current.items.append(Item(label: "", element: row, press: nil, tableRow: true))
@@ -750,7 +752,7 @@ public final class MediaView {
         for b in buttons {
             let t = b.string(kAXDescriptionAttribute) ?? b.string(kAXTitleAttribute) ?? (b.attr(kAXValueAttribute) as? String) ?? ""
             guard !t.isEmpty, t.uppercased() != "MORE" else { continue }
-            var it = Item(label: tidy(t) + ", button", element: b, press: b)
+            var it = Item(label: tidy(t) + ", " + Role.button.displayString, element: b, press: b)
             if t.hasPrefix("Play") { it.play = b }
             items.append(it)
         }
@@ -858,7 +860,7 @@ public final class MediaView {
                 l = Self.item(item.element).label
             }
             if !l.isEmpty { rowLabels[i] = l }
-            return l.isEmpty ? "item not loaded yet" : l
+            return l.isEmpty ? String(localized: "item not loaded yet", comment: "A row of a long list not loaded yet") : l
         }
         guard item.tableRow, item.label.isEmpty else { return item.label }
         if let l = rowLabels[i] { return l }
@@ -896,7 +898,7 @@ public final class MediaView {
         guard rebuildOrQueue(waitForLoading: true, retry: { [weak self] in self?.move(delta) }) else { return }
         navigationIntent &+= 1
         let all = items(of: pane)
-        guard !all.isEmpty else { Speech.speakMessage(pane == .page ? "nothing on this page yet" : "empty"); return }
+        guard !all.isEmpty else { Speech.speakMessage(pane == .page ? String(localized: "nothing on this page yet", comment: "Spoken message") : String(localized: "empty", comment: "Spoken message")); return }
         let old = max(0, min(all.count - 1, index[pane] ?? 0))
         let new = old + delta
         guard all.indices.contains(new) else {
@@ -1071,7 +1073,7 @@ public final class MediaView {
             // Reading to the bottom of a long page takes a few seconds: say so, rather than silence.
             delay(0.8) { [weak self] in
                 guard let self, isCurrent(session), !done, acceptsWindow(window) else { return }
-                Speech.speakMessage("reading the whole page", remember: false)
+                Speech.speakMessage(String(localized: "reading the whole page", comment: "Spoken message"), remember: false)
             }
             loadAll { [weak self] in
                 guard let self, isCurrent(session) else { return }
@@ -1142,7 +1144,12 @@ public final class MediaView {
         if pane == .sidebar, index[.sidebar] == nil, let sel = sidebar.firstIndex(where: { $0.selected }) { index[.sidebar] = sel }
         if index[pane] == nil { index[pane] = 0 }
         let name: String
-        switch pane { case .sidebar: name = "sidebar"; case .page: name = pageTitle.isEmpty ? "page" : "\(pageTitle) page"; case .player: name = "player"; case .toolbar: name = "tool bar" }
+        switch pane {
+        case .sidebar: name = String(localized: "sidebar", comment: "An area of the Music, Podcasts or TV window")
+        case .page: name = pageTitle.isEmpty ? Role.page.displayString : String(localized: "\(pageTitle) page", comment: "An area of the Music, Podcasts or TV window: %@ is the page's title")
+        case .player: name = String(localized: "player", comment: "An area of the Music, Podcasts or TV window")
+        case .toolbar: name = Role.toolBar.displayString
+        }
         Speech.speakOnly(name)   // the area's name: the display shows its item
         announce(crossedFrom: -1, forceShelf: pane == .page)
     }
@@ -1160,7 +1167,7 @@ public final class MediaView {
             let pos = (flat[..<i].filter { $0.shelf == s }.count) + 1
             if forceShelf || old < 0 || !flat.indices.contains(old) || flat[old].shelf != s {
                 let title = shelves[s].title
-                if !title.isEmpty { parts.append("\(title), \(inShelf.count) item\(inShelf.count == 1 ? "" : "s")") }
+                if !title.isEmpty { parts.append("\(title), \(Phrases.items(inShelf.count))") }
             }
             pieces.append(("name", [label(item, at: i)]))
             pieces.append(("position", ["\(pos) of \(inShelf.count)"]))
@@ -1179,13 +1186,13 @@ public final class MediaView {
 
     private func hint(for item: Item) -> String {
         switch pane {
-        case .sidebar: return item.isHeader ? "Down moves to its places." : "Return goes there; Tab moves to the page."
-        case .player: return "Return presses it; Space plays and pauses. Tab moves on."
-        case .toolbar: return "Return presses it. Tab moves to the sidebar."
+        case .sidebar: return item.isHeader ? String(localized: "Down moves to its places.", comment: "A hint in Music, Podcasts or TV") : String(localized: "Return goes there; Tab moves to the page.", comment: "A hint in Music, Podcasts or TV")
+        case .player: return String(localized: "Return presses it; Space plays and pauses. Tab moves on.", comment: "A hint in Music, Podcasts or TV")
+        case .toolbar: return String(localized: "Return presses it. Tab moves to the sidebar.", comment: "A hint in Music, Podcasts or TV")
         case .page:
-            if item.play != nil { return "Return plays it; Shift Return opens its page. Left and Right move between shelves." }
-            if item.press != nil || item.tableRow { return "Return opens it. Left and Right move between shelves; Tab moves to the sidebar and player." }
-            return "Left and Right move between shelves; Tab moves to the sidebar and player."
+            if item.play != nil { return String(localized: "Return plays it; Shift Return opens its page. Left and Right move between shelves.", comment: "A hint in Music, Podcasts or TV") }
+            if item.press != nil || item.tableRow { return String(localized: "Return opens it. Left and Right move between shelves; Tab moves to the sidebar and player.", comment: "A hint in Music, Podcasts or TV") }
+            return String(localized: "Left and Right move between shelves; Tab moves to the sidebar and player.", comment: "A hint in Music, Podcasts or TV")
         }
     }
 
@@ -1221,7 +1228,7 @@ public final class MediaView {
             guard pageID == capturedPage, result?.built?.pageID == capturedPage else { runQueued(); return }
             apply(result?.built)
             if let found = result?.found, found.key == item.key, isCurrent(found) { go(found) }
-            else { Speech.speakMessage("cannot find that item on the page now") }
+            else { Speech.speakMessage(String(localized: "cannot find that item on the page now", comment: "Spoken message")) }
             runQueued()
         }
     }
@@ -1243,7 +1250,7 @@ public final class MediaView {
             let r = AXUIElementPerformAction(play, item.playAction as CFString)
             Log.io("media: play \(Log.words(String(item.label.prefix(50)))) → \(r.rawValue)")
             let title = item.label.components(separatedBy: ", ").prefix(2).joined(separator: ", ")
-            Speech.speakText("playing, " + title)
+            Speech.speakText(String(localized: "playing, \(title)", comment: "Something started playing: %@ is its title"))
             confirmPlaying()
             return
         }
@@ -1268,7 +1275,7 @@ public final class MediaView {
             guard acceptsWindow(window) else { return }
             KeyboardGesture(identifier: "kb:enter")?.send()   // Music plays the selected song on Return
             // Said, as for a Play button (Return on a song in the library was silent, 8 Oct 2026), and checked.
-            Speech.speakMessage("playing", remember: false)
+            Speech.speakMessage(String(localized: "playing", comment: "Spoken message"), remember: false)
             confirmPlaying()
             return
         } else if let target = item.press ?? (item.playAction == kAXPressAction as String ? item.play : nil) {
@@ -1276,7 +1283,7 @@ public final class MediaView {
             let r = AXUIElementPerformAction(target, kAXPressAction as CFString)
             Log.io("media: press \(Log.words(String(item.label.prefix(50)))) → \(r.rawValue)")
         } else {
-            Speech.speakMessage("nothing to open"); return
+            Speech.speakMessage(String(localized: "nothing to open", comment: "Spoken message")); return
         }
         if pane == .player {
             let session = currentSession
@@ -1293,7 +1300,7 @@ public final class MediaView {
 
     private func selectSidebar(_ item: Item, window: AXUIElement?, before: String, keys: Int, allowAlreadyOpen: Bool) {
         guard let outline = item.sidebarOutline, let cell = item.press, !item.isHeader else {
-            Speech.speakMessage("could not select that sidebar item", remember: false); return
+            Speech.speakMessage(String(localized: "could not select that sidebar item", comment: "Spoken message"), remember: false); return
         }
         let body = Self.bodySignature(shelves)
         pendingSidebarBody = body
@@ -1302,7 +1309,7 @@ public final class MediaView {
             guard let self else { return }
             resolving = false
             guard result?.sidebarSelected == true else {
-                if keyCount() == keys { Speech.speakMessage("could not select that sidebar item", remember: false) }
+                if keyCount() == keys { Speech.speakMessage(String(localized: "could not select that sidebar item", comment: "Spoken message"), remember: false) }
                 runQueued(); return
             }
             if result?.sidebarAlreadyOpen == true {
@@ -1342,7 +1349,7 @@ public final class MediaView {
             whenCurrent(item) { found in
                 guard let play = found.play, self.acceptsWindow(self.modelWindow) else { return }
                 _ = AXUIElementPerformAction(play, found.playAction as CFString)
-                Speech.speakMessage("playing", remember: false)
+                Speech.speakMessage(String(localized: "playing", comment: "Spoken message"), remember: false)
             }
             return
         }
@@ -1364,7 +1371,7 @@ public final class MediaView {
                 refreshPlayer()
                 let now = player.first(where: isPlaybackToggle).map { playerControlName($0).lowercased() } ?? ""
                 let playing = now == "pause" || now == "stop"
-                if !now.isEmpty, playing != pressedPlay { Speech.speakMessage(playing ? "playing" : "paused", remember: false) }
+                if !now.isEmpty, playing != pressedPlay { Speech.speakMessage(playing ? String(localized: "playing", comment: "Spoken message") : String(localized: "paused", comment: "Spoken message"), remember: false) }
             }
             return
         }
@@ -1409,7 +1416,7 @@ public final class MediaView {
                         },
                         fallBack: { [weak self] why in
                             guard let self, canUseResult, catalogRequest == request else { return }
-                            if why != "nothing found" { Speech.speakMessage("The catalog did not answer: \(why). Reading the page.") }
+                            if why != "nothing found" { Speech.speakMessage(String(localized: "The catalog did not answer: \(why). Reading the page.", comment: "Spoken message")) }
                             catalog = nil; catalogDrives = false
                             // The page may already be up and unspoken: read it now.
                             let flat = flatPage
@@ -1425,7 +1432,7 @@ public final class MediaView {
         catalogDrives = false
         NSWorkspace.shared.open(e.url)
         Log.io("catalog: opening \"\(Log.words(e.name.prefix(40).description))\"")
-        Speech.speakMessage("Opening \(e.name)")
+        Speech.speakMessage(String(localized: "Opening \(e.name)", comment: "Spoken message"))
         openingTitle = e.name
         waitForNewPage(different: before, tries: Self.searchPageTries)
     }
@@ -1441,11 +1448,11 @@ public final class MediaView {
         // Podcasts: a Back button in the toolbar. Music and TV: Controls > Back (Command+[), disabled at the top.
         if let backButton = window.elements(kAXChildrenAttribute).first(where: { $0.role == "AXToolbar" })?.elements(kAXChildrenAttribute)
                .first(where: { $0.string(kAXDescriptionAttribute) == "Back" || $0.string(kAXIdentifierAttribute) == "BackButton" }) {
-            if (backButton.attr(kAXEnabledAttribute) as? Bool) == false { Speech.speakMessage("no previous page", remember: false); return }
+            if (backButton.attr(kAXEnabledAttribute) as? Bool) == false { Speech.speakMessage(String(localized: "no previous page", comment: "Spoken message"), remember: false); return }
             guard acceptsWindow(window) else { return }
             _ = AXUIElementPerformAction(backButton, kAXPressAction as CFString)
         } else if let item = MenuPath.find(["Controls", "Back"], pid: pid) ?? MenuPath.find(["Go", "Back"], pid: pid) {
-            if (item.attr(kAXEnabledAttribute) as? Bool) == false { Speech.speakMessage("no previous page", remember: false); return }
+            if (item.attr(kAXEnabledAttribute) as? Bool) == false { Speech.speakMessage(String(localized: "no previous page", comment: "Spoken message"), remember: false); return }
             guard acceptsWindow(window) else { return }
             _ = AXUIElementPerformAction(item, kAXPressAction as CFString)
         } else {
@@ -1468,7 +1475,7 @@ public final class MediaView {
                 || player.contains { playerControlName($0).lowercased() == "pause" }
             if !playing {
                 Log.io("media: asked to play, but the player is not playing")
-                Speech.speakMessage("not playing; it may need a subscription or a download")
+                Speech.speakMessage(String(localized: "not playing; it may need a subscription or a download", comment: "Spoken message"))
             }
         }
     }
@@ -1528,7 +1535,7 @@ public final class MediaView {
             if result.video {
                 inVideo = true
                 guard keyCount() == originalKeys else { return }
-                Speech.speakMessage("video playing. Space plays and pauses; Escape leaves the video")
+                Speech.speakMessage(String(localized: "video playing. Space plays and pauses; Escape leaves the video", comment: "Spoken message"))
                 return
             }
             guard let built = result.built else { return }
@@ -1540,12 +1547,12 @@ public final class MediaView {
                                               unchangedMessage: unchangedMessage) }
                 else if keyCount() != originalKeys { return }
                 else if let unchangedMessage { Speech.speakMessage(unchangedMessage, remember: false) }
-                else if goingBack { Speech.speakMessage("no previous page", remember: false) }
+                else if goingBack { Speech.speakMessage(String(localized: "no previous page", comment: "Spoken message"), remember: false) }
                 else {
                     // No new page: a song or episode that plays when opened. Say so, from the player.
                     refreshPlayer()
                     let now = playingText()
-                    if !now.isEmpty, now != nowPlayingBefore { Speech.speakText("playing, " + now) }
+                    if !now.isEmpty, now != nowPlayingBefore { Speech.speakText(String(localized: "playing, \(now)", comment: "Something started playing: %@ is its title")) }
                 }
                 return   // nothing changed (an item that only plays): nothing to say
             }

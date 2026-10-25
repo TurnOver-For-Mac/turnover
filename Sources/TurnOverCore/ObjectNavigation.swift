@@ -98,7 +98,7 @@ public final class ObjectNavigator {
         if let h = heldList, CFEqual(h, list) { return }
         heldList = list
         Log.io("review: holding \(list.role) \"\(Log.words(list.string(kAXDescriptionAttribute) ?? ""))\": it will not take the keyboard")
-        Hints.schedule("Up and Down move through it; Return chooses.")
+        Hints.schedule(String(localized: "Up and Down move through it; Return chooses.", comment: "Spoken message"))
     }
 
     /// Whether the arrows are the held list's: the cursor is still in it, and the keyboard has not moved since.
@@ -121,10 +121,10 @@ public final class ObjectNavigator {
         heldList = list
         let rows = heldRows
         Log.io("review: holding \(list.role) for a plugin: \(rows.count) rows")
-        guard let first = rows.first else { Speech.speakMessage("empty"); return }
-        Speech.speakMessage("\(rows.count) item\(rows.count == 1 ? "" : "s")")
+        guard let first = rows.first else { Speech.speakMessage(String(localized: "empty", comment: "Spoken message")); return }
+        Speech.speakMessage(Phrases.items(rows.count))
         landRow(first, index: 0, count: rows.count)
-        Hints.schedule("Up and Down move through it; Return chooses.")
+        Hints.schedule(String(localized: "Up and Down move through it; Return chooses.", comment: "Spoken message"))
     }
     private var heldRowIndex: Int? {
         guard let cur = current else { return nil }
@@ -152,7 +152,8 @@ public final class ObjectNavigator {
         var parts = Speech.objectPropertiesSpeech(ObjectFactory.make(row), reason: .query)
         // A row with no name of its own (a grid's cell holding a book's whole line): its texts, each its own phrase.
         if ObjectFactory.make(row).name.isEmpty { let t = ElementMatcher.text(of: row); if !t.isEmpty { parts.insert(t, at: 0) } }
-        if !parts.contains(where: { $0.contains(" of ") }) { parts.append("\(index + 1) of \(count)") }
+        // Not when a position is said already: TurnOver's own ("3 of 9", in any language) or the app's own in its words.
+        if !parts.contains(where: { Phrases.isPosition($0) || $0.contains(" of ") }) { parts.append(Phrases.position(index + 1, of: count)) }
         Speech.speakItem(parts.joined(separator: ", "))
     }
 
@@ -176,7 +177,7 @@ public final class ObjectNavigator {
             }
             queue += x.elements(kAXChildrenAttribute)
         }
-        Speech.speakMessage("cannot choose it")
+        Speech.speakMessage(String(localized: "cannot choose it", comment: "Spoken message"))
     }
 
     /// Left and Right: close or open the row (a sidebar section).
@@ -188,7 +189,7 @@ public final class ObjectNavigator {
         guard let now = row.attr("AXDisclosing") as? Bool else { Tones.edge(); return }
         if now == open { Tones.edge(); return }
         _ = row.set("AXDisclosing", open as CFBoolean)
-        Speech.speakMessage(open ? "expanded" : "collapsed")
+        Speech.speakMessage(open ? String(localized: "expanded", comment: "Spoken message") : String(localized: "collapsed", comment: "Spoken message"))
     }
 
     public func releaseHold() { heldList = nil }
@@ -352,7 +353,7 @@ public final class ObjectNavigator {
     public private(set) var landedByStep = false
 
     private func step(forward: Bool) {
-        guard let start = element, let root = window(of: start) else { Speech.speakMessage("nothing to review"); return }
+        guard let start = element, let root = window(of: start) else { Speech.speakMessage(String(localized: "nothing to review", comment: "Spoken message")); return }
         var node: AXUIElement? = start.isSame(root) ? (forward ? root.elements(kAXChildrenAttribute).first : nil) : start
         var first = !start.isSame(root)
         var visited = 0
@@ -367,7 +368,7 @@ public final class ObjectNavigator {
             node = forward ? nextInOrder(after: n, root: root, enter: true) : previousInOrder(before: n, root: root)
         }
         Tones.edge()
-        if !VoiceOverSounds.play("WrapBoundary.aiff") { } ; Speech.speakMessage(forward ? "bottom" : "top")
+        if !VoiceOverSounds.play("WrapBoundary.aiff") { } ; Speech.speakMessage(forward ? String(localized: "bottom", comment: "Spoken message") : String(localized: "top", comment: "Spoken message"))
     }
 
     public func parent() {
@@ -391,7 +392,7 @@ public final class ObjectNavigator {
             node = (Self.descends(n) ? n.elements(kAXChildrenAttribute).first : nil) ?? nextInOrder(after: n, root: e, enter: false)
         }
         Tones.edge()
-        Speech.speakMessage("no items inside")
+        Speech.speakMessage(String(localized: "no items inside", comment: "Spoken message"))
     }
 
     // MARK: VoiceOver's way: groups (the Mac style)
@@ -548,7 +549,7 @@ public final class ObjectNavigator {
 
     /// VO Right and VO Left: the next or previous item in this group; at its end, a bump, as VoiceOver.
     public func groupStep(forward: Bool) {
-        guard let cur = element, let container = cur.role == "AXWindow" || cur.role == "AXSheet" ? cur : groupContainer(of: cur) else { Speech.speakMessage("nothing to review"); return }
+        guard let cur = element, let container = cur.role == "AXWindow" || cur.role == "AXSheet" ? cur : groupContainer(of: cur) else { Speech.speakMessage(String(localized: "nothing to review", comment: "Spoken message")); return }
         let items = Self.groupItems(container)
         guard !items.isEmpty else { Tones.edge(); Log.io("review: edge (an empty group)"); return }
         let j: Int
@@ -566,12 +567,12 @@ public final class ObjectNavigator {
         if landedByStep, ObjectFactory.make(cur).hasNavigableText {
             landedByStep = false
             follow(cur)   // the keyboard focus goes in with the interaction, as VoiceOver's does
-            Speech.speakMessage("in \(Speech.objectPropertiesSpeech(ObjectFactory.make(cur), reason: .query).first ?? "the text")")
+            Speech.speakMessage(String(localized: "in \(Speech.objectPropertiesSpeech(ObjectFactory.make(cur), reason: .query).first ?? String(localized: "the text", comment: "Going into a text with no name"))", comment: "Going into an item: %@ is the item"))
             return
         }
         guard Self.isGroup(cur) || cur.role == "AXWindow" else { firstChild(); return }
         let items = Self.groupItems(cur)
-        guard let first = items.first else { Tones.edge(); Speech.speakMessage("no items inside"); return }
+        guard let first = items.first else { Tones.edge(); Speech.speakMessage(String(localized: "no items inside", comment: "Spoken message")); return }
         if !VoiceOverSounds.play("DrillIn.aiff") { Tones.beep(660, 30) }
         land(on: first)
     }
@@ -581,7 +582,7 @@ public final class ObjectNavigator {
         guard let cur = element, cur.role != "AXWindow", let container = groupContainer(of: cur) else { Tones.edge(); return }
         // The window itself is the top level: the cursor rests on it, so VO-Left and Right then move among the window's
         // own items (the toolbar, the sidebar, the document) instead of staying in the text (Word, 17 Oct 2026).
-        if container.role == "AXWindow" { current = container; currentPid = container.pid; VoiceOverSounds.play("DrillOut.aiff"); Speech.speakMessage("top level"); return }
+        if container.role == "AXWindow" { current = container; currentPid = container.pid; VoiceOverSounds.play("DrillOut.aiff"); Speech.speakMessage(String(localized: "top level", comment: "Spoken message")); return }
         if !VoiceOverSounds.play("DrillOut.aiff") { Tones.beep(440, 30) }
         land(on: container)
     }
@@ -620,7 +621,7 @@ public final class ObjectNavigator {
         let focus = API.focusObject?.element
         let foreground = API.foregroundObject?.element
         let frontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier
-        guard cursor != nil || focus != nil else { Speech.speakMessage("nothing to search"); return }
+        guard cursor != nil || focus != nil else { Speech.speakMessage(String(localized: "nothing to search", comment: "Spoken message")); return }
         let queries = WindowKindQueries<AXUIElement, ElementKey>(
             identity: { ElementKey($0) },
             window: { $0.role == "AXWindow" ? $0 : $0.element(kAXWindowAttribute) },
@@ -661,11 +662,11 @@ public final class ObjectNavigator {
                 Tones.edge()
                 Speech.speakMessage(forward ? "no next \(kind)" : "no previous \(kind)")
             case .unavailable:
-                Speech.speakMessage("nothing to search")
+                Speech.speakMessage(String(localized: "nothing to search", comment: "Spoken message"))
             case .incomplete(.cancelled): break
             case .incomplete(let reason):
                 Log.io("review: window \(kind) search incomplete (\(reason.rawValue))")
-                Speech.speakMessage("Search stopped before finishing. Try again.")
+                Speech.speakMessage(String(localized: "Search stopped before finishing. Try again.", comment: "Spoken message"))
             }
         }
     }
@@ -723,7 +724,7 @@ public final class ObjectNavigator {
             if let linked = y.elements("AXLinkedUIElements").first { Tones.beep(660, 30); land(on: linked); return }
             x = y.element(kAXParentAttribute); hops += 1
         }
-        Speech.speakMessage("no linked item")
+        Speech.speakMessage(String(localized: "no linked item", comment: "Spoken message"))
     }
 
     /// VO-Return: select the item: a row in its list, or a menu item.
@@ -732,7 +733,7 @@ public final class ObjectNavigator {
         if cur.role == "AXRow", let list = cur.element(kAXParentAttribute) {
             let r = list.set(kAXSelectedRowsAttribute, [cur] as CFArray)
             Log.io("review: select row → \(r.rawValue)")
-            if r == .success { Speech.speakMessage("selected") } else { activate() }
+            if r == .success { Speech.speakMessage(String(localized: "selected", comment: "Spoken message")) } else { activate() }
             return
         }
         activate()
@@ -743,14 +744,14 @@ public final class ObjectNavigator {
         guard let cur = element else { return }
         if let open = cur.attr("AXDisclosing") as? Bool {
             let r = cur.set("AXDisclosing", (!open) as CFBoolean)
-            Speech.speakMessage(r == .success ? (open ? "collapsed" : "expanded") : "cannot open or close it")
+            Speech.speakMessage(r == .success ? (open ? State.collapsed.displayString : State.expanded.displayString) : String(localized: "cannot open or close it", comment: "Spoken message"))
             return
         }
         if let tri = cur.role == "AXDisclosureTriangle" ? cur : Self.firstDescendant(of: cur, role: "AXDisclosureTriangle") {
             _ = AXUIElementPerformAction(tri, kAXPressAction as CFString)
             return
         }
-        Speech.speakMessage("no disclosure triangle")
+        Speech.speakMessage(String(localized: "no disclosure triangle", comment: "Spoken message"))
     }
 
     static func firstDescendant(of e: AXUIElement, role: String, depth: Int = 3) -> AXUIElement? {
@@ -764,13 +765,13 @@ public final class ObjectNavigator {
     /// VO-Shift-Space: a mouse click on the item (twice: a double click), where the item really is, the pointer put
     /// back after.
     public func click(double: Bool) {
-        guard let cur = element, let f = TurnOverObject.frame(cur), f.width > 1, f.height > 1 else { Speech.speakMessage("nothing to click"); return }
+        guard let cur = element, let f = TurnOverObject.frame(cur), f.width > 1, f.height > 1 else { Speech.speakMessage(String(localized: "nothing to click", comment: "Spoken message")); return }
         let p = CGPoint(x: f.midX, y: f.midY)
         var hit: AXUIElement?
         if AXUIElementCopyElementAtPosition(AXUIElementCreateSystemWide(), Float(p.x), Float(p.y), &hit) == .success, let h = hit {
             var x: AXUIElement? = h; var hops = 0; var inside = false
             while let y = x, hops < 8 { if CFEqual(y, cur) { inside = true; break }; x = y.element(kAXParentAttribute); hops += 1 }
-            if !inside { Speech.speakMessage("something else is over it; not clicked"); return }
+            if !inside { Speech.speakMessage(String(localized: "something else is over it; not clicked", comment: "Spoken message")); return }
         }
         let back = CGEvent(source: nil)?.location
         Mouse.click(at: p, button: .left, count: double ? 2 : 1)
@@ -782,7 +783,7 @@ public final class ObjectNavigator {
     public func readHelp() {
         guard let cur = element else { return }
         let h = (cur.string(kAXHelpAttribute) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        Speech.speakMessage(h.isEmpty ? "no help tag" : h)
+        Speech.speakMessage(h.isEmpty ? String(localized: "no help tag", comment: "An item with no help tag") : h)
     }
 
     /// VO-Shift-U: a link's address.
@@ -793,7 +794,7 @@ public final class ObjectNavigator {
             if let u = y.attr(kAXURLAttribute) { Speech.speakPrivate((u as? URL)?.absoluteString ?? "\(u)"); return }
             x = y.element(kAXParentAttribute); hops += 1
         }
-        Speech.speakMessage("not a link")
+        Speech.speakMessage(String(localized: "not a link", comment: "Spoken message"))
     }
 
     /// VO-Shift-W: everything in the window, read through without moving.
@@ -809,13 +810,13 @@ public final class ObjectNavigator {
         var names: CFArray?
         AXUIElementCopyActionNames(cur, &names)
         let acts = ((names as? [String]) ?? []).filter { !$0.hasPrefix("AXScroll") && $0 != "AXShowDefaultUI" && $0 != "AXShowAlternateUI" }
-        guard !acts.isEmpty else { Speech.speakMessage("no actions"); return }
+        guard !acts.isEmpty else { Speech.speakMessage(String(localized: "no actions", comment: "Spoken message")); return }
         let items = acts.map { a -> MenuItem in
             var desc: CFString?
             AXUIElementCopyActionDescription(cur, a as CFString, &desc)
             let custom = a.components(separatedBy: "\n").first { $0.hasPrefix("Name:") }.map { String($0.dropFirst(5)) }
             let title = custom ?? ((desc as String?).flatMap { $0.isEmpty ? nil : $0 } ?? a.replacingOccurrences(of: "AX", with: ""))
-            return MenuItem(title, .action { _ = AXUIElementPerformAction(cur, a as CFString) })
+            return MenuItem(verbatim: title, .action { _ = AXUIElementPerformAction(cur, a as CFString) })
         }
         TurnOverMenu.shared.openList("Actions", items: items)
     }
@@ -853,7 +854,7 @@ public final class ObjectNavigator {
     }
 
     public func reportCurrent() {
-        guard let e = element else { Speech.speakMessage("nothing to review"); return }
+        guard let e = element else { Speech.speakMessage(String(localized: "nothing to review", comment: "Spoken message")); return }
         report(e)
     }
 
@@ -868,9 +869,9 @@ public final class ObjectNavigator {
         // A group, the VoiceOver way: what it holds ("tool bar, 6 items"), and how to go in.
         if config.general.movesByGroups, Self.isGroup(e), !["AXTable", "AXOutline", "AXList", "AXWebArea"].contains(e.role) {
             let n = Self.groupItems(e).count
-            parts.append("\(n) item\(n == 1 ? "" : "s")")
+            parts.append(Phrases.items(n))
             Speech.speakItem(parts.joined(separator: ", "))
-            Hints.schedule("VO Shift Down goes in.")
+            Hints.schedule(String(localized: "VO Shift Down goes in.", comment: "Spoken message"))
             return
         }
         // (Not a value that only repeats the name: the App Store's headings carry their title as both, "Discover, heading, Discover".)
@@ -897,8 +898,8 @@ public final class ObjectNavigator {
             // Something that opens and closes by its own actions (WhatsApp's "More" heading has Expand or Collapse,
             // 7 Oct 2026): say which it is now.
             let folds = { (a: [String]) -> String? in
-                if a.contains(where: { $0.hasSuffix("Collapse") }) { return "expanded" }
-                if a.contains(where: { $0.hasSuffix("Expand") }) { return "collapsed" }
+                if a.contains(where: { $0.hasSuffix("Collapse") }) { return State.expanded.displayString }
+                if a.contains(where: { $0.hasSuffix("Expand") }) { return State.collapsed.displayString }
                 return nil
             }
             if let before = folds(actions) {
@@ -925,7 +926,7 @@ public final class ObjectNavigator {
         guard let e = element else { return }
         let r = e.set(kAXFocusedAttribute, kCFBooleanTrue)
         Log.io("review: focus to \(e.role) → \(r.rawValue)")
-        if r != .success { Speech.speakMessage("cannot take the focus") }
+        if r != .success { Speech.speakMessage(String(localized: "cannot take the focus", comment: "Spoken message")) }
         AXHandler.shared.refocus(pid: e.pid)
     }
 

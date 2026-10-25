@@ -20,13 +20,13 @@ final class HeldListPlugin: GlobalPlugin {
         ] as [(String, String, [String], () -> Void)] {
             script(name, desc, gestures: keys, category: cat) { _ in run() }.isAvailable = { ObjectNavigator.shared.isHolding }
         }
-        script("held_tab", "In a list TurnOver is holding: on to the next part of the window", gestures: ["kb:tab"], category: cat) { _ in
+        script("held_tab", String(localized: "In a list TurnOver is holding: on to the next part of the window", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:tab"], category: cat) { _ in
             ObjectNavigator.shared.leaveHold(forward: true)
         }.isAvailable = { ObjectNavigator.shared.isHolding }
-        script("held_shiftTab", "In a list TurnOver is holding: back to the previous part of the window", gestures: ["kb:shift+tab"], category: cat) { _ in
+        script("held_shiftTab", String(localized: "In a list TurnOver is holding: back to the previous part of the window", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+tab"], category: cat) { _ in
             ObjectNavigator.shared.leaveHold(forward: false)
         }.isAvailable = { ObjectNavigator.shared.isHolding }
-        script("held_leave", "In a list TurnOver is holding: back to the keyboard focus", gestures: ["kb:escape"], category: cat) { _ in
+        script("held_leave", String(localized: "In a list TurnOver is holding: back to the keyboard focus", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:escape"], category: cat) { _ in
             ObjectNavigator.shared.releaseHold(); ObjectNavigator.shared.toFocus()
         }.isAvailable = { ObjectNavigator.shared.isHolding }
     }

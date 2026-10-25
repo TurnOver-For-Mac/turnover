@@ -80,7 +80,7 @@ extension BrowseModeDocument {
         var chain: [String] = []; var x = e; var d = 0
         while let y = x, d < 6 { chain.append("\(y.role) \"\((y.string(kAXTitleAttribute) ?? y.string(kAXValueAttribute) ?? "").prefix(30))\""); x = y.element(kAXParentAttribute); d += 1 }
         Log.io("browse mode: nothing to activate at \"\(Log.words(String(text.prefix(40))))\"; buffer element: \(chain.isEmpty ? "none" : Log.words(chain.joined(separator: " < "))); live page: \(text.isEmpty ? "not searched" : "no link or button with that text")")
-        Speech.speakMessage("nothing to activate")
+        Speech.speakMessage(String(localized: "nothing to activate", comment: "Spoken message"))
     }
 
     /// Whether a control's value is a check state, by TurnOver's own role (the subrole counts: a web switch is an
@@ -219,11 +219,15 @@ extension BrowseModeDocument {
                 seen.append(el)
                 let label = elementsListLabel(el, at: at, kind: title)
                 guard !label.isEmpty else { continue }
-                items.append(MenuItem(label, .action { [weak self] in self?.goToListedElement(el, at: at) }))
+                items.append(MenuItem(verbatim: label, .action { [weak self] in self?.goToListedElement(el, at: at) }))
             }
-            groups.append((title, items))
+            // (The kind stays English, as a key; the rotor says it in the reader's language.)
+            let names = ["Headings": String(localized: "Headings", comment: "A rotor kind"), "Links": String(localized: "Links", comment: "A rotor kind"),
+                         "Form controls": String(localized: "Form controls", comment: "A rotor kind"), "Landmarks": String(localized: "Landmarks", comment: "A rotor kind"),
+                         "Tables": String(localized: "Tables", comment: "A rotor kind")]
+            groups.append((names[title] ?? title, items))
         }
-        if let kind { TurnOverMenu.shared.openChooser(kind, items: groups.first?.items ?? []); return }
+        if let kind { TurnOverMenu.shared.openChooser(verbatim: groups.first?.name ?? kind, items: groups.first?.items ?? []); return }   // the kind by its translated name
         TurnOverMenu.shared.openRotor(groups)
     }
 
@@ -240,7 +244,7 @@ extension BrowseModeDocument {
         case "Headings":
             let level = (el.attr(kAXValueAttribute) as? NSNumber)?.intValue
             let text = el.string(kAXTitleAttribute).flatMap { $0.isEmpty ? nil : $0 } ?? line
-            return text.isEmpty ? "" : text + (level.map { ", level \($0)" } ?? "")
+            return text.isEmpty ? "" : text + (level.map { ", " + Phrases.level($0) } ?? "")
         case "Links":
             if let end = buffer.linkEnd(at: at), end > at, end <= buffer.text.length {
                 let t = buffer.text.substring(with: NSRange(location: at, length: end - at)).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -251,9 +255,9 @@ extension BrowseModeDocument {
             let name = el.string(kAXTitleAttribute) ?? el.string(kAXDescriptionAttribute) ?? ""
             var rows: CFIndex = 0
             AXUIElementGetAttributeValueCount(el, kAXRowsAttribute as CFString, &rows)
-            return (name.isEmpty ? "table" : "\(name), table") + (rows > 0 ? ", \(rows) rows" : "")
+            return (name.isEmpty ? Role.table.displayString : "\(name), \(Role.table.displayString)") + (rows > 0 ? ", " + String(localized: "\(String(rows)) rows", comment: "A table's size") : "")
         case "Landmarks":
-            let what = el.string(kAXRoleDescriptionAttribute) ?? "landmark"
+            let what = el.string(kAXRoleDescriptionAttribute) ?? Role.landmark.displayString
             let name = el.string(kAXDescriptionAttribute) ?? el.string(kAXTitleAttribute) ?? ""
             return name.isEmpty || name.lowercased() == what.lowercased() ? what : "\(name), \(what)"
         default:
@@ -276,7 +280,7 @@ extension BrowseModeDocument {
             let kind = line.isControl ? (line.element?.string(kAXRoleDescriptionAttribute) ?? "") : ""
             let label = kind.isEmpty ? text : "\(text), \(kind)"
             let start = line.start, el = line.element, control = line.isControl
-            items.append(MenuItem(label, .action { [weak self] in
+            items.append(MenuItem(verbatim: label, .action { [weak self] in
                 guard let self else { return }
                 // A control by its element; text by its own line (a wrapped paragraph's element is its first line).
                 if control, let el { goToListedElement(el, at: start) }

@@ -65,7 +65,7 @@ enum ScreenCurtain {
     static func toggle() {
         override = !isOn
         apply()
-        Speech.speakMessage(isOn ? "screen curtain on" : "screen curtain off")
+        Speech.speakMessage(isOn ? String(localized: "screen curtain on", comment: "Spoken message") : String(localized: "screen curtain off", comment: "Spoken message"))
     }
 
     static func displays() -> [CGDirectDisplayID] {
