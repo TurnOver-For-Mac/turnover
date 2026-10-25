@@ -2,7 +2,15 @@
   "sourceLanguage" : "en",
   "strings" : {
     " and " : {
-      "comment" : "Between names in a list, with its spaces"
+      "comment" : "Between names in a list, with its spaces",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : " ve "
+          }
+        }
+      }
     },
     "%@\n\nVoiceOver is still on. Check for an update from the TurnOver menu next time, or send feedback." : {
       "comment" : "An alert: %@ is the error"
@@ -13,6 +21,12 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
+            "value" : "%1$@ %2$@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "%1$@ %2$@"
           }
         }
@@ -106,7 +120,15 @@
       "comment" : "A dialog's choice could not be pressed: its name"
     },
     "%@ characters" : {
-      "comment" : "A count of characters (a password's, a long text's)"
+      "comment" : "A count of characters (a password's, a long text's)",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ karakter"
+          }
+        }
+      }
     },
     "%@ choices: %@" : {
       "comment" : "A dialog's choices: how many, then their names",
@@ -123,7 +145,15 @@
       "comment" : "Speech settings"
     },
     "%@ columns" : {
-      "comment" : "A table's size"
+      "comment" : "A table's size",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ sütun"
+          }
+        }
+      }
     },
     "%@ could not be removed: %@" : {
       "comment" : "A plugin not removed: %1$@ is its name, %2$@ the error",
@@ -157,7 +187,15 @@
       "comment" : "A count on a page"
     },
     "%@ hours" : {
-      "comment" : "A battery's time: hours"
+      "comment" : "A battery's time: hours",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ saat"
+          }
+        }
+      }
     },
     "%@ hours ago" : {
       "comment" : "When a notification came"
@@ -210,7 +248,15 @@
       "comment" : "A library plugin failed its check"
     },
     "%@ items" : {
-      "comment" : "A count of items in a list or table"
+      "comment" : "A count of items in a list or table",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ öğe"
+          }
+        }
+      }
     },
     "%@ learnt" : {
       "comment" : "A word added to the dictionary"
@@ -242,7 +288,15 @@
       "comment" : "A filtered list: how many items match"
     },
     "%@ menu" : {
-      "comment" : "A menu bar item: %@ is its name (View menu)"
+      "comment" : "A menu bar item: %@ is its name (View menu)",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ menüsü"
+          }
+        }
+      }
     },
     "%@ messages marked read" : {
       "comment" : "Mail messages marked read: how many"
@@ -251,10 +305,26 @@
       "comment" : "Mail messages marked unread: how many"
     },
     "%@ milliseconds" : {
-      "comment" : "A time"
+      "comment" : "A time",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ milisaniye"
+          }
+        }
+      }
     },
     "%@ minutes" : {
-      "comment" : "A battery's time: minutes"
+      "comment" : "A battery's time: minutes",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ dakika"
+          }
+        }
+      }
     },
     "%@ minutes ago" : {
       "comment" : "When a notification came"
@@ -339,6 +409,12 @@
             "state" : "new",
             "value" : "%1$@ of %2$@"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@/%2$@"
+          }
         }
       }
     },
@@ -360,13 +436,29 @@
       "comment" : "An area of the Music, Podcasts or TV window: %@ is the page's title"
     },
     "%@ percent" : {
-      "comment" : "A percentage: 45 percent\nA slider's value"
+      "comment" : "A percentage: 45 percent\nA slider's value",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yüzde %@"
+          }
+        }
+      }
     },
     "%@ plugins loaded" : {
       "comment" : "Plugins reloaded"
     },
     "%@ point" : {
-      "comment" : "A font size: 12 point"
+      "comment" : "A font size: 12 point",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ punto"
+          }
+        }
+      }
     },
     "%@ presses %@ in %@. Saved" : {
       "comment" : "A key given to an item: the key, the item, the app",
@@ -412,16 +504,48 @@
       "comment" : "A plugin removed: %@ is its name"
     },
     "%@ rows" : {
-      "comment" : "A table's size"
+      "comment" : "A table's size",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ satır"
+          }
+        }
+      }
     },
     "%@ seconds" : {
-      "comment" : "A time\nBraille auto scroll's speed: %@ is seconds"
+      "comment" : "A time\nBraille auto scroll's speed: %@ is seconds",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ saniye"
+          }
+        }
+      }
     },
     "%@ selected" : {
-      "comment" : "A long selection: %@ is the count of characters"
+      "comment" : "A long selection: %@ is the count of characters",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ seçildi"
+          }
+        }
+      }
     },
     "%@ submenu" : {
-      "comment" : "A submenu opened: its name"
+      "comment" : "A submenu opened: its name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ alt menüsü"
+          }
+        }
+      }
     },
     "%@ tables" : {
       "comment" : "A count on a page"
@@ -430,7 +554,15 @@
       "comment" : "Why an app can't be tuned yet: %@ is the app"
     },
     "%@ text" : {
-      "comment" : "The text's colour: %@ is the colour (red text)"
+      "comment" : "The text's colour: %@ is the colour (red text)",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ yazı"
+          }
+        }
+      }
     },
     "%@ text fields" : {
       "comment" : "A count on a page"
@@ -450,7 +582,15 @@
       "comment" : "The battery: %@ is how long until it is full"
     },
     "%@ unselected" : {
-      "comment" : "Text no longer selected: %@ is the text"
+      "comment" : "Text no longer selected: %@ is the text",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ seçimi kaldırıldı"
+          }
+        }
+      }
     },
     "%@ used for %@" : {
       "comment" : "A settings profile and an app: the profile, then the app",
@@ -634,7 +774,15 @@
       "comment" : "The app in front, in the force quit list"
     },
     "%@, misspelled" : {
-      "comment" : "A misspelled word reached: %@ is the word"
+      "comment" : "A misspelled word reached: %@ is the word",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, yanlış yazılmış"
+          }
+        }
+      }
     },
     "%@, misspelled, no suggestions" : {
 
@@ -659,6 +807,12 @@
             "state" : "new",
             "value" : "%1$@, on %2$@"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, şu metinde: %2$@"
+          }
         }
       }
     },
@@ -669,7 +823,15 @@
       "comment" : "A language's speech rate, when it is the main voice's"
     },
     "%@, scroll area" : {
-      "comment" : "A scroll area the keyboard lands on: %@ is what it holds"
+      "comment" : "A scroll area the keyboard lands on: %@ is what it holds",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, kaydırma alanı"
+          }
+        }
+      }
     },
     "%@, selected" : {
       "comment" : "Text selected in browse mode: %@ is the text"
@@ -798,13 +960,29 @@
       "comment" : "A count on a page"
     },
     "1 character" : {
-      "comment" : "A count of characters (a password's, a long text's)"
+      "comment" : "A count of characters (a password's, a long text's)",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 karakter"
+          }
+        }
+      }
     },
     "1 choice: %@" : {
       "comment" : "A dialog's one choice"
     },
     "1 column" : {
-      "comment" : "A table's size"
+      "comment" : "A table's size",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 sütun"
+          }
+        }
+      }
     },
     "1 custom key binding" : {
       "comment" : "Copying VoiceOver's settings"
@@ -813,13 +991,29 @@
       "comment" : "A count on a page"
     },
     "1 hour" : {
-      "comment" : "A battery's time: hours"
+      "comment" : "A battery's time: hours",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 saat"
+          }
+        }
+      }
     },
     "1 image" : {
       "comment" : "A count on a page"
     },
     "1 item" : {
-      "comment" : "A count of items in a list or table"
+      "comment" : "A count of items in a list or table",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 öğe"
+          }
+        }
+      }
     },
     "1 line, %@ visible" : {
       "comment" : "A text's lines, and how many show"
@@ -837,10 +1031,26 @@
       "comment" : "Plugins reloaded"
     },
     "1 row" : {
-      "comment" : "A table's size"
+      "comment" : "A table's size",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 satır"
+          }
+        }
+      }
     },
     "1 second" : {
-      "comment" : "A time"
+      "comment" : "A time",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 saniye"
+          }
+        }
+      }
     },
     "1 table" : {
       "comment" : "A count on a page"
@@ -849,7 +1059,15 @@
       "comment" : "A count on a page"
     },
     "1.5 line spacing" : {
-      "comment" : "Paragraph line spacing"
+      "comment" : "Paragraph line spacing",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1,5 satır aralığı"
+          }
+        }
+      }
     },
     "100 percent" : {
       "comment" : "Spoken message"
@@ -1106,7 +1324,15 @@
       "comment" : "A command, as the key list and keyboard help say it"
     },
     "Buttons" : {
-      "comment" : "A rotor kind"
+      "comment" : "A rotor kind",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Düğmeler"
+          }
+        }
+      }
     },
     "Buy %@ for %@? Press Space again to buy." : {
       "comment" : "Buying an app: its name, then its price",
@@ -1263,7 +1489,15 @@
 
     },
     "Comments" : {
-      "comment" : "A rotor kind"
+      "comment" : "A rotor kind",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yorumlar"
+          }
+        }
+      }
     },
     "Comments and highlights as you reach them" : {
 
@@ -1683,7 +1917,15 @@
 
     },
     "Form controls" : {
-      "comment" : "A rotor kind"
+      "comment" : "A rotor kind",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Form denetimleri"
+          }
+        }
+      }
     },
     "Formatting; reports the formatting at the caret, or of the selection's first character; pressed twice, the detail: colour, background, alignment (on VO-T, in VoiceOverKeys)" : {
       "comment" : "A command, as the key list and keyboard help say it"
@@ -1820,7 +2062,15 @@
 
     },
     "Headings" : {
-      "comment" : "A kind of element in Documents settings\nA rotor kind"
+      "comment" : "A kind of element in Documents settings\nA rotor kind",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Başlıklar"
+          }
+        }
+      }
     },
     "Help" : {
 
@@ -1853,7 +2103,15 @@
 
     },
     "Images" : {
-      "comment" : "A rotor kind"
+      "comment" : "A rotor kind",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resimler"
+          }
+        }
+      }
     },
     "In Steam's Big Picture menu: %@" : {
       "comment" : "A command, as the key list and keyboard help say it: %@ is the key"
@@ -2095,7 +2353,15 @@
       "comment" : "A command, as the key list and keyboard help say it"
     },
     "Landmarks" : {
-      "comment" : "A kind of element in Documents settings\nA rotor kind"
+      "comment" : "A kind of element in Documents settings\nA rotor kind",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yer işaretleri"
+          }
+        }
+      }
     },
     "Laptop" : {
 
@@ -2125,7 +2391,15 @@
       "comment" : "A hint, said after a pause on an item"
     },
     "Links" : {
-      "comment" : "A kind of element in Documents settings\nA rotor kind"
+      "comment" : "A kind of element in Documents settings\nA rotor kind",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bağlantılar"
+          }
+        }
+      }
     },
     "Links and buttons in the line, as on screen" : {
 
@@ -2134,7 +2408,15 @@
       "comment" : "The speech port's status: %@ is the port"
     },
     "Lists" : {
-      "comment" : "A group of commands in the key list\nA kind of element in Documents settings\nA rotor kind"
+      "comment" : "A group of commands in the key list\nA kind of element in Documents settings\nA rotor kind",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Listeler"
+          }
+        }
+      }
     },
     "Lists the apps that are running; the Mac's own window is silent while TurnOver reads" : {
 
@@ -3834,7 +4116,15 @@
       "comment" : "A welcome page's button"
     },
     "Slash" : {
-      "comment" : "The / key"
+      "comment" : "The / key",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eğik çizgi"
+          }
+        }
+      }
     },
     "Slash shortcuts" : {
       "comment" : "A letter's command, as the TurnOver layer lists them"
@@ -3945,7 +4235,15 @@
       "comment" : "Speech moved to an audio device: %@ is the device"
     },
     "Spelling errors" : {
-      "comment" : "A kind of element in Documents settings"
+      "comment" : "A kind of element in Documents settings",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yazım hataları"
+          }
+        }
+      }
     },
     "Starting" : {
 
@@ -4071,7 +4369,15 @@
       "comment" : "A hint in a system dialog"
     },
     "Tables" : {
-      "comment" : "A kind of element in Documents settings\nA rotor kind"
+      "comment" : "A kind of element in Documents settings\nA rotor kind",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tablolar"
+          }
+        }
+      }
     },
     "Tabs" : {
       "comment" : "A group of commands in the key list"
@@ -4768,7 +5074,15 @@
       "comment" : "Spoken message"
     },
     "V O" : {
-      "comment" : "The VO key (Control and Option), as spoken"
+      "comment" : "The VO key (Control and Option), as spoken",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VO"
+          }
+        }
+      }
     },
     "V copy VoiceOver settings" : {
       "comment" : "A letter's command, as the TurnOver layer lists them"
@@ -5033,25 +5347,81 @@
       "comment" : "A choice in the TurnOver menu"
     },
     "alert" : {
-      "comment" : "A role: an alert"
+      "comment" : "A role: an alert",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "uyarı"
+          }
+        }
+      }
     },
     "aligned %@" : {
-      "comment" : "Paragraph alignment: %@ is how"
+      "comment" : "Paragraph alignment: %@ is how",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ hizalı"
+          }
+        }
+      }
     },
     "aligned centre" : {
-      "comment" : "Paragraph alignment"
+      "comment" : "Paragraph alignment",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ortaya hizalı"
+          }
+        }
+      }
     },
     "aligned justified" : {
-      "comment" : "Paragraph alignment"
+      "comment" : "Paragraph alignment",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iki yana hizalı"
+          }
+        }
+      }
     },
     "aligned left" : {
-      "comment" : "Paragraph alignment"
+      "comment" : "Paragraph alignment",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sola hizalı"
+          }
+        }
+      }
     },
     "aligned right" : {
-      "comment" : "Paragraph alignment"
+      "comment" : "Paragraph alignment",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sağa hizalı"
+          }
+        }
+      }
     },
     "all" : {
-      "comment" : "A punctuation level"
+      "comment" : "A punctuation level",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tümü"
+          }
+        }
+      }
     },
     "all %@ items" : {
       "comment" : "A filtered list back to all its items"
@@ -5069,10 +5439,26 @@
       "comment" : "Spoken message"
     },
     "always" : {
-      "comment" : "When typed characters or words are spoken"
+      "comment" : "When typed characters or words are spoken",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "her zaman"
+          }
+        }
+      }
     },
     "annotation" : {
-      "comment" : "A kind of thing to find, after next or previous"
+      "comment" : "A kind of thing to find, after next or previous",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "not"
+          }
+        }
+      }
     },
     "announcement history" : {
       "comment" : "A braille chord's command, as braille help says it"
@@ -5084,7 +5470,15 @@
       "comment" : "How the Mac is online"
     },
     "application" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "uygulama"
+          }
+        }
+      }
     },
     "article" : {
       "comment" : "A web page's article"
@@ -5105,34 +5499,106 @@
       "comment" : "A choice in the TurnOver menu"
     },
     "black" : {
-      "comment" : "A colour"
+      "comment" : "A colour",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "siyah"
+          }
+        }
+      }
     },
     "blank" : {
-      "comment" : "Nothing there: an empty line, an empty field\nSpoken message"
+      "comment" : "Nothing there: an empty line, an empty field\nSpoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "boş"
+          }
+        }
+      }
     },
     "block quote" : {
-      "comment" : "A kind of thing to find, after next or previous"
+      "comment" : "A kind of thing to find, after next or previous",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alıntı bloğu"
+          }
+        }
+      }
     },
     "blockquote" : {
-      "comment" : "A kind of thing to find, after next or previous"
+      "comment" : "A kind of thing to find, after next or previous",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alıntı bloğu"
+          }
+        }
+      }
     },
     "blockquote of the same level" : {
-      "comment" : "A kind of thing to find, after next or previous"
+      "comment" : "A kind of thing to find, after next or previous",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "aynı düzeyde alıntı bloğu"
+          }
+        }
+      }
     },
     "blue" : {
-      "comment" : "A colour"
+      "comment" : "A colour",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mavi"
+          }
+        }
+      }
     },
     "bold" : {
-      "comment" : "Text formatting"
+      "comment" : "Text formatting",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kalın"
+          }
+        }
+      }
     },
     "bold %@" : {
       "comment" : "Bold turned on or off in Word"
     },
     "bold text" : {
-      "comment" : "A kind of thing to find, after next or previous"
+      "comment" : "A kind of thing to find, after next or previous",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kalın metin"
+          }
+        }
+      }
     },
     "bottom" : {
-      "comment" : "Spoken message"
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "en alt"
+          }
+        }
+      }
     },
     "bottom centre" : {
       "comment" : "A part of the screen"
@@ -5159,28 +5625,76 @@
       "comment" : "What braille follows"
     },
     "brown" : {
-      "comment" : "A colour"
+      "comment" : "A colour",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kahverengi"
+          }
+        }
+      }
     },
     "browse mode" : {
       "comment" : "NVDA's browse mode\nSpoken message"
     },
     "browser" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tarayıcı"
+          }
+        }
+      }
     },
     "build %@" : {
       "comment" : "An application's build number: %@ is the build"
     },
     "busy" : {
-      "comment" : "A state, spoken after an item's role"
+      "comment" : "A state, spoken after an item's role",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "meşgul"
+          }
+        }
+      }
     },
     "busy indicator" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "meşgul göstergesi"
+          }
+        }
+      }
     },
     "button" : {
-      "comment" : "A kind of thing to find, after next or previous\nA role, spoken after an item's name"
+      "comment" : "A kind of thing to find, after next or previous\nA role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "düğme"
+          }
+        }
+      }
     },
     "buttons" : {
-      "comment" : "A rotor kind"
+      "comment" : "A rotor kind",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "düğmeler"
+          }
+        }
+      }
     },
     "buying; the App Store asks you to confirm" : {
       "comment" : "Spoken message"
@@ -5213,7 +5727,15 @@
       "comment" : "Spoken message"
     },
     "cap %@" : {
-      "comment" : "A capital letter: %@ is the letter"
+      "comment" : "A capital letter: %@ is the letter",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "büyük %@"
+          }
+        }
+      }
     },
     "cap %@, %@" : {
       "comment" : "Phonetic spelling of a capital: the letter, then its word (cap C, charlie)",
@@ -5227,7 +5749,15 @@
       }
     },
     "caps" : {
-      "comment" : "Caps Lock as the TurnOver key, as spoken before another key"
+      "comment" : "Caps Lock as the TurnOver key, as spoken before another key",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "büyük harf kilidi"
+          }
+        }
+      }
     },
     "caps lock off" : {
       "comment" : "Spoken message"
@@ -5239,7 +5769,15 @@
       "comment" : "Keyboard help: Caps Lock as the TurnOver key"
     },
     "cell" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hücre"
+          }
+        }
+      }
     },
     "cell review off" : {
       "comment" : "Spoken message"
@@ -5251,13 +5789,29 @@
       "comment" : "A part of the screen"
     },
     "centred" : {
-      "comment" : "Paragraph alignment"
+      "comment" : "Paragraph alignment",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ortaya hizalı"
+          }
+        }
+      }
     },
     "change" : {
       "comment" : "A tracked change in Word, as a kind of thing to find"
     },
     "characters" : {
-      "comment" : "A choice in the TurnOver menu\nA trackpad rotor kind"
+      "comment" : "A choice in the TurnOver menu\nA trackpad rotor kind",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "karakterler"
+          }
+        }
+      }
     },
     "characters and words" : {
       "comment" : "A choice in the TurnOver menu"
@@ -5269,19 +5823,59 @@
       "comment" : "The battery"
     },
     "check box" : {
-      "comment" : "A kind of thing to find, after next or previous\nA role, spoken after an item's name"
+      "comment" : "A kind of thing to find, after next or previous\nA role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "onay kutusu"
+          }
+        }
+      }
     },
     "check boxes" : {
-      "comment" : "A rotor kind"
+      "comment" : "A rotor kind",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "onay kutuları"
+          }
+        }
+      }
     },
     "check menu item" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "onay menü öğesi"
+          }
+        }
+      }
     },
     "checkbox" : {
-      "comment" : "A role in Steam's Big Picture: a check box"
+      "comment" : "A role in Steam's Big Picture: a check box",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "onay kutusu"
+          }
+        }
+      }
     },
     "checked" : {
-      "comment" : "A state, spoken after an item's role"
+      "comment" : "A state, spoken after an item's role",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "işaretli"
+          }
+        }
+      }
     },
     "checking for new mail" : {
       "comment" : "Spoken message"
@@ -5302,22 +5896,70 @@
       "comment" : "Spoken message"
     },
     "collapsed" : {
-      "comment" : "A state, spoken after an item's role\nSpoken message"
+      "comment" : "A state, spoken after an item's role\nSpoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "daraltılmış"
+          }
+        }
+      }
     },
     "color chooser" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "renk seçici"
+          }
+        }
+      }
     },
     "colour change" : {
-      "comment" : "A kind of thing to find, after next or previous"
+      "comment" : "A kind of thing to find, after next or previous",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "renk değişikliği"
+          }
+        }
+      }
     },
     "column" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sütun"
+          }
+        }
+      }
     },
     "column %@" : {
-      "comment" : "A table cell's column number"
+      "comment" : "A table cell's column number",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sütun %@"
+          }
+        }
+      }
     },
     "combo box" : {
-      "comment" : "A kind of thing to find, after next or previous\nA role, spoken after an item's name"
+      "comment" : "A kind of thing to find, after next or previous\nA role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kombinasyon kutusu"
+          }
+        }
+      }
     },
     "command" : {
       "comment" : "A braille chord's command, as braille help says it"
@@ -5343,7 +5985,15 @@
       }
     },
     "comments" : {
-      "comment" : "A rotor kind"
+      "comment" : "A rotor kind",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yorumlar"
+          }
+        }
+      }
     },
     "complementary landmark" : {
       "comment" : "A web page's landmark"
@@ -5426,13 +6076,37 @@
       "comment" : "Command X pressed"
     },
     "dark %@" : {
-      "comment" : "A colour: %@ is the colour (dark red)"
+      "comment" : "A colour: %@ is the colour (dark red)",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "koyu %@"
+          }
+        }
+      }
     },
     "date editor" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tarih düzenleyici"
+          }
+        }
+      }
     },
     "default" : {
-      "comment" : "A state, spoken after an item's role"
+      "comment" : "A state, spoken after an item's role",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "varsayılan"
+          }
+        }
+      }
     },
     "delete" : {
       "comment" : "A braille chord's command, as braille help says it"
@@ -5441,7 +6115,15 @@
       "comment" : "Spoken message"
     },
     "deleted %@" : {
-      "comment" : "Text deleted: %@ is the text"
+      "comment" : "Text deleted: %@ is the text",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ silindi"
+          }
+        }
+      }
     },
     "describe image" : {
       "comment" : "A letter's command in the TurnOver layer (Command Control Comma)"
@@ -5462,25 +6144,73 @@
       "comment" : "Spoken message"
     },
     "dialog" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iletişim kutusu"
+          }
+        }
+      }
     },
     "different item" : {
-      "comment" : "A kind of thing to find, after next or previous"
+      "comment" : "A kind of thing to find, after next or previous",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "farklı öğe"
+          }
+        }
+      }
     },
     "direct: this app's keys straight to it, TurnOver quiet" : {
       "comment" : "A letter's command in the TurnOver layer (Command Control Comma)"
     },
     "disclosure triangle" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "açıklama üçgeni"
+          }
+        }
+      }
     },
     "distributed" : {
-      "comment" : "Paragraph alignment"
+      "comment" : "Paragraph alignment",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dağıtılmış"
+          }
+        }
+      }
     },
     "dock item" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dock öğesi"
+          }
+        }
+      }
     },
     "document" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "belge"
+          }
+        }
+      }
     },
     "does nothing in TurnOver (goes to the application)" : {
       "comment" : "What your own key does"
@@ -5507,37 +6237,109 @@
       "comment" : "Spoken message"
     },
     "double spacing" : {
-      "comment" : "Paragraph line spacing"
+      "comment" : "Paragraph line spacing",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "çift satır aralığı"
+          }
+        }
+      }
     },
     "download cancelled" : {
       "comment" : "Spoken message"
     },
     "drawer" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "çekmece"
+          }
+        }
+      }
     },
     "drop down list" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "açılır liste"
+          }
+        }
+      }
     },
     "edge of table" : {
-      "comment" : "Spoken message"
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tablonun kenarı"
+          }
+        }
+      }
     },
     "edit" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "metin alanı"
+          }
+        }
+      }
     },
     "edit field" : {
-      "comment" : "A kind of thing to find, after next or previous"
+      "comment" : "A kind of thing to find, after next or previous",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "metin alanı"
+          }
+        }
+      }
     },
     "editable" : {
-      "comment" : "A state, spoken after an item's role"
+      "comment" : "A state, spoken after an item's role",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "düzenlenebilir"
+          }
+        }
+      }
     },
     "elements" : {
       "comment" : "Spoken message"
     },
     "embedded object" : {
-      "comment" : "A kind of thing to find, after next or previous\nA role, spoken after an item's name"
+      "comment" : "A kind of thing to find, after next or previous\nA role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gömülü nesne"
+          }
+        }
+      }
     },
     "empty" : {
-      "comment" : "A list or table with nothing in it\nSpoken message"
+      "comment" : "A list or table with nothing in it\nSpoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "boş"
+          }
+        }
+      }
     },
     "end of document" : {
       "comment" : "Spoken message"
@@ -5555,10 +6357,26 @@
       "comment" : "Where haptics are felt"
     },
     "exact line spacing" : {
-      "comment" : "Paragraph line spacing"
+      "comment" : "Paragraph line spacing",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tam satır aralığı"
+          }
+        }
+      }
     },
     "expanded" : {
-      "comment" : "A state, spoken after an item's role\nSpoken message"
+      "comment" : "A state, spoken after an item's role\nSpoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "genişletilmiş"
+          }
+        }
+      }
     },
     "find" : {
       "comment" : "A braille chord's command, as braille help says it\nFind opened"
@@ -5582,28 +6400,84 @@
       "comment" : "NVDA's focus mode\nSpoken message"
     },
     "focusable" : {
-      "comment" : "A state, spoken after an item's role"
+      "comment" : "A state, spoken after an item's role",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "odaklanabilir"
+          }
+        }
+      }
     },
     "focused" : {
-      "comment" : "A state, spoken after an item's role"
+      "comment" : "A state, spoken after an item's role",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "odakta"
+          }
+        }
+      }
     },
     "font change" : {
-      "comment" : "A kind of thing to find, after next or previous"
+      "comment" : "A kind of thing to find, after next or previous",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yazı tipi değişikliği"
+          }
+        }
+      }
     },
     "for a time" : {
       "comment" : "A choice in the TurnOver menu"
     },
     "form control" : {
-      "comment" : "A kind of thing to find, after next or previous"
+      "comment" : "A kind of thing to find, after next or previous",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "form denetimi"
+          }
+        }
+      }
     },
     "form controls" : {
-      "comment" : "A rotor kind\nA trackpad rotor kind"
+      "comment" : "A rotor kind\nA trackpad rotor kind",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "form denetimleri"
+          }
+        }
+      }
     },
     "form field" : {
-      "comment" : "A kind of thing to find, after next or previous"
+      "comment" : "A kind of thing to find, after next or previous",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "form alanı"
+          }
+        }
+      }
     },
     "frame" : {
-      "comment" : "A kind of thing to find, after next or previous\nA web page's frame"
+      "comment" : "A kind of thing to find, after next or previous\nA web page's frame",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "çerçeve"
+          }
+        }
+      }
     },
     "function" : {
       "comment" : "The Fn key's name, as keyboard help says it"
@@ -5612,46 +6486,142 @@
       "comment" : "A letter's command in the TurnOver layer (Command Control Comma)"
     },
     "graphic" : {
-      "comment" : "A kind of thing to find, after next or previous\nA role, spoken after an item's name"
+      "comment" : "A kind of thing to find, after next or previous\nA role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "grafik"
+          }
+        }
+      }
     },
     "green" : {
-      "comment" : "A colour"
+      "comment" : "A colour",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yeşil"
+          }
+        }
+      }
     },
     "grey" : {
-      "comment" : "A colour"
+      "comment" : "A colour",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gri"
+          }
+        }
+      }
     },
     "grid" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ızgara"
+          }
+        }
+      }
     },
     "grouping" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "grup"
+          }
+        }
+      }
     },
     "guide" : {
       "comment" : "A letter's command in the TurnOver layer (Command Control Comma)"
     },
     "half checked" : {
-      "comment" : "A state, spoken after an item's role"
+      "comment" : "A state, spoken after an item's role",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kısmen işaretli"
+          }
+        }
+      }
     },
     "handle" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tutamaç"
+          }
+        }
+      }
     },
     "header" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ""
+          }
+        }
+      }
     },
     "heading" : {
-      "comment" : "A kind of thing to find, after next or previous\nA role, spoken after an item's name"
+      "comment" : "A kind of thing to find, after next or previous\nA role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "başlık"
+          }
+        }
+      }
     },
     "heading %@" : {
       "comment" : "A Pages heading style: heading 2"
     },
     "heading at the same level" : {
-      "comment" : "A kind of thing to find, after next or previous"
+      "comment" : "A kind of thing to find, after next or previous",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "aynı düzeyde başlık"
+          }
+        }
+      }
     },
     "heading level %@" : {
-      "comment" : "A heading's level: heading level 2"
+      "comment" : "A heading's level: heading level 2",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "başlık düzeyi %@"
+          }
+        }
+      }
     },
     "headings" : {
-      "comment" : "A rotor kind\nA trackpad rotor kind"
+      "comment" : "A rotor kind\nA trackpad rotor kind",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "başlıklar"
+          }
+        }
+      }
     },
     "help" : {
       "comment" : "A braille chord's command, as braille help says it"
@@ -5694,16 +6664,40 @@
       "comment" : "Spoken message"
     },
     "image" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "resim"
+          }
+        }
+      }
     },
     "images" : {
-      "comment" : "A rotor kind"
+      "comment" : "A rotor kind",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "resimler"
+          }
+        }
+      }
     },
     "in %@" : {
       "comment" : "Going into an item: %@ is the item"
     },
     "in edit controls" : {
-      "comment" : "When typed characters or words are spoken"
+      "comment" : "When typed characters or words are spoken",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "metin alanlarında"
+          }
+        }
+      }
     },
     "input help off" : {
       "comment" : "Spoken message"
@@ -5721,19 +6715,51 @@
       "comment" : "Spoken message"
     },
     "invalid entry" : {
-      "comment" : "A state, spoken after an item's role"
+      "comment" : "A state, spoken after an item's role",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "geçersiz giriş"
+          }
+        }
+      }
     },
     "invisible" : {
-      "comment" : "A state, spoken after an item's role"
+      "comment" : "A state, spoken after an item's role",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "görünmez"
+          }
+        }
+      }
     },
     "italic" : {
-      "comment" : "Text formatting"
+      "comment" : "Text formatting",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "italik"
+          }
+        }
+      }
     },
     "italic %@" : {
       "comment" : "Italic turned on or off in Word"
     },
     "italic text" : {
-      "comment" : "A kind of thing to find, after next or previous"
+      "comment" : "A kind of thing to find, after next or previous",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "italik metin"
+          }
+        }
+      }
     },
     "item chooser" : {
       "comment" : "A braille chord's command, as braille help says it"
@@ -5742,7 +6768,15 @@
       "comment" : "A row of a long list not loaded yet"
     },
     "item of the same type" : {
-      "comment" : "A kind of thing to find, after next or previous"
+      "comment" : "A kind of thing to find, after next or previous",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "aynı türde öğe"
+          }
+        }
+      }
     },
     "its usual voice" : {
       "comment" : "TurnOver's usual voice, when it has no name"
@@ -5754,7 +6788,15 @@
       "comment" : "When a notification came"
     },
     "justified" : {
-      "comment" : "Paragraph alignment"
+      "comment" : "Paragraph alignment",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iki yana hizalı"
+          }
+        }
+      }
     },
     "key.backspace" : {
       "comment" : "A key's name",
@@ -5764,6 +6806,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "backspace"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sil"
           }
         }
       }
@@ -5777,6 +6825,12 @@
             "state" : "new",
             "value" : "caps lock"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "büyük harf kilidi"
+          }
         }
       }
     },
@@ -5788,6 +6842,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "command"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "komut"
           }
         }
       }
@@ -5801,6 +6861,12 @@
             "state" : "new",
             "value" : "control"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kontrol"
+          }
         }
       }
     },
@@ -5812,6 +6878,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "delete"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ileri sil"
           }
         }
       }
@@ -5825,6 +6897,12 @@
             "state" : "new",
             "value" : "down arrow"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "aşağı ok"
+          }
         }
       }
     },
@@ -5835,6 +6913,12 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
+            "value" : "end"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "end"
           }
         }
@@ -5849,6 +6933,12 @@
             "state" : "new",
             "value" : "enter"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "enter"
+          }
         }
       }
     },
@@ -5861,6 +6951,12 @@
             "state" : "new",
             "value" : "escape"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "esc"
+          }
         }
       }
     },
@@ -5871,6 +6967,12 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
+            "value" : "fn"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "fn"
           }
         }
@@ -5885,6 +6987,12 @@
             "state" : "new",
             "value" : "help"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yardım"
+          }
         }
       }
     },
@@ -5895,6 +7003,12 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
+            "value" : "home"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "home"
           }
         }
@@ -5909,6 +7023,12 @@
             "state" : "new",
             "value" : "left arrow"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sol ok"
+          }
         }
       }
     },
@@ -5921,6 +7041,12 @@
             "state" : "new",
             "value" : "numpad enter"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı enter"
+          }
         }
       }
     },
@@ -5931,6 +7057,12 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
+            "value" : "option"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "option"
           }
         }
@@ -5945,6 +7077,12 @@
             "state" : "new",
             "value" : "page down"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "page down"
+          }
         }
       }
     },
@@ -5955,6 +7093,12 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
+            "value" : "page up"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "page up"
           }
         }
@@ -5969,6 +7113,12 @@
             "state" : "new",
             "value" : "right arrow"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sağ ok"
+          }
         }
       }
     },
@@ -5981,6 +7131,12 @@
             "state" : "new",
             "value" : "section"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "paragraf işareti"
+          }
         }
       }
     },
@@ -5991,6 +7147,12 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
+            "value" : "shift"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "shift"
           }
         }
@@ -6005,6 +7167,12 @@
             "state" : "new",
             "value" : "space"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "boşluk"
+          }
         }
       }
     },
@@ -6015,6 +7183,12 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
+            "value" : "tab"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "tab"
           }
         }
@@ -6028,6 +7202,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "up arrow"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yukarı ok"
           }
         }
       }
@@ -6045,13 +7225,37 @@
       "comment" : "Spoken message"
     },
     "label" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "etiket"
+          }
+        }
+      }
     },
     "landmark" : {
-      "comment" : "A kind of thing to find, after next or previous\nA role, spoken after an item's name"
+      "comment" : "A kind of thing to find, after next or previous\nA role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yer işareti"
+          }
+        }
+      }
     },
     "landmarks" : {
-      "comment" : "A rotor kind"
+      "comment" : "A rotor kind",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yer işaretleri"
+          }
+        }
+      }
     },
     "last item" : {
       "comment" : "A braille chord's command, as braille help says it"
@@ -6060,13 +7264,37 @@
       "comment" : "VO-Shift-C done"
     },
     "layout area" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yerleşim alanı"
+          }
+        }
+      }
     },
     "layout item" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yerleşim öğesi"
+          }
+        }
+      }
     },
     "left aligned" : {
-      "comment" : "Paragraph alignment"
+      "comment" : "Paragraph alignment",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sola hizalı"
+          }
+        }
+      }
     },
     "left click" : {
       "comment" : "Spoken message"
@@ -6092,19 +7320,51 @@
       "comment" : "A key pressed and let go alone"
     },
     "level %@" : {
-      "comment" : "How deep an item is, in an outline or a nested list"
+      "comment" : "How deep an item is, in an outline or a nested list",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "düzey %@"
+          }
+        }
+      }
     },
     "level indicator" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "düzey göstergesi"
+          }
+        }
+      }
     },
     "light %@" : {
-      "comment" : "A colour: %@ is the colour (light grey)"
+      "comment" : "A colour: %@ is the colour (light grey)",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "açık %@"
+          }
+        }
+      }
     },
     "line %@" : {
       "comment" : "Where the caret is: the line number"
     },
     "line break" : {
-      "comment" : "A line break inside a paragraph, spoken as a character\nSpoken message"
+      "comment" : "A line break inside a paragraph, spoken as a character\nSpoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "satır sonu"
+          }
+        }
+      }
     },
     "line cleared" : {
       "comment" : "Spoken message"
@@ -6113,25 +7373,81 @@
       "comment" : "Word's line spacing rule, as Word names it"
     },
     "line spacing %@ lines" : {
-      "comment" : "Paragraph line spacing in lines: %@ is how many"
+      "comment" : "Paragraph line spacing in lines: %@ is how many",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "satır aralığı %@ satır"
+          }
+        }
+      }
     },
     "line spacing at least" : {
-      "comment" : "Paragraph line spacing"
+      "comment" : "Paragraph line spacing",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "en az satır aralığı"
+          }
+        }
+      }
     },
     "line spacing at least %@ points" : {
-      "comment" : "Paragraph line spacing: %@ is the size"
+      "comment" : "Paragraph line spacing: %@ is the size",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "satır aralığı en az %@ punto"
+          }
+        }
+      }
     },
     "line spacing exactly %@ points" : {
-      "comment" : "Paragraph line spacing: %@ is the size"
+      "comment" : "Paragraph line spacing: %@ is the size",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "satır aralığı tam %@ punto"
+          }
+        }
+      }
     },
     "lines" : {
-      "comment" : "A trackpad rotor kind"
+      "comment" : "A trackpad rotor kind",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "satırlar"
+          }
+        }
+      }
     },
     "link" : {
-      "comment" : "A kind of thing to find, after next or previous\nA role, spoken after an item's name"
+      "comment" : "A kind of thing to find, after next or previous\nA role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bağlantı"
+          }
+        }
+      }
     },
     "links" : {
-      "comment" : "A rotor kind\nA trackpad rotor kind"
+      "comment" : "A rotor kind\nA trackpad rotor kind",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bağlantılar"
+          }
+        }
+      }
     },
     "links by sound" : {
       "comment" : "Copying VoiceOver's settings"
@@ -6143,19 +7459,59 @@
       "comment" : "Copying VoiceOver's settings"
     },
     "list" : {
-      "comment" : "A kind of thing to find, after next or previous\nA role, spoken after an item's name"
+      "comment" : "A kind of thing to find, after next or previous\nA role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "liste"
+          }
+        }
+      }
     },
     "list item" : {
-      "comment" : "A kind of thing to find, after next or previous\nA role, spoken after an item's name"
+      "comment" : "A kind of thing to find, after next or previous\nA role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "liste öğesi"
+          }
+        }
+      }
     },
     "list with %@ items" : {
-      "comment" : "A list on a page, entered: how many items"
+      "comment" : "A list on a page, entered: how many items",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ öğeli liste"
+          }
+        }
+      }
     },
     "list with 1 item" : {
-      "comment" : "A list on a page, entered"
+      "comment" : "A list on a page, entered",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 öğeli liste"
+          }
+        }
+      }
     },
     "lists" : {
-      "comment" : "A rotor kind"
+      "comment" : "A rotor kind",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "listeler"
+          }
+        }
+      }
     },
     "loading page" : {
       "comment" : "Spoken message"
@@ -6185,25 +7541,73 @@
       "comment" : "Feedback: the marked moments cleared"
     },
     "math" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "matematik"
+          }
+        }
+      }
     },
     "matte" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mat"
+          }
+        }
+      }
     },
     "medium verbosity" : {
       "comment" : "Copying VoiceOver's settings"
     },
     "menu" : {
-      "comment" : "A letter's command in the TurnOver layer (Command Control Comma)\nA role, spoken after an item's name"
+      "comment" : "A letter's command in the TurnOver layer (Command Control Comma)\nA role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "menü"
+          }
+        }
+      }
     },
     "menu bar" : {
-      "comment" : "A braille chord's command, as braille help says it\nA role, spoken after an item's name\nSpoken message"
+      "comment" : "A braille chord's command, as braille help says it\nA role, spoken after an item's name\nSpoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "menü çubuğu"
+          }
+        }
+      }
     },
     "menu button" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "menü düğmesi"
+          }
+        }
+      }
     },
     "menu item" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "menü öğesi"
+          }
+        }
+      }
     },
     "menu item not found: %@" : {
       "comment" : "A plugin's menu item not found: %@ is its path"
@@ -6218,7 +7622,15 @@
       "comment" : "A part of the screen"
     },
     "misspelled words" : {
-      "comment" : "A rotor kind"
+      "comment" : "A rotor kind",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yanlış yazılmış sözcükler"
+          }
+        }
+      }
     },
     "misspellings by sound" : {
       "comment" : "Copying VoiceOver's settings"
@@ -6230,16 +7642,48 @@
       "comment" : "Copying VoiceOver's settings"
     },
     "misspelt word" : {
-      "comment" : "A kind of thing to find, after next or previous"
+      "comment" : "A kind of thing to find, after next or previous",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yanlış yazılmış sözcük"
+          }
+        }
+      }
     },
     "mixed" : {
-      "comment" : "A state in Steam's Big Picture: half checked"
+      "comment" : "A state in Steam's Big Picture: half checked",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kısmen işaretli"
+          }
+        }
+      }
     },
     "modal" : {
-      "comment" : "A state, spoken after an item's role"
+      "comment" : "A state, spoken after an item's role",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kalıcı"
+          }
+        }
+      }
     },
     "most" : {
-      "comment" : "A punctuation level"
+      "comment" : "A punctuation level",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "çoğu"
+          }
+        }
+      }
     },
     "mouse down" : {
       "comment" : "Spoken message"
@@ -6266,7 +7710,15 @@
       "comment" : "Moving or resizing with the arrows"
     },
     "multi line" : {
-      "comment" : "A state, spoken after an item's role"
+      "comment" : "A state, spoken after an item's role",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "çok satırlı"
+          }
+        }
+      }
     },
     "navigation" : {
       "comment" : "A group of commands in the key list"
@@ -6278,7 +7730,15 @@
       "comment" : "How the Mac is online: %@ is how"
     },
     "new line" : {
-      "comment" : "A line ending, spoken as a character\nSpoken message"
+      "comment" : "A line ending, spoken as a character\nSpoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yeni satır"
+          }
+        }
+      }
     },
     "next item" : {
       "comment" : "A braille chord's command, as braille help says it"
@@ -6401,7 +7861,15 @@
       "comment" : "The Mac is offline"
     },
     "no next %@" : {
-      "comment" : "Nothing more of a kind ahead: %@ is the kind (heading)"
+      "comment" : "Nothing more of a kind ahead: %@ is the kind (heading)",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sonraki %@ yok"
+          }
+        }
+      }
     },
     "no next different item" : {
       "comment" : "Spoken message"
@@ -6431,7 +7899,15 @@
       "comment" : "Spoken message"
     },
     "no previous %@" : {
-      "comment" : "Nothing more of a kind behind: %@ is the kind (heading)"
+      "comment" : "Nothing more of a kind behind: %@ is the kind (heading)",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "önceki %@ yok"
+          }
+        }
+      }
     },
     "no previous different item" : {
       "comment" : "Spoken message"
@@ -6527,13 +8003,29 @@
       "comment" : "An app with no windows"
     },
     "none" : {
-      "comment" : "A punctuation level"
+      "comment" : "A punctuation level",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hiçbiri"
+          }
+        }
+      }
     },
     "normal settings" : {
       "comment" : "Spoken message"
     },
     "not %@" : {
-      "comment" : "A state that is absent: %@ is the state"
+      "comment" : "A state that is absent: %@ is the state",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ değil"
+          }
+        }
+      }
     },
     "not a link" : {
       "comment" : "Spoken message"
@@ -6545,7 +8037,15 @@
       "comment" : "Spoken message"
     },
     "not checked" : {
-      "comment" : "A state that is absent"
+      "comment" : "A state that is absent",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "işaretli değil"
+          }
+        }
+      }
     },
     "not found" : {
       "comment" : "Spoken message"
@@ -6581,13 +8081,29 @@
       "comment" : "Spoken message"
     },
     "not pressed" : {
-      "comment" : "A state that is absent"
+      "comment" : "A state that is absent",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "basılı değil"
+          }
+        }
+      }
     },
     "not run" : {
       "comment" : "Spoken message"
     },
     "not selected" : {
-      "comment" : "A state that is absent"
+      "comment" : "A state that is absent",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "seçili değil"
+          }
+        }
+      }
     },
     "notes, %@" : {
       "comment" : "A Keynote slide's presenter notes: their words"
@@ -6665,19 +8181,51 @@
       "comment" : "A notification banner: its words"
     },
     "now selected %@" : {
-      "comment" : "The selection changed: %@ is what is selected now"
+      "comment" : "The selection changed: %@ is what is selected now",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "şimdi seçili: %@"
+          }
+        }
+      }
     },
     "object mode" : {
       "comment" : "Spoken message"
     },
     "off" : {
-      "comment" : "A choice in the TurnOver menu\nA setting that is off\nA state that is absent\nA state, spoken after an item's role"
+      "comment" : "A choice in the TurnOver menu\nA setting that is off\nA state that is absent\nA state, spoken after an item's role",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kapalı"
+          }
+        }
+      }
     },
     "on" : {
-      "comment" : "A state, spoken after an item's role"
+      "comment" : "A state, spoken after an item's role",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "açık"
+          }
+        }
+      }
     },
     "on %@" : {
-      "comment" : "The colour behind the text: %@ is the colour (on yellow)"
+      "comment" : "The colour behind the text: %@ is the colour (on yellow)",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ zemin üzerinde"
+          }
+        }
+      }
     },
     "on battery" : {
       "comment" : "The battery"
@@ -6707,25 +8255,81 @@
       "comment" : "A braille chord's command, as braille help says it"
     },
     "orange" : {
-      "comment" : "A colour"
+      "comment" : "A colour",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "turuncu"
+          }
+        }
+      }
     },
     "out of quote" : {
-      "comment" : "The caret left a quote"
+      "comment" : "The caret left a quote",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alıntı dışında"
+          }
+        }
+      }
     },
     "out of spelling error" : {
-      "comment" : "Moving by character out of a misspelled word"
+      "comment" : "Moving by character out of a misspelled word",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yazım hatası dışında"
+          }
+        }
+      }
     },
     "out of table" : {
-      "comment" : "Spoken message\nThe caret left a table"
+      "comment" : "Spoken message\nThe caret left a table",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tablo dışı"
+          }
+        }
+      }
     },
     "page" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayfa"
+          }
+        }
+      }
     },
     "page %@" : {
-      "comment" : "A page number in a document"
+      "comment" : "A page number in a document",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayfa %@"
+          }
+        }
+      }
     },
     "page break" : {
-      "comment" : "A page break, spoken as a character"
+      "comment" : "A page break, spoken as a character",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayfa sonu"
+          }
+        }
+      }
     },
     "page down" : {
       "comment" : "A braille chord's command, as braille help says it"
@@ -6737,7 +8341,15 @@
       "comment" : "A braille chord's command, as braille help says it"
     },
     "pages" : {
-      "comment" : "A rotor kind"
+      "comment" : "A rotor kind",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayfalar"
+          }
+        }
+      }
     },
     "pan left" : {
       "comment" : "A braille chord's command, as braille help says it"
@@ -6746,7 +8358,15 @@
       "comment" : "A braille chord's command, as braille help says it"
     },
     "pane" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bölme"
+          }
+        }
+      }
     },
     "pans left; at the start of a line, goes to the end of the previous line" : {
       "comment" : "What a braille display key does"
@@ -6755,7 +8375,15 @@
       "comment" : "What a braille display key does"
     },
     "paragraph" : {
-      "comment" : "A kind of thing to find, after next or previous"
+      "comment" : "A kind of thing to find, after next or previous",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "paragraf"
+          }
+        }
+      }
     },
     "pass next key" : {
       "comment" : "Spoken message"
@@ -6764,7 +8392,15 @@
       "comment" : "Spoken message"
     },
     "password edit" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "parola alanı"
+          }
+        }
+      }
     },
     "pasted" : {
       "comment" : "Command V pressed"
@@ -6793,7 +8429,15 @@
       "comment" : "A braille chord's command, as braille help says it"
     },
     "pink" : {
-      "comment" : "A colour"
+      "comment" : "A colour",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pembe"
+          }
+        }
+      }
     },
     "pitch" : {
       "comment" : "A speech setting in the speech settings ring"
@@ -6802,13 +8446,37 @@
       "comment" : "The speech pitch, out of 100"
     },
     "placeholder" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yer tutucu"
+          }
+        }
+      }
     },
     "plain" : {
-      "comment" : "Text with no formatting"
+      "comment" : "Text with no formatting",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "düz"
+          }
+        }
+      }
     },
     "plain text" : {
-      "comment" : "A kind of thing to find, after next or previous"
+      "comment" : "A kind of thing to find, after next or previous",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "düz metin"
+          }
+        }
+      }
     },
     "player" : {
       "comment" : "An area of the Music, Podcasts or TV window"
@@ -6823,13 +8491,37 @@
       "comment" : "Spoken message"
     },
     "pop up button" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "açılır menü düğmesi"
+          }
+        }
+      }
     },
     "popup menu" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "açılır menü"
+          }
+        }
+      }
     },
     "pressed" : {
-      "comment" : "A state, spoken after an item's role"
+      "comment" : "A state, spoken after an item's role",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "basılı"
+          }
+        }
+      }
     },
     "previous item" : {
       "comment" : "A braille chord's command, as braille help says it"
@@ -6838,10 +8530,26 @@
       "comment" : "What a braille display key does"
     },
     "progress bar" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ilerleme çubuğu"
+          }
+        }
+      }
     },
     "protected" : {
-      "comment" : "A state, spoken after an item's role"
+      "comment" : "A state, spoken after an item's role",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "korumalı"
+          }
+        }
+      }
     },
     "punctuation" : {
       "comment" : "A speech setting in the speech settings ring"
@@ -6850,31 +8558,87 @@
       "comment" : "Copying VoiceOver's settings: %@ is the punctuation level"
     },
     "purple" : {
-      "comment" : "A colour"
+      "comment" : "A colour",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mor"
+          }
+        }
+      }
     },
     "quick navigation on or off" : {
       "comment" : "A braille chord's command, as braille help says it"
     },
     "quote level %@" : {
-      "comment" : "How deep a quote is in a Mail message"
+      "comment" : "How deep a quote is in a Mail message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alıntı düzeyi %@"
+          }
+        }
+      }
     },
     "radio" : {
-      "comment" : "A role in Steam's Big Picture: a radio button"
+      "comment" : "A role in Steam's Big Picture: a radio button",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "radyo düğmesi"
+          }
+        }
+      }
     },
     "radio button" : {
-      "comment" : "A kind of thing to find, after next or previous\nA role, spoken after an item's name"
+      "comment" : "A kind of thing to find, after next or previous\nA role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "radyo düğmesi"
+          }
+        }
+      }
     },
     "radio group" : {
-      "comment" : "A kind of thing to find, after next or previous"
+      "comment" : "A kind of thing to find, after next or previous",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "radyo grubu"
+          }
+        }
+      }
     },
     "radio menu item" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "radyo menü öğesi"
+          }
+        }
+      }
     },
     "rate" : {
       "comment" : "A speech setting in the speech settings ring"
     },
     "rate %@" : {
-      "comment" : "The speech rate changed: %@ is the new rate, out of 100"
+      "comment" : "The speech rate changed: %@ is the new rate, out of 100",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hız %@"
+          }
+        }
+      }
     },
     "read" : {
       "comment" : "A Mail message marked read"
@@ -6883,7 +8647,15 @@
       "comment" : "A braille chord's command, as braille help says it"
     },
     "read only" : {
-      "comment" : "A state, spoken after an item's role"
+      "comment" : "A state, spoken after an item's role",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "salt okunur"
+          }
+        }
+      }
     },
     "read the current item" : {
       "comment" : "A braille chord's command, as braille help says it"
@@ -6904,7 +8676,15 @@
       "comment" : "Spoken message"
     },
     "red" : {
-      "comment" : "A colour"
+      "comment" : "A colour",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kırmızı"
+          }
+        }
+      }
     },
     "refreshed" : {
       "comment" : "Spoken message"
@@ -6922,7 +8702,15 @@
       "comment" : "A setting changed: %@ is on or off"
     },
     "required" : {
-      "comment" : "A state, spoken after an item's role"
+      "comment" : "A state, spoken after an item's role",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gerekli"
+          }
+        }
+      }
     },
     "resizing the item" : {
       "comment" : "Moving or resizing with the arrows"
@@ -6946,7 +8734,15 @@
       "comment" : "Spoken message"
     },
     "right aligned" : {
-      "comment" : "Paragraph alignment"
+      "comment" : "Paragraph alignment",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sağa hizalı"
+          }
+        }
+      }
     },
     "right click" : {
       "comment" : "Spoken message"
@@ -6955,10 +8751,26 @@
       "comment" : "Spoken message"
     },
     "right command" : {
-      "comment" : "A modifier key's name"
+      "comment" : "A modifier key's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sağ komut"
+          }
+        }
+      }
     },
     "right control" : {
-      "comment" : "A modifier key's name"
+      "comment" : "A modifier key's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sağ kontrol"
+          }
+        }
+      }
     },
     "right mouse button locked" : {
       "comment" : "Spoken message"
@@ -6967,13 +8779,29 @@
       "comment" : "Spoken message"
     },
     "right option" : {
-      "comment" : "A modifier key's name"
+      "comment" : "A modifier key's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sağ option"
+          }
+        }
+      }
     },
     "right option on its own" : {
       "comment" : "A key pressed and let go alone"
     },
     "right shift" : {
-      "comment" : "A modifier key's name"
+      "comment" : "A modifier key's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sağ shift"
+          }
+        }
+      }
     },
     "rotor" : {
       "comment" : "A braille chord's command, as braille help says it\nVoiceOver's rotor, as it opens"
@@ -6982,13 +8810,37 @@
       "comment" : "Where haptics are felt"
     },
     "row" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "satır"
+          }
+        }
+      }
     },
     "row %@" : {
-      "comment" : "A table cell's row number"
+      "comment" : "A table cell's row number",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "satır %@"
+          }
+        }
+      }
     },
     "ruler" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cetvel"
+          }
+        }
+      }
     },
     "runs a Shortcut" : {
       "comment" : "What your own key does"
@@ -7009,16 +8861,40 @@
       "comment" : "A letter's command in the TurnOver layer (Command Control Comma)"
     },
     "scroll area" : {
-      "comment" : "A scroll area the keyboard lands on"
+      "comment" : "A scroll area the keyboard lands on",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kaydırma alanı"
+          }
+        }
+      }
     },
     "scroll bar" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kaydırma çubuğu"
+          }
+        }
+      }
     },
     "scroll left" : {
       "comment" : "A braille chord's command, as braille help says it"
     },
     "scroll pane" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kaydırma alanı"
+          }
+        }
+      }
     },
     "scroll right" : {
       "comment" : "A braille chord's command, as braille help says it"
@@ -7027,16 +8903,40 @@
       "comment" : "Spoken message"
     },
     "search" : {
-      "comment" : "A role, spoken after an item's name\nSpoken message"
+      "comment" : "A role, spoken after an item's name\nSpoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "arama alanı"
+          }
+        }
+      }
     },
     "search field" : {
-      "comment" : "A role: a search field"
+      "comment" : "A role: a search field",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "arama alanı"
+          }
+        }
+      }
     },
     "search landmark" : {
       "comment" : "A web page's landmark"
     },
     "section" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bölüm"
+          }
+        }
+      }
     },
     "select all" : {
       "comment" : "A braille chord's command, as braille help says it"
@@ -7048,13 +8948,37 @@
       "comment" : "A braille chord's command, as braille help says it"
     },
     "selectable" : {
-      "comment" : "A state, spoken after an item's role"
+      "comment" : "A state, spoken after an item's role",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "seçilebilir"
+          }
+        }
+      }
     },
     "selected" : {
-      "comment" : "A state, spoken after an item's role\nSpoken message"
+      "comment" : "A state, spoken after an item's role\nSpoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "seçili"
+          }
+        }
+      }
     },
     "selected %@" : {
-      "comment" : "Selected text, read: %@ is the text"
+      "comment" : "Selected text, read: %@ is the text",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ seçildi"
+          }
+        }
+      }
     },
     "selected all" : {
       "comment" : "Spoken message"
@@ -7072,7 +8996,15 @@
       "comment" : "Selected text deleted"
     },
     "selection removed" : {
-      "comment" : "The selection went"
+      "comment" : "The selection went",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "seçim kaldırıldı"
+          }
+        }
+      }
     },
     "selection start" : {
       "comment" : "Spoken message"
@@ -7081,13 +9013,29 @@
       "comment" : "Spoken message"
     },
     "separator" : {
-      "comment" : "A kind of thing to find, after next or previous\nA role, spoken after an item's name"
+      "comment" : "A kind of thing to find, after next or previous\nA role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ayırıcı"
+          }
+        }
+      }
     },
     "settings window" : {
       "comment" : "A letter's command in the TurnOver layer (Command Control Comma)"
     },
     "sheet" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ""
+          }
+        }
+      }
     },
     "shift" : {
       "comment" : "A braille chord's command, as braille help says it"
@@ -7114,19 +9062,51 @@
       "comment" : "Spoken message"
     },
     "single spacing" : {
-      "comment" : "Paragraph line spacing"
+      "comment" : "Paragraph line spacing",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tek satır aralığı"
+          }
+        }
+      }
     },
     "slider" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kaydırıcı"
+          }
+        }
+      }
     },
     "some" : {
-      "comment" : "A punctuation level"
+      "comment" : "A punctuation level",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bazıları"
+          }
+        }
+      }
     },
     "something else is over it; not clicked" : {
       "comment" : "Spoken message"
     },
     "sorted" : {
-      "comment" : "A state, spoken after an item's role"
+      "comment" : "A state, spoken after an item's role",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sıralanmış"
+          }
+        }
+      }
     },
     "space" : {
       "comment" : "Spoken message"
@@ -7141,7 +9121,15 @@
       "comment" : "Typing echo changed: %@ is off, in edit controls or always"
     },
     "speech" : {
-      "comment" : "How an element is reported: in words"
+      "comment" : "How an element is reported: in words",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "konuşma"
+          }
+        }
+      }
     },
     "speech mode beeps" : {
       "comment" : "NVDA's speech modes"
@@ -7165,13 +9153,37 @@
       "comment" : "A braille chord's command, as braille help says it"
     },
     "spelling error" : {
-      "comment" : "A kind of thing to find, after next or previous\nSaid before a misspelled word"
+      "comment" : "A kind of thing to find, after next or previous\nSaid before a misspelled word",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yazım hatası"
+          }
+        }
+      }
     },
     "spin button" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "adımlayıcı"
+          }
+        }
+      }
     },
     "split pane" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bölünmüş bölme"
+          }
+        }
+      }
     },
     "star" : {
       "comment" : "Spoken message"
@@ -7189,13 +9201,29 @@
       "comment" : "An app being launched"
     },
     "status bar" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "durum çubuğu"
+          }
+        }
+      }
     },
     "status menus, %@" : {
       "comment" : "The status menus list opened: how many"
     },
     "stepper" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "adımlayıcı"
+          }
+        }
+      }
     },
     "still describing" : {
       "comment" : "Spoken message"
@@ -7210,22 +9238,70 @@
       "comment" : "A hot spot: its number"
     },
     "strikethrough" : {
-      "comment" : "Text formatting"
+      "comment" : "Text formatting",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "üstü çizili"
+          }
+        }
+      }
     },
     "style change" : {
-      "comment" : "A kind of thing to find, after next or previous"
+      "comment" : "A kind of thing to find, after next or previous",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "stil değişikliği"
+          }
+        }
+      }
     },
     "submenu" : {
-      "comment" : "A state, spoken after an item's role"
+      "comment" : "A state, spoken after an item's role",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alt menü"
+          }
+        }
+      }
     },
     "subscript" : {
-      "comment" : "Text formatting"
+      "comment" : "Text formatting",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alt simge"
+          }
+        }
+      }
     },
     "superscript" : {
-      "comment" : "Text formatting"
+      "comment" : "Text formatting",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "üst simge"
+          }
+        }
+      }
     },
     "switch" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "anahtar"
+          }
+        }
+      }
     },
     "switch reader" : {
       "comment" : "A letter's command in the TurnOver layer (Command Control Comma)"
@@ -7242,6 +9318,12 @@
             "state" : "new",
             "value" : "and"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ve işareti"
+          }
         }
       }
     },
@@ -7253,6 +9335,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "apostrophe"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kesme işareti"
           }
         }
       }
@@ -7266,6 +9354,12 @@
             "state" : "new",
             "value" : "at"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "et işareti"
+          }
         }
       }
     },
@@ -7277,6 +9371,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "backslash"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ters eğik çizgi"
           }
         }
       }
@@ -7290,6 +9390,12 @@
             "state" : "new",
             "value" : "bar"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dikey çizgi"
+          }
         }
       }
     },
@@ -7301,6 +9407,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "bullet"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "madde işareti"
           }
         }
       }
@@ -7314,6 +9426,12 @@
             "state" : "new",
             "value" : "caret"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "şapka"
+          }
         }
       }
     },
@@ -7325,6 +9443,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "colon"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iki nokta"
           }
         }
       }
@@ -7338,6 +9462,12 @@
             "state" : "new",
             "value" : "comma"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "virgül"
+          }
         }
       }
     },
@@ -7349,6 +9479,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "copyright"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "telif hakkı"
           }
         }
       }
@@ -7362,6 +9498,12 @@
             "state" : "new",
             "value" : "dash"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tire"
+          }
         }
       }
     },
@@ -7373,6 +9515,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "degrees"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "derece"
           }
         }
       }
@@ -7386,6 +9534,12 @@
             "state" : "new",
             "value" : "dollar"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dolar"
+          }
         }
       }
     },
@@ -7397,6 +9551,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "ellipsis"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "üç nokta"
           }
         }
       }
@@ -7410,6 +9570,12 @@
             "state" : "new",
             "value" : "em dash"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "uzun çizgi"
+          }
         }
       }
     },
@@ -7421,6 +9587,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "en dash"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kısa çizgi"
           }
         }
       }
@@ -7434,6 +9606,12 @@
             "state" : "new",
             "value" : "equals"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "eşittir"
+          }
         }
       }
     },
@@ -7445,6 +9623,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "euro"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "avro"
           }
         }
       }
@@ -7458,6 +9642,12 @@
             "state" : "new",
             "value" : "exclamation"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ünlem"
+          }
         }
       }
     },
@@ -7469,6 +9659,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "grave"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ters kesme işareti"
           }
         }
       }
@@ -7482,6 +9678,12 @@
             "state" : "new",
             "value" : "greater than"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "büyüktür"
+          }
         }
       }
     },
@@ -7493,6 +9695,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "left brace"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sol süslü ayraç"
           }
         }
       }
@@ -7506,6 +9714,12 @@
             "state" : "new",
             "value" : "left bracket"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sol köşeli ayraç"
+          }
         }
       }
     },
@@ -7517,6 +9731,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "left paren"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sol parantez"
           }
         }
       }
@@ -7530,6 +9750,12 @@
             "state" : "new",
             "value" : "left quote"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sol tırnak"
+          }
         }
       }
     },
@@ -7541,6 +9767,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "left single quote"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sol tek tırnak"
           }
         }
       }
@@ -7554,6 +9786,12 @@
             "state" : "new",
             "value" : "less than"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "küçüktür"
+          }
         }
       }
     },
@@ -7565,6 +9803,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "middle dot"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "orta nokta"
           }
         }
       }
@@ -7578,6 +9822,12 @@
             "state" : "new",
             "value" : "number"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "diyez"
+          }
         }
       }
     },
@@ -7589,6 +9839,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "percent"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yüzde"
           }
         }
       }
@@ -7602,6 +9858,12 @@
             "state" : "new",
             "value" : "period"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nokta"
+          }
         }
       }
     },
@@ -7613,6 +9875,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "pilcrow"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "satır başı işareti"
           }
         }
       }
@@ -7626,6 +9894,12 @@
             "state" : "new",
             "value" : "plus"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "artı"
+          }
         }
       }
     },
@@ -7637,6 +9911,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "pound"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sterlin"
           }
         }
       }
@@ -7650,6 +9930,12 @@
             "state" : "new",
             "value" : "question mark"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "soru işareti"
+          }
         }
       }
     },
@@ -7661,6 +9947,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "quote"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tırnak"
           }
         }
       }
@@ -7674,6 +9966,12 @@
             "state" : "new",
             "value" : "registered"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tescilli"
+          }
         }
       }
     },
@@ -7685,6 +9983,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "right brace"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sağ süslü ayraç"
           }
         }
       }
@@ -7698,6 +10002,12 @@
             "state" : "new",
             "value" : "right bracket"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sağ köşeli ayraç"
+          }
         }
       }
     },
@@ -7709,6 +10019,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "right paren"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sağ parantez"
           }
         }
       }
@@ -7722,6 +10038,12 @@
             "state" : "new",
             "value" : "right quote"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sağ tırnak"
+          }
         }
       }
     },
@@ -7733,6 +10055,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "right single quote"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sağ tek tırnak"
           }
         }
       }
@@ -7746,6 +10074,12 @@
             "state" : "new",
             "value" : "section"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "paragraf işareti"
+          }
         }
       }
     },
@@ -7757,6 +10091,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "semicolon"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "noktalı virgül"
           }
         }
       }
@@ -7770,6 +10110,12 @@
             "state" : "new",
             "value" : "slash"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "eğik çizgi"
+          }
         }
       }
     },
@@ -7781,6 +10127,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "space"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "boşluk"
           }
         }
       }
@@ -7794,6 +10146,12 @@
             "state" : "new",
             "value" : "star"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yıldız"
+          }
         }
       }
     },
@@ -7806,6 +10164,12 @@
             "state" : "new",
             "value" : "tab"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sekme karakteri"
+          }
         }
       }
     },
@@ -7816,6 +10180,12 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
+            "value" : "tilde"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "tilde"
           }
         }
@@ -7830,6 +10200,12 @@
             "state" : "new",
             "value" : "trademark"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ticari marka"
+          }
         }
       }
     },
@@ -7841,6 +10217,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "underscore"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alt çizgi"
           }
         }
       }
@@ -7854,6 +10236,12 @@
             "state" : "new",
             "value" : "yen"
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yen"
+          }
         }
       }
     },
@@ -7861,7 +10249,15 @@
       "comment" : "A speech setting in the speech settings ring"
     },
     "system dialog" : {
-      "comment" : "A role: a macOS system dialog"
+      "comment" : "A role: a macOS system dialog",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sistem iletişim kutusu"
+          }
+        }
+      }
     },
     "system dialog waiting: %@. %@ to go to it" : {
       "comment" : "A system dialog waiting: its words, then the keys to reach it",
@@ -7875,16 +10271,40 @@
       }
     },
     "tab" : {
-      "comment" : "A braille chord's command, as braille help says it\nA role, spoken after an item's name"
+      "comment" : "A braille chord's command, as braille help says it\nA role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sekme"
+          }
+        }
+      }
     },
     "tab control" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ""
+          }
+        }
+      }
     },
     "tab stop deleted" : {
       "comment" : "Spoken message"
     },
     "table" : {
-      "comment" : "A kind of thing to find, after next or previous\nA role, spoken after an item's name\nSpoken message"
+      "comment" : "A kind of thing to find, after next or previous\nA role, spoken after an item's name\nSpoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tablo"
+          }
+        }
+      }
     },
     "table with %@ and %@, %@" : {
       "comment" : "A table entered: its rows, its columns, then the cell",
@@ -7909,16 +10329,48 @@
       }
     },
     "tables" : {
-      "comment" : "A rotor kind\nA trackpad rotor kind"
+      "comment" : "A rotor kind\nA trackpad rotor kind",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tablolar"
+          }
+        }
+      }
     },
     "terminal" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "terminal"
+          }
+        }
+      }
     },
     "text" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "metin"
+          }
+        }
+      }
     },
     "text after links" : {
-      "comment" : "A kind of thing to find, after next or previous"
+      "comment" : "A kind of thing to find, after next or previous",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bağlantılardan sonraki metin"
+          }
+        }
+      }
     },
     "text attributes" : {
       "comment" : "A braille chord's command, as braille help says it"
@@ -7927,13 +10379,37 @@
       "comment" : "Copying VoiceOver's settings"
     },
     "text field" : {
-      "comment" : "A kind of thing to find, after next or previous"
+      "comment" : "A kind of thing to find, after next or previous",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "metin alanı"
+          }
+        }
+      }
     },
     "text fields" : {
-      "comment" : "A rotor kind"
+      "comment" : "A rotor kind",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "metin alanları"
+          }
+        }
+      }
     },
     "text frame" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "metin çerçevesi"
+          }
+        }
+      }
     },
     "text mode" : {
       "comment" : "Spoken message"
@@ -7978,7 +10454,15 @@
       "comment" : "Spoken message"
     },
     "time editor" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "saat düzenleyici"
+          }
+        }
+      }
     },
     "title" : {
       "comment" : "A Pages paragraph style: the title"
@@ -7987,22 +10471,62 @@
       "comment" : "A Keynote slide's title: its words"
     },
     "toggle button" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "açma/kapama düğmesi"
+          }
+        }
+      }
     },
     "tone" : {
-      "comment" : "How an element is reported: a sound"
+      "comment" : "How an element is reported: a sound",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ses"
+          }
+        }
+      }
     },
     "tone: a sound, and a note's own words; speech: what each mark is, in words; off: nothing" : {
 
     },
     "tool bar" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "araç çubuğu"
+          }
+        }
+      }
     },
     "tool tip" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ipucu"
+          }
+        }
+      }
     },
     "top" : {
-      "comment" : "Spoken message"
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "en üst"
+          }
+        }
+      }
     },
     "top centre" : {
       "comment" : "A part of the screen"
@@ -8023,10 +10547,26 @@
       "comment" : "Spoken message"
     },
     "tracked change" : {
-      "comment" : "A kind of thing to find, after next or previous"
+      "comment" : "A kind of thing to find, after next or previous",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "izlenen değişiklik"
+          }
+        }
+      }
     },
     "tracked changes" : {
-      "comment" : "A rotor kind"
+      "comment" : "A rotor kind",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "izlenen değişiklikler"
+          }
+        }
+      }
     },
     "trackpad commands %@" : {
       "comment" : "Gesture control turned on or off"
@@ -8035,16 +10575,48 @@
       "comment" : "A braille chord's command, as braille help says it"
     },
     "tree view" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ağaç görünümü"
+          }
+        }
+      }
     },
     "tree view button" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ağaç düğmesi"
+          }
+        }
+      }
     },
     "tree view item" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ağaç öğesi"
+          }
+        }
+      }
     },
     "turquoise" : {
-      "comment" : "A colour"
+      "comment" : "A colour",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "turkuaz"
+          }
+        }
+      }
     },
     "typing echo characters" : {
       "comment" : "Copying VoiceOver's settings"
@@ -8059,7 +10631,15 @@
       "comment" : "Copying VoiceOver's settings"
     },
     "unavailable" : {
-      "comment" : "A state, spoken after an item's role"
+      "comment" : "A state, spoken after an item's role",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "soluk"
+          }
+        }
+      }
     },
     "uncontracted braille input" : {
       "comment" : "Spoken message"
@@ -8071,13 +10651,37 @@
       "comment" : "Underline turned on or off in Word"
     },
     "underlined" : {
-      "comment" : "Text formatting"
+      "comment" : "Text formatting",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "altı çizili"
+          }
+        }
+      }
     },
     "underlined text" : {
-      "comment" : "A kind of thing to find, after next or previous"
+      "comment" : "A kind of thing to find, after next or previous",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "altı çizili metin"
+          }
+        }
+      }
     },
     "unknown" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bilinmeyen"
+          }
+        }
+      }
     },
     "unknown action %@" : {
       "comment" : "A plugin key with an action TurnOver doesn't know: %@ is the action"
@@ -8098,7 +10702,15 @@
       "comment" : "A window with no title"
     },
     "unvisited link" : {
-      "comment" : "A kind of thing to find, after next or previous"
+      "comment" : "A kind of thing to find, after next or previous",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ziyaret edilmemiş bağlantı"
+          }
+        }
+      }
     },
     "up or down copies VoiceOver's voice, rate, pitch and volume" : {
       "comment" : "The speech settings ring's last stop"
@@ -8113,7 +10725,15 @@
       "comment" : "Updates failed: %@ is why"
     },
     "value indicator" : {
-      "comment" : "A role, spoken after an item's name"
+      "comment" : "A role, spoken after an item's name",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "değer göstergesi"
+          }
+        }
+      }
     },
     "version %@" : {
       "comment" : "An application's version: %@ is the version"
@@ -8125,7 +10745,15 @@
       "comment" : "Spoken message"
     },
     "visited link" : {
-      "comment" : "A kind of thing to find, after next or previous"
+      "comment" : "A kind of thing to find, after next or previous",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ziyaret edilmiş bağlantı"
+          }
+        }
+      }
     },
     "voice" : {
       "comment" : "A speech setting in the speech settings ring"
@@ -8160,10 +10788,26 @@
       "comment" : "A braille chord's command, as braille help says it"
     },
     "white" : {
-      "comment" : "A colour"
+      "comment" : "A colour",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "beyaz"
+          }
+        }
+      }
     },
     "window" : {
-      "comment" : "A role, spoken after an item's name\nSpoken message"
+      "comment" : "A role, spoken after an item's name\nSpoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pencere"
+          }
+        }
+      }
     },
     "window spot %@ made" : {
       "comment" : "A window spot of your own made: its number"
@@ -8175,7 +10819,15 @@
       "comment" : "An app coming to the front with plugins: %@ names them"
     },
     "words" : {
-      "comment" : "A choice in the TurnOver menu\nA trackpad rotor kind"
+      "comment" : "A choice in the TurnOver menu\nA trackpad rotor kind",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sözcükler"
+          }
+        }
+      }
     },
     "wrapped to the bottom" : {
       "comment" : "Spoken message"
@@ -8184,7 +10836,15 @@
       "comment" : "Spoken message"
     },
     "yellow" : {
-      "comment" : "A colour"
+      "comment" : "A colour",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sarı"
+          }
+        }
+      }
     },
     "you have your own plugin with this name" : {
       "comment" : "A library plugin's state"
