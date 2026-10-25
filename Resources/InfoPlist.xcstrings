@@ -1,0 +1,54 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "NSAppleEventsUsageDescription" : {
+      "comment" : "A reason macOS shows when it asks for a permission (Info.plist)",
+      "extractionState" : "manual",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TurnOver, VoiceOver'dan okuduğu yerde birkaç sözcük söylemesini, Microsoft Word'den sayfa ve satır numarasını ve sunum oynatılırken Keynote'tan gösterilen slaytın sözcüklerini ister."
+          }
+        }
+      }
+    },
+    "NSAudioCaptureUsageDescription" : {
+      "comment" : "A reason macOS shows when it asks for a permission (Info.plist)",
+      "extractionState" : "manual",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TurnOver okurken VoiceOver'ın sesini kısık tutar, böylece ikisi asla aynı anda konuşmaz. Hiçbir şey kaydedilmez, saklanmaz ya da gönderilmez."
+          }
+        }
+      }
+    },
+    "NSBluetoothAlwaysUsageDescription" : {
+      "comment" : "A reason macOS shows when it asks for a permission (Info.plist)",
+      "extractionState" : "manual",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TurnOver, VoiceOver gibi Bluetooth braille ekranınıza bağlanır."
+          }
+        }
+      }
+    },
+    "NSInputMonitoringUsageDescription" : {
+      "comment" : "A reason macOS shows when it asks for a permission (Info.plist)",
+      "extractionState" : "manual",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TurnOver, okuduğu uygulamalarda VoiceOver tuşlarını dinler; böylece sizin için okuyabilir ve gezinebilir."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

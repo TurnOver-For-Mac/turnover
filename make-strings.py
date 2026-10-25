@@ -42,7 +42,15 @@ def sync(folder):
 def compile_into(folders):
     with tempfile.TemporaryDirectory() as out:
         for catalog in sorted(glob.glob(os.path.join(HERE, "Resources", "*.xcstrings"))):
-            subprocess.run(["xcrun", "xcstringstool", "compile", catalog, "--output-directory", out], check=True)
+            # The translations only. English stays where it is written (the code, Info.plist): an en.lproj made from
+            # InfoPlist.xcstrings gave its keys as the English permission prompts (25 Oct 2026).
+            data = json.load(open(catalog, encoding="utf-8"))
+            source = data.get("sourceLanguage", "en")
+            languages = sorted({l for e in data.get("strings", {}).values() for l in e.get("localizations", {})} - {source})
+            if not languages:
+                continue
+            subprocess.run(["xcrun", "xcstringstool", "compile", catalog, "--output-directory", out,
+                            *[a for l in languages for a in ("--language", l)]], check=True)
         for folder in folders:
             for lproj in sorted(glob.glob(os.path.join(out, "*.lproj"))):
                 target = os.path.join(folder, os.path.basename(lproj))

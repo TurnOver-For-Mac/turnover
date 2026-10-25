@@ -74,6 +74,8 @@ isn't. Anything a person hears or reads (speech, menus, settings, alerts) is wri
 
 `./build.sh --no-install` adds new strings to Resources/Localizable.xcstrings, untranslated (make-strings.py); commit
 that file with the code. A new language is a translation in that file, in Xcode or as JSON, and needs no code.
+The reasons macOS shows when it asks for a permission are translated in Resources/InfoPlist.xcstrings, by their
+Info.plist keys; their English stays in Info.plist.
 
 ## Signing off your work (DCO)
 
