@@ -41,9 +41,9 @@ enum Uninstaller {
         guard !running else { return }
         running = true
         Log.info("uninstall: starting (\(keepSettings ? "app only; settings and permissions kept" : "everything"))")
-        // Coexisting: VoiceOver's Activity first, while TurnOver still has its files and its permissions, or VoiceOver
-        // stays silent in TurnOver's apps for good (a code review on 17 Oct 2026: a blocker). Then the rest.
-        if Coexist.on, ActivityFlow.shared.marker.installed {
+        // An Activity left by an earlier build (CoExist's first form) first, while TurnOver still has its files and its
+        // permissions, or VoiceOver stays silent in TurnOver's apps for good (a code review on 17 Oct 2026). Then the rest.
+        if ActivityFlow.shared.marker.installed {
             Speech.speakMessage("Uninstalling TurnOver. First VoiceOver's settings: VoiceOver Utility opens and closes by itself, about ten seconds.")
             ActivityFlow.shared.set(apps: nil) { text in
                 Log.info("uninstall: the Activity: \(text)")

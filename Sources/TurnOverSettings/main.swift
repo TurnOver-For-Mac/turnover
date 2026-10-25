@@ -484,9 +484,6 @@ struct GeneralView: View {
 /// readers per app, folded away (22 Oct 2026; last in the list, the place for the things most people never touch).
 struct ReadersView: View {
     @EnvironmentObject var model: Model
-    private var coexist: Binding<Bool> {
-        Binding(get: { model.special("_coexist") as? Bool ?? false }, set: { model.setSpecial("_coexist", $0) })
-    }
     var body: some View {
         Form {
             Section {
@@ -494,8 +491,8 @@ struct ReadersView: View {
                 Text("Off: each reader has its own switch and neither changes the other. Command Control Period is TurnOver's; Command F5 is VoiceOver's.").font(.caption)
             }
             Section {
-                Toggle("CoExist: VoiceOver stays running alongside TurnOver", isOn: coexist)
-                Text("VoiceOver is kept quiet where TurnOver reads and keeps passwords and macOS's own prompts. Changing it restarts TurnOver.").font(.caption)
+                Toggle("VoiceOver comes on when TurnOver quits", isOn: model.bool("applications", "voiceOverOnAtQuit"))
+                Text("Off: quitting TurnOver leaves VoiceOver as it is, so with VoiceOver off the Mac has no speech until you press Command F5. For VoiceOver reading inside a virtual machine.").font(.caption)
             }
             DisclosureGroup("Experimental: readers per app") {
                 Toggle("Readers per app", isOn: model.bool("applications", "perAppReaders"))

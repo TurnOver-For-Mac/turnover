@@ -322,8 +322,11 @@ public struct Config: Codable {
         /// A settings file that already holds a list or a mode other than everywhere reads as on, so nobody's set-up
         /// changes with the build.
         public var perAppReaders = false
-        /// TurnOver comes on when VoiceOver turns off, and goes off when VoiceOver comes on (not coexisting).
+        /// TurnOver comes on when VoiceOver turns off, and goes off when VoiceOver comes on.
         public var swapWithVoiceOver = true
+        /// VoiceOver comes on as TurnOver quits, so nobody is left with no speech. Off, a quit leaves VoiceOver as it
+        /// is: a Mac with no reader on purpose, such as VoiceOver reading inside a virtual machine (23 Oct 2026).
+        public var voiceOverOnAtQuit = true
         public init() {}
         public static let leadModes = ["apps", "everywhere", "voiceover"]
         /// The mode in force: the chosen one with readers per app, everywhere without.
@@ -357,7 +360,7 @@ public struct Config: Codable {
         public static func leadModeName(_ m: String) -> String {
             m == "everywhere" ? "TurnOver everywhere" : m == "voiceover" ? "VoiceOver everywhere" : "TurnOver in its apps"
         }
-        enum Keys: String, CodingKey { case leadBundles, leadEverywhereElse, automaticHandOver, leadMode, voiceOverBundles, directApps, perAppReaders, swapWithVoiceOver }
+        enum Keys: String, CodingKey { case leadBundles, leadEverywhereElse, automaticHandOver, leadMode, voiceOverBundles, directApps, perAppReaders, swapWithVoiceOver, voiceOverOnAtQuit }
         // Each field falls back on its own: a new field must never wipe the list of apps TurnOver leads in (8 Oct 2026).
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: Keys.self)
@@ -375,6 +378,7 @@ public struct Config: Codable {
                 leadMode = "apps"
             }
             swapWithVoiceOver = (try? c.decodeIfPresent(Bool.self, forKey: .swapWithVoiceOver)) ?? d.swapWithVoiceOver
+            voiceOverOnAtQuit = (try? c.decodeIfPresent(Bool.self, forKey: .voiceOverOnAtQuit)) ?? d.voiceOverOnAtQuit
             if let chosen = try? c.decodeIfPresent(Bool.self, forKey: .perAppReaders) {
                 perAppReaders = chosen
             } else {

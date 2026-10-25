@@ -75,8 +75,8 @@ live copy is `~/Library/Developer/TurnOver/scenarios/regression/run.sh`; the too
 `~/Library/Developer/TurnOver/tools` from `Tools/drivers`.
 
 Preconditions: the build under test installed as /Applications/TurnOver.app; its welcome closed (the runner refuses
-otherwise); the Mac idle for five minutes at the start (then 90 s before each part); the display awake; VoiceOver on
-with the Activity in (coexist is the product). The runner turns the `logSpeech` default on for the run (the
+otherwise); the Mac idle for five minutes at the start (then 90 s before each part); the display awake; TurnOver on and
+reading, VoiceOver off (one reader at a time since CoExist went, 24 Oct 2026). The runner turns the `logSpeech` default on for the run (the
 scenarios read what was said from the log, which keeps lengths otherwise) and puts it back, quits every app it
 opened, and restores the front app on exit, however it ends.
 

@@ -38,6 +38,27 @@ enum HandOver {
         return Shortcut(keyCode: keyCode, flags: flags, modifierCodes: codes)
     }
 
+    /// VoiceOver reading, from any thread, without waiting: toggled on when macOS's flag is off, opened when the flag is
+    /// on but VoiceOver isn't running (quit by script, or crashed: the toggle would turn the flag off). Nothing when it
+    /// is reading already. Said in the log as `why`. (A code review, 25 Oct 2026: the flag alone left both readers off.)
+    /// `waitUpTo`: seconds to wait for VoiceOver's process after opening it, for a caller about to exit (the quit), so
+    /// TurnOver doesn't go before VoiceOver has come (the same review). Polled, as turnVoiceOverOn waits.
+    nonisolated static func bringVoiceOverBack(_ why: String, waitUpTo: Double = 0) {
+        if voiceOverReading { return }
+        if NSWorkspace.shared.isVoiceOverEnabled {
+            Log.info("\(why): VoiceOver's flag is on but it isn't running; starting it")
+            NSWorkspace.shared.openApplication(at: URL(fileURLWithPath: "/System/Library/CoreServices/VoiceOver.app"), configuration: NSWorkspace.OpenConfiguration()) { _, error in
+                if let error { Log.error("\(why): VoiceOver didn't open: \(error.localizedDescription)") }
+            }
+            let end = Date().addingTimeInterval(waitUpTo)
+            while Date() < end, !voiceOverRunning { usleep(100_000) }
+            if waitUpTo > 0 { Log.info("\(why): VoiceOver \(voiceOverRunning ? "running" : "still not running after \(Int(waitUpTo)) s")") }
+        } else {
+            Log.info("\(why): turning VoiceOver on")
+            postToggle()
+        }
+    }
+
     nonisolated static func postToggle() {
         let s = toggleShortcut()
         let src = CGEventSource(stateID: .hidSystemState)

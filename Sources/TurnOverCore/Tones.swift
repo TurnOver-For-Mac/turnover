@@ -4,11 +4,10 @@
 import Foundation
 
 public enum Tones {
-    /// Coexisting, TurnOver's own tones and bells are off: VoiceOver's sounds (its own, and its files played by
-    /// TurnOver) are the sounds (17 Oct 2026: "turn off TurnOver's sounds").
-    /// The sounds setting (17 Oct 2026): TurnOver's own tones when "TurnOver's" is chosen; otherwise VoiceOver's
-    /// files (VoiceOverSounds), and TurnOver's tones only where VoiceOver has no sound and VoiceOver is off.
-    static var own: Bool { config.general.effectiveSounds == "turnover" || !Coexist.on }
+    /// TurnOver's own tones and bells play (VoiceOver is off where TurnOver reads). The sounds setting (17 Oct 2026)
+    /// chooses only where VoiceOver has a sound of its own: its file (VoiceOverSounds) unless "TurnOver's" is chosen.
+    /// (Off only with CoExist, removed on 24 Oct 2026.)
+    static var own: Bool { true }
     /// One of TurnOver's own sounds (TurnOverSounds) where TurnOver plays its own: false leaves the old tone to play.
     /// `ifChosen`: VoiceOver has its own sound for this, so only when TurnOver's sounds are chosen.
     private static func fresh(_ name: String, ifChosen: Bool = false) -> Bool {
@@ -33,13 +32,9 @@ public enum Tones {
     /// The caret could not leave the line or the document (NVDA re-reads the line; a bump is kinder).
     /// Also felt on the trackpad while trackpad control is on (Trackpad sets it).
     nonisolated(unsafe) public static var onEdge: (@MainActor () -> Void)?
-    /// Coexisting, VoiceOver's own boundary sound plays (it sees the key TurnOver sends on), so TurnOver's tone is
-    /// silent there: both played at a boundary in Word (17 Oct 2026: "we should be using VoiceOver sounds").
-    /// `keySent`: the key went on to the app, so VoiceOver's own boundary sound plays and TurnOver's stays silent;
-    /// otherwise, coexisting, VoiceOver's boundary file (a list's end in Messages was silent, 17 Oct 2026).
+    /// `keySent`: the key went on to the app (kept for callers; it mattered only while VoiceOver ran alongside).
     public static func edge(keySent: Bool = false) {
-        if !Coexist.on { if !fresh("edge") { beep(220, 50, volume: 0.2) } }
-        else if !keySent { _ = voiceOver("WrapBoundary.aiff") }
+        if !fresh("edge") { beep(220, 50, volume: 0.2) }
         onEdge?()
     }
     /// Taking over from VoiceOver: two bell notes a fifth apart, rising (G5, D6). Handing back: the same falling.

@@ -115,22 +115,12 @@ final class MenuAnywhere {
     /// Who reads at this moment, as the layer key found it: VoiceOver, unless TurnOver was already leading (switch
     /// reader goes the other way; every path asks this, the code review, 13 Oct 2026).
     var turnOverActive: () -> Bool = { false }
-    var voiceOverWasReading: Bool { steppedIn || (Coexist.on ? !turnOverActive() : NSWorkspace.shared.isVoiceOverEnabled) }
+    var voiceOverWasReading: Bool { steppedIn || NSWorkspace.shared.isVoiceOverEnabled }
 
     /// Command Control Comma: "TurnOver", then a letter. Where VoiceOver leads, TurnOver steps in for it, and hands back
     /// when the job is done (12 Oct 2026).
     func layer() {
         Log.io("input layer key Command Control Comma")
-        // Coexisting (VoiceOver silenced by the tap where TurnOver reads): the layer as everywhere else, "TurnOver" then a
-        // letter (18 Oct 2026: "it's going straight to the menu"); where VoiceOver leads, the letters are claimed
-        // for 3 s.
-        if Coexist.on {
-            if turnOverActive() { steppedIn = false; listen(); return }
-            Log.info("layer key where VoiceOver leads: the letters claimed for 3 s")
-            Self.say("TurnOver", tone: true)
-            claimLetters()
-            return
-        }
         if Core.active { steppedIn = false; listen(); return }
         // Where VoiceOver leads, TurnOver's keys aren't listening yet, and stepping in takes a moment: a letter pressed
         // at once went to the app (Calculator, 12 Oct 2026). So the layer's letters are claimed for three seconds

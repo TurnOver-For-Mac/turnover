@@ -3,8 +3,7 @@
 // prompt for an administrator. They are drawn by agents (coreautha, SecurityAgent) that never become the active
 // application, so TurnOver never looked at them and they went unspoken (3 Oct 2026; VoiceOver reads them).
 // While TurnOver leads, a prompt's text is read when it appears and the focus goes into it (its buttons, its
-// password field); when it goes, the focus goes back to the application. With CoExist, a prompt is VoiceOver's:
-// TurnOver steps aside while it is open (onPromptChange) and comes back after.
+// password field); when it goes, the focus goes back to the application.
 import Foundation
 import AppKit
 import ApplicationServices
@@ -38,11 +37,6 @@ public final class SystemPrompts {
     }
     private var timer: Timer?
     private var shown: [AXUIElement] = []
-    /// With VoiceOver running (CoExist), macOS's own prompts are VoiceOver's entirely (18 Oct 2026: VoiceOver
-    /// "could take over in higher security dialogues, which keeps TurnOver more secure"): TurnOver neither reads them
-    /// nor takes their keys. The app is told when the first opens (true) and the last closes (false), and steps aside.
-    public var onPromptChange: ((Bool) -> Void)?
-    public var handsToVoiceOver: Bool { Coexist.on && NSWorkspace.shared.isVoiceOverEnabled && onPromptChange != nil }
     /// What each prompt said first, for the reminder and the application chooser.
     private var summaries: [(window: AXUIElement, pid: pid_t, text: String)] = []
 
@@ -86,19 +80,10 @@ public final class SystemPrompts {
         summaries.removeAll { p in !shown.contains { $0.isSame(p.window) } }
         if gone, shown.isEmpty, let front = NSWorkspace.shared.frontmostApplication {
             Log.io("system prompt closed; focus back to \(front.localizedName ?? "?")")
-            if handsToVoiceOver { onPromptChange?(false) }
             AXHandler.shared.refocus(pid: front.processIdentifier)
         }
         for (w, pid) in windows where !shown.contains(where: { $0.isSame(w) }) {
-            let first = shown.isEmpty
             shown.append(w)
-            if handsToVoiceOver {
-                // VoiceOver's: the prompt is given the keyboard (its window can open without it) and TurnOver steps aside.
-                Log.io("system prompt from pid \(pid): VoiceOver's")
-                if first { onPromptChange?(true) }
-                if let f = AXUIElementCreateApplication(pid).element(kAXFocusedUIElementAttribute) { giveKeyboard(to: f) }
-                continue
-            }
             announce(w, pid: pid)
         }
     }
@@ -106,7 +91,6 @@ public final class SystemPrompts {
     /// The agent came to the front: read its window now (the regular look comes every half second, after the focus
     /// had already been read).
     func announceFront(pid: pid_t) {
-        if handsToVoiceOver { return }
         let ax = AXUIElementCreateApplication(pid)
         guard let w = ax.element(kAXFocusedWindowAttribute) ?? ax.elements(kAXWindowsAttribute).first else { return }
         if shown.contains(where: { $0.isSame(w) }), Date().timeIntervalSince(lastAnnounced) < 2 { return }

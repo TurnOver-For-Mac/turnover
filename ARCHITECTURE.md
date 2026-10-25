@@ -1,11 +1,9 @@
 # TurnOver's shape (17 Oct 2026)
 
 TurnOver is a patch for VoiceOver: a second screen reader for the Mac, NVDA's design rebuilt in Swift 6 (main-actor
-default isolation), that reads the apps VoiceOver reads badly and leaves the rest to VoiceOver. VoiceOver stays on
-the whole time (CoExist, on unless turned off: Coexist.swift): TurnOver takes the keys at the head of the HID event
-tap in the apps it reads and speaks there; VoiceOver is silenced in those apps at the sound level, by a Core Audio
-process tap in the open helper voiceover-quiet (VoiceOverTap.swift, 18 Oct 2026); password fields and macOS's own
-prompts are VoiceOver's. One app (18 Oct 2026): the full reader, its newer apps and features marked experimental (the
+default isolation), that reads the apps VoiceOver reads badly and leaves the rest to VoiceOver. One reader speaks
+at a time: TurnOver while it is on, VoiceOver while it is off (CoExist, VoiceOver running alongside and silenced by an
+audio tap, was removed on 24 Oct 2026; docs/DECISIONS.md). One app (18 Oct 2026): the full reader, its newer apps and features marked experimental (the
 smaller Standard edition of 15 to 18 Oct is gone from the code). The NVDA source in
 `reference/nvda` is still the specification where TurnOver has an NVDA counterpart.
 
@@ -17,7 +15,7 @@ notes explain its rules. Read it top to bottom once; then PATTERNS.md for how Ma
 | Target | What it is |
 |---|---|
 | `TurnOverCore` (libTurnOverCore.dylib) | Everything that reads: objects, text, speech, browse mode, app modules, views, plugins, settings. 30,000 lines. |
-| `TurnOver` (the app) | What is Mac-specific and stays: the key tap, who leads (LeadWatcher), VoiceOver's silencing (VoiceOverTap and its helper), the export through VoiceOver Utility (ActivityFlow), the watchdog, the menu-bar item, the Command Control Comma menu (MenuAnywhere), the updater, the uninstaller. |
+| `TurnOver` (the app) | What is Mac-specific and stays: the key tap, who leads (LeadWatcher), the export through VoiceOver Utility (ActivityFlow), the watchdog, the menu-bar item, the Command Control Comma menu (MenuAnywhere), the updater, the uninstaller. |
 | `TurnOverSpeech` | The audio engine: AVSpeechSynthesizer as a renderer, our own player for cancellation, volume, pitch and device changes. |
 | `TurnOverAX` | A thin wrapper over HIServices with timeouts, health and call counting (`AXHealth`, `AXStats`). |
 | `TurnOverKey` | The login-item helper: Command Control Period starts and quits TurnOver. Needs no permissions. |
@@ -30,11 +28,10 @@ These five decide whether anyone is speaking. Each has a named rule, and since 1
 
 | Mechanism | Files | Rule | Test |
 |---|---|---|---|
-| **Who leads** | `TurnOver/LeadWatcher.swift`, `TurnOverCore/LeadPolicy.swift` | `LeadPolicy.leads`: the product leads in its tuned apps and games, each unless given to VoiceOver by hand (the menu's This app, saved). LeadWatcher gathers the inputs, waits out secure input, and switches TurnOver active and inactive; VoiceOver is never toggled, except for a game (the Steam exception). | `PolicyTests: lead policy` (a table) |
-| **The control channel** | `TurnOverControl/ControlChannel.swift`, `TurnOverCore/SettingsBridge.swift` | A Unix socket in TurnOver's folder (mode 600); each connecting process checked by its audit token against "signed through Apple, TurnOver's Team ID" before a line is read. JSON lines: subscribe, ask, patch (Settings), toggle (Key), try (plugin tool), say (Windy). | tested by hand, 18 Oct 2026 (an unsigned client refused) |
-| **VoiceOver silenced** | `TurnOver/VoiceOverTap.swift`, `Helpers/voiceover-quiet` (open, MIT), `TurnOverCore/Coexist.swift` | A Core Audio process tap on VoiceOver, set to mute, in a separate helper: "on" and "off" down a pipe, "still" every second (3 s without it and VoiceOver is heard); the pipe closing ends it. The Activity way (16 to 18 Oct) is gone; `ActivityFlow` and `VoiceOverActivity` remain to take an old Activity out once, and for Copy VoiceOver settings' export. | `PolicyTests: VoiceOver Activity` (an archive, and a real export) |
+| **Who leads** | `TurnOver/LeadWatcher.swift`, `TurnOverCore/LeadPolicy.swift` | `LeadPolicy.leads`: the product leads in its tuned apps and games, each unless given to VoiceOver by hand (the menu's This app, saved). LeadWatcher gathers the inputs, waits out secure input, and switches TurnOver active and inactive; VoiceOver is toggled off as TurnOver takes the app and on as it hands back (the swap setting). | `PolicyTests: lead policy` (a table) |
+| **The control channel** | `TurnOverControl/ControlChannel.swift`, `TurnOverCore/SettingsBridge.swift` | A Unix socket in TurnOver's folder (mode 600); each connecting process checked by its audit token against "signed through Apple, TurnOver's Team ID" before a line is read. JSON lines: subscribe, ask, patch (Settings), try (plugin tool), say (Windy). | tested by hand, 18 Oct 2026 (an unsigned client refused) |
 | **The key tap** | `TurnOver/KeyboardHandler.swift`, `TurnOverCore/InputManager.swift`, `ScriptHandler.swift`, `KeySettings.swift` | A session tap on its own thread; the decision (script or pass) is made on main within 150 ms, late answers replayed in order; the tap never touches settings (a snapshot per key). Stopped first on both quit paths (`TurnOverApp.shutDown`). | `PureTests: keys: the keyboard thread's question` |
-| **The watchdog** | `TurnOver/Watchdog.swift`, the start deadline in `TurnOverApp.swift` | Main stalled 4 s: keys through, and the system's own `say` tells the user; 24 s: relaunch. Watched always while coexisting. A start not finished in 20 s ends itself (the Key helper restarts it); three in five minutes are told and stop. | none |
+| **The watchdog** | `TurnOver/Watchdog.swift`, the start deadline in `TurnOverApp.swift` | Main stalled 4 s: keys through and VoiceOver turned on; 24 s: relaunch. A start not finished in 20 s ends itself (the Key helper restarts it); three in five minutes are told and stop. | none |
 | **The caret wait** | `TurnOverCore/EditableText.swift` (`EditableText.caretMovement`) | Send the key on with TurnOver's marker, wait for the caret (events within 60 ms, polling to 100 ms), speak the unit. | `textedit-guide` fixture (reading), none for the wait |
 
 ## How a key becomes speech

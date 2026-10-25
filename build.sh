@@ -77,11 +77,11 @@ for arch in $(lipo -archs "$BIN/libTurnOverCore.dylib"); do
   strings -arch "$arch" "$BIN/libTurnOverCore.dylib" | grep -q "^$MARKER$" || { echo "STOP: the $arch slice of the core has no $MARKER"; exit 1; }
 done
 
-# TurnOver's helper programs: Steam speech (14 Oct 2026), Trackpad gestures and VoiceOver quiet, in Helpers/. Each
+# TurnOver's helper programs: Steam speech (14 Oct 2026) and Trackpad gestures, in Helpers/. Each
 # built, its self-test run, carried in the bundle and signed with TurnOver. A release build stops without them.
 HELPERSRC="$(cd "$(dirname "$0")" && pwd)/Helpers"
 HELPERBINS=()
-for H in steam-speech trackpad-gestures voiceover-quiet; do
+for H in steam-speech trackpad-gestures; do
   SRC="$HELPERSRC/$H"
   if [ ! -f "$SRC/Package.swift" ]; then
     [ "$TURNOVER_UNIVERSAL" = 1 ] && { echo "STOP: $SRC is missing: a build for testers needs it"; exit 1; }
@@ -94,7 +94,7 @@ for H in steam-speech trackpad-gestures voiceover-quiet; do
   BINH="$SB/release/$H"
   if [ "$TURNOVER_UNIVERSAL" = 1 ]; then
     rm -f "$SB-x86_64/release/$H"
-    # The helper's own lowest macOS: voiceover-quiet needs 14.2 (process taps), which TurnOver checks before starting it.
+    # The helper's own lowest macOS, from its Package.swift.
     MINOS=$(grep -o 'macOS("[0-9.]*")' "$SRC/Package.swift" | grep -o '[0-9.]*' | head -1); MINOS=${MINOS:-14.0}
     swift build -c release --package-path "$SRC" --scratch-path "$SB-x86_64" --triple x86_64-apple-macosx$MINOS 2>&1 | grep -E "error:" || true
     [ -x "$SB-x86_64/release/$H" ] || { echo "Intel build of $H failed"; exit 1; }
@@ -187,7 +187,7 @@ for f in "$SPK/XPCServices/Installer.xpc" "$SPK/XPCServices/Downloader.xpc" "$SP
 done
 sign --force --sign "$IDENTITY" --identifier com.turnover.core "$APP/Contents/Frameworks/libTurnOverCore.dylib"
 [ -f "$APP/Contents/MacOS/turnover-plugin" ] && sign --force --sign "$IDENTITY" --identifier com.turnover.plugin-tool "$APP/Contents/MacOS/turnover-plugin"
-for h in steam-speech trackpad-gestures voiceover-quiet; do [ -f "$APP/Contents/Helpers/$h" ] && sign --force --sign "$IDENTITY" --identifier "com.turnover.$h" "$APP/Contents/Helpers/$h"; done
+for h in steam-speech trackpad-gestures; do [ -f "$APP/Contents/Helpers/$h" ] && sign --force --sign "$IDENTITY" --identifier "com.turnover.$h" "$APP/Contents/Helpers/$h"; done
 sign --force --sign "$IDENTITY" --identifier "$BUNDLEID" "$APP"
 
 # Never install a TurnOver macOS will not trust: it would come up with no permissions and no speech.

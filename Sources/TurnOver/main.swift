@@ -81,34 +81,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// The first time TurnOver runs (or the first time after 1.0): short pages, each with a heading, Next and Back, so
-    /// it can be taken in a piece at a time (12 Oct 2026: "one long list"). Ordinary alerts, so VoiceOver
-    /// (still running) reads each one.
+    /// it can be taken in a piece at a time (12 Oct 2026: "one long list"). Ordinary alerts, read by VoiceOver, since
+    /// TurnOver starts reading only once they close.
     private func welcomeOnFirstRun() {
-        // Coexisting, VoiceOver must be on for the welcome and for every app TurnOver doesn't read (the code review, 17 Oct 2026).
-        if Coexist.on, !NSWorkspace.shared.isVoiceOverEnabled { Log.info("welcome: VoiceOver is off; turning it on first"); HandOver.turnVoiceOverOn() }
         let key = "welcomed-\(Edition.version)"
         let versionWelcomed = UserDefaults.standard.bool(forKey: key)
         // Nothing new: no version welcome due, and this build's pages already seen.
         guard !versionWelcomed || NewToTry.pagesDue else { return }
+        // VoiceOver on for the pages, or nobody reads them (a code review, 17 Oct 2026; again on 24 Oct, when CoExist
+        // went). TurnOver's own launch hand-over turns it off after, by the swap setting.
+        // VoiceOver's flag can stay on with VoiceOver gone (quit by script, or crashed): then it is started, since the
+        // toggle would turn the flag off (the test machine, 24 Oct 2026: the welcome open, and nobody speaking).
+        if !HandOver.voiceOverReading {
+            if NSWorkspace.shared.isVoiceOverEnabled {
+                Log.info("welcome: VoiceOver's flag is on but it isn't running; starting it first")
+                NSWorkspace.shared.openApplication(at: URL(fileURLWithPath: "/System/Library/CoreServices/VoiceOver.app"), configuration: NSWorkspace.OpenConfiguration()) { _, _ in }
+            } else {
+                Log.info("welcome: VoiceOver is off; turning it on first")
+                HandOver.turnVoiceOverOn()
+            }
+        }
         // macOS 27 renamed Accessibility in Privacy and Security to Device Control and Data Access.
         let accessName = ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 27 ? "Device Control and Data Access" : "Accessibility"
         let updated = UserDefaults.standard.bool(forKey: "welcomed-1.0") || versionWelcomed
         // One page for the keys when the version changes (it was four, of nineteen: "a bit much").
         let keysPages: [(String, String)] = [
             ("Keys in \(Edition.version)",
-             "The VO keys do what they do in VoiceOver. TurnOver's own menu, in any app: Command Control Comma. There: this app, every key, the copy of your VoiceOver settings, feedback, and quit.\n\nCommand Control Period turns TurnOver off and on. VoiceOver stays running throughout."),
+             "TurnOver is a full screen reader now: while it is on, it reads everything and VoiceOver is off. Command Control Period starts it and quits it.\n\nThe keys are VoiceOver's, NVDA's or JAWS's: Command Control Comma, then K, changes the style. Command Control M opens the TurnOver menu; Command Control Comma, then S, the Settings window."),
         ]
         let firstRunPages: [(String, String)] = [
             ("Welcome to TurnOver \(Edition.version)",
-             "TurnOver is a second screen reader that works alongside VoiceOver. These few pages explain the start. Next and Back move between them."),
-            ("Where TurnOver reads",
-             "VoiceOver stays on. In TurnOver's apps, such as Mail, Safari, Messages, Word, Excel, Notes and Steam, TurnOver reads and VoiceOver is quiet; everywhere else VoiceOver reads as usual. You never choose: TurnOver says its name as one of its apps comes to the front."),
+             "TurnOver is a screen reader for the Mac. It reads every app, with its own voice and the keys you already know. These few pages explain the start. Next and Back move between them."),
+            ("TurnOver takes over",
+             "While TurnOver is on, it reads everything and VoiceOver is off. TurnOver turns VoiceOver off as it starts and back on as it quits, so you are never without speech. To change that, Settings, Screen reader behaviour."),
             ("Two permissions",
              "Next, TurnOver needs two permissions, \(accessName) and Input Monitoring. macOS asks for the first. For the second, if no question appears, TurnOver shows you where to turn it on. Both are in System Settings, Privacy and Security."),
             ("Keys",
-             "The VO keys do what they do in VoiceOver. TurnOver's own menu, in any app: Command Control Comma. There: this app (VoiceOver or TurnOver reads it), every key, the copy of your VoiceOver settings so the voice is the same, feedback, and quit."),
+             "Choose the keys you know: VoiceOver's, NVDA's or JAWS's. Command Control Comma, then K, changes the style; the VO keys do what they do in VoiceOver. Command Control M opens the TurnOver menu. Every setting is in the Settings window: Command Control Comma, then S. To bring your VoiceOver voice and speed with you: Command Control Comma, then V."),
             ("Starting, quitting and help",
-             "Command Control Period turns TurnOver off and on from anywhere; VoiceOver keeps running either way. If TurnOver ever stops responding, VoiceOver has every app within a few seconds. To report a problem, use Send feedback in the TurnOver menu."),
+             "Command Control Period starts TurnOver and quits it, from anywhere. If TurnOver ever stops responding, VoiceOver comes on within a few seconds and TurnOver starts again. Command Control Comma, then H, opens the guides. To report a problem, use Send feedback in the TurnOver menu."),
         ]
         // An update: the version's pages (keys that moved, once per version), then this build's new things and what
         // to test. A first install: the first-run pages, and this build's are marked seen.
@@ -192,14 +203,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Core.stop()
         Watchdog.shared.active = false   // (or it could post a second toggle while VoiceOver was still starting, 8 Oct 2026)
         Log.info("terminating")
+        AppDelegate.voiceOverOnAtQuit.value = config.applications.voiceOverOnAtQuit
         AppDelegate.giveBackToVoiceOver()
     }
 
-    /// VoiceOver on as TurnOver goes, unless this is a restart (an update installing: build.sh leaves a flag).
+    /// VoiceOver on as TurnOver goes, unless this is a restart (an update installing: build.sh leaves a flag) or its
+    /// setting is off (Screen reader behaviour).
+    /// The setting, copied on main as TurnOver goes: this runs off main on a signal, where main may be stuck. Left
+    /// at on when main never answers, so a stuck TurnOver still leaves speech behind.
+    nonisolated static let voiceOverOnAtQuit = Locked(true)
     nonisolated static func giveBackToVoiceOver() {
         let flag = AppPaths.file("restarting")
         if FileManager.default.fileExists(atPath: flag.path) { try? FileManager.default.removeItem(at: flag); Log.info("restart: VoiceOver left as it is"); return }
-        guard !NSWorkspace.shared.isVoiceOverEnabled else { return }
+        guard !HandOver.voiceOverReading else { return }
+        guard voiceOverOnAtQuit.value else { Log.info("quitting: VoiceOver left off (its setting)"); return }
+        // macOS's flag can stay on with VoiceOver gone (quit by script, or crashed): then it is started, not toggled,
+        // or the toggle turns the flag off and nobody speaks (a code review, 25 Oct 2026).
+        if NSWorkspace.shared.isVoiceOverEnabled { HandOver.bringVoiceOverBack("quitting", waitUpTo: 4); return }
         Log.info("quitting: turning VoiceOver on")
         HandOver.turnVoiceOverOn()
     }
@@ -269,12 +289,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // may be stuck: that is why this handler isn't on main (a code review, 14 Oct 2026: it ran
             // main-actor code on its global queue).
             let done = DispatchSemaphore(value: 0)
-            DispatchQueue.main.async { MainActor.assumeIsolated { ScreenCurtain.off(); delegate.app?.shutDown(); Core.stop() }; done.signal() }
+            DispatchQueue.main.async { MainActor.assumeIsolated { AppDelegate.voiceOverOnAtQuit.value = config.applications.voiceOverOnAtQuit; ScreenCurtain.off(); delegate.app?.shutDown(); Core.stop() }; done.signal() }
             if done.wait(timeout: .now() + 1.5) == .timedOut {
                 CGDisplayRestoreColorSyncSettings()   // the curtain's own undo, without main
                 Log.warning("stopped from outside: the main thread didn't answer; the displays restored directly")
             }
             Watchdog.shared.active = false
+            // VoiceOver left off on purpose: the Key helper is told this was a quit, or it would start TurnOver
+            // again (Codex review, 23 Oct 2026). A restart keeps its flag and the helper's recovery.
+            if !AppDelegate.voiceOverOnAtQuit.value, !FileManager.default.fileExists(atPath: AppPaths.file("restarting").path) {
+                DistributedNotificationCenter.default().postNotificationName(Notification.Name("com.turnover.quitting"), object: nil, userInfo: nil, deliverImmediately: true)
+            }
             AppDelegate.giveBackToVoiceOver()
             exit(0)
         }

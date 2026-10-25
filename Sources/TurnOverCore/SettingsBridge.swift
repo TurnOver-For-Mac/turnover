@@ -4,7 +4,7 @@
 // itself would wait on its own main thread.) The app never writes the settings file: it sends each change here as a
 // patch, part of the settings file's JSON ({"speech": {"rate": 0.6}}), TurnOver merges it into its settings, saves,
 // puts it into effect, and answers with the whole settings so the app shows what is really set.
-// A few settings live outside the file (the say all voice, CoExist): their patches start with "_".
+// A few settings live outside the file (the say all voice): their patches start with "_".
 // The talk goes through TurnOver's control channel (TurnOverControl), which only programs signed by TurnOver's own
 // developer may use: before a code review on 18 Oct 2026 it was distributed notifications, which any program could
 // post (and change TurnOver's settings with) or hear (and read them all).
@@ -15,8 +15,6 @@ import TurnOverSpeech
 
 public enum SettingsBridge {
     private static var started = false
-    /// Restart TurnOver (set by the app): CoExist changes need it.
-    public static var restart: (() -> Void)?
 
     /// The control channel up, and the settings' ops on it: "subscribe" (Settings opening: the settings now, and
     /// every change after), "ask" (the settings now), "patch" (a change).
@@ -44,7 +42,6 @@ public enum SettingsBridge {
         dict["_kokoroMode"] = KokoroVoice.mode
         dict["_kokoroVoice"] = KokoroVoice.voice
         dict["_kokoroSpeed"] = KokoroVoice.speed
-        dict["_coexist"] = Coexist.wouldBeOn
         dict["_outputDevices"] = SpeechPlayer.outputDevices().map { ["uid": $0.uid, "name": $0.name] }
         dict["_speechPortApps"] = SpeechPort.shared.appDecisions.map { ["id": $0.id, "name": $0.name, "allowed": $0.allowed] }
         dict["_otherLanguages"] = Languages.otherLanguages().map { language in
@@ -62,13 +59,6 @@ public enum SettingsBridge {
         if let v = patch["_kokoroVoice"] as? String, KokoroVoice.englishVoices.contains(v) { KokoroVoice.voice = v; KokoroVoice.mode = "reading"; KokoroVoice.preview(v) }
         if let s = patch["_kokoroSpeed"] as? Double { KokoroVoice.speed = min(2, max(0.6, s)) }
         if let a = patch["_speechPortAllowed"] as? [String: Any], let id = a["id"] as? String, let on = a["allowed"] as? Bool { SpeechPort.shared.setAllowed(id, on) }
-        if let on = patch["_coexist"] as? Bool, on != Coexist.wouldBeOn {
-            UserDefaults.standard.set(on, forKey: "coexist")
-            Speech.speakMessage(on ? "CoExist on. TurnOver restarts." : "CoExist off. TurnOver restarts.")
-            Log.info("settings app: CoExist \(on ? "on" : "off"); restarting")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { (restart ?? TurnOverMenu.shared.relaunch)?() }
-            return
-        }
         // The file's settings: merged section by section, then read back through Config, so a value of the wrong kind
         // is simply left as it was.
         let filePatch = patch.filter { !$0.key.hasPrefix("_") }

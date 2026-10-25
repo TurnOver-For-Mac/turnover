@@ -110,9 +110,9 @@ final class LeadWatcher {
     }
 
     /// Does TurnOver lead in this application?
-    /// TurnOver off by Command Control Period while coexisting: still running, VoiceOver has every app.
+    /// TurnOver quitting from its menu (quitRestoringVoiceOver): it takes no app back on the way out.
     var suspended = false
-    /// VoiceOver turned on by hand while TurnOver read (not coexisting): TurnOver stepped back by the swap setting and
+    /// VoiceOver turned on by hand while TurnOver read: TurnOver stepped back by the swap setting and
     /// does not take the next app by itself. Cleared when VoiceOver goes off or TurnOver is turned on by its key.
     var yieldedToVoiceOverByHand = false
     /// Without readers per app, TurnOver takes the app in front once: at launch, and again once Input Monitoring is
@@ -127,10 +127,7 @@ final class LeadWatcher {
         if bundle == "com.turnover.settings" { return !suspended }
         // VoiceOver Utility is VoiceOver's own: TurnOver taking it muted VoiceOver for every app sharing its mute
         // (18 Oct 2026).
-        if bundle == "com.apple.VoiceOverUtility" { return !HandOver.voiceOverReading && Coexist.on }
-        // Coexisting with VoiceOver off (turned off by hand, not yet back on, or quit with the flag left on): nobody else is reading, so TurnOver
-        // reads every app until VoiceOver is on again; "VoiceOver reads it" was silence (19 Oct 2026, the update path).
-        if Coexist.on, !HandOver.voiceOverReading { return true }
+        if bundle == "com.apple.VoiceOverUtility" { return false }
         // Without Input Monitoring TurnOver cannot take its keys: leading would leave a reader that cannot be driven.
         // VoiceOver keeps every application until it is granted (E11, 4 Oct 2026).
         guard InputAccess.granted else {
@@ -146,39 +143,11 @@ final class LeadWatcher {
                                       inVoiceOverList: config.applications.effectiveVoiceOverBundles.contains(bundle), inLeadList: config.applications.leadBundles.contains(bundle)))
     }
 
-    /// The game VoiceOver was turned off for, and when: VoiceOver's quit hands the front to the app it was started
-    /// over (Finder, after a visit there), two seconds into Big Picture, with no key pressed. That is "it slides off
-    /// the app" (16-17 Oct 2026): the game is put back in front.
-    private var gameAtToggle: NSRunningApplication?
-    private var gameToggleAt = Date.distantPast
-
     func look(at app: NSRunningApplication) { appActivated(app) }
     private func appActivated(_ app: NSRunningApplication) {
-        if Coexist.on, let game = gameAtToggle, !game.isTerminated, Date().timeIntervalSince(gameToggleAt) < 6,
-           app.processIdentifier != game.processIdentifier, !Games.leads(app.bundleIdentifier ?? ""),
-           InputManager.lastKeyDownAt < gameToggleAt {
-            Log.info("coexist: \(app.localizedName ?? "an app") came forward by itself after VoiceOver's quit; back to \(game.localizedName ?? "the game")")
-            Speech.cancel()   // not Finder's window, read in the moment before the game is back
-            game.activate()
-            return
-        }
-        // (Keys to the game's process alone, tried 16 Oct 2026: Command Tab went to Steam instead of the system, and
-        // the person was stuck in Big Picture. With VoiceOver off for the game there is nothing to keep keys from.)
-        KeyboardHandler.redirectPid = nil
-        KeyboardHandler.frontPid = app.processIdentifier
         // TurnOver's own windows (the update window, alerts) are VoiceOver's: TurnOver does not read itself. A menu-bar
         // app is not a regular one, so it is let through here by name; it went unread (5 Oct 2026, the update window).
         let own = app.bundleIdentifier == Bundle.main.bundleIdentifier
-        // Coexisting: a system prompt is another process (universalAccessAuthWarn's "Steam would like to control
-        // this Mac"), not a regular app, and VoiceOver reads it since no Activity covers it. TurnOver, still active
-        // from the app behind, read it too: two voices (16 Oct 2026). Here VoiceOver has every process that
-        // isn't one of TurnOver's apps, prompts included.
-        // (Steam's Big Picture is its helper, not a regular app, and TurnOver's: it was handed to VoiceOver here, so
-        // "it only works if VoiceOver is quit", 16 Oct 2026.)
-        if Coexist.on, NSWorkspace.shared.isVoiceOverEnabled, app.activationPolicy != .regular, !own, !Games.leads(app.bundleIdentifier ?? ""), turnOverActive() {
-            Log.info("coexist: \(app.localizedName ?? app.bundleIdentifier ?? "a process") in front is not a regular app; VoiceOver reads it")
-            onCoexistLead?(false); return
-        }
         // A direct app (Command Control Comma, D): its keys straight to it, TurnOver quiet; TurnOver must lead there, as
         // its key tap is what sends them. Any other app clears it.
         let directKey = InputManager.directKey(bundle: app.bundleIdentifier, name: app.localizedName)
@@ -192,7 +161,7 @@ final class LeadWatcher {
         // Not after VoiceOver was turned on by hand (the swap gave it the Mac): that choice stands until VoiceOver goes
         // off again or TurnOver is turned on by its own key (a second reviewer, 22 Oct 2026).
         // And never by turning VoiceOver off when the swap is off: then TurnOver's own key is the only way it comes on.
-        let mayTurnVoiceOverOff = Coexist.on || config.applications.swapWithVoiceOver
+        let mayTurnVoiceOverOff = config.applications.swapWithVoiceOver
         // And never while TurnOver is off by its own key (suspended): an app change then changes nothing.
         let firstTakeOver = !config.applications.perAppReaders && initialTakeOverPending && !suspended && !turnOverActive() && !yieldedToVoiceOverByHand && mayTurnVoiceOverOff
         guard config.applications.switchesAsAppsChange || firstTakeOver, app.activationPolicy == .regular || own,
@@ -206,13 +175,9 @@ final class LeadWatcher {
         // Locked or asleep: VoiceOver keeps the screen until it is unlocked.
         guard !locked else { return }
         let lead = shouldLead(bundle)
-        // Coexisting: who reads is whether TurnOver is active, since VoiceOver is always on.
-        let reading = Coexist.on ? turnOverActive() : !NSWorkspace.shared.isVoiceOverEnabled
+        let reading = !NSWorkspace.shared.isVoiceOverEnabled
         guard lead != reading else { return }   // already the right reader
-        // Coexisting there is no toggle to wait for: the guard gave 1.7 s of silence into a TurnOver app and 1.6 s of
-        // two voices out of one (a code review on 17 Oct 2026). It stays only while a game's VoiceOver toggle is under way.
-        let toggling = !Coexist.on || !NSWorkspace.shared.isVoiceOverEnabled || Games.leads(bundle)
-        guard !toggling || Date().timeIntervalSince(lastHandOverAt) > 1.5 else {
+        guard Date().timeIntervalSince(lastHandOverAt) > 1.5 else {
             // Not now, but not never: once the hand-over settles, look at whatever is in front then. Left alone for
             // good, VoiceOver stayed off in Claude (which TurnOver does not read) until the next switch (4 Oct 2026).
             Log.io("lead watcher: \(app.localizedName ?? bundle) activated during a hand-over; checking again when it settles")
@@ -231,25 +196,9 @@ final class LeadWatcher {
     /// the main thread: each wait is a short check repeated by timer (it used to hold the main thread for up to 2 s
     /// of sleeping and 8 s of nested run loop, events and scripts running inside it: E6 audit, 4 Oct 2026). A newer
     /// hand-over cancels the waits of an older one.
-    /// Coexisting: TurnOver's own active state, and the switch, from the app (no VoiceOver toggle).
+    /// TurnOver's own active state, from the app.
     var turnOverActive: () -> Bool = { false }
-    var onCoexistLead: ((Bool) -> Void)?
-    /// A reader choice for an app was saved: coexisting, the Activity's app list follows it (the app).
-    var onChoiceSaved: (() -> Void)?
     func handOver(voiceOverOn: Bool) {
-        if Coexist.on {
-            lastHandOverAt = Date()
-            // The Steam exception (16 Oct 2026, late: Finder kept coming forward under VoiceOver in Big
-            // Picture, keys or no keys): VoiceOver is turned off as a game TurnOver leads comes to the front, the old
-            // way, and on again as the next app does.
-            let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
-            let gameOff = !voiceOverOn && Games.leads(front)
-            let bringBack = voiceOverOn && !NSWorkspace.shared.isVoiceOverEnabled
-            if gameOff { gameAtToggle = NSWorkspace.shared.frontmostApplication; gameToggleAt = Date() }
-            onCoexistLead?(!voiceOverOn)
-            guard gameOff || bringBack else { Log.info("coexist: TurnOver \(voiceOverOn ? "steps back" : "takes the keys"); VoiceOver stays on"); return }
-            Log.info("coexist: the game exception: VoiceOver \(voiceOverOn ? "back on" : "off for the game")")
-        }
         Log.info("hand-over: asked for VoiceOver \(voiceOverOn ? "on" : "off")")
         if Uninstaller.running && !voiceOverOn { return }   // uninstalling: VoiceOver stays on
         if !voiceOverOn { ScreenCurtain.noteVoiceOverCurtain() }   // before VoiceOver goes, and its curtain with it
@@ -326,9 +275,7 @@ final class LeadWatcher {
         let end = Date().addingTimeInterval(4)
         func check() {
             guard generation == choiceGeneration else { return }
-            // Coexisting, VoiceOver never goes off: TurnOver reading is the sign. (Waiting for VoiceOver off, T from
-            // VoiceOver to TurnOver said nothing, while the other way said "VoiceOver leads in", 19 Oct 2026.)
-            if Coexist.on ? turnOverActive() : !NSWorkspace.shared.isVoiceOverEnabled {
+            if !NSWorkspace.shared.isVoiceOverEnabled {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
                     if generation == self?.choiceGeneration { Speech.speakMessage(text) }
                 }
@@ -347,9 +294,7 @@ final class LeadWatcher {
             if TurnOverMenu.shared.isOpen { self.settleReader(after: 0.3, generation: generation); return }
             let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
             let turnOver = self.shouldLead(front)
-            // Coexisting, VoiceOver is always on: who reads is TurnOver's own state. (Compared with VoiceOver's flag,
-            // T gave TextEdit to VoiceOver and nothing handed over; each T after said "VoiceOver's" again: 18 Oct 2026.)
-            let turnOverReading = Coexist.on ? self.turnOverActive() : !NSWorkspace.shared.isVoiceOverEnabled
+            let turnOverReading = !NSWorkspace.shared.isVoiceOverEnabled
             if turnOver != turnOverReading { self.handOver(voiceOverOn: !turnOver) }
         }
     }
@@ -446,14 +391,8 @@ final class LeadWatcher {
         if shouldLead(bundle) != toTurnOver { pins[bundle] = toTurnOver }   // a game, or a rule the list does not decide
         config.save()
         Log.info("switch reader: \(name) is now \(toTurnOver ? "TurnOver's" : "VoiceOver's") (saved)")
-        onChoiceSaved?()
         choiceGeneration += 1
-        if toTurnOver, Coexist.on {
-            // Said first, then the app, as "VoiceOver leads in" is: said once TurnOver was up, it came after the app's
-            // window, field and all, and wasn't heard (19 Oct 2026, twice).
-            Speech.speakMessage("TurnOver leads in \(name)")
-            settleReader(after: 1.0, generation: choiceGeneration)
-        } else if toTurnOver {
+        if toTurnOver {
             handOver(voiceOverOn: false)
             sayWhenTurnOverIsUp("TurnOver leads in \(name)", generation: choiceGeneration)
         } else {
@@ -465,9 +404,6 @@ final class LeadWatcher {
     /// The app in front to VoiceOver for some seconds, then back to TurnOver if it is still in front and still TurnOver's
     /// (Core.lendToVoiceOver: Excel builds its grid only for VoiceOver).
     func lend(seconds: TimeInterval) {
-        // Coexisting, VoiceOver is running all the time, so an app that builds its tree for VoiceOver already has it:
-        // no loan (it left the Activity covering Excel: silence; a code review on 17 Oct 2026).
-        if Coexist.on { Log.info("lead watcher: no loan while coexisting (VoiceOver is running)"); return }
         guard let app = NSWorkspace.shared.frontmostApplication, let b = app.bundleIdentifier, shouldLead(b) else { return }
         Log.info("lead watcher: lending \(app.localizedName ?? b) to VoiceOver for \(seconds) s")
         handOver(voiceOverOn: true)
@@ -480,9 +416,6 @@ final class LeadWatcher {
 
     /// The user pressed Caps+V: VoiceOver leads in this application from now on.
     func pinCurrentToVoiceOver() {
-        // Coexisting: the same as the switch, which saves the choice and takes the app out of the Activity (a pin
-        // alone left VoiceOver silenced there; a code review on 17 Oct 2026).
-        if Coexist.on { switchCurrent(toTurnOver: false); return }
         if let b = NSWorkspace.shared.frontmostApplication?.bundleIdentifier { pins[b] = false; Log.info("lead watcher: \(b) pinned to VoiceOver") }
         handOver(voiceOverOn: true)
     }

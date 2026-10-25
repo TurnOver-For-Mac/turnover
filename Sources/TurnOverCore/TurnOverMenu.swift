@@ -53,18 +53,8 @@ public final class TurnOverMenu {
     /// Whether TurnOver reads an app (the lead watcher's answer), and switching the app in front to the other reader.
     public var readsApp: ((String) -> Bool)?
     public var switchReader: (() -> Void)?
-    /// Quitting, the app's way (coexisting: VoiceOver gets its apps back first).
+    /// Quitting, the app's way (TurnOver steps back first).
     public var quit: (() -> Void)?
-    /// The coexist option: VoiceOver stays on and is silenced in the apps of the list, instead of being turned off
-    /// where TurnOver reads. Needs a restart.
-    public static func setCoexist(_ on: Bool) {
-        UserDefaults.standard.set(on, forKey: "coexist")
-        Speech.speakMessage(on ? "CoExist on. TurnOver restarts, then VoiceOver Utility opens and closes by itself to set VoiceOver up." : "CoExist off. TurnOver restarts, and VoiceOver's settings are put back.")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { TurnOverMenu.shared.relaunch?() }
-    }
-    /// Starts TurnOver again (set by the app): after a change of CoExist.
-    public var relaunch: (() -> Void)?
-    /// CoExist: VoiceOver's quiet list made again from the apps on the Mac now (set by the app). Nil without CoExist.
     /// The Screen Curtain setting changed: the app puts it into effect (the curtain lives in the app, not the core).
     public var onScreenCurtainChanged: (() -> Void)?
 
@@ -315,7 +305,7 @@ public final class TurnOverMenu {
         var items: [MenuItem] = []
         if let l = NewToTry.latest { items.append(MenuItem("What to test in build \(l.build)", .submenu { NewToTry.menuItems() })) }
         items.append(MenuItem("About TurnOver", .action {
-            Speech.speakMessage("TurnOver \(Edition.version), build \(Edition.build), a screen reader for the Mac. It reads the apps you give it under Tools\(Coexist.on ? "; with CoExist on, VoiceOver reads the rest" : ""). Feature requests and bug reports through GitHub.")
+            Speech.speakMessage("TurnOver \(Edition.version), build \(Edition.build), a screen reader for the Mac. It reads the apps you give it under Tools. Feature requests and bug reports through GitHub.")
         }))
         items.append(contentsOf: aboutItems)
         return items

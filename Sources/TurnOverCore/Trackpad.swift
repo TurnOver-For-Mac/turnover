@@ -78,8 +78,7 @@ public enum Trackpad {
 
     static func setControl(_ on: Bool, announce: Bool) {
         // Said as VoiceOver says it (17 Oct 2026: "trackpad commands on, trackpad commands off, as it does in VoiceOver").
-        // Coexisting, VoiceOver sees the same gesture and says it where it reads; TurnOver says it where it reads.
-        let say = announce && (!Coexist.on || Core.active)
+        let say = announce
         guard on != controlOn else { if say { Speech.speakMessage("trackpad commands \(on ? "on" : "off")") }; return }
         if on, helper?.isRunning != true { if announce { Speech.speakMessage("the trackpad can't be read now") }; return }
         controlOn = on
@@ -154,9 +153,8 @@ public enum Trackpad {
             setControl(line == "R cw", announce: true); return
         }
         guard controlOn else { return }
-        // VoiceOver reading this app: its own Trackpad Commander is there; TurnOver keeps out of it. Coexisting,
-        // VoiceOver is always on: TurnOver being active for the app in front is the test.
-        if Coexist.on ? !Core.active : NSWorkspace.shared.isVoiceOverEnabled { return }
+        // VoiceOver reading this app: its own Trackpad Commander is there; TurnOver keeps out of it.
+        if NSWorkspace.shared.isVoiceOverEnabled { return }
         // Each gesture in the log (not the exploring finger's moves): the Mail session of 19 Oct 2026 could only be
         // read back from the keys the gestures pressed.
         if !line.hasPrefix("E ") { Log.io("trackpad: \(line)") }
@@ -305,11 +303,11 @@ enum PointerHold {
     nonisolated(unsafe) static var voiceOverOn = false
     private static var voiceOverTimer: Timer?
     private static func watchVoiceOver() {
-        voiceOverOn = Coexist.on ? !Core.active : NSWorkspace.shared.isVoiceOverEnabled
+        voiceOverOn = NSWorkspace.shared.isVoiceOverEnabled
         voiceOverTimer?.invalidate()
         voiceOverTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
             MainActor.assumeIsolated {
-                let vo = Coexist.on ? !Core.active : NSWorkspace.shared.isVoiceOverEnabled   // coexisting: VoiceOver's trackpad where TurnOver isn't reading
+                let vo = NSWorkspace.shared.isVoiceOverEnabled
                 if vo != voiceOverOn { voiceOverOn = vo; CGAssociateMouseAndMouseCursorPosition(vo ? 1 : 0) }
             }
         }

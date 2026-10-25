@@ -1,13 +1,13 @@
 # TurnOver
 
-A screen reader for the Mac that works alongside VoiceOver.
+A screen reader for the Mac.
 
 Free and open source, made in spare time. If it helps you, [tip on Ko-fi](https://ko-fi.com/oliverkennett), no account
 needed. GitHub Sponsors is coming.
 
-VoiceOver stays on. TurnOver reads every app by default, with its own voice, and with the keys you already know:
-VoiceOver's in the Mac style, NVDA's in the Windows style. VoiceOver always handles passwords and macOS's own security
-prompts. Command Control Shift T gives the app in front back to VoiceOver whenever you'd rather it read.
+TurnOver is a full screen reader: it reads every app, with its own voice and the keys you already know, VoiceOver's,
+NVDA's or JAWS's. While it is on, VoiceOver is off; it turns VoiceOver off as it starts and back on as it quits, so
+you are never without speech. Command Control Period starts and quits it, if you want VoiceOver for something.
 
 Word was the reason it exists: writing in Microsoft Word on a Mac, with a screen reader that keeps up.
 
@@ -88,16 +88,16 @@ app without speaking; TESTING.md has the rest.
 
 ## Where TurnOver stands
 
-TurnOver is built to work **alongside VoiceOver**, not to replace it: VoiceOver stays on, handles passwords and
-macOS's own prompts, and reads any app you give back to it. That is a design choice, not a stopgap: it means a blind
-person is never without speech, and TurnOver can concentrate on the apps where it reads better.
+TurnOver is a **full replacement for VoiceOver**, from the first launch: one reader speaks at a time, as on every other
+platform. It began as a reader that ran alongside VoiceOver (CoExist), and that went on 24 October 2026: it was
+clever, but it confused things (discussion 46). You are still never without speech: VoiceOver comes back when TurnOver
+quits, and if TurnOver hangs. Switching between the two is one key, and how often you do it is up to you.
 
 TurnOver has its own settings (the Settings window, Command Control Comma then S). "Copy VoiceOver settings" is a
 one-time import of your voice, rate, pitch, verbosity and typing echo, so a new user starts where they were; it is not
 how settings are meant to be managed.
 
-Whether TurnOver should aim to stand entirely on its own is a fair question, and one for Discussions on this
-repository. The plans in docs/ say which decisions are settled and which are open.
+The plans in docs/ say which decisions are settled and which are open; docs/DECISIONS.md has this one.
 
 ## Finding your way around the code
 

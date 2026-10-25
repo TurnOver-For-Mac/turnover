@@ -24,6 +24,8 @@ func pureTests() {
         let off = decode("{\"leadMode\": \"everywhere\"}")
         expect(off.effectiveLeadMode, "everywhere"); expect(off.switchesAsAppsChange, false); expect(off.handsOverAtLaunch, true)
         expect(decode("{}").swapWithVoiceOver, true, "the swap with VoiceOver is on unless turned off")
+        expect(decode("{}").voiceOverOnAtQuit, true, "VoiceOver comes on at quit unless turned off")
+        expect(decode("{\"voiceOverOnAtQuit\": false}").voiceOverOnAtQuit, false, "the choice is kept")
     }
     test("finder: a list row is a folder by its Kind cell or the folder's dashes in Size") {
         expect(FinderRows.isFolderRow(cellTexts: ["Reports", "Today at 10:14", "--", "Folder"]), true)

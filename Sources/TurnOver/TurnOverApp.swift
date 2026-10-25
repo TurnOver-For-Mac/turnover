@@ -2,10 +2,9 @@
 // The app's coordinator: when the reader is on, the Mac-specific pieces, and the hand-over between TurnOver and
 // VoiceOver.
 //
-// With CoExist (the default since 18 Oct 2026) VoiceOver runs all the time: TurnOver is active in the apps it reads,
-// takes the keys there and keeps VoiceOver quiet (VoiceOverTap); everywhere else, in password fields and in macOS's
-// own prompts, it steps aside and VoiceOver is heard. Without CoExist, TurnOver is active exactly when VoiceOver is off
-// (option C, 30 Sep 2026): VoiceOver's own toggle is the hand-over in both directions.
+// TurnOver is active exactly when VoiceOver is off (option C, 30 Sep 2026): VoiceOver's own toggle is the hand-over in
+// both directions. (CoExist, VoiceOver running alongside and silenced by an audio tap, was removed on 24 Oct 2026:
+// Oliver, "it just confuses things"; one reader at a time, as on every other platform.)
 import Foundation
 import AppKit
 import IOKit.hid
@@ -100,71 +99,14 @@ final class TurnOverApp {
 
     func start() {
         lead.turnOverActive = { [weak self] in self?.active ?? false }
-        if Coexist.on {
-            // CoExist means VoiceOver running: off at start (an update from the old way, which turned it off), it's
-            // turned on, after a moment so the two don't start talking over each other (19 Oct 2026). Until it
-            // is, TurnOver reads every app.
-            if !NSWorkspace.shared.isVoiceOverEnabled {
-                Log.info("start: CoExist with VoiceOver off; turning VoiceOver on in 3 s")
-                DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 3) { HandOver.turnVoiceOverOn() }
-            } else if !HandOver.voiceOverRunning {
-                // The flag on with no VoiceOver (quit by script, or crashed): started now, not after the watchdog's 8 s.
-                Log.info("start: CoExist, VoiceOver's flag on but it isn't running; starting it in 3 s")
-                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                    guard NSWorkspace.shared.isVoiceOverEnabled, !HandOver.voiceOverRunning else { return }
-                    NSWorkspace.shared.openApplication(at: URL(fileURLWithPath: "/System/Library/CoreServices/VoiceOver.app"), configuration: NSWorkspace.OpenConfiguration()) { _, _ in }
-                }
-            }
-            startCoexist()
-            // A password field, anywhere (macOS's secure input on): VoiceOver's entirely, as macOS's own prompts are
-            // (18 Oct 2026: "voiceover has to remain on as I want it dealing with all security"). TurnOver
-            // steps aside, keys and all, and comes back when secure input goes off. Watched here, not by the
-            // reader's own watch, which stops while TurnOver is aside.
-            // A password field that doesn't turn secure input on (some apps' own fields) counts the same: TurnOver's
-            // focus on one steps it aside, and it comes back once the system's focus has left it (a code review on
-            // 18 Oct 2026: the guide promised VoiceOver in every password field).
-            secureTimer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { [weak self] _ in MainActor.assumeIsolated {
-                guard let self else { return }
-                let inPasswordField = self.active ? API.focusObject?.role == .passwordEdit
-                    : self.secureSteppedAside && Self.systemFocusIsPasswordField()
-                let on = IsSecureEventInputEnabled() || inPasswordField
-                guard on != self.secureWasOn else { return }
-                self.secureWasOn = on
-                // Only with VoiceOver on to take over: with it off, TurnOver keeps reading (it never echoes a secret field).
-                if on, self.active, NSWorkspace.shared.isVoiceOverEnabled {
-                    self.secureSteppedAside = true
-                    Log.info("secure input on: VoiceOver's; TurnOver steps aside")
-                    self.deactivate()
-                } else if !on, self.secureSteppedAside {
-                    self.secureSteppedAside = false
-                    Log.info("secure input off: TurnOver back if the app in front is its")
-                    if let front = NSWorkspace.shared.frontmostApplication { self.lead.look(at: front) }
-                }
-            } }
-        }
+        // An Activity left by a build before 18 Oct 2026 (the first CoExist) comes out, once: it keeps VoiceOver's speech
+        // off in the apps it lists.
+        removeOldActivity()
+        // The CoExist default of earlier builds, gone with it (24 Oct 2026).
+        UserDefaults.standard.removeObject(forKey: "coexist")
         TurnOverMenu.shared.quit = { [weak self] in self?.quitRestoringVoiceOver() ?? NSApp.terminate(nil) }
-        // macOS's prompts (passwords, Touch ID, "Allow") to VoiceOver while they're open; TurnOver back after.
-        if Coexist.on {
-            SystemPrompts.shared.onPromptChange = { [weak self] open in
-                guard let self else { return }
-                if open {
-                    guard self.active, NSWorkspace.shared.isVoiceOverEnabled else { return }
-                    self.promptSteppedAside = true
-                    Log.info("system prompt: VoiceOver's; TurnOver steps aside")
-                    self.deactivate()
-                } else if self.promptSteppedAside {
-                    self.promptSteppedAside = false
-                    Log.info("system prompt closed; TurnOver back if the app in front is its")
-                    if let front = NSWorkspace.shared.frontmostApplication { self.lead.look(at: front) }
-                }
-            }
-        }
-        lead.onCoexistLead = { [weak self] turnOver in if turnOver { self?.activate() } else { self?.deactivate() } }
         MenuAnywhere.shared.turnOverActive = { [weak self] in self?.active ?? false }
         Speech.player?.onQueueStuck = { seconds in Watchdog.shared.speechStuck(for: seconds) }
-        QuickNavWatch.shared.turnOverActive = { [weak self] in self?.active ?? false }
-        QuickNavWatch.shared.start()
-        ArrowQuickNav.startInStep()
         MenuAnywhere.shared.handOver = { [weak self] on in self?.lead.handOver(voiceOverOn: on) }
         MenuAnywhere.shared.shouldLead = { [weak self] b in self?.lead.shouldLead(b) ?? false }
         MenuAnywhere.shared.switchLead = { [weak self] to in self?.lead.switchCurrent(toTurnOver: to) }
@@ -185,16 +127,6 @@ final class TurnOverApp {
         TurnOverMenu.shared.leadModeChanged = { [weak self] in self?.lead.refreshAfterModeChange() }
         Core.lendToVoiceOver = { [weak self] s in self?.lead.lend(seconds: s) }
         MenuAnywhere.shared.register()
-        TurnOverMenu.shared.relaunch = {
-            let restart = {
-                Log.info("mode changed: restarting")
-                let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/open"); p.arguments = ["-n", Bundle.main.bundlePath]
-                try? FileManager.default.createDirectory(at: AppPaths.file("restarting").deletingLastPathComponent(), withIntermediateDirectories: true)
-                FileManager.default.createFile(atPath: AppPaths.file("restarting").path, contents: nil)
-                try? p.run(); Thread.sleep(forTimeInterval: 0.5); exit(0)
-            }
-            restart()
-        }
         ScreenRecognition.warmUp()
         WindowsRemap.watchFrontApp()
         GlobalCommands.onKeyboardStyleChanged = { [weak self] in
@@ -230,16 +162,16 @@ final class TurnOverApp {
         if NSWorkspace.shared.isVoiceOverEnabled { DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { Tones.startup() } }
         watchForInputMonitoring()
         // The front application at launch may already be one of TurnOver's.
-        // Not coexisting, the launch hand-over turns VoiceOver off: only with the swap on, else neither changes the other.
-        let launchMayTurnVoiceOverOff = Coexist.on || config.applications.swapWithVoiceOver
+        // The launch hand-over turns VoiceOver off: only with the swap on, else neither changes the other.
+        let launchMayTurnVoiceOverOff = config.applications.swapWithVoiceOver
         if let front = NSWorkspace.shared.frontmostApplication, let b = front.bundleIdentifier, config.applications.handsOverAtLaunch, launchMayTurnVoiceOverOff,
-           lead.shouldLead(b), NSWorkspace.shared.isVoiceOverEnabled || Coexist.on {
+           lead.shouldLead(b), NSWorkspace.shared.isVoiceOverEnabled {
             Log.info("start: \(b) is TurnOver's and VoiceOver is on; handing over in a second")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 Log.info("start: the hand-over step runs (self \(self == nil ? "gone" : "here"))")
                 self?.lead.handOver(voiceOverOn: false)
             }
-        } else if !Coexist.on, !config.applications.swapWithVoiceOver, !lead.suspended {
+        } else if !config.applications.swapWithVoiceOver, !lead.suspended {
             // Neither reader changes the other: TurnOver comes on as it starts, VoiceOver stays as it is (22 Oct 2026).
             Log.info("start: TurnOver on without a hand-over (the swap is off)")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in self?.activate() }
@@ -295,22 +227,14 @@ final class TurnOverApp {
     /// test that stopped VoiceOver by its process). Every 2 s: the flag on and no VoiceOver for four looks in a row
     /// (VoiceOver starting shows its process within a second or two), and TurnOver speaks.
     private var voiceOverOnChecks = 0
-    private var voiceOverWasReading = HandOver.voiceOverReading
     private func watchForVoiceOverGone() {
         voiceOverGoneTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
-                // Coexisting, VoiceOver's process coming or going under a flag that stays on sends no change notice:
-                // the app in front is looked at afresh when it does, so TurnOver reads it while VoiceOver isn't there.
-                let reading = HandOver.voiceOverReading
-                if Coexist.on, reading != self.voiceOverWasReading {
-                    self.voiceOverWasReading = reading
-                    if let front = NSWorkspace.shared.frontmostApplication { self.lead.look(at: front) }
-                }
                 // The other way round: VoiceOver on and running while TurnOver still leads. macOS's change notice never
                 // came for a tester (15 Oct 2026: he turned VoiceOver on by hand, TurnOver kept the keys, and
                 // only Activity Monitor could stop it). Two looks, 2 s apart, so a hand-over in progress isn't mistaken.
-                if !Coexist.on, NSWorkspace.shared.isVoiceOverEnabled, HandOver.voiceOverRunning, self.active {
+                if NSWorkspace.shared.isVoiceOverEnabled, HandOver.voiceOverRunning, self.active {
                     self.voiceOverOnChecks += 1
                     if self.voiceOverOnChecks >= 2 {
                         self.voiceOverOnChecks = 0
@@ -323,13 +247,6 @@ final class TurnOverApp {
                 guard NSWorkspace.shared.isVoiceOverEnabled, !HandOver.voiceOverRunning else { self.voiceOverGoneChecks = 0; return }
                 self.voiceOverGoneChecks += 1
                 guard self.voiceOverGoneChecks == 4 else { return }
-                // Coexisting, VoiceOver is the reader everywhere else: started again (a code review on 17 Oct 2026).
-                if Coexist.on {
-                    Log.warning("VoiceOver: macOS says it's on but it isn't running; starting it again")
-                    Speech.speakMessage("VoiceOver stopped; starting it again.")
-                    NSWorkspace.shared.openApplication(at: URL(fileURLWithPath: "/System/Library/CoreServices/VoiceOver.app"), configuration: NSWorkspace.OpenConfiguration()) { _, _ in }
-                    return
-                }
                 guard !self.active else { return }
                 Log.warning("VoiceOver: macOS says it's on but it isn't running (crashed or stopped); TurnOver speaks")
                 self.activate()
@@ -345,14 +262,6 @@ final class TurnOverApp {
         let starting = !sawVoiceOverState
         sawVoiceOverState = true
         defer { refreshWindowsLayer() }
-        // Coexisting: VoiceOver off means TurnOver reads every app (LeadWatcher.shouldLead), on again means it goes back
-        // to its own; the app in front is looked at afresh either way. (It stayed as it was, and with VoiceOver off the
-        // apps that weren't TurnOver's were silent: 19 Oct 2026.)
-        if Coexist.on {
-            Log.info("coexist: VoiceOver \(on ? "on" : "off"); TurnOver reads \(on ? "its own apps" : "every app") now")
-            if let front = NSWorkspace.shared.frontmostApplication { lead.look(at: front) }
-            return
-        }
         lead.voiceOverChanged(on: on)
         // Screen reader behaviour (22 Oct 2026): the swap is a setting. Off, VoiceOver's key changes nothing of TurnOver's.
         // VoiceOver going off ends any yielding, whatever the swap setting says.
@@ -394,9 +303,6 @@ final class TurnOverApp {
         }
         keyboard.start()
         SecureInputWatch.start()
-        if Coexist.on { VoiceOverTap.set(true, why: "TurnOver takes \(NSWorkspace.shared.frontmostApplication?.localizedName ?? "an app")") }
-        // VoiceOver's speech settings may have been changed where it read: TurnOver takes them up (SpeechParity).
-        if Coexist.on, SpeechParity.on { SpeechParity.followVoiceOver() }
         ScreenCurtain.apply()
         // Started by Command+Control+T: TurnOver Key has just said "TurnOver on"; the first take-over is not said again.
         // At launch TurnOver names itself ("TurnOver on"); later take-overs say the usual "TurnOver on" or play the chime.
@@ -408,71 +314,23 @@ final class TurnOverApp {
         else if config.general.handOverChimes { Tones.takeOver() } else { Speech.speakMessage("TurnOver on") }
     }
 
-    // MARK: Coexisting with VoiceOver: on and off while running
-
-    /// The system's keyboard focus is a password field (asked briefly: a busy app is taken as no).
-    private static func systemFocusIsPasswordField() -> Bool {
-        // The front app's own element, with its own short timeout (the system-wide element's would set every call's).
-        guard let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier else { return false }
-        let app = AXUIElementCreateApplication(pid)
-        AXUIElementSetMessagingTimeout(app, 0.25)
-        guard let f = app.element(kAXFocusedUIElementAttribute) else { return false }
-        return f.string(kAXSubroleAttribute) == "AXSecureTextField"
-    }
-
-    private var promptSteppedAside = false
-    private var secureTimer: Timer?
-    private var secureWasOn = false
-    private var secureSteppedAside = false
-    private func startCoexist() {
-        // The Key helper asks, instead of quitting TurnOver: Command Control Period is on and off (16 Oct 2026). Through
-        // the control channel: only TurnOver Key (signed by the same developer) can turn TurnOver off.
-        ControlServer.shared.handlers["toggle"] = { [weak self] _, reply in
-            reply(["op": "ack"])
-            self?.toggleCoexist()
-        }
-        // VoiceOver is silenced by the audio tap (VoiceOverTap), not by an Activity any more (18 Oct 2026). An Activity
-        // left by an earlier build comes out, once: it kept VoiceOver's speech off in TurnOver's apps, password fields
-        // included, where VoiceOver must be heard.
-        if ActivityFlow.shared.marker.installed {
-            Log.info("coexist: an Activity from an earlier build; taking it out")
-            // Said first: VoiceOver Utility comes forward for about ten seconds and drives itself (an update from build
-            // 19 or earlier; it was silent, and looked like something going wrong).
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                Speech.speakMessage("Tidying up VoiceOver's settings from an earlier TurnOver. VoiceOver Utility opens and closes by itself; a moment.")
-                ActivityFlow.shared.set(apps: nil) { text in Log.info("activity removed: \(text)"); Speech.speakMessage("Done.") }
-            }
+    /// An Activity left by a build before 18 Oct 2026 comes out, once: it kept VoiceOver's speech off in TurnOver's apps,
+    /// password fields included.
+    private func removeOldActivity() {
+        guard ActivityFlow.shared.marker.installed else { return }
+        Log.info("start: an Activity from an earlier build; taking it out")
+        // Said first: VoiceOver Utility comes forward for about ten seconds and drives itself (an update from build
+        // 19 or earlier; it was silent, and looked like something going wrong).
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            Speech.speakMessage("Tidying up VoiceOver's settings from an earlier TurnOver. VoiceOver Utility opens and closes by itself; a moment.")
+            ActivityFlow.shared.set(apps: nil) { text in Log.info("activity removed: \(text)"); Speech.speakMessage("Done.") }
         }
     }
-    private func toggleCoexist() {
-        if lead.suspended {
-            lead.suspended = false
-            lead.yieldedToVoiceOverByHand = false   // turned on by its own key: it takes the app in front again
-            Speech.speakMessage("TurnOver on")
-            if !Coexist.on, !config.applications.swapWithVoiceOver {
-                activate()   // on by its key, whatever VoiceOver is doing: the swap is off
-            } else if let front = NSWorkspace.shared.frontmostApplication {
-                lead.look(at: front)
-            }
-            refreshWindowsLayer()
-        } else {
-            lead.suspended = true
-            // Said before TurnOver steps back, with its own voice: VoiceOver's is silent here (the code review, 17 Oct 2026).
-            Speech.speakMessage("TurnOver off")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
-                // Turned on again within the pause: nothing to hand back (off then on in two seconds left VoiceOver
-                // unmuted under TurnOver, the hand-back landing after the take: 18 Oct 2026).
-                guard let self, self.lead.suspended else { Log.info("coexist: on again before the hand-back; it's dropped"); return }
-                self.deactivate()
-                self.refreshWindowsLayer()
-            }
-        }
-    }
-    /// Quit from the menu while coexisting: VoiceOver gets its apps back first, then TurnOver goes.
+    /// Quit from the menu: TurnOver steps back first, then goes.
     func quitRestoringVoiceOver() {
         lead.suspended = true
         deactivate()
-        NSApp.terminate(nil)   // applicationShouldTerminate removes the Activity first when coexisting (main.swift)
+        NSApp.terminate(nil)
     }
 
     /// Quitting: the tap and the watchdog go first, before VoiceOver is turned on. The tap stayed up through the
@@ -480,7 +338,6 @@ final class TurnOverApp {
     func shutDown() {
         Watchdog.shared.active = false
         keyboard.stop()
-        if Coexist.on { VoiceOverTap.set(false, why: "quit") }
         Log.info("quit: the keyboard tap stopped")
     }
 
@@ -494,7 +351,6 @@ final class TurnOverApp {
             // Nothing of TurnOver's may keep the keys once VoiceOver leads: its menu, if open, closes.
             if TurnOverMenu.shared.isOpen { TurnOverMenu.shared.close() }
             keyboard.stop()
-            if Coexist.on { VoiceOverTap.set(false, why: "TurnOver hands back") }
             Core.deactivate()
             refreshWindowsLayer()
             ScreenCurtain.off()   // VoiceOver's own takes over (its setting stays as the user left it)
