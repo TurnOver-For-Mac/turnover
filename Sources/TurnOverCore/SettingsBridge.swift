@@ -19,6 +19,9 @@ public enum SettingsBridge {
 
     /// The control channel up, and the settings' ops on it: "subscribe" (Settings opening: the settings now, and
     /// every change after), "ask" (the settings now), "patch" (a change).
+    /// Set by the app: the swap setting changed in the window (on or off).
+    public static var onSwapChanged: ((Bool) -> Void)?
+
     public static func start() {
         guard !started else { return }
         started = true
@@ -106,8 +109,8 @@ public enum SettingsBridge {
             if before.general.keyboardStyle != next.general.keyboardStyle { GlobalCommands.setKeyboardStyle(next.general.style) }
             if before.braille.bluetooth != next.braille.bluetooth, next.braille.bluetooth { BrailleDisplays.shared.lookNow() }
             if before.applications.perAppReaders != next.applications.perAppReaders { TurnOverMenu.shared.leadModeChanged?() }
+            if before.applications.swapWithVoiceOver != next.applications.swapWithVoiceOver { onSwapChanged?(next.applications.swapWithVoiceOver) }
             // Steam's switches from the window do what the menu's do.
-            if before.games.enabled != next.games.enabled { if next.games.enabled { Games.start() } else { Games.stop() } }
             if before.games.readBigPicture != next.games.readBigPicture { Games.restartBigPicture() }
             let voiceChanged = before.speech.voice != next.speech.voice
             let languageVoicesChanged = before.speech.languageVoices != next.speech.languageVoices

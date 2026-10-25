@@ -161,6 +161,14 @@ final class TurnOverApp {
         // Started while VoiceOver has the Mac (a login, a restart): no words, VoiceOver is talking, but a tone ().
         if NSWorkspace.shared.isVoiceOverEnabled { DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { Tones.startup() } }
         watchForInputMonitoring()
+        // The swap turned on in Settings while TurnOver waits for VoiceOver (the swap was off): the hand-over it would
+        // have made at launch, now (25 Oct 2026).
+        SettingsBridge.onSwapChanged = { [weak self] on in
+            guard let self, on, self.heldForVoiceOver, !self.active, NSWorkspace.shared.isVoiceOverEnabled else { return }
+            Log.info("swap turned on while TurnOver waits for VoiceOver: handing over")
+            self.heldForVoiceOver = false
+            self.lead.handOver(voiceOverOn: false)
+        }
         // The front application at launch may already be one of TurnOver's.
         // The launch hand-over turns VoiceOver off: only with the swap on, else neither changes the other.
         let launchMayTurnVoiceOverOff = config.applications.swapWithVoiceOver
@@ -172,9 +180,23 @@ final class TurnOverApp {
                 self?.lead.handOver(voiceOverOn: false)
             }
         } else if !config.applications.swapWithVoiceOver, !lead.suspended {
-            // Neither reader changes the other: TurnOver comes on as it starts, VoiceOver stays as it is (22 Oct 2026).
-            Log.info("start: TurnOver on without a hand-over (the swap is off)")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in self?.activate() }
+            // Neither reader changes the other (22 Oct 2026), but one speaks at a time: VoiceOver on and running at the
+            // start keeps the Mac, and TurnOver waits for it to go off (both spoke over each other, 25 Oct 2026).
+            if NSWorkspace.shared.isVoiceOverEnabled, HandOver.voiceOverRunning {
+                Log.info("start: VoiceOver is on and the swap is off; TurnOver waits for it to go off")
+                heldForVoiceOver = true
+                // The Settings window must reach TurnOver while it waits, or the advice can't be followed (a code review).
+                SettingsBridge.start()
+                VoiceOverSpeak.say("VoiceOver is on, so TurnOver waits. Turn VoiceOver off and TurnOver speaks; or turn the swap on in Settings, Screen reader behaviour.")
+            } else {
+                Log.info("start: TurnOver on without a hand-over (the swap is off)")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                    guard let self else { return }
+                    // VoiceOver turned on during the second: TurnOver waits instead (a code review, 25 Oct 2026).
+                    if NSWorkspace.shared.isVoiceOverEnabled, HandOver.voiceOverRunning { self.heldForVoiceOver = true; return }
+                    self.activate()
+                }
+            }
         } else {
             Log.info("start: no hand-over at launch (front \(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "none"), VoiceOver \(NSWorkspace.shared.isVoiceOverEnabled ? "on" : "off"))")
         }
@@ -257,6 +279,9 @@ final class TurnOverApp {
 
     /// The first report of VoiceOver's state is TurnOver starting, not a change by hand: the swap setting does not apply to it.
     private var sawVoiceOverState = false
+    /// The swap off and VoiceOver on while TurnOver was speaking: TurnOver is quiet until VoiceOver goes off.
+    private var heldForVoiceOver = false
+
     private func voiceOverChanged(_ on: Bool) {
         HandOver.newChoice()   // VoiceOver turned on or off, by hand too: a recovery's late fallback stands down
         Log.info("VoiceOver is \(on ? "on" : "off")")
@@ -267,8 +292,17 @@ final class TurnOverApp {
         // Screen reader behaviour (22 Oct 2026): the swap is a setting. Off, VoiceOver's key changes nothing of TurnOver's.
         // VoiceOver going off ends any yielding, whatever the swap setting says.
         if !on { lead.yieldedToVoiceOverByHand = false }
-        guard config.applications.swapWithVoiceOver || starting else {
-            Log.info("VoiceOver \(on ? "on" : "off"); TurnOver stays as it is (the swap is off)")
+        if !config.applications.swapWithVoiceOver, !starting {
+            // The swap off: neither reader turns the other on or off, but one speaks at a time (25 Oct 2026: with the
+            // swap off, VoiceOver turned on by hand left both talking). VoiceOver on quietens TurnOver; VoiceOver off
+            // brings it back only if that is what quietened it, since TurnOver's own key is the way it comes on.
+            if on {
+                if active { Log.info("VoiceOver on; TurnOver is quiet until it goes off (the swap is off)"); heldForVoiceOver = true; deactivate() }
+            } else if heldForVoiceOver {
+                heldForVoiceOver = false
+                Log.info("VoiceOver off; TurnOver speaks again (the swap is off)")
+                activate()
+            }
             return
         }
         // Only a change made by hand counts as yielding: a hand-over TurnOver posted itself (the lock screen) does not.

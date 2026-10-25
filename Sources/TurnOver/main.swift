@@ -86,8 +86,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func welcomeOnFirstRun() {
         let key = "welcomed-\(Edition.version)"
         let versionWelcomed = UserDefaults.standard.bool(forKey: key)
-        // Nothing new: no version welcome due, and this build's pages already seen.
-        guard !versionWelcomed || NewToTry.pagesDue else { return }
+        // Keyboard navigation for the Mac, once, welcome due or not (a code review: behind the welcome, a Mac already
+        // welcomed never got it).
+        let keyboardNavigationTurnedOn = turnOnKeyboardNavigation()
+        // Nothing new: no version welcome due, this build's pages already seen, and nothing changed on the Mac.
+        guard !versionWelcomed || NewToTry.pagesDue || keyboardNavigationTurnedOn else { return }
         // VoiceOver on for the pages, or nobody reads them (a code review, 17 Oct 2026; again on 24 Oct, when CoExist
         // went). TurnOver's own launch hand-over turns it off after, by the swap setting.
         // VoiceOver's flag can stay on with VoiceOver gone (quit by script, or crashed): then it is started, since the
@@ -130,13 +133,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             pages = versionWelcomed ? [] : keysPages
             pages += NewToTry.pagesDue || !versionWelcomed ? NewToTry.summaryPages() : []
-            pages.insert(("Welcome to TurnOver \(Edition.version), build \(build)",
-                          "A few short pages: what's new and what to test. Next and Back move; Skip closes them. The details are in the TurnOver menu (Command Control Comma, then M), under What to test in build \(build)."), at: 0)
+            if !pages.isEmpty { pages.insert(("Welcome to TurnOver \(Edition.version), build \(build)",
+                          "A few short pages: what's new and what to test. Next and Back move; Skip closes them. The details are in the TurnOver menu (Command Control Comma, then M), under What to test in build \(build)."), at: 0) }
+        }
+        if keyboardNavigationTurnedOn {
+            pages.append(("Tab reaches every control",
+                          "Keyboard navigation was off on this Mac, so Tab reached only text fields and lists. TurnOver has turned it on: Tab now reaches buttons, pop-ups and sliders too, as on Windows. Apps already open pick it up when they next start. It is in System Settings, Keyboard, if you want it off."))
         }
         NSApp.activate(ignoringOtherApps: true)
         showPages(pages)
         UserDefaults.standard.set(true, forKey: key)
         NewToTry.markSeen()
+    }
+
+    /// Keyboard navigation (System Settings, Keyboard) off: Tab reaches text fields and lists only, and a Tab through a
+    /// Settings section met one control (an AppleVis reader, 25 Oct 2026). VoiceOver's users never meet it, since the
+    /// VO keys don't need it; TurnOver's Tab does. Turned on once, for the whole Mac, and the welcome says so.
+    private func turnOnKeyboardNavigation() -> Bool {
+        let once = "keyboardNavigationTurnedOn"
+        guard !UserDefaults.standard.bool(forKey: once) else { return false }
+        UserDefaults.standard.set(true, forKey: once)
+        let mode = (CFPreferencesCopyAppValue("AppleKeyboardUIMode" as CFString, kCFPreferencesAnyApplication) as? Int) ?? 0
+        guard mode & 2 == 0 else { return false }
+        CFPreferencesSetAppValue("AppleKeyboardUIMode" as CFString, (mode | 2) as CFNumber, kCFPreferencesAnyApplication)
+        CFPreferencesAppSynchronize(kCFPreferencesAnyApplication)
+        Log.info("keyboard navigation turned on for the Mac (AppleKeyboardUIMode was \(mode))")
+        return true
     }
 
     /// Pages as ordinary alerts, so VoiceOver (still running) reads each: a heading and "n of m", then Next (Return),

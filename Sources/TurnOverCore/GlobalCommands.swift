@@ -98,6 +98,11 @@ public final class GlobalCommands: ScriptableObject {
         script("applicationChooser", "Application chooser; lists every application with a window, system alerts too, to switch to (Windows: Windows+Tab, Task View)", gestures: ["kb:option+tab"], category: win) { _ in
             DispatchQueue.main.async { ApplicationChooser.open() }
         }.isAvailable = windowsOn
+        // Option+D is Windows+D, the desktop: Finder's Desktop folder in a window, its items under the arrow keys (an
+        // AppleVis reader asked how to reach the desktop in the NVDA style, 25 Oct 2026). F11 only clears the screen.
+        script("showDesktop", "Opens the Desktop folder in Finder, its items under the arrows (Windows: Windows+D)", gestures: ["kb:option+d"], category: win) { _ in
+            NSWorkspace.shared.open(URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Desktop"))
+        }.isAvailable = windowsOn
         script("focusStatusMenus", "Status menus; lists the status menus at the right of the menu bar, TurnOver's own item last (Windows: Windows+B)", gestures: ["kb:option+b"], category: win) { _ in
             StatusMenus.openList()
         }.isAvailable = windowsOn

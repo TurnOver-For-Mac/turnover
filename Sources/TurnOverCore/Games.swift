@@ -20,7 +20,8 @@ import Network
 
 extension Config {
     public struct Games: Codable {
-        /// The readers run (when the Mac has the Games menu at all).
+        /// The readers run whenever the Mac has the Games menu at all. A switch until 25 Oct 2026, when it went: Steam
+        /// itself says when it is asked to open its port, so an off position only hid speech. Read from old files, unused.
         public var enabled = true
         /// Attach to Steam's debugging port and read Big Picture. Off until chosen: it makes Steam open a debugging port
         /// on this Mac that any program here could use (a code review on 20 Oct 2026). Stored under a new name, so a
@@ -80,7 +81,7 @@ public enum Games {
         Log.info("games: a leftover plugin from before Steam was TurnOver's own is \(on ? "installed" : "gone"); nothing changes")
     }
     /// Whether game processes are TurnOver's and the readers should run.
-    public static var active: Bool { available && config.games.enabled }
+    public static var active: Bool { available }
     public static var running: Bool { started }
     private static var started = false
 
@@ -88,7 +89,6 @@ public enum Games {
 
     public static func startIfWanted() {
         guard available else { return }
-        guard config.games.enabled else { Log.info("games: off in settings"); return }
         start()
     }
 
@@ -179,11 +179,6 @@ public enum Games {
 
     public static func menuItems() -> [MenuItem] {
         [
-            // Testers have Steam only (the plugin); the maintainer's own setup has CrossOver games too.
-            MenuItem(ownSetup ? "Steam and CrossOver games speak through TurnOver" : "Steam: Big Picture and Steam's games speak through TurnOver", .toggle(get: { config.games.enabled }, set: { on in
-                config.games.enabled = on
-                if on { start() } else { stop() }
-            })),
             MenuItem("Read Steam's Big Picture", .toggle(get: { config.games.readBigPicture }, set: { config.games.readBigPicture = $0; restartBigPicture() }),
                      hint: "Makes Steam open a debugging port on this Mac while it runs, which other programs here could use too. Off removes it"),
             MenuItem("What the game reader is doing", .action { sayStatus() }),

@@ -429,12 +429,10 @@ struct OtherAppsView: View {
     }
     var body: some View {
         Form {
-            // Steam's switches, here as well as under Games in the TurnOver menu: every setting has a place in this
+            // Steam's switch, here as well as under Games in the TurnOver menu: every setting has a place in this
             // window (21 Oct 2026), and Big Picture reading, off since it became a choice on 21 Oct, couldn't be found
             // (the maintainer, 25 Oct 2026). Saved in the settings file, so they hold across restarts.
             Section("Steam") {
-                Toggle("Steam and its games speak through TurnOver", isOn: model.bool("games", "enabled"))
-                    .accessibilityLabel("Steam and its games speak through TurnOver")
                 Toggle("Read Steam's Big Picture", isOn: model.bool("games", "readBigPictureChosen"))
                     .accessibilityLabel("Read Steam's Big Picture")
                     .accessibilityHint("Makes Steam open a debugging port on this Mac while it runs, which other programs here could use too.")
@@ -504,8 +502,8 @@ struct ReadersView: View {
                 // One switch for the two readers swapping (25 Oct 2026: a second, for the quit alone, said the same by halves).
                 Toggle("TurnOver and VoiceOver swap: one comes on as the other goes off", isOn: model.bool("applications", "swapWithVoiceOver"))
                     .accessibilityLabel("TurnOver and VoiceOver swap: one comes on as the other goes off")
-                    .accessibilityHint("Off: each reader has its own switch and neither changes the other.")
-                Text("On: TurnOver turns VoiceOver off as it starts and on as it quits, comes on when VoiceOver turns off and steps aside when VoiceOver comes on. Off: each reader has its own switch and neither changes the other, for VoiceOver reading inside a virtual machine, say. Command Control Period is TurnOver's; Command F5 is VoiceOver's.").font(.caption)
+                    .accessibilityHint("Off: each reader has its own switch and neither turns the other on or off; TurnOver is still quiet while VoiceOver is on.")
+                Text("On: TurnOver turns VoiceOver off as it starts and on as it quits, comes on when VoiceOver turns off and steps aside when VoiceOver comes on. Off: each reader has its own switch and neither turns the other on or off, for VoiceOver reading inside a virtual machine such as Parallels. Either way one reader speaks at a time: while VoiceOver is on, TurnOver is quiet.").font(.caption)
             }
             DisclosureGroup("Experimental: readers per app") {
                 Toggle("Readers per app", isOn: model.bool("applications", "perAppReaders"))
@@ -515,9 +513,44 @@ struct ReadersView: View {
     }
 }
 
+/// The window's manners (25 Oct 2026, an AppleVis reader's first evening with the window): Escape closes it, as it
+/// closes TurnOver's menu; the app goes with its last window, and with TurnOver, instead of lingering with no window
+/// where only a force quit found it.
+final class SettingsAppDelegate: NSObject, NSApplicationDelegate {
+    private var escapeMonitor: Any?
+    /// Looks at which TurnOver was missing. Main-actor isolated; a static, since the timer's closure
+    /// may not carry the delegate itself (Swift 6).
+    @MainActor private static var turnOverGoneChecks = 0
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            // Escape with no modifier, outside a field being edited (there it cancels the edit) and with no menu open.
+            guard event.keyCode == 53, event.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty,
+                  let window = NSApp.keyWindow, !(window.firstResponder is NSText), NSApp.mainMenu?.highlightedItem == nil else { return event }
+            window.performClose(nil)
+            return nil
+        }
+        // TurnOver gone for four seconds: the window closes with it. An update's restart closes it too, which is wanted:
+        // a window left open through an update showed TurnOver as off until reopened (build 22).
+        Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { _ in
+            MainActor.assumeIsolated {
+                let running = !NSRunningApplication.runningApplications(withBundleIdentifier: "com.turnover.reader").isEmpty
+                Self.turnOverGoneChecks = running ? 0 : Self.turnOverGoneChecks + 1
+                if Self.turnOverGoneChecks >= 2 { NSApp.terminate(nil) }
+            }
+        }
+    }
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+}
+
 @main
 struct TurnOverSettingsApp: App {
     @StateObject private var model = Model()
+    @NSApplicationDelegateAdaptor(SettingsAppDelegate.self) private var delegate
+    init() {
+        // Tab reaches every control, pop-ups and sliders too, whatever the Mac's Keyboard navigation setting says: with
+        // it off, a Tab through Speech met only the ducking pop-up (an AppleVis reader, 25 Oct 2026). This app's domain.
+        UserDefaults.standard.set(2, forKey: "AppleKeyboardUIMode")
+    }
     var body: some Scene {
         WindowGroup("TurnOver Settings") { ContentView().environmentObject(model) }
             .windowResizability(.contentSize)

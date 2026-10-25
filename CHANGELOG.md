@@ -2,6 +2,26 @@
 
 The newest build is first. "Reported by a tester" marks a fix for something a tester sent in. Thank you.
 
+## 2.0, build 22.1
+
+### Fixed
+
+- One reader speaks at a time whatever the swap setting says. With "TurnOver and VoiceOver swap" off, turning VoiceOver
+  on left both talking over each other; now TurnOver goes quiet while VoiceOver is on and running, and comes back when
+  VoiceOver goes off (if that is what quietened it). Started with the swap off and VoiceOver on, TurnOver waits and says
+  so through VoiceOver.
+- TurnOver Settings: Escape closes the window; the app quits with its last window and when TurnOver has gone (left
+  running with no window, only a force quit found it); Tab reaches every control in the window, pop-ups and sliders too,
+  whatever the Mac's Keyboard navigation setting (with it off, a Tab through Speech met only the ducking pop-up).
+  Reported on AppleVis.
+- Keyboard navigation (System Settings, Keyboard) is turned on for the Mac once, with a welcome page saying so, since
+  TurnOver's Tab needs it where VoiceOver's keys did not.
+- Steam and its games always speak through TurnOver where Steam is installed: the switch for it is gone from Settings
+  and the Games menu (Steam itself says when it is asked to open its port, so off only hid speech). Reading Big Picture
+  and Restart Steam stay.
+- NVDA and JAWS keys: Left Option D opens the Desktop folder in Finder, as Windows D reaches the desktop. Asked for on
+  AppleVis.
+
 ## 2.0, build 22
 
 ### Changed
