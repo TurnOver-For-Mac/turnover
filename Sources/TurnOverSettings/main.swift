@@ -429,6 +429,18 @@ struct OtherAppsView: View {
     }
     var body: some View {
         Form {
+            // Steam's switches, here as well as under Games in the TurnOver menu: every setting has a place in this
+            // window (21 Oct 2026), and Big Picture reading, off since it became a choice on 21 Oct, couldn't be found
+            // (the maintainer, 25 Oct 2026). Saved in the settings file, so they hold across restarts.
+            Section("Steam") {
+                Toggle("Steam and its games speak through TurnOver", isOn: model.bool("games", "enabled"))
+                    .accessibilityLabel("Steam and its games speak through TurnOver")
+                Toggle("Read Steam's Big Picture", isOn: model.bool("games", "readBigPictureChosen"))
+                    .accessibilityLabel("Read Steam's Big Picture")
+                    .accessibilityHint("Makes Steam open a debugging port on this Mac while it runs, which other programs here could use too.")
+                Text("Big Picture makes Steam open a debugging port on this Mac while it runs, which other programs here could use too. Off removes it. Steam needs restarting after this is turned on.").font(.caption)
+                Button("Restart Steam") { model.setSpecial("_restartSteam", true) }
+            }
             if apps.isEmpty {
                 Text("No app has asked to speak through TurnOver yet. A game or another program can ask; it appears here, and you choose whether it may.").font(.caption)
             } else {

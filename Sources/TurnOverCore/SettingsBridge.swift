@@ -74,6 +74,7 @@ public enum SettingsBridge {
         if let m = patch["_kokoroMode"] as? String { KokoroVoice.mode = m == "off" ? "off" : "reading" }
         if let v = patch["_kokoroVoice"] as? String, KokoroVoice.englishVoices.contains(v) { KokoroVoice.voice = v; KokoroVoice.mode = "reading"; KokoroVoice.preview(v) }
         if let s = patch["_kokoroSpeed"] as? Double { KokoroVoice.speed = min(2, max(0.6, s)) }
+        if patch["_restartSteam"] as? Bool == true { Games.restartSteam() }
         if let a = patch["_speechPortAllowed"] as? [String: Any], let id = a["id"] as? String, let on = a["allowed"] as? Bool { SpeechPort.shared.setAllowed(id, on) }
         // The file's settings: merged section by section, then read back through Config, so a value of the wrong kind
         // is simply left as it was.
@@ -105,6 +106,9 @@ public enum SettingsBridge {
             if before.general.keyboardStyle != next.general.keyboardStyle { GlobalCommands.setKeyboardStyle(next.general.style) }
             if before.braille.bluetooth != next.braille.bluetooth, next.braille.bluetooth { BrailleDisplays.shared.lookNow() }
             if before.applications.perAppReaders != next.applications.perAppReaders { TurnOverMenu.shared.leadModeChanged?() }
+            // Steam's switches from the window do what the menu's do.
+            if before.games.enabled != next.games.enabled { if next.games.enabled { Games.start() } else { Games.stop() } }
+            if before.games.readBigPicture != next.games.readBigPicture { Games.restartBigPicture() }
             let voiceChanged = before.speech.voice != next.speech.voice
             let languageVoicesChanged = before.speech.languageVoices != next.speech.languageVoices
             if voiceChanged || languageVoicesChanged { Languages.forget(); languagesState = nil }

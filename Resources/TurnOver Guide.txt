@@ -232,7 +232,7 @@ New output is read as it arrives; your own typing isn't read twice. TurnOver Up 
 
 Steam
 
-Steam's Big Picture is read as you move, once you turn it on: the TurnOver menu, Games, Read Steam's Big Picture. It's
+Steam's Big Picture is read as you move, once you turn it on: Settings, Other apps' speech, Read Steam's Big Picture (or the TurnOver menu, Games), then Restart Steam there. It's
 off to begin with because reading it makes Steam open a debugging port on your Mac while Steam runs, which other
 programs on the same Mac could use too; turning it off, or uninstalling TurnOver, removes that again. Games that
 support it speak through TurnOver without any of this.
