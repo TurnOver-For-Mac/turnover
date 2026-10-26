@@ -10,6 +10,14 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   of that arrived only after the wake, minutes later, and TurnOver took it for VoiceOver turned on by hand, so it stayed
   off until quit and started again. The lock's own VoiceOver no longer counts, and once secure input is off TurnOver
   looks again for up to ten seconds until an ordinary app is in front.
+- TurnOver Settings: Tab and Shift Tab are TurnOver's own in its window: the sidebar, then the section's controls in
+  screen order, round and round, whatever the Mac's Keyboard navigation setting says. With that setting off (the Mac's
+  default) the window's own Tab reached the sidebar and the ducking pop-up and nothing else, and TurnOver's generic
+  Tab fallback, sorting the sidebar by its middle, skipped the top half of the pane. Reported by four people on
+  AppleVis; reproduced here with the setting off and on.
+- Spotlight on macOS 27 is read: Command Space says the search field, the letters typed go to it, Tab reaches the
+  microphone, Escape says it closed (Urh's change; Spotlight's panel is drawn by "Siri AI" there, which TurnOver didn't
+  follow). Reported on AppleVis.
 
 ## 2.0, build 22.1
 

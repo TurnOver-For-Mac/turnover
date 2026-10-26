@@ -8,6 +8,37 @@ import ApplicationServices
 final class TurnOverSettingsAppModule: AppModule {
     static let bundleID = "com.turnover.settings"
     override func objectClass(for element: AXUIElement, role: Role, subrole: String?) -> TurnOverObject.Type? { SettingsLabelledObject.self }
+
+    required init(pid: pid_t, bundleIdentifier: String, appName: String) {
+        super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
+        // Tab is TurnOver's in its own window. With the Mac's Keyboard navigation off, the window's own Tab reaches
+        // the sidebar and one pop-up and nothing else (four AppleVis readers, 26 Oct 2026); and the generic Tab trap
+        // sorted the sidebar by its middle, so Tab from it skipped every control in the top half of the pane. Here:
+        // the sidebar first, then the pane's controls in screen order, round and round, whatever macOS does with Tab.
+        let cat = "TurnOver Settings"
+        script("settings_tab", "The next control: the sidebar, then the section's controls in order", gestures: ["kb:tab"], category: cat) { [weak self] g in self?.tab(g, forward: true) }
+        script("settings_shiftTab", "The previous control", gestures: ["kb:shift+tab"], category: cat) { [weak self] g in self?.tab(g, forward: false) }
+    }
+
+    private func tab(_ g: KeyboardGesture, forward: Bool) {
+        guard let current = API.focusObject?.element, let window = SettingsPanePlugin.windowOf(current) else { g.send(); return }
+        let all = SettingsPanePlugin.controls(in: window)
+        let sidebar = all.first { $0.role == "AXOutline" }
+        var ordered = all.filter { $0.role != "AXOutline" }
+        if let sidebar { ordered.insert(sidebar, at: 0) }
+        guard !ordered.isEmpty else { g.send(); return }
+        // The focus inside the sidebar (a row) counts as the sidebar.
+        var here = ordered.firstIndex { $0.isSame(current) }
+        if here == nil, sidebar != nil {
+            var p: AXUIElement? = current; var hops = 0
+            while let x = p, hops < 8 { if x.role == "AXOutline" { here = 0; break }; p = x.element(kAXParentAttribute); hops += 1 }
+        }
+        let n: Int
+        if let here { n = ((forward ? here + 1 : here - 1) + ordered.count) % ordered.count }
+        else { n = forward ? min(1, ordered.count - 1) : ordered.count - 1 }
+        Log.io("settings window: \(forward ? "Tab" : "Shift+Tab") to \(ordered[n].role) \(n + 1) of \(ordered.count)")
+        SettingsPanePlugin.focus(ordered[n])
+    }
 }
 
 /// A control in TurnOver Settings: when it has no name, its row is asked once (SwiftUI builds the label's link only
