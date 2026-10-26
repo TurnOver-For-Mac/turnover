@@ -1,11 +1,11 @@
-# TurnOver's shape (17 Oct 2026)
+# TurnOver's shape (26 Oct 2026)
 
-TurnOver is a patch for VoiceOver: a second screen reader for the Mac, NVDA's design rebuilt in Swift 6 (main-actor
-default isolation), that reads the apps VoiceOver reads badly and leaves the rest to VoiceOver. One reader speaks
-at a time: TurnOver while it is on, VoiceOver while it is off (CoExist, VoiceOver running alongside and silenced by an
-audio tap, was removed on 24 Oct 2026; docs/DECISIONS.md). One app (18 Oct 2026): the full reader, its newer apps and features marked experimental (the
-smaller Standard edition of 15 to 18 Oct is gone from the code). The NVDA source in
-`reference/nvda` is still the specification where TurnOver has an NVDA counterpart.
+TurnOver is a screen reader for the Mac: NVDA's design rebuilt in Swift 6 (main-actor default isolation), reading
+every app while it is on. One reader speaks at a time: TurnOver while it is on, VoiceOver while it is off, and by
+default each comes on as the other goes (the swap, Settings, Screen reader behaviour; CoExist, VoiceOver running
+alongside and silenced by an audio tap, went on 24 Oct 2026, docs/DECISIONS.md). Three keyboard styles, VoiceOver's,
+NVDA's and JAWS's, over one reader. The NVDA source in `reference/nvda` is still the specification where TurnOver has
+an NVDA counterpart.
 
 This is a map of the mechanisms, each with its files, its test (or "none"), and where PATTERNS.md or the testing
 notes explain its rules. Read it top to bottom once; then PATTERNS.md for how Mac apps misbehave and TurnOver's answers.
@@ -67,7 +67,7 @@ These five decide whether anyone is speaking. Each has a named rule, and since 1
 | Text | `TextInfo.swift` (`AXTextInfo`: offsets, units, formatting, misspellings by range), `TextTables.swift`, `VoiceOverText.swift` | | `PureTests` (tables, spelling at the edge) |
 | Browse mode (pages) | `BrowseMode*.swift`, `WebBuffer.swift` (the virtual buffer: a 2 s deadline, `isPartial`), `WebTextInfo.swift`, `FocusModePolicy.swift` | `rebuildIfCheap` for the arrows, letters and container keys; `reachForMore` at the end of a page that loads as it scrolls; focus mode on editable and player elements, honouring the automatic-focus-mode setting | `PureTests` (wrap, find, comma keys) |
 | Views (data over a window) | `ChatView.swift` (Messages, WhatsApp, Discord: the transcript, loading more at both ends), `MediaView.swift` (Music, Podcasts, TV), `AppStoreView.swift`, `PanesView.swift`; `Recipes.swift` and `Resources/recipes/*.json` describe each app; `TurnOverParts.swift` names the parts a plugin can ask for | a recipe gone unregisters its module | `PureTests` (recipes), `FixtureTests` (panes on a big window) |
-| App modules | `Modules/*` (Word 1,400 lines, Excel, Mail, Finder, Terminal, Safari, Claude, Dock, the recipe-driven Chat, Media, Panes, App Store) | narrow exceptions per app, never a shared-rule change (the project's working rules; "keep what works") | scenarios (live) |
+| App modules | `Modules/*` (Word 1,465 lines, the Code health milestone's first split, Excel, Mail, Finder, Terminal, Safari, Claude, Dock, the recipe-driven Chat, Media, Panes, App Store) | narrow exceptions per app, never a shared-rule change (the project's working rules; "keep what works") | scenarios (live) |
 | The Mac around the apps | `SystemPrompts.swift`, `NotificationBanners.swift`, `ApplicationChooser.swift`, `ForceQuit.swift`, `MenuNavigation.swift`, `StatusMenus.swift` | TurnOver reads the tuned app and whatever appears over it; VoiceOver reads the rest | none |
 | Games | `Games.swift` (Steam: Big Picture and Electron games through the open helper `helpers/steam-speech` in the public repo, started without TurnOver's permissions by `DisclaimedSpawn`; the CrossOver bridge on one Mac) | GAMES.md | `GamesTests` |
 
@@ -76,7 +76,7 @@ These five decide whether anyone is speaking. Each has a named rule, and since 1
 | Part | Files |
 |---|---|
 | The VoiceOver keys | `VoiceOverKeys.swift`, `VoiceOverParity.swift`, `VoiceOverDecisions.swift` (the rulings), `QuickRotor.swift` (VO-Command with the arrows) |
-| The NVDA keys (parked; Windy is the app for them) | `NVDAParity.swift`, `Keypad.swift`, `TurnOver/WindowsKeys.swift` |
+| The NVDA and JAWS keys | `NVDAParity.swift`, `Keypad.swift`, `TurnOver/WindowsKeys.swift`, `GlobalCommands.swift` (the Windows keys: Option as the Windows key) |
 | The menu: Command Control Comma | `TurnOver/MenuAnywhere.swift` (where VoiceOver leads TurnOver steps in for its menu and hands back on close) |
 | The trackpad | `Trackpad.swift` (VoiceOver's gestures where TurnOver reads; the open helper `helpers/trackpad-gestures`) |
 | The rule | PATTERNS.md: Mac keys do what VoiceOver's do, Windows keys what NVDA's do; TurnOver's own features live under the layer |
@@ -99,3 +99,11 @@ These five decide whether anyone is speaking. Each has a named rule, and since 1
 - `~/Library/Developer/TurnOver`: the build folders, the tools (sources in `Tools/drivers`), the scenarios (copied
   to `testing/scenarios`), and the
   symbols of a stripped build. Releases are made by the maintainer with private release tooling.
+
+## Where to start tidying
+
+The Code health milestone on GitHub lists the seams: the four biggest files (Word's module, MediaView, AppStoreView,
+ObjectNavigation) split along their MARKs; every app quirk out of shared code into its module (issue 2); every
+accessibility walk on the main thread given a deadline (the audit issue); the reader's state made testable (issue 3).
+None of it changes behaviour, each is one pull request, and each is the best first contribution for anyone who finds
+the code untidy: the tidying is the help.

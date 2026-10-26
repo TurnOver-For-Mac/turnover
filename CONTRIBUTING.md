@@ -12,6 +12,20 @@ mostly about not wasting your time or mine.
 - **Fix something**, in the code or the guides (Guides/), with a pull request.
 - **Test a change** someone else has proposed and say how it went, by ear.
 
+## Finding your way in ten minutes
+
+- [ARCHITECTURE.md](ARCHITECTURE.md): the map. Every mechanism with its files, its rule and its test. Read it once,
+  top to bottom.
+- [AGENTS.md](AGENTS.md): the house rules for a change (the main thread, deadlines, speech, what a commit says).
+- [docs/HOW-A-KEY-BECOMES-SPEECH.md](docs/HOW-A-KEY-BECOMES-SPEECH.md) and
+  [docs/HOW-FOCUS-BECOMES-AN-OBJECT.md](docs/HOW-FOCUS-BECOMES-AN-OBJECT.md): the two paths through the code, step by step.
+- [docs/DECISIONS.md](docs/DECISIONS.md): why things are the way they are, dated.
+- `Sources/TurnOverCore/Modules/`: one file per app. An app's quirk belongs there, never in shared code.
+- The log (`~/Library/Application Support/TurnOver/logs`): what TurnOver saw and said. Most questions are answered
+  there before the code.
+- If you think the code is untidy, the **Code health** milestone on GitHub is the list of what to tidy, each item
+  one pull request with no change in behaviour.
+
 ## Before you write code
 
 - **Build and run it the way the README's Developing section says** (`./build.sh`, not `swift run`), and read the
