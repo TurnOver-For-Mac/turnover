@@ -170,7 +170,7 @@ final class MenuAnywhere {
             guard let self, !self.claimed.isEmpty else { return }
             self.releaseLetters()
             Log.io("layer: no letter in time (VoiceOver leads)")
-            Self.say("cancelled")
+            Self.say(String(localized: "cancelled", comment: "Spoken message"))
         }
         claimTimeout = w
         DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: w)
@@ -230,7 +230,7 @@ final class MenuAnywhere {
         // Up or Down: the commands as a list VoiceOver reads, item by item (15 Oct 2026: VoiceOver stays on
         // and reads the layer; TurnOver steps in only for what's chosen).
         if key == "list" { voiceOverList(); return }
-        guard key != "escape", let l = Self.letters[key] else { Log.io("layer: cancelled (VoiceOver leads)"); Self.say("cancelled"); return }
+        guard key != "escape", let l = Self.letters[key] else { Log.io("layer: cancelled (VoiceOver leads)"); Self.say(String(localized: "cancelled", comment: "Spoken message")); return }
         runClaimed(key, l)
     }
 
@@ -304,7 +304,7 @@ final class MenuAnywhere {
         voTimeout?.cancel()
         let w = DispatchWorkItem { [weak self] in
             guard let self, !self.voKeys.isEmpty else { return }
-            self.releaseVOList(); Log.io("layer: the list timed out (VoiceOver leads)"); Self.say("cancelled")
+            self.releaseVOList(); Log.io("layer: the list timed out (VoiceOver leads)"); Self.say(String(localized: "cancelled", comment: "Spoken message"))
         }
         voTimeout = w
         DispatchQueue.main.asyncAfter(deadline: .now() + 20, execute: w)
@@ -325,7 +325,7 @@ final class MenuAnywhere {
             releaseVOList()
             guard voList.indices.contains(voIndex), let l = Self.letters[voList[voIndex]] else { return }
             runClaimed(voList[voIndex], l)
-        default: releaseVOList(); Self.say("cancelled")
+        default: releaseVOList(); Self.say(String(localized: "cancelled", comment: "Spoken message"))
         }
     }
 

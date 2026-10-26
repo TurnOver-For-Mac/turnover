@@ -530,7 +530,7 @@ final class CalendarAppModule: AppModule {
         let n = events(day).count
         let label = day.label.isEmpty ? DateFormatter.localizedString(from: day.date, dateStyle: .full, timeStyle: .none) : day.label
         Speech.cancel()
-        Speech.speakMessage("\(prefix)\(label), \(n == 0 ? "no events" : n == 1 ? "1 event" : "\(n) events")")
+        Speech.speakMessage("\(prefix)\(label), \(n == 0 ? String(localized: "no events", comment: "Spoken message") : n == 1 ? String(localized: "1 event", comment: "A day's events") : String(localized: "\(String(n)) events", comment: "A day's events"))")
     }
 
     private func moveEvent(_ step: Int, _ g: KeyboardGesture) {

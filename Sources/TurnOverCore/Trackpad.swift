@@ -87,7 +87,7 @@ public enum Trackpad {
         Log.info("trackpad: control \(on ? "on" : "off")")
         // VoiceOver's sound for it, then the words (the sound as VoiceOver's own; the file is the one it plays for its
         // keyboard toggles, to confirm by ear, 17 Oct 2026).
-        if say { VoiceOverSounds.play(on ? "TrackingOn.aiff" : "TrackingOff.aiff"); Speech.speakMessage("trackpad commands \(on ? "on" : "off")") }   // VoiceOver's, by ear (17 Oct 2026)
+        if say { VoiceOverSounds.play(on ? "TrackingOn.aiff" : "TrackingOff.aiff"); Speech.speakMessage(String(localized: "trackpad commands \(Phrases.onOff(on))", comment: "Gesture control turned on or off")) }   // VoiceOver's, by ear (17 Oct 2026)
     }
 
     // MARK: Gestures

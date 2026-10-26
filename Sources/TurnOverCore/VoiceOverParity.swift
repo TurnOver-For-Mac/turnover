@@ -34,10 +34,10 @@ extension VoiceOverKeysPlugin {
         add("readToHere", String(localized: "Reads from the beginning to here (VO-B)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+b"]) { _ in
             if let d = API.focusTreeInterceptor {
                 let t = d.buffer.text.substring(to: min(d.position, d.buffer.text.length))
-                Speech.speakText(t.isEmpty ? "blank" : t)
+                Speech.speakText(t.isEmpty ? Phrases.blank : t)
             } else if let obj = API.caretObject, let info = try? obj.makeTextInfo(.caret) {
                 let all = info.copy(); all.expand(.story); all.setEndPoint(info, .endToStart)
-                Speech.speakText(all.text.isEmpty ? "blank" : all.text)
+                Speech.speakText(all.text.isEmpty ? Phrases.blank : all.text)
             } else { Speech.speakMessage(String(localized: "not available here", comment: "Spoken message")) }
         }
         add("nextParagraph", String(localized: "Reads the next paragraph (VO-Shift-Page Down)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+shift+pageDown"]) { _ in Self.paragraph(forward: true) }
@@ -125,10 +125,10 @@ extension VoiceOverKeysPlugin {
             case 0:
                 guard let e = Self.element(at: p) else { Speech.speakMessage(String(localized: "nothing under the pointer", comment: "Spoken message")); return }
                 Speech.speakObject(ObjectFactory.make(e), reason: .focus)
-            case 1: Speech.speakMessage("x \(Int(p.x)), y \(Int(p.y))")
+            case 1: Speech.speakMessage(String(localized: "x \(String(Int(p.x))), y \(String(Int(p.y)))", comment: "Where the pointer is on the screen"))
             default:
-                if let w = Self.element(at: p)?.element(kAXWindowAttribute), let o = TurnOverObject.frame(w)?.origin { Speech.speakMessage("x \(Int(p.x - o.x)), y \(Int(p.y - o.y)) in the window") }
-                else { Speech.speakMessage("x \(Int(p.x)), y \(Int(p.y))") }
+                if let w = Self.element(at: p)?.element(kAXWindowAttribute), let o = TurnOverObject.frame(w)?.origin { Speech.speakMessage(String(localized: "x \(String(Int(p.x - o.x))), y \(String(Int(p.y - o.y))) in the window", comment: "Where the pointer is in its window")) }
+                else { Speech.speakMessage(String(localized: "x \(String(Int(p.x))), y \(String(Int(p.y)))", comment: "Where the pointer is on the screen")) }
             }
         }
         add("cursorToMouse", String(localized: "The VoiceOver cursor to the item under the mouse pointer (VO-Shift-F5)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+shift+f5"]) { _ in

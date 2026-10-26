@@ -199,7 +199,7 @@ public enum BrailleInput {
             // translate or announce it in a password field (braille privacy review, 28 Oct 2026).
             if !isSecureInput {
                 let letter = backTranslate([cell], false)
-                Speech.speakPrivate(letter.isEmpty ? "deleted" : "deleted " + letter)
+                Speech.speakPrivate(letter.isEmpty ? String(localized: "deleted", comment: "Spoken message") : String(localized: "deleted \(letter)", comment: "Text deleted: %@ is the text"))
             }
             Braille.refreshSoon()
         } else { retype() }

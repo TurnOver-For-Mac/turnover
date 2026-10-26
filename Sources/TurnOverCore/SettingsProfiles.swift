@@ -159,7 +159,7 @@ public enum SettingsProfiles {
     static func newProfile(for app: (bundle: String, name: String)?) {
         LineInput.ask(String(localized: "Profile name", comment: "Spoken message"), initial: app?.name ?? "") { typed in
             guard let raw = typed?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return }
-            guard !all().contains(where: { $0.name.lowercased() == raw.lowercased() }) else { Speech.speakMessage("There is a profile called \(raw) already"); return }
+            guard !all().contains(where: { $0.name.lowercased() == raw.lowercased() }) else { Speech.speakMessage(String(localized: "There is a profile called \(raw) already", comment: "Spoken message: %@ is the name typed")); return }
             write(Profile(name: raw, apps: app.map { [$0.bundle] } ?? [], settings: Sections(of: config)))
             if activeName != nil { deactivate() }
             activate(raw, byApp: app != nil)

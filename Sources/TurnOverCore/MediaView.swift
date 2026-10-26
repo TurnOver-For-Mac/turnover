@@ -866,7 +866,7 @@ public final class MediaView {
         if let l = rowLabels[i] { return l }
         let l = Self.rowText(item.element).joined(separator: ", ")
         rowLabels[i] = l
-        return l.isEmpty ? "blank" : l
+        return l.isEmpty ? Phrases.blank : l
     }
 
     /// A row's columns, in order: Music's song rows hold them as text fields ("Song Title",
@@ -1362,7 +1362,7 @@ public final class MediaView {
             // "paused" as playback started (7 Oct 2026). Checked again after, and corrected only if it differs.
             let pressedPlay = playerControlName(toggle).lowercased() == "play"
             let pressedStop = playerControlName(toggle).lowercased() == "stop"
-            Speech.speakMessage(pressedPlay ? "playing" : pressedStop ? "stopped" : "paused", remember: false)
+            Speech.speakMessage(pressedPlay ? String(localized: "playing", comment: "Spoken message") : pressedStop ? String(localized: "stopped", comment: "Spoken message") : String(localized: "paused", comment: "Spoken message"), remember: false)
             let session = currentSession
             let window = modelWindow
             let playback = playbackRequest
@@ -1573,7 +1573,7 @@ public final class MediaView {
             // The catalog's list answered this search and is being read: the app's own results page stays unspoken.
             if focusPage, catalogDrives { return }
             let announced = openingTitle; openingTitle = ""
-            if pageTitle != announced { Speech.speakMessage(pageTitle.isEmpty ? "page" : pageTitle) }
+            if pageTitle != announced { Speech.speakMessage(pageTitle.isEmpty ? Role.page.displayString : pageTitle) }
             land(on: places[pageKey()])
             }
         }

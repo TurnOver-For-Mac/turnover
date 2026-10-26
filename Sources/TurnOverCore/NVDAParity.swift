@@ -425,7 +425,7 @@ enum NVDATables {
             let c = cell.element(kAXParentAttribute).flatMap { p in cells(p).firstIndex(where: { $0.isSame(cell) }) } ?? 0
             parts = rows.compactMap { r in let cs = cells(r); return cs.indices.contains(c) ? VoiceOverKeysPlugin.text(cs[c]) : nil }
         }
-        Speech.speakText(parts.map { $0.isEmpty ? "blank" : $0 }.joined(separator: ", "))
+        Speech.speakText(parts.map { $0.isEmpty ? Phrases.blank : $0 }.joined(separator: ", "))
     }
 }
 

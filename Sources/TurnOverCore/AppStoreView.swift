@@ -1034,7 +1034,7 @@ public final class AppStoreView {
                     if thenFocusPage, let (_, list) = pageRoot() { _ = list.set(kAXFocusedAttribute, kCFBooleanTrue) }
                     let title = pageTitle
                     if now == before, !thenFocusPage { Log.io("app store: the page did not change"); return }
-                    if (title != early || early.isEmpty), title != announced { Speech.speakMessage(title.isEmpty ? "page" : title) }
+                    if (title != early || early.isEmpty), title != announced { Speech.speakMessage(title.isEmpty ? Role.page.displayString : title) }
                     if !page.isEmpty, !flatDrives { speak(pageIndex, crossing: true) }
                 }
             }

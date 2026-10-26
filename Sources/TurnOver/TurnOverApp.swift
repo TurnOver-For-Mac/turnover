@@ -509,7 +509,7 @@ final class TurnOverApp {
         if let words = LeadWatcher.nextTakeoverWords { LeadWatcher.nextTakeoverWords = nil; Speech.speakMessage(words) }   // a mode's name, once
         else if config.general.handOverNothing { if atLaunch { announcedAtLaunch = false } }   // nothing, by choice
         else if announcedAtLaunch, atLaunch { announcedAtLaunch = false; Speech.speakMessage(Edition.editionName) }
-        else if atLaunch { Speech.speakMessage("\(Edition.editionName) on") }
+        else if atLaunch { Speech.speakMessage(String(localized: "TurnOver on", comment: "Spoken message")) }
         else if config.general.handOverChimes { Tones.takeOver() } else { Speech.speakMessage(String(localized: "TurnOver on", comment: "Spoken message")) }
     }
 

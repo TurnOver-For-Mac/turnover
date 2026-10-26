@@ -59,7 +59,7 @@ enum FormatSearch {
         var text = (a.string as NSString).substring(with: NSRange(location: run.start - lo, length: min(run.end - run.start, 200)))
         if let nl = text.firstIndex(where: \.isNewline) { text = String(text[..<nl]) }
         text = text.trimmingCharacters(in: .whitespaces)
-        let said = [text.isEmpty ? "blank" : text, kind.detail(run.format)].compactMap { $0 }.joined(separator: ", ")
+        let said = [text.isEmpty ? Phrases.blank : text, kind.detail(run.format)].compactMap { $0 }.joined(separator: ", ")
         Speech.speakMessage(said)
         return true
     }

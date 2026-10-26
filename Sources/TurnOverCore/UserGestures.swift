@@ -96,7 +96,7 @@ public enum UserGestures {
     }
 
     public static func set(_ g: KeyboardGesture, to t: Target) {
-        if isProtected(g) { Log.info("keys: \(g.identifier) is essential; not reassigned"); Speech.speakMessage("\(g.displayName) is one of TurnOver's essential keys and can't be changed"); return }
+        if isProtected(g) { Log.info("keys: \(g.identifier) is essential; not reassigned"); Speech.speakMessage(String(localized: "\(g.displayName) is one of TurnOver's essential keys and can't be changed", comment: "Spoken message: %@ is the command")); return }
         config.keyboard.userGestures[storedIdentifier(of: g)] = t.stored
         config.save()
         Log.info("user keys: \(storedIdentifier(of: g)) → \(t.stored)")

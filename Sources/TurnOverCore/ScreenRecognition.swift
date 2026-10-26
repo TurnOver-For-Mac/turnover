@@ -237,7 +237,7 @@ public final class ScreenRecognition {
     private func speakRow() {
         guard let r = result, let i = rowIndex(caret) else { return }
         let t = r.text.substring(with: r.rows[i].range)
-        Speech.speakText(t.trimmingCharacters(in: .whitespaces).isEmpty ? "blank" : t)
+        Speech.speakText(t.trimmingCharacters(in: .whitespaces).isEmpty ? Phrases.blank : t)
     }
 
     private func speakCharacter() {

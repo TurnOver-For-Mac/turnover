@@ -296,6 +296,17 @@
         }
       }
     },
+    "%@ dialog" : {
+      "comment" : "A dialog in front: %@ is its app (Windows style)",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ iletişim kutusu"
+          }
+        }
+      }
+    },
     "%@ doesn't speak in TurnOver, so TurnOver is back to %@. Choose another in the TurnOver menu, Settings, Speech." : {
       "comment" : "A silent voice replaced: the voice, then the one used instead",
       "localizations" : {
@@ -309,6 +320,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ TurnOver'da konuşmuyor, bu yüzden TurnOver %2$@ sesine döndü. TurnOver menüsü, Ayarlar, Konuşma'dan başka bir ses seçin."
+          }
+        }
+      }
+    },
+    "%@ events" : {
+      "comment" : "A day's events",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ etkinlik"
           }
         }
       }
@@ -435,6 +457,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ yüklü değil"
+          }
+        }
+      }
+    },
+    "%@ is not on screen" : {
+      "comment" : "Spoken message: %@ is a part of the window",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ekranda değil"
+          }
+        }
+      }
+    },
+    "%@ is one of TurnOver's essential keys and can't be changed" : {
+      "comment" : "Spoken message: %@ is the command",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, TurnOver'ın temel tuşlarından biri ve değiştirilemez"
           }
         }
       }
@@ -784,7 +828,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$@/%2$@"
+            "value" : "%1$@ / %2$@"
           }
         }
       }
@@ -1137,7 +1181,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$@, siz %2$@ uygulamasını TurnOver'a verene kadar bekler: uygulamada Komut Kontrol Virgül, sonra T."
+            "value" : "%1$@, siz %2$@ uygulamasını TurnOver'a verene kadar bekler: uygulamada Komut Kontrol Ö, sonra T."
           }
         }
       }
@@ -1160,6 +1204,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ duyurulmayacak. Kaydedildi"
+          }
+        }
+      }
+    },
+    "%@ window" : {
+      "comment" : "A window in front: %@ is its app (Windows style)",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ penceresi"
           }
         }
       }
@@ -1259,6 +1314,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@, %2$@ raf"
+          }
+        }
+      }
+    },
+    "%@, %@ to %@ selected" : {
+      "comment" : "Excel: the cell reached, then the range selected: A1 to C4",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@ to %3$@ selected"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %2$@ ile %3$@ arası seçili"
           }
         }
       }
@@ -1416,6 +1488,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@, geçerli"
+          }
+        }
+      }
+    },
+    "%@, dialog" : {
+      "comment" : "A dialog in front: %@ is its app (Mac style)",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ iletişim kutusu"
           }
         }
       }
@@ -1618,6 +1701,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@, izleniyor"
+          }
+        }
+      }
+    },
+    "%@, window" : {
+      "comment" : "A window in front: %@ is its app (Mac style)",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ penceresi"
           }
         }
       }
@@ -1945,6 +2039,17 @@
         }
       }
     },
+    "1 event" : {
+      "comment" : "A day's events",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 etkinlik"
+          }
+        }
+      }
+    },
     "1 heading" : {
       "comment" : "A count on a page",
       "localizations" : {
@@ -2160,7 +2265,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Birkaç kısa sayfa: yenilikler ve denenecekler. İleri ve Geri gezinir; Atla kapatır. Ayrıntılar TurnOver menüsünde (Komut Kontrol Virgül, sonra M), %@ yapısında denenecekler altında."
+            "value" : "Birkaç kısa sayfa: yenilikler ve denenecekler. İleri ve Geri gezinir; Atla kapatır. Ayrıntılar TurnOver menüsünde (Komut Kontrol Ö, sonra M), %@ yapısında denenecekler altında."
           }
         }
       }
@@ -3407,7 +3512,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Komut Kontrol Virgül her uygulamada TurnOver menüsünü açar"
+            "value" : "Komut Kontrol Ö her uygulamada TurnOver menüsünü açar"
           }
         }
       }
@@ -3418,7 +3523,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Komut Kontrol Nokta TurnOver'ı her yerden kapatıp açar; VoiceOver her durumda çalışmaya devam eder. TurnOver yanıt vermeyi bırakırsa birkaç saniye içinde tüm uygulamaları VoiceOver okur. Bir sorunu bildirmek için TurnOver menüsündeki Geri bildirim gönder'i kullanın."
+            "value" : "Komut Kontrol Ç TurnOver'ı her yerden kapatıp açar; VoiceOver her durumda çalışmaya devam eder. TurnOver yanıt vermeyi bırakırsa birkaç saniye içinde tüm uygulamaları VoiceOver okur. Bir sorunu bildirmek için TurnOver menüsündeki Geri bildirim gönder'i kullanın."
           }
         }
       }
@@ -4172,7 +4277,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Doğrudan. Tuşlar doğrudan %@ uygulamasına gider ve TurnOver burada sessiz kalır. Çıkmak için Komut Kontrol Virgül, sonra D."
+            "value" : "Doğrudan. Tuşlar doğrudan %@ uygulamasına gider ve TurnOver burada sessiz kalır. Çıkmak için Komut Kontrol Ö, sonra D."
           }
         }
       }
@@ -4830,7 +4935,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bu uygulama için, TurnOver kapanana kadar. Komut Kontrol Virgül, sonra T aynısını yapar ve hatırlar"
+            "value" : "Bu uygulama için, TurnOver kapanana kadar. Komut Kontrol Ö, sonra T aynısını yapar ve hatırlar"
           }
         }
       }
@@ -5373,7 +5478,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bu uygulamayı VoiceOver'a ver; VoiceOver'ı açar, TurnOver'ı kapatır ve bu uygulamayı VoiceOver'a bırakır (Komut Kontrol Virgül, sonra T)"
+            "value" : "Bu uygulamayı VoiceOver'a ver; VoiceOver'ı açar, TurnOver'ı kapatır ve bu uygulamayı VoiceOver'a bırakır (Komut Kontrol Ö, sonra T)"
           }
         }
       }
@@ -8267,6 +8372,17 @@
         }
       }
     },
+    "No changes for %@ yet" : {
+      "comment" : "Spoken message: %@ is the app",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ için henüz değişiklik yok"
+          }
+        }
+      }
+    },
     "No ducking" : {
       "comment" : "An audio ducking mode",
       "localizations" : {
@@ -8647,7 +8763,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kapalıyken: her okuyucunun kendi açma kapama tuşu vardır ve biri ötekini değiştirmez. Komut Kontrol Nokta TurnOver'ınki; Komut F5 VoiceOver'ınki."
+            "value" : "Kapalıyken: her okuyucunun kendi açma kapama tuşu vardır ve biri ötekini değiştirmez. Komut Kontrol Ç TurnOver'ınki; Komut F5 VoiceOver'ınki."
           }
         }
       }
@@ -10080,7 +10196,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Uygulamaya göre okuyucular kapalı: TurnOver açıkken her yeri okur. Komut Kontrol Nokta onu kapatıp açar; Ayarlar, Deneysel uygulamaya göre okuyucuları açar."
+            "value" : "Uygulamaya göre okuyucular kapalı: TurnOver açıkken her yeri okur. Komut Kontrol Ç onu kapatıp açar; Ayarlar, Deneysel uygulamaya göre okuyucuları açar."
           }
         }
       }
@@ -12377,7 +12493,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Slayt %1$@/%2$@"
+            "value" : "Slayt %1$@ / %2$@"
           }
         }
       }
@@ -13269,7 +13385,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "VO tuşları VoiceOver'da ne yapıyorsa onu yapar. TurnOver'ın kendi menüsü, her uygulamada: Komut Kontrol Virgül. Orada: bu uygulama (onu VoiceOver mı TurnOver mı okuyor), tüm tuşlar, ses aynı olsun diye VoiceOver ayarlarınızın kopyası, geri bildirim ve çıkış."
+            "value" : "VO tuşları VoiceOver'da ne yapıyorsa onu yapar. TurnOver'ın kendi menüsü, her uygulamada: Komut Kontrol Ö. Orada: bu uygulama (onu VoiceOver mı TurnOver mı okuyor), tüm tuşlar, ses aynı olsun diye VoiceOver ayarlarınızın kopyası, geri bildirim ve çıkış."
           }
         }
       }
@@ -13280,7 +13396,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "VO tuşları VoiceOver'da ne yapıyorsa onu yapar. TurnOver'ın kendi menüsü, her uygulamada: Komut Kontrol Virgül. Orada: bu uygulama, tüm tuşlar, VoiceOver ayarlarınızın kopyası, geri bildirim ve çıkış.\n\nKomut Kontrol Nokta TurnOver'ı kapatıp açar. VoiceOver bu sırada çalışmaya devam eder."
+            "value" : "VO tuşları VoiceOver'da ne yapıyorsa onu yapar. TurnOver'ın kendi menüsü, her uygulamada: Komut Kontrol Ö. Orada: bu uygulama, tüm tuşlar, VoiceOver ayarlarınızın kopyası, geri bildirim ve çıkış.\n\nKomut Kontrol Ç TurnOver'ı kapatıp açar. VoiceOver bu sırada çalışmaya devam eder."
           }
         }
       }
@@ -14135,7 +14251,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "İzleme dörtgeninin hareketleri: VoiceOver'ınkiler ya da Windows stilinde NVDA'nınkiler. Ayrıca Komut Kontrol Virgül, G"
+            "value" : "İzleme dörtgeninin hareketleri: VoiceOver'ınkiler ya da Windows stilinde NVDA'nınkiler. Ayrıca Komut Kontrol Ö, G"
           }
         }
       }
@@ -14145,7 +14261,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "İzleme dörtgeninin hareketleri: VoiceOver'ınkiler ya da Windows stilinde NVDA'nınkiler. Ayrıca Komut Kontrol Virgül, G; ya da TurnOver tuşunu basılı tutup iki parmağı çevirin, açmak için saat yönünde"
+            "value" : "İzleme dörtgeninin hareketleri: VoiceOver'ınkiler ya da Windows stilinde NVDA'nınkiler. Ayrıca Komut Kontrol Ö, G; ya da TurnOver tuşunu basılı tutup iki parmağı çevirin, açmak için saat yönünde"
           }
         }
       }
@@ -14188,6 +14304,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sonra açıkken istediğinizi değiştirin"
+          }
+        }
+      }
+    },
+    "There is a profile called %@ already" : {
+      "comment" : "Spoken message: %@ is the name typed",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ adlı bir profil zaten var"
           }
         }
       }
@@ -14685,7 +14812,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "TurnOver yeniden durdu. Başlatmak için Komut Kontrol Nokta'ya basın; bir uygulamada VoiceOver sessizse yeniden basın."
+            "value" : "TurnOver yeniden durdu. Başlatmak için Komut Kontrol Ç'ye basın; bir uygulamada VoiceOver sessizse yeniden basın."
           }
         }
       }
@@ -14717,7 +14844,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kendi uygulamalarında TurnOver, her yerde TurnOver ya da her yerde VoiceOver. Komut Kontrol Virgül, sonra A, bunu her yerden yapar"
+            "value" : "Kendi uygulamalarında TurnOver, her yerde TurnOver ya da her yerde VoiceOver. Komut Kontrol Ö, sonra A, bunu her yerden yapar"
           }
         }
       }
@@ -15548,7 +15675,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "VoiceOver Yardımcı İzlencesi (VO-F8); TurnOver'ın kendi ayarları Komut Kontrol Virgül, S"
+            "value" : "VoiceOver Yardımcı İzlencesi (VO-F8); TurnOver'ın kendi ayarları Komut Kontrol Ö, S"
           }
         }
       }
@@ -15645,7 +15772,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Her yerde VoiceOver okuyor. Değiştirmek için Komut Kontrol Virgül, sonra A."
+            "value" : "Her yerde VoiceOver okuyor. Değiştirmek için Komut Kontrol Ö, sonra A."
           }
         }
       }
@@ -15699,7 +15826,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Her yeri VoiceOver devralır. Komut Kontrol Nokta TurnOver'ı yeniden başlatır"
+            "value" : "Her yeri VoiceOver devralır. Komut Kontrol Ç TurnOver'ı yeniden başlatır"
           }
         }
       }
@@ -15827,7 +15954,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "TurnOver bekleniyor. Komut Kontrol Nokta ile başlatın."
+            "value" : "TurnOver bekleniyor. Komut Kontrol Ç ile başlatın."
           }
         }
       }
@@ -17507,6 +17634,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "kontrol kilidi"
+          }
+        }
+      }
+    },
+    "conversations" : {
+      "comment" : "A part of the chat window",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sohbetler"
           }
         }
       }
@@ -19907,6 +20045,17 @@
         }
       }
     },
+    "messages" : {
+      "comment" : "A part of the chat window",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesajlar"
+          }
+        }
+      }
+    },
     "middle left" : {
       "comment" : "A part of the screen",
       "localizations" : {
@@ -20809,6 +20958,17 @@
         }
       }
     },
+    "no reply yet" : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "henüz yanıt yok"
+          }
+        }
+      }
+    },
     "no results" : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -21058,6 +21218,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "pencere yok"
+          }
+        }
+      }
+    },
+    "no windows open, %@ minimised" : {
+      "comment" : "Spoken message: %@ is how many windows are in the Dock",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "açık pencere yok, %@ pencere küçültülmüş"
           }
         }
       }
@@ -22916,6 +23087,17 @@
         }
       }
     },
+    "sections" : {
+      "comment" : "A part of the chat window",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bölümler"
+          }
+        }
+      }
+    },
     "select all" : {
       "comment" : "A braille chord's command, as braille help says it",
       "localizations" : {
@@ -23528,6 +23710,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "etkileşimi bitir"
+          }
+        }
+      }
+    },
+    "stopped" : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "durduruldu"
           }
         }
       }
@@ -25151,7 +25344,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ağaç görünümü"
+            "value" : "tablo"
           }
         }
       }
@@ -25664,6 +25857,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "başa dönüldü"
+          }
+        }
+      }
+    },
+    "x %@, y %@" : {
+      "comment" : "Where the pointer is on the screen",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "x %1$@, y %2$@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "x %1$@, y %2$@"
+          }
+        }
+      }
+    },
+    "x %@, y %@ in the window" : {
+      "comment" : "Where the pointer is in its window",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "x %1$@, y %2$@ in the window"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pencerede x %1$@, y %2$@"
           }
         }
       }

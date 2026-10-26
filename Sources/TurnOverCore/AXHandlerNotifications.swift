@@ -263,7 +263,7 @@ extension AXHandler {
             Log.io("window closed: no window left")
             API.setFocusObject(ObjectFactory.make(app), ancestors: [])
             let minimised = all.count
-            Speech.speakMessage(minimised == 0 ? "no windows" : "no windows open, \(minimised) minimised")
+            Speech.speakMessage(minimised == 0 ? String(localized: "no windows", comment: "An app with no windows") : String(localized: "no windows open, \(String(minimised)) minimised", comment: "Spoken message: %@ is how many windows are in the Dock"))
             return
         }
         if let f = API.focusObject, f.pid == pid, f.element.role == "?" || f.element.element(kAXWindowAttribute) == nil {

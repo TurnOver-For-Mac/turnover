@@ -274,7 +274,7 @@ public enum PluginMaker {
 
     static func share(bundle: String, appName: String) {
         let dir = folder(for: bundle)
-        guard FileManager.default.fileExists(atPath: dir.appendingPathComponent("profile.json").path) else { Speech.speakMessage("No changes for \(appName) yet"); return }
+        guard FileManager.default.fileExists(atPath: dir.appendingPathComponent("profile.json").path) else { Speech.speakMessage(String(localized: "No changes for \(appName) yet", comment: "Spoken message: %@ is the app")); return }
         let desktop = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask)[0]
         let zip = desktop.appendingPathComponent("My changes for \(appName).zip")
         try? FileManager.default.removeItem(at: zip)

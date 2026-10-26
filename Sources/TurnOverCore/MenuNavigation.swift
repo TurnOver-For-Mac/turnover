@@ -208,7 +208,7 @@ final class MenuNavigationPlugin: GlobalPlugin {
             return
         }
         let t = h.titles[h.index]
-        let name = t.string(kAXTitleAttribute).flatMap { $0.isEmpty ? nil : $0 } ?? (h.index == 0 ? "Apple" : "menu")
+        let name = t.string(kAXTitleAttribute).flatMap { $0.isEmpty ? nil : $0 } ?? (h.index == 0 ? "Apple" : Role.menu.displayString)
         Speech.speakItem(String(localized: "\(name) menu", comment: "A menu bar item: %@ is its name (View menu)") + ", " + Phrases.position(h.index + 1, of: h.titles.count))
     }
 
@@ -339,7 +339,7 @@ final class MenuNavigationPlugin: GlobalPlugin {
                     lastItem = i; lastSpoken = (i, Date())
                     let obj = ObjectFactory.make(i)
                     API.setFocusObject(obj, ancestors: API.focusAncestors)
-                    Speech.speakMessage("\(b.string(kAXTitleAttribute) ?? "") submenu")
+                    Speech.speakMessage(String(localized: "\(b.string(kAXTitleAttribute) ?? "") submenu", comment: "A submenu opened: its name"))
                     speak(i, obj)
                     return
                 }

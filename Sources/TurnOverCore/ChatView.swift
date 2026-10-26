@@ -358,7 +358,7 @@ public final class ChatView {
         }
         if let element, let at = list.firstIndex(where: { CFEqual($0, element) }) { i = at }
         index[p] = min(i, list.count - 1)
-        Speech.speakOnly(p == .transcript ? "messages" : p == .sections ? "sections" : "conversations")
+        Speech.speakOnly(p == .transcript ? String(localized: "messages", comment: "A part of the chat window") : p == .sections ? String(localized: "sections", comment: "A part of the chat window") : String(localized: "conversations", comment: "A part of the chat window"))
         announce()
     }
 
