@@ -29,6 +29,9 @@ public enum API {
 
     public static func setFocusObject(_ obj: TurnOverObject?, ancestors: [TurnOverObject], interceptor: BrowseModeDocument? = nil) {
         let pid = obj?.pid ?? 0
+        if pid != focusedPid, obj?.appModule.bundleIdentifier == TurnOverSettingsAppModule.bundleID {
+            KeyboardEditor.rememberContext()
+        }
         lock.lock(); _focus = obj; _ancestors = ancestors; _interceptor = interceptor; lock.unlock()
         focusedPidValue.value = pid
     }

@@ -241,7 +241,7 @@ support it speak through TurnOver without any of this.
 KEYBOARD STYLES
 
 TurnOver speaks three screen readers' keys. Press Command Control Comma, then K, until you hear the one you want; the
-TurnOver menu, Settings, Keyboard, and the Settings window offer the same choice. The style changes which keys you
+Settings window's Keyboard section offers the same choice. The style changes which keys you
 press, never what TurnOver can do.
 
 VoiceOver keys (the Mac style)
@@ -288,7 +288,38 @@ In every style
 - TurnOver's own commands behind Command Control Comma never change with the style.
 - Keyboard help (the TurnOver menu, Keys) says what any key does without doing it.
 - Command Control Comma, then Slash, lists every key that works where you are.
-- Your own keys (the TurnOver menu, Keys, My own keys) sit on top of any style.
+- Your own keys (Settings, Keyboard commands) sit on top of any style.
+
+Changing keys
+
+Open Settings with Command Control Comma, then S, and choose Keyboard commands in the sidebar. Commands are
+grouped by category, including commands with no key. Choose a category in the Command categories list, or
+All commands to see everything. Search by a command's words or its key.
+Select a command to see its keys and the Add key, Change and Remove buttons.
+The keys shown belong to the active style and layout. Keys marked during Say All apply only while continuous
+reading is running. Custom assignments override those keys as well as the ordinary preset.
+
+For Add or Change, press the key you want. TurnOver records it without running its current command. Read the
+assignment and any warnings, then choose Save key. Escape or Cancel leaves the keys unchanged. Recording also
+ends when you leave Settings or after 30 seconds. A conflicting assignment is replaced only when you save.
+
+Warnings compare TurnOver's built-in VoiceOver and NVDA styles. They cannot check custom assignments in another
+screen reader. A plain typing or navigation key also carries a warning: assigning it can take it away from apps.
+Right Option is separate from left Option, and number-pad keys are separate from the number row. Essential keys,
+including Escape, the browse/focus-mode key, the TurnOver layer and startup keys, and the keypad's modifier and mode
+switch, cannot be changed.
+
+Remove sends a key to the application. Change assigns the new key and sends the old one to the application. To undo
+either, choose Changed keys in the categories list. A Change appears as one entry: select it and choose
+Restore both keys to put the old and new keys back as they were, including earlier custom assignments. This
+works after restarting TurnOver too; the latest 100 Change actions are kept. If either assignment has since changed,
+each key is listed separately so Restore cannot overwrite the later edit. Other entries have Restore default. The list also keeps existing
+assignments to applications, Shortcuts and script files.
+
+App and document commands come from the app where you opened Settings; open Settings from that app again to refresh
+them. They still work only where that command is available. Changing keyboard style or layout clears this app
+snapshot; reopen Settings from the app to collect its commands in the new style. Named keyboard profiles and
+automatic switching by app are the next parts of the manager.
 
 
 TROUBLESHOOTING AND FEEDBACK

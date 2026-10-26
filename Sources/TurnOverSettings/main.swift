@@ -14,9 +14,11 @@ final class Model: ObservableObject {
     /// A section TurnOver asked the window to show (a settings key pressed): with the first state, or on its own
     /// while the window is open. The sidebar follows it and then clears it.
     @Published var requestedSection: Pane?
+    let keyboardEditor = KeyboardEditorModel()
     private var connection: ControlClient.Connection?
 
     init() {
+        keyboardEditor.send = { [weak self] message in self?.connection?.send(message) }
         connect()
     }
 
@@ -24,15 +26,19 @@ final class Model: ObservableObject {
     /// and again if TurnOver restarts.
     private func connect() {
         connection = ControlClient.Connection(received: { [weak self] message in
+            if self?.keyboardEditor.receive(message) == true { return }
             if message["op"] as? String == "show", let name = message["section"] as? String {
                 self?.requestedSection = Pane(rawValue: name)
                 return
             }
             guard message["op"] as? String == "state", let json = message["json"] as? String, let data = json.data(using: .utf8),
                   let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
+            let reconnecting = self?.connected == false
             self?.state = dict; self?.connected = true
+            if reconnecting { self?.keyboardEditor.connected() }
             if let name = dict["_showSection"] as? String { self?.requestedSection = Pane(rawValue: name) }
         }, ended: { [weak self] in
+            self?.keyboardEditor.disconnected()
             self?.connected = false; self?.connection = nil
             self?.retry()
         })
@@ -83,7 +89,7 @@ final class Model: ObservableObject {
 
 enum Pane: String, CaseIterable, Identifiable {
     // NVDA's order, with TurnOver's own at the end: every setting the menu offered lives here since 21 Oct 2026.
-    case general = "General", speech = "Speech", keyboard = "Keyboard", items = "Item details", webPages = "Web pages", documents = "Documents",
+    case general = "General", speech = "Speech", keyboard = "Keyboard", commands = "Keyboard commands", items = "Item details", webPages = "Web pages", documents = "Documents",
          recognition = "Screen recognition", otherApps = "Other apps' speech", readers = "Screen reader behaviour"
     var id: String { rawValue }
 }
@@ -104,6 +110,7 @@ struct ContentView: View {
                 case .general: GeneralView()
                 case .speech: SpeechView()
                 case .keyboard: KeyboardView()
+                case .commands: KeyboardCommandsView(editor: model.keyboardEditor)
                 case .items: ItemsView()
                 case .webPages: WebPagesView()
                 case .documents: DocumentsView()
@@ -113,7 +120,7 @@ struct ContentView: View {
                 }
             }
         }
-        .frame(minWidth: 700, minHeight: 500)
+        .frame(minWidth: section == .commands ? 820 : 700, minHeight: section == .commands ? 600 : 500)
         .onReceive(model.$requestedSection) { requested in
             guard let requested else { return }
             section = requested
