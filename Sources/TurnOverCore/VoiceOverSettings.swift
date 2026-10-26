@@ -211,14 +211,22 @@ extension VoiceOverSettings {
     public static func apply(_ c: Copied) -> String {
         keepBefore()
         var said: [String] = []
+        var voiceNote = ""
         if let v = AVSpeechSynthesisVoice(identifier: c.voiceId), !c.voiceId.contains("gryphon") {
             config.speech.voice = c.voiceId
             Speech.player.voiceIdentifier = c.voiceId   // (the setting changed but the player kept the old voice: "it says Alex but it is using Eddy", 16 Oct 2026)
             Languages.forget()
             said.append(v.name)
         } else {
+            // Said at the end, apart from the list, or the copy sounded like a failure ("it fails because it can't
+            // find a voice", a reader on AppleVis with a Siri voice, 26 Oct 2026). The Siri voices are Apple's own:
+            // only Siri and VoiceOver may speak with them, and no other program is given them.
             let current = AVSpeechSynthesisVoice(identifier: config.speech.voice)?.name ?? "its voice"
-            said.append("VoiceOver's voice is one TurnOver can't use, so TurnOver keeps \(current)")
+            let siri = c.voiceId.contains("gryphon") || c.voiceId.lowercased().contains("siri")
+            voiceNote = siri
+                ? "VoiceOver's voice is a Siri voice, which Apple gives to Siri and VoiceOver alone, so TurnOver keeps \(current); choose a voice in Settings, Speech."
+                : "VoiceOver's voice isn't one TurnOver can use, so TurnOver keeps \(current); choose a voice in Settings, Speech."
+            Log.info("VoiceOver settings: voice \(c.voiceId) not usable; keeping \(config.speech.voice)")
         }
         config.speech.rate = min(1.0, max(0.1, c.rate))
         Speech.player.rate = config.speech.rate
@@ -271,7 +279,7 @@ extension VoiceOverSettings {
         }
         config.save()
         Log.info("VoiceOver settings copied (archive version \(c.archiveVersion)): \(said.joined(separator: ", "))")
-        return "VoiceOver settings copied: " + said.joined(separator: ", ") + ". Run it again whenever you change VoiceOver's settings: the TurnOver menu, or the speech settings' last stop, sync with VoiceOver."
+        return "VoiceOver settings copied: " + said.joined(separator: ", ") + ". " + (voiceNote.isEmpty ? "" : voiceNote + " ") + "Run it again whenever you change VoiceOver's settings: the TurnOver menu, or the speech settings' last stop, sync with VoiceOver."
     }
 
     /// Said by whichever reader is talking (VoiceOver leads in VoiceOver Utility).

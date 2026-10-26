@@ -15,6 +15,9 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   default) the window's own Tab reached the sidebar and the ducking pop-up and nothing else, and TurnOver's generic
   Tab fallback, sorting the sidebar by its middle, skipped the top half of the pane. Reported by four people on
   AppleVis; reproduced here with the setting off and on.
+- Copying VoiceOver's settings with a Siri voice chosen in VoiceOver no longer sounds like a failure: the copy is
+  reported, then that the voice is a Siri voice, which Apple gives to Siri and VoiceOver alone, so TurnOver keeps its
+  own, with where to choose another. Reported on AppleVis.
 - Spotlight on macOS 27 is read: Command Space says the search field, the letters typed go to it, Tab reaches the
   microphone, Escape says it closed (Urh's change; Spotlight's panel is drawn by "Siri AI" there, which TurnOver didn't
   follow). Reported on AppleVis.
