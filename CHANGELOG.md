@@ -24,6 +24,11 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   TurnOver is on: its own menu action where it has one, else a right click in the middle of it. Control Return, the
   fallback before, opened nothing in Finder or Safari, and on one Mac the desktop's menu instead of the item's. With no
   item, TurnOver says so. Reported on AppleVis.
+- VoiceOver keys: after VO-Shift-Down into Safari's toolbar, VO-Right moves along it and bumps at its end. Safari
+  sends the focus TurnOver had put on the button back to the page, and the cursor followed it there: VO-Right then
+  bumped at once, or landed on the window's close button. Issue 106.
+- A password field says, once a run, that Tab or Shift Tab leaves it: macOS keeps every key from TurnOver in a
+  password field, so VO-Left and VO-Right can't. Issue 107.
 - Spotlight on macOS 27 is read: Command Space says the search field, the letters typed go to it, Tab reaches the
   microphone, Escape says it closed (Urh's change; Spotlight's panel is drawn by "Siri AI" there, which TurnOver didn't
   follow). Reported on AppleVis.

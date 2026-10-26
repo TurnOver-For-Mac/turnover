@@ -35,6 +35,15 @@ public final class ObjectNavigator {
         guard tracksFocus else { return }
         // Choosing in a held list moves the app's focus (Finder shows the folder): the cursor stays in the list.
         if heldList != nil, Date() < keepHoldUntil { return }
+        // The focus TurnOver just put on the item the cursor landed on, and the app sent it on somewhere else (Safari's
+        // toolbar buttons hand it back to the page): the cursor stays on the item. Following the bounce put the
+        // cursor on the page, so VO-Right from the toolbar's first button bumped at an edge, or landed on the window's
+        // close button (issue 106, 26 Oct 2026).
+        if let f = followed, Date().timeIntervalSince(f.at) < 1.5, !CFEqual(f.element, e) {
+            var p: AXUIElement? = e; var hops = 0; var inside = false
+            while let x = p, hops < 10 { if x.isSame(f.element) { inside = true; break }; p = x.element(kAXParentAttribute); hops += 1 }
+            if !inside { Log.io("review: the focus moved on to \(e.role) after following the cursor; the cursor stays"); return }
+        }
         current = e; currentPid = pid; labelSource = nil; heldList = nil
     }
     private var keepHoldUntil = Date.distantPast
