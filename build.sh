@@ -48,10 +48,20 @@ fi
 
 mkdir -p "$BUILD"
 # A failed compile must not install yesterday's binary.
-rm -f "$BUILD/release/turnover" "$BUILD/release/turnover-probe" "$BUILD/release/turnover-plugin" "$BUILD/release/turnover-key" "$BUILD/release/libTurnOverCore.dylib"
+# (Every product, the Settings app and the test runners too: a stale one of those installed or ran as if new. From an
+# outside audit, pull request 13, 26 Oct 2026.)
+for f in turnover turnover-probe turnover-plugin turnover-key turnover-settings turnover-tests turnover-coretest libTurnOverCore.dylib; do
+  rm -f "$BUILD/release/$f"
+done
 # The recipes and official listings, built into the program (make-embedded.py).
 python3 make-embedded.py || { echo "STOP: make-embedded.py failed"; exit 1; }
-swift build -c release --scratch-path "$BUILD" $SWIFTFLAGS 2>&1 | grep -vE '^\[[0-9]+/[0-9]+\]' || true
+# The compiler's own exit status decides, not only whether the files exist: a build that failed after a product was
+# written went on to install (the same audit).
+set +e
+swift build -c release --scratch-path "$BUILD" $SWIFTFLAGS 2>&1 | grep -vE '^\[[0-9]+/[0-9]+\]'
+BUILD_STATUS=${PIPESTATUS[0]}
+set -e
+[ "$BUILD_STATUS" -eq 0 ] || { echo "build failed"; exit "$BUILD_STATUS"; }
 [ -x "$BUILD/release/turnover" ] && [ -x "$BUILD/release/turnover-key" ] && [ -f "$BUILD/release/libTurnOverCore.dylib" ] || { echo "build failed"; exit 1; }
 # The unit tests (Sources/TurnOverTests): a failing test stops the install (8 Oct 2026). TURNOVER_SKIP_TESTS=1 to skip.
 if [ "$TURNOVER_SKIP_TESTS" != 1 ]; then
@@ -62,8 +72,14 @@ fi
 BIN="$BUILD/release"
 if [ "$TURNOVER_UNIVERSAL" = 1 ]; then
   X86="$BUILD-x86_64"
-  rm -f "$X86/release/turnover" "$X86/release/turnover-plugin" "$X86/release/turnover-key" "$X86/release/libTurnOverCore.dylib"
-  swift build -c release --scratch-path "$X86" --triple x86_64-apple-macosx14.0 $SWIFTFLAGS 2>&1 | grep -vE '^\[[0-9]+/[0-9]+\]' || true
+  for f in turnover turnover-probe turnover-plugin turnover-key turnover-settings turnover-tests turnover-coretest libTurnOverCore.dylib; do
+    rm -f "$X86/release/$f"
+  done
+  set +e
+  swift build -c release --scratch-path "$X86" --triple x86_64-apple-macosx14.0 $SWIFTFLAGS 2>&1 | grep -vE '^\[[0-9]+/[0-9]+\]'
+  X86_BUILD_STATUS=${PIPESTATUS[0]}
+  set -e
+  [ "$X86_BUILD_STATUS" -eq 0 ] || { echo "Intel build failed"; exit "$X86_BUILD_STATUS"; }
   [ -x "$X86/release/turnover" ] && [ -x "$X86/release/turnover-key" ] && [ -f "$X86/release/libTurnOverCore.dylib" ] || { echo "Intel build failed"; exit 1; }
   BIN="$BUILD/universal"
   rm -rf "$BIN"; mkdir -p "$BIN"
