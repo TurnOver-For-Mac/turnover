@@ -29,6 +29,10 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   bumped at once, or landed on the window's close button. Issue 106.
 - A password field says, once a run, that Tab or Shift Tab leaves it: macOS keeps every key from TurnOver in a
   password field, so VO-Left and VO-Right can't. Issue 107.
+- WhatsApp: Return on a conversation checks that it is the one now open before going to its message box. WhatsApp
+  answered the press with success and kept the conversation already open, so a link pasted and sent went to the
+  wrong person. On a mismatch the row is selected instead; if that fails too, TurnOver says which conversation is
+  open and stays in the list.
 - Spotlight on macOS 27 is read: Command Space says the search field, the letters typed go to it, Tab reaches the
   microphone, Escape says it closed (Urh's change; Spotlight's panel is drawn by "Siri AI" there, which TurnOver didn't
   follow). Reported on AppleVis.

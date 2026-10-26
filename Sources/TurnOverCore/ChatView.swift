@@ -571,21 +571,44 @@ public final class ChatView {
         }
         if pane == .conversations, r == .success {
             Tones.press()
-            // The app puts its focus in the box as the conversation opens, and that is said; only if it didn't, say it.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                guard let self else { return }
+            // The press answered success and opened nothing: Return on "Mum, Dad and Ollie" went to the box of the
+            // conversation already open, and the link pasted there went to the wrong person (the maintainer, 26 Oct
+            // 2026). So the open conversation's title is checked against the item pressed before the box is entered;
+            // on a mismatch the row is selected instead, and if that fails too, TurnOver says which conversation is
+            // open and stays in the list, never in a box that isn't the one chosen.
+            let wanted = Self.words(e).lowercased()
+            var tries = 0
+            func settle() {
+                let open = openTitle()
+                let matches = open.map { $0.isEmpty || wanted.contains($0.lowercased()) } ?? true   // no title: nothing to check against
+                if !matches, tries == 0 {
+                    tries += 1
+                    Log.io("chat: the open conversation is \(Log.words(open ?? "")), not the one pressed; selecting the row")
+                    _ = e.set(kAXSelectedAttribute, kCFBooleanTrue)
+                    if let list = e.element(kAXParentAttribute) { _ = list.set(kAXSelectedRowsAttribute, [e] as CFArray) }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { settle() }
+                    return
+                }
+                if !matches {
+                    Log.io("chat: still open: \(Log.words(open ?? "")); staying in the list")
+                    Tones.edge()
+                    Speech.speakMessage("\(open ?? "Another conversation") is open, not the one chosen. Press Return again.")
+                    return
+                }
+                // The app puts its focus in the box as the conversation opens, and that is said; only if it didn't, say it.
                 // (WhatsApp flicks its focus to a nameless group after the box: the box said just now is enough.)
                 let inBox = API.focusObject.map { isPart($0.element, spec.composerID) } == true
                     || ((composer?.attr(kAXFocusedAttribute) as? Bool) == true && Speech.sinceFocusSpoken < 1.0)
                 toComposer(quietly: inBox)
+                // WhatsApp moves its focus to the chat's content a moment after opening it (7 Oct 2026): back to the
+                // box, quietly, once it has settled.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { [weak self] in
+                    guard let self, pane == .composer, let c = composer, (c.attr(kAXFocusedAttribute) as? Bool) != true else { return }
+                    Log.io("chat: the app moved the focus off the message box; putting it back")
+                    _ = c.set(kAXFocusedAttribute, kCFBooleanTrue)
+                }
             }
-            // WhatsApp moves its focus to the chat's content a moment after opening it (7 Oct 2026): back to the box,
-            // quietly, once it has settled.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) { [weak self] in
-                guard let self, pane == .composer, let c = composer, (c.attr(kAXFocusedAttribute) as? Bool) != true else { return }
-                Log.io("chat: the app moved the focus off the message box; putting it back")
-                _ = c.set(kAXFocusedAttribute, kCFBooleanTrue)
-            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { settle() }
         }
     }
 
