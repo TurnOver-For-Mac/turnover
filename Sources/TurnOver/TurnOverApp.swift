@@ -288,7 +288,10 @@ final class TurnOverApp {
         let starting = !sawVoiceOverState
         sawVoiceOverState = true
         defer { refreshWindowsLayer() }
-        lead.voiceOverChanged(on: on)
+        // The lock's own VoiceOver, noticed late (after the wake, before or after the unlock): no pin, no yielding.
+        let byLock = on && lead.takeLockVoiceOverOn()
+        if byLock { Log.info("VoiceOver on: the lock screen's own, noticed late") }
+        lead.voiceOverChanged(on: on, byLock: byLock)
         // Screen reader behaviour (22 Oct 2026): the swap is a setting. Off, VoiceOver's key changes nothing of TurnOver's.
         // VoiceOver going off ends any yielding, whatever the swap setting says.
         if !on { lead.yieldedToVoiceOverByHand = false }
@@ -306,7 +309,12 @@ final class TurnOverApp {
             return
         }
         // Only a change made by hand counts as yielding: a hand-over TurnOver posted itself (the lock screen) does not.
-        if on, !starting, !lead.isOurChange { lead.yieldedToVoiceOverByHand = true }
+        // Nor one noticed while the Mac is locked or asleep: the lock's own, its notice held back until the wake, long
+        // after the three-second window (26 Oct 2026; the lead watcher clears the flag again on the unlock as well).
+        if on, !starting, !lead.isOurChange, !lead.locked, !byLock {
+            lead.yieldedToVoiceOverByHand = true
+            Log.info("VoiceOver turned on by hand: TurnOver steps back until it goes off or TurnOver's key")
+        }
         if on { deactivate() } else { activate() }
     }
 

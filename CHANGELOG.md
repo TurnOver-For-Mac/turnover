@@ -2,6 +2,15 @@
 
 The newest build is first. "Reported by a tester" marks a fix for something a tester sent in. Thank you.
 
+## 2.0, build 22.2
+
+### Fixed
+
+- After the Mac wakes and is unlocked, TurnOver comes back. The lock turns VoiceOver on for the login window; the notice
+  of that arrived only after the wake, minutes later, and TurnOver took it for VoiceOver turned on by hand, so it stayed
+  off until quit and started again. The lock's own VoiceOver no longer counts, and once secure input is off TurnOver
+  looks again for up to ten seconds until an ordinary app is in front.
+
 ## 2.0, build 22.1
 
 ### Fixed

@@ -69,11 +69,26 @@ final class LeadWatcher {
         return (d["CGSSessionScreenIsLocked"] as? Bool) ?? (d["CGSSessionScreenIsLocked"] as? Int).map { $0 != 0 } ?? false
     }
 
+    /// The lock turned VoiceOver on (not the user): the notice of it may arrive only after the wake, minutes later,
+    /// before or after the unlock. Pending until that notice is taken (`takeLockVoiceOverOn`) or VoiceOver goes off.
+    private var lockTurnedVoiceOverOn = false
+    /// Each lock starts a new cycle; a wait from an earlier unlock stands down when it sees a newer one.
+    private var lockCycle = 0
+
+    /// The "VoiceOver is on" notice just came: was it the lock's own? Taken once.
+    func takeLockVoiceOverOn() -> Bool {
+        guard lockTurnedVoiceOverOn else { return false }
+        lockTurnedVoiceOverOn = false
+        return true
+    }
+
     private func goingAway(_ why: String) {
         locked = true
+        lockCycle += 1
         Watchdog.shared.noteAsleepOrLocked()
         guard !NSWorkspace.shared.isVoiceOverEnabled else { Log.info("lead watcher: \(why); VoiceOver already on"); return }
         Log.info("lead watcher: \(why); VoiceOver on for the lock screen")
+        lockTurnedVoiceOverOn = true
         handOver(voiceOverOn: true)
     }
 
@@ -82,7 +97,13 @@ final class LeadWatcher {
         guard locked else { return }
         locked = false
         initialTakeOverPending = true   // the lock gave VoiceOver the Mac; the app in front is taken again once (22 Oct 2026)
+        // The lock's own VoiceOver was no yielding by hand. Its "VoiceOver is on" notice came only after the wake, a
+        // quarter of an hour after the lock's three-second window, and was taken as the user's choice: TurnOver never
+        // came back after the unlock until it was quit and started (25 and 26 Oct 2026, three mornings running).
+        // The flag itself stays until the notice comes (it can come after this unlock, too).
+        if lockTurnedVoiceOverOn { yieldedToVoiceOverByHand = false }
         Log.info("lead watcher: \(why); the app in front decides again once secure input is off")
+        let cycle = lockCycle
         // The lock screen's password field turns on secure input, and it stays on for a few seconds after the unlock.
         // While it is on, TurnOver's key tap gets only the modifiers, never a key: handed over at once, TurnOver said
         // "Claude" and then heard none of the user's keys for six seconds (10 Oct 2026). VoiceOver, privileged, still
@@ -95,9 +116,21 @@ final class LeadWatcher {
                 return
             }
             Log.info("lead watcher: secure input \(secure ? "still on after 15 s" : "off") \(Int(Date().timeIntervalSince(started) * 1000)) ms after \(why)")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                if let front = NSWorkspace.shared.frontmostApplication { self?.appActivated(front) }
+            // The app in front decides; while it is still the login window or another agent (no ordinary app has come
+            // to the front yet), looked at again every half second for ten seconds, since no app switch may follow.
+            // A newer lock, or secure input back on (a second lock screen): this wait stands down; the next unlock
+            // starts its own (a code review, 26 Oct 2026).
+            let looking = Date()
+            func decide() {
+                guard cycle == self.lockCycle, !self.locked, !IsSecureEventInputEnabled() else { return }
+                let front = NSWorkspace.shared.frontmostApplication
+                if front == nil || front?.activationPolicy != .regular, Date().timeIntervalSince(looking) < 10 {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { decide() }
+                    return
+                }
+                if let front { self.appActivated(front) }
             }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { decide() }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { decideWhenFree() }
     }
@@ -435,7 +468,10 @@ final class LeadWatcher {
     /// with VoiceOver (3 Oct 2026). Only changes after the first few seconds count.
     private let startedAt = Date()
 
-    func voiceOverChanged(on: Bool) {
+    /// `byLock`: the lock's own VoiceOver, noticed late; no pin and no choice of the user's.
+    func voiceOverChanged(on: Bool, byLock: Bool = false) {
+        if !on { lockTurnedVoiceOverOn = false }   // whatever turned it on, it is off: nothing pending
+        guard !byLock, !locked else { return }
         guard Date().timeIntervalSince(startedAt) > 3 else { return }
         if let t = Watchdog.shared.lastTrip, Date().timeIntervalSince(t) < 30 { return }
         guard Date() > ourChangeUntil, config.applications.switchesAsAppsChange else { return }
