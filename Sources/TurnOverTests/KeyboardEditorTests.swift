@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import Foundation
+import CoreGraphics
 import TurnOverCore
 import TurnOverControl
 
@@ -13,6 +14,49 @@ func keyboardEditorTests() {
     }
     func keys(_ map: KeyboardMap, _ name: String, _ overrides: [String: String] = [:]) -> [String] {
         map.state(overrides: overrides, context: "Test app", style: "VoiceOver keys").commands.first { $0.id == name }?.keys.map(\.id) ?? []
+    }
+
+    test("keyboard editor: right Option T reports time, then date through normal command resolution") {
+        let saved = config
+        defer { config = saved; KeySettings.refresh(); ScriptHandler.clearLastScript() }
+        config.general.keyboardStyle = "mac"
+        config.keyboard.optionCommander = true
+        config.keyboard.userGestures = [:]
+        config.keyboard.multiPressTimeoutMs = 2000
+        ScriptHandler.clearLastScript()
+        // The real right-Option device flag, without relying on the editor's identifier parser.
+        let right = KeyboardGesture(keyCode: 17, modifiers: .option, characters: "†", timestamp: 0, isRepeat: false,
+                                    flags: CGEventFlags.maskAlternate.union(CGEventFlags(rawValue: 0x40)))
+        guard let command = ScriptHandler.findScript(for: right) else { return Harness.fail("right Option T has no command") }
+        expect(command.name, "dateTime")
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none; formatter.timeStyle = .short
+        let beforeTime = formatter.string(from: Date())
+        ScriptHandler.executeScript(command, gesture: right)
+        check([beforeTime, formatter.string(from: Date())].contains(Speech.lastRaw), "the first press sends the time to speech")
+        formatter.dateStyle = .full; formatter.timeStyle = .none
+        let beforeDate = formatter.string(from: Date())
+        guard let repeated = ScriptHandler.findScript(for: right) else { return Harness.fail("the second press has no command") }
+        ScriptHandler.executeScript(repeated, gesture: right)
+        check([beforeDate, formatter.string(from: Date())].contains(Speech.lastRaw), "the second press sends the date to speech")
+    }
+
+    test("keyboard editor: left Option T and default right Option T with Commander off pass through") {
+        let saved = config
+        defer { config = saved; KeySettings.refresh(); ScriptHandler.clearLastScript() }
+        config.general.keyboardStyle = "mac"
+        config.keyboard.optionCommander = true
+        config.keyboard.userGestures = [:]
+        let left = KeyboardGesture(keyCode: 17, modifiers: .option, characters: "†", timestamp: 0, isRepeat: false, flags: .maskAlternate)
+        check(ScriptHandler.findScript(for: left) == nil, "left Option T has no TurnOver command")
+        check(!InputManager.handleKeyDown(left), "left Option T is not swallowed")
+        expect(left.typedCharacter, "†")
+        config.keyboard.optionCommander = false
+        let right = KeyboardGesture(keyCode: 17, modifiers: .option, characters: "†", timestamp: 0, isRepeat: false,
+                                    flags: CGEventFlags.maskAlternate.union(CGEventFlags(rawValue: 0x40)))
+        check(ScriptHandler.findScript(for: right) == nil, "Commander off disables the default right Option T")
+        check(!InputManager.handleKeyDown(right), "right Option T goes to the app with Commander off")
+        expect(right.typedCharacter, "†")
     }
 
     test("keyboard editor: all commands, including unbound commands, retain their categories") {

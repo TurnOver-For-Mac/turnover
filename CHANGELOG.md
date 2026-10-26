@@ -2,6 +2,13 @@
 
 The newest build is first. "Reported by a tester" marks a fix for something a tester sent in. Thank you.
 
+## Unreleased
+
+### Added
+
+- Keyboard commands in Settings: browse commands by category, search their names or keys, add, change or remove
+  assignments, and restore them. Warnings identify clashes with TurnOver's built-in VoiceOver and NVDA bindings.
+
 ## 2.0, build 22.2
 
 ### Fixed
