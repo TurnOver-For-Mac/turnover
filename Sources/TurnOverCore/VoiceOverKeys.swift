@@ -60,7 +60,7 @@ public final class VoiceOverKeysPlugin: GlobalPlugin {
             }
         }
         add("dock", "The Dock (VO-D)", ["kb:turnover+d"]) { _ in KeyboardGesture(identifier: "kb:control+f3")?.send() }
-        add("shortcutMenu", "The shortcut menu for the item (VO-Shift-M)", ["kb:turnover+shift+m"]) { _ in if GlobalCommands.openContextMenu() { return }; if SpellingCorrections.offer() { return }; if GlobalCommands.contextMenuAtCaret() { return }; TurnOverObject.contextMenuRequestedAt = Date(); KeyboardGesture(identifier: "kb:control+enter")?.send() }
+        add("shortcutMenu", "The shortcut menu for the item (VO-Shift-M)", ["kb:turnover+shift+m"]) { _ in if GlobalCommands.openContextMenu() { return }; if SpellingCorrections.offer() { return }; if GlobalCommands.contextMenuAtCaret() { return }; _ = GlobalCommands.contextMenuForItem() }
         add("keyboardHelp", "Keyboard help: every key says what it does (VO-K)", ["kb:turnover+k"]) { _ in InputManager.toggleInputHelp() }
         // VO-H (the commands list) is left out: TurnOver+H is Word's next heading, and TurnOver+slash lists the
         // shortcuts everywhere (4 Oct 2026).

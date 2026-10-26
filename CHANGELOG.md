@@ -20,6 +20,10 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   own, with where to choose another. Reported on AppleVis.
 - NVDA and JAWS keys: Left Option on its own, when the Dock doesn't take the focus (macOS's own Move focus to the Dock
   shortcut turned off), says so and where to turn it on, instead of nothing. Reported on AppleVis.
+- The shortcut menu (VO-Shift-M; Shift F10 or Right Option in the NVDA and JAWS styles) opens the menu of the item
+  TurnOver is on: its own menu action where it has one, else a right click in the middle of it. Control Return, the
+  fallback before, opened nothing in Finder or Safari, and on one Mac the desktop's menu instead of the item's. With no
+  item, TurnOver says so. Reported on AppleVis.
 - Spotlight on macOS 27 is read: Command Space says the search field, the letters typed go to it, Tab reaches the
   microphone, Escape says it closed (Urh's change; Spotlight's panel is drawn by "Siri AI" there, which TurnOver didn't
   follow). Reported on AppleVis.

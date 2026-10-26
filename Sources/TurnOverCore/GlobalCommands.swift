@@ -86,8 +86,9 @@ public final class GlobalCommands: ScriptableObject {
         let windowsOn: () -> Bool = { config.general.windowsKeys }
         script("contextMenu", "Opens the context menu, as Control+Return does (Windows: the Applications key, Shift+F10). Also right Option on its own", gestures: ["kb:shift+f10"], category: win) { _ in
             if GlobalCommands.openContextMenu() { return }
-            TurnOverObject.contextMenuRequestedAt = Date()
-            KeyboardGesture(identifier: "kb:control+enter")?.send()
+            if SpellingCorrections.offer() { return }
+            if GlobalCommands.contextMenuAtCaret() { return }
+            _ = GlobalCommands.contextMenuForItem()
         }.isAvailable = windowsOn
         script("focusDock", "Moves to the Dock (Windows: the Windows key). Left Option on its own", category: win) { _ in
             KeyboardGesture(identifier: "kb:control+f3")?.send()
@@ -550,16 +551,51 @@ public final class GlobalCommands: ScriptableObject {
         // Inside the field on screen, or a scrolled-off caret would click whatever window is there.
         if let frame = TurnOverObject.frame(f.element), !frame.insetBy(dx: -2, dy: -2).contains(CGPoint(x: r.midX, y: r.midY)) { Log.io("context menu: the caret is off the field (\(Int(r.midX)), \(Int(r.midY))); not clicked"); return false }
         let p = CGPoint(x: r.minX + max(1, min(r.width, 4)), y: r.midY)
-        TurnOverObject.contextMenuRequestedAt = Date()
         Log.io("context menu: right click at the caret (\(Int(p.x)), \(Int(p.y)))")
+        rightClick(at: p)
+        return true
+    }
+
+    /// A right click at `p`, the pointer put back after, as VO-Shift-Space leaves it, once the menu has opened.
+    private static func rightClick(at p: CGPoint) {
+        TurnOverObject.contextMenuRequestedAt = Date()
         let src = CGEventSource(stateID: .hidSystemState)
         let before = CGEvent(source: nil)?.location
         CGEvent(mouseEventSource: src, mouseType: .mouseMoved, mouseCursorPosition: p, mouseButton: .right)?.post(tap: .cghidEventTap)
         for type in [CGEventType.rightMouseDown, .rightMouseUp] {
             CGEvent(mouseEventSource: src, mouseType: type, mouseCursorPosition: p, mouseButton: .right)?.post(tap: .cghidEventTap)
         }
-        // The pointer back where it was, as VO-Shift-Space leaves it, once the menu has opened on the click.
         if let before { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { CGWarpMouseCursorPosition(before) } }
+    }
+
+    /// The context menu of the item TurnOver is on, where the page or the caret had none: its own AXShowMenu action
+    /// if it has one, else a right click in the middle of it. Control Return, the fallback until 26 Oct 2026, opened
+    /// nothing here in Finder or Safari, and on one Mac the desktop's menu (New Folder, Change Wallpaper) instead of
+    /// the item's: the click, or the key, landed where no item was (an AppleVis reader). With nothing to open a menu
+    /// for, TurnOver says so rather than clicking whatever lies under the pointer.
+    public static func contextMenuForItem() -> Bool {
+        guard var e = ObjectNavigator.shared.reviewElement ?? API.focusObject?.element else {
+            Speech.speakMessage("No item to open a menu for"); return true
+        }
+        // In a list, outline or table the item is the selected row, not the list: Finder's list answered AXShowMenu
+        // with a two-second timeout and the click would land on whichever row is at the list's middle.
+        if ["AXOutline", "AXTable", "AXList"].contains(e.role),
+           let row = e.elements(kAXSelectedRowsAttribute).first ?? e.elements(kAXSelectedChildrenAttribute).first { e = row }
+        var acts: CFArray?
+        if AXUIElementCopyActionNames(e, &acts) == .success, ((acts as? [String]) ?? []).contains("AXShowMenu") {
+            TurnOverObject.contextMenuRequestedAt = Date()
+            AXUIElementSetMessagingTimeout(e, 0.3)   // never a long wait on main for a menu (AGENTS.md)
+            let r = AXUIElementPerformAction(e, "AXShowMenu" as CFString)
+            AXUIElementSetMessagingTimeout(e, 0)
+            Log.io("context menu: AXShowMenu on \(e.role) → \(r.rawValue)")
+            if r == .success { return true }
+        }
+        guard let frame = TurnOverObject.frame(e), frame.width > 0, frame.height > 0 else {
+            Speech.speakMessage("No item to open a menu for"); return true
+        }
+        let p = CGPoint(x: frame.midX, y: frame.midY)
+        Log.io("context menu: right click on \(e.role) at (\(Int(p.x)), \(Int(p.y)))")
+        rightClick(at: p)
         return true
     }
 
