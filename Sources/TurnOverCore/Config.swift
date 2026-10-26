@@ -202,7 +202,9 @@ public struct Config: Codable {
         public init() {}
         /// The user's own keys (UserGestures): key identifier → "script:<name>", "app:<bundle id>" or "none".
         public var userGestures: [String: String] = [:]
-        enum Keys: String, CodingKey { case speakTypedCharacters, speakTypedWords, speakCommandKeys, multiPressTimeoutMs, layout, speakNewLine, userGestures, optionCommander, numpadCommander, keypadCommands }
+        /// Recent Change actions, so one Restore can undo both sides of a key change after restarting too.
+        public var keyChanges: [KeyboardChange] = []
+        enum Keys: String, CodingKey { case speakTypedCharacters, speakTypedWords, speakCommandKeys, multiPressTimeoutMs, layout, speakNewLine, userGestures, keyChanges, optionCommander, numpadCommander, keypadCommands }
         // Each setting falls back on its own, so adding one never resets the others.
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: Keys.self)
@@ -216,6 +218,7 @@ public struct Config: Codable {
             numpadCommander = (try? c.decodeIfPresent(Bool.self, forKey: .numpadCommander)) ?? false
             keypadCommands = (try? c.decodeIfPresent(Bool.self, forKey: .keypadCommands)) ?? true
             userGestures = (try? c.decodeIfPresent([String: String].self, forKey: .userGestures)) ?? [:]
+            keyChanges = Array(((try? c.decodeIfPresent([KeyboardChange].self, forKey: .keyChanges)) ?? []).suffix(100))
             // Saved before the code name went (12 Oct 2026): "kb:bosun+n" is "kb:turnover+n"; "script:bosunMenu" is
             // "script:turnOverMenu".
             userGestures = Dictionary(userGestures.map { k, v in
@@ -228,6 +231,7 @@ public struct Config: Codable {
             try c.encode(speakCommandKeys, forKey: .speakCommandKeys); try c.encode(multiPressTimeoutMs, forKey: .multiPressTimeoutMs)
             try c.encode(layout, forKey: .layout); try c.encode(speakNewLine, forKey: .speakNewLine)
             try c.encode(userGestures, forKey: .userGestures); try c.encode(optionCommander, forKey: .optionCommander)
+            try c.encode(keyChanges, forKey: .keyChanges)
             try c.encode(numpadCommander, forKey: .numpadCommander); try c.encode(keypadCommands, forKey: .keypadCommands)
         }
     }

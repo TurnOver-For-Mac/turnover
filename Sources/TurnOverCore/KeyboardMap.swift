@@ -102,7 +102,7 @@ public struct KeyboardMap {
         return overrides["kb(\(layout)):" + key.dropFirst(3)] ?? overrides[key]
     }
 
-    public func state(overrides: [String: String], context: String, style: String) -> KeyboardEditing.State {
+    public func state(overrides: [String: String], context: String, style: String, history: [KeyboardChange] = []) -> KeyboardEditing.State {
         var rows = commands
         let ordinary = effective(overrides)
         for (id, name) in ordinary {
@@ -113,7 +113,17 @@ public struct KeyboardMap {
             rows[name]?.keys.append(.init(id: id, label: UserGestures.spoken(id) + " (during Say All)", custom: false, editable: !Self.isEssential(id)))
         }
         for name in rows.keys { rows[name]?.keys.sort { $0.label < $1.label } }
-        let changes = overrides.sorted { $0.key < $1.key }.map { id, value in
+        var covered = Set<String>()
+        var changes: [KeyboardEditing.Change] = []
+        for change in history.reversed() where change.isCurrent(in: overrides) {
+            let affected = Set(change.entries.map(\.key))
+            guard covered.isDisjoint(with: affected) else { continue }
+            covered.formUnion(affected)
+            changes.append(.init(id: "change:" + change.id,
+                                 label: "Changed \(UserGestures.spoken(change.oldKey)) to \(UserGestures.spoken(change.newKey))",
+                                 target: "Restore puts both keys back as they were before this change.", stored: "", undoID: change.id))
+        }
+        changes += overrides.sorted { $0.key < $1.key }.filter { !covered.contains($0.key) }.map { id, value in
             let target: String
             if case .script(let name) = UserGestures.Target(value) { target = commands[name]?.title ?? name }
             else { target = UserGestures.Target(value).map(UserGestures.describe) ?? value }

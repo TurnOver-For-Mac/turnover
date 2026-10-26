@@ -39,7 +39,11 @@ final class KeyboardEditorModel: ObservableObject {
     }
 
     func restore(_ change: KeyboardEditing.Change) {
-        send?(["op": "keyboard", "action": "restore", "key": change.id, "target": change.stored])
+        if let id = change.undoID {
+            send?(["op": "keyboard", "action": "restoreChange", "change": id])
+        } else {
+            send?(["op": "keyboard", "action": "restore", "key": change.id, "target": change.stored])
+        }
     }
 
     func disconnected() {

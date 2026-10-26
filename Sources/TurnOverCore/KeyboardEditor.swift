@@ -93,7 +93,7 @@ public enum KeyboardEditor {
 
     private static func sendState(to reply: @Sendable ([String: Any]) -> Void) {
         let state = catalogue().state(overrides: config.keyboard.userGestures, context: contextName,
-                                      style: config.general.style.spokenName)
+                                      style: config.general.style.spokenName, history: config.keyboard.keyChanges)
         send(state, op: "keyboardState", to: reply)
     }
 
@@ -152,6 +152,10 @@ public enum KeyboardEditor {
                 result("The assignment changed or is no longer available. Record the key again."); return
             }
             finish()
+            if let oldKey = current.oldKey,
+               let change = KeyboardChange(oldKey: oldKey, newKey: candidate.id, before: current.overrides, after: next) {
+                config.keyboard.keyChanges = Array((config.keyboard.keyChanges + [change]).suffix(100))
+            }
             config.keyboard.userGestures = next; config.save(); KeySettings.refresh()
             Log.info("keyboard editor: \(candidate.id) assigned to \(current.command)")
             result("\(candidate.label) assigned.", saved: true)
@@ -163,6 +167,16 @@ public enum KeyboardEditor {
             config.keyboard.userGestures = next; config.save(); KeySettings.refresh()
             Log.info("keyboard editor: \(key) removed from \(command)")
             result("\(UserGestures.spoken(key)) now goes to the application.", saved: true)
+        case "restoreChange":
+            guard let id = message["change"] as? String,
+                  let change = config.keyboard.keyChanges.first(where: { $0.id == id }),
+                  let restored = change.restoring(in: config.keyboard.userGestures) else {
+                result("One of those assignments changed. Refresh the list before restoring it."); return
+            }
+            config.keyboard.userGestures = restored
+            config.keyboard.keyChanges.removeAll { $0.id == id }
+            config.save(); KeySettings.refresh()
+            result("Both keys restored to their previous assignments.", saved: true)
         case "restore":
             guard let key = message["key"] as? String, let expected = message["target"] as? String,
                   config.keyboard.userGestures[key] == expected else { result("That assignment changed. Refresh the list and try again."); return }

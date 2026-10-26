@@ -8,6 +8,7 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 - Keyboard commands in Settings: browse commands by category, search their names or keys, add, change or remove
   assignments, and restore them. Warnings identify clashes with TurnOver's built-in VoiceOver and NVDA bindings.
+  One Restore undoes both sides of a Change, including any earlier custom assignments.
 
 ## 2.0, build 22.2
 

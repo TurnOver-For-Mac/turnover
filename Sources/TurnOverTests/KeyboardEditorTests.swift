@@ -59,6 +59,57 @@ func keyboardEditorTests() {
         expect(right.typedCharacter, "†")
     }
 
+    test("keyboard editor: one restore reverses both keys and their layout overrides after a restart") {
+        let map = KeyboardMap(sources: [.init(owner())], layout: "laptop")
+        let before = ["kb:turnover+t": "script:second", "kb(laptop):turnover+t": "script:first",
+                      "kb:turnover+s": "app:com.apple.TextEdit", "kb(laptop):turnover+s": "script:second",
+                      "kb:rightoption+m": "app:com.apple.mail"]
+        let after = map.assigning("kb:turnover+s", to: "first", replacing: "kb:turnover+t", in: before)!
+        let change = KeyboardChange(oldKey: "kb:turnover+t", newKey: "kb:turnover+s", before: before, after: after)!
+        var saved = Config(); saved.keyboard.userGestures = after; saved.keyboard.keyChanges = [change]
+        let reloaded = try JSONDecoder().decode(Config.self, from: JSONEncoder().encode(saved))
+        let state = map.state(overrides: reloaded.keyboard.userGestures, context: "", style: "", history: reloaded.keyboard.keyChanges)
+        expect(state.changes.filter { $0.undoID != nil }.count, 1)
+        expect(state.changes.filter { $0.undoID == nil }.map(\.id), ["kb:rightoption+m"])
+        expect(reloaded.keyboard.keyChanges.first?.restoring(in: reloaded.keyboard.userGestures), before)
+    }
+
+    test("keyboard editor: restore keeps unrelated edits and rejects a changed member of the pair") {
+        let map = KeyboardMap(sources: [.init(owner())], layout: "laptop")
+        let after = map.assigning("kb:turnover+s", to: "first", replacing: "kb:turnover+t", in: [:])!
+        let change = KeyboardChange(oldKey: "kb:turnover+t", newKey: "kb:turnover+s", before: [:], after: after)!
+        var later = after; later["kb:rightoption+m"] = "app:com.apple.mail"
+        expect(change.restoring(in: later), ["kb:rightoption+m": "app:com.apple.mail"])
+        later["kb:turnover+s"] = "script:second"
+        check(change.restoring(in: later) == nil, "a stale Restore cannot replace a later assignment")
+        expect(map.state(overrides: later, context: "", style: "", history: [change]).changes.filter { $0.undoID != nil }.count, 0)
+    }
+
+    test("keyboard editor: consecutive changes can be restored one complete action at a time") {
+        let map = KeyboardMap(sources: [.init(owner())], layout: "laptop")
+        let first = map.assigning("kb:turnover+s", to: "first", replacing: "kb:turnover+t", in: [:])!
+        let one = KeyboardChange(oldKey: "kb:turnover+t", newKey: "kb:turnover+s", before: [:], after: first)!
+        let second = map.assigning("kb:turnover+8", to: "first", replacing: "kb:turnover+s", in: first)!
+        let two = KeyboardChange(oldKey: "kb:turnover+s", newKey: "kb:turnover+8", before: first, after: second)!
+        expect(map.state(overrides: second, context: "", style: "", history: [one, two]).changes.compactMap(\.undoID), [two.id])
+        let restored = two.restoring(in: second)!
+        expect(map.state(overrides: restored, context: "", style: "", history: [one]).changes.compactMap(\.undoID), [one.id])
+        expect(one.restoring(in: restored), [:])
+        let oldConfig = try JSONDecoder().decode(Config.self, from: Data("{\"keyboard\":{\"userGestures\":{\"kb:rightoption+m\":\"app:com.apple.mail\"}}}".utf8))
+        check(oldConfig.keyboard.keyChanges.isEmpty, "older settings need no migration")
+        expect(oldConfig.keyboard.userGestures["kb:rightoption+m"], "app:com.apple.mail")
+    }
+
+    test("keyboard editor: feedback leaves out assignments and their restore history") {
+        let report = Feedback.settingsForReport(["keyboard": ["layout": "desktop", "userGestures": ["kb:rightoption+m": "app:example"],
+                                                               "keyChanges": [["before": "file:/tmp/example.applescript"]]],
+                                                "applications": ["example"], "userGestures": ["old": "example"]])
+        let keyboard = report["keyboard"] as? [String: Any]
+        expect(keyboard?["layout"] as? String, "desktop")
+        check(keyboard?["userGestures"] == nil && keyboard?["keyChanges"] == nil, "current keys and undo history are omitted")
+        check(report["applications"] == nil && report["userGestures"] == nil, "older private sections remain omitted")
+    }
+
     test("keyboard editor: all commands, including unbound commands, retain their categories") {
         let map = KeyboardMap(sources: [.init(owner())], layout: "laptop")
         let state = map.state(overrides: [:], context: "Test app", style: "VoiceOver keys")

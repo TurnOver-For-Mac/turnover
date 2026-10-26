@@ -82,9 +82,8 @@ public enum Feedback {
         // Settings, without the list of the person's apps and their own keys (which name what they do with the
         // Mac; the report is about how TurnOver was set up, not what for).
         let settings = AppPaths.file("settings.json")
-        if let data = try? Data(contentsOf: settings), var object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            object["applications"] = nil; object["userGestures"] = nil; object["keys"] = nil
-            if let out = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys]) { try? out.write(to: work.appendingPathComponent("settings.json")) }
+        if let data = try? Data(contentsOf: settings), let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if let out = try? JSONSerialization.data(withJSONObject: settingsForReport(object), options: [.prettyPrinted, .sortedKeys]) { try? out.write(to: work.appendingPathComponent("settings.json")) }
         }
         let info = """
         \(Edition.fullName)
@@ -150,6 +149,18 @@ public enum Feedback {
         var buf = [CChar](repeating: 0, count: max(size, 1))
         sysctlbyname("hw.model", &buf, &size, nil, 0)
         return String(decoding: buf.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
+    }
+
+    /// Key assignments and their undo records can name apps and script paths. Both live inside keyboard,
+    /// rather than at the top level checked by older reports (keyboard editor review, 26 Oct 2026).
+    public static func settingsForReport(_ settings: [String: Any]) -> [String: Any] {
+        var out = settings
+        out["applications"] = nil; out["userGestures"] = nil; out["keys"] = nil
+        if var keyboard = out["keyboard"] as? [String: Any] {
+            keyboard["userGestures"] = nil; keyboard["keyChanges"] = nil
+            out["keyboard"] = keyboard
+        }
+        return out
     }
 
     /// A log with what was on screen and what was typed taken out: spoken text, quoted names, typed keys and words,

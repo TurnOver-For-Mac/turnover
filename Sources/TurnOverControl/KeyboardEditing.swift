@@ -28,8 +28,10 @@ public enum KeyboardEditing {
         public var label: String
         public var target: String
         public var stored: String
-        public init(id: String, label: String, target: String, stored: String) {
+        public var undoID: String?
+        public init(id: String, label: String, target: String, stored: String, undoID: String? = nil) {
             self.id = id; self.label = label; self.target = target; self.stored = stored
+            self.undoID = undoID
         }
     }
 

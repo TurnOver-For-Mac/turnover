@@ -310,8 +310,11 @@ including Escape, the browse/focus-mode key, the TurnOver layer and startup keys
 switch, cannot be changed.
 
 Remove sends a key to the application. Change assigns the new key and sends the old one to the application. To undo
-either, choose Changed keys in the categories list, select the key, then choose Restore default. This list also keeps existing assignments
-to applications, Shortcuts and script files.
+either, choose Changed keys in the categories list. A Change appears as one entry: select it and choose
+Restore both keys to put the old and new keys back as they were, including earlier custom assignments. This
+works after restarting TurnOver too; the latest 100 Change actions are kept. If either assignment has since changed,
+each key is listed separately so Restore cannot overwrite the later edit. Other entries have Restore default. The list also keeps existing
+assignments to applications, Shortcuts and script files.
 
 App and document commands come from the app where you opened Settings; open Settings from that app again to refresh
 them. They still work only where that command is available. Changing keyboard style or layout clears this app

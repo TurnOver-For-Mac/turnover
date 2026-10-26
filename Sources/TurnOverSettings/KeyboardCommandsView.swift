@@ -142,7 +142,8 @@ struct KeyboardCommandsView: View {
                 if changes.isEmpty { Text("No changed keys").foregroundStyle(.secondary) }
             }
             if let change = changes.first(where: { $0.id == changedSelection }) {
-                Button("Restore default for \(change.label)") { editor.restore(change) }
+                Button(change.undoID == nil ? "Restore default for \(change.label)" : "Restore both keys") { editor.restore(change) }
+                    .accessibilityLabel(change.undoID == nil ? "Restore default for \(change.label)" : "Restore both keys: \(change.label)")
             } else if !changes.isEmpty {
                 Text("Select a changed key to restore its default.").foregroundStyle(.secondary)
             }
