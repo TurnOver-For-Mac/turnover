@@ -18,6 +18,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 - Copying VoiceOver's settings with a Siri voice chosen in VoiceOver no longer sounds like a failure: the copy is
   reported, then that the voice is a Siri voice, which Apple gives to Siri and VoiceOver alone, so TurnOver keeps its
   own, with where to choose another. Reported on AppleVis.
+- NVDA and JAWS keys: Left Option on its own, when the Dock doesn't take the focus (macOS's own Move focus to the Dock
+  shortcut turned off), says so and where to turn it on, instead of nothing. Reported on AppleVis.
 - Spotlight on macOS 27 is read: Command Space says the search field, the letters typed go to it, Tab reaches the
   microphone, Escape says it closed (Urh's change; Spotlight's panel is drawn by "Siri AI" there, which TurnOver didn't
   follow). Reported on AppleVis.

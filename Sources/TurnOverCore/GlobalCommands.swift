@@ -91,6 +91,20 @@ public final class GlobalCommands: ScriptableObject {
         }.isAvailable = windowsOn
         script("focusDock", "Moves to the Dock (Windows: the Windows key). Left Option on its own", category: win) { _ in
             KeyboardGesture(identifier: "kb:control+f3")?.send()
+            // Control F3 is macOS's "Move focus to the Dock", a shortcut the person can have turned off, and on a
+            // MacBook it needs the Fn flag (sent above). A reader on AppleVis heard nothing at all (26 Oct 2026):
+            // half a second on, if no Dock item is selected, say so and where the shortcut lives.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                let selected = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock").first.map { dock -> Bool in
+                    let app = AXUIElementCreateApplication(dock.processIdentifier)
+                    return app.elements(kAXChildrenAttribute).contains { list in
+                        list.role == "AXList" && list.elements(kAXChildrenAttribute).contains { ($0.attr(kAXSelectedAttribute) as? Bool) == true }
+                    }
+                } ?? false
+                guard !selected else { return }
+                Log.info("focus Dock: no Dock item selected half a second after Control F3")
+                Speech.speakMessage("The Dock didn't take the focus. In System Settings, Keyboard, Keyboard Shortcuts, Keyboard, turn on Move focus to the Dock.")
+            }
         }.isAvailable = windowsOn
         script("trackpadControl", "Gesture control on or off: the trackpad's gestures drive TurnOver (NVDA+Control+Alt+T, touch interaction)", gestures: ["kb:turnover+control+option+t"], category: win) { _ in
             Trackpad.toggle()
