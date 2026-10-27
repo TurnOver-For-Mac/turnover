@@ -14,7 +14,9 @@ with no application behind them), FixtureTests.swift (objects and views against 
 tests on a generated 1,000-row window with call budgets), PolicyTests.swift (the decisions that can leave a blind
 user with no reader: who leads, what the speech queue drops, the VoiceOver Activity's archive against a real export;
 and every recorded fixture read within a budget), GamesTests.swift (the Steam helper's
-line protocol) and PluginTests.swift (the parked plugin format, still tested so it does not rot).
+line protocol), PluginTests.swift (the parked plugin format, still tested so it does not rot), and
+PluginArchiveTests.swift (real ZIPs: entry and expansion limits, misleading size fields, corrupt data, paths,
+links, and cleanup). `turnover-tests archive:` runs the archive checks without installing a plugin.
 
 ## Recorded windows (fixtures)
 

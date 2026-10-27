@@ -233,51 +233,7 @@ public enum PluginLibrary {
         guard data.count == e.size, SHA256.hash(data: data).map({ String(format: "%02x", $0) }).joined() == e.sha256 else {
             throw failure("it didn't match the library's list; nothing was installed")
         }
-        return try unpack(data)
-    }
-
-    nonisolated static func unpack(_ data: Data) throws -> (folder: URL, tmp: URL) {
-        let fm = FileManager.default
-        let tmp = fm.temporaryDirectory.appendingPathComponent("turnover-plugin-\(UUID().uuidString)")
-        try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
-        do {
-            let zip = tmp.appendingPathComponent("p.zip"), out = tmp.appendingPathComponent("unpacked")
-            try data.write(to: zip)
-            // The entries listed before anything is written: a link, or a path with "..", could write outside the
-            // folder during extraction; the check after extraction came too late (a code review, 14 Oct 2026).
-            func zipinfo(_ args: [String]) throws -> String {
-                let z = Process(); z.executableURL = URL(fileURLWithPath: "/usr/bin/zipinfo"); z.arguments = args
-                let o = Pipe(); z.standardOutput = o; z.standardError = FileHandle.nullDevice
-                try z.run(); let text = String(decoding: o.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self); z.waitUntilExit()
-                return text
-            }
-            for n in try zipinfo(["-1", zip.path]).split(separator: "\n") where n.hasPrefix("/") || n.hasPrefix("..") || n.contains("/../") {
-                throw failure("it holds a path outside its folder; nothing was installed")
-            }
-            for line in try zipinfo([zip.path]).split(separator: "\n") where line.hasPrefix("l") {
-                throw failure("it holds a link; nothing was installed")
-            }
-            let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/ditto"); p.arguments = ["-x", "-k", zip.path, out.path]
-            try p.run(); p.waitUntilExit()
-            guard p.terminationStatus == 0 else { throw failure("it couldn't be unpacked") }
-            let keys: [URLResourceKey] = [.isRegularFileKey, .isDirectoryKey, .isSymbolicLinkKey]
-            for case let u as URL in fm.enumerator(at: out, includingPropertiesForKeys: keys) ?? FileManager.DirectoryEnumerator() {
-                let v = try u.resourceValues(forKeys: Set(keys))
-                if v.isSymbolicLink == true || (v.isRegularFile != true && v.isDirectory != true) {
-                    throw failure("it holds something other than plain files; nothing was installed")
-                }
-            }
-            // The library's index tool zips a plugin's files without their folder; a zip made by hand may hold the folder.
-            func hasManifest(_ u: URL) -> Bool { fm.fileExists(atPath: u.appendingPathComponent("manifest.json").path) }
-            guard let folder = hasManifest(out) ? out
-                    : ((try? fm.contentsOfDirectory(at: out, includingPropertiesForKeys: nil)) ?? []).first(where: hasManifest) else {
-                throw failure("it couldn't be unpacked")
-            }
-            return (folder, tmp)
-        } catch {
-            try? fm.removeItem(at: tmp)
-            throw error
-        }
+        return try PluginArchive.unpack(data)
     }
 
     /// Download, check, and install through the same checks as any plugin; asks first when it acts in its app or an
