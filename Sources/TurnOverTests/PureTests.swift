@@ -1128,6 +1128,11 @@ func browseTextNavTests() {
         // Speech settings in the Windows family since 12 Oct 2026 (NVDA-PARITY.md, decision 6), so Caps Lock H
         // opened them too (Guides/11-keys-jaws.md, 21 Oct 2026: "TurnOver H | Opens TurnOver's Speech").
         expect(jaws[normalizeGestureIdentifier("kb:turnover+h")], "reportCurrentSentence", "Caps Lock H reads the sentence, as JAWS's Say Sentence")
+        // The reading keys move the cursor, as JAWS's do; NVDA's review keys left the caret where it was.
+        for (key, name) in [("u", "jaws_sayPriorLine"), ("o", "jaws_sayNextLine"), ("j", "jaws_sayPriorWord"), ("l", "jaws_sayNextWord"),
+                            ("m", "jaws_sayPriorCharacter"), (".", "jaws_sayNextCharacter")] {
+            expect(jaws[normalizeGestureIdentifier("kb:turnover+" + key)], name, "Caps Lock \(key) moves the cursor, as JAWS's \(name.dropFirst(5))")
+        }
         let sayAll = StyleKeymap.sayAllKeys(for: .jaws)
         expect(sayAll[normalizeGestureIdentifier("kb:leftArrow")], "jaws_sayAllBack", "Left during say all goes back")
         expect(sayAll[normalizeGestureIdentifier("kb:pageUp")], "jaws_sayAllFaster", "Page Up during say all is faster")

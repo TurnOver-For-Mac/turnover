@@ -1842,18 +1842,18 @@ JAWS keys
   TurnOver F9: Marks the review cursor as the start of text to copy (NVDA+F9)
   TurnOver H: Reports the current sentence
   TurnOver I: Reports the current line. Pressed twice, spells it
-  TurnOver J: Moves the review cursor to the previous word (NVDA+Control+Left Arrow)
+  TurnOver J: Moves to the previous word and reads it, as Option Left Arrow does (JAWS: Insert+Left Arrow, Caps Lock J)
   TurnOver K: Reports the word at the review cursor; twice, spells it (NVDA+Control+Period)
-  TurnOver L: Moves the review cursor to the next word (NVDA+Control+Right Arrow)
-  TurnOver M: Moves to the previous item in the window
+  TurnOver L: Moves to the next word and reads it, as Option Right Arrow does (JAWS: Insert+Right Arrow, Caps Lock L)
+  TurnOver M: Moves to the previous character and reads it, as Left Arrow does (JAWS: Caps Lock M)
   TurnOver N: Reads the next sentence (VO-Command-Page Down)
-  TurnOver O: Moves the review cursor to the next line (NVDA+Down Arrow, laptop)
+  TurnOver O: Moves to the next line and reads it, as Down Arrow does (JAWS: Caps Lock O)
   TurnOver P: To the item under the pointer; moves object navigation to the item under the mouse pointer (NVDA+Shift+N)
-  TurnOver Period: Next item in the window; moves to the next item in the window, whether or not it can take the focus
+  TurnOver Period: Moves to the next character and reads it, as Right Arrow does (JAWS: Caps Lock Period)
   TurnOver Q: Application and module; reports the application module and the application's name and version (NVDA+Control+F1)
   TurnOver S: Turns reporting of dynamic content changes on or off
   TurnOver Semicolon: Brings object navigation back to the focus
-  TurnOver U: Moves the review cursor to the previous line (NVDA+Up Arrow, laptop)
+  TurnOver U: Moves to the previous line and reads it, as Up Arrow does (JAWS: Caps Lock U)
   TurnOver V: Opens TurnOver's settings in its menu (JAWS: Insert+F2, Insert+6)
   TurnOver Y: Reads the previous sentence (VO-Command-Page Up)
   TurnOver Z: Switches between browse mode and focus mode in a document
