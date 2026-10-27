@@ -257,7 +257,18 @@ public final class AppStoreView {
             guard let self else { return nil }
             // An app's row: rows are reused as the list scrolls (the element remembered may now be another app, or
             // empty), so the row is found again on screen by its name, moving the page there with its scroll bar.
-            if e.kind == .app || e.kind == .card { return bringIntoView(i, name: wanted) }
+            if e.kind == .app || e.kind == .card {
+                guard let row = bringIntoView(i, name: wanted) else { return nil }
+                // The Store's hit-testing lags a new results page: under the row's icon it still named a row of the
+                // search before ("Pages: Create Documents" under "WaterMinder", 27 Oct 2026), so the click was refused.
+                // Up to a second, a quarter at a time, for the system to agree about what is under the point.
+                for attempt in 0..<4 {
+                    if hitAgrees(row, wanted: wanted) { if attempt > 0 { Log.io("app store: the hit test agreed after \(attempt) waits") }; return row }
+                    usleep(250_000)
+                }
+                Log.io("app store: the hit test still names something else under \"\(Log.words(wanted))\"; handing the row over anyway")
+                return row
+            }
             // A heading's button (See All): into view, and checked.
             reveal(e)
             usleep(250_000)
@@ -880,6 +891,23 @@ public final class AppStoreView {
         return true
     }
 
+    /// Whether the system's hit test under the row's icon (or its left edge) names this row. Off the main thread.
+    nonisolated private func hitAgrees(_ row: AXUIElement, wanted: String) -> Bool {
+        guard let f = TurnOverObject.frame(row) else { return false }
+        let icon = Self.first(in: row, depth: 5, where: { $0.role == "AXImage" && ($0.string(kAXDescriptionAttribute) ?? "Artwork") != "Artwork" }).flatMap { TurnOverObject.frame($0) }
+        let p = icon.map { CGPoint(x: $0.midX, y: $0.midY) } ?? CGPoint(x: f.minX + min(20, f.width * 0.1), y: f.midY)
+        var hit: AXUIElement?
+        guard AXUIElementCopyElementAtPosition(app, Float(p.x), Float(p.y), &hit) == .success, let hit else { return false }
+        func name(_ s: String) -> String { (s.components(separatedBy: ",").first ?? s).trimmingCharacters(in: .whitespaces) }
+        var x: AXUIElement? = hit; var hops = 0
+        while let y = x, hops < 8 {
+            if CFEqual(y, row) { return true }
+            if Self.isItem(y) { return name(Self.identity(of: y)) == wanted }
+            x = y.element(kAXParentAttribute); hops += 1
+        }
+        return false
+    }
+
     private func hitIsSafe(_ p: CGPoint, for e: Entry) -> Bool {
         var hit: AXUIElement?
         guard AXUIElementCopyElementAtPosition(app, Float(p.x), Float(p.y), &hit) == .success, let hit else {
@@ -1025,6 +1053,22 @@ public final class AppStoreView {
     private var builtTitle = ""
 
     /// A new page comes a moment after the click; read its title and first item once it has settled.
+    private func settleResults(key: String, wave: Int) {
+        let delay = wave == 1 ? 0.7 : 0.8
+        let names = page.map { $0.label }
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self, self.area == .page, self.currentKey() == key else { return }
+            let current = page.indices.contains(pageIndex) ? page[pageIndex].label : ""
+            self.buildPage()
+            let changed = page.map { $0.label } != names
+            if changed {
+                Log.io("app store: the results changed as they settled (\(names.count) → \(page.count) items); read again")
+                if let i = page.firstIndex(where: { $0.label == current }) { pageIndex = i } else { pageIndex = min(pageIndex, max(0, page.count - 1)) }
+            }
+            if wave < 2 { self.settleResults(key: key, wave: 2) }
+        }
+    }
+
     private func waitForNewPage(from before: String, back: Bool = false, thenFocusPage: Bool = false, tries: Int = 0, moves startMoves: Int? = nil) {
         // The place on this page, by its title (the collection element is a new one when the page comes back).
         if tries == 0, !builtTitle.isEmpty { lastPositions[builtTitle] = pageIndex }
@@ -1041,6 +1085,11 @@ public final class AppStoreView {
             self.buildPage()
             // Keys pressed while waiting were on the old page: the new page starts at its top (or where it was left).
             self.pageIndex = back ? min(self.lastPositions[self.pageTitle] ?? 0, max(0, self.page.count - 1)) : 0
+            // Search results arrive in stages: the first read of "water" had 23 items starting with one app, the
+            // screen a moment later 25 starting with another, and Return then looked for rows the page no longer had
+            // (27 Oct 2026). Looked at again after 0.7 s and 1.5 s: a different list is read again, quietly, the
+            // place kept by name.
+            self.settleResults(key: now, wave: 1)
             _ = moved
             if thenFocusPage, let (_, list) = self.pageRoot() { _ = list.set(kAXFocusedAttribute, kCFBooleanTrue) }
             let title = self.pageTitle

@@ -17,8 +17,10 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   list now; a settings file from before keeps their values.
 - App Store: Return on a search result opens it. The results page's container reports no size, so every row counted
   as off screen and Return said "could not reach … try again" for an app plainly on screen; the page's list, or the
-  window, now gives the area, and a page with no scroll bar asks the row to scroll into view. Reported by the
-  maintainer (Keynote, from a search for Pages).
+  window, now gives the area, and a page with no scroll bar asks the row to scroll into view. Search results that
+  arrive in stages (11, then 24, then 36 for "water") are read again as they settle, the place kept by name, and the
+  Store's own hit test, which lags a new results page, is given up to a second to agree before the icon is clicked.
+  Reported by the maintainer (Keynote, from a search for Pages; then the water apps).
 
 ## 2.0, build 22.3
 
