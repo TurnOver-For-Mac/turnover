@@ -10,6 +10,11 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   Studio's plate) says so a moment after it comes to the front, and names the key for screen recognition in the
   keyboard style in use: VO-Shift-L with VoiceOver keys, the TurnOver key with R with NVDA or JAWS keys. It said
   "window" and then nothing. Issue 74.
+- The verbosity manager: Settings, Item details now lists what is said about an item, in the order it is said (name,
+  kind, value, state, help text, keyboard shortcut, position, level), each on or off, moved up or down with a button.
+  "For" chooses the list for everywhere or for the app last in front, so Mail can say a message's subject before its
+  sender while everything else stays as it was. The three old switches (help text, shortcut, position) are rows of the
+  list now; a settings file from before keeps their values.
 
 ## 2.0, build 22.3
 

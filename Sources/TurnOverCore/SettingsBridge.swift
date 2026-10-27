@@ -22,9 +22,26 @@ public enum SettingsBridge {
     /// Set by the app: the swap setting changed in the window (on or off).
     public static var onSwapChanged: ((Bool) -> Void)?
 
+    /// The last ordinary app in front, apart from TurnOver and its Settings: what the window's per-app verbosity
+    /// list is for (27 Oct 2026).
+    private static var frontApp: (bundle: String, name: String)?
+    private static var frontObserver: NSObjectProtocol?
+
     public static func start() {
         guard !started else { return }
         started = true
+        frontObserver = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { n in
+            guard let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication, app.activationPolicy == .regular,
+                  let b = app.bundleIdentifier, !b.hasPrefix("com.turnover.") else { return }
+            let name = app.localizedName ?? b
+            // Only while the Settings window is running is the state sent: encoding it all on every app switch was
+            // too much for nothing (a code review, 27 Oct 2026).
+            let windowOpen = !NSRunningApplication.runningApplications(withBundleIdentifier: "com.turnover.settings").isEmpty
+            MainActor.assumeIsolated {
+                frontApp = (b, name)
+                if windowOpen { sendState() }   // the window shows the app's name in its "For" list
+            }
+        }
         let server = ControlServer.shared
         server.log = { Log.info($0) }
         server.start(path: AppPaths.file("control.sock").path)
@@ -67,6 +84,8 @@ public enum SettingsBridge {
         dict["_outputDevices"] = SpeechPlayer.outputDevices().map { ["uid": $0.uid, "name": $0.name] }
         dict["_speechPortApps"] = SpeechPort.shared.appDecisions.map { ["id": $0.id, "name": $0.name, "allowed": $0.allowed] }
         dict["_otherLanguages"] = otherLanguagesState()
+        // The app the window's "For this app" means: the last ordinary app in front that isn't TurnOver's own.
+        if let f = frontApp { dict["_frontApp"] = ["bundle": f.bundle, "name": f.name] }
         guard let out = try? JSONSerialization.data(withJSONObject: dict), let s = String(data: out, encoding: .utf8) else { return }
         if let reply { reply(["op": "state", "json": s]) } else { ControlServer.shared.broadcast(["op": "state", "json": s]) }
     }

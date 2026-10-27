@@ -389,10 +389,47 @@ public struct Config: Codable {
             }
         }
     }
+    /// What is said about an item and in what order: the verbosity manager (27 Oct 2026). Eight pieces, each said
+    /// or not, in the order given; one list for everywhere and one per app that differs (Mail: subject first).
+    public struct Verbosity: Codable, Equatable, Sendable {
+        public static let pieces = ["name", "role", "value", "state", "description", "shortcut", "position", "level"]
+        /// What each piece is, for the Settings window.
+        public static let titles: [String: String] = [
+            "name": "Name", "role": "Kind, such as button or link", "value": "Value", "state": "State, such as checked or expanded",
+            "description": "Help text", "shortcut": "Keyboard shortcut", "position": "Position, such as 3 of 10", "level": "Level, in a tree or outline",
+        ]
+        public var order: [String] = pieces
+        public var off: [String] = []
+        public init() {}
+        public init(order: [String], off: [String]) { self.order = order; self.off = off; tidy() }
+        public func says(_ piece: String) -> Bool { !off.contains(piece) }
+        public mutating func set(_ piece: String, said: Bool) { off.removeAll { $0 == piece }; if !said { off.append(piece) } }
+        /// Unknown pieces dropped, missing ones appended in the standard order, no piece twice.
+        public mutating func tidy() {
+            var seen: [String] = []
+            for p in order where Self.pieces.contains(p) && !seen.contains(p) { seen.append(p) }
+            for p in Self.pieces where !seen.contains(p) { seen.append(p) }
+            order = seen
+            off = off.filter { Self.pieces.contains($0) }
+        }
+        enum Keys: String, CodingKey { case order, off }
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: Keys.self)
+            order = (try? c.decodeIfPresent([String].self, forKey: .order)) ?? Self.pieces
+            off = (try? c.decodeIfPresent([String].self, forKey: .off)) ?? []
+            tidy()
+        }
+    }
     public struct Presentation: Codable {
-        public var reportObjectDescriptions = true
-        public var reportKeyboardShortcuts = true
-        public var reportObjectPositionInformation = true
+        /// The three old switches read and write the everywhere list, so the code that asks them keeps working.
+        public var reportObjectDescriptions: Bool { get { verbosity.says("description") } set { verbosity.set("description", said: newValue) } }
+        public var reportKeyboardShortcuts: Bool { get { verbosity.says("shortcut") } set { verbosity.set("shortcut", said: newValue) } }
+        /// (The old position switch covered the level too; it still sets both.)
+        public var reportObjectPositionInformation: Bool { get { verbosity.says("position") } set { verbosity.set("position", said: newValue); verbosity.set("level", said: newValue) } }
+        public var verbosity = Verbosity()
+        public var verbosityByApp: [String: Verbosity] = [:]
+        /// The list for an app (by bundle identifier), or the everywhere list.
+        public func verbosity(for bundle: String?) -> Verbosity { bundle.flatMap { verbosityByApp[$0] } ?? verbosity }
         public var reportDynamicContentChanges = true
         /// VoiceOver's hints: after a pause on an item, what can be done with it ("Return opens its page"). On, as in
         /// VoiceOver, while people are learning TurnOver (7 Oct 2026).
@@ -403,13 +440,18 @@ public struct Config: Codable {
         /// "Bambu Studio, with the Bambu Studio plugin" as an app with a plugin comes to the front (the plugin design notes 13).
         public var announcePlugins = true
         public init() {}
-        enum Keys: String, CodingKey { case reportObjectDescriptions, reportKeyboardShortcuts, reportObjectPositionInformation, reportDynamicContentChanges, speakHints, reportNotifications, announcePlugins }
+        enum Keys: String, CodingKey { case verbosity, verbosityByApp, reportObjectDescriptions, reportKeyboardShortcuts, reportObjectPositionInformation, reportDynamicContentChanges, speakHints, reportNotifications, announcePlugins }
         // Each setting falls back on its own: a settings file from before speakHints keeps the others.
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: Keys.self)
-            reportObjectDescriptions = (try? c.decodeIfPresent(Bool.self, forKey: .reportObjectDescriptions)) ?? true
-            reportKeyboardShortcuts = (try? c.decodeIfPresent(Bool.self, forKey: .reportKeyboardShortcuts)) ?? true
-            reportObjectPositionInformation = (try? c.decodeIfPresent(Bool.self, forKey: .reportObjectPositionInformation)) ?? true
+            // A file from before the list (27 Oct 2026): its three switches become the list's off entries.
+            if let v = try? c.decodeIfPresent(Verbosity.self, forKey: .verbosity) { verbosity = v } else {
+                verbosity = Verbosity()
+                reportObjectDescriptions = (try? c.decodeIfPresent(Bool.self, forKey: .reportObjectDescriptions)) ?? true
+                reportKeyboardShortcuts = (try? c.decodeIfPresent(Bool.self, forKey: .reportKeyboardShortcuts)) ?? true
+                reportObjectPositionInformation = (try? c.decodeIfPresent(Bool.self, forKey: .reportObjectPositionInformation)) ?? true
+            }
+            verbosityByApp = (try? c.decodeIfPresent([String: Verbosity].self, forKey: .verbosityByApp)) ?? [:]
             reportDynamicContentChanges = (try? c.decodeIfPresent(Bool.self, forKey: .reportDynamicContentChanges)) ?? true
             speakHints = (try? c.decodeIfPresent(Bool.self, forKey: .speakHints)) ?? true
             reportNotifications = (try? c.decodeIfPresent(Bool.self, forKey: .reportNotifications)) ?? true
@@ -417,6 +459,7 @@ public struct Config: Codable {
         }
         public func encode(to encoder: Encoder) throws {
             var c = encoder.container(keyedBy: Keys.self)
+            try c.encode(verbosity, forKey: .verbosity); try c.encode(verbosityByApp, forKey: .verbosityByApp)
             try c.encode(reportObjectDescriptions, forKey: .reportObjectDescriptions); try c.encode(reportKeyboardShortcuts, forKey: .reportKeyboardShortcuts)
             try c.encode(reportObjectPositionInformation, forKey: .reportObjectPositionInformation); try c.encode(reportDynamicContentChanges, forKey: .reportDynamicContentChanges)
             try c.encode(speakHints, forKey: .speakHints); try c.encode(reportNotifications, forKey: .reportNotifications)
