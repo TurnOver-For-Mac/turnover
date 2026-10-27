@@ -242,3 +242,26 @@ left the page empty or restarted under Return in one run out of two, each time a
 sound; its host is not. Next: the results page gets a host of its own (a small AppStoreResults controller with the
 keys, the waits and the flat view, and nothing of the old page machinery), and AppStoreView hands over to it on a
 results page and takes back on leaving. Switch off again; the code stays on main, inert.
+
+### VoiceOver as a buffer (27 Oct 2026, late; Oliver's idea: "if we have to use VoiceOver as a kind of buffer")
+
+Measured with VoiceOver on beside TurnOver and driven by script (its AppleScript dictionary: `vo cursor`, `text
+under cursor`, `last phrase`, `move`; `tell application "VoiceOver"`), the switch "Allow VoiceOver to be controlled
+with AppleScript" on:
+
+- Scripted `move` commands are accepted but slow (0.5 to 4 s each) and `text under cursor` stays missing after them.
+  Synthetic VO keys (Control Option Right through System Events) move the cursor in about 150 ms and `text under
+  cursor` answers: 36 of 36 window parts named right after a search, where our wire gave blanks.
+- With VoiceOver's speech muted (VO Shift S) every read is empty: the read API follows what VoiceOver speaks. A
+  silent route would need VoiceOver's own volume at zero or an audio device of its own; not tried, and VoiceOver's
+  volume setting persists, so it is not a thing to flip in a probe.
+- Reaching the rows needs VoiceOver's interaction model (VO Shift Down twice from the page's group); inside a row
+  the parts answered ("74", "Artwork", "Water Daily Intake Tracker, …, zero stars"), and then seventeen of twenty
+  steps on answered blank: VoiceOver too is starved by the Store at that moment, or its cursor was bumping at the
+  row's end; not settled tonight.
+
+Verdict for now: VoiceOver's wire does answer where ours doesn't, at 150 ms a step and only while VoiceOver is
+audibly speaking, and only along VoiceOver's own navigation. Usable as a last resort for a single question ("what
+is this row called", "press it") rather than for reading a page; and only with the swap off and VoiceOver silent by
+some means that keeps its reads alive. Parked behind the engine's own patience, which got names within a round on
+the good runs tonight without VoiceOver at all.
