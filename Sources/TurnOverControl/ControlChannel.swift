@@ -103,38 +103,55 @@ public enum ControlChannel {
 // MARK: - The server (TurnOver)
 
 /// TurnOver's end: accepts, checks, reads lines, hands each message to `handle` on the main thread.
+// Listener and clients, including setup and cancellation, belong to the serial queue. Handlers and logging
+// belong to MainActor. Swift cannot express the queue's ownership; deinit has exclusive access (27 Oct 2026).
 public final class ControlServer: @unchecked Sendable {
     public static let shared = ControlServer()
     /// One message: its fields, and a way to answer the program that sent it.
     public typealias Handler = @MainActor (_ message: [String: Any], _ reply: @escaping @Sendable ([String: Any]) -> Void) -> Void
     /// Set by TurnOver: the ops it answers ("patch", "ask", "say", "toggle", "try"…). Main thread only.
-    nonisolated(unsafe) public var handlers: [String: Handler] = [:]
+    @MainActor public var handlers: [String: Handler] = [:]
     /// Lines for TurnOver's log (set by TurnOver; the channel has no logging of its own). Main thread only.
-    nonisolated(unsafe) public var log: @MainActor (String) -> Void = { _ in }
+    @MainActor public var log: @MainActor (String) -> Void = { _ in }
 
-    private let queue = DispatchQueue(label: "turnover.control")
+    private let queue: DispatchQueue
     private var listener: Int32 = -1
     private var acceptSource: DispatchSourceRead?
-    private var clients: [Int32: (source: DispatchSourceRead, buffer: Data)] = [:]
+    private struct Client {
+        let id: UUID
+        let source: DispatchSourceRead
+        let writer: DispatchSourceWrite
+        var writing = false
+        var buffer = Data()
+        var output = ControlOutput()
+    }
+    private var clients: [Int32: Client] = [:]
     /// Connections that asked to hear the settings as they change (Settings).
     private var subscribers = Set<Int32>()
+
+    /// The supplied queue must be serial.
+    package init(queue: DispatchQueue = DispatchQueue(label: "turnover.control")) { self.queue = queue }
 
     /// Listening at `path`. False if the socket couldn't be made (logged).
     @MainActor @discardableResult
     public func start(path: String) -> Bool {
-        guard listener < 0 else { return true }
+        guard queue.sync(execute: { listener < 0 }) else { return true }
+        guard var addr = ControlChannel.address(path) else { log("control: no socket"); return false }
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-        guard fd >= 0, var addr = ControlChannel.address(path) else { log("control: no socket"); return false }
+        guard fd >= 0 else { log("control: no socket"); return false }
         unlink(path)   // one left by a TurnOver that crashed
         let bound = withUnsafePointer(to: &addr) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) } }
         guard bound == 0 else { log("control: couldn't bind (\(errno))"); close(fd); return false }
         chmod(path, 0o600)   // this user only
         guard listen(fd, 8) == 0 else { log("control: couldn't listen (\(errno))"); close(fd); return false }
-        listener = fd
-        let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
-        source.setEventHandler { [weak self] in self?.acceptOne() }
-        source.resume()
-        acceptSource = source
+        queue.sync {
+            listener = fd
+            let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
+            source.setEventHandler { [weak self] in self?.acceptOne() }
+            source.setCancelHandler { close(fd) }
+            acceptSource = source
+            source.resume()
+        }
         log("control: listening\(ControlChannel.ownTeam == nil ? " (TurnOver unsigned: only programs inside TurnOver)" : "")")
         return true
     }
@@ -142,26 +159,40 @@ public final class ControlServer: @unchecked Sendable {
     private func acceptOne() {
         let fd = accept(listener, nil, nil)
         guard fd >= 0 else { return }
-        var on: Int32 = 1
-        setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
         let (trusted, why) = ControlChannel.peerIsTrusted(fd)
         guard trusted else {
             close(fd)
             DispatchQueue.main.async { MainActor.assumeIsolated { self.log("control: a program turned away (\(why))") } }
             return
         }
+        addClient(fd)
+    }
+
+    /// Takes ownership of an authenticated socket. All connection operations run on queue.
+    package func addClient(_ fd: Int32) {
+        dispatchPrecondition(condition: .onQueue(queue))
+        guard ControlChannel.prepareSocket(fd) else { close(fd); return }
+        let id = UUID()
         let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
-        source.setEventHandler { [weak self] in self?.read(fd) }
-        source.setCancelHandler { close(fd) }
-        clients[fd] = (source, Data())
+        let writer = DispatchSource.makeWriteSource(fileDescriptor: fd, queue: queue)
+        source.setEventHandler { [weak self] in self?.read(fd, id: id) }
+        writer.setEventHandler { [weak self] in self?.flush(fd, id: id) }
+        // Both sources must relinquish the descriptor before close can make its number reusable.
+        let cancelled = DispatchGroup()
+        cancelled.enter(); cancelled.enter()
+        source.setCancelHandler { cancelled.leave() }
+        writer.setCancelHandler { cancelled.leave() }
+        cancelled.notify(queue: queue) { close(fd) }
+        clients[fd] = Client(id: id, source: source, writer: writer)
         source.resume()
     }
 
-    private func read(_ fd: Int32) {
+    private func read(_ fd: Int32, id: UUID) {
+        guard var entry = clients[fd], entry.id == id else { return }
         var chunk = [UInt8](repeating: 0, count: 65536)
-        let n = Darwin.read(fd, &chunk, chunk.count)
+        let n = recv(fd, &chunk, chunk.count, MSG_DONTWAIT)
+        if n < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) { return }
         guard n > 0 else { drop(fd); return }
-        guard var entry = clients[fd] else { return }
         entry.buffer.append(contentsOf: chunk[0..<n])
         // A program that sends a megabyte without a line end is not one of ours.
         if entry.buffer.count > 1_000_000 { drop(fd); return }
@@ -170,7 +201,8 @@ public final class ControlServer: @unchecked Sendable {
             entry.buffer.removeSubrange(entry.buffer.startIndex...end)
             guard let message = (try? JSONSerialization.jsonObject(with: Data(line))) as? [String: Any], let op = message["op"] as? String else { continue }
             if op == "subscribe" { subscribers.insert(fd) }
-            let reply: @Sendable ([String: Any]) -> Void = { [weak self] answer in self?.send(answer, to: fd) }
+            let reply: @Sendable ([String: Any]) -> Void = { [weak self] answer in self?.send(answer, to: fd, id: id) }
+            // JSONSerialization made this graph locally; only the main-queue closure uses it after transfer.
             nonisolated(unsafe) let m = message
             DispatchQueue.main.async { MainActor.assumeIsolated {
                 if let h = self.handlers[op] { h(m, reply) } else if op != "subscribe" { self.log("control: unknown op \(op)") }
@@ -179,17 +211,48 @@ public final class ControlServer: @unchecked Sendable {
         clients[fd] = entry
     }
 
-    private func drop(_ fd: Int32) {
+    package func drop(_ fd: Int32) {
+        dispatchPrecondition(condition: .onQueue(queue))
         subscribers.remove(fd)
-        clients.removeValue(forKey: fd)?.source.cancel()
+        guard let entry = clients.removeValue(forKey: fd) else { return }
+        entry.source.cancel()
+        entry.writer.cancel()
+        if !entry.writing { entry.writer.resume() }
     }
 
-    private func send(_ message: [String: Any], to fd: Int32) {
+    private func send(_ message: [String: Any], to fd: Int32, id: UUID) {
         guard let data = ControlChannel.encode(message) else { return }
         queue.async { [weak self] in
-            guard self?.clients[fd] != nil else { return }
-            data.withUnsafeBytes { _ = write(fd, $0.baseAddress, data.count) }
+            guard let self, self.clients[fd]?.id == id else { return }
+            self.enqueue(data, to: fd)
         }
+    }
+
+    private func enqueue(_ data: Data, to fd: Int32) {
+        guard var entry = clients[fd] else { return }
+        guard entry.output.append(data) else { fail(fd, reason: "outgoing buffer full"); return }
+        clients[fd] = entry
+        flush(fd, id: entry.id)
+    }
+
+    private func flush(_ fd: Int32, id: UUID) {
+        guard var entry = clients[fd], entry.id == id else { return }
+        let result = entry.output.flush { Darwin.send(fd, $0.baseAddress, $0.count, MSG_DONTWAIT) }
+        switch result {
+        case .complete:
+            if entry.writing { entry.writer.suspend(); entry.writing = false }
+        case .blocked:
+            if !entry.writing { entry.writer.resume(); entry.writing = true }
+        case .failed(let error):
+            fail(fd, reason: "write failed (\(error))")
+            return
+        }
+        clients[fd] = entry
+    }
+
+    private func fail(_ fd: Int32, reason: String) {
+        drop(fd)
+        DispatchQueue.main.async { self.log("control: disconnected a client: \(reason)") }
     }
 
     /// To every program that asked to hear (Settings): the settings as they now are.
@@ -197,7 +260,18 @@ public final class ControlServer: @unchecked Sendable {
         guard let data = ControlChannel.encode(message) else { return }
         queue.async { [weak self] in
             guard let self else { return }
-            for fd in self.subscribers { data.withUnsafeBytes { _ = write(fd, $0.baseAddress, data.count) } }
+            // Enqueue can drop a slow or disconnected subscriber.
+            for fd in Array(self.subscribers) { self.enqueue(data, to: fd) }
+        }
+    }
+
+    deinit {
+        // No method can still hold self here; cancellation handlers own the descriptors until sources finish.
+        acceptSource?.cancel()
+        for entry in clients.values {
+            entry.source.cancel()
+            entry.writer.cancel()
+            if !entry.writing { entry.writer.resume() }
         }
     }
 }
@@ -208,12 +282,11 @@ public enum ControlClient {
     /// Connected to TurnOver's channel; nil if TurnOver isn't listening.
     public static func connect(folder: String = "TurnOver") -> Int32? {
         let path = ControlChannel.socketPath(folder: folder)
+        guard var addr = ControlChannel.address(path) else { return nil }
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-        guard fd >= 0, var addr = ControlChannel.address(path) else { return nil }
-        var on: Int32 = 1
-        setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
+        guard fd >= 0 else { return nil }
         let ok = withUnsafePointer(to: &addr) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.connect(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) } }
-        guard ok == 0 else { close(fd); return nil }
+        guard ok == 0, ControlChannel.prepareSocket(fd) else { close(fd); return nil }
         return fd
     }
 
@@ -221,7 +294,7 @@ public enum ControlClient {
     public static func send(_ message: [String: Any], folder: String = "TurnOver", waitFor seconds: Double? = nil) -> (sent: Bool, answer: [String: Any]?) {
         guard let fd = connect(folder: folder) else { return (false, nil) }
         defer { close(fd) }
-        guard let data = ControlChannel.encode(message), write(fd, (data as NSData).bytes, data.count) == data.count else { return (false, nil) }
+        guard let data = ControlChannel.encode(message), ControlChannel.writeAll(data, to: fd) else { return (false, nil) }
         guard let seconds else {
             // Stay connected until TurnOver has read it (it closes its end): closed at once, TurnOver could no longer
             // ask the system who had sent it ("no audit token") and turned every message away; the plugin tool's
@@ -249,25 +322,37 @@ public enum ControlClient {
 
     /// A connection kept open (Settings): messages sent on it, every line TurnOver sends back handed to `received` on
     /// the main thread, `ended` when TurnOver goes.
+    // fd and source are immutable after setup. queue owns buffer, writes and cancellation; deinit cancels only
+    // after the last operation releases self, and the cancellation handler closes fd (27 Oct 2026).
     public final class Connection: @unchecked Sendable {
         private let fd: Int32
         private let source: DispatchSourceRead
+        private let queue = DispatchQueue(label: "turnover.control.client")
+        private let ended: @MainActor () -> Void
         private var buffer = Data()
 
-        public init?(folder: String = "TurnOver", received: @escaping @MainActor ([String: Any]) -> Void, ended: @escaping @MainActor () -> Void) {
+        public convenience init?(folder: String = "TurnOver", received: @escaping @MainActor ([String: Any]) -> Void, ended: @escaping @MainActor () -> Void) {
             guard let fd = ControlClient.connect(folder: folder) else { return nil }
+            self.init(fd: fd, received: received, ended: ended)
+        }
+
+        /// Takes ownership of a connected socket configured with ControlChannel.prepareSocket.
+        package init(fd: Int32, received: @escaping @MainActor ([String: Any]) -> Void, ended: @escaping @MainActor () -> Void) {
             self.fd = fd
-            source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: DispatchQueue(label: "turnover.control.client"))
+            self.ended = ended
+            source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
             source.setEventHandler { [weak self] in
-                guard let self else { return }
+                guard let self, !self.source.isCancelled else { return }
                 var chunk = [UInt8](repeating: 0, count: 65536)
-                let n = read(self.fd, &chunk, chunk.count)
-                guard n > 0 else { self.source.cancel(); DispatchQueue.main.async { MainActor.assumeIsolated { ended() } }; return }
+                let n = recv(self.fd, &chunk, chunk.count, MSG_DONTWAIT)
+                if n < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) { return }
+                guard n > 0 else { self.end(); return }
                 self.buffer.append(contentsOf: chunk[0..<n])
                 while let end = self.buffer.firstIndex(of: 0x0A) {
                     let line = self.buffer[self.buffer.startIndex..<end]
                     self.buffer.removeSubrange(self.buffer.startIndex...end)
                     guard let message = (try? JSONSerialization.jsonObject(with: Data(line))) as? [String: Any] else { continue }
+                    // The parsed graph is transferred to main and never used again on the client queue.
                     nonisolated(unsafe) let m = message
                     DispatchQueue.main.async { MainActor.assumeIsolated { received(m) } }
                 }
@@ -279,7 +364,17 @@ public enum ControlClient {
         @discardableResult
         public func send(_ message: [String: Any]) -> Bool {
             guard let data = ControlChannel.encode(message) else { return false }
-            return write(fd, (data as NSData).bytes, data.count) == data.count
+            return queue.sync {
+                guard !source.isCancelled else { return false }
+                guard ControlChannel.writeAll(data, to: fd) else { end(); return false }
+                return true
+            }
+        }
+
+        private func end() {
+            guard !source.isCancelled else { return }
+            source.cancel()
+            DispatchQueue.main.async { self.ended() }
         }
 
         deinit { source.cancel() }
