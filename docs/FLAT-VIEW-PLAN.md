@@ -227,3 +227,18 @@ So the robust shape is patience and memory, not a different walk:
 
 That is the design to take to step 2; the measurements above are its tests. The code behind the `flatView` switch
 stays as the first cut, off for everyone, and reads a results page well enough to show the shape.
+
+### The second cut, same evening: positions and patience
+
+Rewritten the same night around positions: `walkStructure` numbers the rows (listed, then the content siblings
+back to the top and on to the end, non-rows skipped, a walk that doesn't reach the top discarded), `learnNames` asks
+for the names around the cursor on its own queue, every 300 ms for up to ten seconds, and keeps what answers;
+`resolve` scrolls the row at the position into view, waits for its name, confirms it is the one read, re-counts the
+rows if it stays blank, and makes the hit test agree, asking the row under the point for its name until it answers.
+Seen working in pieces: 13 rows named within a round, "row 7" said then its name as it came, the row at position 7
+found and its name confirmed, the hit test agreeing after the name was waited for. Not yet working as a whole: the
+tie to `AppStoreView`'s own life (buildPage, ensureCurrent, waitForNewPage, settleResults, a stale `loading` flag)
+left the page empty or restarted under Return in one run out of two, each time a different way. The engine is
+sound; its host is not. Next: the results page gets a host of its own (a small AppStoreResults controller with the
+keys, the waits and the flat view, and nothing of the old page machinery), and AppStoreView hands over to it on a
+results page and takes back on leaving. Switch off again; the code stays on main, inert.

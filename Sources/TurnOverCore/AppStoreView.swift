@@ -138,6 +138,8 @@ public final class AppStoreView {
 
     /// The results page read by the flat view: its list replaces `page` as the waves come, the place kept by key.
     private var flatKey = ""
+    /// The first row of this page said once (the waves publish several times as the page fills).
+    private var flatSpokeFirst = false
     private func flatBegin() {
         if flat == nil {
             let f = FlatView(name: "App Store results", adapter: AppStoreFlatAdapter(pid: pid))
@@ -146,26 +148,24 @@ public final class AppStoreView {
         }
         // The same page read again (the settle waves call buildPage): the view's own waves go on; no restart.
         if flatDrives, flatKey == pageKey { return }
-        flatDrives = true; flatKey = pageKey
+        flatDrives = true; flatKey = pageKey; flatSpokeFirst = false
         flat?.begin()
     }
     private func flatEnd() { guard flatDrives else { return }; flatDrives = false; flatItems = []; flat?.end() }
+    /// The index whose placeholder ("row 7") was said while its name was still to come: said again when it comes.
+    private var flatPlaceholderSpoken: Int?
     private func flatChanged(_ items: [FlatItem]) {
-        guard flatDrives, let flat else { return }
-        let current = flatItems.indices.contains(pageIndex) ? flatItems[pageIndex].key : nil
-        var entries: [Entry] = []; var kept: [FlatItem] = []
-        for it in items {
-            guard let e = flat.element(for: it.key) else { continue }
-            var entry = Entry(label: it.label, element: e, kind: .app, shelf: 1)
-            entry.check = it.key.text
-            entries.append(entry); kept.append(it)
+        guard flatDrives else { return }
+        let wasEmpty = page.isEmpty || !flatSpokeFirst
+        let placeholder = AXUIElementCreateApplication(pid)   // an entry's element is never acted on here; resolve finds the live row
+        page = items.map { it in var e = Entry(label: it.label, element: placeholder, kind: .app, shelf: 1); e.check = it.name ?? ""; return e }
+        flatItems = items; shelves = ["", ""]
+        pageIndex = min(pageIndex, max(0, page.count - 1))
+        if wasEmpty, !page.isEmpty { flatSpokeFirst = true; Log.io("app store: the flat view gives the results page \(page.count) rows"); speak(pageIndex, crossing: true) }
+        else if let waiting = flatPlaceholderSpoken, waiting == pageIndex, items.indices.contains(waiting), items[waiting].name != nil {
+            flatPlaceholderSpoken = nil
+            Speech.speakItem(items[waiting].label)
         }
-        let wasEmpty = page.isEmpty
-        page = entries; flatItems = kept; shelves = ["", ""]
-        if let current, let i = kept.firstIndex(where: { $0.key == current }) { pageIndex = i } else { pageIndex = min(pageIndex, max(0, page.count - 1)) }
-        Log.io("app store: the flat view gives the results page \(page.count) items; place \(pageIndex + 1)")
-        // The first items of a new page: said, as the ordinary build says its first item.
-        if wasEmpty, !page.isEmpty { speak(pageIndex, crossing: true) }
     }
 
     public func buildPage() {
@@ -291,14 +291,16 @@ public final class AppStoreView {
     /// another app, the page is read again and the same item found; nil if it cannot be. The looking (scrolling
     /// and waiting, up to two seconds) happens off the main thread, and `then` runs on it (8 Oct 2026).
     private func confirmed(_ i: Int, then: @escaping (Entry?) -> Void) {
-        guard page.indices.contains(i) else { then(nil); return }
+        guard page.indices.contains(i) else { Log.io("app store: nothing at \(i + 1) of \(page.count) to act on"); then(nil); return }
         let e = page[i]
         // The flat view's page: the item is resolved by key in the live tree, brought on screen, the hit test agreeing.
         if flatDrives, let flat, flatItems.indices.contains(i) {
             let item = flatItems[i]
+            guard item.name != nil else { Speech.speakMessage("still reading this row; a moment"); then(nil); return }
             flat.resolve(item) { [weak self] live in
                 guard let self, let live, page.indices.contains(i) else { then(nil); return }
                 page[i].element = live
+                if let n = item.name { page[i].check = n }
                 then(page[i])
             }
             return
@@ -652,9 +654,13 @@ public final class AppStoreView {
     }
 
     private func ensureCurrent() {
-        guard !loading else { return }   // the lists are being written off the main thread
+        guard !loading || flatDrives else { return }   // the lists are being written off the main thread
         if card != nil { area = .page }   // a card over the window: no sidebar to be in
-        if area == .page, page.isEmpty || currentKey() != pageKey { buildPage(); pageIndex = min(pageIndex, max(0, page.count - 1)) }
+        // Under the flat view the list element comes and goes as the Store redraws; the view's own waves keep up, so
+        // a changed key with the same title is no reason to start over (Return emptied the page and did nothing,
+        // 27 Oct 2026).
+        let samePage = flatDrives && pageTitle == builtTitle && pageRoot() != nil
+        if area == .page, page.isEmpty || (currentKey() != pageKey && !samePage) { buildPage(); pageIndex = min(pageIndex, max(0, page.count - 1)) }
         if area == .sidebar { buildSidebar(); sideIndex = min(sideIndex, max(0, sidebar.count - 1)) }
     }
 
@@ -665,6 +671,12 @@ public final class AppStoreView {
         guard list.indices.contains(i) else { return }
         let e = list[i]
         var s = e.label
+        // The flat view's page: the names near here are asked for; a row still to answer is said by its place, then
+        // by name when the name comes.
+        if area == .page, flatDrives, let flat {
+            flat.cursor(at: i)
+            flatPlaceholderSpoken = flatItems.indices.contains(i) && flatItems[i].name == nil ? i : nil
+        }
         // The button as it is now: a download's progress moves on, and Get becomes Open.
         if !e.offerTitle.isEmpty, let o = e.offer, let now = o.string(kAXTitleAttribute) ?? o.string(kAXDescriptionAttribute), now != e.offerTitle {
             s = now.isEmpty ? s.replacingOccurrences(of: ", " + e.offerTitle, with: "") : s.replacingOccurrences(of: e.offerTitle, with: now)
@@ -857,8 +869,9 @@ public final class AppStoreView {
 
     public func open() {
         // While shelves are being read off the main thread, their lists are being written: wait, as the arrows do
-        // (a code review, 14 Oct 2026).
-        guard !loading else { queued.append { [weak self] in self?.open() }; return }
+        // (a code review, 14 Oct 2026). Not under the flat view, which has its own waits: a stale `loading` left
+        // Return queued for good (27 Oct 2026).
+        guard !loading || flatDrives else { queued.append { [weak self] in self?.open() }; return }
         ensureCurrent()
         if area == .sidebar {
             guard sidebar.indices.contains(sideIndex) else { return }
@@ -938,8 +951,10 @@ public final class AppStoreView {
         // What is really under the point, asked of the system: the item itself (or a part of it), and never an
         // offer button. An item's reported position can be stale; a click meant for Puzzle once landed on a Get
         // button and brought up Touch ID to install (7 Oct 2026).
+        // Under the flat view the engine has just had the hit test agree, patiently; the check here answers blank
+        // while the Store is busy and would refuse a row it has confirmed.
         guard let p = candidates.first(where: { c in
-            !(offer?.insetBy(dx: -6, dy: -6).contains(c) ?? false) && area.insetBy(dx: 2, dy: 2).contains(c) && hitIsSafe(c, for: e)
+            !(offer?.insetBy(dx: -6, dy: -6).contains(c) ?? false) && area.insetBy(dx: 2, dy: 2).contains(c) && (flatDrives || hitIsSafe(c, for: e))
         }) else { Log.io("app store: no safe point on the item to click (area \(area))"); return false }
         let home = CGEvent(source: nil)?.location
         Mouse.click(at: p, button: .left, count: 1)
@@ -1137,8 +1152,11 @@ public final class AppStoreView {
             // The same search again leaves the same page: after a moment, read it all the same.
             let limit = thenFocusPage ? 20 : 16
             if (now == before || now.isEmpty) && tries < limit { self.waitForNewPage(from: before, back: back, thenFocusPage: thenFocusPage, tries: tries + 1, moves: start); return }
+            let fromSearch = self.searching
             self.area = .page
             self.searching = false
+            // A new search gives the same list element and title ("Results for …"): the flat view starts over.
+            if fromSearch { self.flatKey = "" }
             self.buildPage()
             // Keys pressed while waiting were on the old page: the new page starts at its top (or where it was left).
             self.pageIndex = back ? min(self.lastPositions[self.pageTitle] ?? 0, max(0, self.page.count - 1)) : 0
@@ -1152,7 +1170,7 @@ public final class AppStoreView {
             let title = self.pageTitle
             if now == before, !thenFocusPage { Log.io("app store: the page did not change"); return }
             Speech.speakMessage(title.isEmpty ? "page" : title)
-            if !self.page.isEmpty { self.speak(self.pageIndex, crossing: true) }
+            if !self.page.isEmpty, !self.flatDrives { self.speak(self.pageIndex, crossing: true) }   // the flat view says its first row itself
         }
     }
 }
