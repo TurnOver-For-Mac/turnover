@@ -483,6 +483,17 @@
         }
       }
     },
+    "%@ is open, not the one chosen. Press Return again." : {
+      "comment" : "Spoken message: %@ is the conversation open",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seçilen değil, %@ açık. Yeniden Return'e basın."
+          }
+        }
+      }
+    },
     "%@ is read by %@" : {
       "localizations" : {
         "en" : {
@@ -2260,7 +2271,7 @@
       }
     },
     "A few short pages: what's new and what to test. Next and Back move; Skip closes them. The details are in the TurnOver menu (Command Control Comma, then M), under What to test in build %@." : {
-      "comment" : "A welcome page after an update: %@ is the build",
+      "comment" : "A welcome page",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -2344,6 +2355,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ için bir başlangıç eklentisi %2$@ içinde, Finder'da açık. Yanındaki kılavuz, anlık görüntü ve menülerle eklentinin profile.json dosyasını düzenleyin; sonra Yazdığınız eklentiyi kur'u seçin."
+          }
+        }
+      }
+    },
+    "A web game is connected on port %@." : {
+      "comment" : "The Steam program's status: %@ is the port",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ numaralı bağlantı noktasına bir web oyunu bağlı."
           }
         }
       }
@@ -2623,6 +2645,17 @@
         }
       }
     },
+    "Another conversation is open, not the one chosen. Press Return again." : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seçilen değil, başka bir sohbet açık. Yeniden Return'e basın."
+          }
+        }
+      }
+    },
     "App Store" : {
       "comment" : "A group of commands in the key list",
       "localizations" : {
@@ -2894,6 +2927,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sorun bulmak için en iyisi. TurnOver'ın son 15 dakikada ve işaretlediğiniz anların çevresinde söylediklerini içerir; bunlar okuduğunuz e-postaların ve sayfaların metni olabilir"
+          }
+        }
+      }
+    },
+    "Big Picture makes Steam open a debugging port on this Mac while it runs, which other programs here could use too. Off removes it. Steam needs restarting after this is turned on." : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Big Picture, Steam çalışırken bu Mac'te bir hata ayıklama bağlantı noktası açtırır; buradaki başka programlar da onu kullanabilir. Kapalı olması onu kaldırır. Bu açıldıktan sonra Steam'in yeniden başlatılması gerekir."
           }
         }
       }
@@ -3364,6 +3407,17 @@
         }
       }
     },
+    "Choose the keys you know: VoiceOver's, NVDA's or JAWS's. Command Control Comma, then K, changes the style; the VO keys do what they do in VoiceOver. Command Control M opens the TurnOver menu. Every setting is in the Settings window: Command Control Comma, then S. To bring your VoiceOver voice and speed with you: Command Control Comma, then V." : {
+      "comment" : "A welcome page",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bildiğiniz tuşları seçin: VoiceOver'ınkiler, NVDA'nınkiler ya da JAWS'ınkiler. Komut Kontrol Ö, sonra K stili değiştirir; VO tuşları VoiceOver'da ne yapıyorsa onu yapar. Komut Kontrol M TurnOver menüsünü açar. Tüm ayarlar Ayarlar penceresinde: Komut Kontrol Ö, sonra S. VoiceOver sesinizi ve hızınızı getirmek için: Komut Kontrol Ö, sonra V."
+          }
+        }
+      }
+    },
     "Claude" : {
       "comment" : "A group of commands in the key list",
       "localizations" : {
@@ -3454,6 +3508,7 @@
     },
     "CoExist off. TurnOver restarts, and VoiceOver's settings are put back." : {
       "comment" : "CoExist turned off",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -3465,6 +3520,7 @@
     },
     "CoExist off. TurnOver restarts." : {
       "comment" : "Spoken message",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -3476,6 +3532,7 @@
     },
     "CoExist on. TurnOver restarts, then VoiceOver Utility opens and closes by itself to set VoiceOver up." : {
       "comment" : "CoExist turned on",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -3487,6 +3544,7 @@
     },
     "CoExist on. TurnOver restarts." : {
       "comment" : "Spoken message",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -3497,6 +3555,7 @@
       }
     },
     "CoExist: VoiceOver stays running alongside TurnOver" : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -3517,8 +3576,20 @@
         }
       }
     },
+    "Command Control Period starts TurnOver and quits it, from anywhere. If TurnOver ever stops responding, VoiceOver comes on within a few seconds and TurnOver starts again. Command Control Comma, then H, opens the guides. To report a problem, use Send feedback in the TurnOver menu." : {
+      "comment" : "A welcome page",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Komut Kontrol Ç, TurnOver'ı her yerden başlatır ve kapatır. TurnOver yanıt vermeyi bırakırsa birkaç saniye içinde VoiceOver açılır ve TurnOver yeniden başlar. Komut Kontrol Ö, sonra H kılavuzları açar. Bir sorunu bildirmek için TurnOver menüsündeki Geri bildirim gönder'i kullanın."
+          }
+        }
+      }
+    },
     "Command Control Period turns TurnOver off and on from anywhere; VoiceOver keeps running either way. If TurnOver ever stops responding, VoiceOver has every app within a few seconds. To report a problem, use Send feedback in the TurnOver menu." : {
       "comment" : "A welcome page",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -6279,6 +6350,17 @@
         }
       }
     },
+    "Keyboard navigation was off on this Mac, so Tab reached only text fields and lists. TurnOver has turned it on: Tab now reaches buttons, pop-ups and sliders too, as on Windows. Apps already open pick it up when they next start. It is in System Settings, Keyboard, if you want it off." : {
+      "comment" : "A welcome page",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu Mac'te klavyeyle gezinme kapalıydı, bu yüzden Tab yalnızca metin alanlarına ve listelere ulaşıyordu. TurnOver onu açtı: Tab artık Windows'taki gibi düğmelere, açılır menülere ve sürgülere de ulaşır. Açık uygulamalar bunu bir sonraki açılışlarında alır. Kapatmak isterseniz Sistem Ayarları, Klavye'de."
+          }
+        }
+      }
+    },
     "Keyboard style" : {
       "localizations" : {
         "tr" : {
@@ -6564,6 +6646,17 @@
         }
       }
     },
+    "Let go of the keys, then press Command Control Period again." : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tuşları bırakın, sonra yeniden Komut Kontrol Ç'ye basın."
+          }
+        }
+      }
+    },
     "Links" : {
       "comment" : "A kind of element in Documents settings\nA rotor kind",
       "localizations" : {
@@ -6811,6 +6904,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Eklenti yap, kur ve yeniden yükle"
+          }
+        }
+      }
+    },
+    "Makes Steam open a debugging port on this Mac while it runs, which other programs here could use too." : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Steam çalışırken bu Mac'te bir hata ayıklama bağlantı noktası açtırır; buradaki başka programlar da onu kullanabilir."
           }
         }
       }
@@ -8405,6 +8508,17 @@
         }
       }
     },
+    "No item to open a menu for" : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Menüsü açılacak öğe yok"
+          }
+        }
+      }
+    },
     "No keys of your own yet" : {
       "localizations" : {
         "tr" : {
@@ -8534,6 +8648,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Şimdi değil"
+          }
+        }
+      }
+    },
+    "Not reading Big Picture." : {
+      "comment" : "The Steam program's status",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Big Picture okunmuyor."
           }
         }
       }
@@ -8759,11 +8884,22 @@
       }
     },
     "Off: each reader has its own switch and neither changes the other. Command Control Period is TurnOver's; Command F5 is VoiceOver's." : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Kapalıyken: her okuyucunun kendi açma kapama tuşu vardır ve biri ötekini değiştirmez. Komut Kontrol Ç TurnOver'ınki; Komut F5 VoiceOver'ınki."
+          }
+        }
+      }
+    },
+    "Off: each reader has its own switch and neither turns the other on or off; TurnOver is still quiet while VoiceOver is on." : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kapalı: her okuyucunun kendi düğmesi vardır ve biri ötekini açıp kapatmaz; VoiceOver açıkken TurnOver yine sessiz kalır."
           }
         }
       }
@@ -8829,6 +8965,27 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Açıkken, hangi okuyucu konuşursa konuşsun Büyük Harf Kilidi her uygulamada NVDA tuşudur. Kapalıyken, VoiceOver'ın kendi Büyük Harf Kilidi tuşları VoiceOver'ın okuduğu uygulamalarda çalışır."
+          }
+        }
+      }
+    },
+    "On: TurnOver turns VoiceOver off as it starts and on as it quits, comes on when VoiceOver turns off and steps aside when VoiceOver comes on. Off: each reader has its own switch and neither turns the other on or off, for VoiceOver reading inside a virtual machine such as Parallels. Either way one reader speaks at a time: while VoiceOver is on, TurnOver is quiet." : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Açık: TurnOver başlarken VoiceOver'ı kapatır, çıkarken açar; VoiceOver kapanınca açılır, VoiceOver açılınca kenara çekilir. Kapalı: her okuyucunun kendi düğmesi vardır ve biri ötekini açıp kapatmaz; Parallels gibi bir sanal makinenin içinde VoiceOver'ın okuması için. Her iki durumda da aynı anda tek okuyucu konuşur: VoiceOver açıkken TurnOver sessizdir."
+          }
+        }
+      }
+    },
+    "One moment: TurnOver is putting VoiceOver's settings back. Press again when it says done." : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bir dakika: TurnOver VoiceOver'ın ayarlarını geri koyuyor. Bitti dediğinde yeniden basın."
           }
         }
       }
@@ -8992,6 +9149,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Açıklama üçgenini açar ya da kapatır (VO-Ters Eğik Çizgi)"
+          }
+        }
+      }
+    },
+    "Opens the Desktop folder in Finder, its items under the arrows (Windows: Windows+D)" : {
+      "comment" : "A command, as the key list and keyboard help say it",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Masaüstü klasörünü Finder'da açar, öğeleri ok tuşlarıyla gezilir (Windows: Windows+D)"
           }
         }
       }
@@ -9468,6 +9636,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "İmleci bu öğeye; fare imlecini nesne gezinmesinin üzerinde olduğu öğeye taşır (NVDA+Shift+M)"
+          }
+        }
+      }
+    },
+    "Port 8080 is in use by something that is not Steam." : {
+      "comment" : "The Steam program's status",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "8080 numaralı bağlantı noktasını Steam olmayan bir şey kullanıyor."
           }
         }
       }
@@ -10203,6 +10382,7 @@
     },
     "Readers per app are off: TurnOver reads everywhere while it is on. Settings, Experimental, turns them on." : {
       "comment" : "Spoken message",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -10212,13 +10392,35 @@
         }
       }
     },
+    "Readers per app are off: TurnOver reads everywhere while it is on. Settings, Screen reader behaviour, turns them on." : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uygulamaya göre okuyucular kapalı: TurnOver açıkken her yeri okur. Ayarlar, Ekran okuyucu davranışı bölümü onları açar."
+          }
+        }
+      }
+    },
     "Reading Big Picture." : {
-      "comment" : "Steam speech",
+      "comment" : "Steam speech\nThe Steam program's status",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Big Picture okunuyor."
+          }
+        }
+      }
+    },
+    "Reading Big Picture. Last: %@" : {
+      "comment" : "The Steam program's status: %@ is the last words read",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Big Picture okunuyor. Son: %@"
           }
         }
       }
@@ -11199,6 +11401,16 @@
         }
       }
     },
+    "Restart Steam" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Steam'i yeniden başlat"
+          }
+        }
+      }
+    },
     "Restart Steam so Big Picture can be read" : {
       "localizations" : {
         "tr" : {
@@ -11539,6 +11751,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Satır ve sütun başlıkları"
+          }
+        }
+      }
+    },
+    "Run it again whenever you change VoiceOver's settings: the TurnOver menu, or the speech settings' last stop, sync with VoiceOver." : {
+      "comment" : "The VoiceOver settings copy done",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VoiceOver'ın ayarlarını her değiştirdiğinizde yeniden çalıştırın: TurnOver menüsünden ya da konuşma ayarlarının son durağı olan VoiceOver ile eşitle'den."
           }
         }
       }
@@ -12769,6 +12992,17 @@
         }
       }
     },
+    "Spotlight closed" : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spotlight kapandı"
+          }
+        }
+      }
+    },
     "Starting" : {
       "localizations" : {
         "tr" : {
@@ -12876,7 +13110,18 @@
         }
       }
     },
+    "Steam" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Steam"
+          }
+        }
+      }
+    },
     "Steam and CrossOver games speak through TurnOver" : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -12907,6 +13152,28 @@
         }
       }
     },
+    "Steam is running without its port; restart Steam from the Games menu." : {
+      "comment" : "The Steam program's status",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Steam bağlantı noktası olmadan çalışıyor; Steam'i Oyunlar menüsünden yeniden başlatın."
+          }
+        }
+      }
+    },
+    "Steam is up; waiting for Big Picture." : {
+      "comment" : "The Steam program's status",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Steam açık; Big Picture bekleniyor."
+          }
+        }
+      }
+    },
     "Steam needs restarting before Big Picture can be read. Restart Steam is in the Games menu." : {
       "comment" : "Steam speech",
       "localizations" : {
@@ -12930,6 +13197,7 @@
       }
     },
     "Steam: Big Picture and Steam's games speak through TurnOver" : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -13206,6 +13474,28 @@
         }
       }
     },
+    "Tab or Shift Tab leaves a password field; macOS keeps the arrow keys from TurnOver here." : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tab ya da Shift Tab parola alanından çıkar; macOS burada ok tuşlarını TurnOver'a vermez."
+          }
+        }
+      }
+    },
+    "Tab reaches every control" : {
+      "comment" : "A welcome page's title",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tab her denetime ulaşır"
+          }
+        }
+      }
+    },
     "Tables" : {
       "comment" : "A kind of element in Documents settings\nA rotor kind",
       "localizations" : {
@@ -13325,6 +13615,17 @@
         }
       }
     },
+    "The Dock didn't take the focus. In System Settings, Keyboard, Keyboard Shortcuts, Keyboard, turn on Move focus to the Dock." : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dock odağı almadı. Sistem Ayarları, Klavye, Klavye Kestirmeleri, Klavye'de Odağı Dock'a taşı'yı açın."
+          }
+        }
+      }
+    },
     "The Mac's default output" : {
       "localizations" : {
         "tr" : {
@@ -13381,6 +13682,7 @@
     },
     "The VO keys do what they do in VoiceOver. TurnOver's own menu, in any app: Command Control Comma. There: this app (VoiceOver or TurnOver reads it), every key, the copy of your VoiceOver settings so the voice is the same, feedback, and quit." : {
       "comment" : "A welcome page",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -13392,6 +13694,7 @@
     },
     "The VO keys do what they do in VoiceOver. TurnOver's own menu, in any app: Command Control Comma. There: this app, every key, the copy of your VoiceOver settings, feedback, and quit.\n\nCommand Control Period turns TurnOver off and on. VoiceOver stays running throughout." : {
       "comment" : "A welcome page",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -13852,6 +14155,17 @@
         }
       }
     },
+    "The next control: the sidebar, then the section's controls in order" : {
+      "comment" : "A command, as the key list and keyboard help say it",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sonraki denetim: önce kenar çubuğu, sonra bölümün denetimleri sırayla"
+          }
+        }
+      }
+    },
     "The next day, and how many events it has" : {
       "comment" : "A command, as the key list and keyboard help say it",
       "localizations" : {
@@ -14002,6 +14316,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Eklenti kitaplığı: %@."
+          }
+        }
+      }
+    },
+    "The previous control" : {
+      "comment" : "A command, as the key list and keyboard help say it",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Önceki denetim"
           }
         }
       }
@@ -14565,7 +14890,7 @@
       }
     },
     "TurnOver %@, build %@, a screen reader for the Mac. It reads the apps you give it under Tools. Feature requests and bug reports through GitHub." : {
-      "comment" : "About TurnOver",
+      "comment" : "Spoken message",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14583,6 +14908,7 @@
     },
     "TurnOver %@, build %@, a screen reader for the Mac. It reads the apps you give it under Tools; with CoExist on, VoiceOver reads the rest. Feature requests and bug reports through GitHub." : {
       "comment" : "About TurnOver, with CoExist on",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14641,8 +14967,19 @@
         }
       }
     },
+    "TurnOver and VoiceOver swap: one comes on as the other goes off" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TurnOver ile VoiceOver yer değiştirir: biri kapanınca öteki açılır"
+          }
+        }
+      }
+    },
     "TurnOver can't keep VoiceOver quiet, so you may hear both. In System Settings, Privacy and Security, Screen and System Audio Recording, turn TurnOver on; or turn CoExist off in TurnOver's Settings, Experimental." : {
       "comment" : "Spoken message",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -14664,6 +15001,7 @@
       }
     },
     "TurnOver comes on when VoiceOver turns off, and off when VoiceOver comes on" : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -14707,6 +15045,7 @@
     },
     "TurnOver counts the characters as you type; Tab moves on" : {
       "comment" : "Said once on reaching a password field",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -14849,8 +15188,31 @@
         }
       }
     },
+    "TurnOver is a full screen reader now: while it is on, it reads everything and VoiceOver is off. Command Control Period starts it and quits it.\n\nThe keys are VoiceOver's, NVDA's or JAWS's: Command Control Comma, then K, changes the style. Command Control M opens the TurnOver menu; Command Control Comma, then S, the Settings window." : {
+      "comment" : "A welcome page",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TurnOver artık tam bir ekran okuyucu: açıkken her şeyi okur ve VoiceOver kapalıdır. Komut Kontrol Ç onu başlatır ve kapatır.\n\nTuşlar VoiceOver'ınkiler, NVDA'nınkiler ya da JAWS'ınkiler: Komut Kontrol Ö, sonra K stili değiştirir. Komut Kontrol M TurnOver menüsünü açar; Komut Kontrol Ö, sonra S Ayarlar penceresini."
+          }
+        }
+      }
+    },
+    "TurnOver is a screen reader for the Mac. It reads every app, with its own voice and the keys you already know. These few pages explain the start. Next and Back move between them." : {
+      "comment" : "A welcome page",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TurnOver, Mac için bir ekran okuyucudur. Her uygulamayı kendi sesiyle ve zaten bildiğiniz tuşlarla okur. Bu birkaç sayfa başlangıcı anlatır. İleri ve Geri sayfalar arasında gezinir."
+          }
+        }
+      }
+    },
     "TurnOver is a second screen reader that works alongside VoiceOver. These few pages explain the start. Next and Back move between them." : {
       "comment" : "A welcome page",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -14883,6 +15245,7 @@
     },
     "TurnOver is not responding. If it doesn't recover, it restarts in twenty seconds." : {
       "comment" : "Spoken message",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -15024,7 +15387,7 @@
       }
     },
     "TurnOver off" : {
-      "comment" : "Spoken message\nTurnOver Key: Command Control Period turned TurnOver off",
+      "comment" : "TurnOver Key: Command Control Period turned TurnOver off",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -15085,6 +15448,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "TurnOver beklenmedik biçimde durdu. Yeniden başlatılıyor."
+          }
+        }
+      }
+    },
+    "TurnOver takes over" : {
+      "comment" : "A welcome page's title",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TurnOver devralır"
           }
         }
       }
@@ -15714,6 +16088,7 @@
       }
     },
     "VoiceOver is kept quiet where TurnOver reads and keeps passwords and macOS's own prompts. Changing it restarts TurnOver." : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -15777,8 +16152,20 @@
         }
       }
     },
+    "VoiceOver settings copied: %@." : {
+      "comment" : "The VoiceOver settings copy done: %@ lists what was copied",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VoiceOver ayarları kopyalandı: %@."
+          }
+        }
+      }
+    },
     "VoiceOver settings copied: %@. Run it again whenever you change VoiceOver's settings: the TurnOver menu, or the speech settings' last stop, sync with VoiceOver." : {
       "comment" : "The VoiceOver settings copy done: %@ lists what was copied",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -15790,6 +16177,7 @@
     },
     "VoiceOver stays on. In TurnOver's apps, such as Mail, Safari, Messages, Word, Excel, Notes and Steam, TurnOver reads and VoiceOver is quiet; everywhere else VoiceOver reads as usual. You never choose: TurnOver says its name as one of its apps comes to the front." : {
       "comment" : "A welcome page",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -15812,6 +16200,7 @@
     },
     "VoiceOver stopped; starting it again." : {
       "comment" : "Spoken message",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -15896,13 +16285,36 @@
         }
       }
     },
-    "VoiceOver's voice is one TurnOver can't use, so TurnOver keeps %@" : {
+    "VoiceOver's voice is a Siri voice, which Apple gives to Siri and VoiceOver alone, so TurnOver keeps %@; choose a voice in Settings, Speech." : {
       "comment" : "Copying VoiceOver's settings: %@ is TurnOver's voice",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
+            "value" : "VoiceOver'ın sesi bir Siri sesi; Apple bu sesleri yalnızca Siri'ye ve VoiceOver'a verir, bu yüzden TurnOver %@ sesini koruyor. Ayarlar, Konuşma'dan bir ses seçin."
+          }
+        }
+      }
+    },
+    "VoiceOver's voice is one TurnOver can't use, so TurnOver keeps %@" : {
+      "comment" : "Copying VoiceOver's settings: %@ is TurnOver's voice",
+      "extractionState" : "stale",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "VoiceOver'ın sesi TurnOver'ın kullanamadığı bir ses, bu yüzden TurnOver %@ sesini koruyor"
+          }
+        }
+      }
+    },
+    "VoiceOver's voice isn't one TurnOver can use, so TurnOver keeps %@; choose a voice in Settings, Speech." : {
+      "comment" : "Copying VoiceOver's settings: %@ is TurnOver's voice",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VoiceOver'ın sesi TurnOver'ın kullanabileceği bir ses değil, bu yüzden TurnOver %@ sesini koruyor. Ayarlar, Konuşma'dan bir ses seçin."
           }
         }
       }
@@ -15945,6 +16357,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ses düzeyi"
+          }
+        }
+      }
+    },
+    "Waiting for Steam." : {
+      "comment" : "The Steam program's status",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Steam bekleniyor."
           }
         }
       }
@@ -16108,6 +16531,7 @@
     },
     "Where TurnOver reads" : {
       "comment" : "A welcome page's title",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -16166,6 +16590,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Hangi uygulamaları TurnOver, hangilerini VoiceOver okuyor (uygulamaya göre okuyucular, Ayarlar, Deneysel)"
+          }
+        }
+      }
+    },
+    "While TurnOver is on, it reads everything and VoiceOver is off. TurnOver turns VoiceOver off as it starts and back on as it quits, so you are never without speech. To change that, Settings, Screen reader behaviour." : {
+      "comment" : "A welcome page",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TurnOver açıkken her şeyi okur ve VoiceOver kapalıdır. TurnOver başlarken VoiceOver'ı kapatır, çıkarken yeniden açar; böylece hiçbir zaman konuşmasız kalmazsınız. Bunu değiştirmek için Ayarlar, Ekran okuyucu davranışı."
           }
         }
       }
@@ -18245,6 +18680,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "boş"
+          }
+        }
+      }
+    },
+    "end" : {
+      "comment" : "The end of the typed command line",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "son"
           }
         }
       }
@@ -24839,6 +25285,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "tablo"
+          }
+        }
+      }
+    },
+    "table %@" : {
+      "comment" : "A Numbers table with no name: its number",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tablo %@"
           }
         }
       }

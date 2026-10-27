@@ -265,7 +265,7 @@ final class Key {
         // Still held: quitting now would leave VoiceOver's shortcut spoiled again, so TurnOver stays (the same review).
         if !held.isEmpty {
             note("Command+Control+Period: modifiers still held after 1.5 s; not quitting")
-            voice.say("Let go of the keys, then press Command Control Period again.")
+            voice.say(String(localized: "Let go of the keys, then press Command Control Period again.", comment: "Spoken message"))
             return
         }
         quitReader(app)

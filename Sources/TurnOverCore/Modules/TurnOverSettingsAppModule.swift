@@ -16,8 +16,8 @@ final class TurnOverSettingsAppModule: AppModule {
         // sorted the sidebar by its middle, so Tab from it skipped every control in the top half of the pane. Here:
         // the sidebar first, then the pane's controls in screen order, round and round, whatever macOS does with Tab.
         let cat = "TurnOver Settings"
-        script("settings_tab", "The next control: the sidebar, then the section's controls in order", gestures: ["kb:tab"], category: cat) { [weak self] g in self?.tab(g, forward: true) }
-        script("settings_shiftTab", "The previous control", gestures: ["kb:shift+tab"], category: cat) { [weak self] g in self?.tab(g, forward: false) }
+        script("settings_tab", String(localized: "The next control: the sidebar, then the section's controls in order", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:tab"], category: cat) { [weak self] g in self?.tab(g, forward: true) }
+        script("settings_shiftTab", String(localized: "The previous control", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+tab"], category: cat) { [weak self] g in self?.tab(g, forward: false) }
     }
 
     private func tab(_ g: KeyboardGesture, forward: Bool) {

@@ -200,7 +200,7 @@ final class TerminalText: TurnOverObject {
             let command = parts.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
             if let (start, text) = cursorLine() { s.anchor = start; s.anchorText = text } else { s.anchor = total }
             s.review = nil
-            Speech.speakText(command.isEmpty ? "blank" : command)
+            Speech.speakText(command.isEmpty ? Phrases.blank : command)
             return
         }
         guard s.anchor >= 0, s.anchor <= total else {
@@ -298,7 +298,7 @@ final class TerminalText: TurnOverObject {
             let trimmed = before.replacingOccurrences(of: "\\s+$", with: "", options: .regularExpression)
             let word = trimmed.split(whereSeparator: { $0 == " " || $0 == "/" }).last.map(String.init) ?? trimmed
             g.send()
-            Speech.speakText(word.isEmpty ? "space" : word)
+            Speech.speakText(word.isEmpty ? String(localized: "space", comment: "Spoken message") : word)
         }
         script("terminal_clearLine", String(localized: "Clears what has been typed on the command line", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:control+u"], category: cat) { [weak self] g in
             g.send()
@@ -322,7 +322,7 @@ final class TerminalText: TurnOverObject {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
                     guard let self, let c = self.cursor else { return }
                     let rest = self.inputAfter(c)
-                    Speech.speakText(start ? (rest.isEmpty ? "blank" : rest) : "end")
+                    Speech.speakText(start ? (rest.isEmpty ? Phrases.blank : rest) : String(localized: "end", comment: "The end of the typed command line"))
                 }
             }
         }
@@ -387,7 +387,7 @@ final class TerminalText: TurnOverObject {
         if target > last { target = last; Tones.edge() }
         s.review = target
         let t = (lineText(target) ?? "").trimmingCharacters(in: .whitespaces)
-        Speech.speakItem(t.isEmpty ? "blank" : t, processed: true)   // on the display too, until the shell line moves (8 Oct 2026)
+        Speech.speakItem(t.isEmpty ? Phrases.blank : t, processed: true)   // on the display too, until the shell line moves (8 Oct 2026)
     }
 
     private func reviewTo(top: Bool) {
@@ -395,6 +395,6 @@ final class TerminalText: TurnOverObject {
         let target = top ? 0 : lastContentLine()
         s.review = target
         let t = (lineText(target) ?? "").trimmingCharacters(in: .whitespaces)
-        Speech.speakItem(t.isEmpty ? "blank" : t, processed: true)   // on the display too, until the shell line moves (8 Oct 2026)
+        Speech.speakItem(t.isEmpty ? Phrases.blank : t, processed: true)   // on the display too, until the shell line moves (8 Oct 2026)
     }
 }

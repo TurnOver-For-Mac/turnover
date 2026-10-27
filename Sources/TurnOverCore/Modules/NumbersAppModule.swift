@@ -45,7 +45,7 @@ final class NumbersAppModule: AppModule {
         if let c = current { target = c + (forward ? 1 : -1) } else { target = forward ? 0 : all.count - 1 }
         guard target >= 0, target < all.count else { Tones.edge(); Speech.speakMessage(forward ? String(localized: "no next table", comment: "Spoken message") : String(localized: "no previous table", comment: "Spoken message")); return }
         let t = all[target]
-        Speech.cancel(); Speech.speakMessage(t.string(kAXTitleAttribute) ?? "table \(target + 1)")
+        Speech.cancel(); Speech.speakMessage(t.string(kAXTitleAttribute) ?? String(localized: "table \(String(target + 1))", comment: "A Numbers table with no name: its number"))
         lastPlace = nil
         _ = click(firstCellOf: t)
     }

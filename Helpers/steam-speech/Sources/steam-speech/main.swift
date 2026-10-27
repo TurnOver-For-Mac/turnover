@@ -339,12 +339,13 @@ final class BigPictureReader {
     private(set) var steamRunningWithoutPort = false
 
     var status: String {
-        guard let r = reader else { return "Not reading Big Picture." }
-        if steamRunningWithoutPort { return "Steam is running without its port; restart Steam from the Games menu." }
-        if r.portIsForeign { return "Port 8080 is in use by something that is not Steam." }
-        if !r.portIsUp { return "Waiting for Steam." }
-        if r.sessions.isEmpty { return "Steam is up; waiting for Big Picture." }
-        return lastSpoken.isEmpty ? "Reading Big Picture." : "Reading Big Picture. Last: \(lastSpoken.prefix(60))"
+        guard let r = reader else { return String(localized: "Not reading Big Picture.", bundle: turnOverApp, comment: "The Steam program's status") }
+        if steamRunningWithoutPort { return String(localized: "Steam is running without its port; restart Steam from the Games menu.", bundle: turnOverApp, comment: "The Steam program's status") }
+        if r.portIsForeign { return String(localized: "Port 8080 is in use by something that is not Steam.", bundle: turnOverApp, comment: "The Steam program's status") }
+        if !r.portIsUp { return String(localized: "Waiting for Steam.", bundle: turnOverApp, comment: "The Steam program's status") }
+        if r.sessions.isEmpty { return String(localized: "Steam is up; waiting for Big Picture.", bundle: turnOverApp, comment: "The Steam program's status") }
+        return lastSpoken.isEmpty ? String(localized: "Reading Big Picture.", bundle: turnOverApp, comment: "The Steam program's status")
+            : String(localized: "Reading Big Picture. Last: \(String(lastSpoken.prefix(60)))", bundle: turnOverApp, comment: "The Steam program's status: %@ is the last words read")
     }
 
     func start() {
@@ -664,7 +665,7 @@ FileHandle.standardInput.readabilityHandler = { h in
             let line = String(decoding: pendingInput[pendingInput.startIndex..<nl], as: UTF8.self).trimmingCharacters(in: .whitespaces)
             pendingInput.removeSubrange(pendingInput.startIndex...nl)
             switch line {
-            case "status": Out.line("T", [bigPicture?.status ?? "Not reading Big Picture.", web.portIsUp ? "A web game is connected on port \(webPort)." : ""].filter { !$0.isEmpty }.joined(separator: " "))
+            case "status": Out.line("T", [bigPicture?.status ?? String(localized: "Not reading Big Picture.", bundle: turnOverApp, comment: "The Steam program's status"), web.portIsUp ? String(localized: "A web game is connected on port \(String(webPort)).", bundle: turnOverApp, comment: "The Steam program's status: %@ is the port") : ""].filter { !$0.isEmpty }.joined(separator: " "))
             case "restart-steam": SteamRestart.run()
             case let l where l.hasPrefix("key "):
                 let parts = l.split(separator: " ")

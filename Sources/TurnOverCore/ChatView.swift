@@ -592,7 +592,8 @@ public final class ChatView {
                 if !matches {
                     Log.io("chat: still open: \(Log.words(open ?? "")); staying in the list")
                     Tones.edge()
-                    Speech.speakMessage("\(open ?? "Another conversation") is open, not the one chosen. Press Return again.")
+                    Speech.speakMessage(open.map { String(localized: "\($0) is open, not the one chosen. Press Return again.", comment: "Spoken message: %@ is the conversation open") }
+                        ?? String(localized: "Another conversation is open, not the one chosen. Press Return again.", comment: "Spoken message"))
                     return
                 }
                 // The app puts its focus in the box as the conversation opens, and that is said; only if it didn't, say it.

@@ -172,9 +172,9 @@ extension BrowseModeDocument {
                 if checkable, let v = now.value, v != before.value {
                     if !Speech.checkStateSpoken(of: element, since: pressedAt) { Speech.speakCheckState(of: element, named: movedOn) }
                 } else if let e = now.expanded, e != before.expanded, !isFocus {
-                    Speech.speakMessage(prefix + (e ? "expanded" : "collapsed"))
+                    Speech.speakMessage(prefix + (e ? State.expanded.displayString : State.collapsed.displayString))
                 } else if let sel = now.selected, sel != before.selected, !isFocus {
-                    Speech.speakMessage(prefix + (sel ? "selected" : "not selected"))
+                    Speech.speakMessage(prefix + (sel ? State.selected.displayString : State.selected.negativeDisplayString))
                 } else {
                     if tries.count == 1 { self.finishWatch(watch, element, changed: true, movedOn: movedOn) } else { look(tries.dropFirst()) }
                     return
