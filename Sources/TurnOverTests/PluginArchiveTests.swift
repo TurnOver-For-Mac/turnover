@@ -223,8 +223,13 @@ func pluginArchiveTests() {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
             process.arguments = ["-c", "-k", "--sequesterRsrc", "--keepParent", source.path, zip.path]
+            // The test runner injects AXReplayShim. On CI, ditto's arm64e slice cannot load that arm64 library
+            // (27 Oct 2026, macOS 27); archive creation needs none of the test runner's environment.
+            process.environment = ["LC_ALL": "C", "PATH": "/usr/bin:/bin"]
             try process.run(); process.waitUntilExit()
-            expect(process.terminationStatus, 0)
+            guard process.terminationReason == .exit, process.terminationStatus == 0 else {
+                return Harness.fail("ditto could not create the Finder ZIP fixture (status \(process.terminationStatus))")
+            }
             let unpacked = try PluginArchive.unpack(Data(contentsOf: zip), temporaryDirectory: work)
             defer { try? FileManager.default.removeItem(at: unpacked.tmp) }
             expect(try Data(contentsOf: unpacked.folder.appendingPathComponent("manifest.json")), archiveManifest)
