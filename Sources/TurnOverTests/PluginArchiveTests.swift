@@ -20,13 +20,13 @@ private func archiveFile(_ name: String, _ data: Data, in source: URL) throws {
     try data.write(to: path)
 }
 
-private func makePluginZIP(_ source: URL, options: [String] = []) throws -> Data {
+private func makePluginZIP(_ source: URL, options: [String] = [], entries: [String] = ["."]) throws -> Data {
     let zip = source.deletingLastPathComponent().appendingPathComponent("fixture.zip")
     try? FileManager.default.removeItem(at: zip)
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
     process.currentDirectoryURL = source
-    process.arguments = ["-q", "-r", "-y"] + options + [zip.path, "."]
+    process.arguments = ["-q", "-r", "-y"] + options + [zip.path] + entries
     process.environment = ["LC_ALL": "C", "PATH": "/usr/bin:/bin"]
     process.standardInput = FileHandle.nullDevice
     process.standardOutput = FileHandle.nullDevice
@@ -261,14 +261,47 @@ func pluginArchiveTests() {
     test("archive: password-protected files are refused without prompting") {
         try withArchiveFixture { source, work in
             try archiveFile("manifest.json", archiveManifest, in: source)
-            try refuseArchive(makePluginZIP(source, options: ["-P", "public-test-password"]), in: work, reason: "valid plugin archive")
+            try refuseArchive(makePluginZIP(source, options: ["-P", "public-test-password"]), in: work, reason: "encrypted content")
         }
     }
-    test("archive: links are refused before their targets can be used") {
+    test("archive: encrypted entries with an empty password are refused at inspection") {
         try withArchiveFixture { source, work in
+            // A stored manifest.json with traditional ZIP encryption and an empty password. zip -P "" refuses
+            // to create this case, so keep the small fixture here; its plaintext is archiveManifest.
+            guard let encrypted = Data(base64Encoded:
+                "UEsDBBQAAQAAAAAAW11+KnxpRQAAADkAAAANAAAAbWFuaWZlc3QuanNvbqsav8WGe0fFjfIi0iwABHCtJNREAh2lEj9YyDEEWXGoMQNUG8B/AKbbYgApbF6Cht1PkaM5vh9icpjvvBwIXHVvm2D7PFBLAQIUAxQAAQAAAAAAW11+KnxpRQAAADkAAAANAAAAAAAAAAAAAACAAQAAAABtYW5pZmVzdC5qc29uUEsFBgAAAAABAAEAOwAAAHAAAAAAAA=="
+            ) else { return Harness.fail("invalid empty-password fixture") }
+            check(zipNumber(encrypted, at: 6, bytes: 2) & 1 == 1, "fixture's encryption flag is set")
+            let zip = source.deletingLastPathComponent().appendingPathComponent("encrypted.zip")
+            try encrypted.write(to: zip)
+            // Establish that supplying an empty password really decrypts this otherwise valid archive.
+            expect(try PluginArchive.run("unzip", ["-p", "-P", "", zip.path], limit: 1024, capture: true), archiveManifest)
+            try refuseArchive(encrypted, in: work, reason: "encrypted content")
+        }
+    }
+    test("archive: an outside symlink followed by a replacement file cannot overwrite its target") {
+        try withArchiveFixture { source, work in
+            let sentinel = source.deletingLastPathComponent().appendingPathComponent("sentinel.txt")
+            let original = Data("Outside the archive: leave this unchanged".utf8)
+            try original.write(to: sentinel)
             try archiveFile("manifest.json", archiveManifest, in: source)
-            try FileManager.default.createSymbolicLink(atPath: source.appendingPathComponent("link").path, withDestinationPath: "manifest.json")
-            try refuseArchive(makePluginZIP(source), in: work, reason: "holds a link")
+            try FileManager.default.createSymbolicLink(atPath: source.appendingPathComponent("link").path, withDestinationPath: sentinel.path)
+            try archiveFile("zzzz", Data("Attempt to overwrite the outside file".utf8), in: source)
+            // Put the symlink first, then a regular file with the same archive name. An extractor must not
+            // follow the earlier link when writing the later file (review of #127, 27 Oct 2026).
+            let zipped = try makePluginZIP(source, entries: ["link", "zzzz", "manifest.json"])
+            var replacements = 0
+            let attack = changeArchiveHeaders(zipped) { data, start, central in
+                let length = zipNumber(data, at: start + (central ? 28 : 26), bytes: 2)
+                let name = start + (central ? 46 : 30)
+                if length == 4, data[name..<(name + length)] == Data("zzzz".utf8) {
+                    data.replaceSubrange(name..<(name + length), with: Data("link".utf8))
+                    replacements += 1
+                }
+            }
+            expect(replacements, 2, "replacement file renamed in both headers")
+            try refuseArchive(attack, in: work, reason: "holds a link")
+            expect(try Data(contentsOf: sentinel), original, "outside symlink target is untouched")
         }
     }
     test("archive: absolute and parent-traversing paths are refused") {
@@ -283,6 +316,30 @@ func pluginArchiveTests() {
                 while let range = unsafe.range(of: original) { unsafe.replaceSubrange(range, with: replacement) }
                 try refuseArchive(unsafe, in: work, reason: "path outside its folder")
             }
+        }
+    }
+    test("archive: a traversal local name behind a clean central name cannot overwrite an outside file") {
+        try withArchiveFixture { source, work in
+            let sentinel = source.deletingLastPathComponent().appendingPathComponent("sentinel.txt")
+            let original = Data("Outside the archive: leave this unchanged".utf8)
+            try original.write(to: sentinel)
+            try archiveFile("manifest.json", archiveManifest, in: source)
+            // From work/<temporary folder>/unpacked, this would reach the sentinel beside work.
+            let escape = "../../../sentinel.txt"
+            let clean = String(repeating: "x", count: escape.utf8.count)
+            try archiveFile(clean, Data("Attempt to overwrite the outside file".utf8), in: source)
+            var replacements = 0
+            let attack = changeArchiveHeaders(try makePluginZIP(source)) { data, start, central in
+                guard !central else { return }
+                let length = zipNumber(data, at: start + 26, bytes: 2), name = start + 30
+                if length == clean.utf8.count, data[name..<(name + length)] == Data(clean.utf8) {
+                    data.replaceSubrange(name..<(name + length), with: Data(escape.utf8))
+                    replacements += 1
+                }
+            }
+            expect(replacements, 1, "only the local filename changed; the central name remains safe")
+            try refuseArchive(attack, in: work, reason: "valid plugin archive")
+            expect(try Data(contentsOf: sentinel), original, "outside file is untouched")
         }
     }
     test("archive: a missing manifest is refused and cleaned up after extraction") {

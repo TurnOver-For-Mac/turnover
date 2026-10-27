@@ -28,9 +28,17 @@ nonisolated package enum PluginArchive {
             for name in entries where name.hasPrefix("/") || name.hasPrefix("..") || name.split(separator: "/").contains("..") {
                 throw failure("it holds a path outside its folder")
             }
-            let listing = try run("zipinfo", ["-l", zip.path], limit: 1024 * 1024, capture: true)
-            for line in String(decoding: listing, as: UTF8.self).split(separator: "\n") where line.hasPrefix("l") {
-                throw failure("it holds a link")
+            // Suppress headers and totals so every row describes an entry. The fifth field's leading B/T
+            // marks encryption; unzip -P "" still decrypts empty-password ZIPs (review of #127, 27 Oct 2026).
+            let listing = try run("zipinfo", ["-l-h-t", zip.path], limit: 1024 * 1024, capture: true)
+            let rows = String(decoding: listing, as: UTF8.self).split(separator: "\n")
+            guard rows.count == entries.count else { throw failure("it couldn't be inspected") }
+            for line in rows {
+                let fields = line.split(maxSplits: 5, whereSeparator: { $0 == " " || $0 == "\t" })
+                guard fields.count == 6, fields[4].count == 2,
+                      let type = fields[4].first, "btBT".contains(type) else { throw failure("it couldn't be inspected") }
+                if type == "B" || type == "T" { throw failure("it holds encrypted content") }
+                if line.hasPrefix("l") { throw failure("it holds a link") }
             }
             // Count actual decompressed bytes before writing files. On macOS 27.0.1, ZIPs with understated size
             // fields passed both zipinfo and unzip -t, and ditto wrote the larger payload (27 Oct 2026).
