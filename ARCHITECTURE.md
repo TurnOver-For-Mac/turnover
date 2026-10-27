@@ -58,7 +58,7 @@ These five decide whether anyone is speaking. Each has a named rule, and since 1
 | Say all | `SayAll.swift` (three chunks ahead; the caret follows each as it starts; tones at the chunk's start) | none |
 | The player | `TurnOverSpeech/SpeechPlayer.swift` (100% is the voice as rendered, measured 15 Oct; pitch 0.5–2; the soft knee; device following by UID; the silent-voice fallback to the system language's voice) | `PureTests` (devices, frames) |
 | Kokoro, ducking, tones | `KokoroVoice.swift`, `Ducking.swift`, `Tones.swift` | `PureTests` (pipe cuts) |
-| Braille | `TurnOverCore/Braille/*` (output, input with contracted words, the display's keys, history with its private flag) | `PureTests` (short forms) |
+| Braille | `TurnOverCore/Braille/*` (output, input with contracted words, the display's keys, history with its private flag); `TurnOverBraille/TOAppleBraille.m` drives USB, HID and Bluetooth on the braille thread, one driver call at a time, and close waits for unloading | `PureTests` (short forms); `Tools/tests/braille-thread-test.sh` (nested run-loop callbacks, latest frame, close during a poll or write) |
 
 ## Reading
 

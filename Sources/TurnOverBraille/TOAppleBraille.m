@@ -39,8 +39,10 @@ static NSString *const kDrivers = @"/System/Library/ScreenReader/BrailleDrivers"
     NSTimer *_poll;      // on the braille thread
     NSData *_pendingCells;   // the latest frame not yet written (guarded by @synchronized(self))
     BOOL _writeScheduled;
-    BOOL _polling;   // the poll timer is inside the driver
-    dispatch_block_t _pendingClose;   // a close that came during a write or a poll, run when that is done
+    void (^_pendingCompletion)(BOOL);   // paired with the latest pending frame, under the same lock
+    BOOL _driverBusy, _closing;   // guarded by @synchronized(self), including unloading
+    BOOL _draining;   // braille thread only: prevents nested write drains
+    dispatch_group_t _closeFinished;   // entered once on close, left only after unloadDriver returns
 }
 
 /// The braille thread: a run loop of its own, as VoiceOver gives its drivers, so a Bluetooth driver's channel
@@ -60,7 +62,7 @@ static NSString *const kDrivers = @"/System/Library/ScreenReader/BrailleDrivers"
     return thread;
 }
 
-/// Run a block on the display's thread (the braille thread for Bluetooth), waiting for it.
+/// Run a block on the display's braille thread, waiting for it.
 - (void)onThread:(dispatch_block_t)block {
     if (!_thread || [NSThread currentThread] == _thread) { block(); return; }
     [self performSelector:@selector(runBlock:) onThread:_thread withObject:block waitUntilDone:YES];
@@ -290,80 +292,125 @@ static NSMutableString *btReport;
 }
 
 
+// All calls into Apple's driver share one guard: its waits run this thread's run loop, so a timer or selector
+// can arrive inside either a read or a write (maintainer review, macOS 27, 26 Oct 2026). The lock also guards
+// frames and close requests coming from main; it is never held while calling the driver or waiting for close.
+- (id)beginDriverCall {
+    @synchronized (self) {
+        if (_driverBusy || _closing || !_driver) return nil;
+        _driverBusy = YES;
+        return _driver;
+    }
+}
+
+- (void)finishClose {
+    id driver;
+    @synchronized (self) {
+        if (!_closing || _driverBusy || !_driver) return;
+        _driverBusy = YES; driver = _driver;
+    }
+    [_poll invalidate]; _poll = nil;
+    char blank[256] = {0};
+    [driver setMainCells:blank length:MIN(_cellCount, 256)];
+    [driver unloadDriver];
+    dispatch_group_t finished;
+    @synchronized (self) {
+        _driver = nil; _driverBusy = NO;
+        finished = _closeFinished;
+    }
+    // A caller handing back to VoiceOver waits for this, not merely for the close request to reach the run loop.
+    dispatch_group_leave(finished);
+}
+
+- (void)endDriverCall {
+    @synchronized (self) { _driverBusy = NO; }
+    [self finishClose];
+    [self drainWrites];
+}
+
+- (void)drainWrites {
+    // Only the braille thread uses _draining. A nested selector leaves the pending frame for the outer call.
+    if (_draining) return;
+    _draining = YES;
+    for (;;) {
+        NSData *frame; id driver; void (^completion)(BOOL);
+        @synchronized (self) {
+            if (_driverBusy) { _draining = NO; return; }
+            frame = _pendingCells; completion = _pendingCompletion;
+            _pendingCells = nil; _pendingCompletion = nil;
+            if (!frame || _closing || !_driver) {
+                _writeScheduled = NO; _draining = NO; return;
+            }
+            _driverBusy = YES; driver = _driver;
+        }
+        BOOL ok = [driver setMainCells:frame.bytes length:_cellCount];
+        if (completion) dispatch_async(dispatch_get_main_queue(), ^{ completion(ok); });
+        [self endDriverCall];
+    }
+}
+
 - (BOOL)writeCells:(NSData *)cells {
-    if (!_driver) return NO;
     NSMutableData *d = [cells mutableCopy];
     if ((NSInteger)d.length < _cellCount) [d increaseLengthBy:_cellCount - d.length];
     __block BOOL ok = NO;
-    id driver = _driver; NSInteger n = _cellCount;
-    [self onThread:^{ ok = [driver setMainCells:d.bytes length:n]; }];
+    [self onThread:^{
+        id driver = [self beginDriverCall];
+        if (!driver) return;
+        ok = [driver setMainCells:d.bytes length:self->_cellCount];
+        [self endDriverCall];
+    }];
     return ok;
 }
 
 - (NSArray<NSNumber *> *)readInputEvents {
-    if (!_driver) return @[];
     __block id events = nil;
-    id driver = _driver;
-    [self onThread:^{ events = [driver getInputEvents]; }];
+    [self onThread:^{
+        id driver = [self beginDriverCall];
+        if (!driver) return;
+        events = [driver getInputEvents];
+        [self endDriverCall];
+    }];
     return [events isKindOfClass:NSArray.class] ? events : @[];
 }
 
 - (BOOL)isBluetooth { return _bluetooth; }
 
 - (void)writeCellsAsync:(NSData *)cells completion:(void (^)(BOOL))completion {
-    if (!_driver) { completion(NO); return; }
     NSMutableData *d = [cells mutableCopy];
     if ((NSInteger)d.length < _cellCount) [d increaseLengthBy:_cellCount - d.length];
-    BOOL schedule;
-    @synchronized (self) { _pendingCells = d; schedule = !_writeScheduled; _writeScheduled = YES; }
-    if (!schedule) return;   // the write already on its way takes this frame
-    id driver = _driver; NSInteger n = _cellCount;
-    // The write stays marked under way until the driver has returned: a USB driver waits by running this thread's
-    // run loop, and a second write scheduled meanwhile entered setMainCells: inside the first (code review,
-    // 21 Oct 2026). Frames that came in during a write are drained here, the latest only.
-    dispatch_block_t write = ^{
-        for (;;) {
-            NSData *frame; dispatch_block_t closing = nil;
-            @synchronized (self) {
-                frame = self->_pendingCells; self->_pendingCells = nil;
-                if (!frame || !self->_driver) {   // done, or closed meanwhile
-                    self->_writeScheduled = NO; frame = nil;
-                    if (!self->_polling) { closing = self->_pendingClose; self->_pendingClose = nil; }
-                }
-            }
-            if (!frame) { if (closing) closing(); return; }
-            BOOL ok = [driver setMainCells:frame.bytes length:n];
-            dispatch_async(dispatch_get_main_queue(), ^{ completion(ok); });
+    BOOL schedule = NO, closed;
+    @synchronized (self) {
+        closed = _closing || !_driver;
+        if (!closed) {
+            _pendingCells = d; _pendingCompletion = [completion copy];
+            schedule = !_writeScheduled; _writeScheduled = YES;
         }
-    };
-    if (!_thread) { write(); return; }
-    [self performSelector:@selector(runBlock:) onThread:_thread withObject:write waitUntilDone:NO];
+    }
+    if (closed) { dispatch_async(dispatch_get_main_queue(), ^{ completion(NO); }); return; }
+    if (!schedule) return;   // the pending write, or the poll it arrived inside, drains the latest frame
+    if (!_thread) { [self drainWrites]; return; }
+    [self performSelector:@selector(drainWrites) onThread:_thread withObject:nil waitUntilDone:NO];
 }
 
 - (void)startPollingWithHandler:(void (^)(NSArray<NSNumber *> *, BOOL))handler {
-    id driver = _driver;
-    if (!driver || !_thread) return;
+    if (!_thread) return;
     __weak TOAppleBrailleDisplay *weakSelf = self;
     [self performSelector:@selector(runBlock:) onThread:_thread withObject:^{
         TOAppleBrailleDisplay *me = weakSelf;
         if (!me) return;
+        @synchronized (me) { if (me->_closing || !me->_driver) return; }
         [me->_poll invalidate];
         __block NSInteger checks = 0;
         me->_poll = [NSTimer scheduledTimerWithTimeInterval:0.03 repeats:YES block:^(NSTimer *timer) {
-            // Marked inside the driver like a write, and for the same reason: a close that came while the driver
-            // waited ran inside getInputEvents and unloaded it under the call (code review, 21 Oct 2026).
             TOAppleBrailleDisplay *display = weakSelf;
             if (!display) { [timer invalidate]; return; }
-            @synchronized (display) { if (!display->_driver) return; display->_polling = YES; }
+            id driver = [display beginDriverCall];
+            if (!driver) return;
             id events = [driver getInputEvents];
             NSArray *list = [events isKindOfClass:NSArray.class] ? events : @[];
             BOOL loaded = (++checks % 33 != 0) || [driver isDriverLoaded];
-            dispatch_block_t closing = nil;
-            @synchronized (display) {
-                display->_polling = NO;
-                if (!display->_writeScheduled) { closing = display->_pendingClose; display->_pendingClose = nil; }
-            }
-            if (closing) { closing(); return; }
+            [display endDriverCall];
+            @synchronized (display) { if (display->_closing) return; }
             if (list.count == 0 && loaded) return;
             if (!loaded) [timer invalidate];
             dispatch_async(dispatch_get_main_queue(), ^{ handler(list, loaded); });
@@ -372,30 +419,53 @@ static NSMutableString *btReport;
 }
 
 - (BOOL)isLoaded {
-    if (!_driver) return NO;
     __block BOOL loaded = NO;
-    id driver = _driver;
-    [self onThread:^{ loaded = [driver isDriverLoaded]; }];
+    [self onThread:^{
+        id driver = [self beginDriverCall];
+        if (!driver) return;
+        loaded = [driver isDriverLoaded];
+        [self endDriverCall];
+    }];
     return loaded;
 }
 
 - (void)close {
-    if (!_driver) return;
-    id driver = _driver; NSInteger n = _cellCount;
-    dispatch_block_t unload = ^{
-        [self->_poll invalidate]; self->_poll = nil;
-        char blank[256] = {0};
-        [driver setMainCells:blank length:MIN(n, 256)];
-        [driver unloadDriver];
-    };
-    // A write or poll under way waits by running the braille thread's run loop, where this would run inside it and
-    // unload the driver mid-call (code review, 21 Oct 2026): whichever of them finishes last runs it instead.
-    BOOL deferred;
-    @synchronized (self) { _driver = nil; deferred = _writeScheduled || _polling; if (deferred) _pendingClose = unload; }
-    if (!deferred) [self onThread:unload];
+    dispatch_group_t finished;
+    BOOL schedule = NO;
+    @synchronized (self) {
+        if (!_driver) return;
+        if (!_closing) {
+            _closing = YES; _pendingCells = nil; _pendingCompletion = nil;
+            _closeFinished = dispatch_group_create(); dispatch_group_enter(_closeFinished);
+            schedule = YES;
+        }
+        finished = _closeFinished;
+    }
+    if (!_thread || [NSThread currentThread] == _thread) {
+        // A reentrant driver callback cannot wait for its own outer call. TurnOver closes from main; on this
+        // thread the outer call completes the close before returning to the run loop.
+        [self finishClose]; return;
+    }
+    if (schedule) [self performSelector:@selector(finishClose) onThread:_thread withObject:nil waitUntilDone:NO];
+    dispatch_group_wait(finished, DISPATCH_TIME_FOREVER);
 }
 
-- (void)dealloc { [self close]; }
+- (void)dealloc {
+    // Work in flight holds self until it returns. If the last owner lets an idle display go without close,
+    // release it on its thread using local captures; a block retaining self here would resurrect a dying object.
+    id driver = _driver; NSTimer *poll = _poll; NSInteger n = _cellCount;
+    if (driver) {
+        dispatch_block_t unload = ^{
+            [poll invalidate];
+            char blank[256] = {0};
+            [driver setMainCells:blank length:MIN(n, 256)];
+            [driver unloadDriver];
+        };
+        if (!_thread || [NSThread currentThread] == _thread) unload();
+        else [TOAppleBrailleDisplay performSelector:@selector(runBlock:) onThread:_thread withObject:unload waitUntilDone:YES];
+    }
+}
+
 @end
 
 @interface NSObject (TOBRLT)

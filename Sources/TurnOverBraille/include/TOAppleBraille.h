@@ -40,6 +40,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (readonly) NSDictionary<NSNumber *, NSString *> *keyCommands;
 /// The model's chords: "first.second" input identifiers (pressed) to VoiceOver command.
 @property (readonly) NSDictionary<NSString *, NSString *> *chordCommands;
+/// Called outside the braille thread: returns only after the driver is unloaded, including an in-flight call.
 - (void)close;
 @end
 
