@@ -266,7 +266,7 @@ public final class AppStoreView {
             guard let self else { return }
             loading = false
             guard let row, page.indices.contains(i) else {
-                Log.io("app store: could not find \"\(Log.words(wanted))\" on screen")
+                Log.io("app store: could not find \"\(Log.words(wanted))\" on screen (kind \(e.kind), element now \"\(Log.words(name(Self.identity(of: e.element))))\", on screen \(self.onScreen(e.element)))")
                 Speech.speakMessage("could not reach \(wanted); try again")
                 then(nil); return
             }
@@ -275,16 +275,26 @@ public final class AppStoreView {
         }
     }
 
+    /// The page's frame on screen: its scroll area's, or, where that is a group with no size of its own (the search
+    /// results page: an AXGroup with the scroll actions whose frame is empty, so every row counted as off screen and
+    /// Return said "could not reach", 27 Oct 2026), its list's, else the window's.
+    nonisolated private func pageFrame() -> CGRect? {
+        guard let (scroll, list) = pageRoot() else { return nil }
+        if let f = TurnOverObject.frame(scroll), f.width > 10, f.height > 10 { return f }
+        if let f = TurnOverObject.frame(list), f.width > 10, f.height > 10 { return f }
+        return window.flatMap { TurnOverObject.frame($0) }
+    }
+
     /// Inside the page's area on screen (an item read ahead of the screen has a frame far above or below it).
     nonisolated private func onScreen(_ x: AXUIElement) -> Bool {
-        guard let f = TurnOverObject.frame(x), f.height > 4, let area = pageRoot().flatMap({ TurnOverObject.frame($0.scroll) }) else { return false }
+        guard let f = TurnOverObject.frame(x), f.height > 4, let area = pageFrame() else { return false }
         return area.contains(CGPoint(x: f.midX, y: f.midY))
     }
 
     /// The page's area a click can reach: its scroll area less the toolbar, which floats over the top of it (Return
     /// on the first search result clicked the toolbar, and Kindle "cannot open this one", 18 Oct 2026).
     nonisolated private func visibleArea() -> CGRect? {
-        guard var area = pageRoot().flatMap({ TurnOverObject.frame($0.scroll) }) else { return nil }
+        guard var area = pageFrame() else { return nil }
         if let w = window, let tb = w.elements(kAXChildrenAttribute).first(where: { $0.role == "AXToolbar" }), let tf = TurnOverObject.frame(tb), tf.maxY > area.minY {
             let cut = min(area.height, tf.maxY - area.minY)
             area.origin.y += cut; area.size.height -= cut
@@ -310,7 +320,19 @@ public final class AppStoreView {
         func name(_ s: String) -> String { (s.components(separatedBy: ",").first ?? s).trimmingCharacters(in: .whitespaces) }
         func lookOnScreen() -> AXUIElement? { visibleRows().first { name(Self.identity(of: $0)) == wanted && onScreen($0) } }
         if let r = lookOnScreen() { return r }
-        guard let (scroll, _) = pageRoot(), let bar = scroll.element(kAXVerticalScrollBarAttribute) else { return nil }
+        let rows = visibleRows()
+        Log.io("app store: \(rows.count) rows on screen; names \(rows.prefix(6).map { "\"\(Log.words(name(Self.identity(of: $0))))\"\(onScreen($0) ? "" : " (off)")" }.joined(separator: ", ")); root \(pageRoot().map { "\($0.scroll.role) > \($0.list.role)" } ?? "none")")
+        guard let (scroll, _) = pageRoot() else { return nil }
+        guard let bar = scroll.element(kAXVerticalScrollBarAttribute) else {
+            // No scroll bar to drive (the search results' group): the row itself, or its list, asked to scroll into
+            // view; then a look at what is on screen.
+            if let row = rows.first(where: { name(Self.identity(of: $0)) == wanted }) ?? page[i].element as AXUIElement? {
+                _ = AXUIElementPerformAction(row, "AXScrollToVisible" as CFString)
+                usleep(200_000)
+                if let r = lookOnScreen() { Log.io("app store: \"\(Log.words(wanted))\" scrolled into view"); return r }
+            }
+            return nil
+        }
         var lo = 0.0, hi = 1.0
         var at = Double(i) / Double(max(1, page.count - 1))
         for step in 0..<10 {

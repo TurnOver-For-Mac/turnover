@@ -15,6 +15,10 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   "For" chooses the list for everywhere or for the app last in front, so Mail can say a message's subject before its
   sender while everything else stays as it was. The three old switches (help text, shortcut, position) are rows of the
   list now; a settings file from before keeps their values.
+- App Store: Return on a search result opens it. The results page's container reports no size, so every row counted
+  as off screen and Return said "could not reach … try again" for an app plainly on screen; the page's list, or the
+  window, now gives the area, and a page with no scroll bar asks the row to scroll into view. Reported by the
+  maintainer (Keynote, from a search for Pages).
 
 ## 2.0, build 22.3
 
