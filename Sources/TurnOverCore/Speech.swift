@@ -411,21 +411,51 @@ public enum Speech {
             if roleWords.lowercased() != "unknown" { parts.append(roleWords) }
         }
         let reportsText = obj.hasNavigableText && reason != .focusEntered && reason != .mouse
+        // The pieces, each as the rules above and below give it, then said in the order the verbosity list sets
+        // (Settings, Item details; everywhere or for this app), the pieces turned off left out (27 Oct 2026).
+        var pieces: [(String, [String])] = []
+        if !name.isEmpty { pieces.append(("name", [name])) }
+        if parts.count > (name.isEmpty ? 0 : 1) { pieces.append(("role", [parts.last!])) }
         // A value that only repeats the name is not said twice (Excel's headings give both, 10 Oct 2026).
-        if !reportsText, reason != .focusEntered, !Role.silentValues.contains(role), let v = obj.value, !v.isEmpty, v != name { parts.append(v) }
-        parts.append(contentsOf: statesSpeech(role: role, states: obj.states, reason: reason))
-        if config.presentation.reportObjectDescriptions, let d = obj.description, !d.isEmpty, d != name { parts.append(d) }
-        if config.presentation.reportKeyboardShortcuts, reason != .focusEntered || role == .list, let k = obj.keyboardShortcut, !k.isEmpty { parts.append(k) }
-        if config.presentation.reportObjectPositionInformation, let p = obj.positionInfo {
-            if let i = p.index, let n = p.count, i > 0, i <= n { parts.append("\(i) of \(n)") }
-            if reason != .focusEntered, let l = p.level { parts.append("level \(l)") }
+        if !reportsText, reason != .focusEntered, !Role.silentValues.contains(role), let v = obj.value, !v.isEmpty, v != name { pieces.append(("value", [v])) }
+        let states = statesSpeech(role: role, states: obj.states, reason: reason)
+        if !states.isEmpty { pieces.append(("state", states)) }
+        if let d = obj.description, !d.isEmpty, d != name { pieces.append(("description", [d])) }
+        if reason != .focusEntered || role == .list, let k = obj.keyboardShortcut, !k.isEmpty { pieces.append(("shortcut", [k])) }
+        if let p = obj.positionInfo {
+            if let i = p.index, let n = p.count, i > 0, i <= n { pieces.append(("position", ["\(i) of \(n)"])) }
+            if reason != .focusEntered, let l = p.level { pieces.append(("level", ["level \(l)"])) }
         }
+        let bundle = obj.element.pid > 0 ? bundleIdentifier(of: obj.element.pid) : nil
+        parts = arranged(pieces, by: config.presentation.verbosity(for: bundle))
         // A check box whose label is a paragraph (an agreement): what it is and whether it is checked first, so the
         // state is not lost at the end of a long sentence.
         if [.checkBox, .radioButton, .toggleButton, .switchControl].contains(role), name.count > 80, parts.first == name {
             return Array(parts.dropFirst()) + [name]
         }
         return parts
+    }
+
+    /// The pieces in the list's order, the ones turned off left out. Pure, for the tests.
+    public static func arranged(_ pieces: [(String, [String])], by v: Config.Verbosity) -> [String] {
+        var out: [String] = []
+        for piece in v.order where v.says(piece) {
+            for (k, words) in pieces where k == piece { out.append(contentsOf: words) }
+        }
+        return out
+    }
+
+    /// The bundle identifier of a process, kept once looked up (a dictionary of the last 32). Owned by `bundleLock`:
+    /// every read and write is inside it, so the dictionary may be reached from any thread that speaks.
+    nonisolated(unsafe) private static var bundleByPid: [pid_t: String] = [:]
+    private static let bundleLock = NSLock()
+    static func bundleIdentifier(of pid: pid_t) -> String? {
+        bundleLock.lock(); defer { bundleLock.unlock() }
+        if let b = bundleByPid[pid] { return b.isEmpty ? nil : b }
+        let b = NSRunningApplication(processIdentifier: pid)?.bundleIdentifier ?? ""
+        if bundleByPid.count > 32 { bundleByPid.removeAll() }
+        bundleByPid[pid] = b
+        return b.isEmpty ? nil : b
     }
 
     // MARK: - Text
@@ -651,9 +681,12 @@ public enum Speech {
                 if offset >= start, ends(c) { found = k; break }
                 offset += String(c).utf16.count
             }
-        } else if let i = t.lastIndex(where: ends), t[(i + 1)...].allSatisfy(inWord) {
-            // Where the word began isn't known (a Backspace went back past it): the last ending character, with only
-            // the next word's letters after it.
+        } else if let i = t.lastIndex(where: ends), i == t.count - 1 {
+            // Where the word began isn't known (a Backspace went back past it): the ending character must be the
+            // last thing in the field. Letters after the last ending character were taken for the next word's, but
+            // with the field lagging they are the word still being typed, and the word before it was read out: "for
+            // entrusting", Backspace, a word, Space said "for" (the maintainer, TextEdit, 27 Oct 2026). Not taken yet
+            // means another look in 10 ms, and after 100 ms the letters typed, which are right in this case.
             found = i
         }
         guard let i = found else { return (false, nil, nil) }

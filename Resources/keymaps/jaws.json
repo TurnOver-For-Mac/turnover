@@ -11,7 +11,7 @@
     "kb:turnover+i": "=kb:turnover+l",
     "kb:turnover+u": "=kb:turnover+upArrow",
     "kb:turnover+o": "=kb:turnover+downArrow",
-    "kb:turnover+h": "=kb:turnover+control+s",
+    "kb:turnover+h": "reportCurrentSentence",
     "kb:turnover+y": "vo_previousSentence",
     "kb:turnover+n": "vo_nextSentence",
     "kb:turnover+control+i": "=kb:turnover+shift+p",

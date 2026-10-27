@@ -571,5 +571,7 @@ extension AXHandler {
         let kind = obj.role == .dialog || obj.role == .sheet ? "dialog" : "window"
         let text = Speech.joined([appName ?? "", appName == title ? "" : title, kind])
         if obj is Dialog { EventHandler.queue(Event(.focusEntered, obj)) } else { Speech.speakOnly(text) }   // a window's name: the display shows the focus in it
+        // A window with nothing to read (OpenGL, custom drawing): said a moment later, with the recognition key (issue 74).
+        if !(obj is Dialog), window.pid != ProcessInfo.processInfo.processIdentifier { EmptyWindowNotice.check(window, pid: window.pid) }
     }
 }

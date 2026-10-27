@@ -2,6 +2,35 @@
 
 The newest build is first. "Reported by a tester" marks a fix for something a tester sent in. Thank you.
 
+## 2.0, build 22.4
+
+### Changed
+
+- A window with nothing TurnOver can read (a custom-drawn or OpenGL window: Parallels' installation assistant, Bambu
+  Studio's plate) says so a moment after it comes to the front, and names the key for screen recognition in the
+  keyboard style in use: VO-Shift-L with VoiceOver keys, the TurnOver key with R with NVDA or JAWS keys. It said
+  "window" and then nothing. Issue 74.
+- The verbosity manager: Settings, Item details now lists what is said about an item, in the order it is said (name,
+  kind, value, state, help text, keyboard shortcut, position, level), each on or off, moved up or down with a button.
+  "For" chooses the list for everywhere or for the app last in front, so Mail can say a message's subject before its
+  sender while everything else stays as it was. The three old switches (help text, shortcut, position) are rows of the
+  list now; a settings file from before keeps their values.
+- App Store: Return on a search result opens it. The results page's container reports no size, so every row counted
+  as off screen and Return said "could not reach … try again" for an app plainly on screen; the page's list, or the
+  window, now gives the area, and a page with no scroll bar asks the row to scroll into view. Search results that
+  arrive in stages (11, then 24, then 36 for "water") are read again as they settle, the place kept by name, and the
+  Store's own hit test, which lags a new results page, is given up to a second to agree before the icon is clicked.
+  Reported by the maintainer (Keynote, from a search for Pages; then the water apps).
+
+## 2.0, build 22.3
+
+### Fixed
+
+- Typing echo: after a Backspace, the word said at the next space was the word before the one just typed when the
+  field was slow to take the space (TextEdit, WhatsApp). The field's word now counts only once the space is in; until
+  then TurnOver looks again, and after a tenth of a second says the letters typed.
+- JAWS keys: Caps Lock H reads the sentence, as in JAWS; it opened the Speech settings (a contributor's change).
+
 ## 2.0, build 22.2
 
 ### Fixed

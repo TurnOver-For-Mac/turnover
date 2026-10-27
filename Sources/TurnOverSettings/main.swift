@@ -355,11 +355,68 @@ struct KeyboardView: View {
 
 struct ItemsView: View {
     @EnvironmentObject var model: Model
+    /// "everywhere", or the bundle identifier of the app the list is for.
+    @State private var scope = "everywhere"
+    // The verbosity manager (27 Oct 2026): what is said about an item, in order, each piece on or off; one list for
+    // everywhere and one for the app last in front, kept apart. The three old switches (help text, shortcut,
+    // position) are rows of this list now. The names match Config.Verbosity.titles.
+    private static let pieces = ["name", "role", "value", "state", "description", "shortcut", "position", "level"]
+    private static let titles: [String: String] = [
+        "name": "Name", "role": "Kind, such as button or link", "value": "Value", "state": "State, such as checked or expanded",
+        "description": "Help text", "shortcut": "Keyboard shortcut", "position": "Position, such as 3 of 10", "level": "Level, in a tree or outline",
+    ]
+    private var frontApp: (bundle: String, name: String)? {
+        guard let d = model.special("_frontApp") as? [String: Any], let b = d["bundle"] as? String, let n = d["name"] as? String else { return nil }
+        return (b, n)
+    }
+    private var everywhere: [String: Any] { model.get("presentation", "verbosity") as? [String: Any] ?? [:] }
+    private var byApp: [String: Any] { model.get("presentation", "verbosityByApp") as? [String: Any] ?? [:] }
+    private var ownList: Bool { scope == "everywhere" || byApp[scope] != nil }
+    private var current: [String: Any] { scope == "everywhere" ? everywhere : (byApp[scope] as? [String: Any] ?? everywhere) }
+    private var order: [String] {
+        var o = (current["order"] as? [String] ?? []).filter { Self.pieces.contains($0) }
+        for p in Self.pieces where !o.contains(p) { o.append(p) }
+        return o
+    }
+    private var off: [String] { current["off"] as? [String] ?? [] }
+    private func save(order: [String], off: [String]) {
+        let v: [String: Any] = ["order": order, "off": off]
+        if scope == "everywhere" { model.set("presentation", "verbosity", v) } else { var d = byApp; d[scope] = v; model.set("presentation", "verbosityByApp", d) }
+    }
+    private func move(_ piece: String, by delta: Int) {
+        var o = order
+        guard let i = o.firstIndex(of: piece), o.indices.contains(i + delta) else { return }
+        o.swapAt(i, i + delta)
+        save(order: o, off: off)
+    }
     var body: some View {
         Form {
-            Toggle("Help text of items", isOn: model.bool("presentation", "reportObjectDescriptions"))
-            Toggle("Each item's keyboard shortcut", isOn: model.bool("presentation", "reportKeyboardShortcuts"))
-            Toggle("Position, such as 3 of 10", isOn: model.bool("presentation", "reportObjectPositionInformation"))
+            Section("What is said about an item, in order") {
+                Picker("For", selection: $scope) {
+                    Text("Everywhere").tag("everywhere")
+                    if let f = frontApp { Text(f.name).tag(f.bundle) }
+                }
+                if scope != "everywhere", !ownList {
+                    Text("Using the everywhere list. A change here starts a list for this app.")
+                }
+                ForEach(Array(order.enumerated()), id: \.element) { i, piece in
+                    let title = Self.titles[piece] ?? piece
+                    HStack {
+                        Toggle(title, isOn: Binding(get: { !off.contains(piece) }, set: { on in
+                            var o = off.filter { $0 != piece }; if !on { o.append(piece) }; save(order: order, off: o)
+                        }))
+                        Spacer()
+                        Button("Up") { move(piece, by: -1) }.disabled(i == 0).accessibilityLabel("Move \(title) up")
+                        Button("Down") { move(piece, by: 1) }.disabled(i == order.count - 1).accessibilityLabel("Move \(title) down")
+                    }
+                }
+                if scope != "everywhere", ownList {
+                    Button("Use the everywhere list for this app") { var d = byApp; d[scope] = nil; model.set("presentation", "verbosityByApp", d) }
+                }
+            }
+            // Another app came to the front while the list was for the one before: back to everywhere, so the controls
+            // never edit an app the picker no longer names (a code review, 27 Oct 2026).
+            .onChange(of: frontApp?.bundle) { _, now in if scope != "everywhere", scope != now { scope = "everywhere" } }
             Toggle("Hints after a pause", isOn: model.bool("presentation", "speakHints"))
             Toggle("Say which plugin an app has as it comes to the front", isOn: model.bool("presentation", "announcePlugins"))
             Picker("Heading, link and button: when to say them", selection: model.string("documentFormatting", "roleOrder", "auto")) {

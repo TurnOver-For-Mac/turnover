@@ -17,8 +17,6 @@ PLUGIN-GUIDE.md says how to write one.
 
 ## Next
 
-- **The Windows style everywhere, even where VoiceOver reads.** NVDA's keys on top of VoiceOver in every app, not
-  only in TurnOver's. You could even let VoiceOver read every app and still use the Windows style's keys.
 - **Trackpad parity.** The trackpad already drives TurnOver in its apps. Next, every gesture behaving as it should for
   your keyboard style: VoiceOver's Trackpad Commander in the Mac style, NVDA's touch gestures in the Windows style.
 - **Apple's own apps, one at a time.** Pages and Numbers first, then Preview, Photos, Calendar, Contacts, Reminders
