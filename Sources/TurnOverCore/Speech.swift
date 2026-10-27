@@ -651,9 +651,12 @@ public enum Speech {
                 if offset >= start, ends(c) { found = k; break }
                 offset += String(c).utf16.count
             }
-        } else if let i = t.lastIndex(where: ends), t[(i + 1)...].allSatisfy(inWord) {
-            // Where the word began isn't known (a Backspace went back past it): the last ending character, with only
-            // the next word's letters after it.
+        } else if let i = t.lastIndex(where: ends), i == t.count - 1 {
+            // Where the word began isn't known (a Backspace went back past it): the ending character must be the
+            // last thing in the field. Letters after the last ending character were taken for the next word's, but
+            // with the field lagging they are the word still being typed, and the word before it was read out: "for
+            // entrusting", Backspace, a word, Space said "for" (the maintainer, TextEdit, 27 Oct 2026). Not taken yet
+            // means another look in 10 ms, and after 100 ms the letters typed, which are right in this case.
             found = i
         }
         guard let i = found else { return (false, nil, nil) }

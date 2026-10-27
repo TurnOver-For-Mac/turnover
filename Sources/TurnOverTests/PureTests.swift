@@ -57,6 +57,12 @@ func pureTests() {
         // A closing double quote the field made curly.
         let h = Speech.fieldWord(endedBy: "\"", before: "say “hi” ", notBefore: 5)
         check(h.taken && h.word == "hi", "a closing smart quote: \(h)")
+        // After a Backspace the start isn't known: the space must be the field's last character, or the word before
+        // the one being typed was read out (27 Oct 2026).
+        let i = Speech.fieldWord(endedBy: " ", before: "for entrusting", notBefore: nil)
+        check(!i.taken, "start unknown, field lagging: not the word before: \(i)")
+        let j = Speech.fieldWord(endedBy: " ", before: "for entrusting ", notBefore: nil)
+        check(j.taken && j.word == "entrusting", "start unknown, space in: \(j)")
     }
     test("applications: hidden links to visible apps appear once, hidden apps stay out") {
         let fm = FileManager.default
