@@ -87,7 +87,7 @@ public final class AppStoreView {
         return nil
     }
 
-    nonisolated private static func first(in e: AXUIElement, depth: Int, where test: (AXUIElement) -> Bool) -> AXUIElement? {
+    nonisolated static func first(in e: AXUIElement, depth: Int, where test: (AXUIElement) -> Bool) -> AXUIElement? {
         if test(e) { return e }
         guard depth > 0 else { return nil }
         for c in e.elements(kAXChildrenAttribute) { if let f = first(in: c, depth: depth - 1, where: test) { return f } }
@@ -128,10 +128,57 @@ public final class AppStoreView {
     /// The page, shelf by shelf, a little at a time: the heading's area above the collection (Updates: "Update
     /// All"), then the shelves reached by AXNextContentSibling, until there are enough to start with. The rest is read
     /// as the arrows reach it (reading all 529 items of Discover at once took 5 s and froze TurnOver, 6 Oct 2026).
+    // MARK: The flat view (developer switch `flatView`; docs/FLAT-VIEW-PLAN.md)
+
+    private var flat: FlatView?
+    /// The flat items beside `page`, same indices, while the flat view drives the page.
+    private var flatItems: [FlatItem] = []
+    private var flatDrives = false
+    private var flatOn: Bool { Edition.devDefault("flatView") }
+
+    /// The results page read by the flat view: its list replaces `page` as the waves come, the place kept by key.
+    private var flatKey = ""
+    private func flatBegin() {
+        if flat == nil {
+            let f = FlatView(name: "App Store results", adapter: AppStoreFlatAdapter(pid: pid))
+            f.onChange = { [weak self] items in self?.flatChanged(items) }
+            flat = f
+        }
+        // The same page read again (the settle waves call buildPage): the view's own waves go on; no restart.
+        if flatDrives, flatKey == pageKey { return }
+        flatDrives = true; flatKey = pageKey
+        flat?.begin()
+    }
+    private func flatEnd() { guard flatDrives else { return }; flatDrives = false; flatItems = []; flat?.end() }
+    private func flatChanged(_ items: [FlatItem]) {
+        guard flatDrives, let flat else { return }
+        let current = flatItems.indices.contains(pageIndex) ? flatItems[pageIndex].key : nil
+        var entries: [Entry] = []; var kept: [FlatItem] = []
+        for it in items {
+            guard let e = flat.element(for: it.key) else { continue }
+            var entry = Entry(label: it.label, element: e, kind: .app, shelf: 1)
+            entry.check = it.key.text
+            entries.append(entry); kept.append(it)
+        }
+        let wasEmpty = page.isEmpty
+        page = entries; flatItems = kept; shelves = ["", ""]
+        if let current, let i = kept.firstIndex(where: { $0.key == current }) { pageIndex = i } else { pageIndex = min(pageIndex, max(0, page.count - 1)) }
+        Log.io("app store: the flat view gives the results page \(page.count) items; place \(pageIndex + 1)")
+        // The first items of a new page: said, as the ordinary build says its first item.
+        if wasEmpty, !page.isEmpty { speak(pageIndex, crossing: true) }
+    }
+
     public func buildPage() {
         let start = Date()
         page = []; shelves = []
-        guard let (scroll, list) = pageRoot() else { pageKey = ""; return }
+        guard let (scroll, list) = pageRoot() else { pageKey = ""; flatEnd(); return }
+        if flatOn, list.string(kAXIdentifierAttribute) == "AppStore.search.result" {
+            pageKey = currentKey(); builtTitle = pageTitle
+            if !flatDrives || flatKey != pageKey { Log.io("app store: page \"\(Log.words(pageTitle))\" is the flat view's") }
+            flatBegin()
+            return
+        }
+        flatEnd()
         seen = []
         // Above the collection: the page's heading and its buttons.
         for c in scroll.elements(kAXChildrenAttribute) where c.role == "AXGroup" && !CFEqual(scroll, list) {
@@ -246,6 +293,16 @@ public final class AppStoreView {
     private func confirmed(_ i: Int, then: @escaping (Entry?) -> Void) {
         guard page.indices.contains(i) else { then(nil); return }
         let e = page[i]
+        // The flat view's page: the item is resolved by key in the live tree, brought on screen, the hit test agreeing.
+        if flatDrives, let flat, flatItems.indices.contains(i) {
+            let item = flatItems[i]
+            flat.resolve(item) { [weak self] live in
+                guard let self, let live, page.indices.contains(i) else { then(nil); return }
+                page[i].element = live
+                then(page[i])
+            }
+            return
+        }
         @Sendable nonisolated func name(_ s: String) -> String { (s.components(separatedBy: ",").first ?? s).trimmingCharacters(in: .whitespaces) }
         let wanted = name(e.check.isEmpty ? e.label : e.check)
         // The element still shows it: on screen and not reused.

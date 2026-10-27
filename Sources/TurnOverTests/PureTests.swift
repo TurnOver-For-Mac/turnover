@@ -43,6 +43,16 @@ func pureTests() {
         expect(new.verbosity(for: "com.apple.mail").order.first, "description", "the app's own list")
         expect(new.verbosity(for: "com.apple.Safari").order.first, "value", "another app: the everywhere list")
     }
+    test("flat view: a wave's list replaces the old in its order; a wave cut short keeps what it did not reach") {
+        func item(_ n: String, _ i: Int) -> FlatItem { FlatItem(key: .name(n), label: n, section: 0, index: i) }
+        let old = [item("Pages", 0), item("Numbers", 1), item("Keynote", 2)]
+        let new = [item("Keynote", 0), item("Pages", 1), item("Word", 2)]
+        expect(FlatView.merge(old: old, new: new, complete: true).map { $0.key.text }, ["Keynote", "Pages", "Word"], "a complete wave is the list")
+        let cut = FlatView.merge(old: old, new: [item("Keynote", 0)], complete: false)
+        expect(cut.map { $0.key.text }, ["Keynote", "Pages", "Numbers"], "a wave cut short keeps the rest, after what it reached")
+        expect(cut.map { $0.index }, [0, 1, 2], "indices renumbered")
+        expect(FlatKey.unstable("row 3").isStable, false); expect(FlatKey.id("ra.68").isStable, true)
+    }
     test("finder: a list row is a folder by its Kind cell or the folder's dashes in Size") {
         expect(FinderRows.isFolderRow(cellTexts: ["Reports", "Today at 10:14", "--", "Folder"]), true)
         expect(FinderRows.isFolderRow(cellTexts: ["Notes.docx", "8 Oct 2026 at 15:57", "244 KB", "Microsoft Word document (.docx)"]), false)

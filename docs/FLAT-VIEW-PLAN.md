@@ -184,3 +184,46 @@ No afternoons are promised: each step is a pull request with the contract's tick
   engine come after.
 - Whether a flattened area says what it is on entry ("results, 36 items") so the keys are explained, as browse mode
   says "browse mode".
+
+## Measured on the App Store, 27 Oct 2026 (evening), with the first engine behind the `flatView` switch
+
+- The results list lists sixteen rows; the rest come as content siblings both ways, with groups that are not rows
+  (stories, spacers) between them, so a chain that stops at the first non-row sees nothing. Walked both ways,
+  skipping up to twenty non-rows, a "water" search gives 160 to 200 rows.
+- A row's name is answered blank intermittently while the Store loads: the same four rows read blank at once, at
+  50 ms and at 200 ms, had their names at 500 ms, and were blank again at 1.5 s. Blank is not "nameless": a wave
+  that reads blank must leave the row out and count itself incomplete; a known row must never be replaced by a
+  blank reading of itself; keys learned are kept.
+- The full label (subtitle, stars, price) costs about 36 ms a row through the Store's tree; two hundred rows took
+  seven seconds a wave. The wave reads the name and the button only; the rest is for when the item is spoken.
+- The Store's hit test under a row lags the page it shows by up to a second after a search.
+
+The engine as left tonight: waves off main (0.3 s, then a second of materialising), merge by key, settle waves at
+0.7 and 1.5 s, a light freshness look every 3 s that triggers a full wave only when new rows are listed, resolve by
+key both ways with scroll-to-visible and the hit test agreeing. Reading the results works; opening a row reached
+by Return still fails more often than it should, because the find at the moment of the key sees the Store blank.
+Next: a find that retries over a second until the row answers, and the click made within the same breath.
+
+### What the evening settled (27 Oct 2026, late)
+
+The engine as written cannot open a result reliably, and the reason is the Store, not the engine. A second
+measurement over three seconds, ten rows (five listed, five reached as siblings): all blank at once; at 300 ms
+seven of the ten answered their names, listed and sibling rows alike; at 700 ms and 1.5 s none; at 3 s two. The
+answers come in bursts, whether or not the row is on screen: the Store's accessibility server answers while it is
+idle and blanks while it is busy loading (images, the network), and busy is most of the time just after a search.
+A blank is never a fact. (The first reading, that only rows on screen answer, was wrong: it was the bursts.)
+
+So the robust shape is patience and memory, not a different walk:
+
+- **Keys by position.** On a results page the order is fixed once loaded, so an item's key is its position among
+  the rows (`.position(n)`), which is readable even when the name is not; the name is attached the first time it
+  is answered and kept. The merge adds names to positions and never removes a name for a blank.
+- **Reads that wait for an answer.** Every read of a name retries over up to a second (every 100 ms) until the Store
+  answers; a wave that still has blanks after that is incomplete and the next wave fills them. The old view's
+  `confirmed` did the same by scrolling and waiting up to two seconds; this is the same patience without the scroll.
+- **One breath to act.** Resolve walks to the position, waits for the name, confirms it is the one that was read,
+  scrolls it into view, hit tests, clicks, all within the same burst where possible, and gives up with a reason
+  after two seconds rather than clicking blind.
+
+That is the design to take to step 2; the measurements above are its tests. The code behind the `flatView` switch
+stays as the first cut, off for everyone, and reads a results page well enough to show the shape.
