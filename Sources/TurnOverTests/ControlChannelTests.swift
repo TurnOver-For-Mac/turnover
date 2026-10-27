@@ -97,6 +97,27 @@ func controlChannelTests() {
         check(!output.append(Data([0x0A])), "overflow refused")
         expect(output.pending, full, "no truncated extra message")
     }
+    test("control: an outbox schedules one flush and releases all bytes on overflow or close") {
+        let output = ControlOutbox()
+        let message = ["text": String(repeating: "a", count: 900_000)]
+        let count = try controlLine(message).count
+        check(output.append(message), "first message schedules a flush")
+        for _ in 0..<3 { check(!output.append(message), "existing flush covers another message") }
+        expect(output.pendingBytes, count * 4, "all queued bytes counted before the flush runs")
+        check(!output.append(message), "overflow uses the existing flush to disconnect")
+        check(output.isClosed, "overflow closes admission immediately")
+        expect(output.pendingBytes, 0, "overflow releases queued data immediately")
+        for _ in 0..<100 { check(!output.append(message), "closed outbox schedules no more work") }
+        expect(output.pendingBytes, 0)
+        expect(output.flush(scheduled: true) { _ in 1 }, .failed(ENOBUFS))
+        check(!output.append(message), "flushing cannot reopen a closed outbox")
+
+        let dropped = ControlOutbox()
+        check(dropped.append(message), "message queued before disconnect")
+        dropped.close()
+        expect(dropped.pendingBytes, 0, "disconnect releases data before the queued flush runs")
+        check(!dropped.append(message), "disconnected outbox refuses late replies")
+    }
     test("control: synchronous writes finish a message larger than the socket buffer") {
         let pair = try controlPair()
         defer { close(pair.local); close(pair.peer) }
@@ -118,6 +139,18 @@ func controlChannelTests() {
         let start = ContinuousClock.now
         check(!ControlChannel.writeAll(Data(repeating: 65, count: 300_000), to: pair.local, timeout: .milliseconds(30)), "full socket fails")
         check(start.duration(to: .now) < .seconds(1), "the write has a total deadline")
+    }
+    test("control: a write with an expired deadline sends no bytes") {
+        let pair = try controlPair()
+        defer { close(pair.local); close(pair.peer) }
+        check(!ControlChannel.writeAll(Data([65, 10]), to: pair.local, deadline: .now.advanced(by: .seconds(-1))), "expired write refused")
+        check(controlHasNoBytes(pair.peer), "no late message on the socket")
+    }
+    test("control: an expired queued request releases data and cannot later succeed") {
+        let request = ControlWriteRequest(Data(repeating: 65, count: 300_000))
+        check(!request.wait(until: .now()), "queued request expires")
+        expect(request.takeData(), nil, "expired payload released before the queue runs")
+        check(!request.complete(true), "late completion cannot overwrite the caller's timeout")
     }
     test("control: a closed peer makes synchronous writes fail without SIGPIPE") {
         let pair = try controlPair()
@@ -149,6 +182,38 @@ func controlChannelTests() {
         let decoded = try lines.map { (try JSONSerialization.jsonObject(with: Data($0)) as? [String: String])?["text"] ?? "" }
         expect(decoded.sorted(), texts)
         withExtendedLifetime(connection) {}
+    }
+    test("control: concurrent sends expire while the client queue is held and never write later") {
+        let pair = try controlPair()
+        defer { close(pair.peer) }
+        let queue = DispatchQueue(label: "turnover.test.control.client.deadline")
+        var endings = 0
+        let connection = ControlClient.Connection(fd: pair.local, queue: queue, received: { _ in }, ended: { endings += 1 })
+        let results = OSAllocatedUnfairLock(initialState: [(Bool, Duration)]())
+        let finished = DispatchGroup()
+        queue.suspend()
+        for i in 0..<3 {
+            finished.enter()
+            DispatchQueue.global().async {
+                let start = ContinuousClock.now
+                let sent = connection.send(["index": i])
+                let elapsed = start.duration(to: .now)
+                results.withLock { $0.append((sent, elapsed)) }
+                finished.leave()
+            }
+        }
+        // Completion must not depend on resuming the queue. The timeout only bounds a broken test.
+        let returnedWhileHeld = finished.wait(timeout: .now() + 3)
+        queue.resume()
+        expect(returnedWhileHeld, .success, "all callers return while the queue is still held")
+        expect(finished.wait(timeout: .now() + 3), .success)
+        let values = results.withLock { $0 }
+        expect(values.count, 3)
+        check(values.allSatisfy { !$0.0 }, "all queued sends timed out")
+        check(values.allSatisfy { $0.1 < .milliseconds(1500) }, "each caller gets one second, with scheduling tolerance")
+        check(controlWait { endings == 1 }, "connection ends once when its queue resumes")
+        expect(controlRead(pair.peer, count: 1), Data(), "expired messages are never sent later")
+        check(!connection.send(["text": "later"]), "closed connection rejects further sends")
     }
     test("control: failed persistent send ends once and cannot use a recycled descriptor") {
         let pair = try controlPair()
@@ -206,7 +271,7 @@ func controlChannelTests() {
         let queue = DispatchQueue(label: "turnover.test.control.reuse")
         let server = ControlServer(queue: queue)
         let old = try controlPair()
-        queue.sync { server.addClient(old.local) }
+        _ = queue.sync { server.addClient(old.local) }
         var replies: [@Sendable ([String: Any]) -> Void] = []
         server.handlers["ask"] = { _, reply in replies.append(reply) }
         expect(ControlChannel.writeAll(try controlLine(["op": "ask"]), to: old.peer), true, "old request sent")
@@ -218,7 +283,7 @@ func controlChannelTests() {
         let replacement = try controlPair(reusing: old.local)
         defer { queue.sync { server.drop(replacement.local) }; close(replacement.peer) }
         expect(replacement.local, old.local, "descriptor really reused")
-        queue.sync { server.addClient(replacement.local) }
+        _ = queue.sync { server.addClient(replacement.local) }
         replies.first?(["text": "stale"])
         queue.sync {}
         check(controlHasNoBytes(replacement.peer), "stale reply discarded")
@@ -250,5 +315,42 @@ func controlChannelTests() {
         server.broadcast(["text": "still here"])
         let final = try controlLine(["text": "still here"])
         expect(controlRead(fast.peer, count: final.count), final)
+    }
+    test("control: held server queue counts buffered replies and queued broadcasts together") {
+        let queue = DispatchQueue(label: "turnover.test.control.admission")
+        let server = ControlServer(queue: queue)
+        let pair = try controlPair()
+        defer { queue.sync { server.drop(pair.local) }; close(pair.peer) }
+        guard let output = queue.sync(execute: { server.addClient(pair.local) }) else { throw POSIXError(.EINVAL) }
+        var reply: (@Sendable ([String: Any]) -> Void)?
+        server.handlers["subscribe"] = { _, answer in reply = answer }
+        expect(ControlChannel.writeAll(try controlLine(["op": "subscribe"]), to: pair.peer), true, "subscription sent")
+        guard controlWait({ reply != nil }), let reply else { throw POSIXError(.ETIMEDOUT) }
+        let text = String(repeating: "a", count: 900_000)
+        let count = try controlLine(["text": text]).count
+        reply(["text": text])
+        queue.sync {}
+        let buffered = output.pendingBytes
+        check(buffered > 0 && buffered < count, "partial socket write leaves a buffered suffix")
+
+        queue.suspend()
+        server.broadcast(["text": text])
+        reply(["text": text])
+        server.broadcast(["text": text])
+        expect(output.pendingBytes, buffered + count * 3, "queued messages and socket suffix share the cap")
+        // Concurrent producers keep firing while no queue work can execute, including after overflow.
+        DispatchQueue.concurrentPerform(iterations: 40) { i in
+            if i.isMultiple(of: 2) { server.broadcast(["text": text]) }
+            else { reply(["text": text]) }
+        }
+        check(output.isClosed, "overflow closes admission before the queue resumes")
+        expect(output.pendingBytes, 0, "overflow releases queued and buffered bytes while the queue is held")
+        queue.resume()
+        guard controlWait({ fcntl(pair.local, F_GETFD) == -1 }) else { throw POSIXError(.ETIMEDOUT) }
+
+        queue.suspend()
+        for _ in 0..<40 { reply(["text": text]); server.broadcast(["text": text]) }
+        expect(output.pendingBytes, 0, "stale replies and broadcasts retain nothing after disconnect")
+        queue.resume()
     }
 }

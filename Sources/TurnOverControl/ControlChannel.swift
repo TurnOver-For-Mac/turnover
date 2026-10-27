@@ -13,6 +13,7 @@
 // (ControlServer.handle). A program's connection can stay open to hear TurnOver's answers as they come (Settings).
 import Foundation
 import Security
+import os
 
 /// Where the channel is: in TurnOver's own support folder.
 public enum ControlChannel {
@@ -103,8 +104,9 @@ public enum ControlChannel {
 // MARK: - The server (TurnOver)
 
 /// TurnOver's end: accepts, checks, reads lines, hands each message to `handle` on the main thread.
-// Listener and clients, including setup and cancellation, belong to the serial queue. Handlers and logging
-// belong to MainActor. Swift cannot express the queue's ownership; deinit has exclusive access (27 Oct 2026).
+// Listener and clients, including setup and cancellation, belong to the serial queue. The subscriber registry
+// and each outbox have their own locks for admission from other threads. Handlers and logging belong to MainActor.
+// Swift cannot express the queue's ownership; deinit has exclusive access (27 Oct 2026).
 public final class ControlServer: @unchecked Sendable {
     public static let shared = ControlServer()
     /// One message: its fields, and a way to answer the program that sent it.
@@ -118,16 +120,16 @@ public final class ControlServer: @unchecked Sendable {
     private var listener: Int32 = -1
     private var acceptSource: DispatchSourceRead?
     private struct Client {
-        let id: UUID
+        let output = ControlOutbox()
+        var id: UUID { output.id }
         let source: DispatchSourceRead
         let writer: DispatchSourceWrite
         var writing = false
         var buffer = Data()
-        var output = ControlOutput()
     }
     private var clients: [Int32: Client] = [:]
     /// Connections that asked to hear the settings as they change (Settings).
-    private var subscribers = Set<Int32>()
+    private let subscribers = OSAllocatedUnfairLock(initialState: [Int32: ControlOutbox]())
 
     /// The supplied queue must be serial.
     package init(queue: DispatchQueue = DispatchQueue(label: "turnover.control")) { self.queue = queue }
@@ -169,12 +171,14 @@ public final class ControlServer: @unchecked Sendable {
     }
 
     /// Takes ownership of an authenticated socket. All connection operations run on queue.
-    package func addClient(_ fd: Int32) {
+    @discardableResult
+    package func addClient(_ fd: Int32) -> ControlOutbox? {
         dispatchPrecondition(condition: .onQueue(queue))
-        guard ControlChannel.prepareSocket(fd) else { close(fd); return }
-        let id = UUID()
+        guard ControlChannel.prepareSocket(fd) else { close(fd); return nil }
         let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
         let writer = DispatchSource.makeWriteSource(fileDescriptor: fd, queue: queue)
+        let client = Client(source: source, writer: writer)
+        let id = client.id
         source.setEventHandler { [weak self] in self?.read(fd, id: id) }
         writer.setEventHandler { [weak self] in self?.flush(fd, id: id) }
         // Both sources must relinquish the descriptor before close can make its number reusable.
@@ -183,8 +187,9 @@ public final class ControlServer: @unchecked Sendable {
         source.setCancelHandler { cancelled.leave() }
         writer.setCancelHandler { cancelled.leave() }
         cancelled.notify(queue: queue) { close(fd) }
-        clients[fd] = Client(id: id, source: source, writer: writer)
+        clients[fd] = client
         source.resume()
+        return client.output
     }
 
     private func read(_ fd: Int32, id: UUID) {
@@ -200,8 +205,12 @@ public final class ControlServer: @unchecked Sendable {
             let line = entry.buffer[entry.buffer.startIndex..<end]
             entry.buffer.removeSubrange(entry.buffer.startIndex...end)
             guard let message = (try? JSONSerialization.jsonObject(with: Data(line))) as? [String: Any], let op = message["op"] as? String else { continue }
-            if op == "subscribe" { subscribers.insert(fd) }
-            let reply: @Sendable ([String: Any]) -> Void = { [weak self] answer in self?.send(answer, to: fd, id: id) }
+            let output = entry.output
+            if op == "subscribe" { subscribers.withLock { $0[fd] = output } }
+            let reply: @Sendable ([String: Any]) -> Void = { [weak self, weak output] answer in
+                guard let output else { return }
+                self?.send(answer, to: fd, output: output)
+            }
             // JSONSerialization made this graph locally; only the main-queue closure uses it after transfer.
             nonisolated(unsafe) let m = message
             DispatchQueue.main.async { MainActor.assumeIsolated {
@@ -213,38 +222,32 @@ public final class ControlServer: @unchecked Sendable {
 
     package func drop(_ fd: Int32) {
         dispatchPrecondition(condition: .onQueue(queue))
-        subscribers.remove(fd)
         guard let entry = clients.removeValue(forKey: fd) else { return }
+        entry.output.close()
+        _ = subscribers.withLock { $0.removeValue(forKey: fd) }
         entry.source.cancel()
         entry.writer.cancel()
         if !entry.writing { entry.writer.resume() }
     }
 
-    private func send(_ message: [String: Any], to fd: Int32, id: UUID) {
-        guard let data = ControlChannel.encode(message) else { return }
+    private func send(_ message: [String: Any], to fd: Int32, output: ControlOutbox) {
+        // Admission happens before scheduling; the closure retains no encoded message of its own.
+        guard output.append(message) else { return }
         queue.async { [weak self] in
-            guard let self, self.clients[fd]?.id == id else { return }
-            self.enqueue(data, to: fd)
+            self?.flush(fd, id: output.id, scheduled: true)
         }
     }
 
-    private func enqueue(_ data: Data, to fd: Int32) {
-        guard var entry = clients[fd] else { return }
-        guard entry.output.append(data) else { fail(fd, reason: "outgoing buffer full"); return }
-        clients[fd] = entry
-        flush(fd, id: entry.id)
-    }
-
-    private func flush(_ fd: Int32, id: UUID) {
+    private func flush(_ fd: Int32, id: UUID, scheduled: Bool = false) {
         guard var entry = clients[fd], entry.id == id else { return }
-        let result = entry.output.flush { Darwin.send(fd, $0.baseAddress, $0.count, MSG_DONTWAIT) }
+        let result = entry.output.flush(scheduled: scheduled) { Darwin.send(fd, $0.baseAddress, $0.count, MSG_DONTWAIT) }
         switch result {
         case .complete:
             if entry.writing { entry.writer.suspend(); entry.writing = false }
         case .blocked:
             if !entry.writing { entry.writer.resume(); entry.writing = true }
         case .failed(let error):
-            fail(fd, reason: "write failed (\(error))")
+            fail(fd, reason: error == ENOBUFS ? "outgoing buffer full" : "write failed (\(error))")
             return
         }
         clients[fd] = entry
@@ -257,11 +260,10 @@ public final class ControlServer: @unchecked Sendable {
 
     /// To every program that asked to hear (Settings): the settings as they now are.
     public func broadcast(_ message: [String: Any]) {
-        guard let data = ControlChannel.encode(message) else { return }
-        queue.async { [weak self] in
-            guard let self else { return }
-            // Enqueue can drop a slow or disconnected subscriber.
-            for fd in Array(self.subscribers) { self.enqueue(data, to: fd) }
+        // Snapshot connection identities, not descriptors alone. A concurrent drop closes its outbox before
+        // removing the subscription, so neither this snapshot nor an old reply can keep admitting output.
+        for (fd, output) in subscribers.withLock({ $0 }) {
+            send(message, to: fd, output: output)
         }
     }
 
@@ -269,6 +271,7 @@ public final class ControlServer: @unchecked Sendable {
         // No method can still hold self here; cancellation handlers own the descriptors until sources finish.
         acceptSource?.cancel()
         for entry in clients.values {
+            entry.output.close()
             entry.source.cancel()
             entry.writer.cancel()
             if !entry.writing { entry.writer.resume() }
@@ -322,12 +325,13 @@ public enum ControlClient {
 
     /// A connection kept open (Settings): messages sent on it, every line TurnOver sends back handed to `received` on
     /// the main thread, `ended` when TurnOver goes.
-    // fd and source are immutable after setup. queue owns buffer, writes and cancellation; deinit cancels only
-    // after the last operation releases self, and the cancellation handler closes fd (27 Oct 2026).
+    // fd and source are immutable after setup. queue owns buffer, writes and cancellation; each pending send
+    // owns a locked request so its caller can time out independently. Deinit cancels only after the last
+    // operation releases self, and the cancellation handler closes fd (27 Oct 2026).
     public final class Connection: @unchecked Sendable {
         private let fd: Int32
         private let source: DispatchSourceRead
-        private let queue = DispatchQueue(label: "turnover.control.client")
+        private let queue: DispatchQueue
         private let ended: @MainActor () -> Void
         private var buffer = Data()
 
@@ -337,8 +341,10 @@ public enum ControlClient {
         }
 
         /// Takes ownership of a connected socket configured with ControlChannel.prepareSocket.
-        package init(fd: Int32, received: @escaping @MainActor ([String: Any]) -> Void, ended: @escaping @MainActor () -> Void) {
+        package init(fd: Int32, queue: DispatchQueue = DispatchQueue(label: "turnover.control.client"),
+                     received: @escaping @MainActor ([String: Any]) -> Void, ended: @escaping @MainActor () -> Void) {
             self.fd = fd
+            self.queue = queue
             self.ended = ended
             source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
             source.setEventHandler { [weak self] in
@@ -363,12 +369,20 @@ public enum ControlClient {
 
         @discardableResult
         public func send(_ message: [String: Any]) -> Bool {
+            // Queue waiting and writing share the budget. In particular, Settings calls this from main;
+            // queued callers must not each start a new second after a slow send (review of #126, 27 Oct 2026).
+            let deadline = ContinuousClock.now.advanced(by: .seconds(1))
+            let waitDeadline = DispatchTime.now() + .seconds(1)
             guard let data = ControlChannel.encode(message) else { return false }
-            return queue.sync {
-                guard !source.isCancelled else { return false }
-                guard ControlChannel.writeAll(data, to: fd) else { end(); return false }
-                return true
+            let request = ControlWriteRequest(data)
+            queue.async { [self] in
+                guard !source.isCancelled, let data = request.takeData() else {
+                    end(); request.complete(false); return
+                }
+                let sent = ControlChannel.writeAll(data, to: fd, deadline: deadline)
+                if !request.complete(sent) { end() }
             }
+            return request.wait(until: waitDeadline)
         }
 
         private func end() {
