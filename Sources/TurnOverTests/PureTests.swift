@@ -963,6 +963,10 @@ func browseTextNavTests() {
                 check(GlobalCommands.shared.script(named: value) != nil || vo.script(named: value) != nil, "\(key) → \(value): a command TurnOver has")
             }
         }
+        // Caps Lock H is JAWS's Say Sentence. It pointed at "=kb:turnover+control+s", and NVDA+Control+S opens the
+        // Speech settings in the Windows family since 12 Oct 2026 (NVDA-PARITY.md, decision 6), so Caps Lock H
+        // opened them too (Guides/11-keys-jaws.md, 21 Oct 2026: "TurnOver H | Opens TurnOver's Speech").
+        expect(jaws[normalizeGestureIdentifier("kb:turnover+h")], "reportCurrentSentence", "Caps Lock H reads the sentence, as JAWS's Say Sentence")
         let sayAll = StyleKeymap.sayAllKeys(for: .jaws)
         expect(sayAll[normalizeGestureIdentifier("kb:leftArrow")], "jaws_sayAllBack", "Left during say all goes back")
         expect(sayAll[normalizeGestureIdentifier("kb:pageUp")], "jaws_sayAllFaster", "Page Up during say all is faster")

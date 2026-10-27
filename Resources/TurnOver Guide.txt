@@ -1331,7 +1331,7 @@ JAWS keys
   TurnOver F4: Quits TurnOver
   TurnOver F5: Rebuilds the page's browse mode view (NVDA+F5)
   TurnOver F9: Marks the review cursor as the start of text to copy (NVDA+F9)
-  TurnOver H: Opens TurnOver's Speech (NVDA+Control+S: Select Synthesizer settings)
+  TurnOver H: Reports the current sentence
   TurnOver I: Reports the current line. Pressed twice, spells it
   TurnOver J: Moves the review cursor to the previous word (NVDA+Control+Left Arrow)
   TurnOver K: Reports the word at the review cursor; twice, spells it (NVDA+Control+Period)
