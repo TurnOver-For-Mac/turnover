@@ -2,6 +2,15 @@
 
 The newest build is first. "Reported by a tester" marks a fix for something a tester sent in. Thank you.
 
+## 2.0, build 22.4
+
+### Changed
+
+- A window with nothing TurnOver can read (a custom-drawn or OpenGL window: Parallels' installation assistant, Bambu
+  Studio's plate) says so a moment after it comes to the front, and names the key for screen recognition in the
+  keyboard style in use: VO-Shift-L with VoiceOver keys, the TurnOver key with R with NVDA or JAWS keys. It said
+  "window" and then nothing. Issue 74.
+
 ## 2.0, build 22.3
 
 ### Fixed
