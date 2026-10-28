@@ -23,6 +23,9 @@ let gates: [String: (name: String, help: String, run: ([String]) -> Void)] = [
     "appstore-ax": ("appstore-ax",
                  "Bounded read-only App Store structural sample; no labels, UI actions or activation. Existing app only. [--direct] explicitly bypasses this probe's AXHealth rest.",
                  runAppStoreAXGate),
+    "appstore-navigation": ("appstore-navigation",
+                 "Read-only preview using production public navigation children. Existing App Store only; metadata by default. [--public-labels] requires revalidated Discover content. No UI actions or reader toggles.",
+                 runAppStoreNavigationGate),
     "text":     ("text",
                  "Gate 7: 200 simulated arrow presses on a 5 MB file in TextEdit, bounded reads only. Takes the front. --lines N --mb N --keep",
                  runTextGate),
@@ -68,8 +71,9 @@ guard let gateName = args.first, let gate = gates[gateName] else {
 }
 
 Log.open(gate: gate.name)
-// The structural App Store gate accepts no content arguments. Do not persist even rejected argument text.
-Log.line(gateName == "appstore-ax" ? "turnover-probe appstore-ax" : "turnover-probe \(gate.name) \(args.dropFirst().joined(separator: " "))")
+// These App Store gates accept no content arguments. Do not persist even rejected argument text.
+let appStoreGate = gateName == "appstore-ax" || gateName == "appstore-navigation"
+Log.line(appStoreGate ? "turnover-probe \(gate.name)" : "turnover-probe \(gate.name) \(args.dropFirst().joined(separator: " "))")
 Log.line("macOS \(ProcessInfo.processInfo.operatingSystemVersionString), pid \(getpid()), VoiceOver enabled flag: \(voiceOverRunning())")
 gate.run(Array(args.dropFirst()))
 Log.close()

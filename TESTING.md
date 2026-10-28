@@ -219,3 +219,15 @@ failure. Neither is reported as an invented provider noValue. No live app is rea
 Typed results time and classify a single query; they do not impose a walk deadline or interrupt an in-flight call.
 Diagnostic callers must provide their own work limits. Health state belongs to the calling process: a fresh probe
 cannot establish whether the separately running reader deferred a read. App Store probe work is tracked in #166.
+
+## Public navigation children prototype (issue 174)
+
+`AXNavigationChildrenTests` compares ordinary and semantic children, provider order, deduplication, authoritative
+empty, unsupported count/slice value fallback, transport/backoff, malformed data, cycles and budget cancellation.
+`AppStoreNavigationModelTests` drives the actual default builder/model owner with semantic-only public fixtures;
+it verifies committed labels/order and refusal to replace a useful page after a cycle or final metadata failure.
+
+The builder allows 2 s for page/sidebar/metadata, 6 s for more/carousel/resolve and 30 s for End's deliberate shelf
+loading. End remains long, cancellable worker work. Navigation queries/decoding have finite caps; legacy role,
+identity and action helpers outside the charged seam retain their existing limits and cooperative checks. This
+prototype does not establish universal responsiveness, VoiceOver-off parity, purchase access or safe live actions.

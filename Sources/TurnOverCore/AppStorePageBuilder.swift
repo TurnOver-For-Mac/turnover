@@ -6,11 +6,24 @@ import AppKit
 import ApplicationServices
 import TurnOverAX
 
-nonisolated final class AppStoreAXModelSource: AppStoreModelSource, Sendable {
+nonisolated package final class AppStoreAXModelSource: AppStoreModelSource, Sendable {
     let pid: pid_t
-    init(pid: pid_t) { self.pid = pid }
-    func read(_ request: AppStoreModelRequest, current: @escaping @Sendable () -> Bool) -> AppStoreModelResult? {
-        let builder = AppStorePageBuilder(pid: pid, model: request.model, current: current)
+    private let makeNavigation: @Sendable (AXNavigationChildren.Limits, @escaping @Sendable () -> Bool) -> AXNavigationChildren
+    package init(pid: pid_t,
+                 makeNavigation: @escaping @Sendable (AXNavigationChildren.Limits, @escaping @Sendable () -> Bool) -> AXNavigationChildren = {
+                     AXNavigationChildren(limits: $0, current: $1)
+                 }) { self.pid = pid; self.makeNavigation = makeNavigation }
+    package func read(_ request: AppStoreModelRequest, current: @escaping @Sendable () -> Bool) -> AppStoreModelResult? {
+        // Navigation collection is bounded independently of legacy label/action helpers. End deliberately loads
+        // several shelves; resolve/more can deliberately wait for materialization, so preserve those waits rather
+        // than reporting an empty complete model after the preview's shorter allowance (28 Oct 2026, issue 174).
+        let limits: AXNavigationChildren.Limits
+        switch request.operation {
+        case .end: limits = .init(durationNanoseconds: 30_000_000_000, queries: 8192, nodes: 12000)
+        case .more, .carousel, .resolve: limits = .init(durationNanoseconds: 6_000_000_000)
+        default: limits = .init()
+        }
+        let builder = AppStorePageBuilder(pid: pid, model: request.model, current: current, navigation: makeNavigation(limits, current))
         return builder.read(request.operation)
     }
 }
@@ -20,7 +33,17 @@ nonisolated final class AppStorePageBuilder {
         AppStorePageBuilder(pid: pid, model: AppStoreModel(), current: { true }).pageRoot()
     }
     private let pid: pid_t
-    private let current: @Sendable () -> Bool
+    private let requestCurrent: @Sendable () -> Bool
+    private let navigation: AXNavigationChildren
+    private func current() -> Bool { requestCurrent() && navigation.check() }
+    private func children(_ element: AXUIElement) -> [AXUIElement] { navigation.children(of: element) }
+    private func first(in element: AXUIElement, depth: Int, where predicate: (AXUIElement) -> Bool) -> AXUIElement? {
+        navigation.first(in: element, depth: depth) {
+            guard current() else { return false }
+            let match = predicate($0)
+            return current() && match
+        }
+    }
     private var page: [AppStoreView.Entry]
     private var shelves: [String]
     private var sidebar: [AppStoreView.Entry]
@@ -37,11 +60,13 @@ nonisolated final class AppStorePageBuilder {
         guard current(), let w = app.element(kAXFocusedWindowAttribute) ?? app.element(kAXMainWindowAttribute) else { return nil }
         AXUIElementSetMessagingTimeout(w, 0.3); return w
     }
-    private var card: AXUIElement? { window?.elements(kAXChildrenAttribute).first { ($0.string(kAXIdentifierAttribute) ?? "").hasSuffix("pageBaseCardView") } }
+    private var card: AXUIElement? { window.flatMap { children($0).first { ($0.string(kAXIdentifierAttribute) ?? "").hasSuffix("pageBaseCardView") } } }
     private func known(_ e: AXUIElement) -> Bool { seen.contains { CFEqual($0, e) } }
     private typealias Entry = AppStoreView.Entry
-    init(pid: pid_t, model: AppStoreModel, current: @escaping @Sendable () -> Bool) {
-        self.pid = pid; self.current = current
+    init(pid: pid_t, model: AppStoreModel, current: @escaping @Sendable () -> Bool,
+         navigation: AXNavigationChildren? = nil) {
+        self.pid = pid; self.requestCurrent = current
+        self.navigation = navigation ?? AXNavigationChildren(current: current)
         page = model.page; shelves = model.shelves; sidebar = model.sidebar
         seen = model.seen; lastSection = model.lastSection; nextSection = model.nextSection; tails = model.tails
         pageKey = model.key
@@ -51,7 +76,8 @@ nonisolated final class AppStorePageBuilder {
         guard current() else { return .init(key: "") }
         let key = currentKey()
         guard current() else { return .init(key: "") }
-        return .init(key: key, title: pageTitle, rootIdentifier: list.string(kAXIdentifierAttribute) ?? "", hasCard: card != nil)
+        let result = AppStorePageMetadata(key: key, title: pageTitle, rootIdentifier: list.string(kAXIdentifierAttribute) ?? "", hasCard: card != nil)
+        return current() ? result : .init(key: "")
     }
     private func snapshot(_ metadata: AppStorePageMetadata) -> AppStoreModel {
         var m = AppStoreModel()
@@ -93,7 +119,7 @@ nonisolated final class AppStorePageBuilder {
         }
         guard current() else { return nil }
         let after = metadata()
-        guard before.key == after.key else { return nil }
+        guard current(), before.key == after.key else { return nil }
         return .init(model: snapshot(after), metadata: after, resolved: resolved, more: more, needsRefresh: identityChanged)
     }
     private func resolve(_ entry: Entry, index: Int) -> Entry? {
@@ -134,18 +160,18 @@ nonisolated final class AppStorePageBuilder {
         guard let w = window else { return nil }
         // A card over the whole window (a category such as Arcade's Family: AppStore.productPage.pageBaseCardView
         // beside its own scroll area, and no sidebar): its page is the window's own scroll area.
-        if w.elements(kAXChildrenAttribute).contains(where: { ($0.string(kAXIdentifierAttribute) ?? "").hasSuffix("pageBaseCardView") }),
-           let s = w.elements(kAXChildrenAttribute).first(where: { $0.role == "AXScrollArea" }),
-           let list = AppStoreView.first(in: s, depth: 4, where: { $0.role == "AXList" && $0.string(kAXSubroleAttribute) == "AXCollectionList" }) { return (s, list) }
-        guard let split = w.elements(kAXChildrenAttribute).first(where: { $0.role == "AXSplitGroup" }) else { return nil }
+        if children(w).contains(where: { ($0.string(kAXIdentifierAttribute) ?? "").hasSuffix("pageBaseCardView") }),
+           let s = children(w).first(where: { $0.role == "AXScrollArea" }),
+           let list = first(in: s, depth: 4, where: { $0.role == "AXList" && $0.string(kAXSubroleAttribute) == "AXCollectionList" }) { return (s, list) }
+        guard let split = children(w).first(where: { $0.role == "AXSplitGroup" }) else { return nil }
         // The page's container is an AXScrollArea, or (seen after a relaunch, 6 Oct 2026) an AXGroup with the
         // scroll actions; the sidebar is a group of its own, or its parts sit loose beside the page.
-        for s in split.elements(kAXChildrenAttribute) where s.role == "AXScrollArea" || s.role == "AXGroup" {
-            if let list = AppStoreView.first(in: s, depth: 4, where: { $0.role == "AXList" && $0.string(kAXSubroleAttribute) == "AXCollectionList" }) { return (s, list) }
+        for s in children(split) where s.role == "AXScrollArea" || s.role == "AXGroup" {
+            if let list = first(in: s, depth: 4, where: { $0.role == "AXList" && $0.string(kAXSubroleAttribute) == "AXCollectionList" }) { return (s, list) }
         }
         // No collection: a page of its own ("Cannot Connect … Retry", AppStore.error), read as it is.
-        for s in split.elements(kAXChildrenAttribute) where s.role == "AXScrollArea" || s.role == "AXGroup" {
-            if let area = AppStoreView.first(in: s, depth: 2, where: { $0.role == "AXScrollArea" && (($0.string(kAXIdentifierAttribute) ?? "").hasPrefix("AppStore.") || !$0.elements(kAXChildrenAttribute).isEmpty) }) { return (area, area) }
+        for s in children(split) where s.role == "AXScrollArea" || s.role == "AXGroup" {
+            if let area = first(in: s, depth: 2, where: { $0.role == "AXScrollArea" && (($0.string(kAXIdentifierAttribute) ?? "").hasPrefix("AppStore.") || !children($0).isEmpty) }) { return (area, area) }
         }
         return nil
     }
@@ -161,8 +187,8 @@ nonisolated final class AppStorePageBuilder {
         // The pages named by what they are (Updates' collection calls itself "Details" in one layout).
         let named = ["AppStore.updates": "Updates", "AppStore.discover": "Discover", "AppStore.arcade": "Arcade", "AppStore.error": "Cannot connect"]
         if let n = named[list.string(kAXIdentifierAttribute) ?? ""] { return n }
-        if let p = AppStoreView.first(in: list, depth: 4, where: { ($0.string(kAXIdentifierAttribute) ?? "").hasSuffix("shelfItemSubComponent.title") }), let v = p.string(kAXValueAttribute) { return v }
-        if let h = AppStoreView.first(in: scroll, depth: 4, where: { $0.role == "AXHeading" && !AppStoreView.isInside($0, list) }), let d = h.string(kAXDescriptionAttribute) ?? h.string(kAXValueAttribute) { return d }
+        if let p = first(in: list, depth: 4, where: { ($0.string(kAXIdentifierAttribute) ?? "").hasSuffix("shelfItemSubComponent.title") }), let v = p.string(kAXValueAttribute) { return v }
+        if let h = first(in: scroll, depth: 4, where: { $0.role == "AXHeading" && !AppStoreView.isInside($0, list) }), let d = h.string(kAXDescriptionAttribute) ?? h.string(kAXValueAttribute) { return d }
         return list.string(kAXDescriptionAttribute) ?? ""
     }
 
@@ -175,8 +201,8 @@ nonisolated final class AppStorePageBuilder {
             pageKey = currentKey(); return
         }
         // Above the collection: the page's heading and its buttons.
-        for c in scroll.elements(kAXChildrenAttribute) where c.role == "AXGroup" && !CFEqual(scroll, list) {
-            for b in c.elements(kAXChildrenAttribute) where b.role == "AXButton" {
+        for c in children(scroll) where c.role == "AXGroup" && !CFEqual(scroll, list) {
+            for b in children(c) where b.role == "AXButton" {
                 if let t = b.string(kAXTitleAttribute) ?? b.string(kAXDescriptionAttribute) { page.append(Entry(label: t, element: b, kind: .button, shelf: 0)) }
             }
         }
@@ -188,7 +214,7 @@ nonisolated final class AppStorePageBuilder {
             shelves.append("")
             walk(list, shelf: 1, section: list, known: known, mark: { self.seen.append($0) })
             for k in page.indices where page[k].check.isEmpty { page[k].check = AppStoreView.identity(of: page[k].element) }
-        } else if let visible = AppStoreView.first(in: list, depth: 2, where: { $0.string(kAXSubroleAttribute) == "AXSectionList" }) {
+        } else if let visible = first(in: list, depth: 2, where: { $0.string(kAXSubroleAttribute) == "AXSectionList" }) {
             var top = visible; var hops = 0
             while current(), let p = top.element("AXPreviousContentSibling"), hops < 200 { top = p; hops += 1 }
             addSections(from: top, limit: AppStoreView.batch)
@@ -213,7 +239,7 @@ nonisolated final class AppStorePageBuilder {
             walk(sec, shelf: shelf, section: sec, known: known, mark: { self.seen.append($0) })
             // A shelf far from the screen is an empty shell until it comes near: bring it into view, read again.
             var tries = 0
-            while current(), page.count == before, tries < 2, sec.elements(kAXChildrenAttribute).count <= 1 || (sec.string(kAXDescriptionAttribute) ?? "").isEmpty {
+            while current(), page.count == before, tries < 2, children(sec).count <= 1 || (sec.string(kAXDescriptionAttribute) ?? "").isEmpty {
                 guard current() else { return }
                 _ = AXUIElementPerformAction(sec, "AXScrollToVisible" as CFString)
                 usleep(250_000); tries += 1
@@ -240,7 +266,7 @@ nonisolated final class AppStorePageBuilder {
         if let next = nextSection { addSections(from: next, limit: AppStoreView.batch); if page.count > before { return true } }
         guard let last = lastSection else { return false }
         // Into view: the shelf, then its last item, so the shelves after it are made.
-        let targets = [last] + Array(last.elements(kAXChildrenAttribute).suffix(1))
+        let targets = [last] + Array(children(last).suffix(1))
         for t in targets {
             guard current() else { return false }
             _ = AXUIElementPerformAction(t, "AXScrollToVisible" as CFString)
@@ -276,9 +302,13 @@ nonisolated final class AppStorePageBuilder {
         return !added.isEmpty
     }
 
-    private func walk(_ e: AXUIElement, shelf: Int, section: AXUIElement, known: (AXUIElement) -> Bool, mark: (AXUIElement) -> Void, depth: Int = 0) {
-        guard depth < 8 else { return }
-        for c in e.elements(kAXChildrenAttribute) {
+    private func walk(_ e: AXUIElement, shelf: Int, section: AXUIElement, known: (AXUIElement) -> Bool, mark: (AXUIElement) -> Void,
+                      depth: Int = 0, ancestors: Set<ElementKey> = []) {
+        let key = ElementKey(e)
+        guard !ancestors.contains(key) else { navigation.stop(.cycle); return }
+        guard depth < 8 else { navigation.stop(.depthLimit); return }
+        let ancestors = ancestors.union([key])
+        for c in children(e) {
             guard current() else { return }
             AXUIElementSetMessagingTimeout(c, 0.3)
             if known(c) { continue }
@@ -318,7 +348,7 @@ nonisolated final class AppStorePageBuilder {
             case "AXImage":
                 continue
             default:
-                walk(c, shelf: shelf, section: section, known: known, mark: mark, depth: depth + 1)
+                walk(c, shelf: shelf, section: section, known: known, mark: mark, depth: depth + 1, ancestors: ancestors)
             }
         }
     }
@@ -326,7 +356,7 @@ nonisolated final class AppStorePageBuilder {
     private func buildSidebar() {
         _ = 0
         sidebar = []
-        guard let w = window, let split = w.elements(kAXChildrenAttribute).first(where: { $0.role == "AXSplitGroup" }) else { return }
+        guard let w = window, let split = children(w).first(where: { $0.role == "AXSplitGroup" }) else { return }
         let page = pageRoot()?.scroll
         func visit(_ c: AXUIElement, _ depth: Int) {
             if let page, CFEqual(c, page) { return }
@@ -334,18 +364,18 @@ nonisolated final class AppStorePageBuilder {
                 let v = (c.attr(kAXValueAttribute) as? String) ?? ""
                 sidebar.append(Entry(label: v.isEmpty ? "Search" : "Search, \(v)", element: c, kind: .search, shelf: 0))
             } else if c.role == "AXOutline" {
-                for row in c.elements(kAXChildrenAttribute) where row.role == "AXRow" {
-                    guard let cell = row.elements(kAXChildrenAttribute).first, let d = cell.string(kAXDescriptionAttribute) else { continue }
+                for row in children(c) where row.role == "AXRow" {
+                    guard let cell = children(row).first, let d = cell.string(kAXDescriptionAttribute) else { continue }
                     let selected = (row.attr(kAXSelectedAttribute) as? Bool) == true
                     sidebar.append(Entry(label: d + (selected ? ", selected" : ""), element: cell, kind: .tab, shelf: 0))
                 }
             } else if (c.string(kAXIdentifierAttribute) ?? "") == "AppStore.accountButton", let t = c.string(kAXTitleAttribute) {
                 sidebar.append(Entry(label: "Account, \(t)", element: c, kind: .account, shelf: 0))
             } else if depth < 2, c.role == "AXGroup" {
-                for k in c.elements(kAXChildrenAttribute) { visit(k, depth + 1) }
+                for k in children(c) { visit(k, depth + 1) }
             }
         }
-        for c in split.elements(kAXChildrenAttribute) { visit(c, 0) }
+        for c in children(split) { visit(c, 0) }
     }
 
     private func pageFrame() -> CGRect? {
@@ -365,7 +395,7 @@ nonisolated final class AppStorePageBuilder {
         var out: [AXUIElement] = []
         func go(_ x: AXUIElement, _ d: Int) {
             guard current(), d < 5 else { return }
-            for c in x.elements(kAXChildrenAttribute) {
+            for c in children(x) {
                 guard current() else { return }
                 AXUIElementSetMessagingTimeout(c, 0.3)
                 if AppStoreView.isItem(c) { out.append(c) } else { go(c, d + 1) }
@@ -419,7 +449,7 @@ nonisolated final class AppStorePageBuilder {
 
     private func hitAgrees(_ row: AXUIElement, wanted: String) -> Bool {
         guard let f = TurnOverObject.frame(row) else { return false }
-        let icon = AppStoreView.first(in: row, depth: 5, where: { $0.role == "AXImage" && ($0.string(kAXDescriptionAttribute) ?? "Artwork") != "Artwork" }).flatMap { TurnOverObject.frame($0) }
+        let icon = first(in: row, depth: 5, where: { $0.role == "AXImage" && ($0.string(kAXDescriptionAttribute) ?? "Artwork") != "Artwork" }).flatMap { TurnOverObject.frame($0) }
         let p = icon.map { CGPoint(x: $0.midX, y: $0.midY) } ?? CGPoint(x: f.minX + min(20, f.width * 0.1), y: f.midY)
         var hit: AXUIElement?
         guard AXUIElementCopyElementAtPosition(app, Float(p.x), Float(p.y), &hit) == .success, let hit else { return false }
