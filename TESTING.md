@@ -45,7 +45,10 @@ The probe reports its own `AXIsProcessTrusted()` result without requesting a per
 apiDisabled reply stops further queries and reports accessibilityDenied, rather than an empty or completed tree.
 
 Discovery, retained-reference reads and freshly reacquired references share 96 query/configuration admissions,
-12 inspected nodes, depth 4, eight elements per array prefix and a 1.5-second cooperative deadline. Each exact
+12 inspected nodes, depth 6, eight elements per array prefix and a 1.5-second cooperative deadline. Depth-first
+discovery follows natural container order and skips children of sidebar outlines and terminal controls; skipped
+and unvisited branches are reported. Fresh-reference path replay asks for one known child index without recounting
+the full array. Each exact
 reference gets a 50 ms client messaging timeout; an equal but newly obtained reference needs its own timeout.
 The single 250 ms sample gap spends the same deadline. The first provider cannotComplete, apiDisabled or client deferral stops
 further queries. Unsupported and noValue remain provider replies, not proof of an empty application tree.

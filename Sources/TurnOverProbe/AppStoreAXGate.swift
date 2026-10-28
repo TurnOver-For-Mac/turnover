@@ -41,6 +41,7 @@ private final class AppStoreAXSample {
     private var references: [ElementKey: Int] = [:]
     private var inspected = Set<ElementKey>()
     private var malformed = false
+    private var skippedDiscoveryBranches = 0, unvisitedDiscoveryBranches = 0
 
     init(pid: pid_t, direct: Bool) { self.pid = pid; self.direct = direct; policy = direct ? .diagnosticDirect : .respectBackoff }
 
@@ -119,9 +120,10 @@ private final class AppStoreAXSample {
     }
 
     private func children(_ element: AXUIElement, _ name: String = kAXChildrenAttribute,
-                          index: Int = 0, limit: Int? = nil) -> [AXUIElement] {
-        let countResult = query(element, "\(name).count") { element.attributeValueCountResult(name, policy: policy) }
-        let count = countResult?.value
+                          index: Int = 0, limit: Int? = nil, countFirst: Bool = true) -> [AXUIElement] {
+        let count: Int?
+        if countFirst { count = query(element, "\(name).count") { element.attributeValueCountResult(name, policy: policy) }?.value }
+        else { count = nil }
         if let count, count < 0 { malformed = true; return [] }
         if let count, count <= index {
             Log.line("\(reference(element)) \(name) reportedCount=\(count) requestedIndex=\(index) received=0")
@@ -158,12 +160,12 @@ private final class AppStoreAXSample {
     /// Only the first collection found within the bounded sample. An index path is a way to reacquire a reference,
     /// never proof of item identity: App Store can reuse the same cell or move another item into the same path.
     private func collection(in window: AXUIElement) -> (AXUIElement, [Int])? {
-        var queue: [(AXUIElement, [Int])] = [(window, [])]
-        var next = 0
+        var discovery = AXProbeDiscovery(root: window)
+        defer { unvisitedDiscoveryBranches += discovery.pendingCount }
         var seen = Set<ElementKey>()
-        while next < queue.count, budget.canContinue() {
-            let (candidate, path) = queue[next]; next += 1
-            guard seen.insert(ElementKey(candidate)).inserted, admit(candidate, depth: path.count) else { continue }
+        while budget.canContinue(), let (candidate, path) = discovery.next() {
+            guard seen.insert(ElementKey(candidate)).inserted else { continue }
+            guard admit(candidate, depth: path.count) else { unvisitedDiscoveryBranches += 1; continue }
             let role = text(candidate, kAXRoleAttribute)
             Log.line("\(reference(candidate)) role=\(AXDiagnosticReport.role(role)) depth=\(path.count)")
             if role == "AXList" {
@@ -171,8 +173,11 @@ private final class AppStoreAXSample {
                 Log.line("\(reference(candidate)) subrole=\(AXDiagnosticReport.subrole(subrole))")
                 if subrole == "AXCollectionList" { return (candidate, path) }
             }
-            guard path.count < budget.maximumDepth else { _ = budget.beginNode(depth: path.count + 1); continue }
-            for (index, child) in children(candidate).enumerated() { queue.append((child, path + [index])) }
+            guard AXProbeDiscoveryPolicy.descends(into: role) else { skippedDiscoveryBranches += 1; continue }
+            guard path.count < budget.maximumDepth else {
+                _ = budget.beginNode(depth: path.count + 1); unvisitedDiscoveryBranches += 1; continue
+            }
+            discovery.append(children(candidate), under: path)
         }
         return nil
     }
@@ -194,7 +199,7 @@ private final class AppStoreAXSample {
     private func fresh(at path: [Int], from window: AXUIElement) -> AXUIElement? {
         var current = window
         for (depth, index) in path.enumerated() {
-            guard admit(current, depth: depth), let child = children(current, index: index, limit: 1).first else { return nil }
+            guard admit(current, depth: depth), let child = children(current, index: index, limit: 1, countFirst: false).first else { return nil }
             current = child
         }
         return admit(current, depth: path.count) ? current : nil
@@ -202,10 +207,10 @@ private final class AppStoreAXSample {
 
     func run() {
         Log.line("healthScope=probeProcess clientPID=\(getpid()) targetPID=\(pid) policy=\(direct ? "diagnosticDirect" : "respectBackoff")")
-        Log.line("limits queries=96 nodes=12 depth=4 arrayPrefix=8 overallMs=1500; local timeout requests are cooperative")
+        Log.line("limits queries=96 nodes=12 depth=6 arrayPrefix=8 overallMs=1500; discovery=depthFirstContainerPath; local timeout requests are cooperative")
         Log.line("scope=boundedStructuralSample labels=false identifiers=false values=false; does not establish running-reader AXHealth or VoiceOver privileges")
         defer {
-            Log.line("summary queries=\(budget.queries) nodesInspected=\(budget.nodes) stop=\(budget.stopped?.rawValue ?? "sampleFinished") depthClipped=\(budget.depthClipped) arraysClipped=\(budget.arraysClipped) malformed=\(malformed) providerTreeComplete=false")
+            Log.line("summary queries=\(budget.queries) nodesInspected=\(budget.nodes) stop=\(budget.stopped?.rawValue ?? "sampleFinished") depthClipped=\(budget.depthClipped) arraysClipped=\(budget.arraysClipped) skippedDiscoveryBranches=\(skippedDiscoveryBranches) unvisitedDiscoveryBranches=\(unvisitedDiscoveryBranches) malformed=\(malformed) providerTreeComplete=false")
         }
         guard let retainedWindow = window() else { Log.line("window=notAcquired; no empty-tree conclusion"); return }
         let selected = collection(in: retainedWindow)

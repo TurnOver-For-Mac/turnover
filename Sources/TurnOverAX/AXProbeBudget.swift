@@ -17,12 +17,12 @@ public struct AXProbeBudget: Sendable {
     public private(set) var arraysClipped = false
     public private(set) var stopped: Stop?
 
-    public init(maximumQueries: Int = 96, maximumNodes: Int = 12, maximumDepth: Int = 4,
+    public init(maximumQueries: Int = 96, maximumNodes: Int = 12, maximumDepth: Int = 6,
                 maximumChildren: Int = 8, durationNanoseconds: UInt64 = 1_500_000_000,
                 startedNanoseconds: UInt64 = DispatchTime.now().uptimeNanoseconds) {
         self.maximumQueries = min(128, max(0, maximumQueries))
         self.maximumNodes = min(16, max(0, maximumNodes))
-        self.maximumDepth = min(4, max(0, maximumDepth))
+        self.maximumDepth = min(6, max(0, maximumDepth))
         self.maximumChildren = min(8, max(1, maximumChildren))
         self.durationNanoseconds = min(2_000_000_000, durationNanoseconds)
         self.startedNanoseconds = startedNanoseconds

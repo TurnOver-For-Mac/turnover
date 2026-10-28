@@ -9,7 +9,7 @@ func axDiagnosticTests() {
                                     maximumChildren: .max, durationNanoseconds: .max, startedNanoseconds: 0)
         expect(maximum.maximumQueries, 128)
         expect(maximum.maximumNodes, 16)
-        expect(maximum.maximumDepth, 4)
+        expect(maximum.maximumDepth, 6)
         expect(maximum.maximumChildren, 8)
         expect(maximum.durationNanoseconds, 2_000_000_000)
         var zero = AXProbeBudget(maximumQueries: -1, maximumNodes: -1, maximumDepth: -1,
@@ -128,5 +128,23 @@ func axDiagnosticTests() {
         check(!AXDiagnosticReport.actions(sample.values).contains(secret), "long custom text never reaches the formatter")
         let absent = AXQueryResult<CFTypeRef>(value: nil, status: .returned(.success), elapsedNanoseconds: 0, wasAttempted: true)
         check(AXDiagnosticReport.outcome(absent).contains("returned:success"), "successful nullable output keeps the actual API status")
+    }
+    test("AX diagnostics: depth-first container discovery reaches content before sidebar and window controls spend the cap") {
+        let roles = [0: "AXWindow", 1: "AXSplitGroup", 2: "AXButton", 3: "AXButton", 4: "AXButton", 5: "AXGroup",
+                     6: "AXScrollArea", 7: "AXTextField", 8: "AXOutline", 9: "AXButton", 10: "AXGroup", 11: "AXGroup", 12: "AXList"]
+        let children = [0: [1, 2, 3, 4], 1: [5, 6], 5: [7, 8, 9], 6: [10], 10: [11], 11: [12], 8: Array(100..<200)]
+        var discovery = AXProbeDiscovery(root: 0), budget = AXProbeBudget(startedNanoseconds: 0)
+        var visited: [Int] = [], expanded: [Int] = [], foundPath: [Int]?
+        while let (node, path) = discovery.next(), budget.beginNode(depth: path.count, now: 0) {
+            visited.append(node)
+            if roles[node] == "AXList" { foundPath = path; break }
+            guard AXProbeDiscoveryPolicy.descends(into: roles[node]) else { continue }
+            expanded.append(node); discovery.append(children[node] ?? [], under: path)
+        }
+        expect(visited, [0, 1, 5, 7, 8, 9, 6, 10, 11, 12])
+        expect(foundPath, [0, 1, 0, 0, 0], "original indices survive skipped sidebar controls")
+        check(!expanded.contains(8) && !expanded.contains(7) && !expanded.contains(9), "outline and control child branches are not queried")
+        expect(budget.nodes, 10)
+        check(budget.stopped == nil && discovery.pendingCount == 3, "content found within the same cap; window buttons remain explicitly unvisited")
     }
 }
