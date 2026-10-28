@@ -298,6 +298,18 @@ func focusRuleTests() {
         (gone as? EditableText)?.caretMoved(speak: nil, gesture: KeyboardGesture(identifier: "kb:command+upArrow")!, info: nil)
         expect(API.focusObject.flatMap { AXReplay.id(of: $0.element) }, 7, "the copy Pages has its focus on is the focus")
     }
+    test("Pages: the caret at a page's first character is that page's") {
+        var f = pages(caret: true)
+        // Neither copy says it has the focus, and the caret is where the first page's part ends and the second's starts.
+        f.nodes = f.nodes.map { n in
+            guard [4, 6].contains(n.id) else { return n }
+            var attrs = n.attrs; attrs["AXFocused"] = nil; attrs["AXSelectedTextRange"] = .range(12, 0)
+            return .init(id: n.id, attrs: attrs)
+        }
+        AXReplay.load(f); defer { AXReplay.unload() }
+        guard let module = pagesModule() else { return Harness.fail("Pages' module is registered") }
+        expect(module.redirectFocus(AXReplay.element(2)).flatMap { AXReplay.id(of: $0) }, 6, "the second page's body text is the focus")
+    }
     test("Pages: after a key the copy of the text that gives the caret stays the focus") {
         guard let kind = pagesBodyClass() else { return Harness.fail("Pages' body text has its class") }
         AXReplay.load(pages(caret: true)); defer { AXReplay.unload(); API.setFocusObject(nil, ancestors: []) }

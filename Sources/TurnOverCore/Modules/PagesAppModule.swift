@@ -145,11 +145,20 @@ final class PagesAppModule: AppModule {
         if let focused { return focused }
         // None says so: the one whose part of the story holds the caret, else the first.
         guard let caret = Self.caret(areas.first) else { return areas.first }
-        return areas.first { a in
-            guard let v = a.attr("AXSharedCharacterRange"), CFGetTypeID(v) == AXValueGetTypeID() else { return false }
+        return Self.copy(holding: caret, in: areas) ?? areas.first
+    }
+
+    /// The page's copy whose part of the story holds the caret. A page's first character, where the page before ends
+    /// too, is that page's: at the top of page 2 "page 2" was never said (28 Oct 2026). Only the document's end is the
+    /// end of a page.
+    static func copy(holding caret: Int, in copies: [AXUIElement]) -> AXUIElement? {
+        let parts: [(copy: AXUIElement, share: CFRange)] = copies.compactMap { a in
+            guard let v = a.attr("AXSharedCharacterRange"), CFGetTypeID(v) == AXValueGetTypeID() else { return nil }
             var r = CFRange(); axValue(v, .cfRange, &r)
-            return caret >= r.location && caret <= r.location + r.length
-        } ?? areas.first
+            return (a, r)
+        }
+        return (parts.first { caret >= $0.share.location && caret < $0.share.location + $0.share.length }
+            ?? parts.first { caret == $0.share.location + $0.share.length })?.copy
     }
 
     /// The pages' body texts under the layout.
@@ -185,11 +194,7 @@ final class PagesAppModule: AppModule {
         guard let layout = Self.layout(of: pid) else { return isBody ? f.element : nil }
         let all = Self.bodies(in: layout)
         guard let caret = all.lazy.compactMap({ Self.caret($0) }).first else { return all.first }
-        return all.first { a in
-            guard let v = a.attr("AXSharedCharacterRange"), CFGetTypeID(v) == AXValueGetTypeID() else { return false }
-            var r = CFRange(); axValue(v, .cfRange, &r)
-            return caret >= r.location && caret <= r.location + r.length
-        } ?? all.first
+        return Self.copy(holding: caret, in: all) ?? all.first
     }
 
     /// The document's page layout in the front window.
