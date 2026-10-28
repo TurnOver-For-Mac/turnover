@@ -31,12 +31,36 @@ static AXError my_GetAttributeValueCount(AXUIElementRef e, CFStringRef a, CFInde
     if (axreplay_handles(e) && attrFn) {
         CFTypeRef v = NULL;
         AXError err = attrFn(e, a, &v);
-        if (err != kAXErrorSuccess) return err;
-        *count = (v && CFGetTypeID(v) == CFArrayGetTypeID()) ? CFArrayGetCount(v) : 1;
+        if (err != kAXErrorSuccess) { if (v) CFRelease(v); return err; }
+        if (!v || CFGetTypeID(v) != CFArrayGetTypeID()) {
+            if (v) CFRelease(v);
+            return kAXErrorIllegalArgument;
+        }
+        *count = CFArrayGetCount(v);
         if (v) CFRelease(v);
         return kAXErrorSuccess;
     }
     return AXUIElementGetAttributeValueCount(e, a, count);
+}
+// Bounded-array reads must also hit the replay provider, rather than accidentally asking a real process (#166).
+static AXError my_CopyAttributeValues(AXUIElementRef e, CFStringRef a, CFIndex index, CFIndex maxValues, CFArrayRef *values) {
+    if (axreplay_handles(e) && attrFn) {
+        CFTypeRef v = NULL;
+        AXError err = attrFn(e, a, &v);
+        if (err != kAXErrorSuccess) { if (v) CFRelease(v); return err; }
+        if (!v || CFGetTypeID(v) != CFArrayGetTypeID() || index < 0 || maxValues < 0) {
+            if (v) CFRelease(v);
+            return kAXErrorIllegalArgument;
+        }
+        CFIndex count = CFArrayGetCount(v);
+        if (index > count || (index == count && count > 0)) { CFRelease(v); return kAXErrorIllegalArgument; }
+        CFIndex length = MIN(maxValues, count - index);
+        CFMutableArrayRef out = CFArrayCreateMutable(NULL, length, &kCFTypeArrayCallBacks);
+        for (CFIndex i = index; i < index + length; i++) CFArrayAppendValue(out, CFArrayGetValueAtIndex(v, i));
+        CFRelease(v); *values = out;
+        return kAXErrorSuccess;
+    }
+    return AXUIElementCopyAttributeValues(e, a, index, maxValues, values);
 }
 static AXError my_CopyAttributeNames(AXUIElementRef e, CFArrayRef *names) {
     if (axreplay_handles(e) && attrNamesFn) return attrNamesFn(e, names);
@@ -72,7 +96,13 @@ static AXError my_CopyMultipleAttributeValues(AXUIElementRef e, CFArrayRef attri
         CFMutableArrayRef out = CFArrayCreateMutable(NULL, n, &kCFTypeArrayCallBacks);
         for (CFIndex i = 0; i < n; i++) {
             CFTypeRef v = NULL;
-            if (attrFn(e, (CFStringRef)CFArrayGetValueAtIndex(attributes, i), &v) == kAXErrorSuccess && v) { CFArrayAppendValue(out, v); CFRelease(v); }
+            AXError err = attrFn(e, (CFStringRef)CFArrayGetValueAtIndex(attributes, i), &v);
+            if (err != kAXErrorSuccess) {
+                if (v) CFRelease(v);
+                if (options & kAXCopyMultipleAttributeOptionStopOnError) { CFRelease(out); return err; }
+                AXValueRef errorValue = AXValueCreate(kAXValueAXErrorType, &err);
+                CFArrayAppendValue(out, errorValue); CFRelease(errorValue);
+            } else if (v) { CFArrayAppendValue(out, v); CFRelease(v); }
             else CFArrayAppendValue(out, kCFNull);
         }
         *values = out;
@@ -83,6 +113,7 @@ static AXError my_CopyMultipleAttributeValues(AXUIElementRef e, CFArrayRef attri
 
 DYLD_INTERPOSE(my_CopyAttributeValue, AXUIElementCopyAttributeValue)
 DYLD_INTERPOSE(my_GetAttributeValueCount, AXUIElementGetAttributeValueCount)
+DYLD_INTERPOSE(my_CopyAttributeValues, AXUIElementCopyAttributeValues)
 DYLD_INTERPOSE(my_CopyAttributeNames, AXUIElementCopyAttributeNames)
 DYLD_INTERPOSE(my_CopyParameterizedAttributeNames, AXUIElementCopyParameterizedAttributeNames)
 DYLD_INTERPOSE(my_CopyActionNames, AXUIElementCopyActionNames)
