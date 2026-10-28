@@ -51,7 +51,7 @@ public enum AXDiagnosticReport {
 
     public static func shouldStop(_ status: AXQueryStatus) -> Bool {
         switch status {
-        case .returned(let error): return error == .cannotComplete
+        case .returned(let error): return error == .cannotComplete || error == .apiDisabled
         case .deferred: return true
         case .batchNull, .invalidResponse: return false
         default: return true   // future client-stop statuses must never permit more diagnostic work

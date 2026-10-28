@@ -41,11 +41,13 @@ counts, timings and typed query outcomes. It never emits titles, values, identif
 There is no labels option. The probe's own log is identified at startup; do not substitute an unrestricted tree dump.
 The header distinguishes the VoiceOver enabled flag from process presence. App Store version/build and whether it
 is frontmost are metadata; the reader's active state and mute lease are reported as unobserved, never inferred.
+The probe reports its own `AXIsProcessTrusted()` result without requesting a permission prompt. An actual
+apiDisabled reply stops further queries and reports accessibilityDenied, rather than an empty or completed tree.
 
 Discovery, retained-reference reads and freshly reacquired references share 96 query/configuration admissions,
 12 inspected nodes, depth 4, eight elements per array prefix and a 1.5-second cooperative deadline. Each exact
 reference gets a 50 ms client messaging timeout; an equal but newly obtained reference needs its own timeout.
-The single 250 ms sample gap spends the same deadline. The first provider cannotComplete or client deferral stops
+The single 250 ms sample gap spends the same deadline. The first provider cannotComplete, apiDisabled or client deferral stops
 further queries. Unsupported and noValue remain provider replies, not proof of an empty application tree.
 
 `--direct` explicitly bypasses only this probe process's AXHealth rest, still recording its actual outcome and
