@@ -105,7 +105,17 @@ final class PagesAppModule: AppModule {
     override func redirectFocus(_ element: AXUIElement) -> AXUIElement? {
         guard element.role == "AXLayoutArea" else { return nil }
         let areas = Self.bodies(in: element)
-        if let focused = areas.first(where: { ($0.attr(kAXFocusedAttribute) as? Bool) == true }) { return focused }
+        let focused = areas.first { ($0.attr(kAXFocusedAttribute) as? Bool) == true }
+        // A .docx just opened (Pages 15.4, macOS 27.0.1, 28 Oct 2026): the layout keeps the focus and the body text
+        // gives no caret (AXSelectedTextRange has no value in any page's copy), so the caret keys were silent and the
+        // review keys read the whole story. Given the focus, as the navigator's moveFocusHere gives it, the body text
+        // shows its caret again.
+        if let body = focused ?? areas.first, Self.caret(body) == nil {
+            let r = body.set(kAXFocusedAttribute, kCFBooleanTrue)
+            Log.io("pages: the layout has the focus and no body text gives its caret; the body text focused → \(r.rawValue)")
+            return body
+        }
+        if let focused { return focused }
         // None says so: the one whose part of the story holds the caret, else the first.
         guard let caret = Self.caret(areas.first) else { return areas.first }
         return areas.first { a in

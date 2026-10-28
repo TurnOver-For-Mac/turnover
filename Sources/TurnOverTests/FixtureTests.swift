@@ -196,6 +196,49 @@ func focusRuleTests() {
             check(focusIs(3), "the page inside the group is the focus, not the group")
         }
     }
+
+    /// A Pages document: a window (0) in the application (9), its page layout (2) holding two pages (3, 5), each
+    /// with its copy of the body text (4, 6). Both copies give the caret, or (a document just opened) neither does.
+    func pages(caret: Bool) -> AXFixture {
+        var f = AXFixture(app: "Pages", bundle: "com.apple.Pages", recorded: "", root: 0, application: 9, focus: 2, nodes: [])
+        func body(_ id: Int, page: Int, shared: (Int, Int)) -> AXFixture.Node {
+            var attrs: [String: AXFixture.Value] = ["AXRole": .string("AXTextArea"), "AXParent": .element(page), "AXWindow": .element(0), "AXFocused": .bool(true),
+                                                    "AXNumberOfCharacters": .number(20), "AXSharedCharacterRange": .range(shared.0, shared.1)]
+            if caret { attrs["AXSelectedTextRange"] = .range(5, 0) }
+            return .init(id: id, attrs: attrs)
+        }
+        f.nodes = [
+            .init(id: 0, attrs: ["AXRole": .string("AXWindow"), "AXParent": .element(9), "AXChildren": .elements([1])]),
+            .init(id: 1, attrs: ["AXRole": .string("AXScrollArea"), "AXParent": .element(0), "AXWindow": .element(0), "AXChildren": .elements([2])]),
+            .init(id: 2, attrs: ["AXRole": .string("AXLayoutArea"), "AXParent": .element(1), "AXWindow": .element(0), "AXFocused": .bool(true), "AXChildren": .elements([3, 5])]),
+            .init(id: 3, attrs: ["AXRole": .string("AXPage"), "AXParent": .element(2), "AXWindow": .element(0), "AXChildren": .elements([4])]),
+            body(4, page: 3, shared: (0, 12)),
+            .init(id: 5, attrs: ["AXRole": .string("AXPage"), "AXParent": .element(2), "AXWindow": .element(0), "AXChildren": .elements([6])]),
+            body(6, page: 5, shared: (12, 8)),
+            .init(id: 9, attrs: ["AXRole": .string("AXApplication"), "AXChildren": .elements([0]), "AXWindows": .elements([0]),
+                                 "AXFocusedWindow": .element(0), "AXFocusedUIElement": .element(2)]),
+        ]
+        return f
+    }
+    func pagesModule() -> AppModule? {
+        BuiltInModules.register()
+        return AppModuleHandler.shared.moduleType(for: "com.apple.Pages")?.init(pid: 900_009, bundleIdentifier: "com.apple.Pages", appName: "Pages")
+    }
+    func setsSaid() -> String { AXReplay.sets.map { "\($0.id) \($0.attribute)" }.joined(separator: ", ") }
+
+    test("Pages: the layout with no caret in its body text gives the body text the focus") {
+        AXReplay.load(pages(caret: false)); defer { AXReplay.unload() }
+        guard let module = pagesModule() else { return Harness.fail("Pages' module is registered") }
+        expect(module.redirectFocus(AXReplay.element(2)).flatMap { AXReplay.id(of: $0) }, 4, "the first page's body text is the focus")
+        check(AXReplay.sets.contains { $0.id == 4 && $0.attribute == "AXFocused" && $0.value == .bool(true) },
+              "the body text was given the focus, so Pages shows its caret (set: \(setsSaid()))")
+    }
+    test("Pages: the layout with the caret in its body text sets nothing in Pages") {
+        AXReplay.load(pages(caret: true)); defer { AXReplay.unload() }
+        guard let module = pagesModule() else { return Harness.fail("Pages' module is registered") }
+        expect(module.redirectFocus(AXReplay.element(2)).flatMap { AXReplay.id(of: $0) }, 4, "the first page's body text is the focus")
+        check(AXReplay.sets.isEmpty, "nothing set in Pages (set: \(setsSaid()))")
+    }
 }
 
 // Scale: a generated window with a 1,000-row list. Searches for a window's parts must not walk the rows, and
