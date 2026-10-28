@@ -116,7 +116,12 @@ public final class GlobalCommands: ScriptableObject {
         // Option+D is Windows+D, the desktop: Finder's Desktop folder in a window, its items under the arrow keys (an
         // AppleVis reader asked how to reach the desktop in the NVDA style, 25 Oct 2026). F11 only clears the screen.
         script("showDesktop", "Opens the Desktop folder in Finder, its items under the arrows (Windows: Windows+D)", gestures: ["kb:option+d"], category: win) { _ in
-            NSWorkspace.shared.open(URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Desktop"))
+            // Off the main thread: the open is TurnOver's own first touch of Desktop, a folder macOS protects, and macOS
+            // asks for the Desktop folder permission while the call waits. On the main thread that held TurnOver silent
+            // until the watchdog gave speech back to VoiceOver and then relaunched it (27 Oct 2026, macOS 27.0.1: the
+            // prompt a second after Option D, the relaunch 24 s later). Off it, TurnOver goes on and reads the prompt.
+            let desktop = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Desktop")
+            DispatchQueue.global(qos: .userInitiated).async { NSWorkspace.shared.open(desktop) }
         }.isAvailable = windowsOn
         script("focusStatusMenus", "Status menus; lists the status menus at the right of the menu bar, TurnOver's own item last (Windows: Windows+B)", gestures: ["kb:option+b"], category: win) { _ in
             StatusMenus.openList()
