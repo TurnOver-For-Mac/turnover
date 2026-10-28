@@ -285,16 +285,21 @@ public struct Config: Codable {
         public var autoRefresh = false
         /// NVDA's "Automatically say all on result".
         public var autoSayAll = false
+        /// After Return clicks something in the result, recognise again instead of closing (Oliver, 28 Oct 2026: a
+        /// dialog's OK, then the screen that follows, without pressing the key again). On by default.
+        public var refreshAfterClick = true
         public init() {}
-        enum Keys: String, CodingKey { case autoRefresh, autoSayAll }
+        enum Keys: String, CodingKey { case autoRefresh, autoSayAll, refreshAfterClick }
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: Keys.self)
             autoRefresh = (try? c.decodeIfPresent(Bool.self, forKey: .autoRefresh)) ?? false
             autoSayAll = (try? c.decodeIfPresent(Bool.self, forKey: .autoSayAll)) ?? false
+            refreshAfterClick = (try? c.decodeIfPresent(Bool.self, forKey: .refreshAfterClick)) ?? true
         }
         public func encode(to encoder: Encoder) throws {
             var c = encoder.container(keyedBy: Keys.self)
             try c.encode(autoRefresh, forKey: .autoRefresh); try c.encode(autoSayAll, forKey: .autoSayAll)
+            try c.encode(refreshAfterClick, forKey: .refreshAfterClick)
         }
     }
     /// The rising tide: which applications TurnOver leads in; VoiceOver has the rest (NVDA: sleep mode, inverted).

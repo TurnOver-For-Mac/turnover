@@ -3,8 +3,8 @@
 // spirit; Command Control T until 12 Oct 2026, when Finder, Mail, Terminal, Preview, WhatsApp and Xcode were found to
 // use it). A tiny helper inside TurnOver.app, registered as a login item, so it is listening even when TurnOver is
 // not running. It needs no permissions: the shortcut is registered with macOS (a Carbon hot key), and it does
-// nothing else. Pressed: TurnOver starts if it isn't running, and quits if it is. It also starts TurnOver again after
-// a crash (the safety net, below).
+// nothing else. Pressed: TurnOver starts if it isn't running; if it is, it turns itself off or on (CoExist), or an
+// older TurnOver that doesn't answer is quit. It also starts TurnOver again after a crash (the safety net, below).
 import AppKit
 import AVFoundation
 import Carbon.HIToolbox
@@ -143,10 +143,13 @@ final class Key {
             // An Activity left by a build before 18 Oct: VoiceOver is silent in TurnOver's apps until it's out, so a
             // TurnOver that stopped comes back whatever VoiceOver says.
             let activityIn = oldActivityInstalled()
+            // Coexisting (experimental, off unless turned on): VoiceOver is on all the time and silenced in TurnOver's
+            // apps, so a TurnOver that stopped comes back whatever VoiceOver says.
+            let coexist = (CFPreferencesCopyAppValue("coexist" as CFString, readerID as CFString) as? Bool) ?? false
             // VoiceOver talking is its flag and its process: the flag alone stays on after VoiceOver was quit by script
             // or crashed (a code review, 25 Oct 2026).
             let voiceOverTalking = NSWorkspace.shared.isVoiceOverEnabled && !NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.VoiceOver").isEmpty
-            guard !back, !voiceOverTalking || activityIn else {   // restarted, or VoiceOver is talking
+            guard !back, !voiceOverTalking || coexist || activityIn else {   // restarted, or VoiceOver is talking
                 note("TurnOver ended; \(back ? "it is back (a restart)" : "VoiceOver is on"): nothing to do"); return
             }
             // The Mac asleep or locked (the lid closed): no sound device and nobody listening, and a start now stalled on
@@ -213,12 +216,18 @@ final class Key {
     func pressed() {
         let running = NSRunningApplication.runningApplications(withBundleIdentifier: readerID)
         if let app = running.first {
-            // Not while TurnOver is taking out an Activity left by a build before 18 Oct: quit halfway, VoiceOver stays
-            // silent in the apps it lists (a code review, 24 Oct 2026). It takes about ten seconds; press again after.
-            // Only in TurnOver's first 30 seconds, when it does that: a removal that failed must not stop the key for good.
-            if oldActivityInstalled(), Date().timeIntervalSince(app.launchDate ?? .distantPast) < 30 {
-                note("Command+Control+Period while the old Activity is being removed: not quitting yet")
-                voice.say("One moment: TurnOver is putting VoiceOver's settings back. Press again when it says done.")
+            // Coexisting (experimental, 16 Oct 2026): TurnOver stays running and turns itself off and on. Asked through
+            // its control channel (TurnOverControl), off the main thread; it answers at once. One that doesn't (stuck,
+            // or older) is quit.
+            let coexist = (CFPreferencesCopyAppValue("coexist" as CFString, readerID as CFString) as? Bool) ?? false
+            if coexist {
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let answered = ControlClient.send(["op": "toggle"], folder: "TurnOver", waitFor: 1.0).answer?["op"] as? String == "ack"
+                    DispatchQueue.main.async { MainActor.assumeIsolated {
+                        if answered { self.note("TurnOver toggled by Command+Control+Period (still running)"); return }
+                        self.quitReader(app)
+                    } }
+                }
                 return
             }
             // Quit, as before CoExist: TurnOver no longer stays running while off (CoExist removed, 24 Oct 2026). Once

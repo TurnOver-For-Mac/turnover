@@ -265,3 +265,45 @@ audibly speaking, and only along VoiceOver's own navigation. Usable as a last re
 is this row called", "press it") rather than for reading a page; and only with the swap off and VoiceOver silent by
 some means that keeps its reads alive. Parked behind the engine's own patience, which got names within a round on
 the good runs tonight without VoiceOver at all.
+
+### The third cut, 27 Oct 2026, night: the screen is the truth, and the Store's screen lies too
+
+Opening a row kept failing under the second cut, so the ground was tested point by point:
+
+- **AXScrollToVisible** on a row or its list returns success and moves nothing. Only the scroll bar's value moves the
+  page (the nearest scroll area above the list).
+- **AXFrame** of a row is a row out after a reflow: the point at a row's icon, hit tested, names another row.
+- **The hit test** (`AXUIElementCopyElementAtPosition`) matches what the Store draws: checked against two screenshots.
+  A scan of the visible area every 60 by 40 points is about 340 hit tests in 300 to 550 ms, and a click at a scanned
+  point not on the offer button opened the product page (HiWater, from a standalone probe).
+- **The list's children** are every result, but a result the Store hasn't drawn answers blank: its title is an
+  invalid element until the cell is on screen. The names "answering in bursts" were cells scrolling into view.
+- **The scroll offset carries over:** a new search ("hydration") opened 7300 points down, where the last page was,
+  so rows 1 to 12 were above the screen and blank.
+- **Cell reuse without a refresh.** After a scroll, the hit test and the tree name Discover-page apps (Pages, Weather
+  Dock, ClassicWeather, Apple Arcade, a STORY tile) where the pixels show water results; a click at "STORY" opened
+  Water Meter: IoT Platform. Screenshots also show two titles drawn in one tile ("Water Sort Color Puzzle" over
+  "Paint Expert"). `AXEnhancedUserInterface` was already on. So on this Store (macOS 27.2) neither the tree, the
+  frames nor the hit test can be trusted to match the pixels after a scroll; only the pixels can.
+
+So `FlatScreen.swift` (behind the same switch) reads the page from the screen: to the top, a hit-test scan, the tiles
+in reading order as the items, a screen down and a new scan when the person moves past the last tile, and Return
+clicks the point a fresh scan finds for the tile. Reading and moving across screens work (5 tiles a screen, 0.4 s a
+scan); opening still opens whatever the Store has really drawn there, which can be another app.
+
+**Where this leaves the App Store.** The accessibility layer of this results page does not describe the screen.
+Two honest routes remain: read the pixels (Vision text recognition on a window capture: needs Screen Recording,
+a big ask for a screen reader), or leave the results page alone and give the person the catalog directly (the
+public iTunes search API for the term they typed, a plain list, Return opening the product page by id through
+`macappstore://apps.apple.com/app/id…`), which is what Codex suggested the same evening. The second is cheap,
+reliable and private enough (the search term goes to Apple either way). Oliver's call.
+
+### The catalog, 28 Oct 2026: Music and Podcasts too
+
+The App Store's catalog route (Catalog.swift, behind the same switch) now answers Music and Podcasts searches as
+well: Music lists three artists, twelve albums and thirty songs; Podcasts forty shows; each app follows its own
+scheme (`music://`, `podcasts://`) from any page, measured. The arrows, Home, End, Return and Escape are the list's
+while the search field keeps the focus (the letters stay the field's); Return on the same term opens the item.
+TV is left out: Apple TV+ shows are not in the public catalog ("severance" found nothing), and its page reads well
+enough. Music's own search page also reads well through MediaView ("Top Results, 6 items, Radiohead, Artist"), so
+there the catalog is a choice, not a rescue; Oliver is comparing.

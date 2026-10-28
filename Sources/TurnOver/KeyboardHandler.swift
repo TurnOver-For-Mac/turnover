@@ -108,6 +108,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
     init() {
         KeyboardGesture.poster = { g in KeyboardHandler.post(g) }
         KeyboardGesture.typedPoster = { g in KeyboardHandler.postTyped(g) }
+        KeyboardGesture.chordPoster = { codes in KeyboardHandler.postChord(codes) }
         KeyboardGesture.turnOverHeld = {
             if KeyboardHandler.capsHeld.value { return true }
             let f = CGEventSource.flagsState(.hidSystemState)
@@ -160,7 +161,8 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         openHIDManager(into: mine)
 
         let mask = CGEventMask(1 << CGEventType.flagsChanged.rawValue | 1 << CGEventType.keyDown.rawValue | 1 << CGEventType.keyUp.rawValue)
-        guard let t = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap,
+        // Coexisting with VoiceOver: at the head of the HID level, before VoiceOver sees a chord (TapProbe, 16 Oct 2026).
+        guard let t = CGEvent.tapCreate(tap: Coexist.on ? .cghidEventTap : .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap,
                                         eventsOfInterest: mask, callback: { proxy, type, event, refcon in
             guard let refcon else { return Unmanaged.passUnretained(event) }
             return Unmanaged<KeyboardHandler>.fromOpaque(refcon).takeUnretainedValue().tapEvent(type, event)
@@ -265,6 +267,40 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         guard code == Int64(s.keyCode) else { return false }
         let mods: CGEventFlags = [.maskCommand, .maskControl, .maskAlternate, .maskShift]
         return flags.intersection(mods) == s.flags.intersection(mods)
+    }
+
+    /// Coexisting, a game TurnOver leads in front (Steam's Big Picture): keys that pass go to the game's process alone,
+    /// so VoiceOver's own tap never sees them. VoiceOver took the arrows as Quick Nav, found nothing in Big Picture,
+    /// landed its cursor in Finder and brought Finder forward: "it slides off the app" (16 Oct 2026).
+    nonisolated(unsafe) static var redirectPid: pid_t?
+    /// Coexisting: the app TurnOver reads in front. The arrows TurnOver lets through or sends go to it alone while
+    /// VoiceOver's Quick Nav may be on, so VoiceOver never takes them: it did, and every list in TurnOver's apps went
+    /// dead, VoiceOver's cursor moving silently instead (19 Oct 2026). Arrows only, and never with Command:
+    /// Command Tab and the rest stay the system's (keys to the process alone broke Command Tab in a game, 16 Oct 2026).
+    nonisolated(unsafe) static var frontPid: pid_t = 0
+    nonisolated static func arrowTarget(code: Int64, flags: CGEventFlags) -> pid_t? {
+        guard Coexist.on, (123...126).contains(code), !flags.contains(.maskCommand), frontPid > 0,
+              ArrowQuickNav.voiceOverMayBeOn.value, !TurnOverMenu.anyOpen.value else { return nil }
+        // Only while the focus is in the app in front: in the Dock (Control F3) the arrows went to Claude's prompt
+        // behind it, and the Dock didn't move (19 Oct 2026). Status menus and Spotlight are the same case.
+        let focused = API.focusedPid
+        guard focused == 0 || focused == frontPid else { return nil }
+        // Not into an app's menu: a menu tracks its keys in a loop of its own, and an arrow posted to the process
+        // closed Finder's context menu instead of opening Open With (a tester, 19 Oct 2026).
+        guard !AXHandler.anyMenuOpen.value else { return nil }
+        return frontPid
+    }
+
+    private func passOrRedirect(_ event: CGEvent) -> Unmanaged<CGEvent>? {
+        if Self.redirectPid == nil, let pid = Self.arrowTarget(code: event.getIntegerValueField(.keyboardEventKeycode), flags: event.flags) {
+            event.setIntegerValueField(.eventSourceUserData, value: Self.marker)
+            event.postToPid(pid)
+            return nil
+        }
+        guard let pid = Self.redirectPid else { return Unmanaged.passUnretained(event) }
+        event.setIntegerValueField(.eventSourceUserData, value: Self.marker)
+        event.postToPid(pid)
+        return nil
     }
 
     private func tapEvent(_ type: CGEventType, _ event: CGEvent) -> Unmanaged<CGEvent>? {
@@ -388,7 +424,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         if type == .keyUp {
             if quarantined.contains(code) { quarantined.remove(code); return nil }
             if remapped.contains(code) { remapped.remove(code); WindowsRemap.apply(.keyUp, event) }
-            return Unmanaged.passUnretained(event)
+            return passOrRedirect(event)
         }
         guard type == .keyDown else { return Unmanaged.passUnretained(event) }
         // An echo loop: the same key again within 8 ms, three times running. No hand or key repeat is that fast
@@ -463,7 +499,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
             return nil
         case .passed:
             if code == 48, event.flags.contains(.maskCommand) { clearLeftoverModifiers(before: "Command Tab") }
-            return Unmanaged.passUnretained(event)
+            return passOrRedirect(event)
         }
     }
 
@@ -602,6 +638,22 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         }
     }
 
+    /// Keys down together, then up: a chord VoiceOver recognises (Left and Right for Quick Nav), marked so the tap ignores them.
+    static func postChord(_ codes: [Int64]) {
+        let src = CGEventSource(stateID: .hidSystemState)
+        var held: CGEventFlags = [.maskSecondaryFn, .maskNumericPad]
+        for down in [true, false] {
+            for code in (down ? codes : codes.reversed()) {
+                guard let e = CGEvent(keyboardEventSource: src, virtualKey: CGKeyCode(code), keyDown: down) else { continue }
+                e.flags = held
+                e.setIntegerValueField(.eventSourceUserData, value: marker)
+                e.post(tap: .cghidEventTap)
+                usleep(15_000)
+            }
+            held = [.maskSecondaryFn, .maskNumericPad]
+        }
+    }
+
     /// NVDA's gesture.send: the key down and up, marked so the tap ignores them.
     static func post(_ g: KeyboardGesture) {
         let src = CGEventSource(stateID: .hidSystemState)
@@ -620,11 +672,12 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
             e.post(tap: .cghidEventTap)
         }
         for (f, code) in lift { state.remove(f); modifier(code, down: false, flags: state) }
+        let toApp = arrowTarget(code: Int64(g.keyCode), flags: g.flags)
         for down in [true, false] {
             guard let e = CGEvent(keyboardEventSource: src, virtualKey: CGKeyCode(g.keyCode), keyDown: down) else { continue }
             e.flags = g.flags
             e.setIntegerValueField(.eventSourceUserData, value: marker)
-            e.post(tap: .cghidEventTap)
+            if let toApp { e.postToPid(toApp) } else { e.post(tap: .cghidEventTap) }
         }
         // Put back only what the hand still holds: a release in between was overwritten by a synthetic press, and
         // every key after carried Control until the next tap of it (the code review, 17 Oct 2026).

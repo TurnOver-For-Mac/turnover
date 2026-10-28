@@ -79,11 +79,59 @@ public final class ScreenRecognition {
                     Speech.speakMessage(message)
                     if !self.isOpen { self.finished() }
                 case .success(let r):
+                    self.showingInterface = false
                     Log.io("screen recognition: \(r.rows.count) rows, \(r.items.count) pieces of text, \(r.text.length) characters in \(Int(Date().timeIntervalSince(started) * 1000)) ms")
                     self.show(r, reopen: reopen, keepRow: keepRow)
                 }
             }
         }
+    }
+
+    /// The layer's E (developer switch `flatView`): the window's controls from its pixels (ScreenInterface), opened as
+    /// a recognition result whose rows are the controls: "Save, button". Return clicks the control.
+    public func recognizeInterface() {
+        guard Edition.devDefault("flatView") else { recognize(); return }
+        guard #available(macOS 26.0, *) else { Speech.speakMessage("the screen interface needs macOS 26 or later"); return }
+        guard !working else { Speech.speakMessage("still recognising"); return }
+        guard ScreenCapturePermission.ensure() else { finished(); return }
+        guard let target = Self.target() else { Speech.speakMessage("no window to recognise"); finished(); return }
+        working = true
+        let started = Date()
+        Speech.speakMessage("reading the screen's controls")
+        Task.detached(priority: .userInitiated) {
+            let image: CGImage
+            do { image = try await Self.capture(target) } catch {
+                await MainActor.run { self.working = false; Speech.speakMessage("could not see the window"); if !self.isOpen { self.finished() } }
+                return
+            }
+            let d = await ScreenInterface.detect(image, frame: target.frame)
+            let r = Self.interfaceResult(d.elements, title: target.title, pid: target.pid, window: target.frame)
+            await MainActor.run {
+                self.working = false
+                Log.io("screen interface: \(d.elements.count) elements in \(Int(Date().timeIntervalSince(started) * 1000)) ms (\(d.note))")
+                for e in d.elements.prefix(60) { Log.io("screen interface:   \(e.kind.rawValue) \"\(Log.words(e.label.prefix(40).description))\" at \(Int(e.rect.midX)),\(Int(e.rect.midY)) (\(e.from))") }
+                self.showingInterface = true
+                self.show(r, reopen: false, keepRow: nil)
+            }
+        }
+    }
+
+    /// The controls as rows: one each, "label, kind", the whole row clickable at the control's centre.
+    @available(macOS 26.0, *)
+    nonisolated static func interfaceResult(_ elements: [ScreenInterface.Element], title: String, pid: pid_t, window: CGRect) -> Result {
+        let text = NSMutableString()
+        var rows: [Row] = []
+        for e in elements {
+            let label = e.label.isEmpty ? (e.kind == .icon ? "icon" : e.kind.rawValue) : e.label
+            let spoken = e.kind.spoken.isEmpty || e.label.isEmpty ? label : "\(label), \(e.kind.spoken)"
+            let start = text.length
+            text.append(spoken); text.append("\n")
+            let labelRange = NSRange(location: start, length: (label as NSString).length)
+            let word = Word(range: labelRange, rect: e.rect)
+            let item = Item(range: NSRange(location: start, length: (spoken as NSString).length), rect: e.rect, words: [word])
+            rows.append(Row(range: NSRange(location: start, length: (spoken as NSString).length + 1), items: [item], block: 0))
+        }
+        return Result(text: text, rows: rows, title: title, pid: pid, window: window)
     }
 
     private func show(_ r: Result, reopen: Bool, keepRow: String?) {
@@ -268,11 +316,23 @@ public final class ScreenRecognition {
         case .right: Mouse.click(at: point, button: .right, count: 1)
         }
         // NVDA puts the mouse back after the click; a right-click's menu stays where it opened.
-        if kind != .right, let home { DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { Mouse.move(to: home) } }
+        if kind != .right, let home { DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { Mouse.move(to: home) } }
         Speech.speakMessage(kind == .right ? "right clicked" : kind == .double ? "double clicked" : "clicked")
-        // The screen changes after a click: the result is out of date. TurnOver follows the app's focus from here.
+        // The screen changes after a click: the result is out of date. Recognised again after a moment (the setting;
+        // the screen interface again where that was open), else TurnOver follows the app's focus from here.
+        if config.recognition.refreshAfterClick, kind != .right {
+            let interface = showingInterface
+            close(silently: true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { [weak self] in
+                guard let self, !self.isOpen, !self.working else { return }
+                if interface { self.recognizeInterface() } else { self.recognize() }
+            }
+            return
+        }
         close(silently: true)
     }
+    /// The result open is the screen interface's (controls), not plain text: recognised again the same way.
+    private var showingInterface = false
 
     // MARK: Refreshing while open (NVDA: "periodically refresh recognized content")
 
@@ -588,14 +648,19 @@ public enum Mouse {
         CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: p, mouseButton: .left)?.post(tap: .cghidEventTap)
     }
 
+    /// As a hand clicks: the pointer there first and a moment to be noticed, then the button held for a moment. A
+    /// 12 ms tap straight after the move was ignored by Bambu Studio's dialog (wxWidgets), while a click with 80 ms
+    /// before it and 60 ms held pressed its OK (28 Oct 2026).
     public static func click(at p: CGPoint, button: CGMouseButton, count: Int) {
         let (down, up): (CGEventType, CGEventType) = button == .right ? (.rightMouseDown, .rightMouseUp) : (.leftMouseDown, .leftMouseUp)
+        move(to: p)
+        usleep(80_000)
         for n in 1...max(1, count) {
             for type in [down, up] {
                 guard let e = CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: p, mouseButton: button) else { continue }
                 e.setIntegerValueField(.mouseEventClickState, value: Int64(n))
                 e.post(tap: .cghidEventTap)
-                usleep(12_000)
+                usleep(type == down ? 60_000 : 40_000)
             }
         }
     }

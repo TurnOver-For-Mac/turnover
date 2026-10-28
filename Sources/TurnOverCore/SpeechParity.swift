@@ -25,7 +25,7 @@ public enum SpeechParity {
     /// TurnOver no longer reads VoiceOver's rate as it takes over. The code stays for a better attempt.
     public static let on = false
     public static func applies(_ setting: String) -> Bool {
-        on && paired.contains(setting) && !refused
+        on && paired.contains(setting) && Coexist.on && !refused
             && !NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.VoiceOver").isEmpty
     }
 

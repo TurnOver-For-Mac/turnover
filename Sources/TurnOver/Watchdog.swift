@@ -55,6 +55,9 @@ final class Watchdog: @unchecked Sendable {   // its state is under `lock`
             if wasTripped {
                 Log.error("watchdog: the main thread is back")
                 KeyboardHandler.bypass = false
+                // VoiceOver silenced again where TurnOver reads: it stayed heard after a 4-second stall on Word opening
+                // a long book, speaking over TurnOver until another app came forward (18 Oct 2026).
+                MainActor.assumeIsolated { VoiceOverTap.resume() }
             }
         }
         RunLoop.main.add(beat, forMode: .common)
@@ -93,7 +96,9 @@ final class Watchdog: @unchecked Sendable {   // its state is under `lock`
             }
             return
         }
-        guard isActive, stuck > 4 else { return }
+        // Coexisting, a hang matters whether or not TurnOver is active: VoiceOver is kept quiet in TurnOver's apps, so
+        // a TurnOver that hangs in Finder is found out only in Mail, where nobody speaks (a code review, 17 Oct 2026).
+        guard isActive || Coexist.on, stuck > 4 else { return }
         let sleeping = inGrace
         lock.lock(); trippedAt = Date(); _lastTrip = trippedAt; voiceOverHeldBack = sleeping; lock.unlock()
         // The Mac asleep, locked or just awake: the beat stopped because the Mac did, not TurnOver. Keys through, but
@@ -101,6 +106,15 @@ final class Watchdog: @unchecked Sendable {   // its state is under `lock`
         // system's voice, several copies over each other (Oliver, 22 Oct 2026), while TurnOver was simply waking.
         Log.error("watchdog: the main thread has not run for \(Int(stuck)) s\(sleeping ? " (the Mac asleep, locked or just awake)" : ""); letting keys through\(sleeping ? "" : " and turning VoiceOver back on")")
         KeyboardHandler.bypass = true
+        // Coexisting: VoiceOver's sound back first, since the tap silencing it would otherwise outlive a hang (18 Oct
+        // 2026), and the warning in the system's own voice, the only one left.
+        if Coexist.on {
+            VoiceOverTap.emergencyOff()
+            // VoiceOver off meanwhile (the game exception): brought back, or nobody reads (a review, 28 Oct 2026).
+            if !sleeping, !HandOver.voiceOverReading { HandOver.bringVoiceOverBack("watchdog") }
+            if !sleeping { Self.sayOutside("TurnOver is not responding. If it doesn't recover, it restarts in twenty seconds.") }
+            return
+        }
         // Not while the Mac sleeps or has just woken: the beat stopped because the Mac did. With VoiceOver off where
         // TurnOver reads (CoExist gone), every wake posted VoiceOver's toggle, nine times in one night, which could
         // leave both readers on (the maintainer's log, 24 to 25 Oct 2026). A hang that outlasts the grace relaunches TurnOver.

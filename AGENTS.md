@@ -63,7 +63,7 @@ Keep private interfaces in their existing narrow bridges. The current dependenci
 | `responsibility_spawnattrs_setdisclaim` | `Sources/TurnOverCore/DisclaimedSpawn.swift` asks macOS to separate a helper's permission responsibility from TurnOver's, so it does not borrow Accessibility and Input Monitoring access. Check the returned `disclaimed` flag: the current bridge can still launch when this call is unavailable or fails. |
 | `AudioDeviceDuck` | `Sources/TurnOverCore/Ducking.swift` lowers other audio clients while leaving TurnOver's voice at full volume. This avoids recording and replaying system audio, which needed recording permission and extra work. Missing symbols disable ducking; preserve restoration on speech end, handover, device changes and exit. |
 
-`Sources/TurnOverCore/VoiceOverCommands.swift` and `VoiceOverSounds.swift` also read private ScreenReader resources for copied command names and familiar event sounds. Preserve their missing-resource fallbacks.
+`Sources/TurnOverCore/VoiceOverCommands.swift` and `VoiceOverSounds.swift` also read private ScreenReader resources for copied command names and familiar event sounds. Preserve their missing-resource fallbacks. The `voiceover-quiet` helper's Core Audio process tap is a public API, separate from the private ducking call.
 
 For any new private API, the pull request must name the public alternatives considered and explain why they cannot provide the required behavior. Document the reason beside the bridge, the macOS versions checked, and what happens when a symbol, class or resource is absent or changes. Keep runtime availability checks and cleanup local to that bridge, and update this inventory.
 

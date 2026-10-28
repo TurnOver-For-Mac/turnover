@@ -11,6 +11,9 @@ permissions. This page says what each is for, what never leaves your Mac, and ho
   key to see whether it is one of its commands; anything else goes straight on to the app.
 - **Screen Recording:** only for screen recognition and describing a picture, when you ask. Both run on your Mac.
 - **Automation (asked once, for one app at a time):** for example Keynote, to read a slide while a show plays.
+- **Audio (CoExist):** to keep VoiceOver's sound quiet while TurnOver reads. A small separate program,
+  voiceover-quiet, mutes VoiceOver's sound and throws it away: nothing is recorded, saved or sent, and no other
+  app's sound is touched.
 
 TurnOver does not ask for Full Disk Access.
 
@@ -75,14 +78,19 @@ but speak: no settings, no keys. Settings, Apps that speak through TurnOver, lis
 
 ## Passwords and security prompts
 
-One reader speaks at a time: TurnOver while it is on, VoiceOver while TurnOver is off.
+With CoExist on (it is unless you turn it off), VoiceOver stays running alongside TurnOver, and everything to do with
+security is VoiceOver's:
 
+- **Password fields, in any app or web page:** when one has the keyboard (macOS's secure typing is on, or TurnOver
+  lands in one), TurnOver steps aside completely. It doesn't read the field and doesn't take your keys; VoiceOver is
+  heard. TurnOver comes back when you leave it.
 - **Typing into a password field is never spoken or logged** by TurnOver, even where an app hides that the keyboard
-  is in one. TurnOver counts the characters instead.
-- **macOS's own prompts** (an administrator password, the keychain, Touch ID, "Allow" questions): TurnOver reads the
-  prompt when it opens and puts you in it, and takes you back to your app when it closes.
-- If you would rather Apple's own reader handled a prompt, turn TurnOver off with Command Control Period: VoiceOver
-  comes on if you have set it to, or press Command F5.
+  is in one.
+- **macOS's own prompts** (an administrator password, the keychain, Touch ID, "Allow" questions): the same,
+  VoiceOver's from the moment they open until they close.
+
+So Apple's own reader is the one with you whenever you type a password or approve something, and TurnOver never
+sees it. With CoExist off, TurnOver still never speaks or logs what you type into a password field.
 
 ## When we get something wrong
 

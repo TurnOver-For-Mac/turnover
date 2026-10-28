@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // What this build offers: one TurnOver, the full screen reader, with its newer apps and features marked experimental
-// where they sit (experimentalApps). The names and numbers a report or the About item needs are here too.
+// where they sit (experimentalApps, CoExist). The names and numbers a report or the About item needs are here too.
 // (A smaller Standard edition lived behind `isRelease` from 15 to 18 Oct 2026; one app since, and its code went
 // with the open-source tidy of 20 Oct 2026.)
 import Foundation

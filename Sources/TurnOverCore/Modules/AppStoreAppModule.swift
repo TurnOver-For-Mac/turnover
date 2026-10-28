@@ -68,8 +68,11 @@ final class AppStoreAppModule: AppModule {
         script("appStore_search", "Goes to the search field", gestures: ["kb:command+f"], category: cat) { [weak self] _ in self?.view.focusSearch() }
         // Return in the search field: the App Store searches; the results are read and the keys come back to the page.
         script("appStore_submitSearch", "Searches, then reads the results", gestures: ["kb:enter"], category: cat) { [weak self] g in
+            // The term is read before the Store starts searching: afterwards its accessibility stops answering for
+            // seconds (a read of the sidebar then took 2 s and the keys were dead for 3 s more, 27 Oct 2026).
+            let term = API.focusObject.flatMap { $0.element.string(kAXValueAttribute) ?? $0.value } ?? ""
             g.send()
-            self?.view.afterSearch()
+            self?.view.afterSearch(term: term)
         }.isAvailable = { API.focusObject?.role == .searchField }
     }
 

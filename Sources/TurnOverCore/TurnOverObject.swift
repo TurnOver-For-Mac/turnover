@@ -349,7 +349,12 @@ open class TurnOverObject: ScriptableObject {
                         return true
                     }
                     if let i = same.firstIndex(where: { CFEqual($0, element) }) { p.index = i + 1; p.count = same.count }
-                } else if let i = element.int(kAXIndexAttribute) { p.index = i + 1; p.count = Int(count) }
+                    // Elements that don't compare equal (a tester's desktop icons read as the last of the last, issue
+                    // 140, 28 Oct 2026): the sibling in the same place with the same name is this one.
+                    else if let f = Self.frame(element), let i = same.firstIndex(where: { s in
+                        Self.frame(s).map { abs($0.minX - f.minX) < 1 && abs($0.minY - f.minY) < 1 } == true && s.string(kAXTitleAttribute) == element.string(kAXTitleAttribute)
+                    }) { p.index = i + 1; p.count = same.count }
+                } else if let i = element.int(kAXIndexAttribute), i < Int(count) { p.index = i + 1; p.count = Int(count) }
             }
         }
         return p.index == nil && p.level == nil ? nil : p

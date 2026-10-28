@@ -107,7 +107,7 @@ public final class ControlServer: @unchecked Sendable {
     public static let shared = ControlServer()
     /// One message: its fields, and a way to answer the program that sent it.
     public typealias Handler = @MainActor (_ message: [String: Any], _ reply: @escaping @Sendable ([String: Any]) -> Void) -> Void
-    /// Set by TurnOver: the ops it answers ("patch", "ask", "say", "try"…). Main thread only.
+    /// Set by TurnOver: the ops it answers ("patch", "ask", "say", "toggle", "try"…). Main thread only.
     nonisolated(unsafe) public var handlers: [String: Handler] = [:]
     /// Lines for TurnOver's log (set by TurnOver; the channel has no logging of its own). Main thread only.
     nonisolated(unsafe) public var log: @MainActor (String) -> Void = { _ in }
