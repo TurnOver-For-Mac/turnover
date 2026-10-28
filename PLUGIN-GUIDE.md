@@ -432,3 +432,13 @@ A plugin is its folder. Share the folder; whoever installs it uses `turnover-plu
 The plugin library (TurnOver menu, Plugins, Plugin library) lists plugins that passed every check, signed by
 TurnOver, each with what it can do said before it installs. Every plugin in it can be read in full at
 github.com/TurnOver-For-Mac/turnover-plugins.
+
+Library ZIPs may contain at most **256 entries**, including directory entries, and **16 MiB (16,777,216 bytes)**
+of uncompressed content in total. The installer counts the actual decompressed bytes before extracting files;
+the compressed download size and the ZIP's stated sizes do not establish this limit. Keep profiles and sample
+fixtures within these limits. Archives with encrypted entries (even with an empty password), unsafe paths,
+symbolic links, unreadable content or failed checks are refused, and their temporary files are removed. Archive
+inspection also limits each listing to 1 MiB and each inspection or extraction command to 30 seconds.
+
+Keep plugin content in ordinary files. Finder ZIPs are supported, but macOS metadata is unpacked as AppleDouble
+sidecar files rather than restored as Finder attributes or resource forks.
