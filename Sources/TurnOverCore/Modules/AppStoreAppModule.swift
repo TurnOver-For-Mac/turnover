@@ -35,6 +35,8 @@ import ApplicationServices
 final class AppStoreAppModule: AppModule {
     static let bundleID = "com.apple.AppStore"
     private lazy var view = AppStoreView(pid: pid)
+    private var focusGeneration = 0
+    private var terminated = false
 
     required init(pid: pid_t, bundleIdentifier: String, appName: String) {
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
@@ -56,8 +58,12 @@ final class AppStoreAppModule: AppModule {
         add("nextShelf", "Next shelf of the page", ["rightArrow"]) { [weak self] _ in self?.view.jumpShelf(1) }
         add("first", "First item", ["home"]) { [weak self] _ in self?.view.toEnd(false) }
         add("last", "Last item", ["end"]) { [weak self] _ in self?.view.toEnd(true) }
-        add("open", "Opens the app's page, or presses the button", ["enter", "numpadEnter"]) { [weak self] _ in self?.view.open() }
-        add("offer", "The app's button: Open, Get, Update or Re-download; a price needs a second press; while downloading, how far it has got", ["space"]) { [weak self] _ in self?.view.offer() }
+        add("open", "Opens the app's page, or presses the button", ["enter", "numpadEnter"]) { [weak self] gesture in
+            AppStoreActionPress.dispatch(gesture) { self?.view.open(press: $0) }
+        }
+        add("offer", "The app's button: Open, Get, Update or Re-download; a price needs a second press; while downloading, how far it has got", ["space"]) { [weak self] gesture in
+            AppStoreActionPress.dispatch(gesture) { self?.view.offer(press: $0) }
+        }
         add("cancelDownload", "Cancels the app's download", ["backspace", "delete"]) { [weak self] _ in self?.view.cancelDownload() }
         add("nextArea", "Next area: sidebar, page", ["tab"]) { [weak self] _ in self?.view.switchArea() }
         add("previousArea", "Previous area", ["shift+tab"]) { [weak self] _ in self?.view.switchArea() }
@@ -77,11 +83,25 @@ final class AppStoreAppModule: AppModule {
     }
 
     override func event_appModuleGainFocus() {
+        guard !terminated else { return }
+        focusGeneration += 1
+        let generation = focusGeneration
+        view.beginSession()
+        let keys = ScriptHandler.keysArrivedCount
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
             // (Or the frontmost app: at launch TurnOver's focus can still be on the app before, 7 Oct 2026.)
-            guard let self, API.focusPid == self.pid || NSWorkspace.shared.frontmostApplication?.processIdentifier == self.pid else { return }
+            guard let self, !terminated, focusGeneration == generation, Core.active, ScriptHandler.keysArrivedCount == keys,
+                  NSWorkspace.shared.frontmostApplication?.processIdentifier == self.pid else { return }
             self.view.arrive()
         }
+    }
+
+    override func event_appModuleLoseFocus() { focusGeneration += 1; view.stop() }
+
+    override func terminate() {
+        terminated = true; focusGeneration += 1
+        view.stop()
+        super.terminate()
     }
 
     override func handleEvent(_ event: Event, next: () -> Void) {
