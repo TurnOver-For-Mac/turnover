@@ -63,10 +63,16 @@ private final class AppStoreNavigationPreview {
             return AXQueryResult(value: error == .success, status: .returned(error),
                                  elapsedNanoseconds: DispatchTime.now().uptimeNanoseconds - before, wasAttempted: true)
         }
+        // Nil means admission/cancellation/deadline stopped this query. Preserve that existing reason rather
+        // than reporting a timeout-configuration failure for an operation that returned no result.
+        guard let result else { return false }
         // Timeout configuration is per exact object, not CFEqual identity. Retain it through the sample so its
         // address cannot be reused for an unconfigured object. No provider accessibility flag is changed.
         configured[identity] = element
-        guard result?.value == true else { if localStop == nil { localStop = "timeoutConfiguration" }; return false }
+        guard result.value == true else {
+            if localStop == nil { localStop = "timeoutConfiguration:\(result.status.description)" }
+            return false
+        }
         return current
     }
 
