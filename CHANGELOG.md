@@ -29,6 +29,11 @@ Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
   Store's own hit test, which lags a new results page, is given up to a second to agree before the icon is clicked.
   Reported by the maintainer (Keynote, from a search for Pages; then the water apps).
 
+### Fixed
+
+- VO-Left and VO-Right can move past segmented controls, such as the buttons in a SwiftUI picker, without getting
+  trapped between their segments.
+
 ## 2.0, build 22.3
 
 ### Fixed
