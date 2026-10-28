@@ -95,17 +95,17 @@ final class Key {
         // Which TurnOver is running, by process, looked at every second. (macOS's "application terminated" notice is not
         // sent for a menu-bar app like TurnOver: the first crash test went unnoticed, 4 Oct 2026.) By process, not only
         // whether one runs: Command Control Period pressed again just after a quit started the next TurnOver within the
-        // second, so the end went unseen, `quitting` stayed set, and the key did nothing until the helper was restarted
-        // (28 Oct 2026).
-        seen = readerPIDs
+        // second, so the end went unseen, the quit stayed set, and the key did nothing until the helper was restarted
+        // (28 Oct 2026). A quit is remembered as it is made, so one between two looks is let go too (ReaderWatch).
+        watch = ReaderWatch(seen: readerPIDs)
         listenForQuits()   // a quit TurnOver announces is on purpose: no restart (16 Oct 2026)
         Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in MainActor.assumeIsolated {
             guard let self else { return }
-            let now = self.readerPIDs
-            if !self.seen.subtracting(now).isEmpty { self.readerEnded() }
-            self.seen = now
+            let ended = self.watch.look(self.readerPIDs)
+            if ended.quit { self.note("TurnOver quit on purpose (the menu, Command Q, or Command+Control+Period)") }
+            if ended.stopped { self.readerEnded() }
         } }
-        note("started; TurnOver \(seen.isEmpty ? "not running" : "running")")
+        note("started; TurnOver \(watch.seen.isEmpty ? "not running" : "running")")
     }
 
     /// Command+Control+Period. A helper starting while another still holds the key (a restart, two started at
@@ -126,9 +126,7 @@ final class Key {
     // not on, and TurnOver is not coming back by itself (a restart), start it again. If it crashes again within a
     // minute, do not loop: say how to turn VoiceOver on. (The helper has no permissions, so it cannot press
     // VoiceOver's key itself.)
-    private var quitting = false
-    /// TurnOver's processes at the last look.
-    private var seen: Set<pid_t> = []
+    private var watch = ReaderWatch()
     private var readerPIDs: Set<pid_t> { Set(NSRunningApplication.runningApplications(withBundleIdentifier: readerID).map(\.processIdentifier)) }
 
     /// A line in the helper's own log, ~/Library/Logs/TurnOver Key.log. (Not TurnOver's folder: writing into another
@@ -142,7 +140,6 @@ final class Key {
     private var lastRescue = Date.distantPast
 
     private func readerEnded() {
-        if quitting { quitting = false; note("TurnOver quit on purpose (the menu, Command Q, or Command+Control+Period)"); return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { MainActor.assumeIsolated { [self] in
             let back = !NSRunningApplication.runningApplications(withBundleIdentifier: readerID).isEmpty
             // An Activity left by a build before 18 Oct: VoiceOver is silent in TurnOver's apps until it's out, so a
@@ -184,7 +181,7 @@ final class Key {
 
     private var quitNoteObserver: NSObjectProtocol?
     func listenForQuits() {
-        quitNoteObserver = DistributedNotificationCenter.default().addObserver(forName: Notification.Name("com.turnover.quitting"), object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.quitting = true } }
+        quitNoteObserver = DistributedNotificationCenter.default().addObserver(forName: Notification.Name("com.turnover.quitting"), object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { if let self { self.watch.quitAnnounced(running: self.readerPIDs) } } }
         // Given up on (two stops in a minute): tried once more when the Mac wakes or is unlocked. On 18 Oct 2026 the Mac
         // locked and slept, TurnOver ended as the sound went (fixed), the restart stalled with no sound device, and
         // TurnOver stayed off until it was noticed ("turnover was off, I don't think I turned it off").
@@ -251,7 +248,7 @@ final class Key {
     }
     private var quitPending = false
     private func quitWhenKeysAreUp(_ app: NSRunningApplication) {
-        guard !quitPending, !quitting else { return }   // a second press while the first waits, or while TurnOver goes
+        guard !quitPending, !watch.isQuitting(app.processIdentifier) else { return }   // a second press while the first waits, or while this TurnOver goes
         quitPending = true
         waitThenQuit(app, until: Date().addingTimeInterval(1.5))
     }
@@ -278,7 +275,7 @@ final class Key {
         // if it is still there after three seconds, it is stopped outright.
         bell.play([1175, 784])
         voice.say("TurnOver off")
-        quitting = true
+        watch.quit(app.processIdentifier)
         kill(app.processIdentifier, SIGTERM)
         let pid = app.processIdentifier
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
