@@ -73,6 +73,10 @@ public final class MediaView {
         shelves.enumerated().flatMap { s, shelf in shelf.items.map { (s, $0) } }
     }
 
+    nonisolated private static let windowWalkLimit = 6000
+    private static let searchPageTries = 14
+    private static let paneCount = 4
+
     // MARK: Building
 
     /// Rebuilding walks the window (about 0.7 s in Music and Podcasts), so arrows use the model as it is, and it is
@@ -100,9 +104,7 @@ public final class MediaView {
                 guard let self else { return }
                 apply(built ?? nil)
                 loadingMore = false
-                let q = queued
-                queued = []
-                q.forEach { $0() }
+                runQueued()
             }
             return false
         }
@@ -159,22 +161,7 @@ public final class MediaView {
         let app = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(app, 1.0)
         guard let window = app.element(kAXFocusedWindowAttribute) ?? app.element(kAXMainWindowAttribute) else { return nil }
-        var sidebarRoot: AXUIElement?
-        var playerRoot: AXUIElement?
-        var tabBarItems: [AXUIElement] = []
-        // Find the regions.
-        var stack = [window]
-        var visited = 0
-        while let e = stack.popLast(), visited < 6000 {
-            visited += 1
-            let id = e.string(kAXIdentifierAttribute) ?? ""
-            if sidebarRoot == nil, e.role == "AXOutline", e.string(kAXDescriptionAttribute) == "Sidebar" { sidebarRoot = e; continue }
-            if playerRoot == nil, id.contains("miniPlayer.contentView") { playerRoot = e; continue }
-            if id.contains(".tabBar.") { tabBarItems.append(e); continue }
-            // A library table can hold thousands of songs: finding the areas never goes inside one.
-            if e.role == "AXTable" || e.role == "AXOutline" || e.role == "AXRow" { continue }
-            stack.append(contentsOf: e.elements(kAXChildrenAttribute).reversed())
-        }
+        let (sidebarRoot, playerRoot, tabBarItems) = Self.regions(in: window)
         let (keptSidebar, knownPageID) = snapshot()   // the model as the main thread has it, read under its lock
         let sidebar = keepSidebar ? keptSidebar : sidebarRoot.map(Self.outlineItems) ?? tabBarItems.map(Self.tabBarItem)
         let player = playerRoot.map(Self.playerItems) ?? []
@@ -182,22 +169,7 @@ public final class MediaView {
         let tabBarBlock = tabBarItems.first?.element(kAXParentAttribute)?.element(kAXParentAttribute)
         // Podcasts keeps the page you came from in the tree behind the new one, the same size (the search behind a
         // show's page, 7 Oct 2026): the one named as the window is titled is showing; the others are skipped.
-        var pages: [AXUIElement] = []
-        do {
-            var st = [window], n = 0
-            while let e = st.popLast(), n < 4000 {
-                n += 1
-                let id = e.string(kAXIdentifierAttribute) ?? ""
-                if id.contains("[viewState="), !id.contains("miniPlayer") { pages.append(e); continue }
-                if e.role == "AXTable" || e.role == "AXOutline" { continue }
-                st.append(contentsOf: e.elements(kAXChildrenAttribute))
-            }
-        }
-        let title = window.string(kAXTitleAttribute) ?? ""
-        var behind: [AXUIElement] = []
-        if pages.count > 1, pages.contains(where: { ($0.string(kAXDescriptionAttribute) ?? "") == title }) {
-            behind = pages.filter { ($0.string(kAXDescriptionAttribute) ?? "") != title }
-        }
+        let behind = Self.hiddenPages(in: window)
         var shelves = Self.shelves(in: window, skipping: [sidebarRoot, playerRoot, tabBarBlock].compactMap { $0 } + tabBarItems + behind)
         // The window's own title when it names the page (Podcasts: "Example Podcast", not the sidebar's "Search");
         // the sidebar's choice when the window is just the app's name (Music).
@@ -219,22 +191,7 @@ public final class MediaView {
             x = e.element(kAXParentAttribute); hops += 1
         }
         let barValue = (scroll?.element(kAXVerticalScrollBarAttribute)?.attr(kAXValueAttribute) as? NSNumber)?.doubleValue
-        // Shelves' places on the whole page: on screen, less the page's top, plus how far it is scrolled.
-        if let sc = scroll, let v = barValue, let origin = Self.position(sc), let size = Self.cgSize(sc, kAXSizeAttribute),
-           let content = Self.cgSize(sc, "AXContentSize") {
-            let offset = CGFloat(v) * max(0, content.height - size.height)
-            for i in shelves.indices { shelves[i].top = shelves[i].top.map { $0 - origin.y + offset } }
-        } else {
-            for i in shelves.indices { shelves[i].top = nil }
-        }
-        for s in shelves.indices {
-            for i in shelves[s].items.indices where !shelves[s].items[i].tableRow {
-                let e = shelves[s].items[i].element
-                shelves[s].items[i].ident = e.string(kAXIdentifierAttribute) ?? ""
-                shelves[s].items[i].desc = e.string(kAXDescriptionAttribute) ?? ""
-                shelves[s].items[i].scrollValue = barValue
-            }
-        }
+        Self.rememberPositions(in: &shelves, scroll: scroll, barValue: barValue)
         // The page: its title, and the scroll area (its identifier, "Music.Genre[id=176843,sections=15]", or the
         // element itself, which stays the same while the page is shown).
         // (Less what changes as it loads: Podcasts' "podcasts.listen[viewState=loaded,sections=19]".)
@@ -266,6 +223,70 @@ public final class MediaView {
             Log.io("media: a new page, up \(n) pages to read it from the top")
             if n > 0 { return build(topped: true, keepSidebar: keepSidebar) }
         }
+        let bar = Self.toolbarItems(in: window)
+        return Built(sidebar: sidebar, shelves: shelves, player: player, pageTitle: pageTitle, playerRoot: playerRoot, pageScroll: scroll, pageID: pageID, toolbar: bar)
+    }
+
+    nonisolated private static func rememberPositions(in shelves: inout [Shelf], scroll: AXUIElement?, barValue: Double?) {
+        // Shelves' places on the whole page: on screen, less the page's top, plus how far it is scrolled.
+        if let sc = scroll, let v = barValue, let origin = Self.position(sc), let size = Self.cgSize(sc, kAXSizeAttribute),
+           let content = Self.cgSize(sc, "AXContentSize") {
+            let offset = CGFloat(v) * max(0, content.height - size.height)
+            for i in shelves.indices { shelves[i].top = shelves[i].top.map { $0 - origin.y + offset } }
+        } else {
+            for i in shelves.indices { shelves[i].top = nil }
+        }
+        for s in shelves.indices {
+            for i in shelves[s].items.indices where !shelves[s].items[i].tableRow {
+                let e = shelves[s].items[i].element
+                shelves[s].items[i].ident = e.string(kAXIdentifierAttribute) ?? ""
+                shelves[s].items[i].desc = e.string(kAXDescriptionAttribute) ?? ""
+                shelves[s].items[i].scrollValue = barValue
+            }
+        }
+    }
+
+    nonisolated private static func regions(in window: AXUIElement) -> (AXUIElement?, AXUIElement?, [AXUIElement]) {
+        var sidebarRoot: AXUIElement?
+        var playerRoot: AXUIElement?
+        var tabBarItems: [AXUIElement] = []
+        // Find the regions.
+        var stack = [window]
+        var visited = 0
+        while let e = stack.popLast(), visited < Self.windowWalkLimit {
+            visited += 1
+            let id = e.string(kAXIdentifierAttribute) ?? ""
+            if sidebarRoot == nil, e.role == "AXOutline", e.string(kAXDescriptionAttribute) == "Sidebar" { sidebarRoot = e; continue }
+            if playerRoot == nil, id.contains("miniPlayer.contentView") { playerRoot = e; continue }
+            if id.contains(".tabBar.") { tabBarItems.append(e); continue }
+            // A library table can hold thousands of songs: finding the areas never goes inside one.
+            if e.role == "AXTable" || e.role == "AXOutline" || e.role == "AXRow" { continue }
+            stack.append(contentsOf: e.elements(kAXChildrenAttribute).reversed())
+        }
+        return (sidebarRoot, playerRoot, tabBarItems)
+    }
+
+    nonisolated private static func hiddenPages(in window: AXUIElement) -> [AXUIElement] {
+        var pages: [AXUIElement] = []
+        do {
+            var st = [window], n = 0
+            while let e = st.popLast(), n < 4000 {
+                n += 1
+                let id = e.string(kAXIdentifierAttribute) ?? ""
+                if id.contains("[viewState="), !id.contains("miniPlayer") { pages.append(e); continue }
+                if e.role == "AXTable" || e.role == "AXOutline" { continue }
+                st.append(contentsOf: e.elements(kAXChildrenAttribute))
+            }
+        }
+        let title = window.string(kAXTitleAttribute) ?? ""
+        var behind: [AXUIElement] = []
+        if pages.count > 1, pages.contains(where: { ($0.string(kAXDescriptionAttribute) ?? "") == title }) {
+            behind = pages.filter { ($0.string(kAXDescriptionAttribute) ?? "") != title }
+        }
+        return behind
+    }
+
+    nonisolated private static func toolbarItems(in window: AXUIElement) -> [Item] {
         // The window's toolbar buttons (Podcasts' More, Share): Back is Escape's.
         var bar: [Item] = []
         if let tb = window.elements(kAXChildrenAttribute).first(where: { $0.role == "AXToolbar" }) {
@@ -280,7 +301,7 @@ public final class MediaView {
                 st.append(contentsOf: e.elements(kAXChildrenAttribute))
             }
         }
-        return Built(sidebar: sidebar, shelves: shelves, player: player, pageTitle: pageTitle, playerRoot: playerRoot, pageScroll: scroll, pageID: pageID, toolbar: bar)
+        return bar
     }
 
     /// A newer read of the same page into the model: shelves already known take the new items and fresher elements;
@@ -371,7 +392,7 @@ public final class MediaView {
         var current = Shelf(title: "", items: [])
         var visited = 0
         func startShelf(_ title: String, at e: AXUIElement? = nil) {
-            if !current.items.isEmpty || !current.title.isEmpty { if !current.items.isEmpty { shelves.append(current) } }
+            if !current.items.isEmpty { shelves.append(current) }
             current = Shelf(title: title, items: [], top: e.flatMap { Self.position($0)?.y })
         }
         func pressable(_ e: AXUIElement) -> Bool {
@@ -379,35 +400,34 @@ public final class MediaView {
             AXUIElementCopyActionNames(e, &acts)
             return ((acts as? [String]) ?? []).contains("AXPress")
         }
-        /// A page's header: its words as one item, then each of its buttons (Follow, Play, Remove from Watchlist…)
-        /// as an item of its own, so they can be reached and pressed.
-        func addSplit(_ e: AXUIElement) {
-            var words: [String] = []
-            var buttons: [AXUIElement] = []
-            func gather(_ x: AXUIElement, _ d: Int) {
-                for c in x.elements(kAXChildrenAttribute) {
-                    let r = c.role
-                    if r == "AXButton" { buttons.append(c); continue }
-                    if r == "AXStaticText" || r == "AXHeading" || r == "AXTextArea" {
-                        if let t = [c.string(kAXDescriptionAttribute), c.string(kAXValueAttribute)].compactMap({ $0 }).first(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty && $0 != "·" }) { words.append(t) }
-                        continue
-                    }
-                    if d < 8 { gather(c, d + 1) }
+        func addLeaf(_ e: AXUIElement, role: String, desc: String, title: String) -> Bool {
+            if ["AXButton", "AXLink", "AXRadioButton", "AXCheckBox", "AXPopUpButton", "AXMenuButton", "AXCell"].contains(role) {
+                let label = tidy(desc.isEmpty ? (title.isEmpty ? ElementMatcher.text(of: e) : title) : desc)
+                if !label.isEmpty, !label.hasSuffix("Chevron") { current.items.append(Item(label: label, element: e, press: e)) }
+                return true
+            }
+            if role == "AXStaticText" || role == "AXGenericElement" {
+                let v = e.string(kAXValueAttribute) ?? ""
+                let t = role == "AXStaticText" && !v.isEmpty ? v : desc   // TV's texts carry their words as a description
+                if !t.trimmingCharacters(in: .whitespaces).isEmpty { current.items.append(Item(label: tidy(t), element: e, press: pressable(e) ? e : nil)) }
+                return true
+            }
+            if role == "AXImage" {
+                // The value read once: Music reuses elements as it scrolls, and a second read could be nil (code review, 20 Oct 2026).
+                let value = e.attr(kAXValueAttribute).map { "\($0)" } ?? ""
+                if pressable(e), !desc.isEmpty || !value.isEmpty {
+                    current.items.append(Item(label: desc.isEmpty ? value : desc, element: e, press: e))
                 }
+                return true
             }
-            gather(e, 0)
-            if !words.isEmpty { current.items.append(Item(label: tidy(words.joined(separator: ", ")), element: e, press: nil)) }
-            for b in buttons {
-                let t = b.string(kAXDescriptionAttribute) ?? b.string(kAXTitleAttribute) ?? (b.attr(kAXValueAttribute) as? String) ?? ""
-                guard !t.isEmpty, t.uppercased() != "MORE" else { continue }
-                var it = Item(label: tidy(t) + ", button", element: b, press: b)
-                if t.hasPrefix("Play") { it.play = b }
-                current.items.append(it)
+            if role == "AXGroup", pressable(e), !desc.isEmpty, e.elements(kAXChildrenAttribute).isEmpty {
+                current.items.append(Item(label: desc, element: e, press: e)); return true
             }
+            return false
         }
         func walk(_ e: AXUIElement, depth: Int) {
             visited += 1
-            guard visited < 6000, depth < 40 else { return }
+            guard visited < Self.windowWalkLimit, depth < 40 else { return }
             if skipping.contains(where: { $0.isSame(e) }) { return }
             let role = e.role, sub = e.string(kAXSubroleAttribute) ?? "", id = e.string(kAXIdentifierAttribute) ?? ""
             if ["AXScrollBar", "AXSplitter", "AXValueIndicator", "AXToolbar", "AXMenuBar"].contains(role) { return }
@@ -443,7 +463,7 @@ public final class MediaView {
             // far along a carousel has none until it is shown; it is kept, and read when it is reached.
             // TV's page header (a show's: Play Episode, Remove from Watchlist) is a cell with real buttons in it.
             if id.hasPrefix("UIA.TV.Cell"), first(in: e, depth: 6, where: { ($0.string(kAXIdentifierAttribute) ?? "").hasPrefix("UIA.TV.Button") }) != nil {
-                addSplit(e); return
+                current.items.append(contentsOf: splitHeader(e)); return
             }
             if id.hasPrefix("UIA.TV.Cell") {
                 var it = item(e)
@@ -455,7 +475,7 @@ public final class MediaView {
             // An item.
             // A page's header (Podcasts' show and episode headers): its words as one item, then each of its buttons
             // (Follow, Play, Download, Save) as an item of its own, so they can be reached and pressed.
-            if id.contains("shelfItem"), id.contains("Header") { addSplit(e); return }
+            if id.contains("shelfItem"), id.contains("Header") { current.items.append(contentsOf: splitHeader(e)); return }
             if id.contains("shelfItem"), !id.contains("SubComponent") { let it = item(e); if !it.label.isEmpty { current.items.append(it) }; return }
             if role == "AXTable" || (role == "AXOutline" && desc != "Sidebar") {
                 startShelf(desc.isEmpty ? (title.isEmpty ? "List" : title) : desc)
@@ -465,28 +485,7 @@ public final class MediaView {
                 }
                 return
             }
-            if ["AXButton", "AXLink", "AXRadioButton", "AXCheckBox", "AXPopUpButton", "AXMenuButton", "AXCell"].contains(role) {
-                let label = tidy(desc.isEmpty ? (title.isEmpty ? ElementMatcher.text(of: e) : title) : desc)
-                if !label.isEmpty, !label.hasSuffix("Chevron") { current.items.append(Item(label: label, element: e, press: e)) }
-                return
-            }
-            if role == "AXStaticText" || role == "AXGenericElement" {
-                let v = e.string(kAXValueAttribute) ?? ""
-                let t = role == "AXStaticText" && !v.isEmpty ? v : desc   // TV's texts carry their words as a description
-                if !t.trimmingCharacters(in: .whitespaces).isEmpty { current.items.append(Item(label: tidy(t), element: e, press: pressable(e) ? e : nil)) }
-                return
-            }
-            if role == "AXImage" {
-                // The value read once: Music reuses elements as it scrolls, and a second read could be nil (code review, 20 Oct 2026).
-                let value = e.attr(kAXValueAttribute).map { "\($0)" } ?? ""
-                if pressable(e), !desc.isEmpty || !value.isEmpty {
-                    current.items.append(Item(label: desc.isEmpty ? value : desc, element: e, press: e))
-                }
-                return
-            }
-            if role == "AXGroup", pressable(e), !desc.isEmpty, e.elements(kAXChildrenAttribute).isEmpty {
-                current.items.append(Item(label: desc, element: e, press: e)); return
-            }
+            if addLeaf(e, role: role, desc: desc, title: title) { return }
             for c in e.elements(kAXChildrenAttribute) { walk(c, depth: depth + 1) }
         }
         walk(window, depth: 0)
@@ -506,6 +505,40 @@ public final class MediaView {
             shelves[i].items.removeFirst()
         }
         return shelves.filter { !$0.items.isEmpty }
+    }
+
+    nonisolated private static func headerParts(_ e: AXUIElement) -> ([String], [AXUIElement]) {
+        var words: [String] = []
+        var buttons: [AXUIElement] = []
+        func gather(_ x: AXUIElement, _ d: Int) {
+            for c in x.elements(kAXChildrenAttribute) {
+                let r = c.role
+                if r == "AXButton" { buttons.append(c); continue }
+                if r == "AXStaticText" || r == "AXHeading" || r == "AXTextArea" {
+                    if let t = [c.string(kAXDescriptionAttribute), c.string(kAXValueAttribute)].compactMap({ $0 }).first(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty && $0 != "·" }) { words.append(t) }
+                    continue
+                }
+                if d < 8 { gather(c, d + 1) }
+            }
+        }
+        gather(e, 0)
+        return (words, buttons)
+    }
+
+    /// A page's header: its words as one item, then each of its buttons (Follow, Play, Remove from Watchlist…)
+    /// as an item of its own, so they can be reached and pressed.
+    nonisolated private static func splitHeader(_ e: AXUIElement) -> [Item] {
+        var items: [Item] = []
+        let (words, buttons) = headerParts(e)
+        if !words.isEmpty { items.append(Item(label: tidy(words.joined(separator: ", ")), element: e, press: nil)) }
+        for b in buttons {
+            let t = b.string(kAXDescriptionAttribute) ?? b.string(kAXTitleAttribute) ?? (b.attr(kAXValueAttribute) as? String) ?? ""
+            guard !t.isEmpty, t.uppercased() != "MORE" else { continue }
+            var it = Item(label: tidy(t) + ", button", element: b, press: b)
+            if t.hasPrefix("Play") { it.play = b }
+            items.append(it)
+        }
+        return items
     }
 
     nonisolated static func position(_ e: AXUIElement) -> CGPoint? {
@@ -641,8 +674,8 @@ public final class MediaView {
     }
 
     public func move(_ delta: Int) {
-        if loadingMore { queued.append { [weak self] in self?.move(delta) }; return }
-        guard rebuild() else { queued.append { [weak self] in self?.move(delta) }; return }
+        if let c = catalog, catalogDrives, pane == .page { c.move(delta); return }
+        guard rebuildOrQueue(waitForLoading: true, retry: { [weak self] in self?.move(delta) }) else { return }
         let all = items(of: pane)
         guard !all.isEmpty else { Speech.speakMessage(pane == .page ? "nothing on this page yet" : "empty"); return }
         let old = max(0, min(all.count - 1, index[pane] ?? 0))
@@ -663,6 +696,20 @@ public final class MediaView {
     private var loadingMore = false
     /// Arrows pressed while more of the page was loading, answered in turn once it has.
     private var queued: [() -> Void] = []
+    private func rebuildOrQueue(waitForLoading: Bool = false, retry: @escaping () -> Void) -> Bool {
+        if (waitForLoading && loadingMore) || !rebuild() {
+            queued.append(retry)
+            return false
+        }
+        return true
+    }
+
+    private func runQueued() {
+        let q = queued
+        queued = []
+        q.forEach { $0() }
+    }
+
     /// Music's video player is up (opened from the page): the app has the keys until it closes.
     public var inVideo = false
     private func loadMore(attempts: Int = 3, then: @escaping () -> Void, nothing: (() -> Void)? = nil) {
@@ -703,9 +750,7 @@ public final class MediaView {
                 // A step that showed only shelves already known: on, while the page still scrolls.
                 else if attempts > 1 { loadMore(attempts: attempts - 1, then: then, nothing: nothing); return }
                 else { none() }
-                let q = queued
-                queued = []
-                q.forEach { $0() }
+                runQueued()
             }
         }
     }
@@ -732,7 +777,8 @@ public final class MediaView {
     }
 
     public func toEnd(_ last: Bool) {
-        guard rebuild() else { queued.append { [weak self] in self?.toEnd(last) }; return }
+        if let c = catalog, catalogDrives, pane == .page { c.toEnd(last); return }
+        guard rebuildOrQueue(retry: { [weak self] in self?.toEnd(last) }) else { return }
         if last, pane == .page, pageScroll != nil, !loadingMore {
             let t = Date()
             var done = false
@@ -761,8 +807,7 @@ public final class MediaView {
 
     /// The previous or next shelf of the page (in the sidebar, the previous or next group heading).
     public func jumpShelf(_ delta: Int) {
-        if loadingMore { queued.append { [weak self] in self?.jumpShelf(delta) }; return }
-        guard rebuild() else { queued.append { [weak self] in self?.jumpShelf(delta) }; return }
+        guard rebuildOrQueue(waitForLoading: true, retry: { [weak self] in self?.jumpShelf(delta) }) else { return }
         if pane != .page { move(delta * 5); return }
         let flat = flatPage
         guard !flat.isEmpty else { return }
@@ -778,7 +823,8 @@ public final class MediaView {
     }
 
     public func letter(_ ch: Character) {
-        guard rebuild() else { queued.append { [weak self] in self?.letter(ch) }; return }
+        if let c = catalog, catalogDrives, pane == .page { c.letter(ch); return }
+        guard rebuildOrQueue(retry: { [weak self] in self?.letter(ch) }) else { return }
         let all = items(of: pane)
         guard !all.isEmpty else { return }
         let cur = min(index[pane] ?? 0, all.count - 1)   // (a stale index past a shorter page made an invalid range, 8 Oct 2026)
@@ -793,10 +839,10 @@ public final class MediaView {
     }
 
     public func switchPane(_ delta: Int) {
-        guard rebuild() else { queued.append { [weak self] in self?.switchPane(delta) }; return }
+        guard rebuildOrQueue(retry: { [weak self] in self?.switchPane(delta) }) else { return }
         var p = pane.rawValue
-        for _ in 0..<4 {
-            p = (p + delta + 4) % 4
+        for _ in 0..<Self.paneCount {
+            p = (p + delta + Self.paneCount) % Self.paneCount
             if !items(of: Pane(rawValue: p)!).isEmpty { break }
         }
         pane = Pane(rawValue: p)!
@@ -851,7 +897,8 @@ public final class MediaView {
     /// Enter: play the item when it has its own Play button (a Podcasts episode); otherwise open it (or, in the
     /// sidebar, go to the section), then read the new page. `openOnly` (Shift+Enter) always opens.
     public func activate(openOnly: Bool = false) {
-        guard rebuild() else { queued.append { [weak self] in self?.activate(openOnly: openOnly) }; return }
+        if let c = catalog, catalogDrives, pane == .page { c.openCurrent(); return }
+        guard rebuildOrQueue(retry: { [weak self] in self?.activate(openOnly: openOnly) }) else { return }
         guard let item = currentItem() else { return }
         whenCurrent(item) { [weak self] in self?.press($0, openOnly: openOnly) }
     }
@@ -925,10 +972,24 @@ public final class MediaView {
         waitForNewPage(different: before)
     }
 
+    private func playerControlName(_ item: Item) -> String {
+        item.label.components(separatedBy: ",").first ?? ""
+    }
+
+    private func isPlaybackToggle(_ item: Item) -> Bool {
+        ["Play", "Pause", "Stop", "play", "pause", "stop"].contains(playerControlName(item))
+    }
+
     /// Space: play the item when it can be played; otherwise the app's own play and pause.
     public func playOrPause(_ g: KeyboardGesture) {
-        guard rebuild() else { queued.append { [weak self] in self?.playOrPause(g) }; return }
-        if pane == .page, let item = currentItem(), item.play != nil {
+        guard rebuildOrQueue(retry: { [weak self] in self?.playOrPause(g) }) else { return }
+        // Something already playing: Space pauses it, whatever the cursor is on. On an episode row it pressed the
+        // row's own Play again and said "playing" while nothing changed (Podcasts, 28 Oct 2026); the player's Pause
+        // was only reached from the player pane.
+        refreshPlayer()
+        let playerPlaying = (playerRoot?.string(kAXIdentifierAttribute) ?? "").contains("isPlaying=true")
+            || player.contains { ["pause", "stop"].contains(playerControlName($0).lowercased()) }
+        if pane == .page, !playerPlaying, let item = currentItem(), item.play != nil {
             whenCurrent(item) { found in
                 guard let play = found.play else { return }
                 _ = AXUIElementPerformAction(play, found.playAction as CFString)
@@ -937,18 +998,18 @@ public final class MediaView {
             return
         }
         // (Live radio has Stop where other things have Pause.)
-        if let toggle = player.first(where: { ["Play", "Pause", "Stop", "play", "pause", "stop"].contains($0.label.components(separatedBy: ",").first ?? "") }) {
+        if let toggle = player.first(where: isPlaybackToggle) {
             let r = AXUIElementPerformAction(toggle.element, kAXPressAction as CFString)
             Log.io("media: play/pause \(Log.words(toggle.label)) → \(r.rawValue)")
             // Say what was pressed: Music takes a moment to change its button, and reading it straight away said
             // "paused" as playback started (7 Oct 2026). Checked again after, and corrected only if it differs.
-            let pressedPlay = (toggle.label.components(separatedBy: ",").first ?? "").lowercased() == "play"
-            let pressedStop = (toggle.label.components(separatedBy: ",").first ?? "").lowercased() == "stop"
+            let pressedPlay = playerControlName(toggle).lowercased() == "play"
+            let pressedStop = playerControlName(toggle).lowercased() == "stop"
             Speech.speakMessage(pressedPlay ? "playing" : pressedStop ? "stopped" : "paused", remember: false)
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
                 guard let self else { return }
                 refreshPlayer()
-                let now = player.first { ["Play", "Pause", "Stop", "play", "pause", "stop"].contains($0.label.components(separatedBy: ",").first ?? "") }?.label.components(separatedBy: ",").first?.lowercased() ?? ""
+                let now = player.first(where: isPlaybackToggle).map { playerControlName($0).lowercased() } ?? ""
                 let playing = now == "pause" || now == "stop"
                 if !now.isEmpty, playing != pressedPlay { Speech.speakMessage(playing ? "playing" : "paused", remember: false) }
             }
@@ -960,15 +1021,58 @@ public final class MediaView {
 
     /// Return in the app's search field: the search runs; when the results replace the page, read them, and the
     /// arrows are the page's again (Music and Podcasts said nothing, and the first Down read the old page).
-    public func afterSearch() {
+    public func afterSearch(term: String = "") {
         let before = signature()
         pane = .page
-        waitForNewPage(different: before, tries: 14, focusPage: true)
+        catalogSearch(term: term)
+        waitForNewPage(different: before, tries: Self.searchPageTries, focusPage: true)
     }
+
+    // MARK: The catalog (developer switch `flatView`; Catalog.swift)
+
+    /// The catalog's answers for the latest search: the page's host while its results are up, instead of the
+    /// app's own results page.
+    private var catalog: Catalog?
+    /// The catalog's list has the keys (the module gives it the arrows even while the search field has the focus).
+    public private(set) var catalogDrives = false
+    /// The term the catalog's list answers, while it has the keys.
+    public var catalogTerm: String? { catalogDrives ? catalog?.term : nil }
+    /// The page just asked for by name: its title is not said again when it comes.
+    private var openingTitle = ""
+
+    private func catalogSearch(term raw: String) {
+        guard Edition.devDefault("flatView"), let kind = Catalog.kind(for: NSRunningApplication(processIdentifier: pid)?.bundleIdentifier) else { return }
+        let term = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !term.isEmpty else { Log.io("catalog: no term to search for"); return }
+        catalog?.cancel()
+        let c = Catalog(kind: kind, term: term, open: { [weak self] e in self?.openCatalogEntry(e) },
+                        fallBack: { [weak self] why in
+                            guard let self else { return }
+                            if why != "nothing found" { Speech.speakMessage("The catalog did not answer: \(why). Reading the page.") }
+                            catalog = nil; catalogDrives = false
+                            // The page may already be up and unspoken: read it now.
+                            let flat = flatPage
+                            if !flat.isEmpty { Speech.speakMessage(pageTitle.isEmpty ? "page" : pageTitle); land(on: nil) }
+                        })
+        catalog = c; catalogDrives = true
+        c.search()
+    }
+    private func openCatalogEntry(_ e: Catalog.Entry) {
+        let before = signature()
+        catalogDrives = false
+        NSWorkspace.shared.open(e.url)
+        Log.io("catalog: opening \"\(Log.words(e.name.prefix(40).description))\"")
+        Speech.speakMessage("Opening \(e.name)")
+        openingTitle = e.name
+        waitForNewPage(different: before, tries: Self.searchPageTries)
+    }
+    /// Escape from an opened entry lands on the results page again: the catalog's list is back.
+    private func catalogBack() { if catalog != nil { catalogDrives = true } }
 
     /// Escape: back a page.
     public func back() {
         let before = signature()
+        catalogBack()
         let app = AXUIElementCreateApplication(pid)
         // Podcasts: a Back button in the toolbar. Music and TV: Controls > Back (Command+[), disabled at the top.
         if let window = app.element(kAXFocusedWindowAttribute),
@@ -992,7 +1096,7 @@ public final class MediaView {
             guard let self else { return }
             refreshPlayer()
             let playing = (playerRoot?.string(kAXIdentifierAttribute) ?? "").contains("isPlaying=true")
-                || player.contains { ($0.label.components(separatedBy: ",").first ?? "").lowercased() == "pause" }
+                || player.contains { playerControlName($0).lowercased() == "pause" }
             if !playing {
                 Log.io("media: asked to play, but the player is not playing")
                 Speech.speakMessage("not playing; it may need a subscription or a download")
@@ -1068,7 +1172,10 @@ public final class MediaView {
             if focusPage, let first = flatPage.first?.item.element {
                 if first.set(kAXFocusedAttribute, kCFBooleanTrue) != .success { _ = pageScroll?.set(kAXFocusedAttribute, kCFBooleanTrue) }
             }
-            Speech.speakMessage(pageTitle.isEmpty ? "page" : pageTitle)
+            // The catalog's list answered this search and is being read: the app's own results page stays unspoken.
+            if focusPage, catalogDrives { return }
+            let announced = openingTitle; openingTitle = ""
+            if pageTitle != announced { Speech.speakMessage(pageTitle.isEmpty ? "page" : pageTitle) }
             land(on: places[pageKey()])
             }
           }

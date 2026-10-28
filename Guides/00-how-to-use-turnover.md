@@ -1,7 +1,7 @@
 # How to use TurnOver
 
-TurnOver is a screen reader for the Mac. It reads every app with its own voice and the keys you already know from
-VoiceOver. One reader speaks at a time: while TurnOver is on VoiceOver is off, and when TurnOver is off VoiceOver reads.
+TurnOver is a screen reader for the Mac that works alongside VoiceOver. VoiceOver stays on; TurnOver reads every app
+with its own voice and the keys you already know, and VoiceOver handles passwords and macOS's own security prompts.
 This page is the short tour. Each section links to the guide that goes into detail.
 
 ## Three things to remember

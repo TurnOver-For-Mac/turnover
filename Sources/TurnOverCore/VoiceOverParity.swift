@@ -492,6 +492,37 @@ public enum ArrowQuickNav {
     /// (it stood aside in text, so Quick Nav "didn't work" in Claude's prompt, 17 Oct 2026).
     static var isActiveHere: Bool { on && config.general.macKeys }
 
+    /// VoiceOver's own arrow Quick Nav, as far as TurnOver knows (nil: not known). Coexisting, VoiceOver runs all the
+    /// time and its Quick Nav took the arrows TurnOver passed to its apps: every list in TurnOver's apps went dead,
+    /// silently, since VoiceOver is quiet there (19 Oct 2026; the Activity that used to keep it off is gone).
+    /// So the two are kept in step: one Quick Nav, on or off in every app. The keyboard thread reads this to send the
+    /// arrows it passes to the app alone while VoiceOver's may be on (KeyboardHandler).
+    nonisolated public static let voiceOverMayBeOn = Locked(true)
+    nonisolated(unsafe) static var voiceOverOn: Bool? { didSet { voiceOverMayBeOn.value = voiceOverOn ?? true } }   // main thread only
+
+    /// The Quick Nav setting VoiceOver keeps (its own default profile), read at start where TurnOver may read
+    /// VoiceOver's settings (Full Disk Access): TurnOver's starts the same. Elsewhere VoiceOver's is taken to be TurnOver's.
+    public static func startInStep() {
+        guard Coexist.on else { return }
+        if let vo = VoiceOverSettings.arrowQuickNav() {
+            voiceOverOn = vo
+            Log.info("Quick Nav: VoiceOver's is \(vo ? "on" : "off"); TurnOver's the same")
+            if vo != on { set(vo, sound: false) }
+        } else {
+            voiceOverOn = nil
+            Log.info("Quick Nav: VoiceOver's setting can't be read; the arrows TurnOver passes go to the app alone")
+        }
+    }
+
+    /// Left and Right pressed together in one of VoiceOver's apps (QuickNavWatch): VoiceOver's turned over, and
+    /// TurnOver's follows it, quietly (VoiceOver plays its own sound there).
+    public static func voiceOverToggled() {
+        let vo = !(voiceOverOn ?? on)
+        voiceOverOn = vo
+        Log.io("Quick Nav: VoiceOver's \(vo ? "on" : "off") in its app; TurnOver's the same")
+        if vo != on { set(vo, sound: false) }
+    }
+
     static func toggle() {
         set(!on, sound: true)
         // In a document the chord is also the way between browse mode and focus mode (VoiceOver has no focus mode:
@@ -502,6 +533,15 @@ public enum ArrowQuickNav {
             d.disableAutoPassThrough = !on
             d.setPassThrough(!on, announce: false)
         }
+        // VoiceOver's follows: its own chord, posted where VoiceOver hears it. Only when it differs, so two out of step
+        // come back into step. (Tried on 17 Oct 2026 and undone, because VoiceOver's Quick Nav then took the arrows
+        // TurnOver passed to its apps; those now go to the app alone, so it can be on.)
+        guard Coexist.on, !NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.VoiceOver").isEmpty,
+              voiceOverOn != on else { return }
+        voiceOverOn = on
+        Log.io("Quick Nav: VoiceOver's turned \(on ? "on" : "off") with TurnOver's")
+        let post = KeyboardGesture.chordPoster
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.15) { post?([123, 124]) }
     }
 
     private static func set(_ value: Bool, sound: Bool) {

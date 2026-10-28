@@ -35,7 +35,10 @@ method tapEvent is called for every key down, key up and modifier change on the 
 - **Asks the main thread** (next section) and acts on the answer: taken or deferred means the key is swallowed and
   its key up is swallowed too (the quarantined set, so the application never sees a release without a press);
   passed means it goes on.
-- **Passes.** A key TurnOver does not take is returned to the system unchanged.
+- **Passes or redirects.** The passOrRedirect method normally returns the event to the system. While coexisting,
+  the arrowTarget method sends a bare arrow (no Command) straight to the front app's process instead, so that
+  VoiceOver's own tap never sees it and cannot take it as its Quick Nav. Keys with Command always go the normal
+  way, so Command Tab and the rest stay the system's.
 
 ## 2. The main thread decides
 
@@ -90,7 +93,8 @@ list, table or outline that moves its own selection. Its initOverlay declares a 
 list_upArrow, list_home and so on). The moveSelection method:
 
 - sends the key on with the gesture's send method, which hands it to the post method in KeyboardHandler.swift.
-  That posts the key down and up at the HID level with TurnOver's marker, lifting any modifier the hand still holds that the key must not carry, and putting it back
+  That posts the key down and up at the HID level with TurnOver's marker (or straight to the front app's process
+  while coexisting), lifting any modifier the hand still holds that the key must not carry, and putting it back
   after;
 - then waitForSelection pumps the run loop for up to 0.3 s until a selection or focus event from the application is
   pending (EventHandler.isPending). The event, when it comes, reads the new row;
@@ -110,7 +114,8 @@ caret to move before speaking the line, word or character at the new place.
 - **joined** turns the pieces into one line: commas in the Mac family, as VoiceOver reads, and spaces in the
   Windows family, as NVDA does, so the voice does not pause at every piece.
 - **enqueue** is where every line ends up. It splits text by language, hands the cleaned text to the sink (the
-  tests listen here), then stops if the speech mode is off or beeps, or if VoiceOver is on. What remains is logged as say: and queued on the SpeechPlayer in
+  tests listen here), then stops if the speech mode is off or beeps, or if VoiceOver is talking and TurnOver is not
+  coexisting. What remains is logged as say: and queued on the SpeechPlayer in
   [SpeechPlayer.swift](Sources/TurnOverSpeech/SpeechPlayer.swift), which runs the voice on its own thread.
 
 ## 6. The worked example

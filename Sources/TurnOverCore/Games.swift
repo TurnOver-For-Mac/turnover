@@ -226,7 +226,8 @@ public enum Games {
     static func say(_ text: String, interrupting: Bool, from source: String) {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
-        if NSWorkspace.shared.isVoiceOverEnabled {
+        // Coexisting, VoiceOver is always on; TurnOver being active for the game is the test (16 Oct 2026).
+        if NSWorkspace.shared.isVoiceOverEnabled, !(Coexist.on && Core.active) {
             if Date().timeIntervalSince(droppedWarnedAt) > 60 {
                 droppedWarnedAt = Date()
                 Log.info("games (\(source)): VoiceOver is on, so game speech is dropped until TurnOver leads: \(Log.words(String(t.prefix(80))))")

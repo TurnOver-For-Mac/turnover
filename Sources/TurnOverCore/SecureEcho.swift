@@ -23,21 +23,12 @@ public enum SecureEcho {
         return max(e.int(kAXNumberOfCharactersAttribute) ?? 0, e.string(kAXValueAttribute)?.count ?? 0, sel, vis)
     }
 
-    /// The field took the focus: what it holds now is the starting point.
-    /// Said once a run: in a password field macOS keeps every key from TurnOver, so VO-Left and VO-Right can't leave
-    /// it ("the keys seem to be swallowed by macOS itself", issue 107, 26 Oct 2026); Tab and Shift Tab, which the
-    /// app itself answers, can.
-    private static var hinted = false
-
+    /// The field took the focus: what it holds now is the starting point. (A spoken hint that Tab leaves the field,
+    /// added for issue 107 on 26 Oct 2026, got in the way of moving around and was dropped the next day; the guide
+    /// says it instead.)
     public static func focused(_ e: AXUIElement) {
         pending?.cancel(); pending = nil
         field = e; baseline = length(e); lastSeen = baseline; changes = 0
-        guard !hinted else { return }
-        hinted = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            guard let f = field, f.isSame(e) else { return }
-            Speech.speakMessage("Tab or Shift Tab leaves a password field; macOS keeps the arrow keys from TurnOver here.")
-        }
     }
 
     /// A caret or value event while the field has the focus.

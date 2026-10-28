@@ -7,9 +7,10 @@ import TurnOverCore
 import AXFixtures
 
 func policyTests() {
-    test("one app: the full reader, plugins on unless turned off") {
+    test("one app: the full reader, CoExist off unless turned on, plugins on unless turned off") {
         check(Edition.editionName == "TurnOver", "named TurnOver")
         check(Edition.includesPlugins == ((UserDefaults.standard.object(forKey: "plugins") as? Bool) ?? true), "plugins on unless the default turns them off")
+        check(Coexist.wouldBeOn == ((UserDefaults.standard.object(forKey: "coexist") as? Bool) ?? false), "CoExist off unless turned on (experimental, 28 Oct 2026)")
         for app in Edition.supportedApps { check(app.bundle.contains("."), "\(app.name) has a bundle id") }
     }
     test("lead policy: the three modes, the hand switch and games, as a table") {

@@ -2,8 +2,8 @@ TurnOver: the guide
 
 HOW TO USE TURNOVER
 
-TurnOver is a screen reader for the Mac. It reads every app with its own voice and the keys you already know from
-VoiceOver. One reader speaks at a time: while TurnOver is on VoiceOver is off, and when TurnOver is off VoiceOver reads.
+TurnOver is a screen reader for the Mac that works alongside VoiceOver. VoiceOver stays on; TurnOver reads every app
+with its own voice and the keys you already know, and VoiceOver handles passwords and macOS's own security prompts.
 This page is the short tour. Each section links to the guide that goes into detail.
 
 Three things to remember
@@ -82,8 +82,7 @@ Starting and stopping
 - Command Control Period starts TurnOver, or stops it, from anywhere. A rising chime means on, a falling one off.
   When TurnOver stops, VoiceOver takes over.
 - Command Control Shift T gives the app in front to VoiceOver, or back to TurnOver, and remembers it. TurnOver
-  reads every app unless you give one to VoiceOver. TurnOver reads password fields and macOS's own prompts too, and
-  never says what you type in a password field.
+  reads every app unless you give one to VoiceOver; VoiceOver always handles passwords and macOS's own prompts.
 - To start TurnOver when you log in: the TurnOver menu, Settings, Starting, Open TurnOver at login.
 
 The first five minutes
@@ -291,6 +290,35 @@ In every style
 - Your own keys (the TurnOver menu, Keys, My own keys) sit on top of any style.
 
 
+COEXIST
+
+CoExist keeps VoiceOver running alongside TurnOver. Wherever TurnOver reads, VoiceOver is silenced at the sound
+level, so you hear only TurnOver; in an app you give to VoiceOver, VoiceOver is heard at once, as if TurnOver weren't
+there. Switching is instant, and nothing is said as it happens. It is on unless you turn it off.
+
+What to expect
+
+- In TurnOver's apps you hear TurnOver; VoiceOver is running but silent.
+- Command Control Comma, then T gives the app in front to VoiceOver: TurnOver lets the keys and the mouse through
+  and VoiceOver is heard. The same again gives it back.
+- In a password field, and in macOS's own prompts (passwords, Touch ID, "Allow" questions), VoiceOver is heard, so
+  Apple's own reader is the one there.
+- Command Control Period turns TurnOver off and on; VoiceOver then has every app.
+- If TurnOver stops or gets stuck for more than a few seconds, VoiceOver is heard again.
+- Nothing of VoiceOver's is changed: its settings, voices and Activities stay as they are.
+- With CoExist on, TurnOver's own braille is off: VoiceOver keeps the display.
+
+Turning it off
+
+The TurnOver menu, Settings, Experimental, CoExist, then Return. TurnOver restarts and turns VoiceOver off where it reads, as
+it did before CoExist.
+
+Good to know
+
+Silencing VoiceOver's sound from outside is new, and a macOS or VoiceOver update could change how it behaves. Please
+report anything odd.
+
+
 TROUBLESHOOTING AND FEEDBACK
 
 TurnOver stops answering
@@ -342,6 +370,9 @@ The permissions, and why
   key to see whether it is one of its commands; anything else goes straight on to the app.
 - Screen Recording: only for screen recognition and describing a picture, when you ask. Both run on your Mac.
 - Automation (asked once, for one app at a time): for example Keynote, to read a slide while a show plays.
+- Audio (CoExist): to keep VoiceOver's sound quiet while TurnOver reads. A small separate program,
+  voiceover-quiet, mutes VoiceOver's sound and throws it away: nothing is recorded, saved or sent, and no other
+  app's sound is touched.
 
 TurnOver does not ask for Full Disk Access.
 
@@ -406,14 +437,19 @@ but speak: no settings, no keys. Settings, Apps that speak through TurnOver, lis
 
 Passwords and security prompts
 
-One reader speaks at a time: TurnOver while it is on, VoiceOver while TurnOver is off.
+With CoExist on (it is unless you turn it off), VoiceOver stays running alongside TurnOver, and everything to do with
+security is VoiceOver's:
 
+- Password fields, in any app or web page: when one has the keyboard (macOS's secure typing is on, or TurnOver
+  lands in one), TurnOver steps aside completely. It doesn't read the field and doesn't take your keys; VoiceOver is
+  heard. TurnOver comes back when you leave it.
 - Typing into a password field is never spoken or logged by TurnOver, even where an app hides that the keyboard
-  is in one. TurnOver counts the characters instead.
-- macOS's own prompts (an administrator password, the keychain, Touch ID, "Allow" questions): TurnOver reads the
-  prompt when it opens and puts you in it, and takes you back to your app when it closes.
-- If you would rather Apple's own reader handled a prompt, turn TurnOver off with Command Control Period: VoiceOver
-  comes on if you have set it to, or press Command F5.
+  is in one.
+- macOS's own prompts (an administrator password, the keychain, Touch ID, "Allow" questions): the same,
+  VoiceOver's from the moment they open until they close.
+
+So Apple's own reader is the one with you whenever you type a password or approve something, and TurnOver never
+sees it. With CoExist off, TurnOver still never speaks or logs what you type into a password field.
 
 When we get something wrong
 

@@ -111,6 +111,7 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // its state be
     var isOn: Bool { thread != nil }
 
     func start() {
+        MainActor.assumeIsolated { Self.buildStyleChords() }   // start() is called on the main thread (refreshWindowsLayer); again on a style change while running
         guard thread == nil else { return }
         WindowsRemap.watchFrontApp()
         let t = Thread { [self] in
@@ -218,6 +219,32 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // its state be
         ("shift+control+right", "vo+command+shift+right", 1), ("shift+control+left", "vo+command+shift+left", 1),
         ("shift+control+up", "vo+command+shift+up", 1), ("shift+control+down", "vo+command+shift+down", 1),
     ]
+    /// A JAWS or Narrator table's keys that stand for an NVDA key ("=kb:turnover+…"), given that key's VoiceOver twin;
+    /// built on the main thread as the layer starts (28 Oct 2026: JAWS keys where VoiceOver reads too).
+    nonisolated static let styleChords = Locked<[Chord: Target]>([:])
+    @MainActor static func buildStyleChords() {
+        var d: [Chord: Target] = [:]
+        let style = config.general.style
+        if style == .jaws || style == .narrator {
+            func parse(_ id: String) -> Chord? {
+                var p = normalizeGestureIdentifier(id)
+                guard p.hasPrefix("kb:turnover+") else { return nil }
+                p = String(p.dropFirst("kb:turnover+".count))
+                // The layer's names: canonical "delete" is forward delete, "backspace" the key this layer calls delete.
+                let names = ["leftArrow": "left", "rightArrow": "right", "upArrow": "up", "downArrow": "down", "enter": "return", "backspace": "delete", "delete": "forwardDelete"]
+                let parts = p.split(separator: "+").map { names[String($0)] ?? String($0) }
+                // Only Shift and Control are chord modifiers here: an alias with Command or Option would collapse onto
+                // another chord (JAWS Shift Page Up, a review, 28 Oct 2026).
+                guard !parts.contains("command"), !parts.contains("option") else { return nil }
+                return chord(parts.joined(separator: "+"))
+            }
+            for (k, v) in StyleKeymap.keys(for: style) where v.hasPrefix("=") {
+                if let from = parse(k), let to = parse(String(v.dropFirst())), let t = chords[to] { d[from] = t }
+            }
+        }
+        styleChords.value = d
+        if !d.isEmpty { Log.info("NVDA keys where VoiceOver reads: \(d.count) \(style.rawValue) keys added") }
+    }
     static let chords: [Chord: Target] = {
         var d: [Chord: Target] = [:]
         for (n, v, times) in chordTable { if let c = chord(n), let t = target(v, times: times) { d[c] = t } }
@@ -293,9 +320,16 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // its state be
             case (45, false, false):   // NVDA+N: TurnOver's menu
                 DispatchQueue.main.async { MainActor.assumeIsolated { MenuAnywhere.shared.open() } }
                 return nil
+            case (15, false, false):   // NVDA+R: TurnOver's screen recognition, stepping in for the result (28 Oct 2026)
+                DispatchQueue.main.async { MainActor.assumeIsolated { MenuAnywhere.shared.recognize() } }
+                return nil
+            case (15, true, false):    // NVDA+Shift+R: the screen interface (experimental)
+                DispatchQueue.main.async { MainActor.assumeIsolated { MenuAnywhere.shared.recognizeInterface() } }
+                return nil
             default: break
             }
-            if let t = Self.chords[Chord(code: code, shift: shift, control: control)] { Self.post(t); return nil }
+            let c = Chord(code: code, shift: shift, control: control)
+            if let t = Self.styleChords.value[c] ?? Self.chords[c] { Self.post(t); return nil }   // the style's own aliases first (a review, 28 Oct 2026)
             Log.io("NVDA keys where VoiceOver reads: key \(code) has no VoiceOver twin")
             return nil
         }

@@ -128,11 +128,12 @@ public enum Core {
     public static func activate() {
         guard started, !active else { return }
         active = true
-        // Speech switched off by the trackpad's three-finger double-tap ends with the app: nothing else resets it (a
-        // code review on 17 Oct 2026).
+        // Speech switched off by the trackpad's three-finger double-tap ends with the app: nothing else resets it, and
+        // coexisting that was both readers silent (a code review on 17 Oct 2026).
         if Speech.mode == .off { Speech.mode = .talk; Log.info("speech: on again (it was off by gesture)") }
         AXHandler.shared.start()
-        BrailleDisplays.shared.start()
+        // Coexisting, VoiceOver's braille server has the display; two drivers on one display is a fight (17 Oct 2026).
+        if Coexist.on { Log.info("braille: off while VoiceOver stays on (its braille server has the display)") } else { BrailleDisplays.shared.start() }
         NewToTry.announceIfUpdated()
         Ducking.apply()
         KokoroVoice.start()   // only where the "kokoro" default is set

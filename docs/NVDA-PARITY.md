@@ -57,9 +57,15 @@ revert the settings (NVDA+Control+C, R), the log (NVDA+F1), the app module (NVDA
 9. **Alt+Up and Down Arrow** (NVDA in Word: previous and next sentence). On a Mac keyboard Alt is Command, and Command
    Up and Down go to the top and bottom. Recommended: the sentence in Word only, as NVDA.
 
+## To build (build 23)
+
+- NVDA+U progress bar output, NVDA's way: a beep whose pitch rises with the percentage as a progress bar moves (a
+  download in the App Store, a copy in Finder), with the spoken percentage as the other setting. Asked for by Oliver on
+  27 Oct 2026: "that's a good thing to have".
+
 ## Not built (no Mac form, or to decide)
 
-- NVDA+M mouse tracking (TurnOver doesn't speak under the pointer as it moves), NVDA+U progress bar output, NVDA+Alt+T
+- NVDA+M mouse tracking (TurnOver doesn't speak under the pointer as it moves), NVDA+Alt+T
   braille mode, NVDA+Control+T braille tether (TurnOver's display follows its own cursor already), NVDA+Alt+S sound
   split (a Windows audio feature), NVDA+Shift+F10 native selection mode (WebKit offers no such mode), NVDA+Page Up and
   Down review modes (TurnOver has object review only), NVDA+Shift+Page Up and Down page in review, Comma and Shift Comma

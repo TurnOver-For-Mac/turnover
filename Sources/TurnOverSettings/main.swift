@@ -487,6 +487,8 @@ struct RecognitionView: View {
         Form {
             Toggle("Read new text as it appears, while a result is open", isOn: model.bool("recognition", "autoRefresh"))
             Toggle("Read the whole result as it opens", isOn: model.bool("recognition", "autoSayAll"))
+            Toggle("After Return clicks something, recognise again", isOn: model.bool("recognition", "refreshAfterClick"))
+            Text("The screen that follows a click is read without pressing the key again; off, the result closes after the click.").font(.caption)
         }.formStyle(.grouped).navigationTitle("Screen recognition")
     }
 }
@@ -566,6 +568,9 @@ struct GeneralView: View {
 /// readers per app, folded away (22 Oct 2026; last in the list, the place for the things most people never touch).
 struct ReadersView: View {
     @EnvironmentObject var model: Model
+    private var coexist: Binding<Bool> {
+        Binding(get: { model.special("_coexist") as? Bool ?? false }, set: { model.setSpecial("_coexist", $0) })
+    }
     var body: some View {
         Form {
             Section {
@@ -577,7 +582,11 @@ struct ReadersView: View {
                     .accessibilityHint("Off: each reader has its own switch and neither turns the other on or off; TurnOver is still quiet while VoiceOver is on.")
                 Text("On: TurnOver turns VoiceOver off as it starts and on as it quits, comes on when VoiceOver turns off and steps aside when VoiceOver comes on. Off: each reader has its own switch and neither turns the other on or off, for VoiceOver reading inside a virtual machine such as Parallels. Either way one reader speaks at a time: while VoiceOver is on, TurnOver is quiet.").font(.caption)
             }
-            DisclosureGroup("Experimental: readers per app") {
+            // A plain section, not a disclosure group: the triangle took the focus but neither Return nor VO Space
+            // opened it (Oliver, 28 Oct 2026: "I can't get into the experimental part").
+            Section(header: Text("Experimental: readers per app, CoExist")) {
+                Toggle("CoExist: VoiceOver stays running alongside TurnOver", isOn: coexist)
+                Text("VoiceOver is kept quiet by an audio tap where TurnOver reads and keeps passwords and macOS's own prompts. Removed on 24 Oct 2026 and back as an experiment: it can leave a Mac silent if macOS asks for audio permission while VoiceOver is muted. Changing it restarts TurnOver.").font(.caption)
                 Toggle("Readers per app", isOn: model.bool("applications", "perAppReaders"))
                 Text("A list of apps for each reader, a mode (TurnOver in its apps, everywhere, or VoiceOver everywhere), and switching between the readers as you change apps. The list is under Tools in the TurnOver menu while this is on. Off, TurnOver reads everywhere while it is on.").font(.caption)
             }

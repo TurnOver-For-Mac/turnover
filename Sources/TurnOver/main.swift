@@ -81,9 +81,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// The first time TurnOver runs (or the first time after 1.0): short pages, each with a heading, Next and Back, so
-    /// it can be taken in a piece at a time (12 Oct 2026: "one long list"). Ordinary alerts, read by VoiceOver, since
-    /// TurnOver starts reading only once they close.
+    /// it can be taken in a piece at a time (12 Oct 2026: "one long list"). Ordinary alerts, so VoiceOver
+    /// (still running) reads each one.
     private func welcomeOnFirstRun() {
+        // Coexisting, VoiceOver must be on for the welcome and for every app TurnOver doesn't read (the code review, 17 Oct 2026).
+        if Coexist.on, !NSWorkspace.shared.isVoiceOverEnabled { Log.info("welcome: VoiceOver is off; turning it on first"); HandOver.turnVoiceOverOn() }
         let key = "welcomed-\(Edition.version)"
         let versionWelcomed = UserDefaults.standard.bool(forKey: key)
         // Keyboard navigation for the Mac, once, welcome due or not (a code review: behind the welcome, a Mac already

@@ -135,6 +135,8 @@ nonisolated public struct KeyboardGesture: CustomStringConvertible, Sendable {
     nonisolated(unsafe) public static var typedPoster: (@Sendable (KeyboardGesture) -> Void)?
     /// Types text into the focused application (braille input), likewise installed by the keyboard handler.
     nonisolated(unsafe) public static var textPoster: (@Sendable (String) -> Void)?
+    /// Keys pressed together (Left and Right: VoiceOver's Quick Nav toggle), installed by the keyboard handler.
+    nonisolated(unsafe) public static var chordPoster: (@Sendable ([Int64]) -> Void)?
 }
 
 /// Normalize a binding written by a developer or in a gesture map: "kb:NVDA+Control+UpArrow" → "kb:turnover+control+upArrow".

@@ -67,7 +67,8 @@ final class MenuAnywhere {
         "n": ("menu", .list, { TurnOverMenu.shared.open() }),
         "s": ("settings window", .run, { SettingsBridge.open() }),   // the window (18 Oct 2026); M, Settings is the spoken menu
         "/": ("shortcuts here", .list, { GlobalCommands.openShortcutsList() }),
-        "r": ("screen recognition", .list, { ScreenRecognition.shared.recognize() }),
+        "r": ("screen recognition", .list, { MenuAnywhere.shared.recognize() }),
+        "e": ("screen interface: the window's controls from its pixels (experimental)", .list, { MenuAnywhere.shared.recognizeInterface() }),
         "t": ("switch reader", .run, { MenuAnywhere.shared.switchLead?(MenuAnywhere.shared.voiceOverWasReading) }),
         "d": ("direct: this app's keys straight to it, TurnOver quiet", .run, { MenuAnywhere.shared.toggleDirect?() }),
         "a": ("all apps: TurnOver in its apps, everywhere, or VoiceOver everywhere", .run, { MenuAnywhere.shared.cycleLeadMode?() }),
@@ -85,7 +86,7 @@ final class MenuAnywhere {
     /// The letters in the list's order, as said when the layer is pressed twice.
     static var letterList: String {
         let names = ["m": "M menu", "s": "S settings", "t": "T switch reader", "a": "A ask for this app", "v": "V copy VoiceOver settings", "k": "K keyboard style", "j": "J that was wrong",
-                     "h": "H guide", "i": "I describe image", "c": "C copy last spoken", "g": "G gesture control", "r": "R recognition", "d": "D direct", "/": "Slash shortcuts"]
+                     "h": "H guide", "i": "I describe image", "c": "C copy last spoken", "g": "G gesture control", "r": "R recognition", "e": "E screen interface", "d": "D direct", "/": "Slash shortcuts"]
         return listOrder.filter { letters[$0] != nil }.compactMap { names[$0] }.joined(separator: ", ") + ". Or Down Arrow for a list"
     }
 
@@ -95,7 +96,7 @@ final class MenuAnywhere {
 
     /// The layer's commands as a list to arrow through, Return running one (15 Oct 2026: never read out in one
     /// go; Up and Down through them, hearing each, and Return on it).
-    static let listOrder = ["m", "s", "t", "d", "a", "v", "k", "j", "h", "i", "c", "g", "r", "/"]
+    static let listOrder = ["m", "s", "t", "d", "a", "v", "k", "j", "h", "i", "c", "g", "r", "e", "/"]
     func openLayerList() {
         let items = Self.listOrder.compactMap { k -> MenuItem? in
             guard let l = Self.letters[k] else { return nil }
@@ -115,12 +116,22 @@ final class MenuAnywhere {
     /// Who reads at this moment, as the layer key found it: VoiceOver, unless TurnOver was already leading (switch
     /// reader goes the other way; every path asks this, the code review, 13 Oct 2026).
     var turnOverActive: () -> Bool = { false }
-    var voiceOverWasReading: Bool { steppedIn || NSWorkspace.shared.isVoiceOverEnabled }
+    var voiceOverWasReading: Bool { steppedIn || (Coexist.on ? !turnOverActive() : NSWorkspace.shared.isVoiceOverEnabled) }
 
     /// Command Control Comma: "TurnOver", then a letter. Where VoiceOver leads, TurnOver steps in for it, and hands back
     /// when the job is done (12 Oct 2026).
     func layer() {
         Log.io("input layer key Command Control Comma")
+        // Coexisting (VoiceOver silenced by the tap where TurnOver reads): the layer as everywhere else, "TurnOver" then a
+        // letter (18 Oct 2026: "it's going straight to the menu"); where VoiceOver leads, the letters are claimed
+        // for 3 s.
+        if Coexist.on {
+            if turnOverActive() { steppedIn = false; listen(); return }
+            Log.info("layer key where VoiceOver leads: the letters claimed for 3 s")
+            Self.say("TurnOver", tone: true)
+            claimLetters()
+            return
+        }
         if Core.active { steppedIn = false; listen(); return }
         // Where VoiceOver leads, TurnOver's keys aren't listening yet, and stepping in takes a moment: a letter pressed
         // at once went to the app (Calculator, 12 Oct 2026). So the layer's letters are claimed for three seconds
@@ -225,6 +236,14 @@ final class MenuAnywhere {
         // read the list, not who was talking, and gave the app to VoiceOver;).
         if key == "t" { Log.io("layer: t → switch reader (VoiceOver was reading: to TurnOver)"); switchLead?(true); return }
         if key == "a" { Log.io("layer: a → the next reading mode"); cycleLeadMode?(); return }
+        // The keyboard style changes without stepping in: stepping in read the window first and buried the style's
+        // name under it ("wasn't properly reading the switching", Oliver, 28 Oct 2026). VoiceOver says the new style.
+        if key == "k" {
+            Log.io("layer: k → keyboard style (VoiceOver leads: no stepping in)")
+            GlobalCommands.toggleKeyboardStyle(quietly: true)
+            Self.say(config.general.style.spokenName)
+            return
+        }
         Log.io("layer: \(key) → \(l.spoken) (VoiceOver leads: stepping in)")
         steppedIn = true
         handOver?(false)
@@ -350,16 +369,19 @@ final class MenuAnywhere {
 
     /// Screen recognition from anywhere: where VoiceOver leads, TurnOver steps in for the result (its keys are
     /// TurnOver's) and hands back when it closes.
-    func recognize() {
-        if ScreenRecognition.shared.isOpen { ScreenRecognition.shared.recognize(); return }
-        if Core.active { ScreenRecognition.shared.recognize(); return }
+    func recognize() { recognize(interface: false) }
+    func recognizeInterface() { recognize(interface: true) }
+    private func recognize(interface: Bool) {
+        let run = { interface ? ScreenRecognition.shared.recognizeInterface() : ScreenRecognition.shared.recognize() }
+        if ScreenRecognition.shared.isOpen { run(); return }
+        if Core.active { run(); return }
         Log.info("screen recognition asked for where VoiceOver leads: stepping in for it")
         handOver?(false)
         let start = Date()
         func waitForTurnOver() {
             if Core.active {
                 ScreenRecognition.shared.onClose = { [weak self] in self?.handBack() }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { ScreenRecognition.shared.recognize() }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { run() }
                 return
             }
             guard Date().timeIntervalSince(start) < 5 else { Log.warning("screen recognition: VoiceOver did not hand over"); return }

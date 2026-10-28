@@ -496,18 +496,20 @@ public final class GlobalCommands: ScriptableObject {
 
     /// The next style round: Mac (VoiceOver's keys), Windows (NVDA's keys), JAWS keys, then Mac again. JAWS keys were
     /// built on 20 Oct 2026 but K only went between the first two, so they couldn't be chosen.
-    public static func toggleKeyboardStyle() {
+    public static func toggleKeyboardStyle(quietly: Bool = false) {
         let now = offeredStyles.firstIndex(of: config.general.style) ?? 0
-        setKeyboardStyle(offeredStyles[(now + 1) % offeredStyles.count])
+        setKeyboardStyle(offeredStyles[(now + 1) % offeredStyles.count], quietly: quietly)
     }
 
-    public static func setKeyboardStyle(_ style: KeyboardStyle) {
+    /// `quietly`: the caller says the name itself (the layer under VoiceOver, where both readers said it: an echo,
+    /// 28 Oct 2026).
+    public static func setKeyboardStyle(_ style: KeyboardStyle, quietly: Bool = false) {
         config.general.keyboardStyle = style.rawValue
         config.save()
         KeySettings.refresh()
         onKeyboardStyleChanged?()
         Log.info("keyboard style: \(config.general.keyboardStyle)")
-        Speech.speakMessage(style.spokenName)
+        if !quietly { Speech.speakMessage(style.spokenName) }
     }
 
     /// Several bindings spoken as one: a run of single letters as "a to z", otherwise the keys in turn.

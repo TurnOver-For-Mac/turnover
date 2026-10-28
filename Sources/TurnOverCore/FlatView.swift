@@ -39,11 +39,29 @@ nonisolated public protocol FlatAdapter: AnyObject, Sendable {
     var settleTimes: [Double] { get }
     func nextSibling(of e: AXUIElement) -> AXUIElement?
     func previousSibling(of e: AXUIElement) -> AXUIElement?
+    /// The area's vertical scroll bar, the one scroll that moves the Store's results (AXScrollToVisible on a row or
+    /// its list returns success and moves nothing: measured 27 Oct 2026). The default: the nearest scroll area above
+    /// the root.
+    func scrollBar() -> AXUIElement?
+    /// Where a row counts as on screen: the window less its toolbar. The default: the window's frame.
+    func screenArea() -> CGRect?
 }
 
 extension FlatAdapter {
     nonisolated public func nextSibling(of e: AXUIElement) -> AXUIElement? { e.element("AXNextContentSibling") }
     nonisolated public func previousSibling(of e: AXUIElement) -> AXUIElement? { e.element("AXPreviousContentSibling") }
+    nonisolated public func scrollBar() -> AXUIElement? {
+        var x = areaRoot(); var hops = 0
+        while let e = x, hops < 8 {
+            if e.role == "AXScrollArea", let bar = e.element(kAXVerticalScrollBarAttribute) { return bar }
+            x = e.element(kAXParentAttribute); hops += 1
+        }
+        return nil
+    }
+    nonisolated public func screenArea() -> CGRect? {
+        guard let root = areaRoot(), let w = root.element(kAXWindowAttribute) else { return nil }
+        return TurnOverObject.frame(w)
+    }
 }
 
 public final class FlatView {
@@ -79,18 +97,23 @@ public final class FlatView {
     public func begin() {
         lock.lock(); generation += 1; let g = generation; rows = []; names = [:]; labels = [:]; cursor = 0; lock.unlock()
         Log.io("flat view \(name): begin (generation \(g))")
+        // The Store keeps a results page scrolled where the last one was (a new search for "hydration" opened
+        // 7300 points down, 27 Oct 2026), and a row the Store hasn't drawn answers blank; the first rows are only
+        // read from the top. So the page starts at the top.
+        queue.async { [adapter] in
+            if let bar = adapter.scrollBar(), let v = bar.attr(kAXValueAttribute) as? Double, v > 0.001 {
+                _ = bar.set(kAXValueAttribute, NSNumber(value: 0)); Log.io("flat view: scrolled to the top (was \(String(format: "%.2f", v)))")
+                usleep(250_000)
+            }
+        }
         structure(reason: "begin", generation: g)
         for t in adapter.settleTimes {
             DispatchQueue.main.asyncAfter(deadline: .now() + t) { [weak self] in self?.structure(reason: "settle \(t) s", generation: g) }
         }
-        freshness?.invalidate()
-        freshness = Timer.scheduledTimer(withTimeInterval: 6, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                self.lock.lock(); let busy = self.resolving; self.lock.unlock()
-                if !busy { self.structure(reason: "freshness", generation: g) }
-            }
-        }
+        // No freshness timer: a structure walk every few seconds was part of what starved the Store (27 Oct 2026);
+        // the settle waves and a re-count when a row is gone are enough. (The `freshness` timer stays for a page
+        // whose adapter asks for it: none yet.)
+        freshness?.invalidate(); freshness = nil
     }
 
     public func end() { freshness?.invalidate(); freshness = nil; lock.lock(); generation += 1; let g = generation; lock.unlock(); Log.io("flat view \(name): end (generation \(g))") }
@@ -170,19 +193,23 @@ public final class FlatView {
             defer { lock.lock(); naming = false; lock.unlock() }
             // Patient: as long as the row the person is on has no name, keep asking (every 300 ms, up to ten seconds);
             // the neighbours' names come with it. The Store answers in bursts.
+            // Few questions, spaced out: a window of seven rows, asked every 400 ms, and nothing while a resolve is
+            // on (our own polling was starving the Store: 27 Oct 2026, "rounds with no name answered").
             let end = Date().addingTimeInterval(10.0)
             var rounds = 0, blankRounds = 0
-            while Date() < end, rounds < 40 {
+            while Date() < end, rounds < 25 {
                 rounds += 1
                 lock.lock()
                 let still = generation == g
                 let c = cursor
-                let window = rows.isEmpty ? [] : Array(max(0, c - 5)...min(rows.count - 1, c + 15)).filter { names[$0] == nil }
+                let paused = resolving
+                let window = rows.isEmpty ? [] : Array(max(0, c - 2)...min(rows.count - 1, c + 4)).filter { names[$0] == nil }
                 let elements = window.map { ($0, rows[$0]) }
                 let cursorNamed = names[c] != nil
                 lock.unlock()
                 guard still else { return }
-                if elements.isEmpty || (cursorNamed && rounds > 3) { break }
+                if paused { usleep(300_000); continue }
+                if elements.isEmpty || (cursorNamed && rounds > 1) { break }
                 var learned = 0
                 for (i, e) in elements {
                     AXUIElementSetMessagingTimeout(e, 0.3)
@@ -192,7 +219,7 @@ public final class FlatView {
                     learned += 1
                 }
                 if learned > 0 { Log.io("flat view \(name): \(learned) names answered (round \(rounds))"); publish(); blankRounds = 0 } else { blankRounds += 1 }
-                usleep(300_000)
+                usleep(400_000)
             }
             if blankRounds > 0 { Log.io("flat view \(name): \(blankRounds) rounds with no name answered (cursor row \(cursor + 1))") }
         }
@@ -214,8 +241,8 @@ public final class FlatView {
     /// The item found again, now: the row at its position (the structure walked again if the one kept has gone),
     /// asked for its name until it answers, which must be the name that was read; scrolled into view; the hit test
     /// under its click point agreeing. Two seconds in all, then a reason. `then` runs on main.
-    public func resolve(_ item: FlatItem, then: @escaping @MainActor @Sendable (AXUIElement?) -> Void) {
-        guard case .position(let n) = item.key else { then(nil); return }
+    public func resolve(_ item: FlatItem, then: @escaping @MainActor @Sendable (AXUIElement?, CGPoint?) -> Void) {
+        guard case .position(let n) = item.key else { then(nil, nil); return }
         let adapter = self.adapter, viewName = self.name
         lock.lock(); let kept = rows.indices.contains(n) ? rows[n] : nil; let expected = names[n]; resolving = true; lock.unlock()
         Log.io("flat view \(viewName): resolving row \(n + 1)\(expected.map { " (\($0))" } ?? "")")
@@ -226,22 +253,25 @@ public final class FlatView {
             var reason = "the row didn't answer in time"
             var answered: String?
             var blankSince = Date()
-            if let r = row { _ = AXUIElementPerformAction(r, "AXScrollToVisible" as CFString) }   // on screen first: it answers sooner there
+            self.lock.lock(); let count = self.rows.count; self.lock.unlock()
+            if let r = row { Self.bringOnScreen(r, position: n, of: count, adapter: adapter) }   // on screen first: the hit test needs it there
             while Date() < end {
                 if let r = row {
-                    AXUIElementSetMessagingTimeout(r, 0.3)
-                    if let n = adapter.name(for: r) {
-                        answered = n
-                        if let expected, expected != n { row = nil; reason = "the row is now \(n), not \(expected)" }
+                    AXUIElementSetMessagingTimeout(r, 0.5)
+                    if let got = adapter.name(for: r) {
+                        answered = got
+                        if let expected, expected != got { row = nil; reason = "the row is now \(got), not \(expected)" }
                         else {
-                            _ = AXUIElementPerformAction(r, "AXScrollToVisible" as CFString)
-                            usleep(150_000)
-                            if Self.hitAgrees(r, name: n, adapter: adapter) {
-                                let e = r; DispatchQueue.main.async { MainActor.assumeIsolated { then(e) } }; return
+                            // Where the row really is: the Store's frames lie by a row after a reflow (a row's icon
+                            // frame held another row, measured 27 Oct 2026), so the screen is scanned with the
+                            // system's own hit test for a point whose row is this one, scrolling a step at a time
+                            // when it isn't on screen yet. That point is what gets clicked.
+                            if let p = Self.scanFor(got, position: n, of: count, adapter: adapter) {
+                                let e = r; DispatchQueue.main.async { MainActor.assumeIsolated { then(e, p) } }; return
                             }
-                            reason = "something else is under it on screen"
+                            reason = "the row isn't under any point on screen"
                         }
-                    } else if r.role == "?" || Date().timeIntervalSince(blankSince) > 0.6 { row = nil }   // gone, or blank too long: the structure again
+                    } else if r.role == "?" || Date().timeIntervalSince(blankSince) > 1.2 { row = nil }   // gone, or blank too long: the structure again
                 }
                 if row == nil {
                     let (rows, _, topReached) = Self.walkStructure(adapter: adapter)
@@ -256,12 +286,102 @@ public final class FlatView {
                     if row == nil { reason = reason == "the row didn't answer in time" ? "the page's rows couldn't be counted" : reason }
                     blankSince = Date()
                 }
-                usleep(150_000)
+                usleep(250_000)
             }
             Log.io("flat view \(viewName): could not open row \(n + 1)\(expected.map { " (\($0))" } ?? ""): \(reason)\(answered.map { "; it answered \($0)" } ?? "")")
             let said = reason
-            DispatchQueue.main.async { MainActor.assumeIsolated { Speech.speakMessage("Not opened: \(said)."); then(nil) } }
+            DispatchQueue.main.async { MainActor.assumeIsolated { Speech.speakMessage("Not opened: \(said)."); then(nil, nil) } }
         }
+    }
+
+    nonisolated static func onScreen(_ e: AXUIElement, adapter: FlatAdapter) -> Bool {
+        guard let f = TurnOverObject.frame(e), f.height > 4, let area = adapter.screenArea() else { return false }
+        return area.contains(CGPoint(x: f.midX, y: f.midY))
+    }
+
+    /// The row scrolled on screen by the scroll bar: a first guess from its position in the list, then a binary
+    /// search on where its frame falls, up to eight steps a quarter-second apart (the Store moves on the bar's
+    /// value and on nothing else).
+    nonisolated static func bringOnScreen(_ e: AXUIElement, position: Int, of count: Int, adapter: FlatAdapter) {
+        guard !onScreen(e, adapter: adapter), let bar = adapter.scrollBar(), let area = adapter.screenArea() else { return }
+        var lo = 0.0, hi = 1.0
+        var at = count > 1 ? Double(position) / Double(count - 1) : 0
+        for step in 0..<8 {
+            _ = bar.set(kAXValueAttribute, NSNumber(value: min(1, max(0, at))))
+            usleep(250_000)
+            guard let f = TurnOverObject.frame(e) else { return }
+            if area.contains(CGPoint(x: f.midX, y: f.midY)) { Log.io("flat view: on screen after \(step + 1) scroll steps"); return }
+            if f.midY < area.minY { hi = at } else { lo = at }
+            at = (lo + hi) / 2
+        }
+        Log.io("flat view: the row stayed off screen after 8 scroll steps")
+    }
+
+    /// A point on screen whose hit test reaches a row named `name` and passes nothing the adapter forbids: the
+    /// screen area scanned every 60 by 40 points (about 300 hit tests, 0.4 s); not found, the page is scrolled a
+    /// step towards the position (up to five steps) and scanned again. A point reached through an image or a
+    /// titled group is preferred to one on bare text.
+    nonisolated static func scanFor(_ name: String, position: Int, of count: Int, adapter: FlatAdapter) -> CGPoint? {
+        guard let area = adapter.screenArea(), let root = adapter.areaRoot() else {
+            Log.io("flat view: no scan: area \(adapter.screenArea() != nil), root \(adapter.areaRoot() != nil)"); return nil
+        }
+        let app = AXUIElementCreateApplication(root.pid)
+        AXUIElementSetMessagingTimeout(app, 0.3)
+        func scan() -> CGPoint? {
+            var best: CGPoint?; var bestScore = -1
+            var hits = 0, items = 0; var seen: [String: CGPoint] = [:]
+            defer { Log.io("flat view: scan of \(Int(area.width))x\(Int(area.height)) at \(Int(area.minX)),\(Int(area.minY)): \(hits) hits, \(items) on rows, named: \(seen.sorted { $0.value.y < $1.value.y }.map { "\($0.key.prefix(18))@\(Int($0.value.x)),\(Int($0.value.y))" }.joined(separator: " | ").prefix(400))") }
+            var y = area.minY + 20
+            while y < area.maxY - 10 {
+                var x = area.minX + 20
+                while x < area.maxX - 10 {
+                    var hit: AXUIElement?
+                    if AXUIElementCopyElementAtPosition(app, Float(x), Float(y), &hit) == .success, let hit {
+                        hits += 1
+                        var e: AXUIElement? = hit; var hops = 0; var unsafe = false; var viaImage = false
+                        while let c = e, hops < 8 {
+                            if adapter.unsafeHit(c) { unsafe = true; break }
+                            if c.role == "AXImage" { viaImage = true }
+                            if adapter.isItem(c) {
+                                items += 1
+                                let n = adapter.name(for: c); if seen[n ?? "(blank)"] == nil { seen[n ?? "(blank)"] = CGPoint(x: x, y: y) }
+                                if !unsafe, n == name {
+                                    let score = viaImage ? 2 : (hit.role == "AXGroup" ? 1 : 0)
+                                    if score > bestScore { bestScore = score; best = CGPoint(x: x, y: y) }
+                                }
+                                break
+                            }
+                            e = c.element(kAXParentAttribute); hops += 1
+                        }
+                    }
+                    x += 60
+                }
+                y += 40
+            }
+            return best
+        }
+        if let p = scan() { return p }
+        guard let bar = adapter.scrollBar() else { return nil }
+        // Not on screen where the frames said: page outwards from here, a screen up, a screen down, two up, two
+        // down, until both ends of the list have been seen (the Store's results run to about four screens).
+        let here = (bar.attr(kAXValueAttribute) as? Double) ?? (count > 1 ? Double(position) / Double(count - 1) : 0)
+        let total = TurnOverObject.frame(root)?.height ?? 0
+        let page = total > area.height ? area.height / (total - area.height) * 0.85 : 1
+        var step = 0; var k = 1.0
+        while step < 12 {
+            var any = false
+            for signed in [-k, k] {
+                let at = here + signed * page
+                guard at > -page, at < 1 + page else { continue }
+                any = true; step += 1
+                _ = bar.set(kAXValueAttribute, NSNumber(value: min(1, max(0, at))))
+                usleep(300_000)
+                if let p = scan() { Log.io("flat view: found by hit test after \(step) scroll steps"); return p }
+            }
+            if !any { break }
+            k += 1
+        }
+        return nil
     }
 
     nonisolated static func hitAgrees(_ e: AXUIElement, name: String, adapter: FlatAdapter) -> Bool {
@@ -271,12 +391,15 @@ public final class FlatView {
         guard AXUIElementCopyElementAtPosition(app, Float(p.x), Float(p.y), &hit) == .success, let hit else { return false }
         var x: AXUIElement? = hit; var hops = 0
         while let y = x, hops < 8 {
-            if adapter.unsafeHit(y) { return false }
+            if adapter.unsafeHit(y) { Log.io("flat view: under the click point (\(Int(p.x)), \(Int(p.y))) is \(y.role) \(y.string(kAXIdentifierAttribute) ?? ""), which must not be clicked"); return false }
             if CFEqual(y, e) { return true }
             if adapter.isItem(y) {
                 // The row under the point, asked its name until it answers (blank is not "another row").
                 for _ in 0..<6 {
-                    if let n = adapter.name(for: y) { return n == name }
+                    if let n = adapter.name(for: y) {
+                        if n != name { Log.io("flat view: under the click point (\(Int(p.x)), \(Int(p.y))) is the row \(Log.words(n)), not \(Log.words(name))") }
+                        return n == name
+                    }
                     usleep(150_000)
                 }
                 Log.io("flat view: the row under the click point answered no name in a second")

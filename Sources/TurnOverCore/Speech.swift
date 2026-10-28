@@ -125,7 +125,7 @@ public enum Speech {
         }
         // While VoiceOver is on it does the talking: TurnOver speaking too (its own menu-bar menu, read item by
         // item over VoiceOver, 3 Oct 2026) is two voices at once.
-        if NSWorkspace.shared.isVoiceOverEnabled { completion?(false); return }
+        if NSWorkspace.shared.isVoiceOverEnabled, !Coexist.on { completion?(false); return }   // (coexisting, VoiceOver is on and silent in TurnOver's apps)
         let s = cleaned(text)
         // Nothing left to say (zero-width marks, a bidi mark): it still "starts", or say all's count of queued
         // chunks never came down and three such lines stopped it for good (a code review, 14 Oct 2026).
