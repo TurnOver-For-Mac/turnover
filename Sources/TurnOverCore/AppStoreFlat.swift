@@ -92,6 +92,9 @@ final class AppStoreResults {
     private(set) var index = 0
     private var spokeFirst = false
     private var extending = false
+    private var active = false
+    private var generation = 0
+    private var navigation = 0
     /// Opens a row at the point the hit test confirmed (AppStoreView clicks there and waits for the page).
     private let openRow: (String, CGPoint) -> Void
 
@@ -101,44 +104,56 @@ final class AppStoreResults {
         view.onChange = { [weak self] items in self?.changed(items) }
     }
 
-    func start() { items = []; index = 0; spokeFirst = false; extending = false; view.begin() }
-    func stop() { view.end() }
+    func start() { generation += 1; active = true; items = []; index = 0; spokeFirst = false; extending = false; view.begin() }
+    func stop() { generation += 1; active = false; items = []; extending = false; view.end() }
 
     private func changed(_ new: [FlatItem]) {
+        guard active else { return }
         items = new
         index = min(index, max(0, items.count - 1))
         if !spokeFirst, !items.isEmpty { spokeFirst = true; speak(index) }
     }
 
     private func speak(_ i: Int) {
-        guard items.indices.contains(i) else { return }
+        guard active, items.indices.contains(i) else { return }
         Speech.speakItem(items[i].label)
         Hints.schedule("Return opens the app's page. Up and Down move; Escape goes back.")
     }
 
+    private func newNavigation() -> Int {
+        navigation += 1
+        extending = false
+        view.cancelResolution()
+        return navigation
+    }
+
     func move(_ d: Int) {
+        guard active else { return }
         guard !items.isEmpty else { Speech.speakMessage("still reading the results; a moment"); return }
         let j = index + d
-        if items.indices.contains(j) { index = j; speak(j); return }
+        if items.indices.contains(j) { _ = newNavigation(); index = j; speak(j); return }
         guard d > 0, !extending else { Tones.edge(); speak(index); return }
         // Past the last tile seen: the next screen, then the first new tile.
+        let request = newNavigation()
         extending = true
-        let had = items.count
+        let had = items.count, g = generation
         view.extend { [weak self] count in
-            guard let self else { return }
+            guard let self, active, generation == g, navigation == request else { return }
             extending = false
             if count > had { index = had; speak(index) } else { Tones.edge(); speak(index) }
         }
     }
     func toEnd(_ last: Bool) {
-        guard !items.isEmpty else { return }
+        guard active, !items.isEmpty else { return }
+        let request = newNavigation()
         if !last { index = 0; speak(0); return }
-        sweep(upTo: 40) { [weak self] in guard let self else { return }; index = items.count - 1; speak(index) }
+        sweep(upTo: 40, request: request) { [weak self] in guard let self else { return }; index = items.count - 1; speak(index) }
     }
     func letter(_ ch: Character) {
-        guard !items.isEmpty else { return }
+        guard active, !items.isEmpty else { return }
+        let request = newNavigation()
         if let j = next(ch, after: index) { index = j; speak(j); return }
-        sweep(upTo: 40, until: { [weak self] in self?.next(ch, after: self?.index ?? 0) != nil }) { [weak self] in
+        sweep(upTo: 40, request: request, until: { [weak self] in self?.next(ch, after: self?.index ?? 0) != nil }) { [weak self] in
             guard let self else { return }
             if let j = next(ch, after: index) { index = j; speak(j) } else { Tones.edge() }
         }
@@ -149,18 +164,21 @@ final class AppStoreResults {
         return nil
     }
     /// Screens scanned one after another until `until` holds, the end, or `upTo` screens.
-    private func sweep(upTo: Int, until: @escaping () -> Bool = { false }, then: @escaping () -> Void) {
+    private func sweep(upTo: Int, request: Int, until: @escaping () -> Bool = { false }, then: @escaping () -> Void) {
+        guard active, navigation == request else { return }
         guard upTo > 0, !until() else { then(); return }
-        let had = items.count
+        let had = items.count, g = generation
         view.extend { [weak self] count in
-            guard let self else { return }
-            if count == had { then() } else { sweep(upTo: upTo - 1, until: until, then: then) }
+            guard let self, active, generation == g, navigation == request else { return }
+            if count == had { then() } else { sweep(upTo: upTo - 1, request: request, until: until, then: then) }
         }
     }
     func open() {
+        guard active else { return }
         guard items.indices.contains(index), let name = items[index].name else { Speech.speakMessage("nothing to open yet"); return }
+        let g = generation, request = newNavigation()
         view.resolve(items[index]) { [weak self] point in
-            guard let self else { return }
+            guard let self, active, generation == g, navigation == request else { return }
             guard let point else { Speech.speakMessage("Not opened: the row isn't on screen now."); return }
             openRow(name, point)
         }
