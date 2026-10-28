@@ -22,7 +22,11 @@ nonisolated public struct FlatItem: Sendable, Equatable {
     /// What is said: the adapter's label once the name is known, else a placeholder ("row 7").
     public var label: String
     public var index: Int
-    public init(key: FlatKey, name: String?, label: String, index: Int) { self.key = key; self.name = name; self.label = label; self.index = index }
+    /// The page that published the item; a position alone must not identify a later page's row.
+    public var page: UUID?
+    public init(key: FlatKey, name: String?, label: String, index: Int, page: UUID? = nil) {
+        self.key = key; self.name = name; self.label = label; self.index = index; self.page = page
+    }
 }
 
 /// What an app's module tells the engine about an area. Every method runs off the main thread and reads the live
@@ -321,7 +325,9 @@ public final class FlatView {
     /// screen area scanned every 60 by 40 points (about 300 hit tests, 0.4 s); not found, the page is scrolled a
     /// step towards the position (up to five steps) and scanned again. A point reached through an image or a
     /// titled group is preferred to one on bare text.
-    nonisolated static func scanFor(_ name: String, position: Int, of count: Int, adapter: FlatAdapter) -> CGPoint? {
+    nonisolated static func scanFor(_ name: String, position: Int, of count: Int, adapter: FlatAdapter,
+                                   current: @Sendable () -> Bool = { true }) -> CGPoint? {
+        guard current() else { return nil }
         guard let area = adapter.screenArea(), let root = adapter.areaRoot() else {
             Log.io("flat view: no scan: area \(adapter.screenArea() != nil), root \(adapter.areaRoot() != nil)"); return nil
         }
@@ -335,22 +341,29 @@ public final class FlatView {
             while y < area.maxY - 10 {
                 var x = area.minX + 20
                 while x < area.maxX - 10 {
+                    guard current() else { return nil }
                     var hit: AXUIElement?
                     if AXUIElementCopyElementAtPosition(app, Float(x), Float(y), &hit) == .success, let hit {
                         hits += 1
                         var e: AXUIElement? = hit; var hops = 0; var unsafe = false; var viaImage = false
                         while let c = e, hops < 8 {
+                            guard current() else { return nil }
                             if adapter.unsafeHit(c) { unsafe = true; break }
+                            guard current() else { return nil }
                             if c.role == "AXImage" { viaImage = true }
+                            guard current() else { return nil }
                             if adapter.isItem(c) {
+                                guard current() else { return nil }
                                 items += 1
                                 let n = adapter.name(for: c); if seen[n ?? "(blank)"] == nil { seen[n ?? "(blank)"] = CGPoint(x: x, y: y) }
+                                guard current() else { return nil }
                                 if !unsafe, n == name {
                                     let score = viaImage ? 2 : (hit.role == "AXGroup" ? 1 : 0)
                                     if score > bestScore { bestScore = score; best = CGPoint(x: x, y: y) }
                                 }
                                 break
                             }
+                            guard current() else { return nil }
                             e = c.element(kAXParentAttribute); hops += 1
                         }
                     }
@@ -360,7 +373,8 @@ public final class FlatView {
             }
             return best
         }
-        if let p = scan() { return p }
+        if let p = scan() { return current() ? p : nil }
+        guard current() else { return nil }
         guard let bar = adapter.scrollBar() else { return nil }
         // Not on screen where the frames said: page outwards from here, a screen up, a screen down, two up, two
         // down, until both ends of the list have been seen (the Store's results run to about four screens).
@@ -371,12 +385,14 @@ public final class FlatView {
         while step < 12 {
             var any = false
             for signed in [-k, k] {
+                guard current() else { return nil }
                 let at = here + signed * page
                 guard at > -page, at < 1 + page else { continue }
                 any = true; step += 1
                 _ = bar.set(kAXValueAttribute, NSNumber(value: min(1, max(0, at))))
                 usleep(300_000)
-                if let p = scan() { Log.io("flat view: found by hit test after \(step) scroll steps"); return p }
+                guard current() else { return nil }
+                if let p = scan(), current() { Log.io("flat view: found by hit test after \(step) scroll steps"); return p }
             }
             if !any { break }
             k += 1
