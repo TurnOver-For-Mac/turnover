@@ -27,6 +27,10 @@ Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
 
 ### Fixed
 
+- Speech recovery: a voice queue still stuck after sleep or wake-up grace gets another recovery attempt. A late
+  replacement cannot overwrite a player that has recovered or been replaced, and restarting waits at most two
+  seconds for its spoken warning, even if the system voice is stuck too. Issue 155.
+
 - App Store: Return on a search result opens it. The results page's container reports no size, so every row counted
   as off screen and Return said "could not reach … try again" for an app plainly on screen; the page's list, or the
   window, now gives the area, and a page with no scroll bar asks the row to scroll into view. Search results that

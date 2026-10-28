@@ -17,6 +17,7 @@ import Foundation
 import TurnOverObjC
 @preconcurrency import AVFoundation   // AVAudioPCMBuffer and AVSpeechUtterance cross to the speech queue, never back
 import AudioToolbox
+import os
 
 public struct SpeechTiming: Sendable {
     /// mach_absolute_time when speak() was called (or the caller's earlier stamp,
@@ -34,12 +35,24 @@ public struct SpeechTiming: Sendable {
     }
 }
 
-/// Every piece of state is the speech queue's (`queue`): the public calls hop onto it. Swift 6 cannot see a queue,
-/// so the class says so here (10 Oct 2026).
+/// Playback state is the speech queue's (`queue`): playback calls and framework callbacks hop onto it. Swift 6
+/// cannot express that queue ownership, so the class says so here (10 Oct 2026). Shared settings, the current-player
+/// snapshot and recovery claims/callbacks use their explicit locks instead of the playback queue.
 public final class SpeechPlayer: @unchecked Sendable {
-    /// The player in use, for the watchdog's own thread (it can't go through the main actor: main may be the thing
-    /// that is stuck, 20 Oct 2026).
-    nonisolated(unsafe) public static var current: SpeechPlayer?
+    /// The watchdog cannot ask main for the current player: main may be stuck too. The slot is locked for setup,
+    /// replacement and off-main recovery checks; retiring a replaced watch never calls the old audio queue (#155).
+    private static let currentSlot = OSAllocatedUnfairLock<SpeechPlayer?>(initialState: nil)
+    public static var current: SpeechPlayer? {
+        get { currentSlot.withLock { $0 } }
+        set {
+            let previous = currentSlot.withLock { current -> SpeechPlayer? in
+                let previous = current
+                current = newValue
+                return previous
+            }
+            if previous !== newValue { previous?.queueWatch.retire() }
+        }
+    }
     public static let machToNs: Double = {
         var info = mach_timebase_info(numer: 0, denom: 0)
         mach_timebase_info(&info)
@@ -693,38 +706,54 @@ public final class SpeechPlayer: @unchecked Sendable {
         p.onFirstAudio = onFirstAudio; p.onVoiceSilent = onVoiceSilent; p.onOutputChange = onOutputChange
         p.onQueueStuck = onQueueStuck; p.externalRenderer = externalRenderer
         if let uid = chosenUID { p.outputDeviceUID = uid }
-        onQueueStuck = nil
         return p
     }
 
-    /// Called once, from another thread, when the speech queue hasn't run for 4 s. A tester switched to his AirPods
+    /// A claim on one stalled heartbeat generation. Recovery checks it again after building a replacement, so
+    /// a resumed queue, a newer claim or an installed player cannot accept an obsolete result (#155, 28 Oct 2026).
+    public struct QueueStall: Sendable {
+        public let player: SpeechPlayer
+        private let stall: SpeechQueueWatch.Stall
+        public var seconds: TimeInterval { stall.seconds }
+        public var isStillStalled: Bool { player.queueWatch.isCurrent(stall) }
+
+        fileprivate init(player: SpeechPlayer, stall: SpeechQueueWatch.Stall) {
+            self.player = player
+            self.stall = stall
+        }
+    }
+
+    /// Called from the watch thread when the speech queue hasn't run for 4 s. Return true once recovery accepts
+    /// the claim; false defers it to the next poll (for example during sleep/wake grace). A tester switched to AirPods
     /// and TurnOver stopped speaking without crashing, until he quit and started it (19 Oct 2026): the log's
     /// last speech line was the switch to the AirPods, then words asked for and no audio, and not even the 4-second
     /// silence check, which runs on the same queue. The likeliest cause is a CoreAudio call on that queue stuck on a
     /// Bluetooth device still connecting (a stuck driver call has stopped every sound before: Teams, 10 Oct 2026).
-    /// Nothing can unstick the call; a fresh TurnOver is what worked for him, so the owner restarts it.
-    public var onQueueStuck: (@Sendable (TimeInterval) -> Void)?
-    private final class Beat: @unchecked Sendable {   // under `lock`
-        let lock = NSLock(); var at = Date(); var told = false
-        /// The last call on the speech queue that might wait on the system, for the log when the queue sticks.
-        var doing = "nothing yet (stuck before its first heartbeat)"
+    /// Nothing can unstick the call; the owner replaces the player or restarts TurnOver.
+    private let queueStuckCallback = OSAllocatedUnfairLock<(@Sendable (QueueStall) -> Bool)?>(initialState: nil)
+    public var onQueueStuck: (@Sendable (QueueStall) -> Bool)? {
+        get { queueStuckCallback.withLock { $0 } }
+        set { queueStuckCallback.withLock { $0 = newValue } }
     }
-    private let beat = Beat()
-    private func doing(_ what: String) { beat.lock.lock(); beat.doing = what; beat.lock.unlock() }
+    private let queueWatch = SpeechQueueWatch()
+    private func doing(_ what: String) { queueWatch.noteDoing(what) }
     private func watchQueue() {
-        let beat = beat, queue = queue
+        let watch = queueWatch, queue = queue
         let t = Thread { [weak self] in
             while true {
                 Thread.sleep(forTimeInterval: 2)
-                guard let self else { return }
-                queue.async { beat.lock.lock(); beat.at = Date(); beat.told = false; beat.doing = "idle"; beat.lock.unlock() }
-                beat.lock.lock()
-                let quiet = Date().timeIntervalSince(beat.at)
-                let tell = quiet > 4 && !beat.told
-                if tell { beat.told = true }
-                beat.lock.unlock()
-                beat.lock.lock(); let what = beat.doing; beat.lock.unlock()
-                if tell { self.onOutputChange?("speech: the speech queue has not run for \(Int(quiet)) s; its last call that waits on the system: \(what)"); self.onQueueStuck?(quiet) }
+                guard let self, !watch.isRetired else { return }
+                queue.async { watch.heartbeat() }
+                guard let stall = watch.claim() else { continue }
+                let request = QueueStall(player: self, stall: stall)
+                guard let callback = self.onQueueStuck else {
+                    watch.complete(stall, accepted: false)
+                    continue
+                }
+                guard request.isStillStalled else { continue }
+                self.onOutputChange?("speech: the speech queue has not run for \(Int(stall.seconds)) s; its last call that waits on the system: \(stall.doing)")
+                let accepted = callback(request)
+                watch.complete(stall, accepted: accepted)
             }
         }
         t.name = "turnover.speech.watch"

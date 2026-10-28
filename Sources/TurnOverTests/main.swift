@@ -24,6 +24,9 @@ Speech.mode = .off
 Speech.sink = { _ in }
 
 pureTests()
+speechQueueWatchTests()
+speechRecoveryAttemptTests()
+recoveryWarningTests()
 controlChannelTests()
 browseTextNavTests()
 gamesTests()

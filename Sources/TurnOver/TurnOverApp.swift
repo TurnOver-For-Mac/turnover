@@ -140,7 +140,7 @@ final class TurnOverApp {
         TurnOverMenu.shared.quit = { [weak self] in self?.quitRestoringVoiceOver() ?? NSApp.terminate(nil) }
         lead.onCoexistLead = { [weak self] turnOver in if turnOver { self?.activate() } else { self?.deactivate() } }
         MenuAnywhere.shared.turnOverActive = { [weak self] in self?.active ?? false }
-        Speech.player?.onQueueStuck = { seconds in Watchdog.shared.speechStuck(for: seconds) }
+        Speech.player?.onQueueStuck = { stall in Watchdog.shared.speechStuck(stall) }
         QuickNavWatch.shared.turnOverActive = { [weak self] in self?.active ?? false }
         QuickNavWatch.shared.start()
         ArrowQuickNav.startInStep()

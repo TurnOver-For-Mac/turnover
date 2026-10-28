@@ -25,6 +25,19 @@ The control-channel tests use private socket pairs and package-internal connecti
 the running reader or bypass its public peer-authentication path. Tiny socket buffers force partial writes and
 backpressure. The write-buffer test also supplies interrupted, would-block, zero and fatal write results.
 
+## Speech recovery (every build)
+
+`turnover-tests 'speech recovery' -v` drives the production queue-watch state with synthetic time: repeated grace
+deferrals, resumed heartbeats, stale completions, single recovery ownership and replacement retirement. The
+replacement-attempt tests verify that deadline expiry and cancellation reject late builders and main callbacks.
+Warning tests run silent system tools, including an explicitly ready child which ignores SIGTERM, to verify the
+two-second production wait has a deadline and kills only the owned warning. A separate test backstop prevents a
+broken wait from hanging the harness. These tests neither start an audio engine nor interrupt the running reader.
+
+A live listening check remains required before release: normal speech, sleep/wake, and recovery after a simulated
+player stall. Name macOS, the voice/output device, keyboard style and reader mode. Passing these tests does not
+establish how a real CoreAudio stall or a device handover sounds.
+
 ## Braille driver thread (every build)
 
 `bash Tools/tests/braille-thread-test.sh` compiles the real Objective-C bridge with a fake driver which runs its
