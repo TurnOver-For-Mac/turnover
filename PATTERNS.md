@@ -82,6 +82,10 @@ misbehaves, check this list first.
   from the app twice running, say "page not responding". `PageWatch`.
 - **Anything slow on the main thread** trips the watchdog at 4 s: walk big trees off the main thread with a deadline
   (Find, Item Chooser, Rotor), cap page reads at 2 s, never wait on Word or on macOS's permission dialogs on main.
+- **A background loader must not append to the arrays the keys read.** The App Store now builds a local page and
+  shelf snapshot on its serial worker, then commits it on main after checking the session, request and base revision.
+  Commit and finish the original command before replaying later keys; a retired completion must leave newer work
+  alone. This also keeps a captured app's confirmation from patching a different row at its old index (#54, 28 Oct 2026).
 
 ## Microsoft Word
 
