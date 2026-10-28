@@ -24,6 +24,8 @@ Speech.mode = .off
 Speech.sink = { _ in }
 
 pureTests()
+appStoreModelTests()
+appStorePurchaseConfirmationTests()
 controlChannelTests()
 browseTextNavTests()
 gamesTests()
