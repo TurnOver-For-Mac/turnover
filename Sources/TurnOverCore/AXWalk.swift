@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import Foundation
 import os
+import TurnOverAX
 
-nonisolated package enum AXWalkStop: String, Sendable { case cancelled, deadline, visits, queries, depth, cycle }
+nonisolated package enum AXWalkStop: String, Sendable { case cancelled, deadline, visits, queries, axQueries, depth, cycle, providerFailure, backoff }
 
 /// Cancellation never waits for an in-flight accessibility call. Its result is checked again before publication.
 nonisolated package final class AXWalkRequest: Sendable {
@@ -14,57 +15,78 @@ nonisolated package final class AXWalkRequest: Sendable {
 }
 
 /// A cooperative budget: a system call cannot be preempted, so check both before and after every provider query.
-/// Query limits count navigation-provider operations, not every AX IPC hidden inside a provider's item rules.
-nonisolated package struct AXWalkBudget {
+/// Provider operations and AX API admissions have separate caps; nested item/profile rules share the AX cap.
+/// This mutable object stays on the synchronous collector's thread and is deliberately not Sendable.
+nonisolated package final class AXWalkBudget {
     private let request: AXWalkRequest
     private let deadline: UInt64
     private let now: @Sendable () -> UInt64
     private let maxVisits: Int
     private let maxQueries: Int
+    private let maxAXQueries: Int
     private let maxDepth: Int
     package private(set) var visits = 0
     package private(set) var queries = 0
+    package private(set) var axQueries = 0
     package private(set) var stopped: AXWalkStop?
 
     package init(request: AXWalkRequest, duration: UInt64 = 2_000_000_000, maxVisits: Int = 5000,
-                 maxQueries: Int = 20_000, maxDepth: Int = 200,
+                 maxQueries: Int = 20_000, maxAXQueries: Int = 20_000, maxDepth: Int = 200,
                  now: @escaping @Sendable () -> UInt64 = { DispatchTime.now().uptimeNanoseconds }) {
         self.request = request
         deadline = request.startedAt.addingReportingOverflow(duration).overflow ? UInt64.max : request.startedAt + duration
         self.maxVisits = maxVisits
         self.maxQueries = maxQueries
+        self.maxAXQueries = maxAXQueries
         self.maxDepth = maxDepth
         self.now = now
     }
 
-    package mutating func check() -> Bool {
+    package func check() -> Bool {
         guard stopped == nil else { return false }
         if request.isCancelled { stopped = .cancelled }
         else if now() >= deadline { stopped = .deadline }
         return stopped == nil
     }
 
-    package mutating func visit() -> Bool {
+    package func visit() -> Bool {
         guard check() else { return false }
         guard visits < maxVisits else { stopped = .visits; return false }
         visits += 1
         return true
     }
 
-    package mutating func depth(_ depth: Int) -> Bool {
+    package func depth(_ depth: Int) -> Bool {
         guard check() else { return false }
         guard depth <= maxDepth else { stopped = .depth; return false }
         return true
     }
 
-    package mutating func halt(_ reason: AXWalkStop) { if stopped == nil { stopped = reason } }
+    package func halt(_ reason: AXWalkStop) { if stopped == nil { stopped = reason } }
 
-    package mutating func query<Value>(_ body: () -> Value) -> Value? {
+    package func query<Value>(_ body: () -> Value) -> Value? {
         guard check() else { return nil }
         guard queries < maxQueries else { stopped = .queries; return nil }
         queries += 1
         let answer = body()
         return check() ? answer : nil
+    }
+
+    package func admitAXQuery() -> Bool {
+        guard check() else { return false }
+        guard axQueries < maxAXQueries else { stopped = .axQueries; return false }
+        axQueries += 1
+        return true
+    }
+
+    package func record(_ status: AXQueryStatus) {
+        switch status {
+        case .deferred: halt(.backoff)
+        case .returned(let error) where [.cannotComplete, .apiDisabled, .invalidUIElement, .failure].contains(error):
+            halt(.providerFailure)
+        case .clientWorkStopped: halt(.cancelled)
+        default: break   // unsupported/noValue are normal fallbacks for optional attributes
+        }
     }
 }
 

@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import Foundation
 import TurnOverCore
+import TurnOverAX
+import ApplicationServices
+import AXFixtures
 import os
 
 nonisolated private struct SearchNode: Sendable {
@@ -149,5 +152,138 @@ func axWalkTests() {
         while publications.withLock({ $0.isEmpty }), Date() < until { RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01)) }
         expect(publications.withLock { $0 }, [9], "stale completion cannot navigate or announce over the current reader")
         runner.cancel()
+    }
+    test("AX read scope: cancelled actual wrappers report client stop without provider work") {
+        let fixture = AXFixture(app: "Public sample", bundle: "test.scope", recorded: "", root: 0, application: nil, focus: nil, nodes: [
+            .init(id: 0, attrs: ["AXRole": .string("AXButton"), "AXTitle": .string("Public button")], actions: [kAXPressAction]),
+        ])
+        AXReplay.load(fixture); defer { AXReplay.unload() }
+        guard let root = AXReplay.root else { return check(false, "fixture root") }
+        let request = AXWalkRequest()
+        let budget = AXWalkBudget(request: request)
+        let before = AXStats.calls
+        AXReadScope.with(while: { budget.check() }, onQuery: { budget.admitAXQuery() }) {
+            request.cancel()
+            let result = root.attributeResult(kAXRoleAttribute, policy: .diagnosticDirect)
+            expect(result.status, .clientWorkStopped, "diagnostic bypass cannot bypass caller cancellation")
+            check(result.error == nil && result.value == nil && !result.wasAttempted, "client stop is not a provider error")
+            expect(result.elapsedNanoseconds, 0)
+            expect(result.legacyError, .cannotComplete)
+            check(root.attr(kAXRoleAttribute) == nil, "legacy wrapper also stops")
+            let batch = root.attributesResult([kAXRoleAttribute, kAXTitleAttribute])
+            expect(batch.query.status, .clientWorkStopped)
+            expect(batch.attributes[kAXTitleAttribute]?.status, .clientWorkStopped, "batch slots preserve client stop")
+            var rule = ElementMatch(); rule.pressable = true
+            check(!ElementMatcher.matches(root, rule), "nested profile action query also respects cancellation")
+        }
+        expect(AXStats.calls, before, "neither typed legacy batch nor nested profile wrappers attempted an AX API")
+        expect(budget.axQueries, 0)
+    }
+    test("AX read scope: nested guards restore their parent and cleanup after throws") {
+        enum SampleError: Error { case stop }
+        let fixture = AXFixture(app: "Public sample", bundle: "test.scope", recorded: "", root: 0, application: nil, focus: nil, nodes: [
+            .init(id: 0, attrs: ["AXRole": .string("AXButton")]),
+        ])
+        AXReplay.load(fixture); defer { AXReplay.unload() }
+        guard let root = AXReplay.root else { return check(false, "fixture root") }
+        AXReadScope.with(while: { false }) {
+            AXReadScope.with(while: { true }) {
+                expect(root.attributeResult(kAXRoleAttribute).status, .clientWorkStopped, "inner scope cannot loosen the outer guard")
+            }
+        }
+        do {
+            try AXReadScope.with(while: { true }) {
+                do {
+                    try AXReadScope.with(while: { false }) { throw SampleError.stop }
+                } catch {}
+                expect(root.attributeResult(kAXRoleAttribute).value as? String, "AXButton", "throw restored the outer permitting scope")
+                throw SampleError.stop
+            }
+        } catch {}
+        expect(root.attributeResult(kAXRoleAttribute).value as? String, "AXButton", "outer throw leaves no scope on the caller's thread")
+    }
+    test("AX read scope: worker scopes do not leak onto the main thread") {
+        let entered = DispatchSemaphore(value: 0), release = DispatchSemaphore(value: 0), done = DispatchSemaphore(value: 0)
+        let stopped = OSAllocatedUnfairLock(initialState: false)
+        let fixture = AXFixture(app: "Public sample", bundle: "test.scope", recorded: "", root: 0, application: nil, focus: nil, nodes: [
+            .init(id: 0, attrs: ["AXRole": .string("AXButton")]),
+        ])
+        AXReplay.load(fixture); defer { AXReplay.unload() }
+        guard let root = AXReplay.root else { return check(false, "fixture root") }
+        DispatchQueue.global().async {
+            AXReadScope.with(while: { false }) {
+                entered.signal()
+                _ = release.wait(timeout: .now() + 2)
+                stopped.withLock { $0 = root.attributeResult(kAXRoleAttribute).status == .clientWorkStopped }
+            }
+            done.signal()
+        }
+        check(entered.wait(timeout: .now() + 2) == .success, "worker owns a live scope")
+        expect(root.attributeResult(kAXRoleAttribute).value as? String, "AXButton", "a different thread continues normally")
+        release.signal()
+        check(done.wait(timeout: .now() + 2) == .success, "worker scope cleaned up")
+        check(stopped.withLock { $0 }, "worker's actual wrapper was stopped")
+    }
+    test("AX read scope: actual AX query budget is distinct from provider operations") {
+        let fixture = AXFixture(app: "Public sample", bundle: "test.scope", recorded: "", root: 0, application: nil, focus: nil, nodes: [
+            .init(id: 0, attrs: ["AXRole": .string("AXButton")], actions: [kAXPressAction]),
+        ])
+        AXReplay.load(fixture); defer { AXReplay.unload() }
+        guard let root = AXReplay.root else { return check(false, "fixture root") }
+        let budget = AXWalkBudget(request: AXWalkRequest(), maxAXQueries: 1)
+        let before = AXStats.calls
+        AXReadScope.with(while: { budget.check() }, onQuery: { budget.admitAXQuery() }) {
+            expect(root.attributeResult(kAXRoleAttribute).value as? String, "AXButton")
+            expect(root.actionNamesResult().status, .clientWorkStopped, "second actual query is not attempted")
+        }
+        expect(budget.axQueries, 1)
+        expect(budget.queries, 0, "no generic provider operation was counted as an AX API query")
+        expect(budget.stopped, .axQueries)
+        expect(AXStats.calls, before + 1, "exactly the admitted query reached the replay provider")
+    }
+    test("AX window search: transport failure before the deadline is incomplete rather than no match") {
+        let pid = pid_t(Int32.max - 110)
+        defer { AXHealth.forget(pid: pid) }
+        for error in [AXError.cannotComplete, .apiDisabled, .invalidUIElement, .failure] {
+            let budget = AXWalkBudget(request: AXWalkRequest())
+            let queries = searchQueries(tree, query: { operation, node in
+                if operation == "matches", node == 3 { _ = AXHealth.query(pid: pid) { error } }
+            })
+            var walk = WindowKindSearch(queries: queries, budget: budget)
+            let result = AXReadScope.with(while: { budget.check() }, onQuery: { budget.admitAXQuery() }, onResult: { budget.record($0) }) {
+                walk.find(from: 1, forward: true)
+            }
+            expect(searchStop(result), .providerFailure, "\(error) must not become an exhausted search or action target")
+            check(searchFound(result) == nil, "failed provider cannot move the cursor")
+        }
+        let budget = AXWalkBudget(request: AXWalkRequest())
+        let queries = searchQueries(tree, query: { operation, node in
+            if operation == "matches", node == 3 { _ = AXHealth.query(pid: pid) { .attributeUnsupported } }
+        })
+        var optional = WindowKindSearch(queries: queries, budget: budget)
+        let result = AXReadScope.with(while: { budget.check() }, onQuery: { budget.admitAXQuery() }, onResult: { budget.record($0) }) {
+            optional.find(from: 1, forward: true)
+        }
+        expect(searchFound(result), 3, "unsupported optional data still permits existing fallback rules")
+    }
+    test("AX window search: caller backoff remains incomplete without attempting provider work") {
+        let pid = pid_t(Int32.max - 111)
+        defer { AXHealth.forget(pid: pid) }
+        var ticks: [UInt64] = [100, 1_000_000_100]
+        _ = AXHealth.query(pid: pid, clock: { ticks.removeFirst() }) { .cannotComplete }
+        let attempted = OSAllocatedUnfairLock(initialState: false)
+        let queries = searchQueries(tree, query: { operation, node in
+            if operation == "matches", node == 3 {
+                _ = AXHealth.query(pid: pid) { attempted.withLock { $0 = true }; return .success }
+            }
+        })
+        let budget = AXWalkBudget(request: AXWalkRequest())
+        var walk = WindowKindSearch(queries: queries, budget: budget)
+        let result = AXReadScope.with(while: { budget.check() }, onQuery: { budget.admitAXQuery() }, onResult: { budget.record($0) }) {
+            walk.find(from: 1, forward: true)
+        }
+        expect(searchStop(result), .backoff)
+        check(!attempted.withLock { $0 }, "deferred provider is never called")
+        expect(budget.axQueries, 0, "backoff does not consume an actual API admission")
     }
 }

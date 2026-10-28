@@ -232,18 +232,16 @@ public final class ObjectNavigator {
         // A table's column with no title is its structure, not a stop: it said only "column" between Ulysses' panes
         // (Day 2, 10 Oct 2026). The cells are reached through the rows.
         if role == "AXColumn", !named { return false }
+        // Action reads share health accounting and a worker's read scope, including nested searches (28 Oct 2026).
         if role == "AXImage" {
-            var acts: CFArray?
-            AXUIElementCopyActionNames(e, &acts)
-            return named || ((acts as? [String]) ?? []).contains("AXPress")
+            return named || ((e.actionNamesResult().value as? [String]) ?? []).contains("AXPress")
         }
         if layoutRoles.contains(role) {
             // A container is an item only when it is a control in disguise (pressable) or has a name; otherwise
             // review goes straight into it.
             if ProfileStore.shared.isSilenced(e, pid: e.pid) { return false }
-            var acts: CFArray?
-            AXUIElementCopyActionNames(e, &acts)
-            return named && e.elements(kAXChildrenAttribute).isEmpty || ((acts as? [String]) ?? []).contains("AXPress") && e.elements(kAXChildrenAttribute).isEmpty
+            let acts = (e.actionNamesResult().value as? [String]) ?? []
+            return named && e.elements(kAXChildrenAttribute).isEmpty || acts.contains("AXPress") && e.elements(kAXChildrenAttribute).isEmpty
         }
         if ProfileStore.shared.isSilenced(e, pid: e.pid) { return false }
         return true
@@ -254,15 +252,13 @@ public final class ObjectNavigator {
     /// the next took 120 ms a step in Contacts' 610 (10 Oct 2026). nil: not a row, or past the ends (then the
     /// children are walked as before).
     nonisolated static func neighbourRow(of e: AXUIElement, in parent: AXUIElement, offset: Int) -> AXUIElement? {
+        // Former raw count/slice calls now share cancellation, budgets and health accounting with attribute reads.
         guard e.role == "AXRow", ["AXOutline", "AXTable"].contains(parent.role),
               let i = (e.attr("AXIndex") as? NSNumber)?.intValue else { return nil }
-        var count: CFIndex = 0
-        guard AXUIElementGetAttributeValueCount(parent, kAXRowsAttribute as CFString, &count) == .success else { return nil }
+        guard let count = parent.attributeValueCountResult(kAXRowsAttribute).value else { return nil }
         let j = i + offset
         guard j >= 0, j < count else { return nil }
-        var values: CFArray?
-        guard AXUIElementCopyAttributeValues(parent, kAXRowsAttribute as CFString, j, 1, &values) == .success,
-              let row = (values as? [AXUIElement])?.first else { return nil }
+        guard let row = (parent.attributeValuesResult(kAXRowsAttribute, index: j, maxValues: 1).value as? [AXUIElement])?.first else { return nil }
         return row
     }
 
@@ -625,20 +621,22 @@ public final class ObjectNavigator {
             neighbourRow: { Self.neighbourRow(of: $0, in: $1, offset: $2) }
         )
         windowSearch.submit { request in
-            var budget = AXWalkBudget(request: request)
-            var resolvedStart = start
-            if let cursor {
-                guard let valid = budget.query({ cursor.role != "?" }) else { return .incomplete(budget.stopped ?? .cancelled) }
-                if !valid {
-                    guard let focus else { return .unavailable }
-                    resolvedStart = focus   // preserve element's invalid-cursor fallback, without asking AX on main
+            let budget = AXWalkBudget(request: request)
+            return AXReadScope.with(while: { budget.check() }, onQuery: { budget.admitAXQuery() }, onResult: { budget.record($0) }) {
+                var resolvedStart = start
+                if let cursor {
+                    guard let valid = budget.query({ cursor.role != "?" }) else { return .incomplete(budget.stopped ?? .cancelled) }
+                    if !valid {
+                        guard let focus else { return .unavailable }
+                        resolvedStart = focus   // preserve element's invalid-cursor fallback, without asking AX on main
+                    }
                 }
+                var search = WindowKindSearch(queries: queries, budget: budget)
+                let result = search.find(from: resolvedStart, forward: forward)
+                // A malformed cross-process child must never become the action target for this window's request.
+                if case .found(let target) = result, target.pid != resolvedStart.pid { return .unavailable }
+                return result
             }
-            var search = WindowKindSearch(queries: queries, budget: budget)
-            let result = search.find(from: resolvedStart, forward: forward)
-            // A malformed cross-process child must never become the action target for this window's request.
-            if case .found(let target) = result, target.pid != resolvedStart.pid { return .unavailable }
-            return result
         } publish: { [weak self] result in
             guard let self, Core.active,
                   Self.sameSnapshot(self.current, cursor), Self.sameSnapshot(API.focusObject?.element, focus),

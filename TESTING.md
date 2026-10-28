@@ -25,6 +25,16 @@ The control-channel tests use private socket pairs and package-internal connecti
 the running reader or bypass its public peer-authentication path. Tiny socket buffers force partial writes and
 backpressure. The write-buffer test also supplies interrupted, would-block, zero and fatal write results.
 
+`turnover-tests "AX window search"` exercises the production reading-order traversal and serial worker with fake
+providers: forward/backward order, indexed row neighbours, delayed and cancelled matches, cycle/depth/work limits,
+coalesced repeated keys, and completed results cancelled before main can publish them. No live app or reader is changed.
+`turnover-tests "AX read scope"` uses replayed public sample elements to check nested/throw cleanup, thread confinement,
+typed and legacy cancellation, nested profile action reads, and separate provider-operation/AX-query budgets.
+Known transport failures and client backoff must produce incomplete search results; unsupported optional attributes
+retain their existing fallbacks.
+The deadline is cooperative: an AX call already in flight cannot be preempted, and retains the existing messaging
+timeout. The large search stays off main; these tests do not establish live speech, focus-following or app coverage.
+
 ## Braille driver thread (every build)
 
 `bash Tools/tests/braille-thread-test.sh` compiles the real Objective-C bridge with a fake driver which runs its

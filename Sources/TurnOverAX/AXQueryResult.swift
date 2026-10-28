@@ -15,6 +15,8 @@ public struct AXBackoff: Equatable, Sendable {
 public enum AXQueryStatus: Equatable, Sendable, CustomStringConvertible {
     case returned(AXError)
     case deferred(AXBackoff)
+    /// The caller cancelled or exhausted its own work budget; no AX API was attempted and no provider error exists.
+    case clientWorkStopped
     /// A batch's CFNull does not identify the per-attribute AX error; keep it distinct from genuine noValue.
     case batchNull
     /// The API succeeded but a batch slot could not be decoded. This is not an invented provider error.
@@ -24,6 +26,7 @@ public enum AXQueryStatus: Equatable, Sendable, CustomStringConvertible {
         switch self {
         case .returned(let error): return "returned:\(describeError(error))"
         case .deferred(let rest): return "clientBackoff:\(rest.reason.rawValue)(\(rest.remainingNanoseconds / 1_000_000)ms)"
+        case .clientWorkStopped: return "client:workStopped"
         case .batchNull: return "batch:unspecifiedAbsence"
         case .invalidResponse: return "client:invalidResponse"
         }
