@@ -226,6 +226,8 @@ public enum Games {
     static func say(_ text: String, interrupting: Bool, from source: String) {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
+        // The helper's source can be a page title, as private as the speech itself (issue 68, 28 Oct 2026).
+        let source = Log.words(source)
         // Coexisting, VoiceOver is always on; TurnOver being active for the game is the test (16 Oct 2026).
         if NSWorkspace.shared.isVoiceOverEnabled, !(Coexist.on && Core.active) {
             if Date().timeIntervalSince(droppedWarnedAt) > 60 {
@@ -346,7 +348,7 @@ final class SteamHelper {
             let d = h.availableData
             if d.isEmpty { h.readabilityHandler = nil; return }
             let text = String(decoding: d, as: UTF8.self)
-            DispatchQueue.main.async { Log.info("steam speech (errors): \(text.prefix(300))") }
+            DispatchQueue.main.async { Log.info("steam speech (errors): \(Log.words(String(text.prefix(300))))") }
         }
         Log.info("games: Steam program started (pid \(pid)\(disclaimed ? ", without TurnOver's permissions" : "; WARNING: it may have TurnOver's permissions"))")
     }
@@ -380,7 +382,7 @@ final class SteamHelper {
                 if !page.contains("MainMenu"), Games.menuNeedsKeys { Games.menuNeedsKeys = false; Log.io("games: Steam's menu closed; keys are Steam's again") }
                 Games.say(text, interrupting: kind == "I", from: page)
             case "X": Speech.cancel()
-            case "L": Log.info("steam speech: \(text.prefix(300))")
+            case "L": Log.info("steam speech: \(Log.words(String(text.prefix(300))))")
             case "R": Games.menuLostKeyboard()
             case "T":
                 let waiting = statusWaiters; statusWaiters.removeAll()
@@ -392,7 +394,7 @@ final class SteamHelper {
 
     func send(_ command: String) {
         guard let child else { return }
-        do { try child.stdin.write(contentsOf: Data((command + "\n").utf8)) } catch { Log.warning("games: couldn't reach the Steam program: \(error)") }
+        do { try child.stdin.write(contentsOf: Data((command + "\n").utf8)) } catch { Log.warning("games: couldn't reach the Steam program: \(Log.words(String(describing: error)))") }
     }
 
     func askStatus(_ answer: @escaping (String) -> Void) {

@@ -285,8 +285,9 @@ final class BaumHIDDriver: BrailleDisplayDriver {
 
     private func received(_ bytes: [UInt8]) {
         guard let command = bytes.first else { return }
-        // The first reports in full, to learn the device's layout from a tester's log.
-        if reportsLogged < 40 { reportsLogged += 1; Log.info("braille: \(name) report " + bytes.prefix(24).map { String(format: "%02x", $0) }.joined(separator: " ")) }
+        // Payloads can encode typed dots (0x33), including passwords. Command and size identify the report
+        // without retaining its keys, even among the first reports after connecting (#62, 28 Oct 2026).
+        if reportsLogged < 40 { reportsLogged += 1; Log.info("braille: \(name) report \(String(format: "0x%02x", command)), \(bytes.count) bytes") }
         let data = Array(bytes.dropFirst())
         switch command {
         case 0x84:

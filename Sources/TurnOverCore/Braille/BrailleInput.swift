@@ -16,8 +16,13 @@ public enum BrailleInput {
     public static var pending: [UInt8] { config.braille.contractedInput ? word : [] }
     private static var typed = ""              // uncontracted: what has been typed for them so far
 
+    // The input tests supply a translator here so privacy does not depend on which private macOS tables are
+    // installed (28 Oct 2026). Production keeps the system translator; all access stays on the main actor.
+    package static var backTranslate: ([UInt8], Bool) -> String = { BrailleOutput.backTranslate($0, contracted: $1) }
+
     private static var echoWords: Bool { ["words", "both"].contains(config.braille.inputEcho) }
     private static var echoCharacters: Bool { ["characters", "both"].contains(config.braille.inputEcho) }
+    private static var isSecureInput: Bool { API.focusObject?.role == .passwordEdit || Speech.typingIntoSecretField }
 
     /// A chord let go: its dots (1 to 8) and whether space was in it.
     // MARK: Modifiers (VoiceOver: space with dot 7 holds a modifier for the next key, with dot 8 locks it)
@@ -65,7 +70,7 @@ public enum BrailleInput {
         if TurnOverMenu.shared.isOpen, !space {
             if dots == [8] { KeyboardGesture(identifier: "kb:enter").map { TurnOverMenu.shared.handle($0) }; return }
             let cell = dots.reduce(UInt8(0)) { $0 | UInt8(1 << ($1 - 1)) }
-            if let ch = BrailleOutput.backTranslate([cell & 0x3F], contracted: false).lowercased().first,
+            if let ch = backTranslate([cell & 0x3F], false).lowercased().first,
                let g = KeyboardGesture(identifier: "kb:\(ch)") { TurnOverMenu.shared.handle(g) }
             return
         }
@@ -73,24 +78,24 @@ public enum BrailleInput {
         if !held.isEmpty, !space, !dots.isEmpty, dots != [7], dots != [8] {
             flush()
             let cell = dots.reduce(UInt8(0)) { $0 | UInt8(1 << ($1 - 1)) }
-            let ch = BrailleOutput.backTranslate([cell & 0x3F], contracted: false).lowercased().first
+            let ch = backTranslate([cell & 0x3F], false).lowercased().first
             let mods = takeModifiers()
             if let ch, let g = KeyboardGesture(identifier: "kb:\(mods)\(ch)") {
-                Log.io("braille input: \(mods)\(ch)")
+                Log.io("braille input: modified key")
                 if let s = ScriptHandler.findScript(for: g) { ScriptHandler.executeScript(s, gesture: g) } else { g.send() }
             } else { Tones.edge() }
             return
         }
         // A password field: the cells are typed, never logged or echoed (the keyboard's typing has the same rule).
-        let secure = API.focusObject?.role == .passwordEdit
-        if secure { Log.io("braille input: (a cell in a password field)") }
-        else if Speech.logsWords { Log.io("braille input: \(space ? "space" : "")\(space && !dots.isEmpty ? "+" : "")\(dots.isEmpty ? "" : "dots " + dots.sorted().map(String.init).joined())") }
-        else { Log.io("braille input: \(space ? "space" : "a cell")") }   // the dots would be the text typed, kept 30 days (code review, 16 Oct 2026)
+        // Dots encode what was typed, including passwords. Keep them out even with developer speech logging
+        // enabled, and out of the late-space and unrecognised-command diagnostics below (#61, 28 Oct 2026).
+        if isSecureInput { Log.io("braille input: (a cell in a password field)") }
+        else { Log.io("braille input: \(space ? "space" : "a cell")") }
         if space && dots.isEmpty { finishWord(then: " "); return }
         // Typing in text, the space landing a moment after the letter: the letter, then the space, not the command
         // the two make together (only while typing: a command after a pause still runs).
         if space, spaceLate, inText, dots.isSubset(of: 1...6), Date().timeIntervalSince(lastTypedAt) < 2 {
-            Log.io("braille input: space pressed after dots \(dots.sorted().map(String.init).joined()) while typing; typed as the cell, then a space")
+            Log.io("braille input: space pressed after a cell while typing; typed as the cell, then a space")
             word.append(dots.reduce(UInt8(0)) { $0 | UInt8(1 << ($1 - 1)) })
             lastTypedAt = Date()
             finishWord(then: " ")
@@ -106,7 +111,7 @@ public enum BrailleInput {
         lastTypedAt = Date()
         if word.count == 1 { followTypingIntoField(); typingElement = API.focusObject?.element }   // from the first cell, so the word shows in its line
         if config.braille.contractedInput {
-            if echoCharacters, !secure { Speech.speakText(BrailleOutput.backTranslate([cell], contracted: false)) }
+            if echoCharacters, !isSecureInput { Speech.speakPrivate(backTranslate([cell], false)) }
             Braille.refreshSoon()
         } else {
             retype()
@@ -141,10 +146,10 @@ public enum BrailleInput {
             // Space pressed a moment before the word's last cell was let go: "the" (2 3 4 6) became space with 2 3 4 6,
             // no command, and the word was lost (7 Oct 2026). A chord that is no command is that cell, then the space.
             guard !dots.contains(7), !dots.contains(8) else {
-                Log.io("braille input: no command for space with dots \(dots.sorted())")
+                Log.io("braille input: unrecognised space chord")
                 Tones.edge(); return
             }
-            Log.io("braille input: no command for space with dots \(dots.sorted()); typed as the cell, then a space")
+            Log.io("braille input: unrecognised space chord; typed as the cell, then a space")
             word.append(dots.reduce(UInt8(0)) { $0 | UInt8(1 << ($1 - 1)) })
             finishWord(then: " ")
         }
@@ -155,26 +160,27 @@ public enum BrailleInput {
     private static func finishWord(then after: String?) {
         var spoken = typed
         if config.braille.contractedInput, !word.isEmpty {
-            let text = BrailleOutput.backTranslate(word, contracted: true)
+            let text = backTranslate(word, true)
             type(text)
             spoken = text
         }
         if let after { type(after) }
-        let secure = API.focusObject?.role == .passwordEdit
-        if echoWords, !spoken.isEmpty, !secure { Speech.speakText(spoken) } else if after == " ", echoCharacters, !secure { Speech.speakText(" ") }
+        // Typing echo follows the keyboard's private speech path: heard, but excluded from speech history and
+        // reports, including when developer speech logging is on (#61, 28 Oct 2026).
+        if echoWords, !spoken.isEmpty, !isSecureInput { Speech.speakPrivate(spoken) } else if after == " ", echoCharacters, !isSecureInput { Speech.speakPrivate(" ") }
         word.removeAll(); typed = ""
     }
 
     /// Uncontracted: type what the word's cells now say, correcting what was typed before.
     private static func retype() {
-        let text = BrailleOutput.backTranslate(word, contracted: false)
+        let text = backTranslate(word, false)
         let common = typed.commonPrefix(with: text)
         for _ in 0..<(typed.count - common.count) { KeyboardGesture(identifier: "kb:backspace")?.send() }
         let add = String(text.dropFirst(common.count))
         if !add.isEmpty { type(add) }
         typed = text
         // Not speakMessage: that would flash the letter on the display.
-        if echoCharacters, API.focusObject?.role != .passwordEdit, let last = add.last { Speech.speakText(String(last)) }
+        if echoCharacters, !isSecureInput, let last = add.last { Speech.speakPrivate(String(last)) }
     }
 
     private static func backspace() {
@@ -188,8 +194,12 @@ public enum BrailleInput {
         let cell = word.removeLast()
         if config.braille.contractedInput {
             // The cell taken off, as a letter ("deleted d"), not just "deleted".
-            let letter = BrailleOutput.backTranslate([cell], contracted: false)
-            Speech.speakText(letter.isEmpty ? "deleted" : "deleted " + letter)
+            // The pending cell has not reached the field, so SecureEcho cannot protect this deletion. Never
+            // translate or announce it in a password field (braille privacy review, 28 Oct 2026).
+            if !isSecureInput {
+                let letter = backTranslate([cell], false)
+                Speech.speakPrivate(letter.isEmpty ? "deleted" : "deleted " + letter)
+            }
             Braille.refreshSoon()
         } else { retype() }
     }

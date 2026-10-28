@@ -48,6 +48,26 @@ enum Out {
     static func log(_ text: String) { line("L", text) }
 }
 
+// Page titles, element text and error descriptions can contain private content. Keep the diagnostic's shape,
+// never those words, even when this helper is run on its own (issue 68, 28 Oct 2026).
+enum Diagnostic {
+    static func text(_ value: String) -> String { "[\(value.count) characters]" }
+    static func page(_ title: String) -> String { "page \(text(title))" }
+    static func error(_ error: Error) -> String { "error code \((error as NSError).code)" }
+
+    static func skippedFocus(_ object: [String: Any]) -> String {
+        ["tag", "cls", "text"].map { "\($0)=\(text(object[$0] as? String ?? ""))" }.joined(separator: " ")
+    }
+
+    static func observer(in title: String, result: [String: Any]) -> String {
+        let value = (result["result"] as? [String: Any])?["value"] as? String
+        // Only the literal acknowledgements returned by our own scripts are safe to keep as words.
+        let status = value.map { ["already", "installed", "installed v11"].contains($0) ? $0 : text($0) }
+            ?? "no installation acknowledgement"
+        return "observer in \(page(title)): \(status)"
+    }
+}
+
 let steamBundle = "com.valvesoftware.steam"
 
 // MARK: - Big Picture's reports, as words
@@ -61,7 +81,7 @@ func bigPictureEvent(_ payload: String) -> BigPictureEvent {
           let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return .nothing }
     if object["focusGone"] as? Bool == true { return .focusGone }
     if object["skipped"] as? Bool == true {
-        return .skipped("tag=\(object["tag"] ?? "") cls=\(object["cls"] ?? "") text=\"\(object["text"] ?? "")\"")
+        return .skipped(Diagnostic.skippedFocus(object))
     }
     var text = (object["name"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     let role = object["role"] as? String ?? ""
@@ -163,7 +183,7 @@ final class DevToolsReader {
         let wanted = targets.filter { attach($0) && $0.webSocketDebuggerUrl != nil }
         let ids = Set(wanted.map { $0.id })
         for (id, s) in sessions where !ids.contains(id) {
-            Out.log("\(name): \(s.title) closed")
+            Out.log("\(name): \(Diagnostic.page(s.title)) closed")
             s.close(); sessions.removeValue(forKey: id)
         }
         for t in wanted where sessions[t.id] == nil {
@@ -176,10 +196,10 @@ final class DevToolsReader {
                                     onDead: { [weak self] in
                                         guard let self, self.sessions[id] != nil else { return }
                                         self.sessions.removeValue(forKey: id)
-                                        Out.log("\(self.name): \(title)'s connection died; attaching again on the next poll")
+                                        Out.log("\(self.name): \(Diagnostic.page(title)) connection died; attaching again on the next poll")
                                     })
             sessions[id] = s
-            Out.log("\(name): attached to \(title)")
+            Out.log("\(name): attached to \(Diagnostic.page(title))")
         }
         onReconciled?()
     }
@@ -207,8 +227,7 @@ final class DevToolsSession {
         send("Runtime.addBinding", ["name": binding])
         send("Page.addScriptToEvaluateOnNewDocument", ["source": script])
         send("Runtime.evaluate", ["expression": script, "returnByValue": true]) { result in
-            let value = ((result["result"] as? [String: Any])?["value"] as? String) ?? "\(result)".prefix(80).description
-            Out.log("observer in \(title): \(value)")
+            Out.log(Diagnostic.observer(in: title, result: result))
         }
     }
 
@@ -244,7 +263,7 @@ final class DevToolsSession {
         lock.unlock()
         guard let data = try? JSONSerialization.data(withJSONObject: ["id": id, "method": method, "params": params]) else { return }
         task.send(.string(String(decoding: data, as: UTF8.self))) { error in
-            if let error { DispatchQueue.main.async { Out.log("send failed: \(error.localizedDescription)") } }
+            if let error { DispatchQueue.main.async { Out.log("send failed: \(Diagnostic.error(error))") } }
         }
     }
 
@@ -253,7 +272,7 @@ final class DevToolsSession {
             guard let self, !self.closed else { return }
             switch result {
             case .failure(let error):
-                DispatchQueue.main.async { Out.log("\(self.title) socket closed: \(error.localizedDescription)") }
+                DispatchQueue.main.async { Out.log("\(Diagnostic.page(self.title)) socket closed: \(Diagnostic.error(error))") }
                 self.died()
             case .success(let message):
                 var text = ""
@@ -328,7 +347,7 @@ final class BigPictureReader {
     /// highlight and choose (found 15 Oct 2026). Nothing if no menu page is there.
     func forwardKey(_ key: String, vk: Int) {
         guard let reader, let menu = reader.sessions.values.first(where: { $0.title.hasPrefix("MainMenu") }) else {
-            Out.log("key \(key) for the menu, but no menu page"); return
+            Out.log("key \(Diagnostic.text(key)) for the menu, but no menu page"); return
         }
         menu.key(key, vk: vk)
     }
@@ -405,7 +424,7 @@ final class BigPictureReader {
             }
         case .skipped(let what):
             // A focused element with no name and no role (Steam's settings screens): logged so the gaps can be closed.
-            Out.log("skipped a nameless focus in \(session.title): \(what)")
+            Out.log("skipped a nameless focus in \(Diagnostic.page(session.title)): \(what)")
         case .speak(let text):
             // The same thing twice in quick succession is one event that fired twice.
             let now = Date()
@@ -460,7 +479,7 @@ enum SteamInstall {
     static func removeSwitchFiles() {
         for i in all where FileManager.default.fileExists(atPath: i.switchFile.path) {
             let gone = (try? FileManager.default.removeItem(at: i.switchFile)) != nil
-            Out.log("\(gone ? "removed" : "could not remove") the debugging switch file for \(i.name)")
+            Out.log("\(gone ? "removed" : "could not remove") the debugging switch file for \(Diagnostic.text(i.name))")
         }
     }
 
@@ -470,7 +489,7 @@ enum SteamInstall {
         let installs = all
         for i in installs where !FileManager.default.fileExists(atPath: i.switchFile.path) {
             let made = FileManager.default.createFile(atPath: i.switchFile.path, contents: Data())
-            Out.log("\(made ? "created" : "could not create") the debugging switch file for \(i.name)")
+            Out.log("\(made ? "created" : "could not create") the debugging switch file for \(Diagnostic.text(i.name))")
         }
         return !installs.isEmpty
     }
@@ -520,7 +539,7 @@ enum SteamRestart {
             let c = NSWorkspace.OpenConfiguration(); c.activates = true
             NSWorkspace.shared.openApplication(at: location, configuration: c) { _, error in
                 DispatchQueue.main.async {
-                    if let error { Out.log("Steam restart failed: \(error.localizedDescription)"); Out.say("Could not start Steam: \(error.localizedDescription)") }
+                    if let error { Out.log("Steam restart failed: \(Diagnostic.error(error))"); Out.say("Could not start Steam: \(error.localizedDescription)") }
                     else { Out.log("Steam is starting") }
                 }
             }
@@ -540,14 +559,14 @@ enum SteamRestart {
         sweep.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
         sweep.arguments = ["-9", "-f", "steamwebhelper.exe"]
         try? sweep.run()
-        Out.log("Steam restart (\(name) bottle): force-quit \(running.count) process(es); relaunching through CrossOver")
+        Out.log("Steam restart (\(Diagnostic.text(name)) bottle): force-quit \(running.count) process(es); relaunching through CrossOver")
         Out.say(running.isEmpty ? "Starting Steam in the \(name) bottle." : "Restarting Steam in the \(name) bottle. It takes a few seconds.")
         DispatchQueue.main.asyncAfter(deadline: .now() + (running.isEmpty ? 0.2 : 4.0)) {
             let c = NSWorkspace.OpenConfiguration(); c.activates = true
             NSWorkspace.shared.open([steamExe], withApplicationAt: crossOver, configuration: c) { _, error in
                 DispatchQueue.main.async {
-                    if let error { Out.log("Steam restart (\(name) bottle) failed: \(error.localizedDescription)"); Out.say("Could not start Steam in the \(name) bottle: \(error.localizedDescription)") }
-                    else { Out.log("Steam in the \(name) bottle is starting") }
+                    if let error { Out.log("Steam restart (\(Diagnostic.text(name)) bottle) failed: \(Diagnostic.error(error))"); Out.say("Could not start Steam in the \(name) bottle: \(error.localizedDescription)") }
+                    else { Out.log("Steam in the \(Diagnostic.text(name)) bottle is starting") }
                 }
             }
         }
@@ -568,9 +587,23 @@ func selfTest() -> Int32 {
            .speak("Hades II, selected. Defy the god of the dead"))
     expect(bigPictureEvent(#"{"name":"","role":"checkbox","state":"on"}"#), .speak(", checkbox, on"))
     expect(bigPictureEvent(#"{"focusGone":true}"#), .focusGone)
-    expect(bigPictureEvent(#"{"skipped":true,"tag":"DIV","cls":"x","text":""}"#), .skipped("tag=DIV cls=x text=\"\""))
+    expect(bigPictureEvent(#"{"skipped":true,"tag":"DIV","cls":"x","text":""}"#), .skipped("tag=[3 characters] cls=[1 characters] text=[0 characters]"))
+    expect(bigPictureEvent(#"{"skipped":true,"tag":"SECRET","cls":"private account","text":"private message"}"#),
+           .skipped("tag=[6 characters] cls=[15 characters] text=[15 characters]"))
     expect(bigPictureEvent(#"{"name":"","role":"","state":""}"#), .nothing)
     expect(bigPictureEvent("not json"), .nothing)
+    func expectText(_ got: String, _ want: String, _ line: Int = #line) {
+        if got != want { failed += 1; FileHandle.standardError.write(Data("line \(line): got \(got), wanted \(want)\n".utf8)) }
+    }
+    expectText(Diagnostic.page("secret"), "page [6 characters]")
+    expectText(Diagnostic.observer(in: "secret", result: ["result": ["value": "installed v11"]]),
+               "observer in page [6 characters]: installed v11")
+    expectText(Diagnostic.observer(in: "secret", result: ["result": ["value": "private message"]]),
+               "observer in page [6 characters]: [15 characters]")
+    expectText(Diagnostic.observer(in: "secret", result: ["exceptionDetails": ["text": "private error"]]),
+               "observer in page [6 characters]: no installation acknowledgement")
+    expectText(Diagnostic.error(NSError(domain: "private domain", code: -1001, userInfo: [NSLocalizedDescriptionKey: "private URL"])),
+               "error code -1001")
     print(failed == 0 ? "steam-speech self-test: all passed" : "steam-speech self-test: \(failed) failed")
     return failed == 0 ? 0 : 1
 }
@@ -606,7 +639,7 @@ FileHandle.standardInput.readabilityHandler = { h in
                 let parts = l.split(separator: " ")
                 if parts.count == 3, let vk = Int(parts[2]) { bigPicture?.forwardKey(String(parts[1]), vk: vk) }
             case "": break
-            default: Out.log("unknown command: \(line.prefix(40))")
+            default: Out.log("unknown command: \(Diagnostic.text(line))")
             }
         }
     }

@@ -24,6 +24,9 @@ Speech.mode = .off
 Speech.sink = { _ in }
 
 pureTests()
+keyboardPrivacyTests()
+braillePrivacyTests()
+feedbackPrivacyTests()
 controlChannelTests()
 browseTextNavTests()
 gamesTests()

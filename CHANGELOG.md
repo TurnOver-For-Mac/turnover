@@ -27,6 +27,11 @@ Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
 
 ### Fixed
 
+- Privacy: typed keys and braille cells are kept out of diagnostic logs, braille typing echo stays out of speech
+  history, and deleting a pending braille cell in a password field does not speak it. Helper diagnostics no longer
+  keep page titles or element text. Feedback reports remove old input and helper diagnostics even when speech is
+  included. Issues 60, 61, 62 and 68.
+
 - App Store: Return on a search result opens it. The results page's container reports no size, so every row counted
   as off screen and Return said "could not reach … try again" for an app plainly on screen; the page's list, or the
   window, now gives the area, and a page with no scroll bar asks the row to scroll into view. Search results that

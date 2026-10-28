@@ -49,7 +49,8 @@ public enum Feedback {
         try? fm.removeItem(at: work)
         try fm.createDirectory(at: work, withIntermediateDirectories: true)
 
-        // The newest three logs, made private unless the tester said otherwise.
+        // Diagnostic logs are always redacted. The optional speech file below supplies the words the tester
+        // agreed to share; old logs can contain braille echo recorded as ordinary speech (#61, 28 Oct 2026).
         let logs = AppPaths.file("logs")
         let newest = ((try? fm.contentsOfDirectory(at: logs, includingPropertiesForKeys: [.contentModificationDateKey])) ?? [])
             .filter { $0.lastPathComponent.hasPrefix("turnover-") || $0.lastPathComponent.hasPrefix("turnover-") }
@@ -61,7 +62,7 @@ public enum Feedback {
         }.map(\.element).prefix(8)
         for log in wanted {
             guard let text = try? String(contentsOf: log, encoding: .utf8) else { continue }
-            let out = includeSpeech ? text : redact(text)
+            let out = redact(text)
             try out.write(to: work.appendingPathComponent(log.lastPathComponent), atomically: true, encoding: .utf8)
         }
         // The TurnOver Key helper's own log (when it restarted TurnOver after a crash): nothing private in it.
@@ -152,28 +153,72 @@ public enum Feedback {
         return String(decoding: buf.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
     }
 
-    /// A log with what was on screen and what was typed taken out: spoken text, quoted names, typed keys and words,
-    /// and the paths and queries of web addresses. What TurnOver did (events, scripts, timings) stays.
+    /// Typing and raw helper/device diagnostics are private even when a report includes speech. Older logs can
+    /// still contain them after the producers are fixed (issues 60, 61, 62 and 68; 28 Oct 2026).
+    /// Screen text, quoted names and URL paths are removed too; events and timings stay. Consented speech is
+    /// exported separately from the current session's speech history, never from these diagnostic logs.
     nonisolated public static func redact(_ log: String) -> String {
-        let quoted = try! NSRegularExpression(pattern: "\"[^\"]*\"")
         let url = try! NSRegularExpression(pattern: "(https?|file|x-webdoc)://([^/\\s\"]*)[^\\s\"]*")
-        let typedKey = try! NSRegularExpression(pattern: "input kb:(shift\\+)?[^+\\s]$")
+        let inputKey = try! NSRegularExpression(pattern: #"(?:input |keyboard: (?:the main thread is not beating; )?)(kb:\S+)"#)
+        let rawBraille = try! NSRegularExpression(pattern: #"(braille: .*? report )[0-9a-fA-F]{2}(?:\s+[0-9a-fA-F]{2})*\s*$"#)
+        let record = try! NSRegularExpression(pattern: #"^\[\s*\d+\.\d+\]\s"#)
+        // A multiline value belongs to its first timestamped record, not to a fresh diagnostic (28 Oct 2026).
+        var privateContinuation = false
         return log.split(separator: "\n", omittingEmptySubsequences: false).map { raw -> String in
             var line = String(raw).replacingOccurrences(of: NSHomeDirectory(), with: "~")
+            if record.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil {
+                privateContinuation = false
+            } else if privateContinuation {
+                return line.isEmpty ? "" : "[…]"
+            }
+            // Helpers used to write arbitrary, sometimes multiline diagnostics. Their contents cannot be
+            // distinguished reliably from page text; keep the source label rather than guessing at words.
+            for marker in ["steam speech: ", "steam speech (errors): ", "trackpad-gestures: ", "trackpad-gestures (errors): ",
+                           "games: couldn't reach the Steam program: "] {
+                if let r = line.range(of: marker) {
+                    privateContinuation = true
+                    return line[..<r.upperBound] + "[diagnostic omitted]"
+                }
+            }
+            if let r = line.range(of: "games (") {
+                privateContinuation = true
+                return line[..<r.upperBound] + "[source]): [diagnostic omitted]"
+            }
+            if let r = line.range(of: "braille input: ") { privateContinuation = true; return line[..<r.upperBound] + "[…]" }
+            for marker in ["braille key ", "braille: no command for "] {
+                if let r = line.range(of: marker), line[r.upperBound...].range(of: #"\bdot[1-8]\b"#, options: .regularExpression) != nil {
+                    return line[..<r.upperBound] + "[input omitted]"
+                }
+            }
+            if let match = rawBraille.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
+               let r = Range(match.range(at: 1), in: line) {
+                return line[..<r.upperBound] + "[input omitted]"
+            }
+            if let match = inputKey.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
+               let r = Range(match.range(at: 1), in: line), !line[r.upperBound...].hasPrefix(" → ") {
+                let gesture = KeyboardGesture(identifier: String(line[r]))
+                if gesture == nil || gesture?.logDescription() == "(a typed key)" {
+                    line.replaceSubrange(r, with: "kb:[a key]")
+                }
+            }
+            if let r = line.range(of: "typed word: ") { privateContinuation = true; return line[..<r.upperBound] + "[a word]" }
+            if line.contains("typedCharacter") { privateContinuation = true; return line.components(separatedBy: "typedCharacter").first! + "typedCharacter [a key]" }
             // Lines whose remainder is what was on screen.
             for marker in ["copied the last spoken: ", "live region: ", "media: press ", "media: play ", "browse mode: press ", "dialog: pressed ",
                            "dialog: cancelled with ", "status menus: press ", "claude: ", "plugin: press ", "find next: ", "find previous: ",
                            // What the display showed, banners, page titles and spoken text in another language (8 Oct 2026).
-                           "braille shows (", "braille input: ", "notification banner: ", "browse mode: page ", "Word's own formatting announcement; TurnOver says it: "] {
-                if let r = line.range(of: marker) { return line[..<r.upperBound] + "[…]" }
+                           "braille shows (", "notification banner: ", "browse mode: page ", "Word's own formatting announcement; TurnOver says it: "] {
+                if let r = line.range(of: marker) { privateContinuation = true; return line[..<r.upperBound] + "[…]" }
             }
-            if let r = line.range(of: " say: ") { return line[..<r.upperBound] + "[spoken, \(line[r.upperBound...].count) characters]" }
-            if let r = line.range(of: " say ["), let close = line[r.upperBound...].firstIndex(of: "]") { return line[...close] + ": [spoken, \(line[close...].count) characters]" }
-            if let r = line.range(of: "typed word: ") { return line[..<r.upperBound] + "[a word]" }
-            if line.contains("typedCharacter") { return line.components(separatedBy: "typedCharacter").first! + "typedCharacter [a key]" }
-            if typedKey.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil, let r = line.range(of: "input kb:") { return line[..<r.upperBound] + "[a key]" }
+            if let r = line.range(of: " say: ") { privateContinuation = true; return line[..<r.upperBound] + "[spoken, \(line[r.upperBound...].count) characters]" }
+            if let r = line.range(of: " say ["), let close = line[r.upperBound...].firstIndex(of: "]") { privateContinuation = true; return line[...close] + ": [spoken, \(line[close...].count) characters]" }
+            // Names in older records were quoted without escaping their own quotes. Pairing quote marks could
+            // leave the middle of a name exposed; keep only the diagnostic before the first quote (28 Oct 2026).
+            if let quote = line.firstIndex(of: "\"") {
+                privateContinuation = true
+                line = String(line[..<quote]) + "\"…\""
+            }
             line = url.stringByReplacingMatches(in: line, range: NSRange(line.startIndex..., in: line), withTemplate: "$1://$2/…")
-            line = quoted.stringByReplacingMatches(in: line, range: NSRange(line.startIndex..., in: line), withTemplate: "\"…\"")
             return line
         }.joined(separator: "\n")
     }
