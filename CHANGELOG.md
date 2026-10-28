@@ -9,6 +9,9 @@ Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
 ### Changed
 
 - Braille: panning to another line moves the caret there, so the arrows carry on from the line read. The Braille section of Settings offers Line by line (the default), To the text shown, or Off. Tethered to review, panning moves only the review cursor.
+- Braille: Apple USB and HID drivers are polled and written on the braille thread, as Bluetooth drivers are, so a
+  display does not hold up speech. Reads and writes cannot enter each other while a driver waits, the latest
+  pending frame is kept, and handing back to VoiceOver waits for the driver to unload.
 
 - A window with nothing TurnOver can read (a custom-drawn or OpenGL window: Parallels' installation assistant, Bambu
   Studio's plate) says so a moment after it comes to the front, and names the key for screen recognition in the

@@ -25,6 +25,14 @@ The control-channel tests use private socket pairs and package-internal connecti
 the running reader or bypass its public peer-authentication path. Tiny socket buffers force partial writes and
 backpressure. The write-buffer test also supplies interrupted, would-block, zero and fatal write results.
 
+## Braille driver thread (every build)
+
+`bash Tools/tests/braille-thread-test.sh` compiles the real Objective-C bridge with a fake driver which runs its
+run loop while waiting. It checks that reads and writes never nest, that the latest pending frame survives a
+write or a poll, and that close waits for unloading during either call. It also checks idle deallocation and
+that nothing calls an unloaded driver. No real display, permissions or private frameworks are needed. The test
+has a five-second deadline, removes its executable on exit, and runs from `build.sh` alongside the unit tests.
+
 ## Recorded windows (fixtures)
 
 A fixture is a window's accessibility tree as JSON (Tests/Fixtures/*.json): every element's attributes, the
