@@ -192,12 +192,31 @@ extension AXHandler {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
             guard let self, let current = self.observers[pid], current === obs else { return }
             let app = AXUIElementCreateApplication(pid)
-            let still = names.filter { n in
-                let r = AXObserverAddNotification(obs, app, n as CFString, Unmanaged.passUnretained(self).toOpaque())
-                return r != .success && r != .notificationAlreadyRegistered
+            AXUIElementSetMessagingTimeout(app, 1.0)
+            // Asked off the main thread, as observe() asks a slow app: an app that refused them all as it came forward
+            // can go on answering slowly a second later. Asked here, Telegram Lite (a Qt app) held TurnOver for about
+            // 10 s, and the watchdog gave speech back to VoiceOver (twice in eight times it came forward, 27 Oct 2026).
+            // The observer and the handler's pointer go to another thread as in observe(): the accessibility client
+            // API takes them from any thread, and both outlive the retry (the handler is `AXHandler.shared`, and the
+            // closure holds the observer).
+            nonisolated(unsafe) let refcon = Unmanaged.passUnretained(self).toOpaque()
+            nonisolated(unsafe) let observer = obs
+            let register: @Sendable ([String]) -> [String] = { some in
+                some.filter { n in
+                    let r = AXObserverAddNotification(observer, app, n as CFString, refcon)
+                    return r != .success && r != .notificationAlreadyRegistered
+                }
             }
-            Log.info("pid \(pid): \(names.count - still.count) of \(names.count) notifications registered on retry")
-            if still.count > Self.notifications.count / 2 { self.retryNotifications(pid: pid, obs: obs, names: still, delays: Array(delays.dropFirst())) }
+            let started = Date()
+            let settle: @MainActor @Sendable ([String]) -> Void = { [weak self] still in
+                guard let self, let current = self.observers[pid], current === obs else { return }
+                Log.info("pid \(pid): \(names.count - still.count) of \(names.count) notifications registered on retry, in \(Int(Date().timeIntervalSince(started) * 1000)) ms off the main thread")
+                if still.count > Self.notifications.count / 2 { self.retryNotifications(pid: pid, obs: obs, names: still, delays: Array(delays.dropFirst())) }
+            }
+            DispatchQueue.global(qos: .userInitiated).async {
+                let still = register(names)
+                DispatchQueue.main.async { MainActor.assumeIsolated { settle(still) } }
+            }
         }
     }
 
