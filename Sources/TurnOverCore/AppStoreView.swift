@@ -435,7 +435,7 @@ public final class AppStoreView {
         if id.hasSuffix("badge.rating") {
             let score = parts.first { Double($0) != nil } ?? ""
             let count = parts.first { $0.uppercased().contains("RATING") } ?? ""
-            return String(localized: "Rating \(score) out of 5, \(count.lowercased())", comment: "An app's rating: the score, then how many ratings")
+            return String(localized: "Rating \(score) out of 5, \(Symbols.lowered(count))", comment: "An app's rating: the score, then how many ratings")
         }
         if id.hasSuffix("badge.chartPosition") {
             let n = parts.first { Int($0) != nil } ?? ""

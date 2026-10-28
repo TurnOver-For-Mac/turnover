@@ -37,6 +37,19 @@ nonisolated public enum Symbols {
         return c.isUppercase && config.speech.capitalPitch > 0 ? Speech.capitalMark + n : n
     }
 
+    /// The language TurnOver's own words are in (the catalog's, from the Mac's language): "cap" is said in it, so the
+    /// letter after it is lowered by its rules too. Not the voice's: the name is made before the speech queue picks a
+    /// voice, which language switching can change, and "cap" and its letter must agree.
+    nonisolated public static var interfaceLocale: Locale { Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en") }
+
+    /// A capital lowered by its language's rules: in Turkish I is ı and İ is i, where lowercased(), which ignores the
+    /// language, makes both i (a tester building PR 123 with JAWS fixes, 28 Oct 2026).
+    public static func lowered(_ c: Character, locale: Locale = interfaceLocale) -> String { lowered(String(c), locale: locale) }
+    /// Words lowered or raised by the same rules, for words said in the interface's language (an App Store count,
+    /// the Keyboard Commander's letters).
+    public static func lowered(_ s: String, locale: Locale = interfaceLocale) -> String { s.lowercased(with: locale) }
+    public static func raised(_ s: String, locale: Locale = interfaceLocale) -> String { s.uppercased(with: locale) }
+
     public static func name(of c: Character, sayCap: Bool) -> String {
         if let s = table[c] { return s.name }
         switch c {
@@ -48,7 +61,7 @@ nonisolated public enum Symbols {
         case "\t": return String(localized: "symbol.tab", defaultValue: "tab", comment: "The tab character")
         case "\u{8}": return String(localized: "key.backspace", defaultValue: "backspace", comment: "A key's name")
         default:
-            if c.isUppercase, sayCap { return String(localized: "cap \(c.lowercased())", comment: "A capital letter: %@ is the letter") }
+            if c.isUppercase, sayCap { return String(localized: "cap \(lowered(c))", comment: "A capital letter: %@ is the letter") }
             return String(c)
         }
     }

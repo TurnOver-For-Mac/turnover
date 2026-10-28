@@ -284,7 +284,7 @@ extension VoiceOverSettings {
         var letters: [String] = []
         for (letter, command) in c.commanderKeys {
             config.keyboard.userGestures["kb:rightoption+" + letter] = VoiceOverCommands.target(for: command).stored
-            letters.append(letter.uppercased())
+            letters.append(Symbols.raised(letter))   // Turkish i is İ, not I (said ı)
         }
         if !letters.isEmpty { said.append(String(localized: "Keyboard Commander keys \(letters.sorted().joined(separator: ", "))", comment: "Copying VoiceOver's settings: the letters given")) }
         var bound = 0

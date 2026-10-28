@@ -2,6 +2,7 @@
 // The translations (Resources/Localizable.xcstrings, make-strings.py, 23 Oct 2026): the tests hear English on a Mac in
 // any language, and no translation can break a sentence by losing or changing the English string's placeholders.
 import Foundation
+import TurnOverCore
 
 func localizationTests() {
     test("localization: the tests run in English, whatever the Mac's language") {
@@ -9,6 +10,18 @@ func localizationTests() {
         // so their expected words hold on a Turkish Mac too. Translations live only in the app bundles (build.sh).
         expect(Bundle.main.preferredLocalizations.first, "en", "the tests' language")
         expect(String(localized: "3 of 9, a test string never translated"), "3 of 9, a test string never translated", "an untranslated string")
+    }
+    test("localization: letters are lowered and raised by the language's rules (Turkish I is ı, İ is i, i is İ)") {
+        let tr = Locale(identifier: "tr"), en = Locale(identifier: "en")
+        expect(Symbols.lowered("I", locale: tr), "ı", "Turkish I")
+        expect(Symbols.lowered("İ", locale: tr), "i", "Turkish İ")
+        expect(Symbols.lowered("I", locale: en), "i", "English I")
+        expect(Symbols.name(of: "I", sayCap: true), "cap i", "a capital in the tests' language, English")
+        // The Keyboard Commander's letters, raised: Turkish i is İ; and an App Store count, lowered: I is ı, İ is i.
+        expect(Symbols.raised("i", locale: tr), "İ", "Turkish i raised")
+        expect(Symbols.raised("i", locale: en), "I", "English i raised")
+        expect(Symbols.lowered("1,2 B DEĞERLENDİRME", locale: tr), "1,2 b değerlendirme", "a Turkish App Store count")
+        expect(Symbols.lowered("IŞIK", locale: tr), "ışık", "Turkish I in a word")
     }
     test("localization: every translation keeps the English string's placeholders") {
         let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
