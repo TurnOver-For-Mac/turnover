@@ -182,10 +182,13 @@ public enum ScriptHandler {
 
     public static func clearLastScript() { lastScript = nil; lastScriptTime = .distantPast; lastScriptCount = 0 }
 
-    /// The commands that speak in on-demand mode: those that report something asked for, as NVDA marks its own.
+    /// The commands that speak in on-demand mode: those that report something asked for, as NVDA marks its own. JAWS's
+    /// reading keys too (Caps Lock U, O, J, L, M, Period): they move as the arrows do, but read as the review keys on
+    /// their letters did, which spoke (the review of pull request 144, 28 Oct 2026).
     static func speaksOnDemand(_ name: String) -> Bool {
         let n = name.lowercased()
         return ["report", "sayall", "readcontents", "speak", "describe", "datetime", "time", "title", "spell", "review",
-                "navigatorobject", "where", "battery", "statusbar", "selecteditem", "readwindow", "readline", "currentline"].contains { n.contains($0) }
+                "navigatorobject", "where", "battery", "statusbar", "selecteditem", "readwindow", "readline", "currentline",
+                "jaws_sayprior", "jaws_saynext"].contains { n.contains($0) }
     }
 }

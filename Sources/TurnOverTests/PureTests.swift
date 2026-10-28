@@ -1139,6 +1139,36 @@ func browseTextNavTests() {
         for (_, value) in sayAll { check(GlobalCommands.shared.script(named: value) != nil, "\(value): a command TurnOver has") }
         expect(StyleKeymap.keys(for: .narrator).isEmpty, true, "Narrator's table is still empty")
     }
+    test("JAWS keys: a reading key's arrow runs at once, before a key pressed straight after it") {
+        // Caps Lock O, then Caps Lock I before the main thread got to either: Down's command went to the back of the
+        // queue, and Caps Lock I read the line the caret had not left yet (the review of pull request 144, 28 Oct 2026).
+        let ran = Locked<[String]>([])
+        let down = GlobalCommands.shared.script("test_downArrow", "", gestures: []) { _ in ran.value.append("Down") }
+        let sayLine = GlobalCommands.shared.script("test_capsLockI", "", gestures: []) { _ in ran.value.append("Caps Lock I") }
+        let saved = config.keyboard.userGestures
+        defer { config.keyboard.userGestures = saved; down.isAvailable = { false }; sayLine.isAvailable = { false }; ScriptHandler.clearLastScript() }
+        config.keyboard.userGestures[normalizeGestureIdentifier("kb:downArrow")] = "script:test_downArrow"   // Down's command, wherever the focus is
+        guard let nextLine = ScriptHandler.findScript(named: "jaws_sayNextLine") else { return Harness.fail("no jaws_sayNextLine") }
+        ScriptHandler.queueScript(nextLine, gesture: KeyboardGesture(identifier: "kb:turnover+o")!)
+        ScriptHandler.queueScript(sayLine, gesture: KeyboardGesture(identifier: "kb:turnover+i")!)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        expect(ran.value, ["Down", "Caps Lock I"], "Down's command ran before Caps Lock I's")
+    }
+    test("JAWS keys: with speech on demand the reading keys speak, as the review keys on their letters did") {
+        // NVDA's review keys speak on demand ("review" is in their names); the six moves did not, so the line, word or
+        // character moved to went unsaid (the review of pull request 144, 28 Oct 2026).
+        let (mode, saved) = (Speech.mode, config.keyboard.userGestures)
+        defer { Speech.mode = mode; Speech.demandedUntil = .distantPast; config.keyboard.userGestures = saved; ScriptHandler.clearLastScript() }
+        // The arrows go to the application (none here): only the reading keys' own commands run.
+        for key in ["upArrow", "downArrow", "option+leftArrow", "option+rightArrow", "leftArrow", "rightArrow"] { config.keyboard.userGestures[normalizeGestureIdentifier("kb:" + key)] = "none" }
+        Speech.mode = .onDemand
+        for name in ["jaws_sayPriorLine", "jaws_sayNextLine", "jaws_sayPriorWord", "jaws_sayNextWord", "jaws_sayPriorCharacter", "jaws_sayNextCharacter"] {
+            guard let s = ScriptHandler.findScript(named: name) else { Harness.fail("no \(name)"); continue }
+            Speech.demandedUntil = .distantPast
+            ScriptHandler.executeScript(s, gesture: KeyboardGesture(identifier: "kb:turnover+o")!)
+            check(Speech.demandedUntil > Date(), "\(name) may speak on demand")
+        }
+    }
     test("Steam's Big Picture choice survives a save: written and read under the same name") {
         var g = Config.Games(); g.readBigPicture = true
         let data = try JSONEncoder().encode(g)

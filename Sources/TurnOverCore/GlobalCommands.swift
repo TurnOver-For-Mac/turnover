@@ -414,10 +414,12 @@ public final class GlobalCommands: ScriptableObject {
     /// sent on to the app. A "=" entry in a style's table runs the other key's command with the key pressed, and the
     /// caret commands send on and read by the key they are given (EditableText.caretMovement), so Caps Lock U would
     /// reach the app as itself. Posting the arrow as typed is no way round it either: with Caps Lock still held, the
-    /// tap counts the arrow as a TurnOver key (KeyboardHandler, capsDown).
+    /// tap counts the arrow as a TurnOver key (KeyboardHandler, capsDown). The command runs at once, as VO-Right runs the
+    /// caret's (VoiceOverKeys): queued, it went behind a key pressed straight after, and Caps Lock O then Caps Lock I read
+    /// the line the caret had not yet left (the review of pull request 144, 28 Oct 2026).
     static func pressInstead(_ key: String) {
         guard let g = KeyboardGesture(identifier: "kb:" + key) else { return }
-        if let s = ScriptHandler.findScript(for: g, styleTable: false) { ScriptHandler.queueScript(s, gesture: g) } else { g.send() }
+        if let s = ScriptHandler.findScript(for: g, styleTable: false) { s.handler(g) } else { g.send() }
     }
 
     static func changeRate(_ delta: Float) {
