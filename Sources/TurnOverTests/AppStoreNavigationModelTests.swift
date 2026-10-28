@@ -71,7 +71,8 @@ func appStoreNavigationModelTests() {
             provider.count = { element, attribute in
                 if attribute == nav, CFEqual(element, root) {
                     reads += 1
-                    state.withLock { $0.count = reads }
+                    let readCount = reads
+                    state.withLock { $0.count = readCount }
                     if reads == failAt { return .init(value: nil, status: .returned(.cannotComplete), elapsedNanoseconds: 0, wasAttempted: true) }
                 }
                 return element.attributeValueCountResult(attribute)
