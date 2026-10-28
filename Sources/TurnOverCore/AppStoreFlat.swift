@@ -5,6 +5,7 @@
 import Foundation
 import AppKit
 import ApplicationServices
+import TurnOverAX
 
 final class AppStoreFlatAdapter: FlatAdapter {
     let pid: pid_t
@@ -28,31 +29,36 @@ final class AppStoreFlatAdapter: FlatAdapter {
         return n.isEmpty ? nil : n
     }
 
-    /// What the raw calls say when a row answers blank (at most twice a second): a dead handle, no children, or an
-    /// error; the measurement the engine's design turns on (27 Oct 2026).
-    nonisolated(unsafe) private static var lastDiagnosis = Date.distantPast
+    /// Diagnose this reader process's missing row name without bypassing its AXHealth rest or copying all children.
+    /// Status and presence only: identifiers and title/description strings may contain private content (issue 166).
+    nonisolated(unsafe) private static var lastDiagnosis = Date.distantPast   // every read/write holds diagLock
     private static let diagLock = NSLock()
     nonisolated static func diagnose(_ e: AXUIElement) {
-        diagLock.lock(); let due = Date().timeIntervalSince(lastDiagnosis) > 0.5; if due { lastDiagnosis = Date() }; diagLock.unlock()
+        diagLock.lock(); let due = Date().timeIntervalSince(lastDiagnosis) > 2; if due { lastDiagnosis = Date() }; diagLock.unlock()
         guard due else { return }
-        func errName(_ r: AXError) -> String {
-            switch r { case .success: return "ok"; case .cannotComplete: return "cannotComplete"; case .noValue: return "noValue"; case .invalidUIElement: return "invalidElement"
-                       case .attributeUnsupported: return "unsupported"; default: return "err\(r.rawValue)" }
+        var budget = AXProbeBudget(maximumQueries: 5, durationNanoseconds: 100_000_000)
+        defer {
+            _ = budget.canContinue()
+            Log.io("flat view diagnosis: sampledQueries=\(budget.queries) stop=\(budget.stopped?.rawValue ?? "sampleFinished") providerTreeComplete=false")
         }
-        var v: AnyObject?
-        let rk = AXUIElementCopyAttributeValue(e, kAXChildrenAttribute as CFString, &v)
-        let kids = (v as? [AXUIElement]) ?? []
-        var vi: AnyObject?
-        let ri = AXUIElementCopyAttributeValue(e, kAXIdentifierAttribute as CFString, &vi)
-        var childPart = "no child"
-        if let c = kids.first {
-            var vt: AnyObject?
-            let rt = AXUIElementCopyAttributeValue(c, kAXTitleAttribute as CFString, &vt)
-            var vd: AnyObject?
-            let rd = AXUIElementCopyAttributeValue(c, kAXDescriptionAttribute as CFString, &vd)
-            childPart = "child \(c.role): title \(errName(rt)) \(((vt as? String) ?? "").isEmpty ? "empty" : "there"), description \(errName(rd)) \(((vd as? String) ?? "").isEmpty ? "empty" : "there")"
+        guard budget.beginQuery() else { return }
+        let count = e.attributeValueCountResult(kAXChildrenAttribute, policy: .respectBackoff)
+        Log.io("flat view diagnosis: healthScope=currentProcess clientPID=\(getpid()) childrenCount=\(count.value.map(String.init) ?? "unknown") \(AXDiagnosticReport.outcome(count))")
+        guard !AXDiagnosticReport.shouldStop(count.status), count.value.map({ $0 > 0 }) ?? true, budget.beginQuery() else { return }
+        let prefix = e.attributeValuesResult(kAXChildrenAttribute, index: 0, maxValues: 1, policy: .respectBackoff)
+        Log.io("flat view diagnosis: childrenPrefix(max=1) \(AXDiagnosticReport.outcome(prefix))")
+        guard !AXDiagnosticReport.shouldStop(prefix.status), let raw = prefix.value,
+              let child = AXDiagnosticReport.elements(in: raw, maximum: 1).values.first else { return }
+        guard budget.beginQuery() else { return }
+        let timeout = AXUIElementSetMessagingTimeout(child, 0.05)
+        Log.io("flat view diagnosis: sampledChild timeoutConfiguration=\(describeError(timeout)) requestedMs=50")
+        guard timeout == .success else { return }
+        for name in [kAXTitleAttribute, kAXDescriptionAttribute] {
+            guard budget.beginQuery() else { return }
+            let result = child.attributeResult(name, policy: .respectBackoff)
+            Log.io("flat view diagnosis: sampledChild \(name) \(AXDiagnosticReport.outcome(result)) presence=\(AXDiagnosticReport.stringPresence(result.value))")
+            if AXDiagnosticReport.shouldStop(result.status) { return }
         }
-        Log.io("flat view diagnosis: row blank: children \(errName(rk)) \(kids.count), identifier \(errName(ri)) \(((vi as? String) ?? "").isEmpty ? "empty" : "there"); \(childPart)")
     }
     /// The tile's title as the Store gives it (name, subtitle, stars) and its button.
     nonisolated func label(for e: AXUIElement, name: String) -> String {

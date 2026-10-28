@@ -33,6 +33,32 @@ write or a poll, and that close waits for unloading during either call. It also 
 that nothing calls an unloaded driver. No real display, permissions or private frameworks are needed. The test
 has a five-second deadline, removes its executable on exit, and runs from `build.sh` alongside the unit tests.
 
+## App Store structural diagnostics (issue 166)
+
+`turnover-probe appstore-ax` samples an already-running App Store without activating it, opening a page, performing
+an action, changing an accessibility flag or toggling VoiceOver. It emits structural roles, standard action names,
+counts, timings and typed query outcomes. It never emits titles, values, identifiers or custom action strings.
+There is no labels option. The probe's own log is identified at startup; do not substitute an unrestricted tree dump.
+
+Discovery, retained-reference reads and freshly reacquired references share 96 query/configuration admissions,
+12 inspected nodes, depth 4, eight elements per array prefix and a 1.5-second cooperative deadline. Each exact
+reference gets a 50 ms client messaging timeout; an equal but newly obtained reference needs its own timeout.
+The single 250 ms sample gap spends the same deadline. The first provider cannotComplete or client deferral stops
+further queries. Unsupported and noValue remain provider replies, not proof of an empty application tree.
+
+`--direct` explicitly bypasses only this probe process's AXHealth rest, still recording its actual outcome and
+spending the same limits. It is diagnostic only. The probe cannot observe the running reader's AXHealth state;
+`AppStoreFlatAdapter.diagnose` records typed, structural results in that process, respecting its rest. A shared
+CFEqual reference or an unchanged child-index path does not prove stable item identity in a recycled collection.
+The in-process sample runs at most once per two seconds, with five query/configuration admissions and a 100 ms
+cooperative allowance; it never performs a direct diagnostic bypass. Its sampled child gets its own client timeout.
+
+The deadline cannot preempt an individual accessibility API call, and Apple offers no paginated name-enumeration
+API. Name enumeration is one timed call; only its first 64 names are examined, with redacted output and its returned
+count recorded. Every summary states that the complete provider tree
+has not been established. Run a live probe under a separate process deadline as well; no install is required.
+`turnover-tests 'AX diagnostics' -v` checks shared budgets, deadlines and structural output with synthetic data.
+
 ## Recorded windows (fixtures)
 
 A fixture is a window's accessibility tree as JSON (Tests/Fixtures/*.json): every element's attributes, the

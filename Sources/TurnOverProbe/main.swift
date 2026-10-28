@@ -20,6 +20,9 @@ let gates: [String: (name: String, help: String, run: ([String]) -> Void)] = [
     "inspect":  ("inspect",
                  "Read-only look at an app's focused window and element: roles, attributes, text queries. --app Name | --bundle id | --pid N [--value]",
                  runInspectGate),
+    "appstore-ax": ("appstore-ax",
+                 "Bounded read-only App Store structural sample; no labels, UI actions or activation. Existing app only. [--direct] explicitly bypasses this probe's AXHealth rest.",
+                 runAppStoreAXGate),
     "text":     ("text",
                  "Gate 7: 200 simulated arrow presses on a 5 MB file in TextEdit, bounded reads only. Takes the front. --lines N --mb N --keep",
                  runTextGate),
@@ -65,7 +68,8 @@ guard let gateName = args.first, let gate = gates[gateName] else {
 }
 
 Log.open(gate: gate.name)
-Log.line("turnover-probe \(gate.name) \(args.dropFirst().joined(separator: " "))")
+// The structural App Store gate accepts no content arguments. Do not persist even rejected argument text.
+Log.line(gateName == "appstore-ax" ? "turnover-probe appstore-ax" : "turnover-probe \(gate.name) \(args.dropFirst().joined(separator: " "))")
 Log.line("macOS \(ProcessInfo.processInfo.operatingSystemVersionString), pid \(getpid()), VoiceOver running: \(voiceOverRunning())")
 gate.run(Array(args.dropFirst()))
 Log.close()
