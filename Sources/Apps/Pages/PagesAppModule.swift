@@ -58,16 +58,20 @@ final class PagesAppModule: AppModule {
     // MARK: Focus
 
     /// The focus hopping from one page's body text to another's (or back from the layout) just after a key is the
-    /// same text: the key's own reading stands ("Body, edit, blank" replaced the line after Command-Down, Up).
+    /// same text: the key's own reading stands ("Body, edit, blank" replaced the line after Command-Down, Up). The
+    /// focus it hopped from is the one whose loseFocus came just before: by now present() has made the new focus
+    /// TurnOver's, and taking API.focusObject for the old one made every arrival in Pages such a hop, so the first
+    /// focus after Command-Tab was never read (28 Oct 2026).
     override func ignoresFocus(_ event: Event) -> Bool {
         guard event.kind == .gainFocus, event.obj.element.role == "AXTextArea", event.obj.element.element(kAXParentAttribute)?.role == "AXPage",
-              let prev = API.focusObject, prev.pid == pid, Date().timeIntervalSince(InputManager.lastKeyDownAt) < 1.5 else { return false }
-        let prevIsBody = prev.element.role == "AXTextArea" && prev.element.element(kAXParentAttribute)?.role == "AXPage"
-        let quiet = prevIsBody || prev.element.role == "AXLayoutArea"
-        if quiet { quietFocus = (event.obj.element, Date()) }
-        return quiet
+              let left = leftFocus, Date().timeIntervalSince(left.at) < 1, Date().timeIntervalSince(InputManager.lastKeyDownAt) < 1.5 else { return false }
+        if left.textOrLayout { quietFocus = (event.obj.element, Date()) }
+        return left.textOrLayout
     }
     private var quietFocus: (element: AXUIElement, at: Date)?
+    /// The focus that last left in Pages, from its loseFocus: whether it was a page's body text (a gone copy too) or
+    /// the page layout.
+    private var leftFocus: (textOrLayout: Bool, at: Date)?
     /// Typing or the caret moving ends the reading of a table.
     private func endTableOnEdit(_ event: Event) { if table != nil, [.caret, .valueChange, .typedCharacter].contains(event.kind) { table = nil } }
     /// Not read: the hop ignoresFocus picked out (the focus object still follows it).
@@ -83,6 +87,7 @@ final class PagesAppModule: AppModule {
 
     override func handleEvent(_ event: Event, next: () -> Void) {
         endTableOnEdit(event)
+        if event.kind == .loseFocus { leftFocus = (event.obj is PagesBody || event.obj.axRole == "AXLayoutArea", Date()) }
         if event.kind == .caret, event.obj.pid == pid, table == nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in self?.notePage() } }
         if event.kind == .gainFocus, let q = quietFocus, Date().timeIntervalSince(q.at) < 1, q.element.isSame(event.obj.element) {
             quietFocus = nil
