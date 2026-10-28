@@ -547,9 +547,10 @@ final class LeadWatcher {
     private let startedAt = Date()
 
     /// `byLock`: the lock's own VoiceOver, noticed late; no pin and no choice of the user's.
-    func voiceOverChanged(on: Bool, byLock: Bool = false) {
+    /// `byInputRecovery`: one matching notification owned by the permission fallback, not a manual reader pin.
+    func voiceOverChanged(on: Bool, byLock: Bool = false, byInputRecovery: Bool = false) {
         if !on { lockTurnedVoiceOverOn = false }   // whatever turned it on, it is off: nothing pending
-        guard !byLock, !locked else { return }
+        guard !byLock, !byInputRecovery, !locked else { return }
         guard Date().timeIntervalSince(startedAt) > 3 else { return }
         if let t = Watchdog.shared.lastTrip, Date().timeIntervalSince(t) < 30 { return }
         guard Date() > ourChangeUntil, config.applications.switchesAsAppsChange else { return }
