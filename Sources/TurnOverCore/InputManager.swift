@@ -93,6 +93,7 @@ public enum InputManager {
 
     public static func handleKeyDown(_ gesture: KeyboardGesture) -> Bool {
         Hints.cancel()
+        ObjectNavigator.shared.cancelWindowSearch()
         lastKeyDownAt = Date()
         // The keyboard commands editor is waiting for a key: this one is it (Escape cancels). Nothing else runs.
         if let capture = captureNext, !gesture.isRepeat {

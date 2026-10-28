@@ -146,6 +146,7 @@ public enum Core {
 
     /// The reader is quiet (VoiceOver has the keyboard).
     public static func deactivate() {
+        ObjectNavigator.shared.cancelWindowSearch()
         guard active else { return }
         active = false
         InputManager.isInputHelpActive = false
