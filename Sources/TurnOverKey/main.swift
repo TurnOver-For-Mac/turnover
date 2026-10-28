@@ -92,17 +92,20 @@ final class Key {
             return noErr
         }, 1, &type, Unmanaged.passUnretained(self).toOpaque(), &handler)
         registerHotKey(tries: 15)
-        // Whether TurnOver is running, looked at every second. (macOS's "application terminated" notice is not sent for
-        // a menu-bar app like TurnOver: the first crash test went unnoticed, 4 Oct 2026.)
-        wasRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: readerID).isEmpty
+        // Which TurnOver is running, by process, looked at every second. (macOS's "application terminated" notice is not
+        // sent for a menu-bar app like TurnOver: the first crash test went unnoticed, 4 Oct 2026.) By process, not only
+        // whether one runs: Command Control Period pressed again just after a quit started the next TurnOver within the
+        // second, so the end went unseen, `quitting` stayed set, and the key did nothing until the helper was restarted
+        // (28 Oct 2026).
+        seen = readerPIDs
         listenForQuits()   // a quit TurnOver announces is on purpose: no restart (16 Oct 2026)
         Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in MainActor.assumeIsolated {
             guard let self else { return }
-            let now = !NSRunningApplication.runningApplications(withBundleIdentifier: readerID).isEmpty
-            if self.wasRunning && !now { self.readerEnded() }
-            self.wasRunning = now
+            let now = self.readerPIDs
+            if !self.seen.subtracting(now).isEmpty { self.readerEnded() }
+            self.seen = now
         } }
-        note("started; TurnOver \(wasRunning ? "running" : "not running")")
+        note("started; TurnOver \(seen.isEmpty ? "not running" : "running")")
     }
 
     /// Command+Control+Period. A helper starting while another still holds the key (a restart, two started at
@@ -124,7 +127,9 @@ final class Key {
     // minute, do not loop: say how to turn VoiceOver on. (The helper has no permissions, so it cannot press
     // VoiceOver's key itself.)
     private var quitting = false
-    private var wasRunning = false
+    /// TurnOver's processes at the last look.
+    private var seen: Set<pid_t> = []
+    private var readerPIDs: Set<pid_t> { Set(NSRunningApplication.runningApplications(withBundleIdentifier: readerID).map(\.processIdentifier)) }
 
     /// A line in the helper's own log, ~/Library/Logs/TurnOver Key.log. (Not TurnOver's folder: writing into another
     /// app's data asks macOS's privacy permission, and stalled the helper, 4 Oct 2026.)
