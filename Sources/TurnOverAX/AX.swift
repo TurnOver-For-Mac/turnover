@@ -24,17 +24,25 @@ public func timed<T>(_ body: () -> T) -> Timed<T> {
 /// to it fail at once instead of waiting. Then it is asked again.
 public enum AXHealth {
     private static let lock = NSLock()
-    nonisolated(unsafe) private static var quietUntil: [pid_t: UInt64] = [:]   // under `lock`
+    private struct Rest { let until: UInt64; let reason: AXBackoff.Reason }
+    // Swift cannot express static NSLock ownership. Every access, including setup, expiry and cleanup, holds lock.
+    nonisolated(unsafe) private static var quietUntil: [pid_t: Rest] = [:]
     /// Called (on whatever thread asked) when an application is found not answering; once per stall.
     nonisolated(unsafe) public static var onUnresponsive: (@Sendable (pid_t) -> Void)?   // set once at start
     static let restNs: UInt64 = 3_000_000_000
 
     static func isResting(_ pid: pid_t) -> Bool {
+        backoff(for: pid) != nil
+    }
+
+    /// This process's current client backoff. A successful standalone probe says nothing about reader-process state.
+    public static func backoff(for pid: pid_t) -> AXBackoff? {
         lock.lock(); defer { lock.unlock() }
-        guard let until = quietUntil[pid] else { return false }
-        if DispatchTime.now().uptimeNanoseconds < until { return true }
+        guard let rest = quietUntil[pid] else { return nil }
+        let now = DispatchTime.now().uptimeNanoseconds
+        if now < rest.until { return AXBackoff(reason: rest.reason, remainingNanoseconds: rest.until - now) }
         quietUntil[pid] = nil
-        return false
+        return nil
     }
 
     /// A question to `pid` came back `error` after `ns`: a cannot-complete that took most of a second is a timeout.
@@ -42,23 +50,41 @@ public enum AXHealth {
         guard error == .cannotComplete, ns > 900_000_000, pid > 0 else { return }
         lock.lock()
         let fresh = quietUntil[pid] == nil
-        quietUntil[pid] = DispatchTime.now().uptimeNanoseconds + restNs
+        quietUntil[pid] = Rest(until: DispatchTime.now().uptimeNanoseconds + restNs, reason: .timeout)
         lock.unlock()
         if fresh { onUnresponsive?(pid) }
     }
 
     /// Ask, unless the application is resting; note a timeout, or a slow drip.
     @inline(__always) static func ask(_ element: AXUIElement, _ body: () -> AXError) -> AXError {
+        query(element, policy: .respectBackoff, body).legacyError
+    }
+
+    static func query(_ element: AXUIElement, policy: AXQueryPolicy, _ body: () -> AXError) -> AXQueryExecution {
         var p: pid_t = 0
         AXUIElementGetPid(element, &p)
-        if isResting(p) { return .cannotComplete }
-        let t0 = DispatchTime.now().uptimeNanoseconds
+        return query(pid: p, policy: policy, body)
+    }
+
+    /// The clock/provider seam is package-only: tests exercise the same admission/accounting without sleeping
+    /// or delaying a real app. Calls and callbacks still run outside the health lock (28 Oct 2026, #166).
+    package static func query(pid p: pid_t, policy: AXQueryPolicy = .respectBackoff,
+                              clock: () -> UInt64 = { DispatchTime.now().uptimeNanoseconds },
+                              _ body: () -> AXError) -> AXQueryExecution {
+        if policy == .respectBackoff, let rest = backoff(for: p) {
+            return AXQueryExecution(status: .deferred(rest), elapsedNanoseconds: 0, wasAttempted: false)
+        }
+        let t0 = clock()
         let e = body()
-        let took = DispatchTime.now().uptimeNanoseconds &- t0
+        let took = clock() &- t0
         AXStats.note(took)
         if e == .cannotComplete { note(e, pid: p, ns: took) }
         if took > dripCallNs { noteDrip(pid: p, ns: took) }
-        return e
+        return AXQueryExecution(status: .returned(e), elapsedNanoseconds: took, wasAttempted: true)
+    }
+
+    package static func forget(pid: pid_t) {
+        lock.lock(); quietUntil[pid] = nil; drip[pid] = nil; lock.unlock()
     }
 
     // MARK: The slow drip
@@ -99,8 +125,13 @@ public enum AXHealth {
         drip[pid] = step.state
         var tripped = false
         if step.rest {
-            tripped = quietUntil[pid] == nil
-            quietUntil[pid] = now + dripRestNs
+            let current = quietUntil[pid].flatMap { $0.until > now ? $0 : nil }
+            tripped = current == nil
+            let candidate = Rest(until: now + dripRestNs, reason: .slowResponses)
+            // The same timed-out call can trip the drip counter. Do not shorten its longer timeout rest or
+            // misreport that provider failure as mere slow responses (diagnostic review, 28 Oct 2026, #166).
+            if let current, current.until >= candidate.until { quietUntil[pid] = current }
+            else { quietUntil[pid] = candidate }
         }
         lock.unlock()
         if tripped { onSlowRest?(pid) }
