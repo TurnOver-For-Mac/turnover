@@ -8,6 +8,8 @@ Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
 
 ### Changed
 
+- Braille: panning to another line moves the caret there, so the arrows carry on from the line read. The Braille section of Settings offers Line by line (the default), To the text shown, or Off. Tethered to review, panning moves only the review cursor.
+
 - A window with nothing TurnOver can read (a custom-drawn or OpenGL window: Parallels' installation assistant, Bambu
   Studio's plate) says so a moment after it comes to the front, and names the key for screen recognition in the
   keyboard style in use: VO-Shift-L with VoiceOver keys, the TurnOver key with R with NVDA or JAWS keys. It said

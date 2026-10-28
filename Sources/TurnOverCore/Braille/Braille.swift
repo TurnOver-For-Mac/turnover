@@ -335,11 +335,17 @@ public enum Braille {
         // Tethered to review: the review cursor's line (NVDA's "tether to review"); else the caret's.
         let reviewed = config.braille.tether == "review" ? TextReview.current() : nil
         if let caret = reviewed ?? API.caretObject.flatMap({ hasText($0) ? try? $0.makeTextInfo(.caret) : nil }) {
-            let line = caret.copy(); line.expand(.line)
+            // Panned on with "Panning moves the cursor" off: the line reached, until the caret moves.
+            var shown = caret
+            if reviewed == nil, let h = heldLine {
+                if h.caret == caret.start, h.info.obj.isSameElement(as: caret.obj) { shown = h.info.copy() } else { heldLine = nil }
+            }
+            let line = shown.copy(); line.expand(.line)
             source = .text(line, lineStart: line.start)
             text = displayed(line.text)
-            cursor = caret.start - line.start
-            selection = caret.selectionOffsets().map { ($0.0 - line.start, $0.1 - line.start) }
+            let caretHere = caret.start >= line.start && caret.start <= line.end
+            cursor = caretHere ? caret.start - line.start : nil
+            selection = caretHere ? caret.selectionOffsets().map { ($0.0 - line.start, $0.1 - line.start) } : nil
             layout()
             // The window follows the caret only when the caret moves (or typing grows the word): panning leaves the
             // caret behind on purpose, and an unrelated refresh must not pull the window back to it.
@@ -579,7 +585,7 @@ public enum Braille {
     private static func pan(forward: Bool) {
         if config.braille.interruptSpeechWhileScrolling { Speech.cancel() }
         if let next = forward ? windows.first(where: { $0 > windowStart }) : windows.last(where: { $0 < windowStart }) {
-            windowStart = next; show(); return
+            windowStart = next; show(); caretToWindow(); return
         }
         // Off the end of the line: on to the next or previous line (NVDA's scrollForward and scrollBack). On an item,
         // panning stays on it (up and down move between items).
@@ -600,14 +606,42 @@ public enum Braille {
         let r = info.copy()
         r.collapse()
         guard r.move(.line, direction) != 0 else { Tones.edge(); return }
-        r.updateCaret()
+        // The caret follows the display (Panning moves the cursor), so the arrows carry on from the line read on the
+        // display, not from where reading began (VoiceOver left the caret behind: a tester, 21 Oct 2026).
+        switch panFollow(setting: config.braille.panMovesCaret, tether: config.braille.tether) {
+        case .review: TextReview.set(r)
+        case .caret: r.updateCaret(); heldLine = nil
+        case .hold: if let c = API.caretObject.flatMap({ try? $0.makeTextInfo(.caret) })?.start { heldLine = (r.copy(), c) }
+        }
         // The line is spoken as well as shown, as VoiceOver does (the display moved on silently, 6 Oct 2026).
         SayAll.stop()
         Speech.cancel()
         let spoken = r.copy(); spoken.expand(.line)
         Speech.speakTextInfo(spoken, unit: .line, reason: .caret)
         refresh()
-        if toEnd { windowStart = windows.last ?? 0; show() }
+        if toEnd { windowStart = windows.last ?? 0; show(); caretToWindow() }
+    }
+
+    /// The line reached by panning with "Panning moves the cursor" off, and the caret then: shown until the caret moves.
+    private static var heldLine: (info: TextInfo, caret: Int)?
+
+    /// What panning on to another line moves. Tethered to review, the review cursor only, as NVDA's braille does, and
+    /// the caret stays where it is; otherwise the caret, unless "Panning moves the cursor" is off, when the display
+    /// holds the line reached until the caret moves.
+    public enum PanFollow: Equatable { case review, caret, hold }
+    public static func panFollow(setting: String, tether: String) -> PanFollow {
+        if tether == "review" { return .review }
+        return setting == "off" ? .hold : .caret
+    }
+
+    /// "Panning moves the cursor" set to the text shown: the caret goes to the start of each display's width of the
+    /// line as it is panned to, so the arrows and typing carry on from exactly what was read.
+    private static func caretToWindow() {
+        guard config.braille.panMovesCaret == "window", case .text(let info, let lineStart) = source,
+              windowStart < cellMap.count else { return }
+        let r = info.copy()
+        r.start = lineStart + cellMap[windowStart]; r.end = r.start
+        if panFollow(setting: config.braille.panMovesCaret, tether: config.braille.tether) == .review { TextReview.set(r) } else { r.updateCaret() }
     }
 
     private static func onActionable(_ e: AXUIElement?) -> Bool {
