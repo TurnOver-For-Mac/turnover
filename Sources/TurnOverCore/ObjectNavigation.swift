@@ -300,9 +300,18 @@ public final class ObjectNavigator {
 
     // MARK: Moving
 
-    /// The window that bounds review: the navigator's own.
+    /// The window that bounds review: the navigator's own. An item that does not name its window is in the one its
+    /// parents lead to: in System Settings' panes on macOS 27, 40 of a window's 169 elements give no AXWindow, the focused
+    /// button among them, and review said "nothing to review" at every step (29 Oct 2026).
     private func window(of e: AXUIElement) -> AXUIElement? {
-        e.role == "AXWindow" ? e : e.element(kAXWindowAttribute)
+        if e.role == "AXWindow" { return e }
+        if let w = e.element(kAXWindowAttribute) { return w }
+        var p = e.element(kAXParentAttribute); var hops = 0
+        while let x = p, hops < 60 {
+            if x.role == "AXWindow" { return x }
+            p = x.element(kAXParentAttribute); hops += 1
+        }
+        return nil
     }
 
     /// The next element in reading order (depth first) inside `root`, after `e`.
