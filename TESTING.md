@@ -112,3 +112,15 @@ masked). The format is at the top of scenario.py. They refuse to run while the u
 
 `scenarios/run-all.sh mac` runs every scenario (the smoke pass before a build goes out; `windows` is the parked
 style); `tools/privacy-check.sh <feedback.zip> <words>` looks for private words in a feedback report.
+
+## Accessibility query outcomes
+
+`AXQueryResultTests` checks actual wrapper reads through the replay shim, bounded array slices, enumeration and
+embedded batch errors. Synthetic elapsed times exercise the production health admission without delaying an app:
+returned AX errors, timeout versus slow-response backoff, skipped provider calls, explicit diagnostic bypass and
+legacy optional/error compatibility. A CFNull batch slot has no known AX error; a missing slot is a client decoding
+failure. Neither is reported as an invented provider noValue. No live app is read by these tests.
+
+Typed results time and classify a single query; they do not impose a walk deadline or interrupt an in-flight call.
+Diagnostic callers must provide their own work limits. Health state belongs to the calling process: a fresh probe
+cannot establish whether the separately running reader deferred a read. App Store probe work is tracked in #166.
