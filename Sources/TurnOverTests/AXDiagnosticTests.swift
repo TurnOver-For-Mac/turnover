@@ -48,6 +48,7 @@ func axDiagnosticTests() {
         let backoff = AXQueryStatus.deferred(AXBackoff(reason: .timeout, remainingNanoseconds: 123))
         check(AXDiagnosticReport.shouldStop(backoff), "client rest stops follow-up queries")
         check(AXDiagnosticReport.shouldStop(.returned(.cannotComplete)), "provider cannotComplete stops follow-up queries")
+        check(AXDiagnosticReport.shouldStop(.returned(.apiDisabled)), "actual accessibility denial stops follow-up queries")
         for status in [AXQueryStatus.returned(.noValue), .returned(.attributeUnsupported), .batchNull, .invalidResponse] {
             check(!AXDiagnosticReport.shouldStop(status), "absence or a decoding error is not invented provider failure")
         }
@@ -59,6 +60,10 @@ func axDiagnosticTests() {
         clientStop.stop(.clientStopped)
         check(!clientStop.beginQuery(now: 0), "other client stops do not authorize another query")
         expect(clientStop.stopped, .clientStopped, "a client work stop is not reported as health backoff")
+        var denied = AXProbeBudget(startedNanoseconds: 0)
+        denied.stop(.accessibilityDenied)
+        check(!denied.beginQuery(now: 0), "a denied client does not keep querying the provider")
+        expect(denied.stopped, .accessibilityDenied, "actual denial has a distinct stop reason")
     }
     test("AX diagnostics: outcome reports never serialize a provider value") {
         let secret = "synthetic-private-account@example.invalid"

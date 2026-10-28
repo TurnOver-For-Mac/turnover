@@ -4,7 +4,7 @@ import Foundation
 /// One budget shared by discovery, retained-reference reads and fresh-reference reads. Limits count admitted
 /// queries, including client-deferred queries; a partial pass never receives a fresh allowance (issue 166).
 public struct AXProbeBudget: Sendable {
-    public enum Stop: String, Sendable { case queryLimit, nodeLimit, deadline, timeoutConfiguration, providerCannotComplete, clientBackoff, clientStopped }
+    public enum Stop: String, Sendable { case queryLimit, nodeLimit, deadline, timeoutConfiguration, providerCannotComplete, accessibilityDenied, clientBackoff, clientStopped }
     public let maximumQueries: Int
     public let maximumNodes: Int
     public let maximumDepth: Int

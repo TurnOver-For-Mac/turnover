@@ -24,6 +24,7 @@ func runAppStoreAXGate(_ args: [String]) {
     }
     let frontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier
     let voiceOverPresent = !NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.VoiceOver").isEmpty
+    Log.line("probeAccessibilityTrusted=\(AXIsProcessTrusted()) permissionPromptRequested=false")
     Log.line("targetBundle=com.apple.AppStore version=\(version("CFBundleShortVersionString")) build=\(version("CFBundleVersion")) targetIsFrontmost=\(frontmost)")
     Log.line("VoiceOverProcessPresent=\(voiceOverPresent) readerActive=unobserved muteLease=unobserved")
     probe.run()
@@ -69,7 +70,9 @@ private final class AppStoreAXSample {
         let result = body()
         Log.line("\(reference(element)) \(name) \(AXDiagnosticReport.outcome(result)) hasValue=\(result.value != nil)")
         switch result.status {
-        case .returned(let error): if error == .cannotComplete { budget.stop(.providerCannotComplete) }
+        case .returned(let error):
+            if error == .cannotComplete { budget.stop(.providerCannotComplete) }
+            else if error == .apiDisabled { budget.stop(.accessibilityDenied) }
         case .deferred: budget.stop(.clientBackoff)
         case .batchNull: break
         case .invalidResponse: malformed = true
