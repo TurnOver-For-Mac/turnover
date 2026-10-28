@@ -124,6 +124,17 @@ public final class SpeechPlayer: @unchecked Sendable {
     /// the voice's identifier; the owner picks a voice that works.
     public var onVoiceSilent: ((String) -> Void)?
     private var silentRuns = 0
+    /// Called on the speech queue until the owner claims or invalidates this failure. The owner checks its current
+    /// player, reader choice and wake grace on main before handing back. This does not measure physical audibility.
+    private var _onOutputUnavailable: (@Sendable (SpeechPlayer, SpeechOutputFailure) -> Void)?
+    public var onOutputUnavailable: (@Sendable (SpeechPlayer, SpeechOutputFailure) -> Void)? {
+        get { settingsLock.lock(); defer { settingsLock.unlock() }; return _onOutputUnavailable }
+        set { settingsLock.lock(); _onOutputUnavailable = newValue; settingsLock.unlock() }
+    }
+    private let outputHealth = SpeechOutputHealth()
+
+    /// Off and beeps are deliberate silence. Invalidated immediately, so a delivery already queued on main is stale.
+    public func monitorRequiredOutput(_ required: Bool) { outputHealth.setEnabled(required) }
 
     /// Hardware buffer size in frames, as requested; see `outputLatencySeconds`.
     public let bufferFrames: UInt32
@@ -162,6 +173,7 @@ public final class SpeechPlayer: @unchecked Sendable {
             self.queue.async { self.ensureRunning(reason: "the output changed"); self.freshSynth(because: "the audio configuration changed") }
         }
         watchQueue()
+        watchOutput()
         synth.delegate = finishWatch
         finishWatch.finished = { [weak self] u in
             guard let self else { return }
@@ -429,6 +441,7 @@ public final class SpeechPlayer: @unchecked Sendable {
                       pitch: Float? = nil,
                       onStart: (@Sendable () -> Void)? = nil,
                       completion: (@Sendable (_ finished: Bool) -> Void)? = nil) {
+        if interrupt { outputHealth.cancel() }
         queue.async { [self] in
             if interrupt { cancelOnQueue() }
             // One utterance renders at a time, in order: a second write while the first was rendering played their
@@ -460,6 +473,9 @@ public final class SpeechPlayer: @unchecked Sendable {
 
     private func render(_ text: String, requestedAt: UInt64, voice: String?, rate rateOverride: Float? = nil, pitch: Float? = nil, onStart: (@Sendable () -> Void)?, completion: (@Sendable (Bool) -> Void)?) {
         do {
+            let state = UtteranceState(completion: completion)
+            state.hasWords = text.contains { $0.isLetter || $0.isNumber }
+            state.outputIncident = outputHealth.request(hasWords: state.hasWords, now: Self.outputClock)
             ensureRunning(reason: "before a render")   // an utterance with no cancel before it waited on a stopped engine (the code review, 17 Oct 2026)
             rendering = true
             // Only a cancel moves the generation on. Moving it for every utterance dropped the buffers of one still
@@ -468,14 +484,11 @@ public final class SpeechPlayer: @unchecked Sendable {
             var made = SpeechTiming(requestedAt: requestedAt, firstBufferAt: nil, text: text)
             made.voice = voice ?? voiceIdentifier
             let timing = TimingBox(made)   // the speech queue's
-            let state = UtteranceState(completion: completion)
             state.startedAt = Date()
             pending.append(state); noteBusy()
-            heartbeat(state)
             let utterance = AVSpeechUtterance(string: text)
             utterance.voice = voice.flatMap(AVSpeechSynthesisVoice.init(identifier:)) ?? AVSpeechSynthesisVoice(identifier: voiceIdentifier) ?? AVSpeechSynthesisVoice(language: nil) ?? AVSpeechSynthesisVoice(language: "en-GB")   // (language nil: the system language's voice; a Spanish tester heard English: code review, 16 Oct 2026)
             state.voice = utterance.voice?.identifier ?? ""
-            state.hasWords = text.contains { $0.isLetter || $0.isNumber }
             // A voice that never answers would hold every utterance behind it: after 3 s with nothing, it is done.
             queue.asyncAfter(deadline: .now() + 3) { [weak self] in
                 guard let self, state.buffers == 0, !state.renderFinished else { return }
@@ -542,8 +555,9 @@ public final class SpeechPlayer: @unchecked Sendable {
                         }
                         return
                     }
-                    guard let out = self.convert(pcm) else { return }
+                    guard let out = self.convert(pcm), out.frameLength > 0 else { return }
                     self.applyVolume(out)
+                    self.outputHealth.scheduledFrames(for: state.outputIncident, sampleTime: self.outputSampleTime())
                     if timing.value.firstBufferAt == nil {
                         timing.value.firstBufferAt = mach_absolute_time()
                         self.onFirstAudio?(timing.value)
@@ -558,6 +572,7 @@ public final class SpeechPlayer: @unchecked Sendable {
                             self.noteStart(state, length: length)
                             onStart()
                             self.queue.async {
+                                self.outputHealth.playbackProgress(for: state.outputIncident)
                                 state.played += 1
                                 self.finishIfDone(state)
                             }
@@ -565,6 +580,7 @@ public final class SpeechPlayer: @unchecked Sendable {
                     } else {
                         self.player.scheduleBuffer(out, completionCallbackType: .dataPlayedBack) { _ in
                             self.queue.async {
+                                self.outputHealth.playbackProgress(for: state.outputIncident)
                                 state.played += 1
                                 self.finishIfDone(state)
                             }
@@ -582,8 +598,9 @@ public final class SpeechPlayer: @unchecked Sendable {
         queue.async {
             guard gen == self.generation, !state.renderFinished || state.buffers > 0 else { return }
             state.buffers += 1
-            guard pcm.frameLength > 0, let out = self.convert(pcm) else { return }
+            guard pcm.frameLength > 0, let out = self.convert(pcm), out.frameLength > 0 else { return }
             self.applyVolume(out)
+            self.outputHealth.scheduledFrames(for: state.outputIncident, sampleTime: self.outputSampleTime())
             if timing.value.firstBufferAt == nil {
                 timing.value.firstBufferAt = mach_absolute_time()
                 self.onFirstAudio?(timing.value)
@@ -596,6 +613,7 @@ public final class SpeechPlayer: @unchecked Sendable {
             self.player.scheduleBuffer(out, completionCallbackType: first ? .dataRendered : .dataPlayedBack) { _ in
                 if first { self.noteStart(state, length: length); onStart?() }
                 self.queue.async {
+                    self.outputHealth.playbackProgress(for: state.outputIncident)
                     state.played += 1
                     self.finishIfDone(state)
                 }
@@ -647,6 +665,7 @@ public final class SpeechPlayer: @unchecked Sendable {
         var done = false
         var voice = ""
         var hasWords = false
+        var outputIncident: SpeechOutputIncident?
         /// For where the reading has got to (say all stopping on a word): the frames scheduled, and the player's
         /// sample time as the first of them started.
         var frames: AVAudioFramePosition = 0
@@ -667,14 +686,23 @@ public final class SpeechPlayer: @unchecked Sendable {
     public var isPaused: Bool { busyLock.lock(); defer { busyLock.unlock() }; return paused }
     private var paused = false
     public func pause() {
-        queue.async { [self] in player.pause(); busyLock.lock(); paused = true; busyLock.unlock() }
+        outputHealth.setPaused(true)
+        queue.async { [self] in outputHealth.setPaused(true); player.pause(); busyLock.lock(); paused = true; busyLock.unlock() }
     }
     public func resume() {
-        queue.async { [self] in ensureRunning(reason: "resuming"); play(player); busyLock.lock(); paused = false; busyLock.unlock() }
+        queue.async { [self] in
+            outputHealth.setPaused(false)
+            for state in pending where !state.done {
+                state.outputIncident = outputHealth.request(hasWords: state.hasWords, now: Self.outputClock)
+                if state.frames > 0 { outputHealth.scheduledFrames(for: state.outputIncident, sampleTime: outputSampleTime()) }
+            }
+            ensureRunning(reason: "resuming"); play(player); busyLock.lock(); paused = false; busyLock.unlock()
+        }
     }
 
     /// Stop now. Sub-buffer: the player node drops what it holds.
     public func cancel() {
+        outputHealth.cancel()
         queue.async { [self] in cancelOnQueue() }
     }
 
@@ -704,6 +732,7 @@ public final class SpeechPlayer: @unchecked Sendable {
         let p = try SpeechPlayer(voice: voiceIdentifier, rate: rate, bufferFrames: bufferFrames)
         p.volume = volume; p.pitch = pitch; p.fallbackVoiceIdentifier = fallbackVoiceIdentifier
         p.onFirstAudio = onFirstAudio; p.onVoiceSilent = onVoiceSilent; p.onOutputChange = onOutputChange
+        p.onOutputUnavailable = onOutputUnavailable
         p.onQueueStuck = onQueueStuck; p.externalRenderer = externalRenderer
         if let uid = chosenUID { p.outputDeviceUID = uid }
         return p
@@ -784,24 +813,31 @@ public final class SpeechPlayer: @unchecked Sendable {
     }
 
     private var lastAlertAt = Date.distantPast
-    /// Four seconds after a request with words, no buffer and no cancel: said once a minute with the system's own
-    /// voice, which needs no engine, and logged with the engine's state (a code review on 17 Oct 2026: silence must
-    /// be told, not just suffered).
-    private var lastSilenceTold = Date.distantPast
-    private func heartbeat(_ state: UtteranceState) {
-        guard state.hasWords else { return }
-        queue.asyncAfter(deadline: .now() + 4) { [weak self] in
-            guard let self, !state.renderFinished, state.scheduled == 0, self.current?.state === state else { return }
-            let line = "speech: no audio 4 s after a request (engine running \(self.engine.isRunning), paused \(self.paused), voice \(state.voice))"
-            self.onOutputChange?(line)
-            guard Date().timeIntervalSince(self.lastSilenceTold) > 60 else { return }
-            self.lastSilenceTold = Date()
-            let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/say"); p.arguments = ["TurnOver's voice is not sounding. Press Command Control Period twice to restart it."]
-            try? p.run()
+    private static var outputClock: TimeInterval { Double(DispatchTime.now().uptimeNanoseconds) / 1_000_000_000 }
+
+    private func outputSampleTime() -> Int64? {
+        guard engine.isRunning, player.isPlaying, let time = player.lastRenderTime else { return nil }
+        return player.playerTime(forNodeTime: time)?.sampleTime
+    }
+
+    /// Kept independent of the renderer's shorter finish/timeout paths: an empty completed utterance must still
+    /// reach the four-second deadline. A stuck queue is handled separately by watchQueue.
+    private func watchOutput() {
+        queue.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+            guard let self else { return }
+            if self.outputHealth.isWaiting {
+                let queued = self.pending.contains { !$0.done && $0.scheduled > $0.played }
+                if let failure = self.outputHealth.poll(now: Self.outputClock, sampleTime: self.outputSampleTime(), hasQueuedAudio: queued) {
+                    self.onOutputUnavailable?(self, failure)
+                }
+            }
+            self.watchOutput()
         }
     }
 
     private func cancelOnQueue() {
+        outputHealth.cancel()
+        outputHealth.setPaused(false)
         ensureRunning(reason: "before a cancel")
         let t0 = DispatchTime.now().uptimeNanoseconds
         defer { lastCancelMs = Double(DispatchTime.now().uptimeNanoseconds - t0) / 1_000_000 }

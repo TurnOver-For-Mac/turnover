@@ -39,7 +39,7 @@ final class Watchdog: @unchecked Sendable {   // its state is under `lock`
     nonisolated(unsafe) private var graceUntil = Date.distantPast
     nonisolated func noteAsleepOrLocked() { lock.lock(); graceUntil = .distantFuture; lock.unlock() }
     nonisolated func noteAwake() { lock.lock(); graceUntil = Date().addingTimeInterval(30); lock.unlock() }
-    nonisolated private var inGrace: Bool { lock.lock(); defer { lock.unlock() }; return Date() < graceUntil }
+    nonisolated var inGrace: Bool { lock.lock(); defer { lock.unlock() }; return Date() < graceUntil }
 
     nonisolated var active: Bool {
         get { lock.lock(); defer { lock.unlock() }; return _active }

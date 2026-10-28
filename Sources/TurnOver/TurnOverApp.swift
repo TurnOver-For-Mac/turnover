@@ -12,6 +12,7 @@ import IOKit.hid
 import Carbon
 import TurnOverCore
 import TurnOverControl
+import TurnOverSpeech
 
 final class TurnOverApp {
     private let keyboard = KeyboardHandler()
@@ -141,6 +142,10 @@ final class TurnOverApp {
         lead.onCoexistLead = { [weak self] turnOver in if turnOver { self?.activate() } else { self?.deactivate() } }
         MenuAnywhere.shared.turnOverActive = { [weak self] in self?.active ?? false }
         Speech.player?.onQueueStuck = { stall in Watchdog.shared.speechStuck(stall) }
+        Speech.player?.onOutputUnavailable = { [weak self] source, failure in
+            let choice = HandOver.choice.value
+            onMain { [weak self] in self?.speechOutputUnavailable(failure, from: source, readerChoice: choice) }
+        }
         QuickNavWatch.shared.turnOverActive = { [weak self] in self?.active ?? false }
         QuickNavWatch.shared.start()
         ArrowQuickNav.startInStep()
@@ -400,6 +405,27 @@ final class TurnOverApp {
             WindowsKeyLayer.shared.start()
         } else {
             WindowsKeyLayer.shared.stop()
+        }
+    }
+
+    private func speechOutputUnavailable(_ failure: SpeechOutputFailure, from source: SpeechPlayer, readerChoice: Int) {
+        // A delivery can wait on main while a key cancels speech, the user picks a reader, or a replacement player
+        // starts. Wake grace leaves the incident pending: the responsive speech queue offers it again afterwards.
+        let state: SpeechOutputRecovery.ReaderState
+        if !active || lead.suspended { state = .inactive }
+        else if source.isPaused || (Speech.mode != .talk && Speech.mode != .onDemand) { state = .intentionallyQuiet }
+        else if lead.locked || Watchdog.shared.inGrace { state = .waking }
+        else { state = .required }
+        SpeechOutputRecovery.receive(failure, isCurrent: Speech.player === source && HandOver.choice.value == readerChoice, state: state) {
+            Log.error("speech: required output made no \(failure.stage == .rendering ? "rendered frames" : "playback progress") within 4 s; handing back to VoiceOver")
+            lead.suspended = true   // no automatic take-back into the failed output path; TurnOver's key retries it
+            KeyboardHandler.bypass = true
+            // Release first: deactivation closes the braille driver, which may wait on hardware. A speech failure
+            // must not keep VoiceOver muted or postpone starting it while that unrelated close finishes.
+            if Coexist.on { VoiceOverTap.set(false, why: "TurnOver speech output failed") }
+            HandOver.bringVoiceOverBack("speech output failed")
+            Watchdog.sayOutside("TurnOver's speech output stopped. Handing back to VoiceOver. Press Command Control Period to try TurnOver again.")
+            deactivate()
         }
     }
 
