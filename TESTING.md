@@ -112,3 +112,16 @@ masked). The format is at the top of scenario.py. They refuse to run while the u
 
 `scenarios/run-all.sh mac` runs every scenario (the smoke pass before a build goes out; `windows` is the parked
 style); `tools/privacy-check.sh <feedback.zip> <words>` looks for private words in a feedback report.
+
+## Keyboard readiness and activation
+
+`KeyboardSessionTests` exercises the production lifecycle and main-actor admission without opening real taps or
+changing either reader. It covers denied setup, cancellation before run-loop publication, rapid restart waiting for
+teardown, stale/duplicate callbacks, failed re-enable, VoiceOver taking over during pending setup with the swap off,
+loss of input while core setup is in progress, and bounded ownership of automatic permission-recovery notifications
+without suppressing later manual choices. These are state/ownership checks, not real event-delivery tests.
+
+Live checks still need Accessibility denied/granted, Input Monitoring denied/granted, Caps Lock and Control+Option,
+swap on/off, Coexist on/off, app changes, rapid toggles and a real failed/re-enabled tap. A valid enabled tap plus
+granted input permission does not prove physical HID/Caps Lock delivery (including Karabiner). Non-Coexist and game
+handover can still turn VoiceOver off before this activation acknowledgement; issue161 tracks that preflight.
