@@ -24,6 +24,9 @@ fixes code that is not live. Each has a date and a reason. To reopen one, open a
 - **App rules go in app modules, not shared code** (PATTERNS.md). A rule that helps one app can silently break
   another; shared code (focus, the lookup, the hand-over, the watchdog, the buffer) changes only with a reason that
   names the apps it was checked in.
+- **Larger pull requests for app modules** (28 Oct 2026, Discussion 141). Moving app logic out of the core into app
+  modules can come in a few larger pull requests, one purpose each, after the plan is agreed in an issue or a
+  Discussion; small related fixes can share a pull request. One change per pull request made that work impractical.
 - **Design borrowed, code not** (NOTICE.md). The object model and app modules are NVDA's design; the keys are
   VoiceOver's and NVDA's; no code from either is in the tree.
 - **Plugins are data** (20 Oct 2026). Reading rules, labels and keys for an app, written as files; no scripts run

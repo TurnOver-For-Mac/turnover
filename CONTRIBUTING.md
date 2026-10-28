@@ -23,8 +23,8 @@ mostly about not wasting your time or mine.
 - `Sources/TurnOverCore/Modules/`: one file per app. An app's quirk belongs there, never in shared code.
 - The log (`~/Library/Application Support/TurnOver/logs`): what TurnOver saw and said. Most questions are answered
   there before the code.
-- If you think the code is untidy, the **Code health** milestone on GitHub is the list of what to tidy, each item
-  one pull request with no change in behaviour.
+- If you think the code is untidy, the **Code health** milestone on GitHub is the list of what to tidy. Each item
+  changes no behaviour; one item or a few related ones go in a pull request.
 
 ## Before you write code
 
@@ -35,13 +35,18 @@ mostly about not wasting your time or mine.
 - **Anything bigger** (a new feature, a change to how focus, speech, keys or the VoiceOver hand-over work): open an
   issue first and say what you have in mind. Those parts are shared by every app, and a change that helps one app
   can silently break another.
+- **Moving app logic into app modules** is welcome, and is the direction the code is going: less special-casing in
+  the core, more in `Sources/TurnOverCore/Modules/`. That work doesn't need to come as a string of tiny pull requests.
+  Open an issue or a Discussion with the plan first, so two people don't move the same thing, then send it in a few
+  larger pieces, an app or a mechanism at a time.
 - **Keep what works.** TurnOver follows VoiceOver's keys in the Mac style and NVDA's in the Windows style. A change
   that alters what an existing key does needs a very good reason.
 
 ## Pull requests
 
-- One change per pull request, with a sentence on what it fixes and how you checked it (by ear, a unit test, a
-  recorded window).
+- One purpose per pull request, with a sentence on what it does and how you checked it (by ear, a unit test, a
+  recorded window). Several small fixes of the same kind, or a refactor that touches many files for one reason, can
+  go together; list what's in it in the description, so it can be read piece by piece.
 - `./build.sh --no-install` must build, and the unit tests must pass. The checks run them on every pull request.
 - Add a test where you can: Sources/TurnOverTests has plain tests and tests against recorded windows (TESTING.md).
 - Recorded windows must not contain anyone's private content: record Apple's own content, not mail, chats or

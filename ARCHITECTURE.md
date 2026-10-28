@@ -106,5 +106,5 @@ These five decide whether anyone is speaking. Each has a named rule, and since 1
 The Code health milestone on GitHub lists the seams: the four biggest files (Word's module, MediaView, AppStoreView,
 ObjectNavigation) split along their MARKs; every app quirk out of shared code into its module (issue 2); every
 accessibility walk on the main thread given a deadline (the audit issue); the reader's state made testable (issue 3).
-None of it changes behaviour, each is one pull request, and each is the best first contribution for anyone who finds
+None of it changes behaviour, one item or a few related ones make a pull request, and each is the best first contribution for anyone who finds
 the code untidy: the tidying is the help.
