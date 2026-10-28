@@ -57,3 +57,30 @@ those facts, as with the NVDA rewrites (ESCALATIONS E13).
   reading by paragraph, a separate input table.
 - VoiceOver's status cells and text style marking (bold, links) in braille.
 - Bluetooth (BLE and serial drivers: SCROIOSerialElement, the autodetector's BLE path).
+
+## Release groundwork (28 Oct 2026, issue 160)
+
+`TOAppleBrailleDisplay.closeWithCompletion` requests release and returns without waiting on the braille thread.
+The locked `releaseState` snapshot never calls the driver. Open becomes pending immediately, rejecting new writes
+and polls; the existing driver-thread guard lets the in-flight call return before blanking and unloading. Every
+completion runs on main after that attempt: released only when `unloadDriver` returns YES, failed when it returns NO.
+A failed session retains the display, bundle and driver for the process lifetime, with no further driver calls or
+retries. This intentional quarantine prevents ARC from destroying a potentially live driver on another thread.
+A driver that never returns stays pending and retained. No timeout establishes release.
+
+This is preparatory API work. The Swift adapter, display manager and hand-over callers still use synchronous
+`close`, which can wait indefinitely for the attempt. Synchronous callers now retain failed sessions and can inspect
+`releaseState`; they have not yet been changed to gate on it. The idle `dealloc` fallback also still waits on the
+owning driver thread. No physical display or VoiceOver hand-over has been tested for this change.
+
+Before adopting the asynchronous API, the display manager must retain closing sessions and prevent scans and
+replacement drivers until every relevant release is confirmed. Delayed Bluetooth detection needs a generation
+check: a result arriving after stop must itself be released before the stop can be considered complete. A pending
+or failed release must not be treated as permission to reopen, or to start VoiceOver's display driver.
+
+TurnOver-originated VoiceOver-on requests need a release gate in `LeadWatcher` before posting the toggle; the
+current path can turn VoiceOver on before observing it and deactivating TurnOver. Normal quit also needs an
+asynchronous termination gate. Manual VoiceOver changes and signal/watchdog recovery need a separate agreed
+policy: in-process code cannot force a stuck private driver to relinquish its hardware safely. A separate driver
+service is a possible later containment design, requiring USB/Bluetooth, signing and permission investigation.
+These caller changes need maintainer and braille-user review, especially the policy for a release that never finishes.

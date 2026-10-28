@@ -41,10 +41,13 @@ establish how a real CoreAudio stall or a device handover sounds.
 ## Braille driver thread (every build)
 
 `bash Tools/tests/braille-thread-test.sh` compiles the real Objective-C bridge with a fake driver which runs its
-run loop while waiting. It checks that reads and writes never nest, that the latest pending frame survives a
-write or a poll, and that close waits for unloading during either call. It also checks idle deallocation and
-that nothing calls an unloaded driver. No real display, permissions or private frameworks are needed. The test
-has a five-second deadline, removes its executable on exit, and runs from `build.sh` alongside the unit tests.
+run loop while waiting. Explicit gates hold a poll, write, blank or unload; main must remain responsive, release
+must stay pending, and repeated close requests must share one attempt. Successful release completes on main
+only after unload returns YES. An unload NO reports failure and retains the display and driver without retrying.
+The test also checks non-nesting, the latest pending frame, idle deallocation and no calls after unload. No real
+display, permissions or private frameworks are needed. The test has a fifteen-second failure deadline, removes
+its executable on exit, and runs from `build.sh` alongside the unit tests. This tests the additive asynchronous
+bridge API; production callers still use the synchronous close while the hand-over policy in issue 160 is reviewed.
 
 ## Recorded windows (fixtures)
 
