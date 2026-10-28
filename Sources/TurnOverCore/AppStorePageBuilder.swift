@@ -217,13 +217,13 @@ nonisolated final class AppStorePageBuilder {
         } else if let visible = first(in: list, depth: 2, where: { $0.string(kAXSubroleAttribute) == "AXSectionList" }) {
             var top = visible; var hops = 0
             while current(), let p = top.element("AXPreviousContentSibling"), hops < 200 { top = p; hops += 1 }
-            addSections(from: top, limit: AppStoreView.batch)
+            addSections(from: top, limit: AppStoreView.batch, deferEmptyMaterialization: true)
         }
         pageKey = currentKey()
         Log.io("app store: page \"\(Log.words(pageTitle))\", \(shelves.filter { !$0.isEmpty }.count) shelves, \(page.count) items in \(Int(Date().timeIntervalSince(start) * 1000)) ms")
     }
 
-    private func addSections(from start: AXUIElement, limit: Int) {
+    private func addSections(from start: AXUIElement, limit: Int, deferEmptyMaterialization: Bool = false) {
         var section: AXUIElement? = start
         var count = 0
         let stopAt = page.count + limit
@@ -236,11 +236,22 @@ nonisolated final class AppStorePageBuilder {
             let shelf = shelves.count
             shelves.append(name)
             let before = page.count
+            let seenBefore = seen.count
             walk(sec, shelf: shelf, section: sec, known: known, mark: { self.seen.append($0) })
             // A shelf far from the screen is an empty shell until it comes near: bring it into view, read again.
             var tries = 0
             while current(), page.count == before, tries < 2, children(sec).count <= 1 || (sec.string(kAXDescriptionAttribute) ?? "").isEmpty {
                 guard current() else { return }
+                if deferEmptyMaterialization, before > 0 {
+                    // A readable prefix is ready. Initial product-page collection took 1.6–1.9 s in Oliver's
+                    // trial (28 Oct 2026); this retry path adds 250 ms waits before publication. Leave this exact
+                    // shelf for more/End; they retain the existing eager materialization and reading order.
+                    shelves.removeLast()
+                    seen.removeSubrange(seenBefore..<seen.count)
+                    tails.removeValue(forKey: shelf)
+                    nextSection = sec
+                    return
+                }
                 _ = AXUIElementPerformAction(sec, "AXScrollToVisible" as CFString)
                 usleep(250_000); tries += 1
                 shelves[shelf] = AppStoreView.shelfName(sec.string(kAXDescriptionAttribute) ?? "")

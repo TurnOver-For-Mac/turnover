@@ -231,3 +231,8 @@ The builder allows 2 s for page/sidebar/metadata, 6 s for more/carousel/resolve 
 loading. End remains long, cancellable worker work. Navigation queries/decoding have finite caps; legacy role,
 identity and action helpers outside the charged seam retain their existing limits and cooperative checks. This
 prototype does not establish universal responsiveness, VoiceOver-off parity, purchase access or safe live actions.
+
+`AppStoreFirstContentTests` verifies that an initial readable prefix is published before a later empty shelf is
+scrolled/materialized. The exact deferred shelf remains next for more/End; provisional screenshot identities,
+carousel tails and shelf slots are rolled back. Recorded-provider tests recover following content in order once
+and preserve eager materialization when there is no readable prefix. Scroll actions in these tests hit only the shim.
