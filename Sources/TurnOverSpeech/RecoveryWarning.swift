@@ -41,13 +41,13 @@ package final class RecoveryWarning: Sendable {
 
     /// The test executable supplies silent system tools; production starts only the system voice above.
     @discardableResult
-    package func start(executable: URL, arguments: [String]) -> Bool {
+    package func start(executable: URL, arguments: [String], input: FileHandle? = nil) -> Bool {
         state.withLock { current in
             guard current?.process.isRunning != true else { return false }
             let process = Process(), completion = Completion()
             process.executableURL = executable
             process.arguments = arguments
-            process.standardInput = FileHandle.nullDevice
+            process.standardInput = input ?? FileHandle.nullDevice
             process.standardOutput = FileHandle.nullDevice
             process.standardError = FileHandle.nullDevice
             process.terminationHandler = { _ in completion.finish() }
@@ -90,6 +90,16 @@ package final class RecoveryWarning: Sendable {
     }
 
     package var isRunning: Bool { state.withLock { $0?.process.isRunning == true } }
+
+    /// Test failure context, read only once the owned child has stopped.
+    package var terminationDescription: String {
+        state.withLock { current in
+            guard let process = current?.process else { return "no warning child" }
+            guard !process.isRunning else { return "warning child is still running" }
+            let reason = process.terminationReason == .exit ? "exit" : "signal"
+            return "warning child ended: \(reason) \(process.terminationStatus)"
+        }
+    }
 
     deinit { cancel() }
 }

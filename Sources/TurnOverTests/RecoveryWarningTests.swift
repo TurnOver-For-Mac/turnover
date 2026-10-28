@@ -8,6 +8,14 @@ private func warningWait(_ condition: () -> Bool) -> Bool {
     return condition()
 }
 
+private func startBlockedWarning(_ warning: RecoveryWarning, ready: URL, input: Pipe) -> Bool {
+    // The test keeps the pipe's write end open until cleanup. The shell's own read then stays blocked, without
+    // relying on a timed external command or leaving descendants behind (CI failure, 28 Oct 2026).
+    let script = "trap '' TERM\nprintf ready > \"$1\"\nIFS= read -r line"
+    return warning.start(executable: URL(fileURLWithPath: "/bin/sh"),
+                         arguments: ["-c", script, "warning-test", ready.path], input: input.fileHandleForReading)
+}
+
 func recoveryWarningTests() {
     test("speech recovery: no warning and a failed launch never delay recovery") {
         let warning = RecoveryWarning()
@@ -33,14 +41,19 @@ func recoveryWarningTests() {
         let warning = RecoveryWarning()
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("turnover-warning-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
-        defer { warning.cancel(); try? FileManager.default.removeItem(at: directory) }
+        let input = Pipe()
+        defer {
+            warning.cancel()
+            try? input.fileHandleForWriting.close(); try? input.fileHandleForReading.close()
+            try? FileManager.default.removeItem(at: directory)
+        }
         let ready = directory.appendingPathComponent("ready")
-        // The marker follows the ignored-TERM setup; exec keeps that disposition and the same owned child pid.
-        let script = "trap '' TERM\nprintf ready > \"$1\"\nexec /bin/sleep 60"
-        guard warning.start(executable: URL(fileURLWithPath: "/bin/sh"), arguments: ["-c", script, "warning-test", ready.path]) else {
+        guard startBlockedWarning(warning, ready: ready, input: input) else {
             return Harness.fail("silent hanging warning could not start")
         }
-        check(warningWait { FileManager.default.fileExists(atPath: ready.path) }, "child confirms it ignores SIGTERM")
+        guard warningWait({ FileManager.default.fileExists(atPath: ready.path) }) else {
+            return Harness.fail("child did not confirm it ignores SIGTERM: \(warning.terminationDescription)")
+        }
         check(!warning.start(executable: URL(fileURLWithPath: "/usr/bin/true"), arguments: []), "a second warning cannot overlap")
         // A broken unbounded wait is released by this test-only backstop, so the regression fails rather than
         // leaving the test executable and its child hung. It is not the production timeout under test.
@@ -49,7 +62,8 @@ func recoveryWarningTests() {
         DispatchQueue.global().asyncAfter(deadline: .now() + 2, execute: backstop)
         defer { backstop.cancel() }
         let clock = ContinuousClock(), began = clock.now
-        check(!warning.wait(timeout: 0.05), "deadline expiration is reported")
+        let completed = warning.wait(timeout: 0.05)
+        check(!completed, "deadline expiration is reported: \(warning.terminationDescription)")
         check(began.duration(to: clock.now) < .seconds(1), "restart is released by its deadline, not the test backstop")
         check(warningWait { !warning.isRunning }, "timed-out child is stopped")
         check(warning.wait(timeout: 1), "child termination can still be observed after a timeout")
@@ -57,16 +71,36 @@ func recoveryWarningTests() {
 
     test("speech recovery: cancelling an old warning does not complete its replacement") {
         let warning = RecoveryWarning()
-        defer { warning.cancel() }
-        guard warning.start(executable: URL(fileURLWithPath: "/bin/sleep"), arguments: ["60"]) else {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("turnover-warning-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        let oldInput = Pipe(), newInput = Pipe()
+        defer {
+            warning.cancel()
+            for input in [oldInput, newInput] {
+                try? input.fileHandleForWriting.close(); try? input.fileHandleForReading.close()
+            }
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let oldReady = directory.appendingPathComponent("old-ready"), newReady = directory.appendingPathComponent("new-ready")
+        guard startBlockedWarning(warning, ready: oldReady, input: oldInput) else {
             return Harness.fail("first silent warning could not start")
+        }
+        guard warningWait({ FileManager.default.fileExists(atPath: oldReady.path) }) else {
+            return Harness.fail("first warning did not become ready: \(warning.terminationDescription)")
         }
         warning.cancel()
         check(warningWait { !warning.isRunning }, "old child exits")
-        guard warning.start(executable: URL(fileURLWithPath: "/bin/sleep"), arguments: ["60"]) else {
+        guard startBlockedWarning(warning, ready: newReady, input: newInput) else {
             return Harness.fail("replacement silent warning could not start")
         }
-        check(!warning.wait(timeout: 0.05), "the replacement still needs its own termination")
+        guard warningWait({ FileManager.default.fileExists(atPath: newReady.path) }) else {
+            return Harness.fail("replacement warning did not become ready: \(warning.terminationDescription)")
+        }
+        let backstop = DispatchWorkItem { @Sendable in warning.cancel() }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 2, execute: backstop)
+        defer { backstop.cancel() }
+        let completed = warning.wait(timeout: 0.05)
+        check(!completed, "the replacement still needs its own termination: \(warning.terminationDescription)")
         check(warningWait { !warning.isRunning }, "replacement child is stopped on timeout")
     }
 }
