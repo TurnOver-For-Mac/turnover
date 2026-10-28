@@ -75,25 +75,30 @@ public struct AXAttributeBatchResult {
 
     package init(query: AXQueryResult<CFArray>, names: [String]) {
         self.query = query
-        let values = query.value as? [AnyObject]
-        isAligned = values?.count == names.count
+        let values = query.value
+        let count = values.map { CFArrayGetCount($0) }
+        isAligned = count == names.count
         var attributes: [String: AXQueryResult<CFTypeRef>] = [:]
-        for (index, name) in names.enumerated() {
-            var status = query.status
-            var value: CFTypeRef?
-            if status == .returned(.success) {
-                if let values, values.indices.contains(index) {
-                    let raw = values[index]
-                    if CFGetTypeID(raw) == CFNullGetTypeID() {
-                        status = .batchNull
-                    } else if CFGetTypeID(raw) == AXValueGetTypeID(), AXValueGetType(raw as! AXValue) == .axError {
-                        var error = AXError.failure
-                        status = AXValueGetValue(raw as! AXValue, .axError, &error) ? .returned(error) : .invalidResponse
-                    } else { value = raw }
-                } else { status = .invalidResponse }
+        withExtendedLifetime(values) {
+            for (index, name) in names.enumerated() {
+                var status = query.status
+                var value: CFTypeRef?
+                if status == .returned(.success) {
+                    if let values, index < CFArrayGetCount(values), let pointer = CFArrayGetValueAtIndex(values, index) {
+                        // Keep the array alive while borrowing only requested slots, rather than bridging an
+                        // unexpectedly large reply into another whole Swift array (#166).
+                        let raw = Unmanaged<AnyObject>.fromOpaque(pointer).takeUnretainedValue()
+                        if CFGetTypeID(raw) == CFNullGetTypeID() {
+                            status = .batchNull
+                        } else if CFGetTypeID(raw) == AXValueGetTypeID(), AXValueGetType(raw as! AXValue) == .axError {
+                            var error = AXError.failure
+                            status = AXValueGetValue(raw as! AXValue, .axError, &error) ? .returned(error) : .invalidResponse
+                        } else { value = raw }
+                    } else { status = .invalidResponse }
+                }
+                attributes[name] = AXQueryResult(value: value, status: status,
+                                                elapsedNanoseconds: query.elapsedNanoseconds, wasAttempted: query.wasAttempted)
             }
-            attributes[name] = AXQueryResult(value: value, status: status,
-                                            elapsedNanoseconds: query.elapsedNanoseconds, wasAttempted: query.wasAttempted)
         }
         self.attributes = attributes
     }
