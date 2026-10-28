@@ -1,6 +1,34 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Reading-order search used outside documents by VO-Command-letter. Providers keep AX and fake-tree tests on
 // the same traversal; the main actor only admits and publishes a current result (issue 119, 28 Oct 2026).
+import TurnOverAX
+
+nonisolated package enum WindowSearchStart<Node: Sendable>: Sendable {
+    case ready(Node)
+    case unavailable
+    case incomplete(AXWalkStop)
+}
+
+nonisolated package enum WindowSearchPreflight {
+    /// A stale explicit review cursor may fall back to the current focus. Ignore invalidUIElement only for this
+    /// one validation, not later traversal failures or cannotComplete/apiDisabled. Both scopes still count queries
+    /// and stop for cancellation/deadlines; caller-owned messaging timeouts remain unchanged (28 Oct 2026).
+    package static func resolve<Node: Sendable>(cursor: Node?, focus: Node?, budget: AXWalkBudget,
+                                               role: (Node) -> AXQueryResult<String>) -> WindowSearchStart<Node> {
+        guard let start = cursor ?? focus else { return .unavailable }
+        guard let cursor else { return .ready(start) }
+        return AXReadScope.with(while: { budget.check() }, onQuery: { budget.admitAXQuery() }, onResult: { status in
+            if status != .returned(.invalidUIElement) { budget.record(status) }
+        }) {
+            guard let result = budget.query({ role(cursor) }) else { return .incomplete(budget.stopped ?? .cancelled) }
+            if result.error == .invalidUIElement || result.value == nil || result.value == "?" {
+                guard let focus else { return .unavailable }
+                return .ready(focus)
+            }
+            return .ready(cursor)
+        }
+    }
+}
 
 nonisolated package enum WindowKindSearchResult<Node: Sendable>: Sendable {
     case found(Node)

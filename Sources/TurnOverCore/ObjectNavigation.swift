@@ -610,7 +610,7 @@ public final class ObjectNavigator {
         let cursor = current
         let focus = API.focusObject?.element
         let foreground = API.foregroundObject?.element
-        guard let start = cursor ?? focus else { Speech.speakMessage("nothing to search"); return }
+        guard cursor != nil || focus != nil else { Speech.speakMessage("nothing to search"); return }
         let queries = WindowKindQueries<AXUIElement, ElementKey>(
             identity: { ElementKey($0) },
             window: { $0.role == "AXWindow" ? $0 : $0.element(kAXWindowAttribute) },
@@ -622,15 +622,17 @@ public final class ObjectNavigator {
         )
         windowSearch.submit { request in
             let budget = AXWalkBudget(request: request)
+            let resolvedStart: AXUIElement
+            switch WindowSearchPreflight.resolve(cursor: cursor, focus: focus, budget: budget, role: { element in
+                let result = element.attributeResult(kAXRoleAttribute)
+                return AXQueryResult(value: result.value as? String, status: result.status,
+                                     elapsedNanoseconds: result.elapsedNanoseconds, wasAttempted: result.wasAttempted)
+            }) {
+            case .ready(let element): resolvedStart = element
+            case .unavailable: return .unavailable
+            case .incomplete(let reason): return .incomplete(reason)
+            }
             return AXReadScope.with(while: { budget.check() }, onQuery: { budget.admitAXQuery() }, onResult: { budget.record($0) }) {
-                var resolvedStart = start
-                if let cursor {
-                    guard let valid = budget.query({ cursor.role != "?" }) else { return .incomplete(budget.stopped ?? .cancelled) }
-                    if !valid {
-                        guard let focus else { return .unavailable }
-                        resolvedStart = focus   // preserve element's invalid-cursor fallback, without asking AX on main
-                    }
-                }
                 var search = WindowKindSearch(queries: queries, budget: budget)
                 let result = search.find(from: resolvedStart, forward: forward)
                 // A malformed cross-process child must never become the action target for this window's request.

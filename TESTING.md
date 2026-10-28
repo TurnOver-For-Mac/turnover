@@ -34,6 +34,8 @@ Known transport failures and client backoff must produce incomplete search resul
 retain their existing fallbacks.
 The deadline is cooperative: an AX call already in flight cannot be preempted, and retains the existing messaging
 timeout. The large search stays off main; these tests do not establish live speech, focus-following or app coverage.
+Landing on a result, speech presentation and focus-following still perform accessibility work on main; this change
+bounds search collection rather than all object navigation or action presentation.
 
 ## Braille driver thread (every build)
 

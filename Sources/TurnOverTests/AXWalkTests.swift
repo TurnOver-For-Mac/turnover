@@ -286,4 +286,29 @@ func axWalkTests() {
         check(!attempted.withLock { $0 }, "deferred provider is never called")
         expect(budget.axQueries, 0, "backoff does not consume an actual API admission")
     }
+    test("AX window search: stale cursor preflight falls back once without hiding transport failure") {
+        let pid = pid_t(Int32.max - 112)
+        defer { AXHealth.forget(pid: pid) }
+        func role(_ error: AXError) -> AXQueryResult<String> {
+            let execution = AXHealth.query(pid: pid) { error }
+            return AXQueryResult(value: nil, status: execution.status,
+                                 elapsedNanoseconds: execution.elapsedNanoseconds, wasAttempted: execution.wasAttempted)
+        }
+        let budget = AXWalkBudget(request: AXWalkRequest())
+        let stale = WindowSearchPreflight.resolve(cursor: 1, focus: 3, budget: budget) { _ in role(.invalidUIElement) }
+        if case .ready(let node) = stale { expect(node, 3, "only the known current focus is a fallback target") }
+        else { check(false, "stale review cursor must not prevent focus-based search") }
+        check(budget.stopped == nil, "the one stale-cursor check did not poison traversal")
+        expect(budget.axQueries, 1, "validation still uses actual scope admission")
+        AXReadScope.with(while: { budget.check() }, onQuery: { budget.admitAXQuery() }, onResult: { budget.record($0) }) {
+            _ = role(.invalidUIElement)
+        }
+        expect(budget.stopped, .providerFailure, "invalid UI encountered later is not suppressed")
+        for error in [AXError.cannotComplete, .apiDisabled] {
+            let fresh = AXWalkBudget(request: AXWalkRequest())
+            let result = WindowSearchPreflight.resolve(cursor: 1, focus: 3, budget: fresh) { _ in role(error) }
+            if case .incomplete(let reason) = result { expect(reason, .providerFailure) }
+            else { check(false, "\(error) cannot silently switch the search target to focus") }
+        }
+    }
 }
