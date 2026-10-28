@@ -143,13 +143,8 @@ public final class WebTextInfo: TextInfo {
 
     // Every unit must end after the offset, or NVDA's move loop stalls: at the end of a line WebKit's
     // "line for marker" is the line just finished, so the "right" and "next end" forms are the fallbacks.
-    // Indices are one per UTF-16 unit, line breaks included (measured: 42 "⏎", 43 "A"); WebKit's
-    // "next text marker" steps over a break and the letter after it together, so characters step by index.
-    public override func characterOffsets(_ offset: Int) -> (Int, Int) {
-        let two = textRange(offset, offset + 2) as NSString
-        if two.length == 2, two.rangeOfComposedCharacterSequence(at: 0).length == 2 { return (offset, offset + 2) }
-        return (offset, offset + 1)
-    }
+    // Characters use the shared composed-sequence reader over UTF-16 indices. WebKit's "next
+    // text marker" skips a break and the following letter together (measured 1 Oct 2026).
     private func unit(_ containing: String, _ right: String?, _ nextEnd: String, at offset: Int) -> (Int, Int)? {
         // A caret on the break that ends a line belongs to the line after it (asked at the break, WebKit
         // answers with the line before, break included: every line was read twice, 2 Oct 2026).

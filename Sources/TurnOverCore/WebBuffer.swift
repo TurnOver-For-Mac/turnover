@@ -549,6 +549,9 @@ public final class BufferTextInfo: TextInfo {
     public private(set) var chain: [AXUIElement] = []
 
     public override func storyLength() -> Int { buffer.text.length }
+    public override func characterOffsets(_ offset: Int) -> (Int, Int) {
+        CharacterBoundaries.offsets(in: buffer.text, at: offset) ?? (offset, offset)
+    }
     public override func textRange(_ s: Int, _ e: Int) -> String {
         let n = buffer.text.length
         let a = max(0, min(s, n)), b = max(a, min(e, n))
