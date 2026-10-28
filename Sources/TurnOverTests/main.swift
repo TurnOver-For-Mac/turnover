@@ -25,6 +25,7 @@ Speech.sink = { _ in }
 
 pureTests()
 axNavigationChildrenTests()
+appStoreNavigationModelTests()
 appStoreModelTests()
 appStorePurchaseConfirmationTests()
 controlChannelTests()

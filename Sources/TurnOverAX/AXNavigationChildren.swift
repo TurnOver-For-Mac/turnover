@@ -72,6 +72,9 @@ public final class AXNavigationChildren {
         return stopped == nil
     }
 
+    /// A caller traversing children itself can reject a cyclic or over-depth path without publishing partial data.
+    public func stop(_ reason: Stop) { if stopped == nil { stopped = reason } }
+
     /// Both count and bounded prefix reads spend the same query allowance. A provider failure never authorizes
     /// a second representation; only absent/unsupported navigation children permit ordinary-child fallback.
     public func children(of element: AXUIElement) -> [AXUIElement] {

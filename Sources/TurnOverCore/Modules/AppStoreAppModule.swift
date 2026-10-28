@@ -15,8 +15,10 @@
 // - The product page's badges read backwards ("GB, SIZE, 2.76"; "selfie" for the developer's picture); they are
 //   put in order here. Its Accessibility section (which features the developer says the app supports) is read
 //   as a shelf like the others.
-// - With VoiceOver running the App Store shows a smaller tree (no prices, no offer buttons); TurnOver reads it
-//   while VoiceOver is off, so it has the full one.
+// - On that October 6 build the ordinary AXChildren walk exposed fewer prices/buttons while VoiceOver ran.
+//   The October 28 investigation found public navigation-order children beyond the ordinary walk (issue 174).
+//   The default builder now tries that representation; matched VoiceOver-off coverage, prices and safe actions
+//   still require separate checks. The earlier ordinary-tree observation does not establish full-tree parity.
 //
 // Keys (only while the focus is not in the search field, no menu is open and no sheet is up):
 //   Up, Down        the previous and next item: every app, heading, text and button on the page, in order

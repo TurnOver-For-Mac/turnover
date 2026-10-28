@@ -388,3 +388,18 @@ and no title. A tooltip names an icon button, but never the window's own buttons
   buttons and nothing else:** no content in the tree, every hit test answers the window, and the app does not
   implement the enhanced-interface flags VoiceOver sets. Screen recognition is the only way in and it works, but
   cards laid out in columns are read row by row (issue 73), and TurnOver says only window on arrival (issue 74).
+
+## From a public AX probe to a reading adapter (28 Oct 2026, App Store, issue 174)
+
+1. Record app/macOS versions, Accessibility trust, actual foreground app, and both VoiceOver's flag and observed
+   process state. Compare the same public page with VoiceOver on/off; label an untested state explicitly.
+2. Keep returned errors, legitimate absence and reader-process backoff distinct. A separate probe has its own
+   health state. Probe with deadlines, query/decoding limits and no application actions before changing an adapter.
+3. Choose the public representation that exposes the content. App Store navigation children can expose content
+   missed by ordinary children. Preserve their order; successful empty is authoritative. Test typed fallback rules.
+4. Carry discovered identities into the adapter, then resolve them freshly before acting. Reject ambiguous or
+   recycled elements. A readable child array alone establishes neither purchase access nor complete control.
+5. Try a reversible action separately and verify its resulting page/selection. Purchase/download actions require
+   their own user intent and confirmation; they are excluded from the structural preview.
+6. Retire work on newer focus, page or reader intent; reject stale callbacks and incomplete publication. Turn each
+   observed shape into a public-content fixture with cancellation/error cases before widening live coverage.
