@@ -86,19 +86,38 @@ final class PagesAppModule: AppModule {
         if event.kind == .caret, event.obj.pid == pid, table == nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in self?.notePage() } }
         if event.kind == .gainFocus, let q = quietFocus, Date().timeIntervalSince(q.at) < 1, q.element.isSame(event.obj.element) {
             quietFocus = nil
-            Log.io("pages: the focus hopped to another page's body text after a key; not read")
             // A jump (Command-Up or Down, Page Up or Down) lands in another page's copy of the text, where the key's
-            // own reading lost track of the caret: the line it landed on is read here instead (silence, 17 Oct 2026).
-            let key = InputManager.lastKeyIdentifier
-            if ["kb:command+upArrow", "kb:command+downArrow", "kb:pageUp", "kb:pageDown", "kb:command+home", "kb:command+end"].contains(key),
-               let info = try? event.obj.makeTextInfo(.caret) {
-                info.expand(.line)
+            // own reading lost track of the caret: the line it landed on is read here instead (silence, 17 Oct 2026),
+            // unless the key read it (said twice, 28 Oct 2026). So is any caret key whose reading was left to this
+            // focus (PagesBody), by the key.
+            let reading = Self.keyReading.flatMap { $0.at >= InputManager.lastKeyDownAt ? $0.leftToHop : nil }
+            if let unit = Self.hopReading(key: InputManager.lastKeyIdentifier, leftToHop: reading), let info = try? event.obj.makeTextInfo(.caret) {
+                Log.io("pages: the focus hopped to another page's body text after a key; read as the key's move")
+                info.expand(unit)
                 Speech.cancel()
-                Speech.speakTextInfo(info, unit: .line, reason: .caret)
+                Speech.speakTextInfo(info, unit: unit, reason: .caret)
+            } else {
+                Log.io("pages: the focus hopped to another page's body text after a key; not read")
             }
             return
         }
         next()
+    }
+
+    /// What the last caret key did with its reading (PagesBody): left it to the hop after it (the key went to a copy of
+    /// the text that answered nothing, or its wait for the caret saw the focus move), or read its own move.
+    static var keyReading: (at: Date, leftToHop: Bool)?
+
+    /// How a hop to another page's copy just after a key is read: a jump by its line, unless the key read its own move;
+    /// any other caret key by the key, as the core reads a paragraph box's hop (EditableText.readParagraphHop), when its
+    /// reading was left to the hop; nil leaves the key's own reading.
+    static func hopReading(key: String, leftToHop: Bool?) -> TextUnit? {
+        if ["kb:command+upArrow", "kb:command+downArrow", "kb:pageUp", "kb:pageDown", "kb:command+home", "kb:command+end"].contains(key) { return leftToHop == false ? nil : .line }
+        let k = key.lowercased()
+        guard leftToHop == true, !k.contains("turnover"), !k.contains("control"), !k.contains("shift"),
+              ["uparrow", "downarrow", "leftarrow", "rightarrow", "home", "end", "pageup", "pagedown"].contains(where: { k.hasSuffix($0) }) else { return nil }
+        return k.contains("uparrow") || k.contains("downarrow") || k.contains("page") || k.contains("command") ? .line
+            : k.contains("option") ? .word : (k.hasSuffix("home") || k.hasSuffix("end")) ? .line : .character
     }
 
     /// The page layout reported as the focus while a body text holds the caret: the body text has it.
@@ -296,6 +315,47 @@ final class PagesAppModule: AppModule {
 /// A page's body text in Pages.
 final class PagesBody: EditableText {
     override var textInfoClass: TextInfo.Type { PagesTextInfo.self }
+
+    // Pages lays out only the pages near the view and makes a page's copy of the text afresh as it comes back (a
+    // five-page .docx, Pages 15.4, macOS 27.0.1, 28 Oct 2026: 58 copies in eight minutes). A copy whose page has
+    // scrolled away is gone (kAXErrorInvalidUIElement), and Pages moves its focus to a new copy without saying so,
+    // until the caret moves. After End, Home or a page key had scrolled the caret's page away, the next arrow went to
+    // the gone copy and said nothing, and the focus that came after it was taken for the key's own reading.
+
+    /// A caret key coming to a copy that answers nothing goes to the copy Pages has its focus on, which moves, reads or
+    /// bumps as any; with none, the hop after the key reads the move.
+    override func caretMovement(_ gesture: KeyboardGesture, _ unit: TextUnit) {
+        if (try? makeTextInfo(.caret)) == nil {
+            if let text = takeOverFromPagesFocus() { text.caretMovement(gesture, unit); return }
+            PagesAppModule.keyReading = (Date(), true)
+        }
+        super.caretMovement(gesture, unit)
+    }
+
+    /// After the key: a focus waiting means the wait for the caret left the reading to it, and the hop reads the move.
+    /// With none waiting, a copy gone after a jump (Command-Up or Command-Down, when no focus came and the line was not
+    /// read) gives way to the copy Pages has its focus on, which reads it.
+    override func caretMoved(speak unit: TextUnit?, gesture: KeyboardGesture, info: TextInfo?) {
+        if EventHandler.isPending(.gainFocus) {
+            PagesAppModule.keyReading = (Date(), true)
+        } else if info == nil, !ScriptHandler.isScriptWaiting, (try? makeTextInfo(.caret)) == nil, let text = takeOverFromPagesFocus() {
+            text.caretMoved(speak: unit, gesture: gesture, info: nil)
+            return
+        } else if unit != nil, !ScriptHandler.isScriptWaiting, !SayAll.willResume(gesture), info != nil || (try? makeTextInfo(.caret)) != nil {
+            PagesAppModule.keyReading = (Date(), false)
+        }
+        super.caretMoved(speak: unit, gesture: gesture, info: info)
+    }
+
+    /// The copy Pages has its focus on, when it is another copy of the text giving the caret: TurnOver's focus too.
+    private func takeOverFromPagesFocus() -> EditableText? {
+        guard let live = AXUIElementCreateApplication(pid).element(kAXFocusedUIElementAttribute), !live.isSame(element),
+              live.role == "AXTextArea", live.element(kAXParentAttribute)?.role == "AXPage", PagesAppModule.caret(live) != nil,
+              let text = ObjectFactory.make(live) as? EditableText else { return nil }
+        Log.io("pages: the copy of the text is gone; the copy Pages has its focus on takes over")
+        API.setFocusObject(text, ancestors: text.ancestors)
+        return text
+    }
 }
 
 /// Pages' text with its embedded objects named: "table, 13 rows, 13 columns", "image, Sunset", "footnote 1".

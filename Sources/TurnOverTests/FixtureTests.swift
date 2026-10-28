@@ -261,6 +261,46 @@ func focusRuleTests() {
         expect(module.redirectFocus(AXReplay.element(2)).flatMap { AXReplay.id(of: $0) }, 4, "the first page's body text is the focus")
         check(AXReplay.sets.isEmpty, "nothing set in Pages (set: \(setsSaid()))")
     }
+
+    /// The same document after a jump: the pages were laid out afresh, so the first page's old copy (4) is gone and
+    /// answers nothing, and Pages has its focus on the new copy (7), which gives the caret.
+    func pagesLaidOutAfresh() -> AXFixture {
+        var f = pages(caret: true)
+        f.nodes = f.nodes.filter { ![3, 4, 5, 6, 9].contains($0.id) } + [
+            .init(id: 3, attrs: ["AXRole": .string("AXPage"), "AXParent": .element(2), "AXWindow": .element(0), "AXChildren": .elements([7])]),
+            .init(id: 4, attrs: [:]),
+            .init(id: 5, attrs: ["AXRole": .string("AXPage"), "AXParent": .element(2), "AXWindow": .element(0), "AXChildren": .elements([8])]),
+            .init(id: 7, attrs: ["AXRole": .string("AXTextArea"), "AXParent": .element(3), "AXWindow": .element(0), "AXFocused": .bool(true),
+                                 "AXNumberOfCharacters": .number(20), "AXSharedCharacterRange": .range(0, 12), "AXSelectedTextRange": .range(0, 0)]),
+            .init(id: 8, attrs: ["AXRole": .string("AXTextArea"), "AXParent": .element(5), "AXWindow": .element(0), "AXFocused": .bool(true),
+                                 "AXNumberOfCharacters": .number(20), "AXSharedCharacterRange": .range(12, 8), "AXSelectedTextRange": .range(0, 0)]),
+            .init(id: 9, attrs: ["AXRole": .string("AXApplication"), "AXChildren": .elements([0]), "AXWindows": .elements([0]),
+                                 "AXFocusedWindow": .element(0), "AXFocusedUIElement": .element(7)]),
+        ]
+        return f
+    }
+    /// The class Pages' module gives the first page's copy of the body text.
+    func pagesBodyClass() -> TurnOverObject.Type? {
+        AXReplay.load(pages(caret: true)); defer { AXReplay.unload() }
+        return pagesModule()?.objectClass(for: AXReplay.element(4), role: .editableText, subrole: nil)
+    }
+
+    test("Pages: a jump that leaves the copy of the text gone and brings no focus reads from Pages' focus") {
+        guard let kind = pagesBodyClass() else { return Harness.fail("Pages' body text has its class") }
+        AXReplay.load(pagesLaidOutAfresh()); defer { AXReplay.unload(); API.setFocusObject(nil, ancestors: []) }
+        let gone = kind.init(element: AXReplay.element(4))
+        API.setFocusObject(gone, ancestors: [])
+        (gone as? EditableText)?.caretMoved(speak: nil, gesture: KeyboardGesture(identifier: "kb:command+upArrow")!, info: nil)
+        expect(API.focusObject.flatMap { AXReplay.id(of: $0.element) }, 7, "the copy Pages has its focus on is the focus")
+    }
+    test("Pages: after a key the copy of the text that gives the caret stays the focus") {
+        guard let kind = pagesBodyClass() else { return Harness.fail("Pages' body text has its class") }
+        AXReplay.load(pages(caret: true)); defer { AXReplay.unload(); API.setFocusObject(nil, ancestors: []) }
+        let copy = kind.init(element: AXReplay.element(4))
+        API.setFocusObject(copy, ancestors: [])
+        (copy as? EditableText)?.caretMoved(speak: nil, gesture: KeyboardGesture(identifier: "kb:command+upArrow")!, info: nil)
+        expect(API.focusObject.flatMap { AXReplay.id(of: $0.element) }, 4, "the copy is still the focus")
+    }
 }
 
 // Scale: a generated window with a 1,000-row list. Searches for a window's parts must not walk the rows, and
