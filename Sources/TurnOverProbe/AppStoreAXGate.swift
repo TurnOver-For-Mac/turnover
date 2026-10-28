@@ -15,6 +15,17 @@ func runAppStoreAXGate(_ args: [String]) {
         return
     }
     let probe = AppStoreAXSample(pid: app.processIdentifier, direct: args.contains("--direct"))
+    let bundle = app.bundleURL.flatMap { Bundle(url: $0) }
+    func version(_ key: String) -> String {
+        guard let value = bundle?.object(forInfoDictionaryKey: key) as? String,
+              !value.isEmpty, value.utf8.count <= 64,
+              value.utf8.allSatisfy({ (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) || [43, 45, 46, 95].contains($0) }) else { return "unavailable" }
+        return value
+    }
+    let frontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier
+    let voiceOverPresent = !NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.VoiceOver").isEmpty
+    Log.line("targetBundle=com.apple.AppStore version=\(version("CFBundleShortVersionString")) build=\(version("CFBundleVersion")) targetIsFrontmost=\(frontmost)")
+    Log.line("VoiceOverProcessPresent=\(voiceOverPresent) readerActive=unobserved muteLease=unobserved")
     probe.run()
 }
 

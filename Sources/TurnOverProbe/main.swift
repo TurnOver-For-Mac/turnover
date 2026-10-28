@@ -70,6 +70,6 @@ guard let gateName = args.first, let gate = gates[gateName] else {
 Log.open(gate: gate.name)
 // The structural App Store gate accepts no content arguments. Do not persist even rejected argument text.
 Log.line(gateName == "appstore-ax" ? "turnover-probe appstore-ax" : "turnover-probe \(gate.name) \(args.dropFirst().joined(separator: " "))")
-Log.line("macOS \(ProcessInfo.processInfo.operatingSystemVersionString), pid \(getpid()), VoiceOver running: \(voiceOverRunning())")
+Log.line("macOS \(ProcessInfo.processInfo.operatingSystemVersionString), pid \(getpid()), VoiceOver enabled flag: \(voiceOverRunning())")
 gate.run(Array(args.dropFirst()))
 Log.close()

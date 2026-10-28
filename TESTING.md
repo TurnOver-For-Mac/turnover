@@ -39,6 +39,8 @@ has a five-second deadline, removes its executable on exit, and runs from `build
 an action, changing an accessibility flag or toggling VoiceOver. It emits structural roles, standard action names,
 counts, timings and typed query outcomes. It never emits titles, values, identifiers or custom action strings.
 There is no labels option. The probe's own log is identified at startup; do not substitute an unrestricted tree dump.
+The header distinguishes the VoiceOver enabled flag from process presence. App Store version/build and whether it
+is frontmost are metadata; the reader's active state and mute lease are reported as unobserved, never inferred.
 
 Discovery, retained-reference reads and freshly reacquired references share 96 query/configuration admissions,
 12 inspected nodes, depth 4, eight elements per array prefix and a 1.5-second cooperative deadline. Each exact
