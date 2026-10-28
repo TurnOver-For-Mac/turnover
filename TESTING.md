@@ -56,6 +56,20 @@ verify the cell is removed silently and ordinary echo still sounds right. Name t
 macOS version and keyboard style. The automated tests do not establish driver delivery during Secure Input or
 how speech sounds on hardware.
 
+## Accessibility window search
+
+`turnover-tests "AX window search"` exercises the production reading-order traversal and serial worker with fake
+providers: forward/backward order, indexed row neighbours, delayed and cancelled matches, cycle/depth/work limits,
+coalesced repeated keys, and completed results cancelled before main can publish them. No live app or reader is changed.
+`turnover-tests "AX read scope"` uses replayed public sample elements to check nested/throw cleanup, thread confinement,
+typed and legacy cancellation, nested profile action reads, and separate provider-operation/AX-query budgets.
+Known transport failures and client backoff must produce incomplete search results; unsupported optional attributes
+retain their existing fallbacks.
+The deadline is cooperative: an AX call already in flight cannot be preempted, and retains the existing messaging
+timeout. The large search stays off main; these tests do not establish live speech, focus-following or app coverage.
+Landing on a result, speech presentation and focus-following still perform accessibility work on main; this change
+bounds search collection rather than all object navigation or action presentation.
+
 ## Braille driver thread (every build)
 
 `bash Tools/tests/braille-thread-test.sh` compiles the real Objective-C bridge with a fake driver which runs its

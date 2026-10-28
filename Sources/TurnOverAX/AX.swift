@@ -71,8 +71,17 @@ public enum AXHealth {
     package static func query(pid p: pid_t, policy: AXQueryPolicy = .respectBackoff,
                               clock: () -> UInt64 = { DispatchTime.now().uptimeNanoseconds },
                               _ body: () -> AXError) -> AXQueryExecution {
+        guard AXReadScope.shouldContinue else {
+            AXReadScope.report(.clientWorkStopped)
+            return AXQueryExecution(status: .clientWorkStopped, elapsedNanoseconds: 0, wasAttempted: false)
+        }
         if policy == .respectBackoff, let rest = backoff(for: p) {
+            AXReadScope.report(.deferred(rest))
             return AXQueryExecution(status: .deferred(rest), elapsedNanoseconds: 0, wasAttempted: false)
+        }
+        guard AXReadScope.admitQuery() else {
+            AXReadScope.report(.clientWorkStopped)
+            return AXQueryExecution(status: .clientWorkStopped, elapsedNanoseconds: 0, wasAttempted: false)
         }
         let t0 = clock()
         let e = body()
@@ -80,6 +89,7 @@ public enum AXHealth {
         AXStats.note(took)
         if e == .cannotComplete { note(e, pid: p, ns: took) }
         if took > dripCallNs { noteDrip(pid: p, ns: took) }
+        AXReadScope.report(.returned(e))
         return AXQueryExecution(status: .returned(e), elapsedNanoseconds: took, wasAttempted: true)
     }
 
