@@ -1420,7 +1420,7 @@ public final class MediaView {
                             catalog = nil; catalogDrives = false
                             // The page may already be up and unspoken: read it now.
                             let flat = flatPage
-                            if !flat.isEmpty { Speech.speakMessage(pageTitle.isEmpty ? "page" : pageTitle); land(on: nil) }
+                            if !flat.isEmpty { Speech.speakMessage(pageTitle.isEmpty ? Role.page.displayString : pageTitle); land(on: nil) }
                         })
         catalog = c; catalogDrives = true
         c.search()

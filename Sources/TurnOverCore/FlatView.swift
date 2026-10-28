@@ -294,7 +294,7 @@ public final class FlatView {
             }
             Log.io("flat view \(viewName): could not open row \(n + 1)\(expected.map { " (\($0))" } ?? ""): \(reason)\(answered.map { "; it answered \($0)" } ?? "")")
             let said = reason
-            DispatchQueue.main.async { MainActor.assumeIsolated { Speech.speakMessage("Not opened: \(said)."); then(nil, nil) } }
+            DispatchQueue.main.async { MainActor.assumeIsolated { Speech.speakMessage(String(localized: "Not opened: \(said).", comment: "Spoken message")); then(nil, nil) } }
         }
     }
 

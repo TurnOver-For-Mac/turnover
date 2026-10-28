@@ -218,6 +218,23 @@
         }
       }
     },
+    "%@ catalog results for %@" : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ catalog results for %2$@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%2$@ için %1$@ katalog sonucu"
+          }
+        }
+      }
+    },
     "%@ characters" : {
       "comment" : "A count of characters (a password's, a long text's)",
       "localizations" : {
@@ -468,6 +485,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ ekranda değil"
+          }
+        }
+      }
+    },
+    "%@ is now %@" : {
+      "comment" : "A piece of the reading order moved: its name, then its new place (2nd)",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ is now %2$@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ artık %2$@ sırada"
           }
         }
       }
@@ -1744,6 +1778,40 @@
         }
       }
     },
+    "%@. %@, not said" : {
+      "comment" : "A piece of an item's announcement in the reading order: its place and name",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@. %2$@, not said"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@. %2$@, söylenmiyor"
+          }
+        }
+      }
+    },
+    "%@. %@, said" : {
+      "comment" : "A piece of an item's announcement in the reading order: its place and name",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@. %2$@, said"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@. %2$@, söyleniyor"
+          }
+        }
+      }
+    },
     "%@. Arrows, Shift for small steps. Escape stops" : {
       "comment" : "Moving or resizing with the arrows: %@ says which",
       "localizations" : {
@@ -1905,6 +1973,50 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@: %2$@ yazar"
+          }
+        }
+      }
+    },
+    "%@nd" : {
+      "comment" : "An ordinal number: 2nd, 22nd",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@."
+          }
+        }
+      }
+    },
+    "%@rd" : {
+      "comment" : "An ordinal number: 3rd, 23rd",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@."
+          }
+        }
+      }
+    },
+    "%@st" : {
+      "comment" : "An ordinal number: 1st, 21st",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@."
+          }
+        }
+      }
+    },
+    "%@th" : {
+      "comment" : "An ordinal number: 4th, 11th",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@."
           }
         }
       }
@@ -2516,6 +2628,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Eklentiler"
+          }
+        }
+      }
+    },
+    "After Return clicks something, recognise again" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Return bir şeye tıkladıktan sonra yeniden tanı"
           }
         }
       }
@@ -3508,7 +3630,6 @@
     },
     "CoExist off. TurnOver restarts, and VoiceOver's settings are put back." : {
       "comment" : "CoExist turned off",
-      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -3520,7 +3641,6 @@
     },
     "CoExist off. TurnOver restarts." : {
       "comment" : "Spoken message",
-      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -3532,7 +3652,6 @@
     },
     "CoExist on. TurnOver restarts, then VoiceOver Utility opens and closes by itself to set VoiceOver up." : {
       "comment" : "CoExist turned on",
-      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -3544,7 +3663,6 @@
     },
     "CoExist on. TurnOver restarts." : {
       "comment" : "Spoken message",
-      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -3555,7 +3673,6 @@
       }
     },
     "CoExist: VoiceOver stays running alongside TurnOver" : {
-      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -4514,6 +4631,16 @@
         }
       }
     },
+    "Down" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aşağı"
+          }
+        }
+      }
+    },
     "Down (joystick down, or the key VoiceOver uses to move down)" : {
       "comment" : "A braille display key, as VoiceOver names it",
       "localizations" : {
@@ -4597,6 +4724,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tümünü okurken: yalnızca bu okuma için daha yavaş (JAWS: Page Down)"
+          }
+        }
+      }
+    },
+    "E screen interface" : {
+      "comment" : "A letter's command, as the TurnOver layer lists them",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "E ekran arayüzü"
           }
         }
       }
@@ -4780,6 +4918,16 @@
         }
       }
     },
+    "Everywhere" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Her yerde"
+          }
+        }
+      }
+    },
     "Expands or collapses the item, and says which" : {
       "comment" : "A command, as the key list and keyboard help say it",
       "localizations" : {
@@ -4803,11 +4951,22 @@
       }
     },
     "Experimental: readers per app" : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Deneysel: uygulamaya göre okuyucular"
+          }
+        }
+      }
+    },
+    "Experimental: readers per app, CoExist" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deneysel: uygulamaya göre okuyucular, CoExist"
           }
         }
       }
@@ -4991,6 +5150,16 @@
         }
       }
     },
+    "For" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kapsam"
+          }
+        }
+      }
+    },
     "For each display's width of message" : {
       "localizations" : {
         "tr" : {
@@ -5089,6 +5258,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "İşaretlenen 1 anı unut"
+          }
+        }
+      }
+    },
+    "Forgets this app's own order; the Settings window's default applies" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu uygulamanın kendi sırasını unutur; Ayarlar penceresindeki varsayılan geçerli olur"
           }
         }
       }
@@ -5585,6 +5764,17 @@
         }
       }
     },
+    "Help text" : {
+      "comment" : "A piece of an item's announcement, in the reading order",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yardım metni"
+          }
+        }
+      }
+    },
     "Help text of items" : {
       "localizations" : {
         "tr" : {
@@ -5644,6 +5834,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Etkin noktalar"
+          }
+        }
+      }
+    },
+    "How items are read in %@" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ uygulamasında öğeler nasıl okunur"
           }
         }
       }
@@ -6361,6 +6561,17 @@
         }
       }
     },
+    "Keyboard shortcut" : {
+      "comment" : "A piece of an item's announcement, in the reading order",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Klavye kısayolu"
+          }
+        }
+      }
+    },
     "Keyboard style" : {
       "localizations" : {
         "tr" : {
@@ -6442,6 +6653,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ sürümünde tuşlar"
+          }
+        }
+      }
+    },
+    "Kind, such as button or link" : {
+      "comment" : "A piece of an item's announcement, in the reading order",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tür, örneğin düğme ya da bağlantı"
           }
         }
       }
@@ -6653,6 +6875,27 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tuşları bırakın, sonra yeniden Komut Kontrol Ç'ye basın."
+          }
+        }
+      }
+    },
+    "Level, in a tree or outline" : {
+      "comment" : "A piece of an item's announcement, in the reading order",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Düzey, ağaçta ya da anahatta"
+          }
+        }
+      }
+    },
+    "Line by line" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Satır satır"
           }
         }
       }
@@ -7111,6 +7354,36 @@
         }
       }
     },
+    "Move %@ down" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ öğesini aşağı taşı"
+          }
+        }
+      }
+    },
+    "Move %@ up" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ öğesini yukarı taşı"
+          }
+        }
+      }
+    },
+    "Move down" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aşağı taşı"
+          }
+        }
+      }
+    },
     "Move focus here; moves the keyboard focus to the item object navigation is on" : {
       "comment" : "A command, as the key list and keyboard help say it",
       "localizations" : {
@@ -7118,6 +7391,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Odağı buraya taşı; klavye odağını nesne gezinmesinin üzerinde olduğu öğeye taşır"
+          }
+        }
+      }
+    },
+    "Move up" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yukarı taşı"
           }
         }
       }
@@ -8082,6 +8365,17 @@
         }
       }
     },
+    "Name" : {
+      "comment" : "A piece of an item's announcement, in the reading order",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ad"
+          }
+        }
+      }
+    },
     "Name for this %@" : {
       "comment" : "Labelling an item: %@ is its role",
       "localizations" : {
@@ -8475,6 +8769,17 @@
         }
       }
     },
+    "No catalog results for %@; reading the page." : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ için katalogda sonuç yok; sayfa okunuyor."
+          }
+        }
+      }
+    },
     "No changes for %@ yet" : {
       "comment" : "Spoken message: %@ is the app",
       "localizations" : {
@@ -8652,6 +8957,28 @@
         }
       }
     },
+    "Not opened: %@." : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Açılmadı: %@."
+          }
+        }
+      }
+    },
+    "Not opened: the row isn't on screen now." : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Açılmadı: satır şu anda ekranda değil."
+          }
+        }
+      }
+    },
     "Not reading Big Picture." : {
       "comment" : "The Steam program's status",
       "localizations" : {
@@ -8738,6 +9065,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Hiçbir şey"
+          }
+        }
+      }
+    },
+    "Nothing in this window can be read. Press %@ to recognise the screen." : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu pencerede okunabilecek bir şey yok. Ekranı tanımak için %@ tuşuna basın."
           }
         }
       }
@@ -8981,6 +9319,7 @@
     },
     "One moment: TurnOver is putting VoiceOver's settings back. Press again when it says done." : {
       "comment" : "Spoken message",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -9039,6 +9378,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Eklenti kılavuzunu aç"
+          }
+        }
+      }
+    },
+    "Opening %@" : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ açılıyor"
           }
         }
       }
@@ -9459,6 +9809,26 @@
         }
       }
     },
+    "Panning moves the cursor" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kaydırma imleci taşır"
+          }
+        }
+      }
+    },
+    "Panning on to another line moves the caret there, so the arrows carry on from what was read. Tethered to review, panning moves only the review cursor." : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Başka bir satıra kaydırmak imleci oraya taşır, böylece ok tuşları okunan yerden devam eder. İncelemeye bağlıyken kaydırma yalnızca inceleme imlecini taşır."
+          }
+        }
+      }
+    },
     "Pause or resume speaking" : {
       "comment" : "A command, as the key list and keyboard help say it",
       "localizations" : {
@@ -9652,6 +10022,7 @@
       }
     },
     "Position, such as 3 of 10" : {
+      "comment" : "A piece of an item's announcement, in the reading order",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -11671,6 +12042,16 @@
         }
       }
     },
+    "Return switches whether this piece is spoken in %@" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Return, bu parçanın %@ uygulamasında söylenip söylenmeyeceğini değiştirir"
+          }
+        }
+      }
+    },
     "Return to type a search. Tab for the page." : {
       "comment" : "A hint in the App Store",
       "localizations" : {
@@ -11837,6 +12218,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Söylensin"
+          }
+        }
+      }
+    },
+    "Said earlier" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Daha önce söylenir"
+          }
+        }
+      }
+    },
+    "Said later" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Daha sonra söylenir"
           }
         }
       }
@@ -13089,6 +13490,17 @@
         }
       }
     },
+    "State, such as checked or expanded" : {
+      "comment" : "A piece of an item's announcement, in the reading order",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durum, örneğin işaretli ya da genişletilmiş"
+          }
+        }
+      }
+    },
     "Status menus" : {
       "localizations" : {
         "tr" : {
@@ -13476,6 +13888,7 @@
     },
     "Tab or Shift Tab leaves a password field; macOS keeps the arrow keys from TurnOver here." : {
       "comment" : "Spoken message",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -13868,6 +14281,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Altyazı paneli (VO-Komut-F10)"
+          }
+        }
+      }
+    },
+    "The catalog did not answer: %@. Reading the page." : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Katalog yanıt vermedi: %@. Sayfa okunuyor."
           }
         }
       }
@@ -14287,6 +14711,16 @@
         }
       }
     },
+    "The pieces of an announcement in the order they are said; each can be moved or switched off, for this app only" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bir duyurunun parçaları söylendikleri sırayla; her biri yalnızca bu uygulama için taşınabilir ya da kapatılabilir"
+          }
+        }
+      }
+    },
     "The plugin does not load: %@" : {
       "comment" : "A plugin's problem: %@ is the problem (in English)",
       "localizations" : {
@@ -14480,6 +14914,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gelecek haftanın aynı günü"
+          }
+        }
+      }
+    },
+    "The screen that follows a click is read without pressing the key again; off, the result closes after the click." : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tıklamadan sonra gelen ekran, tuşa yeniden basmadan okunur; kapalıyken sonuç tıklamadan sonra kapanır."
           }
         }
       }
@@ -14791,6 +15235,16 @@
         }
       }
     },
+    "To the text shown" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gösterilen metne"
+          }
+        }
+      }
+    },
     "Today, %@" : {
       "comment" : "A Calendar day that is today: %@ is the date",
       "localizations" : {
@@ -14890,7 +15344,7 @@
       }
     },
     "TurnOver %@, build %@, a screen reader for the Mac. It reads the apps you give it under Tools. Feature requests and bug reports through GitHub." : {
-      "comment" : "Spoken message",
+      "comment" : "About TurnOver",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14907,8 +15361,7 @@
       }
     },
     "TurnOver %@, build %@, a screen reader for the Mac. It reads the apps you give it under Tools; with CoExist on, VoiceOver reads the rest. Feature requests and bug reports through GitHub." : {
-      "comment" : "About TurnOver, with CoExist on",
-      "extractionState" : "stale",
+      "comment" : "About TurnOver",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14979,7 +15432,6 @@
     },
     "TurnOver can't keep VoiceOver quiet, so you may hear both. In System Settings, Privacy and Security, Screen and System Audio Recording, turn TurnOver on; or turn CoExist off in TurnOver's Settings, Experimental." : {
       "comment" : "Spoken message",
-      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -15299,7 +15751,7 @@
       }
     },
     "TurnOver leads in %@" : {
-      "comment" : "TurnOver reads the app in front: %@ is the app",
+      "comment" : "Spoken message\nTurnOver reads the app in front: %@ is the app",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -15387,7 +15839,7 @@
       }
     },
     "TurnOver off" : {
-      "comment" : "TurnOver Key: Command Control Period turned TurnOver off",
+      "comment" : "Spoken message\nTurnOver Key: Command Control Period turned TurnOver off",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -15782,6 +16234,16 @@
         }
       }
     },
+    "Up" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yukarı"
+          }
+        }
+      }
+    },
     "Up (joystick up, or the key VoiceOver uses to move up)" : {
       "comment" : "A braille display key, as VoiceOver names it",
       "localizations" : {
@@ -15924,6 +16386,36 @@
         }
       }
     },
+    "Use the default order in %@ again" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ uygulamasında yeniden varsayılan sırayı kullan"
+          }
+        }
+      }
+    },
+    "Use the everywhere list for this app" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu uygulama için her yerdeki listeyi kullan"
+          }
+        }
+      }
+    },
+    "Using the everywhere list. A change here starts a list for this app." : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Her yerdeki liste kullanılıyor. Burada yapılan bir değişiklik bu uygulama için ayrı bir liste başlatır."
+          }
+        }
+      }
+    },
     "V O" : {
       "comment" : "The VO key (Control and Option), as spoken",
       "localizations" : {
@@ -15986,6 +16478,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "iki kez VO-F1"
+          }
+        }
+      }
+    },
+    "Value" : {
+      "comment" : "A piece of an item's announcement, in the reading order",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Değer"
           }
         }
       }
@@ -16083,6 +16586,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Her yerde VoiceOver"
+          }
+        }
+      }
+    },
+    "VoiceOver is kept quiet by an audio tap where TurnOver reads and keeps passwords and macOS's own prompts. Removed on 24 Oct 2026 and back as an experiment: it can leave a Mac silent if macOS asks for audio permission while VoiceOver is muted. Changing it restarts TurnOver." : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TurnOver'ın okuduğu yerlerde VoiceOver bir ses yakalayıcıyla susturulur; parolalar ve macOS'un kendi uyarıları VoiceOver'da kalır. 24 Ekim 2026'da kaldırıldı, deneme olarak geri geldi: VoiceOver susturulmuşken macOS ses izni isterse Mac sessiz kalabilir. Değiştirmek TurnOver'ı yeniden başlatır."
           }
         }
       }
@@ -16200,7 +16713,6 @@
     },
     "VoiceOver stopped; starting it again." : {
       "comment" : "Spoken message",
-      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -16444,6 +16956,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "TurnOver nedir ve tuşları"
+          }
+        }
+      }
+    },
+    "What is said about an item, in order" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bir öğe hakkında söylenenler, sırayla"
           }
         }
       }
@@ -17016,6 +17538,28 @@
         }
       }
     },
+    "already first" : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "zaten ilk sırada"
+          }
+        }
+      }
+    },
+    "already last" : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "zaten son sırada"
+          }
+        }
+      }
+    },
     "always" : {
       "comment" : "When typed characters or words are spoken",
       "localizations" : {
@@ -17089,6 +17633,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "makale"
+          }
+        }
+      }
+    },
+    "asking the catalog; a moment" : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "katalog soruluyor; bir dakika"
           }
         }
       }
@@ -18201,7 +18756,7 @@
       }
     },
     "could not reach %@; try again" : {
-      "comment" : "An App Store item could not be reached: %@ is its name",
+      "comment" : "Spoken message",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -18218,6 +18773,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "arama alanına ulaşılamadı"
+          }
+        }
+      }
+    },
+    "could not see the window" : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pencere görülemedi"
           }
         }
       }
@@ -22130,6 +22696,17 @@
         }
       }
     },
+    "nothing to open yet" : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "henüz açılacak bir şey yok"
+          }
+        }
+      }
+    },
     "nothing to read here" : {
       "comment" : "Steam's Big Picture page has nothing to read",
       "localizations" : {
@@ -22983,6 +23560,17 @@
         }
       }
     },
+    "reading the screen's controls" : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ekranın denetimleri okunuyor"
+          }
+        }
+      }
+    },
     "reading the whole page" : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -23408,6 +23996,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ekran perdesi açık"
+          }
+        }
+      }
+    },
+    "screen interface: the window's controls from its pixels (experimental)" : {
+      "comment" : "A letter's command in the TurnOver layer (Command Control Comma)",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ekran arayüzü: pencerenin denetimleri piksellerinden (deneysel)"
           }
         }
       }
@@ -24134,6 +24733,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "hâlâ betimleniyor"
+          }
+        }
+      }
+    },
+    "still reading the results; a moment" : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sonuçlar hâlâ okunuyor; bir dakika"
           }
         }
       }
@@ -25488,6 +26098,28 @@
         }
       }
     },
+    "the catalog did not answer" : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "katalog yanıt vermedi"
+          }
+        }
+      }
+    },
+    "the default order" : {
+      "comment" : "Spoken message: an app's reading order back to the default",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "varsayılan sıra"
+          }
+        }
+      }
+    },
     "the log can't be read" : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -25506,6 +26138,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "resim yakalanamadı. TurnOver'ın Sistem Ayarları, Gizlilik ve Güvenlik'te Ekran Kaydı iznine ihtiyacı var"
+          }
+        }
+      }
+    },
+    "the screen interface needs macOS 26 or later" : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ekran arayüzü için macOS 26 ya da sonrası gerekiyor"
           }
         }
       }

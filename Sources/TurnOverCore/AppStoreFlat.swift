@@ -135,7 +135,7 @@ final class AppStoreResults {
 
     func move(_ d: Int) {
         guard active else { return }
-        guard !items.isEmpty else { Speech.speakMessage("still reading the results; a moment"); return }
+        guard !items.isEmpty else { Speech.speakMessage(String(localized: "still reading the results; a moment", comment: "Spoken message")); return }
         let j = index + d
         if items.indices.contains(j) { _ = newNavigation(); index = j; speak(j); return }
         guard d > 0, !extending else { Tones.edge(); speak(index); return }
@@ -181,11 +181,11 @@ final class AppStoreResults {
     }
     func open() {
         guard active else { return }
-        guard items.indices.contains(index), let name = items[index].name else { Speech.speakMessage("nothing to open yet"); return }
+        guard items.indices.contains(index), let name = items[index].name else { Speech.speakMessage(String(localized: "nothing to open yet", comment: "Spoken message")); return }
         let g = generation, request = newNavigation()
         view.resolve(items[index]) { [weak self] point in
             guard let self, active, generation == g, navigation == request else { return }
-            guard let point else { Speech.speakMessage("Not opened: the row isn't on screen now."); return }
+            guard let point else { Speech.speakMessage(String(localized: "Not opened: the row isn't on screen now.", comment: "Spoken message")); return }
             openRow(name, point)
         }
     }

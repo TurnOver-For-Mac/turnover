@@ -115,7 +115,7 @@ public enum SettingsBridge {
         if let a = patch["_speechPortAllowed"] as? [String: Any], let id = a["id"] as? String, let on = a["allowed"] as? Bool { SpeechPort.shared.setAllowed(id, on) }
         if let on = patch["_coexist"] as? Bool, on != Coexist.wouldBeOn {
             UserDefaults.standard.set(on, forKey: "coexist")
-            Speech.speakMessage(on ? "CoExist on. TurnOver restarts." : "CoExist off. TurnOver restarts.")
+            Speech.speakMessage(on ? String(localized: "CoExist on. TurnOver restarts.", comment: "Spoken message") : String(localized: "CoExist off. TurnOver restarts.", comment: "Spoken message"))
             Log.info("settings app: CoExist \(on ? "on" : "off"); restarting")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { (restart ?? TurnOverMenu.shared.relaunch)?() }
             return

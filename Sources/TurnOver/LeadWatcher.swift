@@ -522,7 +522,7 @@ final class LeadWatcher {
         if toTurnOver, Coexist.on {
             // Said first, then the app, as "VoiceOver leads in" is: said once TurnOver was up, it came after the app's
             // window, field and all, and wasn't heard (19 Oct 2026, twice).
-            Speech.speakMessage("TurnOver leads in \(name)")
+            Speech.speakMessage(String(localized: "TurnOver leads in \(name)", comment: "Spoken message"))
             settleReader(after: 1.0, generation: choiceGeneration)
         } else if toTurnOver {
             handOver(voiceOverOn: false)

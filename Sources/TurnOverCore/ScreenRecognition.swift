@@ -91,17 +91,17 @@ public final class ScreenRecognition {
     /// a recognition result whose rows are the controls: "Save, button". Return clicks the control.
     public func recognizeInterface() {
         guard Edition.devDefault("flatView") else { recognize(); return }
-        guard #available(macOS 26.0, *) else { Speech.speakMessage("the screen interface needs macOS 26 or later"); return }
-        guard !working else { Speech.speakMessage("still recognising"); return }
+        guard #available(macOS 26.0, *) else { Speech.speakMessage(String(localized: "the screen interface needs macOS 26 or later", comment: "Spoken message")); return }
+        guard !working else { Speech.speakMessage(String(localized: "still recognising", comment: "Spoken message")); return }
         guard ScreenCapturePermission.ensure() else { finished(); return }
-        guard let target = Self.target() else { Speech.speakMessage("no window to recognise"); finished(); return }
+        guard let target = Self.target() else { Speech.speakMessage(String(localized: "no window to recognise", comment: "Spoken message")); finished(); return }
         working = true
         let started = Date()
-        Speech.speakMessage("reading the screen's controls")
+        Speech.speakMessage(String(localized: "reading the screen's controls", comment: "Spoken message"))
         Task.detached(priority: .userInitiated) {
             let image: CGImage
             do { image = try await Self.capture(target) } catch {
-                await MainActor.run { self.working = false; Speech.speakMessage("could not see the window"); if !self.isOpen { self.finished() } }
+                await MainActor.run { self.working = false; Speech.speakMessage(String(localized: "could not see the window", comment: "Spoken message")); if !self.isOpen { self.finished() } }
                 return
             }
             let d = await ScreenInterface.detect(image, frame: target.frame)

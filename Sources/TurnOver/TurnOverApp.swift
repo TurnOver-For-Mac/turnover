@@ -551,7 +551,7 @@ final class TurnOverApp {
         if lead.suspended {
             lead.suspended = false
             lead.yieldedToVoiceOverByHand = false   // turned on by its own key: it takes the app in front again
-            Speech.speakMessage("TurnOver on")
+            Speech.speakMessage(String(localized: "TurnOver on", comment: "Spoken message"))
             if !Coexist.on, !config.applications.swapWithVoiceOver {
                 activate()   // on by its key, whatever VoiceOver is doing: the swap is off
             } else if let front = NSWorkspace.shared.frontmostApplication {
@@ -561,7 +561,7 @@ final class TurnOverApp {
         } else {
             lead.suspended = true
             // Said before TurnOver steps back, with its own voice: VoiceOver's is silent here (the code review, 17 Oct 2026).
-            Speech.speakMessage("TurnOver off")
+            Speech.speakMessage(String(localized: "TurnOver off", comment: "Spoken message"))
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
                 // Turned on again within the pause: nothing to hand back (off then on in two seconds left VoiceOver
                 // unmuted under TurnOver, the hand-back landing after the take: 18 Oct 2026).

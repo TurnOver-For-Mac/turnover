@@ -397,10 +397,12 @@ struct ItemsView: View {
     // everywhere and one for the app last in front, kept apart. The three old switches (help text, shortcut,
     // position) are rows of this list now. The names match Config.Verbosity.titles.
     private static let pieces = ["name", "role", "value", "state", "description", "shortcut", "position", "level"]
-    private static let titles: [String: String] = [
-        "name": "Name", "role": "Kind, such as button or link", "value": "Value", "state": "State, such as checked or expanded",
-        "description": "Help text", "shortcut": "Keyboard shortcut", "position": "Position, such as 3 of 10", "level": "Level, in a tree or outline",
-    ]
+    private static var titles: [String: String] {
+        ["name": String(localized: "Name", comment: "A piece of an item's announcement, in the reading order"), "role": String(localized: "Kind, such as button or link", comment: "A piece of an item's announcement, in the reading order"),
+         "value": String(localized: "Value", comment: "A piece of an item's announcement, in the reading order"), "state": String(localized: "State, such as checked or expanded", comment: "A piece of an item's announcement, in the reading order"),
+         "description": String(localized: "Help text", comment: "A piece of an item's announcement, in the reading order"), "shortcut": String(localized: "Keyboard shortcut", comment: "A piece of an item's announcement, in the reading order"),
+         "position": String(localized: "Position, such as 3 of 10", comment: "A piece of an item's announcement, in the reading order"), "level": String(localized: "Level, in a tree or outline", comment: "A piece of an item's announcement, in the reading order")]
+    }
     private var frontApp: (bundle: String, name: String)? {
         guard let d = model.special("_frontApp") as? [String: Any], let b = d["bundle"] as? String, let n = d["name"] as? String else { return nil }
         return (b, n)

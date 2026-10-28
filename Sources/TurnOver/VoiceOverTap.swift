@@ -104,7 +104,7 @@ enum VoiceOverTap {
                             // who said no to macOS's audio question, or a macOS that changed the tap; 19 Oct 2026).
                             if !toldCantSilence {
                                 toldCantSilence = true
-                                Speech.speakMessage("TurnOver can't keep VoiceOver quiet, so you may hear both. In System Settings, Privacy and Security, Screen and System Audio Recording, turn TurnOver on; or turn CoExist off in TurnOver's Settings, Experimental.")
+                                Speech.speakMessage(String(localized: "TurnOver can't keep VoiceOver quiet, so you may hear both. In System Settings, Privacy and Security, Screen and System Audio Recording, turn TurnOver on; or turn CoExist off in TurnOver's Settings, Experimental.", comment: "Spoken message"))
                             }
                         }
                         return
