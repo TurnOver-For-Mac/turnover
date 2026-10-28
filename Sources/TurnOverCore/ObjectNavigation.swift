@@ -610,6 +610,7 @@ public final class ObjectNavigator {
         let cursor = current
         let focus = API.focusObject?.element
         let foreground = API.foregroundObject?.element
+        let frontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier
         guard cursor != nil || focus != nil else { Speech.speakMessage("nothing to search"); return }
         let queries = WindowKindQueries<AXUIElement, ElementKey>(
             identity: { ElementKey($0) },
@@ -641,6 +642,7 @@ public final class ObjectNavigator {
             }
         } publish: { [weak self] result in
             guard let self, Core.active,
+                  NSWorkspace.shared.frontmostApplication?.processIdentifier == frontmost,
                   Self.sameSnapshot(self.current, cursor), Self.sameSnapshot(API.focusObject?.element, focus),
                   Self.sameSnapshot(API.foregroundObject?.element, foreground) else { return }
             switch result {
