@@ -52,7 +52,7 @@ final class HelperProgram {
             let d = h.availableData
             if d.isEmpty { h.readabilityHandler = nil; return }
             let text = String(decoding: d, as: UTF8.self)
-            DispatchQueue.main.async { Log.info("\(label) (errors): \(text.prefix(300))") }
+            DispatchQueue.main.async { Log.info("\(label) (errors): \(Log.words(String(text.prefix(300))))") }
         }
         Log.info("\(name): started (pid \(pid)\(disclaimed ? ", without TurnOver's permissions" : "; WARNING: it may have TurnOver's permissions"))")
     }
@@ -75,7 +75,8 @@ final class HelperProgram {
 
     private func received(_ data: Data) {
         for line in lines.add(data) where !line.isEmpty {
-            if line.hasPrefix("L ") { Log.info("\(name): \(line.dropFirst(2).prefix(300))") } else { onLine(line) }
+            // Helpers can include page text or error details in diagnostics (issue 68, 28 Oct 2026).
+            if line.hasPrefix("L ") { Log.info("\(name): \(Log.words(String(line.dropFirst(2).prefix(300))))") } else { onLine(line) }
         }
     }
 

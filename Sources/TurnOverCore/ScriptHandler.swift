@@ -80,7 +80,7 @@ public enum ScriptHandler {
 
     nonisolated public static func askMain(_ gesture: KeyboardGesture) -> KeyDecision {
         keysArrived.lock.lock(); keysArrived.unsafeValue &+= 1; keysArrived.lock.unlock()
-        guard !(mainStuck?() ?? false) else { Log.warning("keyboard: the main thread is not beating; \(gesture.identifier) goes through"); return .passed }
+        guard !(mainStuck?() ?? false) else { Log.warning("keyboard: the main thread is not beating; \(gesture.logDescription()) goes through"); return .passed }
         let state = Locked(Wait.waiting); let done = DispatchSemaphore(value: 0)
         let started = DispatchTime.now()
         DispatchQueue.main.async { MainActor.assumeIsolated {
@@ -91,7 +91,7 @@ public enum ScriptHandler {
             state.lock.unlock()
             if late {
                 let ms = Double(DispatchTime.now().uptimeNanoseconds - started.uptimeNanoseconds) / 1e6
-                Log.warning("keyboard: \(gesture.identifier) answered after \(Int(ms)) ms: \(taken ? "its script runs now" : "sent on to the application now")")
+                Log.warning("keyboard: \(gesture.logDescription()) answered after \(Int(ms)) ms: \(taken ? "its script runs now" : "sent on to the application now")")
                 if !taken { gesture.send() }
             } else { done.signal() }
         } }

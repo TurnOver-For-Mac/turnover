@@ -38,6 +38,24 @@ A live listening check remains required before release: normal speech, sleep/wak
 player stall. Name macOS, the voice/output device, keyboard style and reader mode. Passing these tests does not
 establish how a real CoreAudio stall or a device handover sounds.
 
+## Privacy regressions (every build)
+
+`turnover-tests privacy -v` exercises typed-key diagnostic masking, braille input and feedback redaction using
+synthetic text. Braille tests replay ordinary and password fields, intercept every text/key post, and supply a
+test translator; they never type into another app, open the user's logs or disable VoiceOver. The speech sink
+checks the private flag on actual typing/deletion echo, rather than relying on empty history with speech off.
+The Steam helper's `--self-test` checks its page/element diagnostic formatters too.
+
+Feedback always redacts diagnostic logs, even when speech is included. Consented speech comes from the current
+session's history; private typing is excluded there. This also prevents old unmarked braille echo in disk logs
+from being exported as speech. Existing logs on disk are not rewritten or deleted by this fix.
+
+Before releasing, check on a real braille display: contracted and uncontracted typing, late-space chords, word
+and character echo, and dot-7 deletion of a pending cell in a disposable password field. Use synthetic text;
+verify the cell is removed silently and ordinary echo still sounds right. Name the display, USB/Bluetooth,
+macOS version and keyboard style. The automated tests do not establish driver delivery during Secure Input or
+how speech sounds on hardware.
+
 ## Braille driver thread (every build)
 
 `bash Tools/tests/braille-thread-test.sh` compiles the real Objective-C bridge with a fake driver which runs its
