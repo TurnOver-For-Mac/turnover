@@ -20,6 +20,9 @@ let gates: [String: (name: String, help: String, run: ([String]) -> Void)] = [
     "inspect":  ("inspect",
                  "Read-only look at an app's focused window and element: roles, attributes, text queries. --app Name | --bundle id | --pid N [--value]",
                  runInspectGate),
+    "appstore-navigation": ("appstore-navigation",
+                 "Read-only preview using production public navigation children. Existing App Store only; metadata by default. [--public-labels] requires revalidated Discover content. No UI actions or reader toggles.",
+                 runAppStoreNavigationGate),
     "text":     ("text",
                  "Gate 7: 200 simulated arrow presses on a 5 MB file in TextEdit, bounded reads only. Takes the front. --lines N --mb N --keep",
                  runTextGate),
@@ -65,7 +68,7 @@ guard let gateName = args.first, let gate = gates[gateName] else {
 }
 
 Log.open(gate: gate.name)
-Log.line("turnover-probe \(gate.name) \(args.dropFirst().joined(separator: " "))")
-Log.line("macOS \(ProcessInfo.processInfo.operatingSystemVersionString), pid \(getpid()), VoiceOver running: \(voiceOverRunning())")
+Log.line(gateName == "appstore-navigation" ? "turnover-probe appstore-navigation" : "turnover-probe \(gate.name) \(args.dropFirst().joined(separator: " "))")
+Log.line("macOS \(ProcessInfo.processInfo.operatingSystemVersionString), pid \(getpid()), VoiceOver enabled flag: \(voiceOverRunning())")
 gate.run(Array(args.dropFirst()))
 Log.close()
