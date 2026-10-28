@@ -537,7 +537,7 @@ final class WordAppModule: AppModule {
         AXHandler.shared.focusChanged(area, pid: pid)
     }
 
-    override func terminate() { caretArea = nil; lastDocument = nil; pageRanges = [] }
+    override func terminate() { caretArea = nil; lastDocument = nil; pageRanges = []; pageRangeWindow = nil }
 
     /// Word's own section of the TurnOver menu: how comments are announced as the caret reaches them, and the
     /// Word commands that have no key of their own.
@@ -620,20 +620,38 @@ final class WordAppModule: AppModule {
         return (rows, restore)
     }
 
-    /// Every page area with its slice of the document-global index space (AXSharedTextUIElements +
-    /// AXSharedCharacterRange), cached; rebuilt when an index falls outside every cached page.
+    /// Every page area with its slice of the document-global index space. A window change or reflow must not
+    /// reuse another document's page or old bounds (source regression, 29 Oct 2026, issue 178).
     private var pageRanges: [(area: AXUIElement, start: Int, end: Int)] = []
+    private var pageRangeWindow: AXUIElement?
     func pageArea(containing offset: Int, near element: AXUIElement) -> AXUIElement? {
-        func find() -> AXUIElement? { pageRanges.first { offset >= $0.start && offset < $0.end }?.area }
-        if let a = find() { return a }
+        guard offset >= 0 else { return nil }
+        func range(of area: AXUIElement) -> (start: Int, end: Int)? {
+            guard let r = cfRange(area.attr("AXSharedCharacterRange")), r.location >= 0, r.length >= 0,
+                  r.location != Int.max else { return nil }
+            let (end, overflow) = r.location.addingReportingOverflow(r.length)
+            guard !overflow else { return nil }
+            return (r.location, end)
+        }
+        // The end is inclusive: Word omits the paragraph mark ending a page from its shared range.
+        func contains(_ r: (start: Int, end: Int)) -> Bool { offset >= r.start && offset <= r.end }
+        // Normal caret reads need one bounded range query, rather than mapping every page in a long document.
+        if let r = range(of: element), contains(r) { return element }
+        let window = element.element(kAXWindowAttribute) ?? SettingsPanePlugin.windowOf(element)
+        if window == nil || pageRangeWindow == nil || !CFEqual(window, pageRangeWindow) {
+            pageRanges = []
+            pageRangeWindow = window
+        }
+        if let cached = pageRanges.first(where: { contains(($0.start, $0.end)) })?.area,
+           let live = range(of: cached), contains(live) { return cached }
         let t0 = Date()
         let areas = element.elements("AXSharedTextUIElements")
         pageRanges = areas.compactMap { a in
-            guard let r = cfRange(a.attr("AXSharedCharacterRange")), r.location != Int.max else { return nil }
-            return (a, r.location, r.location + r.length + 1)   // +1: the paragraph mark that ends the page
+            guard let r = range(of: a) else { return nil }
+            return (a, r.start, r.end)
         }
         Log.debug("Word: \(pageRanges.count) page areas mapped in \(Int(Date().timeIntervalSince(t0) * 1000)) ms")
-        return find()
+        return pageRanges.first { contains(($0.start, $0.end)) }?.area
     }
 }
 
@@ -1156,20 +1174,27 @@ final class WordTextInfo: AXTextInfo {
         let module = obj.appModule as? WordAppModule
         let area = module?.pageArea(containing: offset, near: textElement) ?? textElement
         let n = storyLength()
+        guard offset >= 0, n >= 0 else { return nil }
         // The empty last paragraph (after Return at the end): Word counts no mark for it, so the caret is past the end.
         if offset >= n, n > 0, let last = textRange(n - 1, n).last, last == "\r" || last == "\n" { return (n, n) }
         let probe = offset >= n && n > 0 ? n - 1 : offset
         guard let line = (area.param(kAXLineForIndexParameterizedAttribute, probe as CFNumber) as? NSNumber)?.intValue,
               let r = cfRange(area.param(kAXRangeForLineParameterizedAttribute, line as CFNumber)), r.length > 0 else { return nil }
+        let (lineEnd, overflow) = r.location.addingReportingOverflow(r.length)
+        let (storyEnd, storyOverflow) = n.addingReportingOverflow(1)
+        guard r.location >= 0, !overflow, !storyOverflow, r.location <= n, lineEnd <= storyEnd else { return nil }
         // An empty paragraph is one paragraph mark; Word's line for its index can be the line after it.
         // The line must hold the index asked for, or the empty line is the mark itself.
-        if offset < n, (offset < r.location || offset >= r.location + r.length) {
+        if offset < n, (offset < r.location || offset >= lineEnd) {
             let ch = textRange(offset, offset + 1)
             if ch == "\r" || ch == "\n" { return (offset, offset + 1) }
         }
+        // Word answers the wrong page's last line when a page disappeared or moved between queries. Refuse that
+        // line so the existing paragraph fallback can read the requested position instead of repeating old text.
+        guard probe >= r.location, probe < lineEnd else { return nil }
         // Word's line can run past a paragraph mark into a table's stand-in ("Client details⏎Table, 6 Rows,
         // 2 Columns, , "): a line ends at its paragraph mark.
-        var a = r.location, b = r.location + r.length
+        var a = r.location, b = lineEnd
         let t = textRange(a, b) as NSString
         let base = a
         for i in 0..<max(0, t.length - 1) where t.character(at: i) == 13 || t.character(at: i) == 10 {
