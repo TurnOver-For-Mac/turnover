@@ -40,11 +40,15 @@ private func firstContentFixture(leadingEmpty: Bool = false, middleReady: Bool =
 }
 
 private final class FirstContentRig {
-    let worker = DispatchQueue(label: "turnover.tests.store-first-content")
-    let deliveries = Locked<[@MainActor @Sendable () -> Void]>([])
+    let worker: DispatchQueue
+    let deliveries: Locked<[@MainActor @Sendable () -> Void]>
     let owner: AppStoreModelOwner
 
     init(materializeOnScroll: Bool = false) {
+        let worker = DispatchQueue(label: "turnover.tests.store-first-content")
+        let deliveries = Locked<[@MainActor @Sendable () -> Void]>([])
+        self.worker = worker
+        self.deliveries = deliveries
         let nav = AXNavigationChildren.navigationAttribute
         let source = AppStoreAXModelSource(pid: AXReplay.floor, makeNavigation: { limits, current in
             var provider = AXNavigationChildren.Source()
@@ -64,7 +68,6 @@ private final class FirstContentRig {
             }
             return AXNavigationChildren(limits: limits, current: current, source: provider)
         })
-        let deliveries = self.deliveries
         owner = AppStoreModelOwner(pid: AXReplay.floor, source: source, queue: worker, deliver: { callback in
             deliveries.lock.lock(); deliveries.unsafeValue.append(callback); deliveries.lock.unlock()
         })
