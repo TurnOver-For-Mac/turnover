@@ -152,13 +152,34 @@ extension VoiceOverSettings {
         var c = Copied()
         c.archiveVersion = (top["ArchiveVersionVO"] as? NSNumber)?.intValue ?? 0
         // [language, {voiceId, rate, pitch, volume}, language, {…}]: the first selection is the main voice.
-        guard let sel = d["VoiceOverDefaultVoiceSelections"] as? [Any],
-              let voice = sel.first(where: { $0 is [String: Any] }) as? [String: Any],
-              let id = voice["voiceId"] as? String else { throw ReadError.noVoice }
-        c.voiceId = id
-        c.rate = (voice["rate"] as? NSNumber)?.floatValue ?? 0.5
-        c.volume = (voice["volume"] as? NSNumber)?.floatValue ?? 1
-        c.pitch = (voice["pitch"] as? NSNumber)?.floatValue ?? 0.5
+        if let sel = d["VoiceOverDefaultVoiceSelections"] as? [Any],
+           let voice = sel.first(where: { $0 is [String: Any] }) as? [String: Any],
+           let id = voice["voiceId"] as? String, !id.isEmpty {
+            c.voiceId = id
+            c.rate = (voice["rate"] as? NSNumber)?.floatValue ?? 0.5
+            c.volume = (voice["volume"] as? NSNumber)?.floatValue ?? 1
+            c.pitch = (voice["pitch"] as? NSNumber)?.floatValue ?? 0.5
+        } else {
+            // Some exports retain flattened speech fields rather than VoiceSelection objects. Only the default
+            // voice is copied: category voices and Activities must not replace it. Percentages need converting.
+            let system = "SCRCategories_SCRCategorySystemWide_SCRSpeechComponentSettings_"
+            let language = "SCRCategories_SCRCategorySystemWide_SCRSpeechLanguages_default_SCRSpeechComponentSettings_"
+            let customised = d[language + "SCRVoiceUseCustomizedVoiceSettings"] as? Bool == true
+            func field(_ name: String) -> Any? {
+                if customised, let value = d[language + name] { return value }
+                return d[system + name]
+            }
+            guard let id = field("SCRVoiceIdentifier") as? String, !id.isEmpty else { throw ReadError.noVoice }
+            func fraction(_ name: String, default fallback: Float) -> Float {
+                guard let value = field(name) as? NSNumber else { return fallback }
+                let fraction = value.floatValue / 100
+                return fraction.isFinite ? min(1, max(0, fraction)) : fallback
+            }
+            c.voiceId = id
+            c.rate = fraction("SCRRateAsPercent", default: 0.5)
+            c.pitch = fraction("SCRPitchAsPercent", default: 0.5)
+            c.volume = fraction("SCRVolumeAsPercent", default: 1)
+        }
         c.verbosity = d["SCRVerbosity_SCRVerbosityLevel"] as? String ?? ""
         c.typingEcho = d["SCRTypingEchoFeedback"] as? String ?? ""
         c.links = d["SCRCategories_SCRCategorySystemWide_SCRLinkAttributeDescriptionLevel"] as? String ?? ""
@@ -181,10 +202,10 @@ extension VoiceOverSettings {
 
     /// The settings as they were before the last copy, for Undo (15 Oct 2026: "a restore just in case").
     static let beforeURL = AppPaths.file("settings-before-voiceover-copy.json")
-    static func keepBefore() {
+    static func keepBefore(at url: URL) {
         // Only until an undo: a second copy must not overwrite the values from before the first (the code review, 17 Oct 2026).
-        guard !FileManager.default.fileExists(atPath: beforeURL.path) else { return }
-        if let data = try? JSONEncoder().encode(config) { try? data.write(to: beforeURL, options: .atomic) }
+        guard !FileManager.default.fileExists(atPath: url.path) else { return }
+        if let data = try? JSONEncoder().encode(config) { try? data.write(to: url, options: .atomic) }
     }
     /// Undo: the fields the copy changes go back to the kept values; everything else stays as it is now.
     public static func undo() -> String {
@@ -208,13 +229,14 @@ extension VoiceOverSettings {
 
     /// Applies what TurnOver can, saves, and returns what to say. A voice TurnOver can't use (a Siri voice) keeps
     /// the current one and says so.
-    public static func apply(_ c: Copied) -> String {
-        keepBefore()
+    /// Tools and tests may supply a separate Undo snapshot URL rather than use the app's live backup.
+    public static func apply(_ c: Copied, undoSnapshot: URL? = nil) -> String {
+        keepBefore(at: undoSnapshot ?? beforeURL)
         var said: [String] = []
         var voiceNote = ""
         if let v = AVSpeechSynthesisVoice(identifier: c.voiceId), !c.voiceId.contains("gryphon") {
             config.speech.voice = c.voiceId
-            Speech.player.voiceIdentifier = c.voiceId   // (the setting changed but the player kept the old voice: "it says Alex but it is using Eddy", 16 Oct 2026)
+            Speech.player?.voiceIdentifier = c.voiceId   // (the setting changed but the player kept the old voice: "it says Alex but it is using Eddy", 16 Oct 2026)
             Languages.forget()
             said.append(v.name)
         } else {
@@ -229,13 +251,13 @@ extension VoiceOverSettings {
             Log.info("VoiceOver settings: voice \(c.voiceId) not usable; keeping \(config.speech.voice)")
         }
         config.speech.rate = min(1.0, max(0.1, c.rate))
-        Speech.player.rate = config.speech.rate
+        Speech.player?.rate = config.speech.rate
         said.append("rate \(Int((config.speech.rate * 100).rounded()))")
         config.speech.pitch = min(1, max(0, c.pitch))
-        Speech.player.pitch = config.speech.pitchMultiplier
+        Speech.player?.pitch = config.speech.pitchMultiplier
         if abs(c.pitch - 0.5) > 0.01 { said.append("pitch \(Int((config.speech.pitch * 100).rounded()))") }
         config.speech.volume = Int((min(1, max(0.1, c.volume)) * 100).rounded())
-        Speech.player.volume = Float(config.speech.volume) / 100
+        Speech.player?.volume = Float(config.speech.volume) / 100
         switch c.verbosity {   // VoiceOver's low, medium and high: hints and descriptions
         case "SCRVerbosityLow": config.presentation.speakHints = false; config.presentation.reportObjectDescriptions = false; said.append("low verbosity")
         case "SCRVerbosityMedium": config.presentation.speakHints = false; config.presentation.reportObjectDescriptions = true; said.append("medium verbosity")

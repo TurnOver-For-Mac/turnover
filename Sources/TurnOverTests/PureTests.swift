@@ -617,6 +617,116 @@ func pureTests() {
         expect(c.verbosity, "SCRVerbosityLow"); expect(c.typingEcho, "SCRTypingEchoWords"); expect(c.archiveVersion, 4)
         expect((try? VoiceOverSettings.read(FileManager.default.temporaryDirectory.appendingPathComponent("missing.voprefs"))) == nil, true)
     }
+    func readVoiceOverDefault(_ settings: [String: Any]) throws -> VoiceOverSettings.Copied {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("voiceover-\(UUID().uuidString).voprefs")
+        let plist: [String: Any] = ["ArchiveVersionVO": 4, "export": ["default": settings]]
+        try PropertyListSerialization.data(fromPropertyList: plist, format: .binary, options: 0).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        return try VoiceOverSettings.read(url)
+    }
+    let flatSpeech = "SCRCategories_SCRCategorySystemWide_SCRSpeechComponentSettings_"
+    let flatLanguage = "SCRCategories_SCRCategorySystemWide_SCRSpeechLanguages_default_SCRSpeechComponentSettings_"
+    test("VoiceOver export: flattened speech settings and percentages are read") {
+        let c = try readVoiceOverDefault([
+            flatSpeech + "SCRVoiceIdentifier": "test.default.voice",
+            flatSpeech + "SCRRateAsPercent": 100.0,
+            flatSpeech + "SCRPitchAsPercent": 40.0,
+            flatSpeech + "SCRVolumeAsPercent": 65.0,
+            "SCRCategories_SCRCategoryGuide_SCRSpeechComponentSettings_SCRVoiceIdentifier": "wrong.guide.voice",
+            "SCRVerbosity_SCRVerbosityLevel": "SCRVerbosityMedium", "SCRTypingEchoFeedback": "SCRTypingEchoWords"
+        ])
+        expect(c.voiceId, "test.default.voice"); expect(c.rate, 1); expect(c.pitch, 0.4); expect(c.volume, 0.65)
+        expect(c.verbosity, "SCRVerbosityMedium"); expect(c.typingEcho, "SCRTypingEchoWords"); expect(c.archiveVersion, 4)
+    }
+    test("VoiceOver export: enabled default-language overrides inherit absent speech fields") {
+        let c = try readVoiceOverDefault([
+            flatSpeech + "SCRVoiceIdentifier": "test.default.voice",
+            flatSpeech + "SCRRateAsPercent": 100.0, flatSpeech + "SCRPitchAsPercent": 35.0,
+            flatSpeech + "SCRVolumeAsPercent": 80.0,
+            flatLanguage + "SCRVoiceUseCustomizedVoiceSettings": true,
+            flatLanguage + "SCRRateAsPercent": 90.0
+        ])
+        expect(c.voiceId, "test.default.voice"); expect(c.rate, 0.9); expect(c.pitch, 0.35); expect(c.volume, 0.8)
+    }
+    test("VoiceOver export: disabled default-language overrides do not change speech") {
+        let c = try readVoiceOverDefault([
+            flatSpeech + "SCRVoiceIdentifier": "test.default.voice", flatSpeech + "SCRRateAsPercent": 75.0,
+            flatLanguage + "SCRVoiceUseCustomizedVoiceSettings": false,
+            flatLanguage + "SCRVoiceIdentifier": "wrong.inactive.voice", flatLanguage + "SCRRateAsPercent": 20.0
+        ])
+        expect(c.voiceId, "test.default.voice"); expect(c.rate, 0.75); expect(c.pitch, 0.5); expect(c.volume, 1)
+    }
+    test("VoiceOver export: structured voice selections retain precedence over flattened settings") {
+        let c = try readVoiceOverDefault([
+            "VoiceOverDefaultVoiceSelections": ["en", ["voiceId": "test.structured.voice", "rate": 0.65]],
+            flatSpeech + "SCRVoiceIdentifier": "wrong.flat.voice", flatSpeech + "SCRRateAsPercent": 100.0
+        ])
+        expect(c.voiceId, "test.structured.voice"); expect(c.rate, 0.65)
+    }
+    test("VoiceOver export: an empty structured voice falls back to flattened settings") {
+        let c = try readVoiceOverDefault([
+            "VoiceOverDefaultVoiceSelections": ["en", ["voiceId": "", "rate": 0.2]],
+            flatSpeech + "SCRVoiceIdentifier": "test.flat.voice", flatSpeech + "SCRRateAsPercent": 75.0
+        ])
+        expect(c.voiceId, "test.flat.voice"); expect(c.rate, 0.75)
+    }
+    test("VoiceOver export: an empty structured voice without a fallback still fails") {
+        do {
+            _ = try readVoiceOverDefault(["VoiceOverDefaultVoiceSelections": ["en", ["voiceId": ""]]])
+            Harness.fail("empty structured voice was accepted")
+        } catch VoiceOverSettings.ReadError.noVoice { } catch { Harness.fail("unexpected error: \(error)") }
+    }
+    test("VoiceOver export: enabled default-language voice replaces the system voice") {
+        let c = try readVoiceOverDefault([
+            flatSpeech + "SCRVoiceIdentifier": "test.system.voice",
+            flatLanguage + "SCRVoiceUseCustomizedVoiceSettings": true,
+            flatLanguage + "SCRVoiceIdentifier": "test.language.voice"
+        ])
+        expect(c.voiceId, "test.language.voice"); expect(c.rate, 0.5); expect(c.pitch, 0.5); expect(c.volume, 1)
+    }
+    test("VoiceOver export: flattened percentages are bounded and non-finite values use defaults") {
+        let c = try readVoiceOverDefault([
+            flatSpeech + "SCRVoiceIdentifier": "test.default.voice",
+            flatSpeech + "SCRRateAsPercent": 150.0,
+            flatSpeech + "SCRPitchAsPercent": -10.0,
+            flatSpeech + "SCRVolumeAsPercent": Double.nan
+        ])
+        expect(c.rate, 1); expect(c.pitch, 0); expect(c.volume, 1)
+    }
+    test("VoiceOver export: a flattened export without a usable voice still fails") {
+        do {
+            _ = try readVoiceOverDefault([flatSpeech + "SCRRateAsPercent": 70.0])
+            Harness.fail("missing voice was accepted")
+        } catch VoiceOverSettings.ReadError.noVoice { } catch { Harness.fail("unexpected error: \(error)") }
+    }
+    test("VoiceOver export: copied settings apply before a speech player is initialised") {
+        let saved = config
+        let savedPlayer = Speech.player
+        let savedPersists = Config.persists
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("voiceover-apply-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let snapshot = folder.appendingPathComponent("before.json")
+        defer {
+            config = saved; Speech.player = savedPlayer; Config.persists = savedPersists
+            try? FileManager.default.removeItem(at: folder)
+        }
+        Config.persists = false
+        Speech.player = nil
+        var c = try readVoiceOverDefault([flatSpeech + "SCRVoiceIdentifier": "test.unavailable.voice"])
+        c.rate = 0.9; c.pitch = 0.4; c.volume = 0.65
+        c.verbosity = "SCRVerbosityMedium"; c.typingEcho = "SCRTypingEchoWords"
+        _ = VoiceOverSettings.apply(c, undoSnapshot: snapshot)
+        guard let data = try? Data(contentsOf: snapshot) else { return Harness.fail("Undo snapshot was not written to the temporary path") }
+        let before = try JSONDecoder().decode(Config.self, from: data)
+        expect(before.speech.rate, saved.speech.rate); expect(before.speech.voice, saved.speech.voice)
+        expect(config.speech.rate, 0.9); expect(config.speech.pitch, 0.4); expect(config.speech.volume, 65)
+        expect(config.presentation.speakHints, false); expect(config.presentation.reportObjectDescriptions, true)
+        expect(config.keyboard.speakTypedCharacters, .off); expect(config.keyboard.speakTypedWords, .editControls)
+        expect(config.speech.voice, saved.speech.voice, "an unavailable voice does not replace the current one")
+        c.rate = 0.7
+        _ = VoiceOverSettings.apply(c, undoSnapshot: snapshot)
+        expect(try Data(contentsOf: snapshot), data, "a later copy must not replace the original Undo snapshot")
+    }
     test("recipes: the built-in recipes load and describe the apps as the code did") {
         let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         Recipes.load(builtIn: repo.appendingPathComponent("Resources/recipes"), plugins: [])
