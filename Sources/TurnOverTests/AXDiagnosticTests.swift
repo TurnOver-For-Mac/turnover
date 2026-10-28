@@ -55,6 +55,10 @@ func axDiagnosticTests() {
         budget.stop(.clientBackoff)
         check(!budget.beginQuery(now: 0), "no query follows a client rest")
         expect(budget.queries, 0)
+        var clientStop = AXProbeBudget(startedNanoseconds: 0)
+        clientStop.stop(.clientStopped)
+        check(!clientStop.beginQuery(now: 0), "other client stops do not authorize another query")
+        expect(clientStop.stopped, .clientStopped, "a client work stop is not reported as health backoff")
     }
     test("AX diagnostics: outcome reports never serialize a provider value") {
         let secret = "synthetic-private-account@example.invalid"
@@ -106,5 +110,18 @@ func axDiagnosticTests() {
         expect(elements.malformedCount, 1)
         expect(elements.values.count, 7)
         expect(AXDiagnosticReport.elements(in: raw, maximum: -1).examinedCount, 0)
+    }
+    test("AX diagnostics: oversized custom names are counted without bridging or emitting their content") {
+        let secret = "synthetic-private-custom-action"
+        let long = ("Name:" + String(repeating: secret, count: 10_000)) as NSString
+        let sample = AXDiagnosticReport.names(in: [long, "AXPress" as NSString] as CFArray)
+        expect(sample.returnedCount, 2)
+        expect(sample.examinedCount, 2)
+        expect(sample.oversizedCount, 1)
+        expect(sample.malformedCount, 0, "a deliberately omitted long name is not a false type error")
+        expect(sample.values, ["AXPress"])
+        check(!AXDiagnosticReport.actions(sample.values).contains(secret), "long custom text never reaches the formatter")
+        let absent = AXQueryResult<CFTypeRef>(value: nil, status: .returned(.success), elapsedNanoseconds: 0, wasAttempted: true)
+        check(AXDiagnosticReport.outcome(absent).contains("returned:success"), "successful nullable output keeps the actual API status")
     }
 }

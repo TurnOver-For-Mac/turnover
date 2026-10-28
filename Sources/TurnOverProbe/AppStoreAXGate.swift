@@ -57,12 +57,12 @@ private final class AppStoreAXSample {
         guard prepare(element), budget.beginQuery() else { return nil }
         let result = body()
         Log.line("\(reference(element)) \(name) \(AXDiagnosticReport.outcome(result)) hasValue=\(result.value != nil)")
-        if result.status == .returned(.success), result.value == nil { malformed = true }
         switch result.status {
         case .returned(let error): if error == .cannotComplete { budget.stop(.providerCannotComplete) }
         case .deferred: budget.stop(.clientBackoff)
         case .batchNull: break
         case .invalidResponse: malformed = true
+        default: budget.stop(.clientStopped)   // a client stop is distinct from AXHealth backoff
         }
         _ = budget.canContinue()
         return result
@@ -101,7 +101,7 @@ private final class AppStoreAXSample {
         let sample = AXDiagnosticReport.names(in: raw)
         if sample.malformedCount > 0 { malformed = true }
         let summary = actions ? AXDiagnosticReport.actions(sample.values) : AXDiagnosticReport.attributes(sample.values)
-        Log.line("\(reference(element)) \(actions ? "actions" : "attributes") returnedCount=\(sample.returnedCount) sampledNames=\(sample.examinedCount) \(summary) malformedSampleMembers=\(sample.malformedCount)")
+        Log.line("\(reference(element)) \(actions ? "actions" : "attributes") returnedCount=\(sample.returnedCount) sampledNames=\(sample.examinedCount) \(summary) malformedSampleMembers=\(sample.malformedCount) oversizedSampleNames=\(sample.oversizedCount)")
     }
 
     private func children(_ element: AXUIElement, _ name: String = kAXChildrenAttribute,

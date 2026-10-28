@@ -54,8 +54,9 @@ The in-process sample runs at most once per two seconds, with five query/configu
 cooperative allowance; it never performs a direct diagnostic bypass. Its sampled child gets its own client timeout.
 
 The deadline cannot preempt an individual accessibility API call, and Apple offers no paginated name-enumeration
-API. Name enumeration is one timed call; only its first 64 names are examined, with redacted output and its returned
-count recorded. Every summary states that the complete provider tree
+API. Name enumeration is one timed call; only its first 64 names are examined directly from the CF array. Names
+longer than 128 UTF-16 units are counted and omitted before bridging to Swift. Redacted output records the returned
+count. Every summary states that the complete provider tree
 has not been established. Run a live probe under a separate process deadline as well; no install is required.
 `turnover-tests 'AX diagnostics' -v` checks shared budgets, deadlines and structural output with synthetic data.
 
