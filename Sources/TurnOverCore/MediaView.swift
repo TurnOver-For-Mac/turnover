@@ -209,7 +209,7 @@ public final class MediaView {
 
     private func apply(_ b: Built?) {
         guard let b else { return }
-        let keep = currentItem().flatMap { $0.tableRow ? nil : $0.label }
+        let keep = currentItem().flatMap { $0.tableRow ? nil : $0 }
         let keepIndex = index[pane]
         let isTable = b.shelves.contains { $0.items.first?.tableRow == true }
         shelves = !isTable && !b.pageID.isEmpty && b.pageID == pageID ? Self.merge(shelves, b.shelves) : b.shelves
@@ -217,8 +217,12 @@ public final class MediaView {
         player = b.player; toolbar = b.toolbar; pageTitle = b.pageTitle; playerRoot = b.playerRoot; pageScroll = b.pageScroll
         builtAt = Date()
         rowLabels = [:]
-        if let keep, let i = items(of: pane).firstIndex(where: { $0.label == keep }) { index[pane] = i }
-        else if let k = keepIndex { index[pane] = min(k, max(0, items(of: pane).count - 1)) }
+        let all = items(of: pane)
+        let matches = keep.map { captured in all.indices.filter { all[$0].key == captured.key } } ?? []
+        // Identical titles can name different episodes/albums. Only a unique identity with the same
+        // presentation may move the cursor; repeated/ambiguous keys retain the clamped position (#182).
+        if let keep, matches.count == 1, let i = matches.first, all[i].label == keep.label { index[pane] = i }
+        else if let k = keepIndex { index[pane] = min(k, max(0, all.count - 1)) }
         Log.io("media: \(sidebar.count) sidebar, \(shelves.count) shelves (\(flatPage.count) items), \(player.count) player, page \(Log.words(pageTitle))")
     }
 

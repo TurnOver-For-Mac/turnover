@@ -228,6 +228,42 @@ func mediaWorkTests() {
         rig.source.result(result); rig.view.activate(); rig.settle()
         check(AXReplay.actions.isEmpty, "wrong identity was refused instead of pressing the old index")
     }
+    test("media work: held refresh keeps the selected stable ID when identical titles reorder") {
+        mediaActionFixture(); defer { AXReplay.unload() }
+        let rig = MediaTestRig(); defer { rig.view.stop(); rig.worker.sync {} }
+        var first = mediaPlayable("A", element: 100), second = mediaPlayable("B", element: 101)
+        first.label = "Shared title"; second.label = "Shared title"
+        rig.load(items: [first, second])
+        expect(rig.view.currentItem()?.ident, first.ident)
+        rig.source.result(MediaTestRig.result("Refreshed", items: [second, first]))
+        let gate = rig.gate(); defer { gate.release.signal() }
+        rig.view.refresh {}; rig.wait(gate)
+        expect(rig.view.currentItem()?.ident, first.ident, "pending read cannot alter the committed selection")
+        gate.release.signal(); rig.settle()
+        expect(rig.view.shelves.flatMap(\.items).map(\.ident), [second.ident, first.ident], "fixture really changed item order")
+        expect(rig.view.currentItem()?.ident, first.ident, "the logical item is retained rather than the first matching title")
+        rig.view.activate()
+        expect(AXReplay.actions.map(\.id), [100], "activation targets the originally selected episode")
+    }
+    test("media work: ambiguous duplicate keys refuse cursor relocation and preserve its position") {
+        let identifier = "sample[id=duplicate]"
+        AXReplay.load(.init(app: "Public media sample", bundle: "test.media", recorded: "", root: 1, application: 0, focus: nil, nodes: [
+            .init(id: 0, attrs: ["AXRole": .string("AXApplication"), "AXFocusedWindow": .element(1)]),
+            .init(id: 1, attrs: ["AXRole": .string("AXWindow"), "AXChildren": .elements([])]),
+            .init(id: 100, attrs: ["AXRole": .string("AXButton"), "AXIdentifier": .string(identifier), "AXDescription": .string("Duplicate")], actions: ["AXPress"]),
+            .init(id: 101, attrs: ["AXRole": .string("AXButton"), "AXIdentifier": .string(identifier), "AXDescription": .string("Duplicate")], actions: ["AXPress"]),
+        ]))
+        defer { AXReplay.unload() }
+        let rig = MediaTestRig(); defer { rig.view.stop(); rig.worker.sync {} }
+        let first = MediaView.Item(label: "Duplicate", element: AXReplay.element(100), ident: identifier, desc: "Duplicate")
+        let second = MediaView.Item(label: "Duplicate", element: AXReplay.element(101), ident: identifier, desc: "Duplicate")
+        rig.load(items: [first, second]); rig.view.move(1)
+        expect(AXReplay.id(of: rig.view.currentItem()?.element), 101)
+        rig.source.result(MediaTestRig.result("Refreshed", items: [first, second]))
+        rig.view.refresh {}; rig.settle()
+        expect(AXReplay.id(of: rig.view.currentItem()?.element), 101, "ambiguous identity cannot select the first duplicate")
+        check(AXReplay.actions.isEmpty, "selection retention alone performs no provider action")
+    }
     test("media work: the real collector publishes a recorded page without changing the app") {
         AXReplay.load(.init(app: "Public Music sample", bundle: "test.media", recorded: "", root: 1, application: 0, focus: nil, nodes: [
             .init(id: 0, attrs: ["AXRole": .string("AXApplication"), "AXFocusedWindow": .element(1)]),
