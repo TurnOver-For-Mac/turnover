@@ -58,10 +58,12 @@ public final class MediaView {
     public enum Pane: Int { case sidebar, page, player, toolbar }
 
     nonisolated package enum SidebarNavigation: Sendable, Equatable { case pressCell, selectRow }
+    nonisolated package enum ShelfLoading: Sendable, Equatable { case standard, tvEarly }
 
     public let pid: pid_t
     private let sidebarNavigation: SidebarNavigation
     private let bundleIdentifier: String?
+    private let shelfLoading: ShelfLoading
     private let work: MediaWorkOwner<ReadResult>
     nonisolated private let collector: Collector
     nonisolated private let windowQuery: WindowQuery
@@ -72,13 +74,15 @@ public final class MediaView {
         self.init(pid: pid, eligible: { Core.active && NSWorkspace.shared.frontmostApplication?.processIdentifier == pid })
     }
 
-    package convenience init(pid: pid_t, sidebarNavigation: SidebarNavigation, bundleIdentifier: String? = nil) {
-        self.init(pid: pid, sidebarNavigation: sidebarNavigation, bundleIdentifier: bundleIdentifier,
+    package convenience init(pid: pid_t, sidebarNavigation: SidebarNavigation, bundleIdentifier: String? = nil,
+                             shelfLoading: ShelfLoading = .standard) {
+        self.init(pid: pid, sidebarNavigation: sidebarNavigation, bundleIdentifier: bundleIdentifier, shelfLoading: shelfLoading,
                   eligible: { Core.active && NSWorkspace.shared.frontmostApplication?.processIdentifier == pid })
     }
 
     package init(pid: pid_t, collector: Collector? = nil, queue: DispatchQueue? = nil,
                  sidebarNavigation: SidebarNavigation = .pressCell, bundleIdentifier: String? = nil,
+                 shelfLoading: ShelfLoading = .standard,
                  windowQuery: WindowQuery? = nil, keys: @escaping @Sendable () -> Int = { ScriptHandler.keysArrivedCount },
                  deliver: @escaping @Sendable (@escaping @MainActor @Sendable () -> Void) -> Void = { onMain($0) },
                  delay: @escaping @MainActor (TimeInterval, @escaping @MainActor @Sendable () -> Void) -> Void = { onMain(after: $0, $1) },
@@ -86,6 +90,7 @@ public final class MediaView {
         self.pid = pid; self.collector = collector ?? Self.collect
         self.sidebarNavigation = sidebarNavigation
         self.bundleIdentifier = bundleIdentifier ?? Speech.bundleIdentifier(of: pid)
+        self.shelfLoading = shelfLoading
         self.windowQuery = windowQuery ?? Self.focusedWindow
         self.keyCount = keys
         self.delay = delay
@@ -103,6 +108,9 @@ public final class MediaView {
     // Where the user is.
     public var pane: Pane = .page
     private var index: [Pane: Int] = [:]
+    // Executed navigation owns the pane/cursor even if it returns to the same item. Arrows waiting in queued
+    // have not executed yet, so they leave this revision alone until their original turn (#188).
+    private var navigationIntent: UInt64 = 0
 
     var flatPage: [(shelf: Int, item: Item)] {
         shelves.enumerated().flatMap { s, shelf in shelf.items.map { (s, $0) } }
@@ -117,16 +125,19 @@ public final class MediaView {
     private func isCurrent(_ session: UUID) -> Bool { work.isCurrent(session) }
 
     public func beginSession() {
+        shelfReadiness?.cancel(); shelfReadiness = nil
         work.beginSession(); queued = []; loadingMore = false; refreshing = false; resolving = false
         builtAt = .distantPast; pendingSidebarBody = nil
     }
 
     public func stop() {
+        shelfReadiness?.cancel(); shelfReadiness = nil
         work.stop(); queued = []; loadingMore = false; refreshing = false; resolving = false; pendingSidebarBody = nil
         catalogRequest = UUID(); catalog?.cancel(); catalog = nil; catalogDrives = false
     }
 
     private func beginPageIntent() {
+        shelfReadiness?.cancel(); shelfReadiness = nil
         work.beginSession(); queued = []; loadingMore = false; refreshing = false; resolving = false; pendingSidebarBody = nil
     }
     private var pendingSidebarBody: [String]?
@@ -265,13 +276,15 @@ public final class MediaView {
     package typealias Collector = @Sendable (ReadInput, @escaping @Sendable () -> Bool) -> ReadResult?
 
     private func read(_ operation: ReadOperation, capturedWindow: AXUIElement? = nil,
+                      admitted: @escaping @MainActor () -> Bool = { true },
+                      duration: UInt64 = 12_000_000_000,
                       then: @escaping @MainActor @Sendable (ReadResult?) -> Void) {
         guard let window = capturedWindow ?? synchronizedWindow() else { return }
         let session = currentSession
         work.enqueue { [weak self] in
-            guard let self, isCurrent(session), modelWindow.map({ CFEqual($0, window) }) == true else { return }
+            guard let self, isCurrent(session), modelWindow.map({ CFEqual($0, window) }) == true, admitted() else { return }
             let input = ReadInput(pid: pid, sidebar: sidebar, pageID: pageID, window: window, windowQuery: windowQuery, operation: operation)
-            work.perform({ [collector] current in collector(input, current) }) { [weak self] result in
+            work.perform(duration: duration, { [collector] current in collector(input, current) }) { [weak self] result in
                 guard let self, isCurrent(session), acceptsWindow(window) else { return }
                 then(result)
             }
@@ -286,7 +299,7 @@ public final class MediaView {
     /// The player alone, read again (its few buttons: quick enough for any thread).
     private func refreshPlayer() { if let r = playerRoot { player = Self.playerItems(r) } }
 
-    private func apply(_ b: Built?) {
+    private func apply(_ b: Built?, shelfRead: MediaShelfReadiness? = nil) {
         guard let b else { return }
         if let pendingSidebarBody {
             let body = Self.bodySignature(b.shelves)
@@ -308,6 +321,11 @@ public final class MediaView {
         if let keep, matches.count == 1, let i = matches.first, all[i].label == keep.label { index[pane] = i }
         else if let k = keepIndex { index[pane] = min(k, max(0, all.count - 1)) }
         Log.io("media: \(sidebar.count) sidebar, \(shelves.count) shelves (\(flatPage.count) items), \(player.count) player, page \(Log.words(pageTitle))")
+        // read() validated the current native window before apply(). Observe only the fully committed model,
+        // so an overlapping refresh can satisfy a TV load without replaying its delayed completion (#188).
+        if let load = shelfReadiness {
+            load.observe(pageID: pageID, itemKeys: flatPage.map { $0.item.key }, fromRead: shelfRead === load)
+        }
     }
 
     /// A request's local AX work is synchronous on the serial worker. The existing AX scope also stops nested
@@ -876,6 +894,7 @@ public final class MediaView {
     public func move(_ delta: Int) {
         if let c = catalog, catalogDrives, pane == .page { c.move(delta); return }
         guard rebuildOrQueue(waitForLoading: true, retry: { [weak self] in self?.move(delta) }) else { return }
+        navigationIntent &+= 1
         let all = items(of: pane)
         guard !all.isEmpty else { Speech.speakMessage(pane == .page ? "nothing on this page yet" : "empty"); return }
         let old = max(0, min(all.count - 1, index[pane] ?? 0))
@@ -894,6 +913,7 @@ public final class MediaView {
     /// page" fails and the wheel does nothing; it keeps only the shelves near the screen, so the model keeps the
     /// rest. TV keeps every shelf once loaded, and its bar's value drops as the page grows.
     private var loadingMore = false
+    private var shelfReadiness: MediaShelfReadiness?
     private var resolving = false
     private var drainingKeys = false
     /// Arrows pressed while more of the page was loading, answered in turn once it has.
@@ -953,6 +973,10 @@ public final class MediaView {
         }
         if !scrolled { loadingMore = false; none(); return }
         loadingMore = true
+        if shelfLoading == .tvEarly, !pageID.isEmpty {
+            beginShelfReadiness(session: session, window: window, attempts: attempts, then: then, nothing: nothing)
+            return
+        }
         delay(0.5) { [weak self] in
             guard let self, isCurrent(session), acceptsWindow(window) else { return }
             refresh(keepSidebar: true) { [weak self] in
@@ -965,6 +989,48 @@ public final class MediaView {
                 runQueued()
             }
         }
+    }
+
+    private func beginShelfReadiness(session: UUID, window: AXUIElement?, attempts: Int,
+                                     then: @escaping () -> Void, nothing: (() -> Void)?) {
+        let capturedPage = pageID, capturedIntent = navigationIntent
+        let load = MediaShelfReadiness(pageID: capturedPage, itemKeys: flatPage.map { $0.item.key }, current: { [weak self] in
+            guard let self, isCurrent(session), pageID == capturedPage else { return false }
+            return acceptsWindow(window)
+        }, read: { [weak self] load, phase, done in
+            guard let self, shelfReadiness === load else { return }
+            read(.build(keepSidebar: true, detectVideo: false), capturedWindow: window,
+                 admitted: { [weak self, weak load] in self?.shelfReadiness === load && load != nil },
+                 duration: phase == .early ? 250_000_000 : 12_000_000_000) { [weak self, weak load] result in
+                guard let self, let load, shelfReadiness === load else { return }
+                // An overlapping publication may already have fulfilled the token while this read was held.
+                // A different page must never be published by the retired load, even in the same window.
+                guard pageID == capturedPage else { load.invalidate(); return }
+                if let built = result?.built {
+                    guard built.pageID == capturedPage else { load.invalidate(); return }
+                    apply(built, shelfRead: load)
+                }
+                done()
+            }
+        }, completed: { [weak self] load, outcome in
+            guard let self, shelfReadiness === load else { return }
+            shelfReadiness = nil
+            loadingMore = false
+            // Queued arrows still follow their initiating move. Immediate Tab/letter/Home intent owns its
+            // newer pane/cursor, so the old move must not run against that new location.
+            if navigationIntent == capturedIntent {
+                switch outcome {
+                case .ready: then()
+                case .unchanged:
+                    if attempts > 1 { loadMore(attempts: attempts - 1, then: then, nothing: nothing) }
+                    else { (nothing ?? { Tones.edge() })() }
+                case .cancelled: break
+                }
+            }
+            runQueued()
+        })
+        shelfReadiness = load
+        load.start(delay: delay)
     }
 
     /// Music's video player fills the window (an interview opened from Radio, 7 Oct 2026): its own buttons, and Escape
@@ -996,6 +1062,7 @@ public final class MediaView {
     public func toEnd(_ last: Bool) {
         if let c = catalog, catalogDrives, pane == .page { c.toEnd(last); return }
         guard rebuildOrQueue(retry: { [weak self] in self?.toEnd(last) }) else { return }
+        navigationIntent &+= 1
         if last, pane == .page, pageScroll != nil, !loadingMore {
             let t = Date()
             let session = currentSession
@@ -1031,6 +1098,7 @@ public final class MediaView {
     /// The previous or next shelf of the page (in the sidebar, the previous or next group heading).
     public func jumpShelf(_ delta: Int) {
         guard rebuildOrQueue(waitForLoading: true, retry: { [weak self] in self?.jumpShelf(delta) }) else { return }
+        navigationIntent &+= 1
         if pane != .page { move(delta * 5); return }
         let flat = flatPage
         guard !flat.isEmpty else { return }
@@ -1048,6 +1116,7 @@ public final class MediaView {
     public func letter(_ ch: Character) {
         if let c = catalog, catalogDrives, pane == .page { c.letter(ch); return }
         guard rebuildOrQueue(retry: { [weak self] in self?.letter(ch) }) else { return }
+        navigationIntent &+= 1
         let all = items(of: pane)
         guard !all.isEmpty else { return }
         let cur = min(index[pane] ?? 0, all.count - 1)   // (a stale index past a shorter page made an invalid range, 8 Oct 2026)
@@ -1063,6 +1132,7 @@ public final class MediaView {
 
     public func switchPane(_ delta: Int) {
         guard rebuildOrQueue(retry: { [weak self] in self?.switchPane(delta) }) else { return }
+        navigationIntent &+= 1
         var p = pane.rawValue
         for _ in 0..<Self.paneCount {
             p = (p + delta + Self.paneCount) % Self.paneCount
