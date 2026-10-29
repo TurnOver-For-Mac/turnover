@@ -141,7 +141,7 @@ nonisolated private final class SystemSettingsPartLookup {
         if modal.status == .returned(.success) {
             guard let raw = modal.value, CFGetTypeID(raw) == CFBooleanGetTypeID(), raw as? Bool == false else { return nil }
         } else if !absent(modal.status) { return nil }
-        guard let sheets = reader.query({ window.attributeResult(kAXSheetsAttribute) }) else { return nil }
+        guard let sheets = reader.query({ window.attributeResult("AXSheets") }) else { return nil }
         if sheets.status == .returned(.success) {
             guard let raw = sheets.value, CFGetTypeID(raw) == CFArrayGetTypeID(), CFArrayGetCount(raw as! CFArray) == 0 else { return nil }
         } else if !absent(sheets.status) { return nil }
