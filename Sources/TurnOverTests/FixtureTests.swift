@@ -42,6 +42,28 @@ func fixtureTests() {
         AXReplay.load(fixture); ObjectNavigator.forgetGroupItems()
         expect(ObjectNavigator.groupItems(AXReplay.root!).compactMap { AXReplay.id(of: $0) }, [1, 2, 5])
     }
+    // System Settings' panes, macOS 27 (29 Oct 2026): 40 of a window's 169 elements, the focused button among them, give
+    // no AXWindow, only a parent. Review took its bounds from AXWindow alone and said "nothing to review" at every step.
+    test("navigation: an item that doesn't name its window is reviewed in the window its parents lead to") {
+        let saved = config, sink = Speech.sink
+        config.general.focusFollowsCursor = "off"
+        Speech.sink = { _ in }
+        var fixture = AXFixture(app: "System Settings", bundle: "com.apple.systempreferences", recorded: "", root: 0, application: nil, focus: 2, nodes: [])
+        fixture.nodes = [
+            .init(id: 0, attrs: ["AXRole": .string("AXWindow"), "AXChildren": .elements([1])]),
+            .init(id: 1, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(0), "AXChildren": .elements([2, 3])]),
+            .init(id: 2, attrs: ["AXRole": .string("AXButton"), "AXDescription": .string("Update Now"), "AXParent": .element(1)]),
+            .init(id: 3, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("The Mac restarts to install the update."), "AXParent": .element(1)]),
+        ]
+        AXReplay.load(fixture)
+        defer { AXReplay.unload(); config = saved; Speech.sink = sink }
+        let navigator = ObjectNavigator.shared
+        navigator.focusMoved(to: AXReplay.focus!, pid: AXReplay.focus!.pid)
+        navigator.next()
+        expect(navigator.reviewElement.flatMap { AXReplay.id(of: $0) }, 3, "on to the text after the button")
+        navigator.previous()
+        expect(navigator.reviewElement.flatMap { AXReplay.id(of: $0) }, 2, "and back to the button")
+    }
 
     test("replay: a recording answers like the application") {
         var f = AXFixture(app: "Test", bundle: "test", recorded: "", root: 0, application: nil, focus: 2, nodes: [])
