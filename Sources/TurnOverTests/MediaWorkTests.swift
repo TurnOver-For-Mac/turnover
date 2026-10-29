@@ -67,7 +67,8 @@ private final class MediaTestRig {
         let delays = MediaTestDelays()
         self.source = source; self.deliveries = deliveries; self.worker = worker; self.allowed = allowed
         self.delays = delays
-        let collector: MediaView.Collector? = liveCollector ? nil : { source.read($0, current: $1) }
+        let fakeCollector: MediaView.Collector = { source.read($0, current: $1) }
+        let collector: MediaView.Collector? = liveCollector ? nil : fakeCollector
         // All dependencies are init-local checked values; no partially initialized self crosses to the worker.
         view = MediaView(pid: AXReplay.floor, collector: collector,
                          queue: worker, deliver: { deliveries.enqueue($0) },
