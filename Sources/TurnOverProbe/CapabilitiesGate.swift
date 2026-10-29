@@ -32,12 +32,11 @@ private final class AXCapabilitiesSample {
     private let pid: pid_t
     private let settingsShape: Bool
     private var shapeTags: [ElementKey: String] = [:]
-    private var budget = AXProbeBudget(maximumQueries: 128, maximumNodes: 16, maximumDepth: 6,
-                                       maximumChildren: 8, durationNanoseconds: 2_000_000_000)
+    private var budget: CapabilitiesBudget
     // Messaging timeouts belong to the exact object, not to every CFEqual reference. Retaining the configured
     // object prevents address reuse during this one synchronous sample; no application flag is changed.
     private var configured: [ObjectIdentifier: AXUIElement] = [:]
-    private var seen = Set<ElementKey>(), details = Set<ElementKey>()
+    private var seen = Set<ElementKey>(), details = Set<ElementKey>(), settableSamples = Set<ElementKey>()
     private var malformed = false, unvisited = 0, skipped = 0, oversizedMetadata = 0
     private var localStop: String?
     private let started = DispatchTime.now().uptimeNanoseconds, initialAXMilliseconds = AXStats.ms
@@ -54,7 +53,10 @@ private final class AXCapabilitiesSample {
         "AXValue", "AXEditable", "AXProtectedContent", "AXFocusedUIElement", "AXWebArea",
     ]
 
-    init(pid: pid_t, settingsShape: Bool) { self.pid = pid; self.settingsShape = settingsShape }
+    init(pid: pid_t, settingsShape: Bool) {
+        self.pid = pid; self.settingsShape = settingsShape
+        budget = CapabilitiesBudget(settingsShape: settingsShape)
+    }
 
     private func prepare(_ element: AXUIElement) -> Bool {
         let identity = ObjectIdentifier(element)
@@ -124,10 +126,33 @@ private final class AXCapabilitiesSample {
         if role == "AXSplitGroup", identifier == "Main, SidebarNavigationSplitView" { shapeTags[ElementKey(element)] = "settingsSplit" }
         if role == "AXOutline", identifier == "com.apple.settings.sidebar.collectionView" { shapeTags[ElementKey(element)] = "settingsSidebar" }
         if role == "AXTextField", subrole == "AXSearchField" { shapeTags[ElementKey(element)] = "settingsSearch" }
+        let publicGeneralIDs: Set<String> = ["com.apple.systempreferences.general.about", "com.apple.systempreferences.general.softwareUpdate",
+            "com.apple.systempreferences.general.storage", "com.apple.systempreferences.general.appleCareAndWarranty"]
+        if role == "AXButton", let identifier, publicGeneralIDs.contains(identifier) {
+            shapeTags[ElementKey(element)] = "settingsGeneralButton"
+            generalLabelMetadata(element)
+            focusedSettable(element)
+        }
         return role
     }
 
+    private func generalLabelMetadata(_ element: AXUIElement) {
+        let result = query(element, "knownPublicGeneralAttributedDescription") { element.attributeResult("AXAttributedDescription") }
+        var kind = "absent", length: Int?
+        if let value = result?.value {
+            if CFGetTypeID(value) == CFAttributedStringGetTypeID() {
+                // The type is checked and only the stored length is inspected. No attributed description text,
+                // runs, attributes or derived Swift String can enter the metadata log.
+                kind = "attributedString"; length = CFAttributedStringGetLength(value as! CFAttributedString)
+            } else if CFGetTypeID(value) == CFStringGetTypeID() {
+                kind = "string"; length = CFStringGetLength(value as! CFString)
+            } else { kind = AXDiagnosticReport.valueKind(value) }
+        }
+        Log.line("knownPublicGeneralButton=true attributedDescriptionStatus=\(result?.status.description ?? "notAdmitted") kind=\(kind) length=\(length.map(String.init) ?? "unavailable") labelTextLogged=false")
+    }
+
     private func focusedSettable(_ element: AXUIElement) {
+        guard settableSamples.insert(ElementKey(element)).inserted else { return }
         let result = query(element, "AXFocused.settable") {
             var settable: DarwinBoolean = false
             let execution = AXHealth.query(pid: element.pid) {
@@ -143,7 +168,7 @@ private final class AXCapabilitiesSample {
         let count = query(element, "\(name).count", { element.attributeValueCountResult(name) })?.value
         if let count, count < 0 { malformed = true; return [] }
         if count == 0 { Log.line("array=\(name) reportedCount=0 received=0"); return [] }
-        let maximum = min(8, count ?? 8)
+        let maximum = min(budget.maximumChildren, count ?? budget.maximumChildren)
         guard let result = query(element, "\(name).prefix", { element.attributeValuesResult(name, index: 0, maxValues: maximum) }), let array = result.value else { return [] }
         let sample = AXDiagnosticReport.elements(in: array, maximum: maximum)
         if sample.malformedCount > 0 || sample.returnedCount > maximum { malformed = true }
@@ -190,7 +215,7 @@ private final class AXCapabilitiesSample {
 
     func run() {
         Log.line("method=boundedPublicAXCapabilities healthScope=probeProcess policy=respectBackoff")
-        Log.line("bounds queriesAndTimeoutSetups=128 nodes=16 childrenPerRead=8 depth=6 cooperativeDeadlineMs=2000 timeoutPerExactReferenceMs=50")
+        Log.line("bounds queriesAndTimeoutSetups=\(budget.maximumQueries) nodes=\(budget.maximumNodes) childrenPerRead=\(budget.maximumChildren) depth=\(budget.maximumDepth) cooperativeDeadlineMs=2000 timeoutPerExactReferenceMs=50")
         Log.line("labels=false identifierValuesLogged=false textValues=false customActionStrings=false actionsAttempted=0 activationAttempted=false flagsWritten=0 fullControlValidated=false")
         Log.line("systemSettingsShapeMode=\(settingsShape) knownStructuralTagsOnly=true outlineAndTableRowsPruned=\(settingsShape)")
         Log.line("nameEnumeration=oneNonpaginatedProviderCallWithBoundedClientDecoding; caller must impose an external process deadline")
