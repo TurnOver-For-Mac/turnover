@@ -1186,4 +1186,14 @@ func browseTextNavTests() {
         expect(find(r("A lot happened").location, true, .afterLinks), r("That was the news.").location, "over the next links")
         expect(find(r("That was").location, false, .afterLinks), r("The big story").location, "back: the text before, after links")
     }
+    test("a file dialog's service counts as the app in front it serves") {
+        let svc = "com.apple.appkit.xpc.openAndSavePanelService"
+        check(AXHandler.servesPanel(helperBundle: svc, helperName: "Open and Save Panel Service (TextEdit)", frontName: "TextEdit"), "TextEdit's dialog, TextEdit in front")
+        check(AXHandler.servesPanel(helperBundle: svc, helperName: "Open and Save Panel Service (Safari)", frontName: "Safari"), "Safari's browse for file")
+        check(!AXHandler.servesPanel(helperBundle: svc, helperName: "Open and Save Panel Service (TextEdit)", frontName: "Safari"), "another app's dialog left behind")
+        check(!AXHandler.servesPanel(helperBundle: svc, helperName: "Open and Save Panel Service (TextEdit)", frontName: "Edit"), "a front app whose name is only the end of another's")
+        check(!AXHandler.servesPanel(helperBundle: "com.apple.TextInputUI.xpc.CursorUIViewService", helperName: "Cursor (TextEdit)", frontName: "TextEdit"), "any other service stays ignored")
+        check(!AXHandler.servesPanel(helperBundle: svc, helperName: nil, frontName: "TextEdit"), "a service without a name")
+        check(!AXHandler.servesPanel(helperBundle: svc, helperName: "Open and Save Panel Service ()", frontName: ""), "no app in front")
+    }
 }
