@@ -18,7 +18,7 @@ let gates: [String: (name: String, help: String, run: ([String]) -> Void)] = [
                  "Speech engine soak through AVSpeechSynthesizer.write(). Silent: no audio is played. --voice <id substring> --count N --sayall",
                  runSpeechGate),
     "capabilities": ("capabilities",
-                 "Bounded metadata-only public AX sample of one running app. Requires --bundle id. No labels, document text, actions, flag writes or activation.",
+                 "Bounded metadata-only public AX sample of one running app. Requires --bundle id. Optional --system-settings reports known structural tags only for System Settings. No labels, document text, actions, flag writes or activation.",
                  runCapabilitiesGate),
     "inspect":  ("inspect",
                  "Read-only look at an app's focused window and element: roles, attributes, text queries. --app Name | --bundle id | --pid N [--value]",

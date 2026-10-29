@@ -6,9 +6,11 @@ import ApplicationServices
 import TurnOverAX
 
 func runCapabilitiesGate(_ args: [String]) {
-    guard args.count == 2, args[0] == "--bundle", args[1].utf8.count <= 128,
+    let settingsShape = args.count == 3 && args.last == "--system-settings"
+    guard args.count == (settingsShape ? 3 : 2), args[0] == "--bundle", args[1].utf8.count <= 128,
+          !settingsShape || args[1] == "com.apple.systempreferences",
           args[1].contains("."), args[1].utf8.allSatisfy({ (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) || [45, 46, 95].contains($0) }) else {
-        Log.line("capabilities requires --bundle followed by one running application's bundle identifier; rejected arguments are not logged")
+        Log.line("capabilities requires --bundle id; optional --system-settings is restricted to com.apple.systempreferences; rejected arguments are not logged")
         return
     }
     guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: args[1]).first else {
@@ -23,18 +25,20 @@ func runCapabilitiesGate(_ args: [String]) {
     }
     Log.line("targetBundle=\(args[1]) version=\(version("CFBundleShortVersionString")) build=\(version("CFBundleVersion")) targetIsFrontmost=\(NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier)")
     Log.line("probeAccessibilityTrusted=\(AXIsProcessTrusted()) permissionPromptRequested=false VoiceOverProcessPresent=\(!NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.VoiceOver").isEmpty) readerActive=unobserved muteLease=unobserved")
-    AXCapabilitiesSample(pid: app.processIdentifier).run()
+    AXCapabilitiesSample(pid: app.processIdentifier, settingsShape: settingsShape).run()
 }
 
 private final class AXCapabilitiesSample {
     private let pid: pid_t
+    private let settingsShape: Bool
+    private var shapeTags: [ElementKey: String] = [:]
     private var budget = AXProbeBudget(maximumQueries: 128, maximumNodes: 16, maximumDepth: 6,
                                        maximumChildren: 8, durationNanoseconds: 2_000_000_000)
     // Messaging timeouts belong to the exact object, not to every CFEqual reference. Retaining the configured
     // object prevents address reuse during this one synchronous sample; no application flag is changed.
     private var configured: [ObjectIdentifier: AXUIElement] = [:]
     private var seen = Set<ElementKey>(), details = Set<ElementKey>()
-    private var malformed = false, unvisited = 0, skipped = 0
+    private var malformed = false, unvisited = 0, skipped = 0, oversizedMetadata = 0
     private var localStop: String?
     private let started = DispatchTime.now().uptimeNanoseconds, initialAXMilliseconds = AXStats.ms
     private static let leaves: Set<String> = ["AXButton", "AXTextField", "AXSearchField", "AXTextArea", "AXStaticText", "AXImage", "AXScrollBar", "AXLink"]
@@ -50,7 +54,7 @@ private final class AXCapabilitiesSample {
         "AXValue", "AXEditable", "AXProtectedContent", "AXFocusedUIElement", "AXWebArea",
     ]
 
-    init(pid: pid_t) { self.pid = pid }
+    init(pid: pid_t, settingsShape: Bool) { self.pid = pid; self.settingsShape = settingsShape }
 
     private func prepare(_ element: AXUIElement) -> Bool {
         let identity = ObjectIdentifier(element)
@@ -67,18 +71,22 @@ private final class AXCapabilitiesSample {
         guard prepare(element), budget.beginQuery() else { return nil }
         let result = body()
         Log.line("query=\(name) \(AXDiagnosticReport.outcome(result)) hasValue=\(result.value != nil)")
-        switch result.status {
+        record(result.status)
+        _ = budget.canContinue()
+        return result
+    }
+
+    private func record(_ status: AXQueryStatus) {
+        switch status {
         case .returned(let error):
             if error == .apiDisabled { budget.stop(.accessibilityDenied) }
             else if error == .cannotComplete { budget.stop(.providerCannotComplete) }
-            else if error == .invalidUIElement { localStop = result.status.description; budget.stop(.clientStopped) }
+            else if error == .invalidUIElement { localStop = status.description; budget.stop(.clientStopped) }
         case .deferred: budget.stop(.clientBackoff)
         case .batchNull: break
         case .invalidResponse: malformed = true; budget.stop(.clientStopped)
         default: budget.stop(.clientStopped)
         }
-        _ = budget.canContinue()
-        return result
     }
 
     private func element(_ parent: AXUIElement, _ name: String) -> AXUIElement? {
@@ -87,12 +95,48 @@ private final class AXCapabilitiesSample {
         return value
     }
 
-    private func role(_ element: AXUIElement) -> String? {
-        guard let result = query(element, "AXRole", { element.attributeResult(kAXRoleAttribute) }), let raw = result.value else { return nil }
+    private func boundedString(_ raw: CFTypeRef?) -> String? {
+        guard let raw else { return nil }
         guard CFGetTypeID(raw) == CFStringGetTypeID() else { malformed = true; return nil }
         let string = raw as! CFString // type checked, and capped before bridging any provider string
-        guard CFStringGetLength(string) <= 128 else { malformed = true; return nil }
+        guard CFStringGetLength(string) <= 128 else { oversizedMetadata += 1; return nil }
         return raw as? String
+    }
+
+    private func role(_ element: AXUIElement) -> String? {
+        guard settingsShape else {
+            return boundedString(query(element, "AXRole", { element.attributeResult(kAXRoleAttribute) })?.value)
+        }
+        shapeTags[ElementKey(element)] = nil
+        var batch: AXAttributeBatchResult?
+        _ = query(element, "systemSettingsShapeMetadata") {
+            let result = element.attributesResult([kAXRoleAttribute, kAXSubroleAttribute, kAXIdentifierAttribute])
+            batch = result; return result.query
+        }
+        guard let batch, batch.query.status == .returned(.success) else { return nil }
+        for value in batch.attributes.values { record(value.status) }
+        guard batch.isAligned else { malformed = true; budget.stop(.clientStopped); return nil }
+        let role = boundedString(batch.attributes[kAXRoleAttribute]?.value)
+        let identifier = boundedString(batch.attributes[kAXIdentifierAttribute]?.value)
+        let subrole = boundedString(batch.attributes[kAXSubroleAttribute]?.value)
+        // These exact structural constants come from the public System Settings sample, 29 Oct 2026 (#177).
+        // Unknown identifiers and all provider labels remain unreported; matching the string alone is insufficient.
+        if role == "AXSplitGroup", identifier == "Main, SidebarNavigationSplitView" { shapeTags[ElementKey(element)] = "settingsSplit" }
+        if role == "AXOutline", identifier == "com.apple.settings.sidebar.collectionView" { shapeTags[ElementKey(element)] = "settingsSidebar" }
+        if role == "AXTextField", subrole == "AXSearchField" { shapeTags[ElementKey(element)] = "settingsSearch" }
+        return role
+    }
+
+    private func focusedSettable(_ element: AXUIElement) {
+        let result = query(element, "AXFocused.settable") {
+            var settable: DarwinBoolean = false
+            let execution = AXHealth.query(pid: element.pid) {
+                AXUIElementIsAttributeSettable(element, kAXFocusedAttribute as CFString, &settable)
+            }
+            return AXQueryResult(value: settable.boolValue, status: execution.status,
+                                 elapsedNanoseconds: execution.elapsedNanoseconds, wasAttempted: execution.wasAttempted)
+        }
+        Log.line("capability=AXFocused.settable value=\(result?.value.map(String.init) ?? "unavailable"); setterNotAttempted=true")
     }
 
     private func children(_ element: AXUIElement, _ name: String) -> [AXUIElement] {
@@ -127,17 +171,16 @@ private final class AXCapabilitiesSample {
     private func inspect(_ target: AXUIElement, kind: String) {
         guard details.insert(ElementKey(target)).inserted else { return }
         Log.line("capabilitySample=\(kind)")
+        focusedSettable(target)
         names(target, kind: "attributes"); names(target, kind: "parameters"); names(target, kind: "actions")
         let names = [kAXNumberOfCharactersAttribute, kAXSelectedTextRangeAttribute, "AXSelectedTextMarkerRange", "AXStartTextMarker", "AXEndTextMarker"]
         var batch: AXAttributeBatchResult?
         _ = query(target, "textMetadata") { let result = target.attributesResult(names); batch = result; return result.query }
-        if let batch {
+        if let batch, batch.query.status == .returned(.success) {
             for name in names {
                 guard let result = batch.attributes[name] else { malformed = true; continue }
                 Log.line("textMetadata=\(name) status=\(result.status.description) kind=\(AXDiagnosticReport.valueKind(result.value))")
-                if result.error == .apiDisabled { budget.stop(.accessibilityDenied) }
-                else if result.error == .cannotComplete { budget.stop(.providerCannotComplete) }
-                else if result.error == .invalidUIElement || result.status == .invalidResponse { localStop = result.status.description; budget.stop(.clientStopped) }
+                record(result.status)
             }
             if !batch.isAligned { malformed = true }
         }
@@ -148,10 +191,11 @@ private final class AXCapabilitiesSample {
     func run() {
         Log.line("method=boundedPublicAXCapabilities healthScope=probeProcess policy=respectBackoff")
         Log.line("bounds queriesAndTimeoutSetups=128 nodes=16 childrenPerRead=8 depth=6 cooperativeDeadlineMs=2000 timeoutPerExactReferenceMs=50")
-        Log.line("labels=false identifiers=false textValues=false customActionStrings=false actionsAttempted=0 activationAttempted=false flagsWritten=0 fullControlValidated=false")
+        Log.line("labels=false identifierValuesLogged=false textValues=false customActionStrings=false actionsAttempted=0 activationAttempted=false flagsWritten=0 fullControlValidated=false")
+        Log.line("systemSettingsShapeMode=\(settingsShape) knownStructuralTagsOnly=true outlineAndTableRowsPruned=\(settingsShape)")
         Log.line("nameEnumeration=oneNonpaginatedProviderCallWithBoundedClientDecoding; caller must impose an external process deadline")
         defer {
-            Log.line("summary queries=\(budget.queries) nodes=\(budget.nodes) capabilitySamples=\(details.count) stop=\(localStop ?? budget.stopped?.rawValue ?? "sampleFinished") depthClipped=\(budget.depthClipped) arraysClipped=\(budget.arraysClipped) skippedBranches=\(skipped) unvisitedBranches=\(unvisited) malformed=\(malformed) providerTreeComplete=false")
+            Log.line("summary queries=\(budget.queries) nodes=\(budget.nodes) capabilitySamples=\(details.count) stop=\(localStop ?? budget.stopped?.rawValue ?? "sampleFinished") depthClipped=\(budget.depthClipped) arraysClipped=\(budget.arraysClipped) skippedBranches=\(skipped) unvisitedBranches=\(unvisited) malformed=\(malformed) oversizedMetadata=\(oversizedMetadata) providerTreeComplete=false")
             Log.line("AXQueryTimeMs=\(String(format: "%.2f", AXStats.ms - initialAXMilliseconds)) wallMs=\((DispatchTime.now().uptimeNanoseconds - started) / 1_000_000); advertised capabilities and sampled reads do not prove action success or complete document support")
         }
         let app = AXUIElementCreateApplication(pid)
@@ -159,7 +203,7 @@ private final class AXCapabilitiesSample {
             // Focus inspection may be the window itself. It uses the detail cache, not traversal's seen set,
             // so the later bounded window walk can still discover that window's children (overnight #177).
             let rawRole = role(focus)
-            Log.line("sample=focus role=\(AXDiagnosticReport.role(rawRole)) isWebArea=\(rawRole == "AXWebArea")")
+            Log.line("sample=focus role=\(AXDiagnosticReport.role(rawRole)) isWebArea=\(rawRole == "AXWebArea") knownStructure=\(shapeTags[ElementKey(focus)] ?? "unmatched")")
             inspect(focus, kind: "focus")
         }
         guard let window = element(app, kAXFocusedWindowAttribute) ?? element(app, kAXMainWindowAttribute) else {
@@ -170,9 +214,12 @@ private final class AXCapabilitiesSample {
             guard seen.insert(ElementKey(target)).inserted else { continue }
             guard budget.beginNode(depth: depth) else { unvisited += 1; continue }
             let rawRole = role(target)
-            Log.line("sample=window node=\(budget.nodes) depth=\(depth) role=\(AXDiagnosticReport.role(rawRole)) isWebArea=\(rawRole == "AXWebArea")")
-            if details.count < 4, let rawRole, Self.detailRoles.contains(rawRole) { inspect(target, kind: rawRole == "AXWebArea" ? "webArea" : "content") }
-            guard let rawRole, !Self.leaves.contains(rawRole) else { skipped += 1; continue }
+            let tag = shapeTags[ElementKey(target)]
+            Log.line("sample=window node=\(budget.nodes) depth=\(depth) role=\(AXDiagnosticReport.role(rawRole)) isWebArea=\(rawRole == "AXWebArea") knownStructure=\(tag ?? "unmatched")")
+            if details.count < 4, tag != nil || rawRole.map({ Self.detailRoles.contains($0) }) == true {
+                inspect(target, kind: tag ?? (rawRole == "AXWebArea" ? "webArea" : "content"))
+            }
+            guard let rawRole, !Self.leaves.contains(rawRole), !(settingsShape && ["AXOutline", "AXTable"].contains(rawRole)) else { skipped += 1; continue }
             guard depth < budget.maximumDepth else { _ = budget.beginNode(depth: depth + 1); unvisited += 1; continue }
             let found = children(target, kAXChildrenAttribute)
             stack.append(contentsOf: found.reversed().map { ($0, depth + 1) })
