@@ -9,7 +9,9 @@ import ApplicationServices
 final class MediaAppModule: AppModule {
     /// The apps read this way come from their recipes (Resources/recipes, kind "media"; a user's own can add one).
     static var bundles: [String] { Recipes.bundles(kind: "media") }
-    private lazy var view = MediaView(pid: pid)
+    // TV's cell AXPress returned success while its Search row remained selected (29 Oct 2026, #186).
+    // The shared owner receives a strategy; Music, Podcasts and other recipe apps retain cell presses.
+    private lazy var view = MediaView(pid: pid, sidebarNavigation: bundleIdentifier == "com.apple.TV" ? .selectRow : .pressCell)
     private static let arrivalTries = 6
     private var focusGeneration = 0
     private var terminated = false

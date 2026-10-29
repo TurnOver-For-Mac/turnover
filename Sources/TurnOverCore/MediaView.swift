@@ -41,6 +41,8 @@ public final class MediaView {
         public var ident = ""
         public var desc = ""
         public var scrollValue: Double?
+        /// The exact sidebar outline captured with its row; selecting it needs no main-thread ancestor walk.
+        package var sidebarOutline: AXUIElement?
         /// Music's and TV's identifiers name the item ("…[id=ra.68…", "….id=\"umc.cmc.31qa8j…\""); others are
         /// shared by a shelf's items, so the words are added.
         var key: String { ident.contains("id=") ? ident : ident + "|" + label }
@@ -55,23 +57,35 @@ public final class MediaView {
     /// The toolbar: its buttons (More, Share; not Back, which Escape is), as Podcasts keeps Unfollow and Report in More.
     public enum Pane: Int { case sidebar, page, player, toolbar }
 
+    nonisolated package enum SidebarNavigation: Sendable, Equatable { case pressCell, selectRow }
+
     public let pid: pid_t
+    private let sidebarNavigation: SidebarNavigation
     private let work: MediaWorkOwner<ReadResult>
     nonisolated private let collector: Collector
     nonisolated private let windowQuery: WindowQuery
+    nonisolated private let keyCount: @Sendable () -> Int
     private let delay: @MainActor (TimeInterval, @escaping @MainActor @Sendable () -> Void) -> Void
 
     public convenience init(pid: pid_t) {
         self.init(pid: pid, eligible: { Core.active && NSWorkspace.shared.frontmostApplication?.processIdentifier == pid })
     }
 
+    package convenience init(pid: pid_t, sidebarNavigation: SidebarNavigation) {
+        self.init(pid: pid, sidebarNavigation: sidebarNavigation,
+                  eligible: { Core.active && NSWorkspace.shared.frontmostApplication?.processIdentifier == pid })
+    }
+
     package init(pid: pid_t, collector: Collector? = nil, queue: DispatchQueue? = nil,
-                 windowQuery: WindowQuery? = nil,
+                 sidebarNavigation: SidebarNavigation = .pressCell,
+                 windowQuery: WindowQuery? = nil, keys: @escaping @Sendable () -> Int = { ScriptHandler.keysArrivedCount },
                  deliver: @escaping @Sendable (@escaping @MainActor @Sendable () -> Void) -> Void = { onMain($0) },
                  delay: @escaping @MainActor (TimeInterval, @escaping @MainActor @Sendable () -> Void) -> Void = { onMain(after: $0, $1) },
                  eligible: @escaping @MainActor () -> Bool) {
         self.pid = pid; self.collector = collector ?? Self.collect
+        self.sidebarNavigation = sidebarNavigation
         self.windowQuery = windowQuery ?? Self.focusedWindow
+        self.keyCount = keys
         self.delay = delay
         work = MediaWorkOwner(queue: queue, deliver: deliver, eligible: eligible)
     }
@@ -102,17 +116,18 @@ public final class MediaView {
 
     public func beginSession() {
         work.beginSession(); queued = []; loadingMore = false; refreshing = false; resolving = false
-        builtAt = .distantPast
+        builtAt = .distantPast; pendingSidebarBody = nil
     }
 
     public func stop() {
-        work.stop(); queued = []; loadingMore = false; refreshing = false; resolving = false
+        work.stop(); queued = []; loadingMore = false; refreshing = false; resolving = false; pendingSidebarBody = nil
         catalogRequest = UUID(); catalog?.cancel(); catalog = nil; catalogDrives = false
     }
 
     private func beginPageIntent() {
-        work.beginSession(); queued = []; loadingMore = false; refreshing = false; resolving = false
+        work.beginSession(); queued = []; loadingMore = false; refreshing = false; resolving = false; pendingSidebarBody = nil
     }
+    private var pendingSidebarBody: [String]?
 
     private var modelWindow: AXUIElement?
     package typealias WindowQuery = @Sendable (pid_t) -> AXUIElement?
@@ -220,6 +235,7 @@ public final class MediaView {
     nonisolated package enum ReadOperation: Sendable {
         case build(keepSidebar: Bool, detectVideo: Bool)
         case resolve(Item, bar: AXUIElement?)
+        case selectSidebar(row: AXUIElement, outline: AXUIElement, cell: AXUIElement, label: String, allowAlreadyOpen: Bool)
     }
     nonisolated package struct ReadInput: Sendable {
         package let pid: pid_t
@@ -238,8 +254,10 @@ public final class MediaView {
         package var built: Built?
         package var found: Item?
         package var video: Bool
-        package init(built: Built? = nil, found: Item? = nil, video: Bool = false) {
-            self.built = built; self.found = found; self.video = video
+        package var sidebarSelected: Bool?
+        package var sidebarAlreadyOpen: Bool
+        package init(built: Built? = nil, found: Item? = nil, video: Bool = false, sidebarSelected: Bool? = nil, sidebarAlreadyOpen: Bool = false) {
+            self.built = built; self.found = found; self.video = video; self.sidebarSelected = sidebarSelected; self.sidebarAlreadyOpen = sidebarAlreadyOpen
         }
     }
     package typealias Collector = @Sendable (ReadInput, @escaping @Sendable () -> Bool) -> ReadResult?
@@ -268,6 +286,11 @@ public final class MediaView {
 
     private func apply(_ b: Built?) {
         guard let b else { return }
+        if let pendingSidebarBody {
+            let body = Self.bodySignature(b.shelves)
+            guard !body.isEmpty, body != pendingSidebarBody else { return }
+            self.pendingSidebarBody = nil
+        }
         let keep = currentItem().flatMap { $0.tableRow ? nil : $0 }
         let keepIndex = index[pane]
         let isTable = b.shelves.contains { $0.items.first?.tableRow == true }
@@ -291,6 +314,11 @@ public final class MediaView {
         AXReadScope.with(while: current) {
             guard current(), input.isWindowCurrent(), current() else { return nil }
             switch input.operation {
+            case .selectSidebar(let row, let outline, let cell, let label, let allowAlreadyOpen):
+                let outcome = MediaSidebarSelection.select(row: row, outline: outline, cell: cell, expectedLabel: label,
+                                                           allowAlreadyOpen: allowAlreadyOpen, current: current,
+                                                           windowCurrent: { input.isWindowCurrent() })
+                return current() ? ReadResult(sidebarSelected: outcome != .failed, sidebarAlreadyOpen: outcome == .alreadyOpen) : nil
             case .build(let keepSidebar, let detectVideo):
                 if detectVideo, showsVideo(in: input.window) { return current() ? ReadResult(video: true) : nil }
                 let built = build(input, keepSidebar: keepSidebar, current: current)
@@ -515,8 +543,10 @@ public final class MediaView {
             let pressable = ((acts as? [String]) ?? []).contains("AXPress")
             // TV's group rows (Library, Channels) cannot be pressed; Music's carry an Edit button.
             let header = cell.map { c in c.elements(kAXChildrenAttribute).contains { $0.role == "AXButton" && $0.string(kAXTitleAttribute) == "Edit" } } ?? false
-            return Item(label: label, element: row, press: pressable ? cell : nil, isHeader: header,
-                        selected: (row.attr(kAXSelectedAttribute) as? Bool) == true)
+            var item = Item(label: label, element: row, press: pressable ? cell : nil, isHeader: header,
+                            selected: (row.attr(kAXSelectedAttribute) as? Bool) == true)
+            item.sidebarOutline = outline
+            return item
         }
     }
 
@@ -1141,8 +1171,15 @@ public final class MediaView {
             confirmPlaying()
             return
         }
+        let originalKeys = keyCount()
+        let sidebarAlreadyOpen = pendingSidebarBody == nil && item.selected && pageTitle == item.label
+            && !Self.bodySignature(shelves).isEmpty
         beginPageIntent()
         let before = signature()
+        if pane == .sidebar, sidebarNavigation == .selectRow {
+            selectSidebar(item, window: window, before: before, keys: originalKeys, allowAlreadyOpen: sidebarAlreadyOpen)
+            return
+        }
         if pane == .page { places[pageKey()] = item.key }
         if pane == .sidebar, item.press == nil, let outline = item.element.element(kAXParentAttribute) {
             guard acceptsWindow(window) else { return }
@@ -1176,6 +1213,35 @@ public final class MediaView {
         }
         nowPlayingBefore = playingText()
         waitForNewPage(different: before)
+    }
+
+    private func selectSidebar(_ item: Item, window: AXUIElement?, before: String, keys: Int, allowAlreadyOpen: Bool) {
+        guard let outline = item.sidebarOutline, let cell = item.press, !item.isHeader else {
+            Speech.speakMessage("could not select that sidebar item", remember: false); return
+        }
+        let body = Self.bodySignature(shelves)
+        pendingSidebarBody = body
+        resolving = true
+        read(.selectSidebar(row: item.element, outline: outline, cell: cell, label: item.label, allowAlreadyOpen: allowAlreadyOpen), capturedWindow: window) { [weak self] result in
+            guard let self else { return }
+            resolving = false
+            guard result?.sidebarSelected == true else {
+                if keyCount() == keys { Speech.speakMessage("could not select that sidebar item", remember: false) }
+                runQueued(); return
+            }
+            if result?.sidebarAlreadyOpen == true {
+                pendingSidebarBody = nil
+                runQueued(); return
+            }
+            // Selection is not page arrival. A sidebar-derived title cannot turn old Search items into Home.
+            waitForNewPage(different: before, keys: keys, requiredBodyChange: body,
+                           unchangedMessage: "could not open that sidebar item")
+            runQueued()
+        }
+    }
+
+    private static func bodySignature(_ shelves: [Shelf]) -> [String] {
+        shelves.flatMap { $0.items.flatMap { [$0.key, $0.label] } }
     }
 
     private func playerControlName(_ item: Item) -> String {
@@ -1374,26 +1440,30 @@ public final class MediaView {
 
     /// After a press: when the page has changed, read where it went (its title, first shelf and item).
     private func waitForNewPage(different before: String, tries: Int = 8, goingBack: Bool = false, focusPage: Bool = false,
-                                generation: UUID? = nil, keys: Int? = nil) {
+                                generation: UUID? = nil, keys: Int? = nil, requiredBodyChange: [String]? = nil,
+                                unchangedMessage: String? = nil) {
         let session = generation ?? currentSession
         let window = modelWindow
-        let originalKeys = keys ?? ScriptHandler.keysArrivedCount
+        let originalKeys = keys ?? keyCount()
         delay(0.35) { [weak self] in
             guard let self, isCurrent(session), acceptsWindow(window) else { return }
             read(.build(keepSidebar: false, detectVideo: !goingBack), capturedWindow: window) { [weak self] result in
             guard let self, isCurrent(session), let result else { return }
             if result.video {
                 inVideo = true
-                guard ScriptHandler.keysArrivedCount == originalKeys else { return }
+                guard keyCount() == originalKeys else { return }
                 Speech.speakMessage("video playing. Space plays and pauses; Escape leaves the video")
                 return
             }
             guard let built = result.built else { return }
             // A page still loading (no shelves yet, 7 Oct 2026): wait for it, rather than read an empty page.
-            if signature(of: built) == before || (built.shelves.isEmpty && tries > 0) {
+            let bodyPending = requiredBodyChange.map { Self.bodySignature(built.shelves) == $0 || built.shelves.allSatisfy { $0.items.isEmpty } } ?? false
+            if signature(of: built) == before || (built.shelves.isEmpty && tries > 0) || bodyPending {
                 if tries > 0 { waitForNewPage(different: before, tries: tries - 1, goingBack: goingBack, focusPage: focusPage,
-                                              generation: session, keys: originalKeys) }
-                else if ScriptHandler.keysArrivedCount != originalKeys { return }
+                                              generation: session, keys: originalKeys, requiredBodyChange: requiredBodyChange,
+                                              unchangedMessage: unchangedMessage) }
+                else if keyCount() != originalKeys { return }
+                else if let unchangedMessage { Speech.speakMessage(unchangedMessage, remember: false) }
                 else if goingBack { Speech.speakMessage("no previous page", remember: false) }
                 else {
                     // No new page: a song or episode that plays when opened. Say so, from the player.
@@ -1406,7 +1476,7 @@ public final class MediaView {
             apply(built)
             // Later user navigation owns the pane/cursor. The new snapshot is still useful, but a slow page
             // result must not move focus or announce over a more recent key (including arrival retry chains).
-            guard ScriptHandler.keysArrivedCount == originalKeys else { return }
+            guard keyCount() == originalKeys else { return }
             pane = .page
             // After a search the keyboard is still in the search field, where the arrows are the field's: give it to
             // the results, so Down reads them.

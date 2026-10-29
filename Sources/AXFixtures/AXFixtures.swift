@@ -367,6 +367,24 @@ public enum AXReplay {
         if t == CFStringGetTypeID() { value = .string(v as! String) }
         else if t == CFBooleanGetTypeID() { value = .bool(CFBooleanGetValue((v as! CFBoolean))) }
         else if t == CFNumberGetTypeID() { value = .number((v as! NSNumber).doubleValue) }
+        else if t == CFArrayGetTypeID() {
+            let array = v as! CFArray
+            let count = CFArrayGetCount(array)
+            guard count <= 128 else { return .illegalArgument }
+            var ids: [Int] = []
+            withExtendedLifetime(array) {
+                for index in 0..<count {
+                    guard let pointer = CFArrayGetValueAtIndex(array, index) else { continue }
+                    let object = Unmanaged<AnyObject>.fromOpaque(pointer).takeUnretainedValue()
+                    guard CFGetTypeID(object) == AXUIElementGetTypeID(), let elementID = id(of: object as! AXUIElement), byId[elementID] != nil else { continue }
+                    ids.append(elementID)
+                }
+            }
+            guard ids.count == count else { return .illegalArgument }
+            // Replayed selection writes must read back like the provider, rather than returning success while
+            // silently dropping arrays. Only bounded arrays of elements in this synthetic fixture are accepted.
+            value = .elements(ids)
+        }
         else if t == AXValueGetTypeID(), AXValueGetType((v as! AXValue)) == .cfRange { var r = CFRange(); AXValueGetValue((v as! AXValue), .cfRange, &r); value = .range(r.location, r.length) }
         sets.append((i, a as String, value))
         if let value { n.attrs[a as String] = value; byId[i] = n }

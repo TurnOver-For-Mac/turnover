@@ -60,13 +60,16 @@ private final class MediaTestRig {
     let worker: DispatchQueue
     let view: MediaView
     let delays: MediaTestDelays
+    let keys: OSAllocatedUnfairLock<Int>
     private let allowed: OSAllocatedUnfairLock<Bool>
 
-    init(liveCollector: Bool = false, actualWindow: Bool = false) {
+    init(liveCollector: Bool = false, actualWindow: Bool = false,
+         sidebarNavigation: MediaView.SidebarNavigation = .pressCell) {
         let source = MediaTestSource(), deliveries = MediaTestDeliveries()
         let worker = DispatchQueue(label: "turnover.tests.media-work")
         let allowed = OSAllocatedUnfairLock(initialState: true)
-        let delays = MediaTestDelays()
+        let delays = MediaTestDelays(), keys = OSAllocatedUnfairLock(initialState: 0)
+        self.keys = keys
         self.source = source; self.deliveries = deliveries; self.worker = worker; self.allowed = allowed
         self.delays = delays
         let fakeCollector: MediaView.Collector = { source.read($0, current: $1) }
@@ -75,7 +78,8 @@ private final class MediaTestRig {
         let windowQuery: MediaView.WindowQuery? = liveCollector || actualWindow ? nil : fixedWindow
         // All dependencies are init-local checked values; no partially initialized self crosses to the worker.
         view = MediaView(pid: AXReplay.floor, collector: collector,
-                         queue: worker, windowQuery: windowQuery, deliver: { deliveries.enqueue($0) },
+                         queue: worker, sidebarNavigation: sidebarNavigation, windowQuery: windowQuery,
+                         keys: { keys.withLock { $0 } }, deliver: { deliveries.enqueue($0) },
                          delay: { delays.enqueue($0, $1) },
                          eligible: { allowed.withLock { $0 } })
     }
@@ -134,6 +138,32 @@ private func mediaTwoWindowFixture(focused: Int?, main: Int? = nil, firstScrollV
         .init(id: 100, attrs: ["AXRole": .string("AXButton"), "AXIdentifier": .string("sample[id=A]"), "AXDescription": .string("A"), "AXParent": .element(10)], actions: ["AXPress"]),
         .init(id: 200, attrs: ["AXRole": .string("AXButton"), "AXIdentifier": .string("sample[id=B]"), "AXDescription": .string("B"), "AXParent": .element(20)], actions: ["AXPress"]),
     ])
+}
+
+private func tvSidebarFixture(page: String = "Search", body: String? = "Public Browse item", homeSelected: Bool = false,
+                              focusedWindow: Int = 1) -> AXFixture {
+    .init(app: "Public TV sample", bundle: "test.tv", recorded: "synthetic", root: 1, application: 0, focus: nil, nodes: [
+        .init(id: 0, attrs: ["AXRole": .string("AXApplication"), "AXFocusedWindow": .element(focusedWindow)]),
+        .init(id: 1, attrs: ["AXRole": .string("AXWindow"), "AXTitle": .string(page), "AXChildren": .elements([10, 20])]),
+        .init(id: 2, attrs: ["AXRole": .string("AXWindow"), "AXTitle": .string(page), "AXChildren": .elements([])]),
+        .init(id: 10, attrs: ["AXRole": .string("AXOutline"), "AXDescription": .string("Sidebar"),
+                            "AXRows": .elements([30, 31]), "AXChildren": .elements([30, 31]), "AXSelectedRows": .elements(homeSelected ? [30] : [31])]),
+        .init(id: 30, attrs: ["AXRole": .string("AXRow"), "AXParent": .element(10), "AXChildren": .elements([40]), "AXSelected": .bool(homeSelected)]),
+        .init(id: 31, attrs: ["AXRole": .string("AXRow"), "AXParent": .element(10), "AXChildren": .elements([41]), "AXSelected": .bool(!homeSelected)]),
+        // AXReplay deliberately reports AXPress success without changing the provider's selection.
+        .init(id: 40, attrs: ["AXRole": .string("AXCell"), "AXDescription": .string("Home"), "AXParent": .element(30)], actions: ["AXPress"]),
+        .init(id: 41, attrs: ["AXRole": .string("AXCell"), "AXDescription": .string("Search"), "AXParent": .element(31)], actions: ["AXPress"]),
+        .init(id: 20, attrs: ["AXRole": .string("AXScrollArea"), "AXIdentifier": .string("public.tv.body"), "AXChildren": .elements(body == nil ? [] : [22]), "AXVerticalScrollBar": .element(23)]),
+        .init(id: 22, attrs: ["AXRole": .string("AXButton"), "AXDescription": .string(body ?? ""), "AXIdentifier": .string(body ?? ""), "AXParent": .element(20)], actions: ["AXPress"]),
+        .init(id: 23, attrs: ["AXRole": .string("AXScrollBar"), "AXValue": .number(0)]),
+    ])
+}
+
+private func selectTVHome(_ rig: MediaTestRig) {
+    rig.view.refresh {}; rig.settle()
+    rig.view.switchPane(-1) // Page -> Sidebar; native Search row was selected.
+    rig.view.move(-1)
+    expect(rig.view.currentItem()?.label, "Home")
 }
 
 func mediaWorkTests() {
@@ -373,6 +403,137 @@ func mediaWorkTests() {
         expect(rig.source.state.withLock { $0.windows.count }, reads, "no collector is admitted without confirmed actual focus")
         check(rig.view.shelves.isEmpty && rig.view.pageTitle.isEmpty, "unconfirmed focus invalidates the old model")
         check(AXReplay.actions.isEmpty && AXReplay.sets.isEmpty, "neither old nor main-window controls were driven")
+    }
+    test("TV sidebar: actual Enter selects and verifies the row instead of pressing its ineffective cell") {
+        AXReplay.load(tvSidebarFixture()); defer { AXReplay.unload() }
+        let rig = MediaTestRig(liveCollector: true, sidebarNavigation: .selectRow)
+        defer { rig.view.stop(); rig.worker.sync {} }
+        selectTVHome(rig)
+        rig.view.activate(); rig.settle()
+        expect(AXReplay.sets.map(\.attribute), [kAXSelectedRowsAttribute])
+        expect(AXReplay.sets.first?.value, .elements([30]), "only the captured Home row was requested")
+        check(AXReplay.actions.isEmpty, "no false-success cell press or playback")
+        expect(rig.view.pageTitle, "Search", "selection alone did not invent page content")
+        // Advance only after the actual replayed write/verification, as a controlled provider response.
+        AXReplay.load(tvSidebarFixture(page: "Home", body: "Public Home item", homeSelected: true))
+        check(rig.delays.fire(0.35), "existing page-change wait was scheduled after verification")
+        rig.settle()
+        expect(rig.view.pageTitle, "Home")
+        expect(rig.view.shelves.flatMap(\.items).map(\.label), ["Public Home item"])
+    }
+    test("TV sidebar: unchanged or empty body cannot become Home merely from its sidebar-derived title") {
+        for body: String? in ["Public Browse item", nil] {
+            AXReplay.load(tvSidebarFixture())
+            let rig = MediaTestRig(liveCollector: true, sidebarNavigation: .selectRow)
+            selectTVHome(rig); rig.view.activate(); rig.settle()
+            let savedSink = Speech.sink
+            var said: [String] = []; Speech.sink = { said.append($0) }
+            AXReplay.load(tvSidebarFixture(page: "Home", body: body, homeSelected: true))
+            for _ in 0...8 { check(rig.delays.fire(0.35), "the existing finite page poll remains pending"); rig.settle() }
+            expect(rig.view.pageTitle, "Search", "old body was not relabeled as a confirmed Home page")
+            expect(said, ["could not open that sidebar item"])
+            Speech.sink = savedSink; rig.view.stop(); rig.worker.sync {}; AXReplay.unload()
+        }
+    }
+    test("TV sidebar: verified already-open selection is idempotent without a false page timeout") {
+        AXReplay.load(tvSidebarFixture(page: "Home", body: "Public Home item", homeSelected: true)); defer { AXReplay.unload() }
+        let rig = MediaTestRig(liveCollector: true, sidebarNavigation: .selectRow)
+        defer { rig.view.stop(); rig.worker.sync {} }
+        rig.view.refresh {}; rig.settle(); rig.view.switchPane(-1)
+        expect(rig.view.currentItem()?.label, "Home")
+        let savedSink = Speech.sink; var said: [String] = []; Speech.sink = { said.append($0) }
+        defer { Speech.sink = savedSink }
+        rig.view.activate(); rig.settle()
+        check(AXReplay.sets.isEmpty && AXReplay.actions.isEmpty, "verified current page needs no new selection or press")
+        check(!rig.delays.fire(0.35), "unchanged open content does not enter a false-failure poll")
+        expect(said, [])
+    }
+    test("TV sidebar: ordinary refresh cannot bypass pending body confirmation with a changed title") {
+        AXReplay.load(tvSidebarFixture()); defer { AXReplay.unload() }
+        let rig = MediaTestRig(liveCollector: true, sidebarNavigation: .selectRow)
+        defer { rig.view.stop(); rig.worker.sync {} }
+        selectTVHome(rig); rig.view.activate(); rig.settle()
+        AXReplay.load(tvSidebarFixture(page: "Home", homeSelected: true))
+        rig.view.refresh {}; rig.settle()
+        expect(rig.view.pageTitle, "Search", "generic refresh cannot publish Home with old Search items")
+        AXReplay.load(tvSidebarFixture(page: "Home", body: nil, homeSelected: true))
+        rig.view.refresh {}; rig.settle()
+        expect(rig.view.pageTitle, "Search", "an empty loader is not confirmed body content")
+        AXReplay.load(tvSidebarFixture(page: "Home", body: "Public Home item", homeSelected: true))
+        rig.view.refresh {}; rig.settle()
+        expect(rig.view.pageTitle, "Home", "actual changed body clears the publication guard")
+        expect(rig.view.shelves.flatMap(\.items).map(\.label), ["Public Home item"])
+    }
+    test("TV sidebar: later queued keys retain their pane after asynchronous selection and page delivery") {
+        AXReplay.load(tvSidebarFixture()); defer { AXReplay.unload() }
+        let rig = MediaTestRig(liveCollector: true, sidebarNavigation: .selectRow)
+        defer { rig.view.stop(); rig.worker.sync {} }
+        selectTVHome(rig); rig.view.activate(); rig.worker.sync {}
+        rig.keys.withLock { $0 += 2 }
+        rig.view.switchPane(1); rig.view.switchPane(1)
+        rig.settle()
+        expect(rig.view.pane, .sidebar, "the later two Tab commands already own the pane")
+        let savedSink = Speech.sink; var said: [String] = []; Speech.sink = { said.append($0) }
+        defer { Speech.sink = savedSink }
+        AXReplay.load(tvSidebarFixture(page: "Home", body: "Public Home item", homeSelected: true))
+        check(rig.delays.fire(0.35), "held page result is delivered after newer input")
+        rig.settle()
+        expect(rig.view.pageTitle, "Home", "current content can still refresh")
+        expect(rig.view.pane, .sidebar, "late selection did not reset the newer cursor")
+        expect(said, [], "no late page announcement over newer keys")
+    }
+    test("TV sidebar: complete selected-row membership refuses wrong multiple and malformed selections") {
+        for selection: AXFixture.Value in [.elements([31]), .elements([30, 31]), .strings(["not an element"])] {
+            var fixture = tvSidebarFixture(); fixture.nodes[3].attrs[kAXSelectedRowsAttribute] = selection
+            AXReplay.load(fixture)
+            let worker = DispatchQueue(label: "turnover.tests.tv-membership"), confirmed = OSAllocatedUnfairLock(initialState: true)
+            worker.sync {
+                let outline = AXReplay.element(10)
+                _ = AXUIElementSetMessagingTimeout(outline, 0.05)
+                let value = MediaSidebarSelection.membership(row: AXReplay.element(30), outline: outline, current: { true }, windowCurrent: { true })
+                confirmed.withLock { $0 = value }
+            }
+            check(!confirmed.withLock { $0 }, "a partial or wrong row never confirms navigation")
+            check(AXReplay.sets.isEmpty && AXReplay.actions.isEmpty, "membership check is read-only")
+            AXReplay.unload()
+        }
+    }
+    test("TV sidebar: reparented or reused captured rows fail before selecting anything") {
+        for changedParent in [false, true] {
+            AXReplay.load(tvSidebarFixture())
+            let rig = MediaTestRig(liveCollector: true, sidebarNavigation: .selectRow)
+            selectTVHome(rig)
+            var fixture = tvSidebarFixture()
+            if changedParent { fixture.nodes[4].attrs[kAXParentAttribute] = .element(20) }
+            else { fixture.nodes[6].attrs[kAXDescriptionAttribute] = .string("Other public item") }
+            AXReplay.load(fixture)
+            let savedSink = Speech.sink; var said: [String] = []; Speech.sink = { said.append($0) }
+            rig.view.activate(); rig.settle()
+            check(AXReplay.sets.isEmpty && AXReplay.actions.isEmpty, "old row/cell identity caused no UI mutation")
+            expect(said, ["could not select that sidebar item"])
+            Speech.sink = savedSink; rig.view.stop(); rig.worker.sync {}; AXReplay.unload()
+        }
+    }
+    test("TV sidebar: an actual window switch retires queued row selection before its worker write") {
+        AXReplay.load(tvSidebarFixture()); defer { AXReplay.unload() }
+        let rig = MediaTestRig(liveCollector: true, sidebarNavigation: .selectRow)
+        defer { rig.view.stop(); rig.worker.sync {} }
+        selectTVHome(rig)
+        let gate = MediaTestGate(); defer { gate.release.signal() }
+        rig.worker.async { gate.hold() }; rig.wait(gate)
+        rig.view.activate()
+        AXReplay.load(tvSidebarFixture(focusedWindow: 2))
+        gate.release.signal(); rig.settle()
+        check(AXReplay.sets.isEmpty && AXReplay.actions.isEmpty, "no selection reached the old native window")
+        expect(rig.view.pageTitle, "")
+    }
+    test("media sidebar: default Music and Podcasts strategy retains the cell press") {
+        AXReplay.load(tvSidebarFixture()); defer { AXReplay.unload() }
+        let rig = MediaTestRig(liveCollector: true)
+        defer { rig.view.stop(); rig.worker.sync {} }
+        selectTVHome(rig); rig.view.activate(); rig.settle()
+        expect(AXReplay.actions.map(\.id), [40], "default media path still presses the existing cell")
+        check(AXReplay.sets.isEmpty, "TV row strategy was not applied to default media")
     }
     test("media work: an expired request releases the lane without calling its provider") {
         let worker = DispatchQueue(label: "turnover.tests.media-deadline"), delivery = MediaTestDeliveries()
