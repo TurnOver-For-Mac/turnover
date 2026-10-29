@@ -143,7 +143,7 @@ package final class MailAppModule: AppModule {
     /// content" holds it four levels down (group, scroll area, web area; measured 13 Oct 2026); the message list's
     /// scroll area holds none.
     package static func messageIn(_ scroll: AXUIElement,
-                                  isEditable: (AXUIElement) -> Bool = EditableWebArea.isEditable) -> AXUIElement? {
+                                  isEditable: @MainActor (AXUIElement) -> Bool = EditableWebArea.isEditable) -> AXUIElement? {
         var level = scroll.elements(kAXChildrenAttribute)
         for _ in 0..<6 {
             guard level.count <= 200 else { return nil }
@@ -234,7 +234,7 @@ package final class MailAppModule: AppModule {
         Speech.speakMessage("sent")
     }
 
-    override func handleEvent(_ event: Event, next: () -> Void) {
+    package override func handleEvent(_ event: Event, next: () -> Void) {
         // After Command Shift D: "sent" before the window and focus behind the compose window are read.
         if Self.sending != nil, [.foreground, .gainFocus].contains(event.kind) { Self.saySentIfGone() }
         if event.kind == .gainFocus { notePlace(event.obj.element) }
@@ -259,7 +259,7 @@ package final class MailAppModule: AppModule {
         }
     }
 
-    override func objectClass(for element: AXUIElement, role: Role, subrole: String?) -> TurnOverObject.Type? {
+    package override func objectClass(for element: AXUIElement, role: Role, subrole: String?) -> TurnOverObject.Type? {
         if role == .tableRow, MailMessageRow.isMessageRow(element) { return MailMessageRow.self }
         if role == .webArea, EditableWebArea.isEditable(element) { return MailMessageBody.self }
         if element.string(kAXIdentifierAttribute) == "popup_priority" { return MailPriorityPopup.self }
