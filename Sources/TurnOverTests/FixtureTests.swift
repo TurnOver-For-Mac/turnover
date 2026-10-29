@@ -284,6 +284,11 @@ func focusRuleTests() {
         AXReplay.load(pages(caret: true)); defer { AXReplay.unload() }
         return pagesModule()?.objectClass(for: AXReplay.element(4), role: .editableText, subrole: nil)
     }
+    /// Pages' module for the replayed element's own pid (each replayed element has a pid of its own).
+    func pagesModule(for id: Int) -> AppModule? {
+        BuiltInModules.register()
+        return AppModuleHandler.shared.moduleType(for: "com.apple.Pages")?.init(pid: AXReplay.floor + pid_t(id), bundleIdentifier: "com.apple.Pages", appName: "Pages")
+    }
 
     test("Pages: a jump that leaves the copy of the text gone and brings no focus reads from Pages' focus") {
         guard let kind = pagesBodyClass() else { return Harness.fail("Pages' body text has its class") }
@@ -300,6 +305,113 @@ func focusRuleTests() {
         API.setFocusObject(copy, ancestors: [])
         (copy as? EditableText)?.caretMoved(speak: nil, gesture: KeyboardGesture(identifier: "kb:command+upArrow")!, info: nil)
         expect(API.focusObject.flatMap { AXReplay.id(of: $0.element) }, 4, "the copy is still the focus")
+    }
+
+    /// The two pages' copies of the text (4, 6) with words: the first page's part of the story is "One two three\nfour",
+    /// the second's ", five six". Each copy answers for the whole story, as Pages' do, with the caret at `caret`.
+    func pagesStory(caret: Int) -> AXFixture {
+        var f = pages(caret: true)
+        f.nodes = f.nodes.map { n in
+            guard [4, 6].contains(n.id) else { return n }
+            var attrs = n.attrs
+            attrs["AXValue"] = .string("One two three\nfour, five six"); attrs["AXNumberOfCharacters"] = .number(28)
+            attrs["AXSharedCharacterRange"] = n.id == 4 ? .range(0, 18) : .range(18, 10); attrs["AXSelectedTextRange"] = .range(caret, 0)
+            return .init(id: n.id, attrs: attrs)
+        }
+        return f
+    }
+    /// A caret key on the first page's copy whose move crosses onto the second page. Pages moves its focus as the caret
+    /// crosses, so the key's wait for the caret sees a focus event waiting; then the caret is at `to`, and the second
+    /// page's copy gets the focus. What was said for that focus, as Pages' module takes it.
+    func pagesCrossing(pressed: String, sends: String, script: String, from: Int, to: Int) -> [String] {
+        guard let kind = pagesBodyClass(), let module = pagesModule(for: 6) else { Harness.fail("Pages' module is registered"); return [] }
+        AXReplay.load(pagesStory(caret: from))
+        let sink = Speech.sink, direct = InputManager.directPid
+        defer { AXReplay.unload(); API.setFocusObject(nil, ancestors: []); Speech.sink = sink; InputManager.directPid = direct; InputManager.lastKeyDownAt = .distantPast }
+        Speech.sink = { _ in }
+        let old = kind.init(element: AXReplay.element(4)), new = kind.init(element: AXReplay.element(6))
+        API.setFocusObject(old, ancestors: [])
+        InputManager.lastKeyIdentifier = pressed
+        InputManager.lastKeyDownAt = Date()
+        // The focus event waits behind the key's script. Its stand-in (the window) is not run: its pid is a direct app's.
+        InputManager.directPid = AXReplay.floor
+        ScriptHandler.executeScript(Script(name: "pagesCrossing", description: "", category: "", owner: nil) { g in
+            EventHandler.queue(Event(.gainFocus, TurnOverObject(element: AXReplay.element(0))))
+            old.script(named: script)?.handler(g)
+        }, gesture: KeyboardGesture(identifier: sends)!)
+        var r = CFRange(location: to, length: 0)
+        for id in [4, 6] { _ = AXUIElementSetAttributeValue(AXReplay.element(id), kAXSelectedTextRangeAttribute as CFString, AXValueCreate(.cfRange, &r)!) }
+        var said: [String] = []
+        Speech.sink = { said.append($0) }
+        module.handleEvent(Event(.loseFocus, old)) {}
+        API.setFocusObject(new, ancestors: [])
+        let hop = Event(.gainFocus, new)
+        _ = module.ignoresFocus(hop)
+        module.handleEvent(hop) {}
+        return said
+    }
+    test("Pages: a VoiceOver key's move onto the next page reads the line, as the arrow it sends does") {
+        // VO-Down sends Down, and the hop was checked against VO-Down itself: nothing was said (a code review, 29 Oct 2026).
+        expect(pagesCrossing(pressed: "kb:turnover+downArrow", sends: "kb:downArrow", script: "caret_moveByLine", from: 5, to: 19), ["four, five six"])
+    }
+    test("Pages: Right onto the next page reads the character crossed and Option Right the word, as within a page") {
+        let saved = config; defer { config = saved }
+        // On the Mac, the character and the word passed over, not the comma after the caret that Option Right stops on.
+        config.general.keyboardStyle = KeyboardStyle.voiceOver.rawValue
+        expect(pagesCrossing(pressed: "kb:rightArrow", sends: "kb:rightArrow", script: "caret_moveByCharacter", from: 17, to: 18), ["r"])
+        expect(pagesCrossing(pressed: "kb:option+rightArrow", sends: "kb:option+rightArrow", script: "caret_moveByWord", from: 14, to: 18), ["four"])
+        // In the Windows style, Option Right goes on to the next word and reads it.
+        config.general.keyboardStyle = KeyboardStyle.jaws.rawValue
+        expect(pagesCrossing(pressed: "kb:option+rightArrow", sends: "kb:option+rightArrow", script: "caret_moveByWord", from: 14, to: 18), ["five"])
+    }
+    test("Pages: after a copy of the text takes over from a gone one, Shift with an arrow reads the selection") {
+        guard let kind = pagesBodyClass() else { return Harness.fail("Pages' body text has its class") }
+        var f = pagesLaidOutAfresh()
+        f.nodes = f.nodes.map { n in
+            guard [7, 8].contains(n.id) else { return n }
+            var attrs = n.attrs; attrs["AXValue"] = .string("Twenty characters ok")
+            return .init(id: n.id, attrs: attrs)
+        }
+        AXReplay.load(f)
+        let sink = Speech.sink, poster = KeyboardGesture.poster
+        var said: [String] = []
+        defer { AXReplay.unload(); API.setFocusObject(nil, ancestors: []); Speech.sink = sink; KeyboardGesture.poster = poster }
+        Speech.sink = { _ in }
+        let gone = kind.init(element: AXReplay.element(4))
+        API.setFocusObject(gone, ancestors: [])
+        (gone as? EditableText)?.caretMoved(speak: nil, gesture: KeyboardGesture(identifier: "kb:command+upArrow")!, info: nil)
+        // Shift Option Right: Pages selects the first word.
+        KeyboardGesture.poster = { _ in
+            var r = CFRange(location: 0, length: 6)
+            _ = AXUIElementSetAttributeValue(AXReplay.element(7), kAXSelectedTextRangeAttribute as CFString, AXValueCreate(.cfRange, &r)!)
+        }
+        Speech.sink = { said.append($0) }
+        API.focusObject?.script(named: "caret_changeSelection")?.handler(KeyboardGesture(identifier: "kb:option+shift+rightArrow")!)
+        check(said.contains { $0.contains("Twenty") }, "the selection is said (said: \(said))")
+    }
+    test("Pages: after a hop between the pages' copies of the text, Shift with an arrow reads the selection") {
+        guard let kind = pagesBodyClass(), let module = pagesModule(for: 6) else { return Harness.fail("Pages' module is registered") }
+        AXReplay.load(pagesStory(caret: 18))
+        let sink = Speech.sink, poster = KeyboardGesture.poster
+        var said: [String] = []
+        defer { AXReplay.unload(); API.setFocusObject(nil, ancestors: []); Speech.sink = sink; KeyboardGesture.poster = poster; InputManager.lastKeyDownAt = .distantPast }
+        Speech.sink = { _ in }
+        let old = kind.init(element: AXReplay.element(4)), new = kind.init(element: AXReplay.element(6))
+        InputManager.lastKeyIdentifier = "kb:rightArrow"
+        InputManager.lastKeyDownAt = Date()
+        module.handleEvent(Event(.loseFocus, old)) {}
+        API.setFocusObject(new, ancestors: [])
+        let hop = Event(.gainFocus, new)
+        check(module.ignoresFocus(hop), "the hop is quiet")
+        module.handleEvent(hop) {}
+        // Shift Option Right: Pages selects ", five".
+        KeyboardGesture.poster = { _ in
+            var r = CFRange(location: 18, length: 6)
+            for id in [4, 6] { _ = AXUIElementSetAttributeValue(AXReplay.element(id), kAXSelectedTextRangeAttribute as CFString, AXValueCreate(.cfRange, &r)!) }
+        }
+        Speech.sink = { said.append($0) }
+        new.script(named: "caret_changeSelection")?.handler(KeyboardGesture(identifier: "kb:option+shift+rightArrow")!)
+        check(said.contains { $0.contains("five") }, "the selection is said (said: \(said))")
     }
 }
 
