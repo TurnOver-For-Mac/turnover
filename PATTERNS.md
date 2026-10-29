@@ -82,6 +82,10 @@ misbehaves, check this list first.
   from the app twice running, say "page not responding". `PageWatch`.
 - **Anything slow on the main thread** trips the watchdog at 4 s: walk big trees off the main thread with a deadline
   (Find, Item Chooser, Rotor), cap page reads at 2 s, never wait on Word or on macOS's permission dialogs on main.
+- **A background loader must not append to the arrays the keys read.** The App Store now builds a local page and
+  shelf snapshot on its serial worker, then commits it on main after checking the session, request and base revision.
+  Commit and finish the original command before replaying later keys; a retired completion must leave newer work
+  alone. This also keeps a captured app's confirmation from patching a different row at its old index (#54, 28 Oct 2026).
 
 ## Microsoft Word
 
@@ -384,3 +388,54 @@ and no title. A tooltip names an icon button, but never the window's own buttons
   buttons and nothing else:** no content in the tree, every hit test answers the window, and the app does not
   implement the enhanced-interface flags VoiceOver sets. Screen recognition is the only way in and it works, but
   cards laid out in columns are read row by row (issue 73), and TurnOver says only window on arrival (issue 74).
+
+## From a public AX probe to a reading adapter (28 Oct 2026, App Store, issue 174)
+
+1. Record app/macOS versions, Accessibility trust, actual foreground app, and both VoiceOver's flag and observed
+   process state. Compare the same public page with VoiceOver on/off; label an untested state explicitly.
+2. Keep returned errors, legitimate absence and reader-process backoff distinct. A separate probe has its own
+   health state. Probe with deadlines, query/decoding limits and no application actions before changing an adapter.
+3. Choose the public representation that exposes the content. App Store navigation children can expose content
+   missed by ordinary children. Preserve their order; successful empty is authoritative. Test typed fallback rules.
+4. Carry discovered identities into the adapter, then resolve them freshly before acting. Reject ambiguous or
+   recycled elements. A readable child array alone establishes neither purchase access nor complete control.
+5. Try a reversible action separately and verify its resulting page/selection. Purchase/download actions require
+   their own user intent and confirmation; they are excluded from the structural preview.
+6. Retire work on newer focus, page or reader intent; reject stale callbacks and incomplete publication. Turn each
+   observed shape into a public-content fixture with cancellation/error cases before widening live coverage.
+
+## App probing refinements (29 Oct 2026, macOS 27.2)
+
+- An inspected focus element must not suppress traversal when that same element is also the window. Inspection
+  and traversal have different visited sets. A clipped prefix establishes only what was visited, not absence.
+- Probe foreground state explicitly. Music and Podcasts initially returned cannotComplete in background samples;
+  their warmed foreground samples succeeded without VoiceOver. This does not establish why the first call failed.
+- Chromium's content can sit below toolbar/list branches. The bounded extended profile can reach its WebArea;
+  advertised text-marker names still need successful read/action checks before claiming behavior.
+- Media requests carry the actual native window, not just a process ID, page title or MainWindow. Two windows in
+  one app can share those other properties. Recheck current window before publication, scrolling or activation.
+- Settings' General buttons exposed AXAttributedDescription but omitted standard title/description/help. The
+  narrow label bridge prefers the standard fields, caps decoding, and falls back when the optional shape changes.
+- A successful AXFocused write does not prove keyboard movement. Settings re-resolves the part and reads the
+  actual focused element; missing or incomplete ancestry is not proof that focus is elsewhere.
+
+## A sidebar press that returns success without changing page (TV, 29 Oct 2026, issue 186)
+
+TV 1.7.2 on macOS 27.2 advertised AXPress on the first cell of each sidebar row. Oliver's live trial returned
+success pressing Home, but Search remained selected and later reads still held its Browse categories. A separate
+bounded read-only probe confirmed Home unselected, Search selected, and AXSelectedRows settable on the outline.
+The row itself did not advertise AXPress. These are different observations: an advertised operation or successful
+action return is not the resulting selection. Verify selection and body change separately. A page title derived
+from the sidebar selection alone cannot establish that the old content has been replaced.
+
+## Useful media content before a fixed pause ends (TV, 29 Oct 2026, issue 188)
+
+Nine clean shelf completions in Oliver's TV trial took 557–678 ms, including a fixed 500 ms client pause; one
+overlapping current snapshot already had new items at 223 ms. The TV module now enables an optional early
+read with a small work budget. An unchanged/incomplete early result waits at the same scroll position until
+the existing settling point, rather than scrolling again prematurely. A current same-page publication with
+genuine new item keys can fulfill that load and retire its timers. New executed navigation owns the cursor,
+even if it returns to the same item; queued arrows keep their order. Other media apps keep the default timing.
+This fast path does not establish that a half-second is enough for every machine or network. Timers are
+scheduling choices; only observed content establishes readiness. Full provider-unavailable handling remains
+a separate live-check limitation, not an invented empty page.

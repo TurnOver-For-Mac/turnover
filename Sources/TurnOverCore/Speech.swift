@@ -19,8 +19,16 @@ public enum OutputReason { case focus, focusEntered, caret, query, change, messa
 public enum SpeechMode { case off, talk, onDemand, beeps }
 
 public enum Speech {
-    public static var player: SpeechPlayer! { didSet { SpeechPlayer.current = player } }
-    public static var mode: SpeechMode = .talk
+    public static var player: SpeechPlayer! {
+        didSet {
+            oldValue?.monitorRequiredOutput(false)
+            SpeechPlayer.current = player
+            player?.monitorRequiredOutput(mode == .talk || mode == .onDemand)
+        }
+    }
+    public static var mode: SpeechMode = .talk {
+        didSet { player?.monitorRequiredOutput(mode == .talk || mode == .onDemand) }
+    }
     /// On-demand mode: speech allowed until then, set as a reporting command starts (ScriptHandler).
     nonisolated(unsafe) public static var demandedUntil = Date.distantPast
     nonisolated(unsafe) private static var lastBeep = Date.distantPast

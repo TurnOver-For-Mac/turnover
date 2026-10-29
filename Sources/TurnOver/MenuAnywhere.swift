@@ -60,7 +60,8 @@ final class MenuAnywhere {
     enum Kind { case run, list }
     /// The layer's letters. Plugin commands (P), write a plugin (W) and the mode (E) left the layer (18 Oct 2026:
     /// "don't matter any more"); the plugin maker is still in the menu.
-    static var letters: [String: (spoken: String, kind: Kind, action: @MainActor () -> Void)] { [
+    static var letters: [String: (spoken: String, kind: Kind, action: @MainActor () -> Void)] {
+        var l: [String: (spoken: String, kind: Kind, action: @MainActor () -> Void)] = [
         // M for the menu (14 Oct 2026: clearer than NVDA's N, and the layer is TurnOver's own); N still opens
         // it, unlisted, for hands used to it. The plugin maker moved from M to W ("write a plugin").
         "m": ("menu", .list, { TurnOverMenu.shared.open() }),
@@ -68,7 +69,6 @@ final class MenuAnywhere {
         "s": ("settings window", .run, { SettingsBridge.open() }),   // the window (18 Oct 2026); M, Settings is the spoken menu
         "/": ("shortcuts here", .list, { GlobalCommands.openShortcutsList() }),
         "r": ("screen recognition", .list, { MenuAnywhere.shared.recognize() }),
-        "e": ("screen interface: the window's controls from its pixels (experimental)", .list, { MenuAnywhere.shared.recognizeInterface() }),
         "t": ("switch reader", .run, { MenuAnywhere.shared.switchLead?(MenuAnywhere.shared.voiceOverWasReading) }),
         "d": ("direct: this app's keys straight to it, TurnOver quiet", .run, { MenuAnywhere.shared.toggleDirect?() }),
         "a": ("all apps: TurnOver in its apps, everywhere, or VoiceOver everywhere", .run, { MenuAnywhere.shared.cycleLeadMode?() }),
@@ -82,7 +82,12 @@ final class MenuAnywhere {
         // V: copy VoiceOver's settings (15 Oct 2026: every TurnOver command through the layer, no direct keys;
         // direct keys clash with apps and will go).
         "v": ("copy VoiceOver settings", .run, { VoiceOverSettings.startFlow() }),
-    ] }
+        ]
+        // The screen interface (a window's controls from its pixels) is a feature for a whole build, so the layer
+        // offers it only in developer builds (Oliver, 29 Oct 2026: "that's not a bug fix, it's a feature").
+        if Edition.isDevBuild { l["e"] = ("screen interface: the window's controls from its pixels (experimental)", .list, { MenuAnywhere.shared.recognizeInterface() }) }
+        return l
+    }
     /// The letters in the list's order, as said when the layer is pressed twice.
     static var letterList: String {
         let names = ["m": "M menu", "s": "S settings", "t": "T switch reader", "a": "A ask for this app", "v": "V copy VoiceOver settings", "k": "K keyboard style", "j": "J that was wrong",

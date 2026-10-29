@@ -118,8 +118,19 @@ extension AXHandler {
     /// A helper process that belongs to the application in front: its bundle identifier extends the app's
     /// (com.apple.Safari.SandboxBroker serves Safari's Settings window). Its focus is the app's focus.
     func isHelperOfActiveApp(_ helper: NSRunningApplication) -> Bool {
-        guard let front = NSRunningApplication(processIdentifier: activePid)?.bundleIdentifier, let b = helper.bundleIdentifier else { return false }
+        guard let frontApp = NSRunningApplication(processIdentifier: activePid) else { return false }
+        if Self.servesPanel(helperBundle: helper.bundleIdentifier, helperName: helper.localizedName, frontName: frontApp.localizedName) { return true }
+        guard let front = frontApp.bundleIdentifier, let b = helper.bundleIdentifier else { return false }
         return b.hasPrefix(front + ".")
+    }
+
+    /// The Open and Save dialogs are drawn by a system service, one per app, that names the app it serves: "Open and
+    /// Save Panel Service (TextEdit)". Its focus was ignored as a process that is not an application, so a file dialog
+    /// was never read, in TextEdit or in Safari's "browse for file" (issue 14, 29 Oct 2026). Only the service serving
+    /// the app in front counts; another app's dialog left open behind stays ignored.
+    nonisolated public static func servesPanel(helperBundle: String?, helperName: String?, frontName: String?) -> Bool {
+        guard helperBundle == "com.apple.appkit.xpc.openAndSavePanelService", let name = helperName, let front = frontName, !front.isEmpty else { return false }
+        return name.hasSuffix("(\(front))")
     }
 
     /// Watch a process for notifications (also for status items whose menus TurnOver opens).

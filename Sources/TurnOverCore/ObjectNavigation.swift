@@ -14,7 +14,8 @@ import AppKit
 public final class ObjectNavigator {
     public static let shared = ObjectNavigator()
     /// The navigator object's element; nil means "the focus".
-    private var current: AXUIElement?
+    private var current: AXUIElement? { didSet { cancelWindowSearch() } }
+    private let windowSearch = AXWalkRunner<WindowKindSearchResult<AXUIElement>>()
     /// Where the review cursor is (for the plugin maker: the item it changes).
     public var reviewElement: AXUIElement? { current }
     private var currentPid: pid_t = 0
@@ -32,6 +33,7 @@ public final class ObjectNavigator {
     public var tracksFocus = true
 
     public func focusMoved(to e: AXUIElement, pid: pid_t) {
+        cancelWindowSearch()
         guard tracksFocus else { return }
         // Choosing in a held list moves the app's focus (Finder shows the folder): the cursor stays in the list.
         if heldList != nil, Date() < keepHoldUntil { return }
@@ -230,18 +232,16 @@ public final class ObjectNavigator {
         // A table's column with no title is its structure, not a stop: it said only "column" between Ulysses' panes
         // (Day 2, 10 Oct 2026). The cells are reached through the rows.
         if role == "AXColumn", !named { return false }
+        // Action reads share health accounting and a worker's read scope, including nested searches (28 Oct 2026).
         if role == "AXImage" {
-            var acts: CFArray?
-            AXUIElementCopyActionNames(e, &acts)
-            return named || ((acts as? [String]) ?? []).contains("AXPress")
+            return named || ((e.actionNamesResult().value as? [String]) ?? []).contains("AXPress")
         }
         if layoutRoles.contains(role) {
             // A container is an item only when it is a control in disguise (pressable) or has a name; otherwise
             // review goes straight into it.
             if ProfileStore.shared.isSilenced(e, pid: e.pid) { return false }
-            var acts: CFArray?
-            AXUIElementCopyActionNames(e, &acts)
-            return named && e.elements(kAXChildrenAttribute).isEmpty || ((acts as? [String]) ?? []).contains("AXPress") && e.elements(kAXChildrenAttribute).isEmpty
+            let acts = (e.actionNamesResult().value as? [String]) ?? []
+            return named && e.elements(kAXChildrenAttribute).isEmpty || acts.contains("AXPress") && e.elements(kAXChildrenAttribute).isEmpty
         }
         if ProfileStore.shared.isSilenced(e, pid: e.pid) { return false }
         return true
@@ -251,16 +251,14 @@ public final class ObjectNavigator {
     /// The row before or after a row of a table or outline, fetched alone by its index: fetching every row to find
     /// the next took 120 ms a step in Contacts' 610 (10 Oct 2026). nil: not a row, or past the ends (then the
     /// children are walked as before).
-    static func neighbourRow(of e: AXUIElement, in parent: AXUIElement, offset: Int) -> AXUIElement? {
+    nonisolated static func neighbourRow(of e: AXUIElement, in parent: AXUIElement, offset: Int) -> AXUIElement? {
+        // Former raw count/slice calls now share cancellation, budgets and health accounting with attribute reads.
         guard e.role == "AXRow", ["AXOutline", "AXTable"].contains(parent.role),
               let i = (e.attr("AXIndex") as? NSNumber)?.intValue else { return nil }
-        var count: CFIndex = 0
-        guard AXUIElementGetAttributeValueCount(parent, kAXRowsAttribute as CFString, &count) == .success else { return nil }
+        guard let count = parent.attributeValueCountResult(kAXRowsAttribute).value else { return nil }
         let j = i + offset
         guard j >= 0, j < count else { return nil }
-        var values: CFArray?
-        guard AXUIElementCopyAttributeValues(parent, kAXRowsAttribute as CFString, j, 1, &values) == .success,
-              let row = (values as? [AXUIElement])?.first else { return nil }
+        guard let row = (parent.attributeValuesResult(kAXRowsAttribute, index: j, maxValues: 1).value as? [AXUIElement])?.first else { return nil }
         return row
     }
 
@@ -280,7 +278,7 @@ public final class ObjectNavigator {
         return false
     }
 
-    static func descends(_ e: AXUIElement) -> Bool {
+    nonisolated static func descends(_ e: AXUIElement) -> Bool {
         let role = e.role
         if skippedRoles.contains(role) { return false }
         if ["AXButton", "AXCheckBox", "AXRadioButton", "AXPopUpButton", "AXMenuButton", "AXTextField", "AXTextArea", "AXComboBox",
@@ -615,18 +613,72 @@ public final class ObjectNavigator {
     /// The next or previous element of a kind in the window, in reading order, from the cursor (VO-Command-H and
     /// friends outside a document).
     public func findInWindow(roles: Set<String>, forward: Bool, kind: String) {
-        guard let start = element, let root = window(of: start) else { Speech.speakMessage("nothing to search"); return }
-        var node: AXUIElement? = start.isSame(root) ? (forward ? root.elements(kAXChildrenAttribute).first : nil) : start
-        var first = !start.isSame(root)
-        var visited = 0
-        while let n = node, visited < 5000 {
-            visited += 1
-            if !first, roles.contains(n.role), Self.isItem(n) || n.role == "AXHeading" { land(on: n); return }
-            first = false
-            node = forward ? nextInOrder(after: n, root: root, enter: true) : previousInOrder(before: n, root: root)
+        // Take references only: even resolving the cursor's window can wait on the target application. The worker
+        // retains reading-order and row-neighbour rules, with a cooperative deadline instead of thousands of main
+        // thread queries. A call already in flight is not preemptible, but never blocks key resolution (28 Oct 2026).
+        let cursor = current
+        let focus = API.focusObject?.element
+        let foreground = API.foregroundObject?.element
+        let frontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        guard cursor != nil || focus != nil else { Speech.speakMessage("nothing to search"); return }
+        let queries = WindowKindQueries<AXUIElement, ElementKey>(
+            identity: { ElementKey($0) },
+            window: { $0.role == "AXWindow" ? $0 : $0.element(kAXWindowAttribute) },
+            children: { $0.elements(kAXChildrenAttribute) },
+            parent: { $0.element(kAXParentAttribute) },
+            descends: { Self.descends($0) },
+            matches: { roles.contains($0.role) && (Self.isItem($0) || $0.role == "AXHeading") },
+            neighbourRow: { Self.neighbourRow(of: $0, in: $1, offset: $2) }
+        )
+        windowSearch.submit { request in
+            let budget = AXWalkBudget(request: request)
+            let resolvedStart: AXUIElement
+            switch WindowSearchPreflight.resolve(cursor: cursor, focus: focus, budget: budget, role: { element in
+                let result = element.attributeResult(kAXRoleAttribute)
+                return AXQueryResult(value: result.value as? String, status: result.status,
+                                     elapsedNanoseconds: result.elapsedNanoseconds, wasAttempted: result.wasAttempted)
+            }) {
+            case .ready(let element): resolvedStart = element
+            case .unavailable: return .unavailable
+            case .incomplete(let reason): return .incomplete(reason)
+            }
+            return AXReadScope.with(while: { budget.check() }, onQuery: { budget.admitAXQuery() }, onResult: { budget.record($0) }) {
+                var search = WindowKindSearch(queries: queries, budget: budget)
+                let result = search.find(from: resolvedStart, forward: forward)
+                // A malformed cross-process child must never become the action target for this window's request.
+                if case .found(let target) = result, target.pid != resolvedStart.pid { return .unavailable }
+                return result
+            }
+        } publish: { [weak self] result in
+            guard let self, Core.active,
+                  NSWorkspace.shared.frontmostApplication?.processIdentifier == frontmost,
+                  Self.sameSnapshot(self.current, cursor), Self.sameSnapshot(API.focusObject?.element, focus),
+                  Self.sameSnapshot(API.foregroundObject?.element, foreground) else { return }
+            switch result {
+            case .found(let target):
+                self.land(on: target)
+            case .end:
+                Tones.edge()
+                Speech.speakMessage(forward ? "no next \(kind)" : "no previous \(kind)")
+            case .unavailable:
+                Speech.speakMessage("nothing to search")
+            case .incomplete(.cancelled): break
+            case .incomplete(let reason):
+                Log.io("review: window \(kind) search incomplete (\(reason.rawValue))")
+                Speech.speakMessage("Search stopped before finishing. Try again.")
+            }
         }
-        Tones.edge()
-        Speech.speakMessage(forward ? "no next \(kind)" : "no previous \(kind)")
+    }
+
+    /// Keys, cursor/focus movement and reader deactivation retire both queued work and held completion callbacks.
+    public func cancelWindowSearch() { windowSearch.cancel() }
+
+    private static func sameSnapshot(_ a: AXUIElement?, _ b: AXUIElement?) -> Bool {
+        switch (a, b) {
+        case (nil, nil): return true
+        case (let a?, let b?): return a.isSame(b)
+        default: return false
+        }
     }
 
     /// VO-Shift-Escape: out to the top level of the window, on its first item.

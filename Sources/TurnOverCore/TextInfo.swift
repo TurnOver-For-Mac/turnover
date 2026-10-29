@@ -125,7 +125,11 @@ open class TextInfo {
     // MARK: Primitives (override)
 
     open func storyLength() -> Int { 0 }
+    /// Nil when counting characters would require fetching an unbounded text value.
+    open func characterStoryLength() -> Int? { storyLength() }
     open func textRange(_ s: Int, _ e: Int) -> String { "" }
+    /// Unexpanded source text: spoken attachment labels must not change UTF-16 positions.
+    open func characterTextRange(_ s: Int, _ e: Int) -> String { textRange(s, e) }
     open func caretOffset() -> Int? { nil }
     open func selectionOffsets() -> (Int, Int)? { nil }
     open func setCaretOffset(_ o: Int) {}
@@ -193,17 +197,8 @@ open class TextInfo {
     // MARK: Units
 
     open func characterOffsets(_ offset: Int) -> (Int, Int) {
-        let n = storyLength()
-        guard offset < n else { return (offset, offset) }
-        // Composed character sequences (an emoji, a letter and its combining mark) are one character; so is CR LF.
-        let s = textRange(max(0, offset - 2), min(n, offset + 4)) as NSString
-        let base = max(0, offset - 2)
-        let local = offset - base
-        guard local < s.length else { return (offset, offset + 1) }
-        let r = s.rangeOfComposedCharacterSequence(at: local)
-        var e = base + r.location + r.length
-        if s.character(at: local) == 13, local + 1 < s.length, s.character(at: local + 1) == 10 { e = offset + 2 }
-        return (base + r.location, max(e, offset + 1))
+        guard let n = characterStoryLength() else { return (offset, offset) }
+        return CharacterBoundaries.offsets(at: offset, length: n, read: characterTextRange) ?? (offset, offset)
     }
 
     /// NVDA's word unit: a run of word characters with its trailing whitespace; punctuation is its own word; a line break is a word.
@@ -329,19 +324,26 @@ open class TextInfo {
     @discardableResult
     public func move(_ unit: TextUnit, _ direction: Int, endPoint: EndPoint? = nil) -> Int {
         guard direction != 0 else { return 0 }
-        let length = storyLength()
+        let length: Int
+        if unit == .character {
+            guard let n = characterStoryLength() else { return 0 }
+            length = n
+        } else { length = storyLength() }
         let forward = direction > 0
-        if endPoint == nil { collapse() }
         var position = endPoint == .end ? end : start
         var moved = 0
         for _ in 0..<abs(direction) {
             let next: Int
             if forward {
                 guard position < length else { break }
-                next = unitOffsets(unit, position).1
+                let range = unitOffsets(unit, position)
+                if unit == .character, range.0 == range.1 { break }
+                next = range.1
             } else {
                 guard position > 0 else { break }
-                next = unitOffsets(unit, position - 1).0
+                let range = unitOffsets(unit, position - 1)
+                if unit == .character, range.0 == range.1 { break }
+                next = range.0
             }
             guard forward ? next > position : next < position else { break }
             position = next
@@ -378,19 +380,35 @@ open class AXTextInfo: TextInfo {
         return (textElement.string(kAXValueAttribute) as NSString?)?.length ?? 0
     }
 
+    open override func characterStoryLength() -> Int? {
+        textElement.int(kAXNumberOfCharactersAttribute)
+    }
+
     open override func textRange(_ s: Int, _ e: Int) -> String {
+        let t = rawTextRange(s, e)
+        return t.contains(Attachments.mark) ? Attachments.expand(t, in: textElement, from: max(0, s)) : t
+    }
+
+    open override func characterTextRange(_ s: Int, _ e: Int) -> String {
+        guard let n = characterStoryLength() else { return "" }
+        return rawTextRange(s, e, knownLength: n, valueLimit: CharacterBoundaries.maximumContextLength)
+    }
+
+    private func rawTextRange(_ s: Int, _ e: Int, knownLength: Int? = nil, valueLimit: Int? = nil) -> String {
         // Nothing lies past the end (WebKit answers a range at the end of a one-line field with "\n": "new line").
-        let e = min(e, storyLength())
+        let n = knownLength ?? storyLength()
+        let e = min(e, n)
         guard e > s else { return "" }
         if let t = textElement.param(kAXStringForRangeParameterizedAttribute, axRangeValue(s, e - s)) as? String {
-            return t.contains(Attachments.mark) ? Attachments.expand(t, in: textElement, from: s) : t
+            return t
         }
         // Controls without parameterized attributes (a plain AppKit text field): slice the value.
+        // Character probing may fetch a small field's value, never a whole large document.
+        if let valueLimit, n > valueLimit { return "" }
         guard let v = textElement.string(kAXValueAttribute) else { return "" }
         let ns = v as NSString
         let cs = min(max(s, 0), ns.length), ce = min(max(e, cs), ns.length)
-        let t = ns.substring(with: NSRange(location: cs, length: ce - cs))
-        return t.contains(Attachments.mark) ? Attachments.expand(t, in: textElement, from: cs) : t
+        return ns.substring(with: NSRange(location: cs, length: ce - cs))
     }
 
     open override func caretOffset() -> Int? {

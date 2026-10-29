@@ -216,9 +216,9 @@ nonisolated public enum ElementMatcher {
             if named { return false }
         }
         if let p = m.pressable {
-            var acts: CFArray?
-            AXUIElementCopyActionNames(e, &acts)
-            if ((acts as? [String]) ?? []).contains("AXPress") != p { return false }
+            // This can be nested inside a bounded search; action reads now share attribute health/scope admission
+            // rather than bypassing cancellation and accounting (28 Oct 2026, issue 119).
+            if ((e.actionNamesResult().value as? [String]) ?? []).contains("AXPress") != p { return false }
         }
         if let w = m.window { guard let win = e.element(kAXWindowAttribute), glob(w, win.string(kAXTitleAttribute) ?? "") else { return false } }
         if let t = m.text, !glob(t, text(of: e)) { return false }

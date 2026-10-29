@@ -17,9 +17,24 @@ let gates: [String: (name: String, help: String, run: ([String]) -> Void)] = [
     "speech":   ("speech",
                  "Speech engine soak through AVSpeechSynthesizer.write(). Silent: no audio is played. --voice <id substring> --count N --sayall",
                  runSpeechGate),
+    "capabilities": ("capabilities",
+                 "Bounded metadata-only public AX sample of one running app. Requires --bundle id. Optional --extended uses a larger fixed content sample; --system-settings reports known structural tags only for System Settings. These modes cannot be combined. No labels, document text, actions, flag writes or activation.",
+                 runCapabilitiesGate),
+    "iphone-mirroring": ("iphone-mirroring",
+                 "Bounded public AX routes and one-character focused text probes for existing iPhone Mirroring. Metadata logs only. No arguments, labels, images, UI actions, flag writes, activation or permission prompts.",
+                 runIPhoneMirroringGate),
+    "tv-structure": ("tv-structure",
+                 "Bounded read-only TV structure and known Home/Search sidebar capabilities. Existing TV only; no arguments, arbitrary labels, identifiers, actions, writes or activation.",
+                 runTVStructureGate),
     "inspect":  ("inspect",
                  "Read-only look at an app's focused window and element: roles, attributes, text queries. --app Name | --bundle id | --pid N [--value]",
                  runInspectGate),
+    "appstore-ax": ("appstore-ax",
+                 "Bounded read-only App Store structural sample; no labels, UI actions or activation. Existing app only. [--direct] explicitly bypasses this probe's AXHealth rest.",
+                 runAppStoreAXGate),
+    "appstore-navigation": ("appstore-navigation",
+                 "Read-only preview using production public navigation children. Existing App Store only; metadata by default. [--public-labels] requires revalidated Discover content. No UI actions or reader toggles.",
+                 runAppStoreNavigationGate),
     "text":     ("text",
                  "Gate 7: 200 simulated arrow presses on a 5 MB file in TextEdit, bounded reads only. Takes the front. --lines N --mb N --keep",
                  runTextGate),
@@ -65,7 +80,9 @@ guard let gateName = args.first, let gate = gates[gateName] else {
 }
 
 Log.open(gate: gate.name)
-Log.line("turnover-probe \(gate.name) \(args.dropFirst().joined(separator: " "))")
-Log.line("macOS \(ProcessInfo.processInfo.operatingSystemVersionString), pid \(getpid()), VoiceOver running: \(voiceOverRunning())")
+// Metadata gates never persist raw arguments, including rejected content or malformed target arguments.
+let metadataGate = gateName == "appstore-ax" || gateName == "appstore-navigation" || gateName == "capabilities" || gateName == "tv-structure" || gateName == "iphone-mirroring"
+Log.line(metadataGate ? "turnover-probe \(gate.name)" : "turnover-probe \(gate.name) \(args.dropFirst().joined(separator: " "))")
+Log.line("macOS \(ProcessInfo.processInfo.operatingSystemVersionString), pid \(getpid()), VoiceOver enabled flag: \(voiceOverRunning())")
 gate.run(Array(args.dropFirst()))
 Log.close()

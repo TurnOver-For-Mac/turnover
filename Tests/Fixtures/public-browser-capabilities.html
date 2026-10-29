@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<title>TurnOver public browser capability sample</title>
+<style>body{font:20px system-ui;max-width:48em;margin:2em auto;padding:0 1em}label,button,select{display:block;margin:1em 0}td,th{padding:.5em;border:1px solid}textarea{width:90%}</style>
+<h1>TurnOver public browser capability sample</h1>
+<p>This local sample contains only public test content. It makes no network requests, saves no data, and has no purchase or account actions.</p>
+<nav aria-label="Sample sections"><a href="#reading">Reading</a> · <a href="#form">Form</a> · <a href="#table">Table</a></nav>
+<main>
+<section id="reading"><h2>Reading and Unicode</h2>
+<p>First paragraph. Second sentence. A link goes to the <a href="#table">sample table</a>.</p>
+<p>Character samples: A, café, é, 😀, 👩🏽‍💻, 🇬🇧. The final word is zebra.</p>
+<ul><li>Red apple</li><li>Green pear</li><li>Blue plum</li></ul>
+</section>
+<section id="form"><h2>Editable controls</h2>
+<label>Sample text <input type="text" value="Public sample text" autocomplete="off"></label>
+<label>Sample multiline text <textarea rows="3">Line one.
+Line two with café and 😀.
+Line three.</textarea></label>
+<label>Sample choice <select><option>Alpha</option><option>Beta</option><option>Gamma</option></select></label>
+<label><input type="checkbox"> Sample checkbox</label>
+<button type="button" onclick="document.getElementById('result').textContent='The harmless sample button was pressed.'">Harmless sample button</button>
+<p id="result" role="status" aria-live="polite">The sample button has not been pressed.</p>
+</section>
+<section id="table"><h2>Sample table</h2>
+<table><caption>Public fruit inventory</caption><thead><tr><th scope="col">Fruit</th><th scope="col">Count</th></tr></thead><tbody><tr><th scope="row">Apple</th><td>3</td></tr><tr><th scope="row">Pear</th><td>5</td></tr></tbody></table>
+</section>
+</main>
+</html>

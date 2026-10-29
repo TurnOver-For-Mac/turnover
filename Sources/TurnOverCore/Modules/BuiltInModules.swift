@@ -16,6 +16,7 @@ public enum BuiltInModules {
         h.register(TerminalAppModule.self, for: "com.googlecode.iterm2")
         h.register(MailAppModule.self, for: MailAppModule.bundleID)
         h.register(SafariAppModule.self, for: SafariAppModule.bundleID)
+        h.register(SystemSettingsAppModule.self, for: SystemSettingsAppModule.bundleID)
         // Previews, off until turned on in the TurnOver menu (Applications).
         h.register(FinderAppModule.self, for: FinderAppModule.bundleID)
         h.register(ClaudeAppModule.self, for: ClaudeTranscript.bundleID)

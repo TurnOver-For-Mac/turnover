@@ -286,15 +286,17 @@ public struct Config: Codable {
         /// NVDA's "Automatically say all on result".
         public var autoSayAll = false
         /// After Return clicks something in the result, recognise again instead of closing (Oliver, 28 Oct 2026: a
-        /// dialog's OK, then the screen that follows, without pressing the key again). On by default.
-        public var refreshAfterClick = true
+        /// dialog's OK, then the screen that follows, without pressing the key again). A feature for a whole build,
+        /// so off by default and its toggle shown only in developer builds (Oliver, 29 Oct 2026: "that's not a bug fix,
+        /// it's a feature").
+        public var refreshAfterClick = false
         public init() {}
         enum Keys: String, CodingKey { case autoRefresh, autoSayAll, refreshAfterClick }
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: Keys.self)
             autoRefresh = (try? c.decodeIfPresent(Bool.self, forKey: .autoRefresh)) ?? false
             autoSayAll = (try? c.decodeIfPresent(Bool.self, forKey: .autoSayAll)) ?? false
-            refreshAfterClick = (try? c.decodeIfPresent(Bool.self, forKey: .refreshAfterClick)) ?? true
+            refreshAfterClick = (try? c.decodeIfPresent(Bool.self, forKey: .refreshAfterClick)) ?? false
         }
         public func encode(to encoder: Encoder) throws {
             var c = encoder.container(keyedBy: Keys.self)

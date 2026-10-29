@@ -40,6 +40,8 @@ public enum Edition {
         ("com.apple.Safari", "Safari"),
         ("com.apple.Terminal", "Terminal"),
         ("com.microsoft.Word", "Microsoft Word (preview, off until you turn it on)"),
+        ("com.google.Chrome", "Chrome (preview, off until you turn it on)"),
+        ("com.apple.systempreferences", "System Settings (preview, off until you turn it on)"),
         // Previews, off until turned on (6 Oct 2026).
         ("com.apple.finder", "Finder (preview, off until you turn it on)"),
         ("com.anthropic.claudefordesktop", "Claude (preview, off until you turn it on)"),

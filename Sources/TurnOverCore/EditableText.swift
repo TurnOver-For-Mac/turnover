@@ -261,6 +261,7 @@ open class EditableText: TurnOverObject {
         // Google Docs, Sheets, Slides: the text box is a hidden typing target; Google says the move itself.
         if GoogleDocs.isEditor(element) { gesture.send(); return }
         guard let info = try? makeTextInfo(.caret) else { gesture.send(); return }
+        let boundarySound = appModule.playsNativeCaretBoundarySound
         let bookmark = info.bookmark
         let oldLine = info.copy(); oldLine.expand(.line)
         // An edge known before the key is sent is an edge at once, not after the caret's patience: at the end of
@@ -284,7 +285,7 @@ open class EditableText: TurnOverObject {
         if noRoom {
             Log.io("edge: nothing \(backwards ? "before" : "after") the caret (\(info.start) of \(length)); sent unwaited")
             gesture.send()
-            Tones.edge(keySent: true)
+            Tones.edge(keySent: true, sound: boundarySound)
             caretMoved(speak: readsLineAtEdge ? .line : nil, gesture: gesture, info: info)
             return
         }
@@ -318,7 +319,7 @@ open class EditableText: TurnOverObject {
                 return
             }
             Log.io("edge: caret stayed on its line (old line \(oldLine.start)-\(oldLine.end), caret \(info2?.start ?? n.start))")
-            Tones.edge(keySent: true)
+            Tones.edge(keySent: true, sound: boundarySound)
             caretMoved(speak: readsLineAtEdge ? .line : nil, gesture: gesture, info: info2 ?? n)
             return
         }
@@ -349,7 +350,7 @@ open class EditableText: TurnOverObject {
                 }
             }
             Log.io("edge: caret did not move (old line \(oldLine.start)-\(oldLine.end), caret \(newInfo?.start ?? -1))")
-            Tones.edge(keySent: true)
+            Tones.edge(keySent: true, sound: boundarySound)
             caretMoved(speak: unit == .line && readsLineAtEdge ? .line : nil, gesture: gesture, info: newInfo)
             return
         }

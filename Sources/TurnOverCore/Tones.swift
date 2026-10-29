@@ -37,10 +37,18 @@ public enum Tones {
     /// silent there: both played at a boundary in Word (17 Oct 2026: "we should be using VoiceOver sounds").
     /// `keySent`: the key went on to the app, so VoiceOver's own boundary sound plays and TurnOver's stays silent;
     /// otherwise, coexisting, VoiceOver's boundary file (a list's end in Messages was silent, 17 Oct 2026).
-    public static func edge(keySent: Bool = false) {
+    /// A sound-only opt-out preserves the trackpad boundary feedback. Native caret callers take their app
+    /// policy before sending the key; every other caller keeps the existing sound decision (#190).
+    public static func edge(keySent: Bool = false, sound: Bool = true) {
+        if sound { edgeSound(keySent) }
+        onEdge?()
+    }
+    // A narrow playback seam lets regression tests observe the real edge request without starting audio.
+    // The production function retains the existing sound-set and coexist decisions.
+    package static var edgeSound: @MainActor (Bool) -> Void = playEdgeSound
+    private static func playEdgeSound(keySent: Bool) {
         if !Coexist.on { if !fresh("edge") { beep(220, 50, volume: 0.2) } }
         else if !keySent { _ = voiceOver("WrapBoundary.aiff") }
-        onEdge?()
     }
     /// Taking over from VoiceOver: two bell notes a fifth apart, rising (G5, D6). Handing back: the same falling.
     /// Short and soft, as it is heard every time an application changes hands.

@@ -1,0 +1,13 @@
+{
+  "id": "official-system-settings",
+  "name": "System Settings",
+  "version": "1.0",
+  "author": "TurnOver",
+  "contact": "https://github.com/TurnOver-For-Mac/turnover/issues",
+  "summary": "System Settings: commands for the sidebar, current pane and search, with clearer button labels. Preview.",
+  "description": "Command-Control-1 moves to the sidebar, 2 to the current pane and 3 to search. When native focus is unavailable, TurnOver announces a verified review-cursor fallback. Normal navigation and editing keys keep their native behavior. Turn it on in Applications to try it.",
+  "apps": ["com.apple.systempreferences"],
+  "kind": "official",
+  "privacy": "Reads System Settings on your Mac; nothing is sent anywhere.",
+  "changes": [{"version": "1.0", "notes": "Add guarded part navigation and bounded optional attributed button labels."}]
+}

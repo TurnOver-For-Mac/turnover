@@ -5,7 +5,7 @@
 import Foundation
 import ApplicationServices
 
-final class MailAppModule: AppModule {
+package final class MailAppModule: AppModule {
     static let bundleID = "com.apple.mail"
 
     required init(pid: pid_t, bundleIdentifier: String, appName: String) {
@@ -142,11 +142,15 @@ final class MailAppModule: AppModule {
     /// The message being read inside a scroll area: the first web area that isn't being written in. Mail's "message
     /// content" holds it four levels down (group, scroll area, web area; measured 13 Oct 2026); the message list's
     /// scroll area holds none.
-    static func messageIn(_ scroll: AXUIElement) -> AXUIElement? {
+    package static func messageIn(_ scroll: AXUIElement,
+                                  isEditable: @MainActor (AXUIElement) -> Bool = EditableWebArea.isEditable) -> AXUIElement? {
         var level = scroll.elements(kAXChildrenAttribute)
         for _ in 0..<6 {
-            if let web = level.first(where: { $0.role == "AXWebArea" }) { return EditableWebArea.isEditable(web) ? nil : web }
-            level = level.filter { $0.role != "AXTable" && $0.role != "AXOutline" && $0.role != "AXScrollBar" }.flatMap { $0.elements(kAXChildrenAttribute) }
+            guard level.count <= 200 else { return nil }
+            // An editable web area beside the message is a compose body, not the end of the search. Never
+            // descend into it and mistake one of its nested web areas for received mail (issue 179, 29 Oct 2026).
+            if let web = level.first(where: { $0.role == "AXWebArea" && !isEditable($0) }) { return web }
+            level = level.filter { !["AXTable", "AXOutline", "AXScrollBar", "AXWebArea"].contains($0.role) }.flatMap { $0.elements(kAXChildrenAttribute) }
             if level.isEmpty || level.count > 200 { return nil }
         }
         return nil
@@ -230,7 +234,7 @@ final class MailAppModule: AppModule {
         Speech.speakMessage("sent")
     }
 
-    override func handleEvent(_ event: Event, next: () -> Void) {
+    package override func handleEvent(_ event: Event, next: () -> Void) {
         // After Command Shift D: "sent" before the window and focus behind the compose window are read.
         if Self.sending != nil, [.foreground, .gainFocus].contains(event.kind) { Self.saySentIfGone() }
         if event.kind == .gainFocus { notePlace(event.obj.element) }
@@ -255,7 +259,7 @@ final class MailAppModule: AppModule {
         }
     }
 
-    override func objectClass(for element: AXUIElement, role: Role, subrole: String?) -> TurnOverObject.Type? {
+    package override func objectClass(for element: AXUIElement, role: Role, subrole: String?) -> TurnOverObject.Type? {
         if role == .tableRow, MailMessageRow.isMessageRow(element) { return MailMessageRow.self }
         if role == .webArea, EditableWebArea.isEditable(element) { return MailMessageBody.self }
         if element.string(kAXIdentifierAttribute) == "popup_priority" { return MailPriorityPopup.self }

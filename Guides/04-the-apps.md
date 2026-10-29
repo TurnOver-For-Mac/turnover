@@ -27,6 +27,7 @@ presses its own button (Get, Open, Update). Command F searches.
 
 Word reads as you move, says the page as you reach it, and has VoiceOver's keys for headings, tracked changes and
 spelling errors (VO Command H, R, E). Tables say each cell with its headings. In Excel, cells are read as you move.
+Word's native caret boundaries use Word/macOS's sound; TurnOver keeps its own review and table-edge feedback.
 
 ## Calendar (experimental)
 

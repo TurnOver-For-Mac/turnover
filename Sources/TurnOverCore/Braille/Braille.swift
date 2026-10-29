@@ -436,10 +436,18 @@ public enum Braille {
 
     // MARK: Keys
 
+    // BAUM can send unsupported mixed chords such as dot keys with an extra thumb key. Those names contain
+    // typed cells too: redact diagnostics while keeping the original identifier for dispatch (#62, 28 Oct 2026).
+    package static func diagnosticKeyName(_ name: String) -> String {
+        name.split(separator: "+").contains { $0.hasPrefix("dot") } ? "(a braille input chord)" : name
+    }
+
     /// From the driver, on the main thread.
     public static func handle(_ key: BrailleKey) {
         guard display != nil else { return }
-        Log.io("braille key \(key)")
+        let loggedKey: BrailleKey
+        if case .key(let name) = key { loggedKey = .key(diagnosticKeyName(name)) } else { loggedKey = key }
+        Log.io("braille key \(loggedKey)")
         // Input help (TurnOver 1): the key says what it does instead of doing it.
         if InputManager.isInputHelpActive { Speech.cancel(); BrailleHelp.explain(BrailleHelp.describe(key)); return }
         // A display key stops speech as a keyboard key does (NVDA: every gesture cancels speech first); the
@@ -521,7 +529,7 @@ public enum Braille {
             case "previousLine": line(-1)
             case "nextLine": line(1)
             case "activate": activate()
-            default: Log.io("braille: no command for \(name)")
+            default: Log.io("braille: no command for \(diagnosticKeyName(name))")
             }
         }
     }

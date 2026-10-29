@@ -5,6 +5,7 @@
 import Foundation
 import AppKit
 import ApplicationServices
+import TurnOverAX
 
 final class AppStoreFlatAdapter: FlatAdapter {
     let pid: pid_t
@@ -28,31 +29,36 @@ final class AppStoreFlatAdapter: FlatAdapter {
         return n.isEmpty ? nil : n
     }
 
-    /// What the raw calls say when a row answers blank (at most twice a second): a dead handle, no children, or an
-    /// error; the measurement the engine's design turns on (27 Oct 2026).
-    nonisolated(unsafe) private static var lastDiagnosis = Date.distantPast
+    /// Diagnose this reader process's missing row name without bypassing its AXHealth rest or copying all children.
+    /// Status and presence only: identifiers and title/description strings may contain private content (issue 166).
+    nonisolated(unsafe) private static var lastDiagnosis = Date.distantPast   // every read/write holds diagLock
     private static let diagLock = NSLock()
     nonisolated static func diagnose(_ e: AXUIElement) {
-        diagLock.lock(); let due = Date().timeIntervalSince(lastDiagnosis) > 0.5; if due { lastDiagnosis = Date() }; diagLock.unlock()
+        diagLock.lock(); let due = Date().timeIntervalSince(lastDiagnosis) > 2; if due { lastDiagnosis = Date() }; diagLock.unlock()
         guard due else { return }
-        func errName(_ r: AXError) -> String {
-            switch r { case .success: return "ok"; case .cannotComplete: return "cannotComplete"; case .noValue: return "noValue"; case .invalidUIElement: return "invalidElement"
-                       case .attributeUnsupported: return "unsupported"; default: return "err\(r.rawValue)" }
+        var budget = AXProbeBudget(maximumQueries: 5, durationNanoseconds: 100_000_000)
+        defer {
+            _ = budget.canContinue()
+            Log.io("flat view diagnosis: sampledQueries=\(budget.queries) stop=\(budget.stopped?.rawValue ?? "sampleFinished") providerTreeComplete=false")
         }
-        var v: AnyObject?
-        let rk = AXUIElementCopyAttributeValue(e, kAXChildrenAttribute as CFString, &v)
-        let kids = (v as? [AXUIElement]) ?? []
-        var vi: AnyObject?
-        let ri = AXUIElementCopyAttributeValue(e, kAXIdentifierAttribute as CFString, &vi)
-        var childPart = "no child"
-        if let c = kids.first {
-            var vt: AnyObject?
-            let rt = AXUIElementCopyAttributeValue(c, kAXTitleAttribute as CFString, &vt)
-            var vd: AnyObject?
-            let rd = AXUIElementCopyAttributeValue(c, kAXDescriptionAttribute as CFString, &vd)
-            childPart = "child \(c.role): title \(errName(rt)) \(((vt as? String) ?? "").isEmpty ? "empty" : "there"), description \(errName(rd)) \(((vd as? String) ?? "").isEmpty ? "empty" : "there")"
+        guard budget.beginQuery() else { return }
+        let count = e.attributeValueCountResult(kAXChildrenAttribute, policy: .respectBackoff)
+        Log.io("flat view diagnosis: healthScope=currentProcess clientPID=\(getpid()) childrenCount=\(count.value.map(String.init) ?? "unknown") \(AXDiagnosticReport.outcome(count))")
+        guard !AXDiagnosticReport.shouldStop(count.status), count.value.map({ $0 > 0 }) ?? true, budget.beginQuery() else { return }
+        let prefix = e.attributeValuesResult(kAXChildrenAttribute, index: 0, maxValues: 1, policy: .respectBackoff)
+        Log.io("flat view diagnosis: childrenPrefix(max=1) \(AXDiagnosticReport.outcome(prefix))")
+        guard !AXDiagnosticReport.shouldStop(prefix.status), let raw = prefix.value,
+              let child = AXDiagnosticReport.elements(in: raw, maximum: 1).values.first else { return }
+        guard budget.beginQuery() else { return }
+        let timeout = AXUIElementSetMessagingTimeout(child, 0.05)
+        Log.io("flat view diagnosis: sampledChild timeoutConfiguration=\(describeError(timeout)) requestedMs=50")
+        guard timeout == .success else { return }
+        for name in [kAXTitleAttribute, kAXDescriptionAttribute] {
+            guard budget.beginQuery() else { return }
+            let result = child.attributeResult(name, policy: .respectBackoff)
+            Log.io("flat view diagnosis: sampledChild \(name) \(AXDiagnosticReport.outcome(result)) presence=\(AXDiagnosticReport.stringPresence(result.value))")
+            if AXDiagnosticReport.shouldStop(result.status) { return }
         }
-        Log.io("flat view diagnosis: row blank: children \(errName(rk)) \(kids.count), identifier \(errName(ri)) \(((vi as? String) ?? "").isEmpty ? "empty" : "there"); \(childPart)")
     }
     /// The tile's title as the Store gives it (name, subtitle, stars) and its button.
     nonisolated func label(for e: AXUIElement, name: String) -> String {
@@ -92,6 +98,9 @@ final class AppStoreResults {
     private(set) var index = 0
     private var spokeFirst = false
     private var extending = false
+    private var active = false
+    private var generation = 0
+    private var navigation = 0
     /// Opens a row at the point the hit test confirmed (AppStoreView clicks there and waits for the page).
     private let openRow: (String, CGPoint) -> Void
 
@@ -101,44 +110,56 @@ final class AppStoreResults {
         view.onChange = { [weak self] items in self?.changed(items) }
     }
 
-    func start() { items = []; index = 0; spokeFirst = false; extending = false; view.begin() }
-    func stop() { view.end() }
+    func start() { generation += 1; active = true; items = []; index = 0; spokeFirst = false; extending = false; view.begin() }
+    func stop() { generation += 1; active = false; items = []; extending = false; view.end() }
 
     private func changed(_ new: [FlatItem]) {
+        guard active else { return }
         items = new
         index = min(index, max(0, items.count - 1))
         if !spokeFirst, !items.isEmpty { spokeFirst = true; speak(index) }
     }
 
     private func speak(_ i: Int) {
-        guard items.indices.contains(i) else { return }
+        guard active, items.indices.contains(i) else { return }
         Speech.speakItem(items[i].label)
         Hints.schedule("Return opens the app's page. Up and Down move; Escape goes back.")
     }
 
+    private func newNavigation() -> Int {
+        navigation += 1
+        extending = false
+        view.cancelResolution()
+        return navigation
+    }
+
     func move(_ d: Int) {
+        guard active else { return }
         guard !items.isEmpty else { Speech.speakMessage("still reading the results; a moment"); return }
         let j = index + d
-        if items.indices.contains(j) { index = j; speak(j); return }
+        if items.indices.contains(j) { _ = newNavigation(); index = j; speak(j); return }
         guard d > 0, !extending else { Tones.edge(); speak(index); return }
         // Past the last tile seen: the next screen, then the first new tile.
+        let request = newNavigation()
         extending = true
-        let had = items.count
+        let had = items.count, g = generation
         view.extend { [weak self] count in
-            guard let self else { return }
+            guard let self, active, generation == g, navigation == request else { return }
             extending = false
             if count > had { index = had; speak(index) } else { Tones.edge(); speak(index) }
         }
     }
     func toEnd(_ last: Bool) {
-        guard !items.isEmpty else { return }
+        guard active, !items.isEmpty else { return }
+        let request = newNavigation()
         if !last { index = 0; speak(0); return }
-        sweep(upTo: 40) { [weak self] in guard let self else { return }; index = items.count - 1; speak(index) }
+        sweep(upTo: 40, request: request) { [weak self] in guard let self else { return }; index = items.count - 1; speak(index) }
     }
     func letter(_ ch: Character) {
-        guard !items.isEmpty else { return }
+        guard active, !items.isEmpty else { return }
+        let request = newNavigation()
         if let j = next(ch, after: index) { index = j; speak(j); return }
-        sweep(upTo: 40, until: { [weak self] in self?.next(ch, after: self?.index ?? 0) != nil }) { [weak self] in
+        sweep(upTo: 40, request: request, until: { [weak self] in self?.next(ch, after: self?.index ?? 0) != nil }) { [weak self] in
             guard let self else { return }
             if let j = next(ch, after: index) { index = j; speak(j) } else { Tones.edge() }
         }
@@ -149,18 +170,21 @@ final class AppStoreResults {
         return nil
     }
     /// Screens scanned one after another until `until` holds, the end, or `upTo` screens.
-    private func sweep(upTo: Int, until: @escaping () -> Bool = { false }, then: @escaping () -> Void) {
+    private func sweep(upTo: Int, request: Int, until: @escaping () -> Bool = { false }, then: @escaping () -> Void) {
+        guard active, navigation == request else { return }
         guard upTo > 0, !until() else { then(); return }
-        let had = items.count
+        let had = items.count, g = generation
         view.extend { [weak self] count in
-            guard let self else { return }
-            if count == had { then() } else { sweep(upTo: upTo - 1, until: until, then: then) }
+            guard let self, active, generation == g, navigation == request else { return }
+            if count == had { then() } else { sweep(upTo: upTo - 1, request: request, until: until, then: then) }
         }
     }
     func open() {
+        guard active else { return }
         guard items.indices.contains(index), let name = items[index].name else { Speech.speakMessage("nothing to open yet"); return }
+        let g = generation, request = newNavigation()
         view.resolve(items[index]) { [weak self] point in
-            guard let self else { return }
+            guard let self, active, generation == g, navigation == request else { return }
             guard let point else { Speech.speakMessage("Not opened: the row isn't on screen now."); return }
             openRow(name, point)
         }

@@ -21,6 +21,7 @@
 import Foundation
 import ApplicationServices
 import AppKit
+import TurnOverAX
 
 public final class MediaView {
     nonisolated public struct Item: Sendable {
@@ -40,6 +41,8 @@ public final class MediaView {
         public var ident = ""
         public var desc = ""
         public var scrollValue: Double?
+        /// The exact sidebar outline captured with its row; selecting it needs no main-thread ancestor walk.
+        package var sidebarOutline: AXUIElement?
         /// Music's and TV's identifiers name the item ("…[id=ra.68…", "….id=\"umc.cmc.31qa8j…\""); others are
         /// shared by a shelf's items, so the words are added.
         var key: String { ident.contains("id=") ? ident : ident + "|" + label }
@@ -54,11 +57,48 @@ public final class MediaView {
     /// The toolbar: its buttons (More, Share; not Back, which Escape is), as Podcasts keeps Unfollow and Report in More.
     public enum Pane: Int { case sidebar, page, player, toolbar }
 
+    nonisolated package enum SidebarNavigation: Sendable, Equatable { case pressCell, selectRow }
+    nonisolated package enum ShelfLoading: Sendable, Equatable { case standard, tvEarly }
+
     public let pid: pid_t
-    public init(pid: pid_t) { self.pid = pid }
+    private let sidebarNavigation: SidebarNavigation
+    private let bundleIdentifier: String?
+    private let shelfLoading: ShelfLoading
+    private let work: MediaWorkOwner<ReadResult>
+    nonisolated private let collector: Collector
+    nonisolated private let windowQuery: WindowQuery
+    nonisolated private let keyCount: @Sendable () -> Int
+    private let delay: @MainActor (TimeInterval, @escaping @MainActor @Sendable () -> Void) -> Void
+
+    public convenience init(pid: pid_t) {
+        self.init(pid: pid, eligible: { Core.active && NSWorkspace.shared.frontmostApplication?.processIdentifier == pid })
+    }
+
+    package convenience init(pid: pid_t, sidebarNavigation: SidebarNavigation, bundleIdentifier: String? = nil,
+                             shelfLoading: ShelfLoading = .standard) {
+        self.init(pid: pid, sidebarNavigation: sidebarNavigation, bundleIdentifier: bundleIdentifier, shelfLoading: shelfLoading,
+                  eligible: { Core.active && NSWorkspace.shared.frontmostApplication?.processIdentifier == pid })
+    }
+
+    package init(pid: pid_t, collector: Collector? = nil, queue: DispatchQueue? = nil,
+                 sidebarNavigation: SidebarNavigation = .pressCell, bundleIdentifier: String? = nil,
+                 shelfLoading: ShelfLoading = .standard,
+                 windowQuery: WindowQuery? = nil, keys: @escaping @Sendable () -> Int = { ScriptHandler.keysArrivedCount },
+                 deliver: @escaping @Sendable (@escaping @MainActor @Sendable () -> Void) -> Void = { onMain($0) },
+                 delay: @escaping @MainActor (TimeInterval, @escaping @MainActor @Sendable () -> Void) -> Void = { onMain(after: $0, $1) },
+                 eligible: @escaping @MainActor () -> Bool) {
+        self.pid = pid; self.collector = collector ?? Self.collect
+        self.sidebarNavigation = sidebarNavigation
+        self.bundleIdentifier = bundleIdentifier ?? Speech.bundleIdentifier(of: pid)
+        self.shelfLoading = shelfLoading
+        self.windowQuery = windowQuery ?? Self.focusedWindow
+        self.keyCount = keys
+        self.delay = delay
+        work = MediaWorkOwner(queue: queue, deliver: deliver, eligible: eligible)
+    }
 
     // The model, rebuilt when stale.
-    nonisolated(unsafe) public private(set) var sidebar: [Item] = []
+    public private(set) var sidebar: [Item] = []
     public private(set) var shelves: [Shelf] = []
     public private(set) var player: [Item] = []
     public private(set) var toolbar: [Item] = []
@@ -68,6 +108,9 @@ public final class MediaView {
     // Where the user is.
     public var pane: Pane = .page
     private var index: [Pane: Int] = [:]
+    // Executed navigation owns the pane/cursor even if it returns to the same item. Arrows waiting in queued
+    // have not executed yet, so they leave this revision alone until their original turn (#188).
+    private var navigationIntent: UInt64 = 0
 
     var flatPage: [(shelf: Int, item: Item)] {
         shelves.enumerated().flatMap { s, shelf in shelf.items.map { (s, $0) } }
@@ -76,6 +119,70 @@ public final class MediaView {
     nonisolated private static let windowWalkLimit = 6000
     private static let searchPageTries = 14
     private static let paneCount = 4
+
+    private var currentSession: UUID { work.session }
+    private var canUseResult: Bool { work.isCurrent(work.session) }
+    private func isCurrent(_ session: UUID) -> Bool { work.isCurrent(session) }
+
+    public func beginSession() {
+        shelfReadiness?.cancel(); shelfReadiness = nil
+        work.beginSession(); queued = []; loadingMore = false; refreshing = false; resolving = false
+        builtAt = .distantPast; pendingSidebarBody = nil
+    }
+
+    public func stop() {
+        shelfReadiness?.cancel(); shelfReadiness = nil
+        work.stop(); queued = []; loadingMore = false; refreshing = false; resolving = false; pendingSidebarBody = nil
+        catalogRequest = UUID(); catalog?.cancel(); catalog = nil; catalogDrives = false
+    }
+
+    private func beginPageIntent() {
+        shelfReadiness?.cancel(); shelfReadiness = nil
+        work.beginSession(); queued = []; loadingMore = false; refreshing = false; resolving = false; pendingSidebarBody = nil
+    }
+    private var pendingSidebarBody: [String]?
+
+    private var modelWindow: AXUIElement?
+    package typealias WindowQuery = @Sendable (pid_t) -> AXUIElement?
+
+    /// One typed query on a fresh exact application handle. Failure/backoff refuses stale work; a main-window
+    /// fallback cannot prove which native window currently has the keyboard (#182, 29 Oct 2026).
+    nonisolated private static func focusedWindow(_ pid: pid_t) -> AXUIElement? {
+        let app = AXUIElementCreateApplication(pid)
+        guard AXUIElementSetMessagingTimeout(app, 0.05) == .success else { return nil }
+        let result = app.attributeResult(kAXFocusedWindowAttribute)
+        guard let value = result.value, CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
+        return value as! AXUIElement
+    }
+
+    /// This is deliberately separate from the worker's pure cancellation predicate: an AX scope admission
+    /// callback must never recursively query AX. The worker makes the equivalent explicit boundary checks.
+    private func synchronizedWindow() -> AXUIElement? {
+        guard canUseResult else { stop(); return nil }
+        guard let window = windowQuery(pid) else { retireWindow(); return nil }
+        guard canUseResult else { stop(); return nil }
+        if let old = modelWindow, !CFEqual(old, window) { retireWindow() }
+        modelWindow = window
+        return window
+    }
+
+    private func retireWindow() {
+        beginPageIntent()
+        modelWindow = nil
+        sidebar = []; shelves = []; player = []; toolbar = []; pageTitle = ""; pageID = ""
+        playerRoot = nil; pageScroll = nil; rowLabels = [:]; index = [:]; builtAt = .distantPast
+        places = [:]; inVideo = false; openingTitle = ""; nowPlayingBefore = ""; playbackRequest = UUID()
+        catalogRequest = UUID(); catalog?.cancel(); catalog = nil; catalogDrives = false
+    }
+
+    private func acceptsWindow(_ expected: AXUIElement?) -> Bool {
+        guard let expected, let actual = synchronizedWindow() else { return false }
+        return CFEqual(expected, actual)
+    }
+
+    /// Existing foreground events can retire work promptly. Equal-title windows may be deduplicated upstream,
+    /// so reads, deliveries and actions also validate the actual focused window independently.
+    public func windowChanged() { _ = synchronizedWindow() }
 
     // MARK: Building
 
@@ -86,84 +193,186 @@ public final class MediaView {
     /// the caller queues itself (`queued`) and is run again when the model is in; "please wait" is said if it is slow.
     @discardableResult
     public func rebuild(force: Bool = false) -> Bool {
+        guard canUseResult else { stop(); return false }
+        guard let window = synchronizedWindow() else { return false }
         if !force {
             // Stale but usable: answer this key from the model as it is, and refresh it in the background.
             if Date().timeIntervalSince(builtAt) > 8.0, !refreshing, !sidebar.isEmpty || !shelves.isEmpty {
                 refreshing = true
-                DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                read(.build(keepSidebar: false, detectVideo: false), capturedWindow: window) { [weak self] result in
                     guard let self else { return }
-                    let built = self.build()
-                    DispatchQueue.main.async { self.apply(built); self.refreshing = false }
+                    apply(result?.built); refreshing = false
                 }
                 return true
             }
             guard sidebar.isEmpty && shelves.isEmpty else { return true }
             guard !loadingMore else { return false }
             loadingMore = true
-            Poll.background({ [weak self] in self?.build() }) { [weak self] built in
+            let session = currentSession
+            delay(0.6) { [weak self] in
+                guard let self, isCurrent(session), loadingMore, acceptsWindow(window) else { return }
+                Speech.speakMessage("please wait", remember: false)
+            }
+            read(.build(keepSidebar: false, detectVideo: false), capturedWindow: window) { [weak self] result in
                 guard let self else { return }
-                apply(built ?? nil)
+                apply(result?.built)
                 loadingMore = false
                 runQueued()
             }
             return false
         }
-        apply(build())
-        return true
+        refresh {}
+        return false
     }
     private var refreshing = false
 
     /// Read the window in the background, then carry on (arriving in the app).
-    public func refresh(keepSidebar: Bool = false, then: @escaping @MainActor () -> Void) {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+    public func refresh(keepSidebar: Bool = false, then: @escaping @MainActor @Sendable () -> Void) {
+        read(.build(keepSidebar: keepSidebar, detectVideo: false)) { [weak self] result in
             guard let self else { return }
-            let built = self.build(keepSidebar: keepSidebar)
-            DispatchQueue.main.async { self.apply(built); then() }
+            apply(result?.built); then()
         }
     }
 
-    nonisolated struct Built: Sendable { var sidebar: [Item]; var shelves: [Shelf]; var player: [Item]; var pageTitle: String; var playerRoot: AXUIElement?; var pageScroll: AXUIElement?; var pageID: String; var toolbar: [Item] = [] }
+    nonisolated package struct Built: Sendable {
+        package var sidebar: [Item], shelves: [Shelf], player: [Item], pageTitle: String
+        package var playerRoot: AXUIElement?, pageScroll: AXUIElement?
+        package var pageID: String
+        package var toolbar: [Item]
+        package init(sidebar: [Item] = [], shelves: [Shelf] = [], player: [Item] = [], pageTitle: String = "",
+                     playerRoot: AXUIElement? = nil, pageScroll: AXUIElement? = nil, pageID: String = "", toolbar: [Item] = []) {
+            self.sidebar = sidebar; self.shelves = shelves; self.player = player; self.pageTitle = pageTitle
+            self.playerRoot = playerRoot; self.pageScroll = pageScroll; self.pageID = pageID; self.toolbar = toolbar
+        }
+    }
+    nonisolated package enum ReadOperation: Sendable {
+        case build(keepSidebar: Bool, detectVideo: Bool)
+        case resolve(Item, bar: AXUIElement?)
+        case selectSidebar(row: AXUIElement, outline: AXUIElement, cell: AXUIElement, label: String, allowAlreadyOpen: Bool)
+    }
+    nonisolated package struct ReadInput: Sendable {
+        package let pid: pid_t
+        package let sidebar: [Item]
+        package let pageID: String
+        package let window: AXUIElement
+        package let windowQuery: WindowQuery
+        package let operation: ReadOperation
+
+        nonisolated func isWindowCurrent() -> Bool {
+            guard let actual = windowQuery(pid) else { return false }
+            return CFEqual(window, actual)
+        }
+    }
+    nonisolated package struct ReadResult: Sendable {
+        package var built: Built?
+        package var found: Item?
+        package var video: Bool
+        package var sidebarSelected: Bool?
+        package var sidebarAlreadyOpen: Bool
+        package init(built: Built? = nil, found: Item? = nil, video: Bool = false, sidebarSelected: Bool? = nil, sidebarAlreadyOpen: Bool = false) {
+            self.built = built; self.found = found; self.video = video; self.sidebarSelected = sidebarSelected; self.sidebarAlreadyOpen = sidebarAlreadyOpen
+        }
+    }
+    package typealias Collector = @Sendable (ReadInput, @escaping @Sendable () -> Bool) -> ReadResult?
+
+    private func read(_ operation: ReadOperation, capturedWindow: AXUIElement? = nil,
+                      admitted: @escaping @MainActor () -> Bool = { true },
+                      duration: UInt64 = 12_000_000_000,
+                      then: @escaping @MainActor @Sendable (ReadResult?) -> Void) {
+        guard let window = capturedWindow ?? synchronizedWindow() else { return }
+        let session = currentSession
+        work.enqueue { [weak self] in
+            guard let self, isCurrent(session), modelWindow.map({ CFEqual($0, window) }) == true, admitted() else { return }
+            let input = ReadInput(pid: pid, sidebar: sidebar, pageID: pageID, window: window, windowQuery: windowQuery, operation: operation)
+            work.perform(duration: duration, { [collector] current in collector(input, current) }) { [weak self] result in
+                guard let self, isCurrent(session), acceptsWindow(window) else { return }
+                then(result)
+            }
+        }
+    }
     /// Which page the model holds: a read of the same page is merged into it, as the page only shows the shelves
     /// near the screen.
-    nonisolated(unsafe) private var pageID = ""
+    private var pageID = ""
     private var playerRoot: AXUIElement?
     private var pageScroll: AXUIElement?
 
     /// The player alone, read again (its few buttons: quick enough for any thread).
     private func refreshPlayer() { if let r = playerRoot { player = Self.playerItems(r) } }
 
-    /// The sidebar and page id are read by a build on a background queue while the main thread may be applying
-    /// another: both sides take this lock (8 Oct 2026, from the code review).
-    private let modelLock = NSLock()
-    nonisolated private func snapshot() -> ([Item], String) { modelLock.lock(); defer { modelLock.unlock() }; return (sidebar, pageID) }
-
-    private func apply(_ b: Built?) {
+    private func apply(_ b: Built?, shelfRead: MediaShelfReadiness? = nil) {
         guard let b else { return }
-        let keep = currentItem().flatMap { $0.tableRow ? nil : $0.label }
+        if let pendingSidebarBody {
+            let body = Self.bodySignature(b.shelves)
+            guard !body.isEmpty, body != pendingSidebarBody else { return }
+            self.pendingSidebarBody = nil
+        }
+        let keep = currentItem().flatMap { $0.tableRow ? nil : $0 }
         let keepIndex = index[pane]
         let isTable = b.shelves.contains { $0.items.first?.tableRow == true }
         shelves = !isTable && !b.pageID.isEmpty && b.pageID == pageID ? Self.merge(shelves, b.shelves) : b.shelves
-        modelLock.lock()
         sidebar = b.sidebar; pageID = b.pageID
-        modelLock.unlock()
         player = b.player; toolbar = b.toolbar; pageTitle = b.pageTitle; playerRoot = b.playerRoot; pageScroll = b.pageScroll
         builtAt = Date()
         rowLabels = [:]
-        if let keep, let i = items(of: pane).firstIndex(where: { $0.label == keep }) { index[pane] = i }
-        else if let k = keepIndex { index[pane] = min(k, max(0, items(of: pane).count - 1)) }
+        let all = items(of: pane)
+        let matches = keep.map { captured in all.indices.filter { all[$0].key == captured.key } } ?? []
+        // Identical titles can name different episodes/albums. Only a unique identity with the same
+        // presentation may move the cursor; repeated/ambiguous keys retain the clamped position (#182).
+        if let keep, matches.count == 1, let i = matches.first, all[i].label == keep.label { index[pane] = i }
+        else if let k = keepIndex { index[pane] = min(k, max(0, all.count - 1)) }
         Log.io("media: \(sidebar.count) sidebar, \(shelves.count) shelves (\(flatPage.count) items), \(player.count) player, page \(Log.words(pageTitle))")
+        // read() validated the current native window before apply(). Observe only the fully committed model,
+        // so an overlapping refresh can satisfy a TV load without replaying its delayed completion (#188).
+        if let load = shelfReadiness {
+            load.observe(pageID: pageID, itemKeys: flatPage.map { $0.item.key }, fromRead: shelfRead === load)
+        }
     }
 
-    /// Read the app's window into a model (any thread: accessibility calls only).
+    /// A request's local AX work is synchronous on the serial worker. The existing AX scope also stops nested
+    /// recipe/label queries after cancellation or the 12 s deadline; an in-flight provider call can still finish.
+    nonisolated private static func collect(_ input: ReadInput, current: @escaping @Sendable () -> Bool) -> ReadResult? {
+        AXReadScope.with(while: current) {
+            guard current(), input.isWindowCurrent(), current() else { return nil }
+            switch input.operation {
+            case .selectSidebar(let row, let outline, let cell, let label, let allowAlreadyOpen):
+                let outcome = MediaSidebarSelection.select(row: row, outline: outline, cell: cell, expectedLabel: label,
+                                                           allowAlreadyOpen: allowAlreadyOpen, current: current,
+                                                           windowCurrent: { input.isWindowCurrent() })
+                return current() ? ReadResult(sidebarSelected: outcome != .failed, sidebarAlreadyOpen: outcome == .alreadyOpen) : nil
+            case .build(let keepSidebar, let detectVideo):
+                if detectVideo, showsVideo(in: input.window) { return current() ? ReadResult(video: true) : nil }
+                let built = build(input, keepSidebar: keepSidebar, current: current)
+                return current() ? ReadResult(built: built) : nil
+            case .resolve(let item, let bar):
+                var last: Built?
+                let places = [item.scrollValue].compactMap { $0 } + Array(stride(from: 0.0, through: 1.0, by: 0.15))
+                for value in places {
+                    guard current(), input.isWindowCurrent(), current() else { return nil }
+                    if let bar {
+                        _ = bar.set(kAXValueAttribute, NSNumber(value: value))
+                        usleep(450_000)
+                        guard current(), input.isWindowCurrent(), current() else { return nil }
+                    }
+                    guard let built = build(input, keepSidebar: true, current: current), current() else { return nil }
+                    last = built
+                    if let found = built.shelves.lazy.flatMap(\.items).first(where: { $0.key == item.key }) {
+                        return ReadResult(built: built, found: found)
+                    }
+                    if bar == nil { break }
+                }
+                return current() ? ReadResult(built: last) : nil
+            }
+        }
+    }
+
+    /// Read the app's window into a model (worker only: immutable input and accessibility calls).
     /// `keepSidebar`: the page alone, as it scrolls (Music's sidebar takes 3 to 4 s to read, 7 Oct 2026).
-    nonisolated private func build(topped: Bool = false, keepSidebar: Bool = false) -> Built? {
-        if Self.showsVideo(pid: pid) { return nil }   // the video player has no page to read
-        let app = AXUIElementCreateApplication(pid)
-        AXUIElementSetMessagingTimeout(app, 1.0)
-        guard let window = app.element(kAXFocusedWindowAttribute) ?? app.element(kAXMainWindowAttribute) else { return nil }
+    nonisolated private static func build(_ input: ReadInput, topped: Bool = false, keepSidebar: Bool = false,
+                                          current: @escaping @Sendable () -> Bool) -> Built? {
+        guard current(), input.isWindowCurrent(), current(), !Self.showsVideo(in: input.window) else { return nil }
+        let window = input.window
         let (sidebarRoot, playerRoot, tabBarItems) = Self.regions(in: window)
-        let (keptSidebar, knownPageID) = snapshot()   // the model as the main thread has it, read under its lock
-        let sidebar = keepSidebar ? keptSidebar : sidebarRoot.map(Self.outlineItems) ?? tabBarItems.map(Self.tabBarItem)
+        let sidebar = keepSidebar ? input.sidebar : sidebarRoot.map(Self.outlineItems) ?? tabBarItems.map(Self.tabBarItem)
         let player = playerRoot.map(Self.playerItems) ?? []
         // Podcasts' sidebar is a block of tab-bar items with the account name beside it: leave the whole block out.
         let tabBarBlock = tabBarItems.first?.element(kAXParentAttribute)?.element(kAXParentAttribute)
@@ -173,7 +382,7 @@ public final class MediaView {
         var shelves = Self.shelves(in: window, skipping: [sidebarRoot, playerRoot, tabBarBlock].compactMap { $0 } + tabBarItems + behind)
         // The window's own title when it names the page (Podcasts: "Example Podcast", not the sidebar's "Search");
         // the sidebar's choice when the window is just the app's name (Music).
-        let appName = NSRunningApplication(processIdentifier: pid)?.localizedName ?? ""
+        let appName = NSRunningApplication(processIdentifier: input.pid)?.localizedName ?? ""
         let windowName = window.string(kAXTitleAttribute) ?? ""
         let pageTitle = !windowName.isEmpty && windowName != appName ? windowName : (sidebar.first(where: { $0.selected })?.label ?? windowName)
         // A table with no name of its own is the page's list ("Songs", not the window's "Music").
@@ -185,7 +394,7 @@ public final class MediaView {
         var scroll: AXUIElement?
         var x = shelves.first?.items.first?.element.element(kAXParentAttribute)
         var hops = 0
-        while let e = x, hops < 30 {
+        while let e = x, hops < 30, current() {
             if e.element(kAXVerticalScrollBarAttribute) != nil { scroll = e; break }
             if e.role == "AXScrollArea", scroll == nil { scroll = e }
             x = e.element(kAXParentAttribute); hops += 1
@@ -201,29 +410,34 @@ public final class MediaView {
         } ?? ""
         // A page new to the model, shown part way down (Music keeps where it was): read it from the top, since the
         // shelves above the screen are not there to read.
-        if !topped, pageID != knownPageID, let v = barValue, v > 0.01, let bar = scroll?.element(kAXVerticalScrollBarAttribute),
+        if !topped, pageID != input.pageID, let v = barValue, v > 0.01, let bar = scroll?.element(kAXVerticalScrollBarAttribute), current(), input.isWindowCurrent(), current(),
            bar.set(kAXValueAttribute, NSNumber(value: 0)) == .success {
             Log.io("media: a new page part way down (\(String(format: "%.2f", v))): reading it from the top")
             usleep(400_000)
-            return build(topped: true, keepSidebar: keepSidebar)
+            guard current(), input.isWindowCurrent(), current() else { return nil }
+            return build(input, topped: true, keepSidebar: keepSidebar, current: current)
         }
         // Podcasts' scroll bar has no value to read or set: up a page at a time to the top. A page scrolls only once
         // the one before has finished (measured 7 Oct 2026), so each waits, and it stops when nothing moves.
-        if !topped, pageID != knownPageID, barValue == nil, let sc = scroll, let size = Self.cgSize(sc, kAXSizeAttribute),
+        if !topped, pageID != input.pageID, barValue == nil, let sc = scroll, let size = Self.cgSize(sc, kAXSizeAttribute),
            let content = Self.cgSize(sc, "AXContentSize"), size.height > 0, content.height > size.height * 1.2 {   // a zero height made Int(infinity), a crash (code review, 20 Oct 2026)
             func shown() -> String { sc.elements(kAXChildrenAttribute).prefix(3).map { $0.string(kAXIdentifierAttribute) ?? "" }.joined(separator: "|") }
             var n = 0
             var before = shown()
-            while n < Int(content.height / size.height) + 2, AXUIElementPerformAction(sc, "AXScrollUpByPage" as CFString) == .success {
+            // A malformed/unbounded content height must not make a provider-controlled scroll loop infinite.
+            let rounds = min(100, max(0, Int(min(100, content.height / size.height)) + 2))
+            while n < rounds, current(), input.isWindowCurrent(), current(), AXUIElementPerformAction(sc, "AXScrollUpByPage" as CFString) == .success {
                 usleep(350_000)
+                guard current(), input.isWindowCurrent(), current() else { return nil }
                 let now = shown()
                 if now == before { break }
                 before = now; n += 1
             }
             Log.io("media: a new page, up \(n) pages to read it from the top")
-            if n > 0 { return build(topped: true, keepSidebar: keepSidebar) }
+            if n > 0 { return build(input, topped: true, keepSidebar: keepSidebar, current: current) }
         }
         let bar = Self.toolbarItems(in: window)
+        guard current(), input.isWindowCurrent(), current() else { return nil }
         return Built(sidebar: sidebar, shelves: shelves, player: player, pageTitle: pageTitle, playerRoot: playerRoot, pageScroll: scroll, pageID: pageID, toolbar: bar)
     }
 
@@ -349,8 +563,10 @@ public final class MediaView {
             let pressable = ((acts as? [String]) ?? []).contains("AXPress")
             // TV's group rows (Library, Channels) cannot be pressed; Music's carry an Edit button.
             let header = cell.map { c in c.elements(kAXChildrenAttribute).contains { $0.role == "AXButton" && $0.string(kAXTitleAttribute) == "Edit" } } ?? false
-            return Item(label: label, element: row, press: pressable ? cell : nil, isHeader: header,
-                        selected: (row.attr(kAXSelectedAttribute) as? Bool) == true)
+            var item = Item(label: label, element: row, press: pressable ? cell : nil, isHeader: header,
+                            selected: (row.attr(kAXSelectedAttribute) as? Bool) == true)
+            item.sidebarOutline = outline
+            return item
         }
     }
 
@@ -634,8 +850,10 @@ public final class MediaView {
         if !item.tableRow, item.label.isEmpty {
             // A TV cell far along its carousel: shown, then read.
             if let l = rowLabels[i] { return l }
+            let window = modelWindow
             var l = Self.item(item.element).label
             if l.isEmpty {
+                guard acceptsWindow(window) else { return "item not loaded yet" }
                 _ = AXUIElementPerformAction(item.element, "AXScrollToVisible" as CFString)
                 l = Self.item(item.element).label
             }
@@ -667,7 +885,7 @@ public final class MediaView {
         walk(row, 0)
         return out
     }
-    func currentItem() -> Item? {
+    package func currentItem() -> Item? {
         let all = items(of: pane)
         guard !all.isEmpty else { return nil }
         return all[max(0, min(all.count - 1, index[pane] ?? 0))]
@@ -676,6 +894,7 @@ public final class MediaView {
     public func move(_ delta: Int) {
         if let c = catalog, catalogDrives, pane == .page { c.move(delta); return }
         guard rebuildOrQueue(waitForLoading: true, retry: { [weak self] in self?.move(delta) }) else { return }
+        navigationIntent &+= 1
         let all = items(of: pane)
         guard !all.isEmpty else { Speech.speakMessage(pane == .page ? "nothing on this page yet" : "empty"); return }
         let old = max(0, min(all.count - 1, index[pane] ?? 0))
@@ -694,10 +913,17 @@ public final class MediaView {
     /// page" fails and the wheel does nothing; it keeps only the shelves near the screen, so the model keeps the
     /// rest. TV keeps every shelf once loaded, and its bar's value drops as the page grows.
     private var loadingMore = false
+    private var shelfReadiness: MediaShelfReadiness?
+    private var resolving = false
+    private var drainingKeys = false
     /// Arrows pressed while more of the page was loading, answered in turn once it has.
     private var queued: [() -> Void] = []
     private func rebuildOrQueue(waitForLoading: Bool = false, retry: @escaping () -> Void) -> Bool {
-        if (waitForLoading && loadingMore) || !rebuild() {
+        guard canUseResult else { stop(); return false }
+        if resolving || (waitForLoading && loadingMore) {
+            guard synchronizedWindow() != nil else { return false }
+        }
+        if resolving || (waitForLoading && loadingMore) || !rebuild() {
             queued.append(retry)
             return false
         }
@@ -705,14 +931,19 @@ public final class MediaView {
     }
 
     private func runQueued() {
-        let q = queued
-        queued = []
-        q.forEach { $0() }
+        guard !drainingKeys else { return }
+        let session = currentSession
+        drainingKeys = true
+        defer { drainingKeys = false }
+        while isCurrent(session), !loadingMore, !resolving, !queued.isEmpty { queued.removeFirst()() }
     }
 
     /// Music's video player is up (opened from the page): the app has the keys until it closes.
     public var inVideo = false
     private func loadMore(attempts: Int = 3, then: @escaping () -> Void, nothing: (() -> Void)? = nil) {
+        guard canUseResult else { stop(); return }
+        let session = currentSession
+        let window = modelWindow
         let none = nothing ?? { Tones.edge() }
         // A key while more is loading: that load answers it (an edge sound here was wrong, 7 Oct 2026).
         if loadingMore { return }
@@ -730,21 +961,26 @@ public final class MediaView {
                 let screens = (scroll.string(kAXIdentifierAttribute) ?? "").hasPrefix("Music.") ? 1.5 : 0.8
                 step = max(0.03, screens * size.height / (content.height - size.height))
             }
-            if cur < 0.999 { scrolled = bar.set(kAXValueAttribute, NSNumber(value: min(1.0, cur + step))) == .success }
+            if cur < 0.999, isCurrent(session), acceptsWindow(window) { scrolled = bar.set(kAXValueAttribute, NSNumber(value: min(1.0, cur + step))) == .success }
             Log.io("media: scrolling the page from \(String(format: "%.2f", cur)) by \(String(format: "%.2f", step)) → \(scrolled)")
         } else {
             var acts: CFArray?
             AXUIElementCopyActionNames(scroll, &acts)
             if ((acts as? [String]) ?? []).contains("AXScrollDownByPage") {
-                for _ in 0..<3 { scrolled = AXUIElementPerformAction(scroll, "AXScrollDownByPage" as CFString) == .success || scrolled }
+                for _ in 0..<3 where isCurrent(session) && acceptsWindow(window) { scrolled = AXUIElementPerformAction(scroll, "AXScrollDownByPage" as CFString) == .success || scrolled }
             }
             Log.io("media: scrolling the page by its action → \(scrolled)")
         }
         if !scrolled { loadingMore = false; none(); return }
         loadingMore = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            self?.refresh(keepSidebar: true) { [weak self] in
-                guard let self else { return }
+        if shelfLoading == .tvEarly, !pageID.isEmpty {
+            beginShelfReadiness(session: session, window: window, attempts: attempts, then: then, nothing: nothing)
+            return
+        }
+        delay(0.5) { [weak self] in
+            guard let self, isCurrent(session), acceptsWindow(window) else { return }
+            refresh(keepSidebar: true) { [weak self] in
+                guard let self, isCurrent(session) else { return }
                 loadingMore = false
                 if flatPage.count > countBefore { then() }
                 // A step that showed only shelves already known: on, while the page still scrolls.
@@ -755,13 +991,59 @@ public final class MediaView {
         }
     }
 
+    private func beginShelfReadiness(session: UUID, window: AXUIElement?, attempts: Int,
+                                     then: @escaping () -> Void, nothing: (() -> Void)?) {
+        let capturedPage = pageID, capturedIntent = navigationIntent
+        let load = MediaShelfReadiness(pageID: capturedPage, itemKeys: flatPage.map { $0.item.key }, current: { [weak self] in
+            guard let self, isCurrent(session), pageID == capturedPage else { return false }
+            return acceptsWindow(window)
+        }, read: { [weak self] load, phase, done in
+            guard let self, shelfReadiness === load else { return }
+            read(.build(keepSidebar: true, detectVideo: false), capturedWindow: window,
+                 admitted: { [weak self, weak load] in self?.shelfReadiness === load && load != nil },
+                 duration: phase == .early ? 250_000_000 : 12_000_000_000) { [weak self, weak load] result in
+                guard let self, let load, shelfReadiness === load else { return }
+                // An overlapping publication may already have fulfilled the token while this read was held.
+                // A different page must never be published by the retired load, even in the same window.
+                guard pageID == capturedPage else { load.invalidate(); return }
+                if let built = result?.built {
+                    guard built.pageID == capturedPage else { load.invalidate(); return }
+                    apply(built, shelfRead: load)
+                }
+                done()
+            }
+        }, completed: { [weak self] load, outcome in
+            guard let self, shelfReadiness === load else { return }
+            shelfReadiness = nil
+            loadingMore = false
+            // Queued arrows still follow their initiating move. Immediate Tab/letter/Home intent owns its
+            // newer pane/cursor, so the old move must not run against that new location.
+            if navigationIntent == capturedIntent {
+                switch outcome {
+                case .ready: then()
+                case .unchanged:
+                    if attempts > 1 { loadMore(attempts: attempts - 1, then: then, nothing: nothing) }
+                    else { (nothing ?? { Tones.edge() })() }
+                case .cancelled: break
+                }
+            }
+            runQueued()
+        })
+        shelfReadiness = load
+        load.start(delay: delay)
+    }
+
     /// Music's video player fills the window (an interview opened from Radio, 7 Oct 2026): its own buttons, and Escape
     /// to leave it, are the app's, not the media view's.
     nonisolated public static func showsVideo(pid: pid_t) -> Bool {
         let app = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(app, 0.3)
         guard let w = app.element(kAXFocusedWindowAttribute) else { return false }
-        return first(in: w, depth: 3) { $0.string(kAXIdentifierAttribute) == "Toggle Controls" } != nil
+        return showsVideo(in: w)
+    }
+
+    nonisolated private static func showsVideo(in window: AXUIElement) -> Bool {
+        first(in: window, depth: 3) { $0.string(kAXIdentifierAttribute) == "Toggle Controls" } != nil
     }
 
     nonisolated static func cgSize(_ e: AXUIElement, _ name: String) -> CGSize? {
@@ -772,6 +1054,7 @@ public final class MediaView {
 
     /// Every shelf of the page, scrolling to the bottom (End).
     private func loadAll(rounds: Int = 25, then: @escaping () -> Void) {
+        guard canUseResult else { stop(); return }
         guard rounds > 0 else { then(); return }
         loadMore(then: { [weak self] in self?.loadAll(rounds: rounds - 1, then: then) }, nothing: then)
     }
@@ -779,15 +1062,22 @@ public final class MediaView {
     public func toEnd(_ last: Bool) {
         if let c = catalog, catalogDrives, pane == .page { c.toEnd(last); return }
         guard rebuildOrQueue(retry: { [weak self] in self?.toEnd(last) }) else { return }
+        navigationIntent &+= 1
         if last, pane == .page, pageScroll != nil, !loadingMore {
             let t = Date()
+            let session = currentSession
+            let window = modelWindow
             var done = false
             // Reading to the bottom of a long page takes a few seconds: say so, rather than silence.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { if !done { Speech.speakMessage("reading the whole page", remember: false) } }
+            delay(0.8) { [weak self] in
+                guard let self, isCurrent(session), !done, acceptsWindow(window) else { return }
+                Speech.speakMessage("reading the whole page", remember: false)
+            }
             loadAll { [weak self] in
+                guard let self, isCurrent(session) else { return }
                 done = true
-                Log.io("media: End loaded \(self?.shelves.count ?? 0) shelves in \(String(format: "%.1f", Date().timeIntervalSince(t))) s")
-                self?.goToEnd(true); self?.onEnd?()
+                Log.io("media: End loaded \(shelves.count) shelves in \(String(format: "%.1f", Date().timeIntervalSince(t))) s")
+                goToEnd(true); onEnd?()
             }
             return
         }
@@ -808,6 +1098,7 @@ public final class MediaView {
     /// The previous or next shelf of the page (in the sidebar, the previous or next group heading).
     public func jumpShelf(_ delta: Int) {
         guard rebuildOrQueue(waitForLoading: true, retry: { [weak self] in self?.jumpShelf(delta) }) else { return }
+        navigationIntent &+= 1
         if pane != .page { move(delta * 5); return }
         let flat = flatPage
         guard !flat.isEmpty else { return }
@@ -825,6 +1116,7 @@ public final class MediaView {
     public func letter(_ ch: Character) {
         if let c = catalog, catalogDrives, pane == .page { c.letter(ch); return }
         guard rebuildOrQueue(retry: { [weak self] in self?.letter(ch) }) else { return }
+        navigationIntent &+= 1
         let all = items(of: pane)
         guard !all.isEmpty else { return }
         let cur = min(index[pane] ?? 0, all.count - 1)   // (a stale index past a shorter page made an invalid range, 8 Oct 2026)
@@ -840,6 +1132,7 @@ public final class MediaView {
 
     public func switchPane(_ delta: Int) {
         guard rebuildOrQueue(retry: { [weak self] in self?.switchPane(delta) }) else { return }
+        navigationIntent &+= 1
         var p = pane.rawValue
         for _ in 0..<Self.paneCount {
             p = (p + delta + Self.paneCount) % Self.paneCount
@@ -859,6 +1152,7 @@ public final class MediaView {
         guard let i = index[pane], all.indices.contains(i) else { return }
         let item = all[i]
         var parts: [String] = []
+        var pieces: [(String, [String])] = []
         if pane == .page {
             let flat = flatPage
             let s = flat[i].shelf
@@ -868,14 +1162,17 @@ public final class MediaView {
                 let title = shelves[s].title
                 if !title.isEmpty { parts.append("\(title), \(inShelf.count) item\(inShelf.count == 1 ? "" : "s")") }
             }
-            parts.append(label(item, at: i))
-            parts.append("\(pos) of \(inShelf.count)")
+            pieces.append(("name", [label(item, at: i)]))
+            pieces.append(("position", ["\(pos) of \(inShelf.count)"]))
         } else {
-            parts.append(item.label)
-            if item.isHeader { parts.append("heading") }
-            if item.selected { parts.append("selected") }
-            parts.append("\(i + 1) of \(all.count)")
+            pieces.append(("name", [item.label]))
+            if item.isHeader { pieces.append(("role", ["heading"])) }
+            if item.selected { pieces.append(("state", ["selected"])) }
+            pieces.append(("position", ["\(i + 1) of \(all.count)"]))
         }
+        // Flat media items use the same Item details policy/order as ordinary objects. Shelf context remains
+        // outside the item pieces; Number in list must not be hardcoded back on here (#187, 29 Oct 2026).
+        parts += Speech.arranged(pieces, by: config.presentation.verbosity(for: bundleIdentifier))
         Speech.speakItem(parts.joined(separator: ", "), processed: true)
         Hints.schedule(hint(for: item))
     }
@@ -907,26 +1204,25 @@ public final class MediaView {
     /// (as the App Store does), so one read before scrolling on may be gone, or now show another item: pressing it
     /// would open the wrong thing. Such an item is found again by scrolling back to where it was read.
     private func whenCurrent(_ item: Item, _ go: @escaping @MainActor (Item) -> Void) {
-        if pane != .page || item.tableRow || isCurrent(item) { go(item); return }
+        let window = modelWindow
+        guard canUseResult else { stop(); return }
+        if pane != .page || item.tableRow || isCurrent(item) {
+            guard acceptsWindow(window) else { return }
+            go(item); return
+        }
+        guard acceptsWindow(window) else { return }
         Log.io("media: \(Log.words(String(item.label.prefix(40)))) has scrolled away; finding it again")
-        let bar = pageScroll?.element(kAXVerticalScrollBarAttribute)
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        resolving = true
+        let capturedPage = pageID
+        read(.resolve(item, bar: pageScroll?.element(kAXVerticalScrollBarAttribute)), capturedWindow: window) { [weak self] result in
             guard let self else { return }
-            var found: Item?
-            var last: Built?
-            let places = [item.scrollValue].compactMap { $0 } + Array(stride(from: 0.0, through: 1.0, by: 0.15))
-            for v in places {
-                if let bar { _ = bar.set(kAXValueAttribute, NSNumber(value: v)); usleep(450_000) }
-                guard let b = build(keepSidebar: true) else { break }
-                last = b
-                if let f = b.shelves.lazy.flatMap(\.items).first(where: { $0.key == item.key }) { found = f; break }
-                if bar == nil { break }
-            }
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                if let last { apply(last) }
-                if let found { go(found) } else { Speech.speakMessage("cannot find that item on the page now") }
-            }
+            resolving = false
+            // A numeric index or the provider's reused element cannot substitute another requested item.
+            guard pageID == capturedPage, result?.built?.pageID == capturedPage else { runQueued(); return }
+            apply(result?.built)
+            if let found = result?.found, found.key == item.key, isCurrent(found) { go(found) }
+            else { Speech.speakMessage("cannot find that item on the page now") }
+            runQueued()
         }
     }
 
@@ -941,6 +1237,8 @@ public final class MediaView {
     }
 
     private func press(_ item: Item, openOnly: Bool) {
+        let window = modelWindow
+        guard canUseResult, acceptsWindow(window) else { return }
         if !openOnly, pane == .page, let play = item.play {
             let r = AXUIElementPerformAction(play, item.playAction as CFString)
             Log.io("media: play \(Log.words(String(item.label.prefix(50)))) → \(r.rawValue)")
@@ -949,27 +1247,77 @@ public final class MediaView {
             confirmPlaying()
             return
         }
+        let originalKeys = keyCount()
+        let sidebarAlreadyOpen = pendingSidebarBody == nil && item.selected && pageTitle == item.label
+            && !Self.bodySignature(shelves).isEmpty
+        beginPageIntent()
         let before = signature()
+        if pane == .sidebar, sidebarNavigation == .selectRow {
+            selectSidebar(item, window: window, before: before, keys: originalKeys, allowAlreadyOpen: sidebarAlreadyOpen)
+            return
+        }
         if pane == .page { places[pageKey()] = item.key }
         if pane == .sidebar, item.press == nil, let outline = item.element.element(kAXParentAttribute) {
+            guard acceptsWindow(window) else { return }
             _ = outline.set(kAXSelectedRowsAttribute, [item.element] as CFArray)
         } else if item.tableRow, let table = item.element.element(kAXParentAttribute) {
+            guard acceptsWindow(window) else { return }
             _ = table.set(kAXFocusedAttribute, kCFBooleanTrue)
+            guard acceptsWindow(window) else { return }
             _ = table.set(kAXSelectedRowsAttribute, [item.element] as CFArray)
+            guard acceptsWindow(window) else { return }
             KeyboardGesture(identifier: "kb:enter")?.send()   // Music plays the selected song on Return
             // Said, as for a Play button (Return on a song in the library was silent, 8 Oct 2026), and checked.
             Speech.speakMessage("playing", remember: false)
             confirmPlaying()
             return
         } else if let target = item.press ?? (item.playAction == kAXPressAction as String ? item.play : nil) {
+            guard acceptsWindow(window) else { return }
             let r = AXUIElementPerformAction(target, kAXPressAction as CFString)
             Log.io("media: press \(Log.words(String(item.label.prefix(50)))) → \(r.rawValue)")
         } else {
             Speech.speakMessage("nothing to open"); return
         }
-        if pane == .player { DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in self?.refreshPlayer(); self?.announce(crossedFrom: -2) }; return }
+        if pane == .player {
+            let session = currentSession
+            let window = modelWindow
+            delay(0.4) { [weak self] in
+                guard let self, isCurrent(session), pane == .player, acceptsWindow(window) else { return }
+                refreshPlayer(); announce(crossedFrom: -2)
+            }
+            return
+        }
         nowPlayingBefore = playingText()
         waitForNewPage(different: before)
+    }
+
+    private func selectSidebar(_ item: Item, window: AXUIElement?, before: String, keys: Int, allowAlreadyOpen: Bool) {
+        guard let outline = item.sidebarOutline, let cell = item.press, !item.isHeader else {
+            Speech.speakMessage("could not select that sidebar item", remember: false); return
+        }
+        let body = Self.bodySignature(shelves)
+        pendingSidebarBody = body
+        resolving = true
+        read(.selectSidebar(row: item.element, outline: outline, cell: cell, label: item.label, allowAlreadyOpen: allowAlreadyOpen), capturedWindow: window) { [weak self] result in
+            guard let self else { return }
+            resolving = false
+            guard result?.sidebarSelected == true else {
+                if keyCount() == keys { Speech.speakMessage("could not select that sidebar item", remember: false) }
+                runQueued(); return
+            }
+            if result?.sidebarAlreadyOpen == true {
+                pendingSidebarBody = nil
+                runQueued(); return
+            }
+            // Selection is not page arrival. A sidebar-derived title cannot turn old Search items into Home.
+            waitForNewPage(different: before, keys: keys, requiredBodyChange: body,
+                           unchangedMessage: "could not open that sidebar item")
+            runQueued()
+        }
+    }
+
+    private static func bodySignature(_ shelves: [Shelf]) -> [String] {
+        shelves.flatMap { $0.items.flatMap { [$0.key, $0.label] } }
     }
 
     private func playerControlName(_ item: Item) -> String {
@@ -983,6 +1331,7 @@ public final class MediaView {
     /// Space: play the item when it can be played; otherwise the app's own play and pause.
     public func playOrPause(_ g: KeyboardGesture) {
         guard rebuildOrQueue(retry: { [weak self] in self?.playOrPause(g) }) else { return }
+        playbackRequest = UUID()
         // Something already playing: Space pauses it, whatever the cursor is on. On an episode row it pressed the
         // row's own Play again and said "playing" while nothing changed (Podcasts, 28 Oct 2026); the player's Pause
         // was only reached from the player pane.
@@ -991,7 +1340,7 @@ public final class MediaView {
             || player.contains { ["pause", "stop"].contains(playerControlName($0).lowercased()) }
         if pane == .page, !playerPlaying, let item = currentItem(), item.play != nil {
             whenCurrent(item) { found in
-                guard let play = found.play else { return }
+                guard let play = found.play, self.acceptsWindow(self.modelWindow) else { return }
                 _ = AXUIElementPerformAction(play, found.playAction as CFString)
                 Speech.speakMessage("playing", remember: false)
             }
@@ -999,6 +1348,7 @@ public final class MediaView {
         }
         // (Live radio has Stop where other things have Pause.)
         if let toggle = player.first(where: isPlaybackToggle) {
+            guard acceptsWindow(modelWindow) else { return }
             let r = AXUIElementPerformAction(toggle.element, kAXPressAction as CFString)
             Log.io("media: play/pause \(Log.words(toggle.label)) → \(r.rawValue)")
             // Say what was pressed: Music takes a moment to change its button, and reading it straight away said
@@ -1006,8 +1356,11 @@ public final class MediaView {
             let pressedPlay = playerControlName(toggle).lowercased() == "play"
             let pressedStop = playerControlName(toggle).lowercased() == "stop"
             Speech.speakMessage(pressedPlay ? "playing" : pressedStop ? "stopped" : "paused", remember: false)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
-                guard let self else { return }
+            let session = currentSession
+            let window = modelWindow
+            let playback = playbackRequest
+            delay(2.0) { [weak self] in
+                guard let self, isCurrent(session), playbackRequest == playback, acceptsWindow(window) else { return }
                 refreshPlayer()
                 let now = player.first(where: isPlaybackToggle).map { playerControlName($0).lowercased() } ?? ""
                 let playing = now == "pause" || now == "stop"
@@ -1022,6 +1375,8 @@ public final class MediaView {
     /// Return in the app's search field: the search runs; when the results replace the page, read them, and the
     /// arrows are the page's again (Music and Podcasts said nothing, and the first Down read the old page).
     public func afterSearch(term: String = "") {
+        guard synchronizedWindow() != nil else { return }
+        beginPageIntent()
         let before = signature()
         pane = .page
         catalogSearch(term: term)
@@ -1033,6 +1388,7 @@ public final class MediaView {
     /// The catalog's answers for the latest search: the page's host while its results are up, instead of the
     /// app's own results page.
     private var catalog: Catalog?
+    private var catalogRequest = UUID()
     /// The catalog's list has the keys (the module gives it the arrows even while the search field has the focus).
     public private(set) var catalogDrives = false
     /// The term the catalog's list answers, while it has the keys.
@@ -1045,9 +1401,14 @@ public final class MediaView {
         let term = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !term.isEmpty else { Log.io("catalog: no term to search for"); return }
         catalog?.cancel()
-        let c = Catalog(kind: kind, term: term, open: { [weak self] e in self?.openCatalogEntry(e) },
+        let request = UUID(); catalogRequest = request
+        // The catalog survives opening an entry and Back; its own cancellation retires a search, while the
+        // current media session still gates every callback/action after leaving the app.
+        let c = Catalog(kind: kind, term: term, open: { [weak self] e in
+                            guard let self, canUseResult, catalogRequest == request else { return }; openCatalogEntry(e)
+                        },
                         fallBack: { [weak self] why in
-                            guard let self else { return }
+                            guard let self, canUseResult, catalogRequest == request else { return }
                             if why != "nothing found" { Speech.speakMessage("The catalog did not answer: \(why). Reading the page.") }
                             catalog = nil; catalogDrives = false
                             // The page may already be up and unspoken: read it now.
@@ -1058,6 +1419,8 @@ public final class MediaView {
         c.search()
     }
     private func openCatalogEntry(_ e: Catalog.Entry) {
+        guard canUseResult, acceptsWindow(modelWindow) else { return }
+        beginPageIntent()
         let before = signature()
         catalogDrives = false
         NSWorkspace.shared.open(e.url)
@@ -1071,19 +1434,22 @@ public final class MediaView {
 
     /// Escape: back a page.
     public func back() {
+        guard let window = synchronizedWindow() else { return }
+        beginPageIntent()
         let before = signature()
         catalogBack()
-        let app = AXUIElementCreateApplication(pid)
         // Podcasts: a Back button in the toolbar. Music and TV: Controls > Back (Command+[), disabled at the top.
-        if let window = app.element(kAXFocusedWindowAttribute),
-           let backButton = window.elements(kAXChildrenAttribute).first(where: { $0.role == "AXToolbar" })?.elements(kAXChildrenAttribute)
+        if let backButton = window.elements(kAXChildrenAttribute).first(where: { $0.role == "AXToolbar" })?.elements(kAXChildrenAttribute)
                .first(where: { $0.string(kAXDescriptionAttribute) == "Back" || $0.string(kAXIdentifierAttribute) == "BackButton" }) {
             if (backButton.attr(kAXEnabledAttribute) as? Bool) == false { Speech.speakMessage("no previous page", remember: false); return }
+            guard acceptsWindow(window) else { return }
             _ = AXUIElementPerformAction(backButton, kAXPressAction as CFString)
         } else if let item = MenuPath.find(["Controls", "Back"], pid: pid) ?? MenuPath.find(["Go", "Back"], pid: pid) {
             if (item.attr(kAXEnabledAttribute) as? Bool) == false { Speech.speakMessage("no previous page", remember: false); return }
+            guard acceptsWindow(window) else { return }
             _ = AXUIElementPerformAction(item, kAXPressAction as CFString)
         } else {
+            guard acceptsWindow(window) else { return }
             KeyboardGesture(identifier: "kb:command+[")?.send()
         }
         waitForNewPage(different: before, tries: 5, goingBack: true)
@@ -1092,8 +1458,11 @@ public final class MediaView {
     /// After asking to play: make sure it did. A subscribers-only episode in Podcasts said "playing" and stayed
     /// silent (7 Oct 2026). The player says whether it plays (Podcasts' "…isPlaying=true", or a Pause button).
     private func confirmPlaying() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-            guard let self else { return }
+        let session = currentSession
+        let window = modelWindow
+        let playback = UUID(); playbackRequest = playback
+        delay(1.5) { [weak self] in
+            guard let self, isCurrent(session), playbackRequest == playback, acceptsWindow(window) else { return }
             refreshPlayer()
             let playing = (playerRoot?.string(kAXIdentifierAttribute) ?? "").contains("isPlaying=true")
                 || player.contains { playerControlName($0).lowercased() == "pause" }
@@ -1105,6 +1474,7 @@ public final class MediaView {
     }
 
     private var nowPlayingBefore = ""
+    private var playbackRequest = UUID()
     /// What the player's information area says, or "" when nothing is playing.
     private func playingText() -> String {
         let t = player.first { $0.press == nil }?.label ?? ""
@@ -1112,9 +1482,13 @@ public final class MediaView {
     }
 
     public func nowPlaying() {
-        if playerRoot == nil { rebuild(force: true) } else { refreshPlayer() }
-        Speech.speakText(player.first { $0.press == nil }?.label ?? "nothing playing")
+        guard synchronizedWindow() != nil else { return }
+        if playerRoot == nil {
+            refresh { [weak self] in self?.sayNowPlaying() }
+        } else { refreshPlayer(); sayNowPlaying() }
     }
+
+    private func sayNowPlaying() { Speech.speakText(player.first { $0.press == nil }?.label ?? "nothing playing") }
 
     /// Where the user was on each page, so Back lands on the item that was opened.
     /// (The item's key, not its place in the list: the page is read again from the top when it comes back, and the
@@ -1141,21 +1515,31 @@ public final class MediaView {
     }
 
     /// After a press: when the page has changed, read where it went (its title, first shelf and item).
-    private func waitForNewPage(different before: String, tries: Int = 8, goingBack: Bool = false, focusPage: Bool = false) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
-          // Read the window off the main thread, so keys pressed meanwhile are answered at once.
-          DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self else { return }
-            if !goingBack, Self.showsVideo(pid: pid) {
-                DispatchQueue.main.async { self.inVideo = true; Speech.speakMessage("video playing. Space plays and pauses; Escape leaves the video") }
+    private func waitForNewPage(different before: String, tries: Int = 8, goingBack: Bool = false, focusPage: Bool = false,
+                                generation: UUID? = nil, keys: Int? = nil, requiredBodyChange: [String]? = nil,
+                                unchangedMessage: String? = nil) {
+        let session = generation ?? currentSession
+        let window = modelWindow
+        let originalKeys = keys ?? keyCount()
+        delay(0.35) { [weak self] in
+            guard let self, isCurrent(session), acceptsWindow(window) else { return }
+            read(.build(keepSidebar: false, detectVideo: !goingBack), capturedWindow: window) { [weak self] result in
+            guard let self, isCurrent(session), let result else { return }
+            if result.video {
+                inVideo = true
+                guard keyCount() == originalKeys else { return }
+                Speech.speakMessage("video playing. Space plays and pauses; Escape leaves the video")
                 return
             }
-            guard let built = build() else { return }
-            DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
+            guard let built = result.built else { return }
             // A page still loading (no shelves yet, 7 Oct 2026): wait for it, rather than read an empty page.
-            if signature(of: built) == before || (built.shelves.isEmpty && tries > 0) {
-                if tries > 0 { waitForNewPage(different: before, tries: tries - 1, goingBack: goingBack, focusPage: focusPage) }
+            let bodyPending = requiredBodyChange.map { Self.bodySignature(built.shelves) == $0 || built.shelves.allSatisfy { $0.items.isEmpty } } ?? false
+            if signature(of: built) == before || (built.shelves.isEmpty && tries > 0) || bodyPending {
+                if tries > 0 { waitForNewPage(different: before, tries: tries - 1, goingBack: goingBack, focusPage: focusPage,
+                                              generation: session, keys: originalKeys, requiredBodyChange: requiredBodyChange,
+                                              unchangedMessage: unchangedMessage) }
+                else if keyCount() != originalKeys { return }
+                else if let unchangedMessage { Speech.speakMessage(unchangedMessage, remember: false) }
                 else if goingBack { Speech.speakMessage("no previous page", remember: false) }
                 else {
                     // No new page: a song or episode that plays when opened. Say so, from the player.
@@ -1166,11 +1550,18 @@ public final class MediaView {
                 return   // nothing changed (an item that only plays): nothing to say
             }
             apply(built)
+            // Later user navigation owns the pane/cursor. The new snapshot is still useful, but a slow page
+            // result must not move focus or announce over a more recent key (including arrival retry chains).
+            guard keyCount() == originalKeys else { return }
             pane = .page
             // After a search the keyboard is still in the search field, where the arrows are the field's: give it to
             // the results, so Down reads them.
             if focusPage, let first = flatPage.first?.item.element {
-                if first.set(kAXFocusedAttribute, kCFBooleanTrue) != .success { _ = pageScroll?.set(kAXFocusedAttribute, kCFBooleanTrue) }
+                guard acceptsWindow(window) else { return }
+                if first.set(kAXFocusedAttribute, kCFBooleanTrue) != .success {
+                    guard acceptsWindow(window) else { return }
+                    _ = pageScroll?.set(kAXFocusedAttribute, kCFBooleanTrue)
+                }
             }
             // The catalog's list answered this search and is being read: the app's own results page stays unspoken.
             if focusPage, catalogDrives { return }
@@ -1178,7 +1569,6 @@ public final class MediaView {
             if pageTitle != announced { Speech.speakMessage(pageTitle.isEmpty ? "page" : pageTitle) }
             land(on: places[pageKey()])
             }
-          }
         }
     }
 }

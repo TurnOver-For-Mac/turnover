@@ -12,13 +12,16 @@ import IOKit.hid
 import Carbon
 import TurnOverCore
 import TurnOverControl
+import TurnOverSpeech
 
 final class TurnOverApp {
     private let keyboard = KeyboardHandler()
     private let lead = LeadWatcher()
     private let status = StatusItem()
     private var voiceOverObservation: NSKeyValueObservation?
-    private var active = false
+    private let inputActivation = KeyboardActivation()
+    private var active: Bool { inputActivation.isActive }
+    private var activation: UInt64? { inputActivation.generation }
     private var voiceOverGoneTimer: Timer?
     private var testSayObserver: NSObjectProtocol?
     private var voiceOverGoneChecks = 0
@@ -60,6 +63,7 @@ final class TurnOverApp {
         AXHealth.dripExempt = { pid in NSRunningApplication(processIdentifier: pid)?.bundleIdentifier.map { ownModules.contains($0) } ?? false }
         GlobalCommands.shared.script("handOverToVoiceOver", "Hand this app to VoiceOver; turns VoiceOver on and TurnOver off, and leaves this application to VoiceOver (Command Control Comma, then T)", gestures: [], category: "System") { [weak self] _ in
             guard let self else { return }
+            self.inputActivation.readerSelected()
             Speech.speakMessage("VoiceOver")
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { self.lead.pinCurrentToVoiceOver() }   // the KVO observation deactivates TurnOver
         }
@@ -67,9 +71,15 @@ final class TurnOverApp {
         TurnOverMenu.shared.onScreenCurtainChanged = { [weak self] in if self?.active == true { ScreenCurtain.apply() } }
         status.apply()
         keyboard.onCapsLockToggled = { on in Speech.speakMessage(on ? "caps lock on" : "caps lock off") }
+        keyboard.onReadinessChanged = { [weak self] generation, ready in
+            guard let self, self.activation == generation else { return }
+            if ready { self.finishActivation(generation) }
+            else { self.inputUnavailable(generation) }
+        }
         // The app's own items in the menu (docs/MENU-PLAN.md): the hand-over sits in "Hand over or quit"; updates and
         // uninstalling in "About and updates".
         TurnOverMenu.shared.handOverItem = MenuItem("Hand over to VoiceOver", .action { [weak self] in guard let self else { return }
+            self.inputActivation.readerSelected()
             Speech.speakMessage("VoiceOver")
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { self.lead.pinCurrentToVoiceOver() }
         }, hint: "For this app, until TurnOver quits. Command Control Comma, then T, does the same and remembers it")
@@ -85,7 +95,11 @@ final class TurnOverApp {
                                           }, hint: "Every build on GitHub, newest first, to go back to one if the newest breaks something: download it, replace the app, and skip the newer one in Updates"),
             MenuItem("Uninstall TurnOver", .submenu { Uninstaller.menuItems() })]
         TurnOverMenu.shared.readsApp = { [weak self] b in self?.lead.shouldLead(b) ?? false }
-        TurnOverMenu.shared.switchReader = { [weak self] in let to = MenuAnywhere.shared.voiceOverWasReading; DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self?.lead.switchCurrent(toTurnOver: to) } }
+        TurnOverMenu.shared.switchReader = { [weak self] in
+            self?.inputActivation.readerSelected()
+            let to = MenuAnywhere.shared.voiceOverWasReading
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self?.lead.switchCurrent(toTurnOver: to) }
+        }
         // Each style its own reader's key (the parity audit, 13 Oct 2026): NVDA+Control+Escape in the Windows style,
         // VoiceOver's VO-Shift-Minus (VO-Shift-Fn-Underscore) in the Mac style. VO-Shift-Minus in the Windows style was
         // NVDA 2026's "zoom out", and VO-Shift-Escape is VoiceOver's "top level", so neither is the curtain's there.
@@ -112,7 +126,7 @@ final class TurnOverApp {
     }
 
     func start() {
-        lead.turnOverActive = { [weak self] in self?.active ?? false }
+        lead.turnOverActive = { [weak self] in self?.activation != nil }
         // An Activity left by a build before 18 Oct 2026 (the first CoExist) comes out whatever the switch says: it
         // keeps VoiceOver's speech off in the apps it lists (a review, 28 Oct 2026).
         removeOldActivity()
@@ -140,13 +154,17 @@ final class TurnOverApp {
         TurnOverMenu.shared.quit = { [weak self] in self?.quitRestoringVoiceOver() ?? NSApp.terminate(nil) }
         lead.onCoexistLead = { [weak self] turnOver in if turnOver { self?.activate() } else { self?.deactivate() } }
         MenuAnywhere.shared.turnOverActive = { [weak self] in self?.active ?? false }
-        Speech.player?.onQueueStuck = { seconds in Watchdog.shared.speechStuck(for: seconds) }
+        Speech.player?.onQueueStuck = { stall in Watchdog.shared.speechStuck(stall) }
+        Speech.player?.onOutputUnavailable = { [weak self] source, failure in
+            let choice = HandOver.choice.value
+            onMain { [weak self] in self?.speechOutputUnavailable(failure, from: source, readerChoice: choice) }
+        }
         QuickNavWatch.shared.turnOverActive = { [weak self] in self?.active ?? false }
         QuickNavWatch.shared.start()
         ArrowQuickNav.startInStep()
         MenuAnywhere.shared.handOver = { [weak self] on in self?.lead.handOver(voiceOverOn: on) }
         MenuAnywhere.shared.shouldLead = { [weak self] b in self?.lead.shouldLead(b) ?? false }
-        MenuAnywhere.shared.switchLead = { [weak self] to in self?.lead.switchCurrent(toTurnOver: to) }
+        MenuAnywhere.shared.switchLead = { [weak self] to in self?.inputActivation.readerSelected(); self?.lead.switchCurrent(toTurnOver: to) }
         MenuAnywhere.shared.toggleDirect = { [weak self] in self?.lead.toggleDirect() }
         VoiceOverSettings.automaticExport = { done in ActivityFlow.shared.export(completion: done) }
         // Words from a companion app (Windy: "Windows style"): said by TurnOver where TurnOver reads, since VoiceOver
@@ -158,6 +176,7 @@ final class TurnOverApp {
             Log.io("say for a companion: \(Log.words(String(text.prefix(60))))"); Speech.speakMessage(text)
         }
         MenuAnywhere.shared.cycleLeadMode = { [weak self] in
+            self?.inputActivation.readerSelected()
             guard config.applications.perAppReaders else { Speech.speakMessage("Readers per app are off: TurnOver reads everywhere while it is on. Settings, Screen reader behaviour, turns them on."); return }
             self?.lead.cycleMode()
         }
@@ -254,7 +273,7 @@ final class TurnOverApp {
     /// Mac, 5 Oct 2026: granted later, TurnOver went on leaving everything to VoiceOver).
     private var inputTimer: Timer?
     private func watchForInputMonitoring() {
-        guard !InputAccess.granted else { return }
+        guard inputTimer == nil, !InputAccess.granted else { return }
         // Ask now, straight after Accessibility. It used to be asked only when TurnOver first took over from
         // VoiceOver, and without it TurnOver never takes over: on a fresh install the question never came (a
         // fresh-install test, 6 Oct 2026; a tester's first log shows the same).
@@ -311,7 +330,7 @@ final class TurnOverApp {
                 // The other way round: VoiceOver on and running while TurnOver still leads. macOS's change notice never
                 // came for a tester (15 Oct 2026: he turned VoiceOver on by hand, TurnOver kept the keys, and
                 // only Activity Monitor could stop it). Two looks, 2 s apart, so a hand-over in progress isn't mistaken.
-                if !Coexist.on, NSWorkspace.shared.isVoiceOverEnabled, HandOver.voiceOverRunning, self.active {
+                if !Coexist.on, NSWorkspace.shared.isVoiceOverEnabled, HandOver.voiceOverRunning, self.activation != nil {
                     self.voiceOverOnChecks += 1
                     if self.voiceOverOnChecks >= 2 {
                         self.voiceOverOnChecks = 0
@@ -345,6 +364,7 @@ final class TurnOverApp {
     private var heldForVoiceOver = false
 
     private func voiceOverChanged(_ on: Bool) {
+        let byInputRecovery = inputActivation.takeAutomaticVoiceOverRestore(on: on, readerChoice: HandOver.choice.value)
         HandOver.newChoice()   // VoiceOver turned on or off, by hand too: a recovery's late fallback stands down
         Log.info("VoiceOver is \(on ? "on" : "off")")
         let starting = !sawVoiceOverState
@@ -361,7 +381,7 @@ final class TurnOverApp {
             if let front = NSWorkspace.shared.frontmostApplication { lead.look(at: front) }
             return
         }
-        lead.voiceOverChanged(on: on, byLock: byLock)
+        lead.voiceOverChanged(on: on, byLock: byLock, byInputRecovery: byInputRecovery)
         // Screen reader behaviour (22 Oct 2026): the swap is a setting. Off, VoiceOver's key changes nothing of TurnOver's.
         // VoiceOver going off ends any yielding, whatever the swap setting says.
         if !on { lead.yieldedToVoiceOverByHand = false }
@@ -370,7 +390,11 @@ final class TurnOverApp {
             // swap off, VoiceOver turned on by hand left both talking). VoiceOver on quietens TurnOver; VoiceOver off
             // brings it back only if that is what quietened it, since TurnOver's own key is the way it comes on.
             if on {
-                if active { Log.info("VoiceOver on; TurnOver is quiet until it goes off (the swap is off)"); heldForVoiceOver = true; deactivate() }
+                if inputActivation.yieldToVoiceOver() {
+                    Log.info("VoiceOver on; TurnOver is quiet until it goes off (the swap is off)")
+                    heldForVoiceOver = true
+                    deactivate()
+                }
             } else if heldForVoiceOver {
                 heldForVoiceOver = false
                 Log.info("VoiceOver off; TurnOver speaks again (the swap is off)")
@@ -381,7 +405,7 @@ final class TurnOverApp {
         // Only a change made by hand counts as yielding: a hand-over TurnOver posted itself (the lock screen) does not.
         // Nor one noticed while the Mac is locked or asleep: the lock's own, its notice held back until the wake, long
         // after the three-second window (26 Oct 2026; the lead watcher clears the flag again on the unlock as well).
-        if on, !starting, !lead.isOurChange, !lead.locked, !byLock {
+        if on, !starting, !lead.isOurChange, !lead.locked, !byLock, !byInputRecovery {
             lead.yieldedToVoiceOverByHand = true
             Log.info("VoiceOver turned on by hand: TurnOver steps back until it goes off or TurnOver's key")
         }
@@ -396,25 +420,84 @@ final class TurnOverApp {
         // front. Off where TurnOver reads (its own tap has the keys) and when TurnOver is switched off.
         // Its setting turns it off: the layer takes Caps Lock where VoiceOver reads, so VoiceOver's own Caps Lock keys
         // (VO-F7, VO-F8, VO-M) are the NVDA key's there (21 Oct 2026).
-        if config.general.windowsKeys, config.general.keysWhereVoiceOverReads, !active, !lead.suspended, InputAccess.granted, NSWorkspace.shared.isVoiceOverEnabled {
+        if config.general.windowsKeys, config.general.keysWhereVoiceOverReads, activation == nil, !active, !lead.suspended, InputAccess.granted, NSWorkspace.shared.isVoiceOverEnabled {
             WindowsKeyLayer.shared.start()
         } else {
             WindowsKeyLayer.shared.stop()
         }
     }
 
+    private func speechOutputUnavailable(_ failure: SpeechOutputFailure, from source: SpeechPlayer, readerChoice: Int) {
+        // A delivery can wait on main while a key cancels speech, the user picks a reader, or a replacement player
+        // starts. Wake grace leaves the incident pending: the responsive speech queue offers it again afterwards.
+        let state: SpeechOutputRecovery.ReaderState
+        if !active || lead.suspended { state = .inactive }
+        else if source.isPaused || (Speech.mode != .talk && Speech.mode != .onDemand) { state = .intentionallyQuiet }
+        else if lead.locked || Watchdog.shared.inGrace { state = .waking }
+        else { state = .required }
+        SpeechOutputRecovery.receive(failure, isCurrent: Speech.player === source && HandOver.choice.value == readerChoice, state: state) {
+            Log.error("speech: required output made no \(failure.stage == .rendering ? "rendered frames" : "playback progress") within 4 s; handing back to VoiceOver")
+            lead.suspended = true   // no automatic take-back into the failed output path; TurnOver's key retries it
+            KeyboardHandler.bypass = true
+            // Release first: deactivation closes the braille driver, which may wait on hardware. A speech failure
+            // must not keep VoiceOver muted or postpone starting it while that unrelated close finishes.
+            if Coexist.on { VoiceOverTap.set(false, why: "TurnOver speech output failed") }
+            HandOver.bringVoiceOverBack("speech output failed")
+            Watchdog.sayOutside("TurnOver's speech output stopped. Handing back to VoiceOver. Press Command Control Period to try TurnOver again.")
+            deactivate()
+        }
+    }
+
     private func activate() {
-        guard !active else { return }
-        active = true
+        guard activation == nil, !active, !lead.suspended, !lead.locked else { return }
         WindowsKeyLayer.shared.stop()
-        Watchdog.shared.active = true
-        KeyboardHandler.bypass = false
-        Core.activate()
-        if !InputAccess.granted, InputAccess.askOnce() {
+        KeyboardHandler.bypass = true
+        let inputGranted = InputAccess.granted
+        if !inputGranted, InputAccess.askOnce() {
             Speech.speakMessage("TurnOver needs Input Monitoring for its keys. Opening System Settings, where VoiceOver will read: turn TurnOver on in the list.")
             if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") { NSWorkspace.shared.open(url) }
         }
-        keyboard.start()
+        let generation = keyboard.start()
+        inputActivation.begin(generation)
+        // Caps Lock needs the physical HID watch. The event tap alone can work for Control+Option, but must
+        // not swallow Caps Lock while its input permission is absent. A granted permission is accepted even
+        // with Karabiner's existing exclusive-open result; that result alone does not prove missing reports.
+        if KeySettings.current.capsIsTurnOver, !inputGranted { inputUnavailable(generation, awaitingPermission: true); return }
+        // Setup can itself stall. Cancel the request rather than allowing a late tap to silence VoiceOver
+        // after the user has already been handed back (review of #52, 28 Oct 2026).
+        onMain(after: 3) { [weak self] in
+            guard let self, self.activation == generation, !self.active else { return }
+            self.inputUnavailable(generation)
+        }
+    }
+
+    private func inputUnavailable(_ generation: UInt64, awaitingPermission: Bool = false) {
+        guard activation == generation else { return }
+        Log.error("keyboard: input unavailable for the current activation; VoiceOver keeps the Mac")
+        // Missing permission already gates the lead policy; its existing watch can retry once granted.
+        // Other failures suspend automatic take-back until the user explicitly turns TurnOver on again.
+        if !awaitingPermission { lead.suspended = true }
+        KeyboardHandler.bypass = true
+        VoiceOverTap.set(false, why: "TurnOver's keyboard is unavailable")
+        let needsVoiceOver = !HandOver.voiceOverReading
+        HandOver.bringVoiceOverBack("TurnOver's keyboard is unavailable")
+        if awaitingPermission {
+            if needsVoiceOver { inputActivation.expectAutomaticVoiceOverRestore(readerChoice: HandOver.choice.value) }
+            watchForInputMonitoring()   // reinstalls the watch if permission was revoked after a granted launch
+        }
+        Watchdog.sayOutside("TurnOver's keyboard is unavailable. VoiceOver is taking over. Check TurnOver's Accessibility and Input Monitoring permissions before turning TurnOver on again.")
+        deactivate()
+    }
+
+    private func finishActivation(_ generation: UInt64) {
+        guard activation == generation, !active else { return }
+        guard !lead.suspended, !lead.locked else { deactivate(); return }
+        guard keyboard.isReady(generation) else { return }
+        Watchdog.shared.active = true
+        Core.activate()
+        // Core setup can take time. A failed tap during it must not lead to muting VoiceOver afterwards.
+        guard inputActivation.confirm(generation, inputReady: keyboard.isReady(generation)) else { inputUnavailable(generation); return }
+        KeyboardHandler.bypass = false
         SecureInputWatch.start()
         if Coexist.on { VoiceOverTap.set(true, why: "TurnOver takes \(NSWorkspace.shared.frontmostApplication?.localizedName ?? "an app")") }
         // VoiceOver's speech settings may have been changed where it read: TurnOver takes them up (SpeechParity).
@@ -464,6 +547,7 @@ final class TurnOverApp {
         }
     }
     private func toggleCoexist() {
+        inputActivation.readerSelected()
         if lead.suspended {
             lead.suspended = false
             lead.yieldedToVoiceOverByHand = false   // turned on by its own key: it takes the app in front again
@@ -497,6 +581,8 @@ final class TurnOverApp {
     /// Quitting: the tap and the watchdog go first, before VoiceOver is turned on. The tap stayed up through the
     /// hand-over and swallowed keys for up to 4 s at a menu quit (code review, 16 Oct 2026).
     func shutDown() {
+        inputActivation.cancel()
+        KeyboardHandler.bypass = true
         Watchdog.shared.active = false
         keyboard.stop()
         if Coexist.on { VoiceOverTap.set(false, why: "quit") }
@@ -506,17 +592,19 @@ final class TurnOverApp {
     private func deactivate() {
         SecureInputWatch.stop()
         Watchdog.shared.active = false
-        if active {
-            active = false
+        let wasActive = active
+        inputActivation.cancel()
+        KeyboardHandler.bypass = true
+        keyboard.stop()
+        if Coexist.on { VoiceOverTap.set(false, why: "TurnOver hands back") }
+        if wasActive {
             // The falling chime as VoiceOver takes over (words would collide with VoiceOver's own "VoiceOver on").
             if config.general.handOverChimes, !config.general.handOverNothing { Tones.handBack() }
-            // Nothing of TurnOver's may keep the keys once VoiceOver leads: its menu, if open, closes.
-            if TurnOverMenu.shared.isOpen { TurnOverMenu.shared.close() }
-            keyboard.stop()
-            if Coexist.on { VoiceOverTap.set(false, why: "TurnOver hands back") }
-            Core.deactivate()
-            refreshWindowsLayer()
-            ScreenCurtain.off()   // VoiceOver's own takes over (its setting stays as the user left it)
         }
+        // This also covers a reader choice which cancelled activation before this call.
+        if TurnOverMenu.shared.isOpen { TurnOverMenu.shared.close() }
+        Core.deactivate()
+        refreshWindowsLayer()
+        ScreenCurtain.off()   // VoiceOver's own takes over (its setting stays as the user left it)
     }
 }

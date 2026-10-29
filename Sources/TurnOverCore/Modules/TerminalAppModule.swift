@@ -53,13 +53,28 @@ final class TerminalText: TurnOverObject {
     private func int(_ attr: String) -> Int? { (element.attr(attr) as? NSNumber)?.intValue }
     private var cursor: Int? {
         guard let v = element.attr(kAXSelectedTextRangeAttribute) else { return nil }
-        var r = CFRange(); axValue(v, .cfRange, &r); return r.location
+        guard let r = cfRange(v), r.location >= 0, r.location != Int.max else { return nil }
+        return r.location
     }
     private func string(_ location: Int, _ length: Int) -> String {
         var r = CFRange(location: location, length: max(0, length))
         guard let v = AXValueCreate(.cfRange, &r), let s = element.param(kAXStringForRangeParameterizedAttribute, v) as? String else { return "" }
         return s
     }
+    /// Shell AX positions are UTF-16, while spoken characters are extended graphemes. The old one-unit reads
+    /// split supplementary and combining characters (28 Oct 2026, #180). Never fetch AXValue scrollback to repair
+    /// an unavailable slice: keep key delivery and leave the unproven character unspoken.
+    private func character(at offset: Int) -> String? {
+        guard let length = int(kAXNumberOfCharactersAttribute), length >= 0, offset >= 0, offset <= length else { return nil }
+        if offset == length { return "" }
+        guard let (start, end) = CharacterBoundaries.offsets(at: offset, length: length, read: { start, end in
+            self.string(start, end - start)
+        }) else { return nil }
+        let text = string(start, end - start)
+        guard text.utf16.count == end - start, text.count == 1 else { return nil }
+        return text
+    }
+
     private func lineIndex(at i: Int) -> Int? {
         (element.param(kAXLineForIndexParameterizedAttribute, NSNumber(value: i)) as? NSNumber)?.intValue
     }
@@ -264,16 +279,17 @@ final class TerminalText: TurnOverObject {
         // Editing keys, as in any edit field: what was deleted is said, and where the cursor went.
         script("terminal_backspace", "Deletes the character before the cursor and says it", gestures: ["kb:backspace"], category: cat) { [weak self] g in
             guard let self, let c = self.cursor, !self.atInputStart(c) else { Tones.edge(); g.send(); return }
-            let ch = self.string(c - 1, 1)
+            let ch = self.character(at: c - 1)
             g.send()
             if !self.state.typed.isEmpty { self.state.typed.removeLast() }
             Speech.clearTypedWordBuffer()
-            self.sayCharacter(ch)
+            if let ch { self.sayCharacter(ch) }
         }
         script("terminal_deleteForward", "Deletes the character at the cursor and says it", gestures: ["kb:delete"], category: cat) { [weak self] g in
             guard let self, let c = self.cursor else { g.send(); return }
-            let ch = self.string(c, 1)
+            let ch = self.character(at: c)
             g.send()
+            guard let ch else { return }
             if ch.isEmpty || ch == "\n" || self.inputAfter(c).isEmpty { Tones.edge() } else { self.sayCharacter(ch) }
         }
         script("terminal_deleteWord", "Deletes the word before the cursor and says it", gestures: ["kb:option+backspace", "kb:control+w"], category: cat) { [weak self] g in
@@ -322,7 +338,7 @@ final class TerminalText: TurnOverObject {
                 g.send()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                     guard let self, let c = self.cursor else { return }
-                    let ch = self.string(c, 1)
+                    guard let ch = self.character(at: c) else { return }
                     Speech.speakText(ch.isEmpty || ch == "\n" ? "blank" : ch, symbolLevel: .all)
                 }
             }

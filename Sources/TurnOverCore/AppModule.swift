@@ -24,6 +24,10 @@ open class AppModule: ScriptableObject {
     /// Supplement the app's spelling marks with macOS's checker. With no marks, the checker is always a fallback.
     open var supplementsSpellingMarks: Bool { true }
 
+    /// TurnOver's extra boundary sound after a native caret movement key was sent to this app. Apps that
+    /// already sound that boundary can opt out; TurnOver-owned review and structural navigation keep theirs.
+    open var playsNativeCaretBoundarySound: Bool { true }
+
     /// A grid's selection changed while the focus is in it (AXSelectedCellsChanged; `count` cells now selected). True
     /// if the module has said what is needed; false for TurnOver's own handling (one cell selected: it is the focus).
     open func gridSelectionChanged(_ table: AXUIElement, count: Int) -> Bool { false }

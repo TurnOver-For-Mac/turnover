@@ -23,8 +23,9 @@ import AppKit
 import Carbon.HIToolbox
 import TurnOverCore
 
-// The keyboard tap and the Caps Lock watch run on their own thread; every field here is that thread's (or set once
-// from the main thread before it starts). Anything of the reader's is reached through onMain (Swift 6, 10 Oct 2026).
+// The tap, HID manager and key state belong to one worker at a time, through teardown. Lifecycle and its run-loop
+// reference are read/written only under lifecycle.lock, including setup, stop and replacement. Callbacks are set on
+// main before the first worker starts and invoked only on main via onMain; reader state stays there (28 Oct 2026).
 nonisolated final class KeyboardHandler: @unchecked Sendable {
     static let marker: Int64 = 0xB05A
     /// Caps Lock held as the TurnOver key, for the trackpad's on and off (read off the keyboard thread).
@@ -36,12 +37,22 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
     static let typedTurnOverMarker: Int64 = 0xB05C
 
     var onCapsLockToggled: (@MainActor (Bool) -> Void)?
+    var onReadinessChanged: (@MainActor (UInt64, Bool) -> Void)?
 
-    private var thread: Thread?
-    private var runLoop: CFRunLoop?   // the key thread's
+    private struct Lifecycle {
+        var session = KeyboardSessionState()
+        var runLoop: CFRunLoop?
+    }
+    private let lifecycle = Locked(Lifecycle())
     /// What one keyboard thread set up: torn down by that thread, whatever came after it. (Stopping and starting
     /// again at once, a double toggle, had the old thread's tear-down clear the new thread's tap, 8 Oct 2026.)
-    private final class Layer { var manager: IOHIDManager?; var tap: CFMachPort?; var connect: io_connect_t = 0 }
+    private final class Layer {
+        let generation: UInt64
+        var manager: IOHIDManager?
+        var tap: CFMachPort?
+        var connect: io_connect_t = 0
+        init(generation: UInt64) { self.generation = generation }
+    }
     private var layer: Layer?
     private var manager: IOHIDManager? { layer?.manager }
     private var tap: CFMachPort? { layer?.tap }
@@ -117,38 +128,86 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         KeyboardGesture.textPoster = { s in KeyboardHandler.postText(s) }
     }
 
-    func start() {
-        guard thread == nil else { return }
+    @discardableResult
+    func start() -> UInt64 {
+        lifecycle.lock.lock()
+        let request = lifecycle.unsafeValue.session.requestStart()
+        let worker = lifecycle.unsafeValue.session.beginWorker()
+        lifecycle.lock.unlock()
+        if let worker { startWorker(worker) }
+        return request
+    }
+
+    func isReady(_ generation: UInt64) -> Bool {
+        lifecycle.lock.lock(); defer { lifecycle.lock.unlock() }
+        return lifecycle.unsafeValue.session.isReady(generation)
+    }
+
+    private func isRequested(_ generation: UInt64) -> Bool {
+        lifecycle.lock.lock(); defer { lifecycle.lock.unlock() }
+        return lifecycle.unsafeValue.session.isRequested(generation)
+    }
+
+    private func report(_ generation: UInt64, ready: Bool) {
+        lifecycle.lock.lock()
+        let accepted = lifecycle.unsafeValue.session.report(generation, ready: ready)
+        lifecycle.lock.unlock()
+        guard accepted else { return }
+        onMain { [self] in onReadinessChanged?(generation, ready) }
+    }
+
+    private func startWorker(_ generation: UInt64) {
         let t = Thread { [self] in
-            runLoop = CFRunLoopGetCurrent()
-            let mine = setUp()
-            CFRunLoopRun()
-            tearDown(mine)
+            lifecycle.lock.lock()
+            lifecycle.unsafeValue.runLoop = CFRunLoopGetCurrent()
+            lifecycle.lock.unlock()
+            if isRequested(generation) {
+                let mine = setUp(generation)
+                let ready = mine.tap.map { CFMachPortIsValid($0) && CGEvent.tapIsEnabled(tap: $0) } ?? false
+                if ready, isRequested(generation) {
+                    // A created tap is insufficient: acknowledge from the run loop once it is serving work.
+                    CFRunLoopPerformBlock(CFRunLoopGetCurrent(), CFRunLoopMode.defaultMode.rawValue) { [self, weak mine] in
+                        guard isRequested(generation), let t = mine?.tap else { return }
+                        report(generation, ready: CFMachPortIsValid(t) && CGEvent.tapIsEnabled(tap: t))
+                    }
+                    CFRunLoopRun()
+                }
+                // An unexpected run-loop exit is also a loss of input, not a successful active reader.
+                report(generation, ready: false)
+                tearDown(mine)
+            }
+            lifecycle.lock.lock()
+            lifecycle.unsafeValue.runLoop = nil
+            lifecycle.unsafeValue.session.finished(generation)
+            let next = lifecycle.unsafeValue.session.beginWorker()
+            lifecycle.lock.unlock()
+            if let next { startWorker(next) }
         }
         t.name = "turnover.keyboard"
         t.qualityOfService = .userInteractive
-        thread = t
         t.start()
     }
 
-    private let tornDown = DispatchSemaphore(value: 0)
     func stop() {
-        guard let rl = runLoop else { return }
-        CFRunLoopPerformBlock(rl, CFRunLoopMode.defaultMode.rawValue) { CFRunLoopStop(rl) }
+        lifecycle.lock.lock()
+        lifecycle.unsafeValue.session.requestStop()
+        let rl = lifecycle.unsafeValue.runLoop
+        lifecycle.lock.unlock()
+        Self.capsHeld.value = false
+        guard let rl else { return }
+        CFRunLoopPerformBlock(rl, CFRunLoopMode.defaultMode.rawValue) { CFRunLoopStop(CFRunLoopGetCurrent()) }
         CFRunLoopWakeUp(rl)
-        // Until the old tap is down (half a second at most): a start() straight after made a second tap while the
-        // first still ran, and every key was handled twice (a code review, 14 Oct 2026).
-        if tornDown.wait(timeout: .now() + 0.5) == .timedOut { Log.warning("keyboard: the old layer did not come down in time") }
-        thread = nil
-        runLoop = nil
+        // Keys pass as soon as the request is retired. Replacement waits for actual teardown on the worker,
+        // without blocking main or trusting a shared semaphore left over from an earlier stop (28 Oct 2026).
     }
 
-    private func setUp() -> Layer {
-        let mine = Layer()
+    private func setUp(_ generation: UInt64) -> Layer {
+        let mine = Layer(generation: generation)
         layer = mine
         // Nothing carried over from the tap before (a restart after the watchdog): a code still in `quarantined`
         // would swallow the next real key-up, and the app would see a key held down (a code review, 14 Oct 2026).
         quarantined.removeAll(); remapped.removeAll(); capsDown = false; chordFired = false; keypadZeroDown = false
+        Self.capsHeld.value = false
         controlAlone = false; shiftAlone = false; optionAlone = false; commandAlone = false
         let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching(kIOHIDSystemClass))
         if service != 0 {
@@ -195,9 +254,13 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
 
     /// Input Monitoring granted while the layer was up: open the keyboard watch again, on the keyboard's own thread.
     func reopenKeyboardWatch() {
-        guard let rl = runLoop else { return }
+        lifecycle.lock.lock()
+        let rl = lifecycle.unsafeValue.runLoop
+        let generation = lifecycle.unsafeValue.session.requested
+        lifecycle.lock.unlock()
+        guard let rl, let generation else { return }
         CFRunLoopPerformBlock(rl, CFRunLoopMode.defaultMode.rawValue) { [self] in
-            guard let mine = layer else { return }
+            guard isRequested(generation), let mine = layer, mine.generation == generation else { return }
             if let m = mine.manager { IOHIDManagerClose(m, IOOptionBits(kIOHIDOptionsTypeNone)) }
             openHIDManager(into: mine)
         }
@@ -205,14 +268,16 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
     }
 
     private func tearDown(_ mine: Layer) {
-        if let t = mine.tap { CGEvent.tapEnable(tap: t, enable: false) }
+        if let t = mine.tap {
+            CGEvent.tapEnable(tap: t, enable: false)
+            CFMachPortInvalidate(t)
+        }
         mine.tap = nil
         if let m = mine.manager { IOHIDManagerClose(m, IOOptionBits(kIOHIDOptionsTypeNone)) }
         mine.manager = nil
         if mine.connect != 0 { IOServiceClose(mine.connect); mine.connect = 0 }
         if layer === mine { layer = nil }
         Log.info("keyboard: layer down")
-        tornDown.signal()
     }
 
     private func lockState() -> Bool {
@@ -227,6 +292,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
     }
 
     private func hidValue(_ value: IOHIDValue) {
+        guard let generation = layer?.generation, isReady(generation), !Self.bypass else { return }
         let element = IOHIDValueGetElement(value)
         guard IOHIDElementGetUsagePage(element) == UInt32(kHIDPage_KeyboardOrKeypad),
               IOHIDElementGetUsage(element) == UInt32(kHIDUsage_KeyboardCapsLock) else { return }
@@ -304,6 +370,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
     }
 
     private func tapEvent(_ type: CGEventType, _ event: CGEvent) -> Unmanaged<CGEvent>? {
+        guard let generation = layer?.generation, isRequested(generation) else { return Unmanaged.passUnretained(event) }
         if Self.bypass, type != .tapDisabledByTimeout, type != .tapDisabledByUserInput {
             if !quarantined.isEmpty { quarantined.removeAll() }   // their key-ups pass now; none must be swallowed later
             return Unmanaged.passUnretained(event)
@@ -311,6 +378,12 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             Log.warning("keyboard: tap disabled (\(type.rawValue)), re-enabling")
             if let t = tap { CGEvent.tapEnable(tap: t, enable: true) }
+            guard let t = tap, CGEvent.tapIsEnabled(tap: t) else {
+                Log.error("keyboard: tap could not be re-enabled; handing input back")
+                report(generation, ready: false)
+                CFRunLoopStop(CFRunLoopGetCurrent())
+                return Unmanaged.passUnretained(event)
+            }
             // Three times in ten seconds: say so, once a minute (the team review: a failure that leaves the user
             // without keys is told, not only logged, 8 Oct 2026).
             let now = Date()

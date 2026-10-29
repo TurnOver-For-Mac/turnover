@@ -39,7 +39,7 @@ final class Watchdog: @unchecked Sendable {   // its state is under `lock`
     nonisolated(unsafe) private var graceUntil = Date.distantPast
     nonisolated func noteAsleepOrLocked() { lock.lock(); graceUntil = .distantFuture; lock.unlock() }
     nonisolated func noteAwake() { lock.lock(); graceUntil = Date().addingTimeInterval(30); lock.unlock() }
-    nonisolated private var inGrace: Bool { lock.lock(); defer { lock.unlock() }; return Date() < graceUntil }
+    nonisolated var inGrace: Bool { lock.lock(); defer { lock.unlock() }; return Date() < graceUntil }
 
     nonisolated var active: Bool {
         get { lock.lock(); defer { lock.unlock() }; return _active }
@@ -121,42 +121,44 @@ final class Watchdog: @unchecked Sendable {   // its state is under `lock`
         if !sleeping { HandOver.bringVoiceOverBack("watchdog") }
     }
 
-    /// The system's `say`, from any thread: the voice of last resort while the main thread is stuck. One at a time:
-    /// a second warning while the first is still being said waits for it (they spoke over each other, 22 Oct 2026).
-    nonisolated(unsafe) private static var saying: Process?
-    nonisolated private static let sayLock = NSLock()
+    /// The system voice is independent of the stuck player, but can stall too. Keep one warning at a time and
+    /// never make recovery depend on it finishing (#155, 28 Oct 2026).
+    nonisolated private static let warning = RecoveryWarning()
     nonisolated static func sayOutside(_ text: String) {
-        sayLock.lock(); defer { sayLock.unlock() }
-        if let s = saying, s.isRunning { return }
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/usr/bin/say")
-        p.arguments = [text]
-        try? p.run()
-        saying = p
+        warning.say(text)
     }
     nonisolated static func waitForSaying() {
-        sayLock.lock(); let s = saying; sayLock.unlock()
-        s?.waitUntilExit()
+        if !warning.wait() { Log.error("speech: the recovery warning exceeded two seconds; continuing recovery") }
     }
 
     /// The speech queue stuck (SpeechPlayer.onQueueStuck): told with the system's voice, which needs nothing of
     /// TurnOver's, and TurnOver started afresh, as quitting and starting it did for a tester ().
-    nonisolated func speechStuck(for seconds: TimeInterval) {
+    nonisolated func speechStuck(_ stall: SpeechPlayer.QueueStall) -> Bool {
         // First a fresh speech player, in place of the stuck one: TurnOver keeps running and speaks again within a
         // second (19 Oct 2026). Only if that can't be done (the main thread stuck too, or no audio engine) is TurnOver
         // restarted, as before.
         // Built on a thread of its own: starting an audio engine is the kind of call that was stuck, and built on main
         // it stuck main too (98 s on 20 Oct 2026), so keys and the VoiceOver hand-back stopped with it. If the build
         // hangs, its thread is abandoned and TurnOver restarts; main stays free for the watchdog's other duties.
-        if inGrace { Log.error("speech: the speech queue has not run for \(Int(seconds)) s, with the Mac asleep, locked or just awake: left to come back"); return }
-        let rebuilt = Flag()
-        guard let old = SpeechPlayer.current else { relaunch(stuckFor: seconds); return }
+        guard stall.isStillStalled, SpeechPlayer.current === stall.player else { return true }
+        // Returning false preserves the request for the next watch poll: a sleeping Mac must not consume the
+        // one recovery attempt for a queue that stays stuck after waking (#155, 28 Oct 2026).
+        guard !inGrace else { return false }
+        let seconds = stall.seconds, old = stall.player
+        let attempt = SpeechRecoveryAttempt<SpeechPlayer>()
+        // Audio teardown can block as well: rejected candidates leave both main and this recovery watcher free.
+        defer { attempt.expire(); attempt.discardOffThread() }
         let builder = Thread {
             do {
                 let fresh = try old.freshCopy()
+                guard attempt.offer(fresh) else { return }
                 DispatchQueue.main.async { MainActor.assumeIsolated {
+                    guard stall.isStillStalled, SpeechPlayer.current === old, !self.inGrace else {
+                        attempt.expire()
+                        return
+                    }
+                    guard let fresh = attempt.takeForInstallation() else { return }
                     Speech.player = fresh
-                    rebuilt.set()
                     Log.error("speech: the speech queue was stuck for \(Int(seconds)) s; a fresh speech player in its place")
                 } }
             } catch { Log.error("speech: no fresh speech player (\(error)); restarting TurnOver") }
@@ -164,16 +166,23 @@ final class Watchdog: @unchecked Sendable {   // its state is under `lock`
         builder.name = "turnover.speech.rebuild"
         builder.start()
         Thread.sleep(forTimeInterval: 3)
-        if rebuilt.isSet { return }
+        if attempt.installed { return true }
+        attempt.expire()   // a builder or queued main callback finishing after this cannot install
+        guard stall.isStillStalled, SpeechPlayer.current === old else { return true }
+        guard !inGrace else { return false }
         Log.error("speech: the speech queue has not run for \(Int(seconds)) s; restarting TurnOver")
         Self.sayOutside("TurnOver's voice stopped. Restarting TurnOver.")
-        Self.waitForSaying()   // said before the restart cuts it
+        Self.waitForSaying()
+        // The queue or reader choice can change while the warning is being said. Do not restart a recovered
+        // reader or restart during a new sleep/lock grace (#155, 28 Oct 2026).
+        guard stall.isStillStalled, SpeechPlayer.current === old else { return true }
+        guard !inGrace else { return false }
         try? FileManager.default.createDirectory(at: AppPaths.file("restarting").deletingLastPathComponent(), withIntermediateDirectories: true)
         FileManager.default.createFile(atPath: AppPaths.file("restarting").path, contents: nil)
         relaunch(stuckFor: seconds)
     }
 
-    nonisolated private func relaunch(stuckFor: TimeInterval) {
+    nonisolated private func relaunch(stuckFor: TimeInterval) -> Never {
         Log.error("watchdog: still stuck after \(Int(stuckFor)) s; relaunching TurnOver")
         // The new TurnOver is told which process it replaces, and ends it if it's still here; this one leaves with
         // _exit, which runs no exit handlers (an audio call in one hung, and the old TurnOver lived on beside the new:
@@ -195,11 +204,4 @@ final class Watchdog: @unchecked Sendable {   // its state is under `lock`
             Thread.sleep(forTimeInterval: 8)
         }
     }
-}
-
-/// A yes/no set on one thread and read on another.
-nonisolated final class Flag: @unchecked Sendable {
-    private let lock = NSLock(); private var value = false
-    func set() { lock.lock(); value = true; lock.unlock() }
-    var isSet: Bool { lock.lock(); defer { lock.unlock() }; return value }
 }

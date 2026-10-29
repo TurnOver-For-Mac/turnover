@@ -7,6 +7,15 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+/// Releasing a display is distinct from asking for it: a driver may still be inside a poll, write or unload.
+typedef NS_ENUM(NSInteger, TOBrailleReleaseState) {
+    TOBrailleReleaseStateOpen,
+    TOBrailleReleaseStatePending,
+    TOBrailleReleaseStateReleased,
+    /// The driver's unload returned NO. Ownership is retained; it is not safe to reopen or hand over the display.
+    TOBrailleReleaseStateFailed,
+};
+
 @interface TOAppleBrailleDisplay : NSObject
 /// Every display connected now that one of the drivers takes (USB and HID, including HID over Bluetooth).
 + (NSArray<TOAppleBrailleDisplay *> *)detect;
@@ -40,7 +49,14 @@ NS_ASSUME_NONNULL_BEGIN
 @property (readonly) NSDictionary<NSNumber *, NSString *> *keyCommands;
 /// The model's chords: "first.second" input identifiers (pressed) to VoiceOver command.
 @property (readonly) NSDictionary<NSString *, NSString *> *chordCommands;
-/// Called outside the braille thread: returns only after the driver is unloaded, including an in-flight call.
+/// A locked snapshot, without calling or waiting for the driver. Released means unloadDriver returned YES.
+@property (readonly) TOBrailleReleaseState releaseState;
+/// Requests release without waiting for the braille thread. New writes and polls are rejected at once. Every
+/// completion arrives on main after the one unload attempt returns, as Released or Failed; no timeout is success.
+/// Failure retains the driver for the process lifetime, without retrying or moving it to another thread.
+- (void)closeWithCompletion:(void (^)(TOBrailleReleaseState state))completion;
+/// Called outside the braille thread: waits for the release attempt, including an in-flight call. This legacy
+/// API can wait indefinitely; inspect releaseState afterwards because an unload failure is not a release.
 - (void)close;
 @end
 

@@ -43,6 +43,7 @@ static NSString *const kDrivers = @"/System/Library/ScreenReader/BrailleDrivers"
     BOOL _driverBusy, _closing;   // guarded by @synchronized(self), including unloading
     BOOL _draining;   // braille thread only: prevents nested write drains
     dispatch_group_t _closeFinished;   // entered once on close, left only after unloadDriver returns
+    TOBrailleReleaseState _releaseState;   // guarded by @synchronized(self), never asks the driver
 }
 
 /// The braille thread: a run loop of its own, as VoiceOver gives its drivers, so a Bluetooth driver's channel
@@ -303,22 +304,36 @@ static NSMutableString *btReport;
     }
 }
 
+// An unsuccessful private driver unload is not permission to release its object or try a second driver. Keep it
+// and its owning display quarantined until process exit, with no further driver calls. This deliberately leaks
+// only failed sessions: ARC teardown could otherwise run driver cleanup on main (review, 28 Oct 2026; issue 160).
++ (void)retainUnreleasedDisplay:(TOAppleBrailleDisplay *)display {
+    static NSMutableArray<TOAppleBrailleDisplay *> *unreleased;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ unreleased = [NSMutableArray array]; });
+    @synchronized (unreleased) { [unreleased addObject:display]; }
+}
+
 - (void)finishClose {
     id driver;
     @synchronized (self) {
-        if (!_closing || _driverBusy || !_driver) return;
+        if (_releaseState != TOBrailleReleaseStatePending || _driverBusy || !_driver) return;
         _driverBusy = YES; driver = _driver;
     }
     [_poll invalidate]; _poll = nil;
     char blank[256] = {0};
     [driver setMainCells:blank length:MIN(_cellCount, 256)];
-    [driver unloadDriver];
+    BOOL released = [driver unloadDriver];
+    if (!released) [TOAppleBrailleDisplay retainUnreleasedDisplay:self];
     dispatch_group_t finished;
     @synchronized (self) {
-        _driver = nil; _driverBusy = NO;
+        if (released) _driver = nil;
+        _driverBusy = NO;
+        _releaseState = released ? TOBrailleReleaseStateReleased : TOBrailleReleaseStateFailed;
         finished = _closeFinished;
     }
-    // A caller handing back to VoiceOver waits for this, not merely for the close request to reach the run loop.
+    // The attempt finished, not necessarily a successful release. Legacy callers still wait for it; new callers
+    // must gate handover/reopening on Released, never Pending or Failed (issue 160).
     dispatch_group_leave(finished);
 }
 
@@ -429,24 +444,43 @@ static NSMutableString *btReport;
     return loaded;
 }
 
-- (void)close {
+- (TOBrailleReleaseState)releaseState {
+    @synchronized (self) { return _releaseState; }
+}
+
+- (dispatch_group_t)requestClose {
     dispatch_group_t finished;
     BOOL schedule = NO;
     @synchronized (self) {
-        if (!_driver) return;
         if (!_closing) {
             _closing = YES; _pendingCells = nil; _pendingCompletion = nil;
             _closeFinished = dispatch_group_create(); dispatch_group_enter(_closeFinished);
-            schedule = YES;
+            if (_driver) { _releaseState = TOBrailleReleaseStatePending; schedule = YES; }
+            else { _releaseState = TOBrailleReleaseStateReleased; dispatch_group_leave(_closeFinished); }
         }
         finished = _closeFinished;
     }
+    if (schedule) {
+        if (!_thread) [self finishClose];
+        else [self performSelector:@selector(finishClose) onThread:_thread withObject:nil waitUntilDone:NO];
+    }
+    return finished;
+}
+
+- (void)closeWithCompletion:(void (^)(TOBrailleReleaseState))completion {
+    dispatch_group_t finished = [self requestClose];
+    // The notification owns self through completion. A queued selector or an in-flight driver call owns it while
+    // Pending; Failed gains the process-lifetime quarantine before the group is left.
+    dispatch_group_notify(finished, dispatch_get_main_queue(), ^{ completion(self.releaseState); });
+}
+
+- (void)close {
+    dispatch_group_t finished = [self requestClose];
     if (!_thread || [NSThread currentThread] == _thread) {
         // A reentrant driver callback cannot wait for its own outer call. TurnOver closes from main; on this
         // thread the outer call completes the close before returning to the run loop.
         [self finishClose]; return;
     }
-    if (schedule) [self performSelector:@selector(finishClose) onThread:_thread withObject:nil waitUntilDone:NO];
     dispatch_group_wait(finished, DISPATCH_TIME_FOREVER);
 }
 

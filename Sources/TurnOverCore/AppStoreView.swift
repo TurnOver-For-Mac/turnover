@@ -19,18 +19,37 @@ public final class AppStoreView {
         /// The app's button as it read when the item was made ("Get", "73.2% loaded"): replaced by the button as it
         /// is now whenever the item is read (14 Oct 2026: "73.2% loaded" was read long after Outlook installed).
         var offerTitle = ""
+        public init(label: String, element: AXUIElement, kind: Kind, shelf: Int,
+                    offer: AXUIElement? = nil, section: AXUIElement? = nil, check: String = "", offerTitle: String = "") {
+            self.label = label; self.element = element; self.kind = kind; self.shelf = shelf
+            self.offer = offer; self.section = section; self.check = check; self.offerTitle = offerTitle
+        }
     }
     public enum Area { case sidebar, page }
 
     public let pid: pid_t
     var area: Area = .page
-    // Read by the background loader while the main thread moves (as before Swift 6; a race the compiler now names).
-    nonisolated(unsafe) public private(set) var page: [Entry] = []
-    nonisolated(unsafe) public private(set) var shelves: [String] = []
-    nonisolated(unsafe) private var sidebar: [Entry] = []
+    public var page: [Entry] { modelOwner.model.page }
+    public var shelves: [String] { modelOwner.model.shelves }
+    private var sidebar: [Entry] { modelOwner.model.sidebar }
+    private lazy var modelOwner: AppStoreModelOwner = {
+        let owner = AppStoreModelOwner(pid: pid)
+        owner.onApply = { [weak self] old, new in self?.applied(old, new) }
+        return owner
+    }()
+    private var active = true
+    private var canUseResult: Bool {
+        active && Core.active && NSWorkspace.shared.frontmostApplication?.processIdentifier == pid
+    }
+    private func acceptsCurrentPage() -> Bool {
+        guard canUseResult else { stop(); return false }
+        return true
+    }
+    private var checkedAt = Date.distantPast
+    private var sidebarBuiltAt = Date.distantPast
     private var pageIndex = 0, sideIndex = 0
-    private var pageKey = ""
-    private var pendingBuy: (AXUIElement, Date)?
+    private var pageKey: String { modelOwner.model.key }
+    private var purchaseConfirmation = AppStorePurchaseConfirmation()
     private var lastOpen: (String, Date)?
 
     nonisolated static func isDownloading(_ title: String) -> Bool {
@@ -39,11 +58,13 @@ public final class AppStoreView {
 
     /// Delete on an app that is downloading: cancels it (the only key that does).
     public func cancelDownload() {
-        ensureCurrent()
+        purchaseConfirmation.reset()
+        guard ensureCurrent(retry: { [weak self] in self?.cancelDownload() }) else { return }
         guard area == .page, page.indices.contains(pageIndex) else { Speech.speakMessage("nothing downloading here"); return }
         confirmed(pageIndex) { e in
             guard let e, let o = Self.first(in: e.element, depth: 5, where: { ($0.string(kAXIdentifierAttribute) ?? "").contains("offerButton") }) else { return }
             let title = o.string(kAXTitleAttribute) ?? o.string(kAXDescriptionAttribute) ?? ""
+            guard self.acceptsCurrentPage() else { return }
             guard Self.isDownloading(title) else { Speech.speakMessage("nothing downloading here"); return }
             _ = AXUIElementPerformAction(o, kAXPressAction as CFString)
             Log.io("app store: download cancelled with Delete")
@@ -68,23 +89,7 @@ public final class AppStoreView {
 
     /// The page's collection (AXCollectionList) and the scroll area holding it.
     nonisolated private func pageRoot() -> (scroll: AXUIElement, list: AXUIElement)? {
-        guard let w = window else { return nil }
-        // A card over the whole window (a category such as Arcade's Family: AppStore.productPage.pageBaseCardView
-        // beside its own scroll area, and no sidebar): its page is the window's own scroll area.
-        if w.elements(kAXChildrenAttribute).contains(where: { ($0.string(kAXIdentifierAttribute) ?? "").hasSuffix("pageBaseCardView") }),
-           let s = w.elements(kAXChildrenAttribute).first(where: { $0.role == "AXScrollArea" }),
-           let list = Self.first(in: s, depth: 4, where: { $0.role == "AXList" && $0.string(kAXSubroleAttribute) == "AXCollectionList" }) { return (s, list) }
-        guard let split = w.elements(kAXChildrenAttribute).first(where: { $0.role == "AXSplitGroup" }) else { return nil }
-        // The page's container is an AXScrollArea, or (seen after a relaunch, 6 Oct 2026) an AXGroup with the
-        // scroll actions; the sidebar is a group of its own, or its parts sit loose beside the page.
-        for s in split.elements(kAXChildrenAttribute) where s.role == "AXScrollArea" || s.role == "AXGroup" {
-            if let list = Self.first(in: s, depth: 4, where: { $0.role == "AXList" && $0.string(kAXSubroleAttribute) == "AXCollectionList" }) { return (s, list) }
-        }
-        // No collection: a page of its own ("Cannot Connect … Retry", AppStore.error), read as it is.
-        for s in split.elements(kAXChildrenAttribute) where s.role == "AXScrollArea" || s.role == "AXGroup" {
-            if let area = Self.first(in: s, depth: 2, where: { $0.role == "AXScrollArea" && (($0.string(kAXIdentifierAttribute) ?? "").hasPrefix("AppStore.") || !$0.elements(kAXChildrenAttribute).isEmpty) }) { return (area, area) }
-        }
-        return nil
+        AppStorePageBuilder.root(pid: pid)
     }
 
     nonisolated static func first(in e: AXUIElement, depth: Int, where test: (AXUIElement) -> Bool) -> AXUIElement? {
@@ -94,11 +99,11 @@ public final class AppStoreView {
         return nil
     }
 
-    nonisolated private static func same(_ a: AXUIElement, _ b: AXUIElement) -> Bool { CFEqual(a, b) }
+    nonisolated static func same(_ a: AXUIElement, _ b: AXUIElement) -> Bool { CFEqual(a, b) }
 
     /// Whether an element is inside another (a shelf's heading is inside the page's collection; the page's own
     /// heading is above it).
-    static func isInside(_ e: AXUIElement, _ container: AXUIElement) -> Bool {
+    nonisolated static func isInside(_ e: AXUIElement, _ container: AXUIElement) -> Bool {
         var p = e.element(kAXParentAttribute); var n = 0
         while let x = p, n < 30 { if CFEqual(x, container) { return true }; p = x.element(kAXParentAttribute); n += 1 }
         return false
@@ -106,24 +111,12 @@ public final class AppStoreView {
 
     /// What identifies the page: the collection element itself, its identifier and its name ("Results for …").
     /// Nothing that scrolling changes: a heading in view did, and every key read the whole page again (6 Oct 2026).
-    private func currentKey() -> String {
-        guard let (_, list) = pageRoot() else { return "" }
-        return "\(CFHash(list))|\(list.string(kAXIdentifierAttribute) ?? "")|\(list.string(kAXDescriptionAttribute) ?? "")"
-    }
+    private func currentKey() -> String { pageKey }
 
     /// The card over the window, if one is showing (its description names it: "Family, APPLE ARCADE").
-    private var card: AXUIElement? { window?.elements(kAXChildrenAttribute).first { ($0.string(kAXIdentifierAttribute) ?? "").hasSuffix("pageBaseCardView") } }
+    private var hasCard: Bool { modelOwner.model.hasCard }
 
-    public var pageTitle: String {
-        guard let (scroll, list) = pageRoot() else { return "" }
-        if let c = card, let d = c.string(kAXDescriptionAttribute), !d.isEmpty { return Self.tidy(d) }
-        // The pages named by what they are (Updates' collection calls itself "Details" in one layout).
-        let named = ["AppStore.updates": "Updates", "AppStore.discover": "Discover", "AppStore.arcade": "Arcade", "AppStore.error": "Cannot connect"]
-        if let n = named[list.string(kAXIdentifierAttribute) ?? ""] { return n }
-        if let p = Self.first(in: list, depth: 4, where: { ($0.string(kAXIdentifierAttribute) ?? "").hasSuffix("shelfItemSubComponent.title") }), let v = p.string(kAXValueAttribute) { return v }
-        if let h = Self.first(in: scroll, depth: 4, where: { $0.role == "AXHeading" && !Self.isInside($0, list) }), let d = h.string(kAXDescriptionAttribute) ?? h.string(kAXValueAttribute) { return d }
-        return list.string(kAXDescriptionAttribute) ?? ""
-    }
+    public var pageTitle: String { modelOwner.model.title }
 
     /// The page, shelf by shelf, a little at a time: the heading's area above the collection (Updates: "Update
     /// All"), then the shelves reached by AXNextContentSibling, until there are enough to start with. The rest is read
@@ -188,6 +181,7 @@ public final class AppStoreView {
     }
     /// A row the host resolved: clicked at the point the system's hit test confirmed, the new page waited for.
     private func openResolvedRow(_ name: String, at p: CGPoint) {
+        guard acceptsCurrentPage() else { return }
         let before = pageKey
         let home = CGEvent(source: nil)?.location
         Mouse.click(at: p, button: .left, count: 1)
@@ -196,108 +190,48 @@ public final class AppStoreView {
         waitForNewPage(from: before)
     }
 
-    public func buildPage() {
-        let start = Date()
-        page = []; shelves = []
-        guard let (scroll, list) = pageRoot() else { pageKey = ""; resultsEnd(); return }
-        if flatOn, list.string(kAXIdentifierAttribute) == "AppStore.search.result" {
-            pageKey = currentKey(); builtTitle = pageTitle
-            if let c = catalog, c.failed == nil { catalogDrives = true; resultsEnd(); return }   // the catalog answers this page
-            resultsBegin()
-            return
-        }
-        catalogDrives = false
-        resultsEnd()
-        seen = []
-        // Above the collection: the page's heading and its buttons.
-        for c in scroll.elements(kAXChildrenAttribute) where c.role == "AXGroup" && !CFEqual(scroll, list) {
-            for b in c.elements(kAXChildrenAttribute) where b.role == "AXButton" {
-                if let t = b.string(kAXTitleAttribute) ?? b.string(kAXDescriptionAttribute) { page.append(Entry(label: t, element: b, kind: .button, shelf: 0)) }
+    public func buildPage(then: @escaping @MainActor @Sendable () -> Void = {}) {
+        modelOwner.read(.page(skipFlatResults: flatOn)) { [weak self] _ in
+            guard let self, canUseResult else { return }
+            checkedAt = Date()
+            if flatOn, modelOwner.model.rootIdentifier == "AppStore.search.result" {
+                if let c = catalog, c.failed == nil { catalogDrives = true; resultsEnd() }
+                else { resultsBegin() }
+            } else {
+                catalogDrives = false; resultsEnd()
             }
+            then()
         }
-        shelves.append("")
-        lastSection = nil; nextSection = nil; tails = [:]
-        // The collection lists only the shelves on screen: from the one in view, back to the page's first.
-        if CFEqual(scroll, list) {
-            // A page with no shelves: its texts and buttons in order.
-            shelves.append("")
-            walk(list, shelf: 1, section: list, known: known, mark: { self.seen.append($0) })
-            for k in page.indices where page[k].check.isEmpty { page[k].check = Self.identity(of: page[k].element) }
-        } else if let visible = Self.first(in: list, depth: 2, where: { $0.string(kAXSubroleAttribute) == "AXSectionList" }) {
-            var top = visible; var hops = 0
-            while let p = top.element("AXPreviousContentSibling"), hops < 200 { top = p; hops += 1 }
-            addSections(from: top, limit: Self.batch)
-        }
-        pageKey = currentKey()
-        builtTitle = pageTitle
-        Log.io("app store: page \"\(Log.words(pageTitle))\", \(shelves.filter { !$0.isEmpty }.count) shelves, \(page.count) items in \(Int(Date().timeIntervalSince(start) * 1000)) ms")
     }
 
-    nonisolated(unsafe) private var seen: [AXUIElement] = []
-    nonisolated(unsafe) private var lastSection: AXUIElement?
-    /// The next shelf not read yet (nil: none ready, or the end).
-    nonisolated(unsafe) private var nextSection: AXUIElement?
-    /// Carousels not read to the end: the shelf's last item read so far.
-    nonisolated(unsafe) private var tails: [Int: AXUIElement] = [:]
+    private func applied(_ old: AppStoreModel, _ new: AppStoreModel) {
+        guard canUseResult else { stop(); return }
+        if old.key != new.key { purchaseConfirmation.reset() }
+        let selection = new.retainingPageSelection(from: old, index: pageIndex)
+        pageIndex = selection.index
+        if !selection.retained { purchaseConfirmation.reset() }
+        sideIndex = min(sideIndex, max(0, new.sidebar.count - 1))
+    }
+
+    public func stop() {
+        active = false; modelOwner.stop(); purchaseConfirmation.reset()
+        resultsEnd(); catalog?.cancel()
+    }
+
+    public func beginSession() { active = true; invalidatePage() }
+
+    private func invalidatePage() {
+        modelOwner.invalidate(); purchaseConfirmation.reset()
+        checkedAt = .distantPast; sidebarBuiltAt = .distantPast
+    }
+
+    private var loading: Bool { modelOwner.isLoading }
+    private var lastSection: AXUIElement? { modelOwner.model.lastSection }
+    private var nextSection: AXUIElement? { modelOwner.model.nextSection }
+    private var tails: [Int: AXUIElement] { modelOwner.model.tails }
+    private func queue(_ command: @escaping @MainActor () -> Void) { modelOwner.enqueue(command) }
+
     nonisolated static let batch = 40, perCarousel = 12
-    nonisolated private func known(_ e: AXUIElement) -> Bool { seen.contains { Self.same($0, e) } }
-
-    /// Shelves from this one on, as far as the App Store has them ready.
-    nonisolated private func addSections(from start: AXUIElement, limit: Int) {
-        var section: AXUIElement? = start
-        var count = 0
-        let stopAt = page.count + limit
-        nextSection = nil
-        while let sec = section, count < 80 {
-            if page.count >= stopAt { nextSection = sec; return }
-            count += 1
-            let name = Self.shelfName(sec.string(kAXDescriptionAttribute) ?? "")
-            let shelf = shelves.count
-            shelves.append(name)
-            let before = page.count
-            walk(sec, shelf: shelf, section: sec, known: known, mark: { self.seen.append($0) })
-            // A shelf far from the screen is an empty shell until it comes near: bring it into view, read again.
-            var tries = 0
-            while page.count == before, tries < 2, sec.elements(kAXChildrenAttribute).count <= 1 || (sec.string(kAXDescriptionAttribute) ?? "").isEmpty {
-                _ = AXUIElementPerformAction(sec, "AXScrollToVisible" as CFString)
-                usleep(250_000); tries += 1
-                shelves[shelf] = Self.shelfName(sec.string(kAXDescriptionAttribute) ?? "")
-                walk(sec, shelf: shelf, section: sec, known: known, mark: { self.seen.append($0) })
-            }
-            if page.count == before { shelves[shelf] = "" }
-            // A shelf with no heading named by what it holds: the banners at the top, a row of categories.
-            if shelves[shelf].isEmpty, page.count > before {
-                let ids = page[before..<page.count].map { $0.element.string(kAXIdentifierAttribute) ?? "" }
-                if ids.contains(where: { $0.contains("RibbonBar") }) { shelves[shelf] = "Categories" }
-                else if ids.contains(where: { $0.contains("Hero") || $0.contains("LargeCard") }) { shelves[shelf] = "Featured" }
-            }
-            // The shelf's own heading is said as its name; not again as an item.
-            if !shelves[shelf].isEmpty { page.removeSubrange(before..<page.count, where: { $0.kind == .heading && $0.label == shelves[shelf] }) }
-            for k in before..<page.count where page[k].check.isEmpty { page[k].check = Self.identity(of: page[k].element) }
-            lastSection = sec
-            section = sec.element("AXNextContentSibling")
-        }
-    }
-
-    /// The end of what was read: the App Store makes the shelves further down only as they come into view. Bring
-    /// the last one into view and read on. True if there was more.
-    nonisolated private func loadMore() -> Bool {
-        let before = page.count
-        if let next = nextSection { addSections(from: next, limit: Self.batch); if page.count > before { return true } }
-        guard let last = lastSection else { return false }
-        // Into view: the shelf, then its last item, so the shelves after it are made.
-        let targets = [last] + Array(last.elements(kAXChildrenAttribute).suffix(1))
-        for t in targets {
-            _ = AXUIElementPerformAction(t, "AXScrollToVisible" as CFString)
-            for _ in 0..<4 {
-                usleep(200_000)
-                if let next = last.element("AXNextContentSibling") { addSections(from: next, limit: Self.batch); break }
-            }
-            if page.count > before { break }
-        }
-        Log.io("app store: read on past \"\(Log.words(Self.shelfName(last.string(kAXDescriptionAttribute) ?? "")))\": \(page.count - before) more")
-        return page.count > before
-    }
 
     /// The words an element shows now: its own title or description, or its first titled part that is not the
     /// offer button.
@@ -319,47 +253,45 @@ public final class AppStoreView {
     /// The entry at the place, made sure of: its element still shows what was read. If the row was reused for
     /// another app, the page is read again and the same item found; nil if it cannot be. The looking (scrolling
     /// and waiting, up to two seconds) happens off the main thread, and `then` runs on it (8 Oct 2026).
-    private func confirmed(_ i: Int, then: @escaping (Entry?) -> Void) {
-        guard page.indices.contains(i) else { Log.io("app store: nothing at \(i + 1) of \(page.count) to act on"); then(nil); return }
-        let e = page[i]
-        @Sendable nonisolated func name(_ s: String) -> String { (s.components(separatedBy: ",").first ?? s).trimmingCharacters(in: .whitespaces) }
-        let wanted = name(e.check.isEmpty ? e.label : e.check)
-        // The element still shows it: on screen and not reused.
-        if !e.check.isEmpty, name(Self.identity(of: e.element)) == wanted, onScreen(e.element),
-           e.kind != .app && e.kind != .card || visibleRows().contains(where: { CFEqual($0, e.element) }) { then(e); return }
-        guard !loading else { queued.append { [weak self] in self?.confirmed(i, then: then) }; return }
-        loading = true
-        Poll.background({ [weak self] () -> AXUIElement? in
-            guard let self else { return nil }
-            // An app's row: rows are reused as the list scrolls (the element remembered may now be another app, or
-            // empty), so the row is found again on screen by its name, moving the page there with its scroll bar.
-            if e.kind == .app || e.kind == .card {
-                guard let row = bringIntoView(i, name: wanted) else { return nil }
-                // The Store's hit-testing lags a new results page: under the row's icon it still named a row of the
-                // search before ("Pages: Create Documents" under "WaterMinder", 27 Oct 2026), so the click was refused.
-                // Up to a second, a quarter at a time, for the system to agree about what is under the point.
-                for attempt in 0..<4 {
-                    if hitAgrees(row, wanted: wanted) { if attempt > 0 { Log.io("app store: the hit test agreed after \(attempt) waits") }; return row }
-                    usleep(250_000)
-                }
-                Log.io("app store: the hit test still names something else under \"\(Log.words(wanted))\"; handing the row over anyway")
-                return row
+    private func confirmed(_ i: Int, then: @escaping @MainActor @Sendable (Entry?) -> Void) {
+        guard page.indices.contains(i) else { purchaseConfirmation.reset(); then(nil); return }
+        let captured = page[i], generation = modelOwner.session
+        if loading {
+            queue { [weak self] in
+                guard let self, modelOwner.session == generation else { return }
+                confirm(captured, then: then)
             }
-            // A heading's button (See All): into view, and checked.
-            reveal(e)
-            usleep(250_000)
-            return name(Self.identity(of: e.element)) == wanted ? e.element : nil
-        }) { [weak self] row in
-            guard let self else { return }
-            loading = false
-            guard let row, page.indices.contains(i) else {
-                Log.io("app store: could not find \"\(Log.words(wanted))\" on screen (kind \(e.kind), element now \"\(Log.words(name(Self.identity(of: e.element))))\", on screen \(self.onScreen(e.element)))")
-                Speech.speakMessage("could not reach \(wanted); try again")
-                then(nil); return
-            }
-            page[i].element = row
-            then(page[i])
+        } else { confirm(captured, then: then) }
+    }
+
+    private func confirm(_ captured: Entry, then: @escaping @MainActor @Sendable (Entry?) -> Void) {
+        let wanted = Self.itemName(captured.check.isEmpty ? captured.label : captured.check)
+        let matches = AppStoreEntryIdentity.indices(for: captured, in: page)
+        guard !wanted.isEmpty, matches.count == 1, let i = matches.first else {
+            purchaseConfirmation.reset()
+            Speech.speakMessage("could not identify this item unambiguously"); then(nil); return
         }
+        modelOwner.read(.resolve(captured, index: i)) { [weak self] result in
+            guard let self, canUseResult else { return }
+            guard let resolved = result?.resolved else {
+                purchaseConfirmation.reset()
+                if result?.needsRefresh == true {
+                    invalidatePage()
+                    Speech.speakMessage("This item changed. Reading the page again.")
+                    buildPage { [weak self] in
+                        guard let self, canUseResult, !page.isEmpty else { return }
+                        speak(pageIndex, crossing: true)
+                    }
+                    then(nil); return
+                }
+                Speech.speakMessage("could not reach \(wanted); try again"); then(nil); return
+            }
+            then(resolved)
+        }
+    }
+
+    nonisolated private static func itemName(_ value: String) -> String {
+        (value.components(separatedBy: ",").first ?? value).trimmingCharacters(in: .whitespaces)
     }
 
     /// The page's frame on screen: its scroll area's, or, where that is a group with no size of its own (the search
@@ -370,12 +302,6 @@ public final class AppStoreView {
         if let f = TurnOverObject.frame(scroll), f.width > 10, f.height > 10 { return f }
         if let f = TurnOverObject.frame(list), f.width > 10, f.height > 10 { return f }
         return window.flatMap { TurnOverObject.frame($0) }
-    }
-
-    /// Inside the page's area on screen (an item read ahead of the screen has a frame far above or below it).
-    nonisolated private func onScreen(_ x: AXUIElement) -> Bool {
-        guard let f = TurnOverObject.frame(x), f.height > 4, let area = pageFrame() else { return false }
-        return area.contains(CGPoint(x: f.midX, y: f.midY))
     }
 
     /// The page's area a click can reach: its scroll area less the toolbar, which floats over the top of it (Return
@@ -389,76 +315,9 @@ public final class AppStoreView {
         return area
     }
 
-    /// The rows of the page on screen now (the collection lists only those).
-    nonisolated private func visibleRows() -> [AXUIElement] {
-        guard let (_, list) = pageRoot() else { return [] }
-        var out: [AXUIElement] = []
-        func go(_ x: AXUIElement, _ d: Int) {
-            guard d < 5 else { return }
-            for c in x.elements(kAXChildrenAttribute) { if Self.isItem(c) { out.append(c) } else { go(c, d + 1) } }
-        }
-        go(list, 0)
-        return out
-    }
-
-    /// The live row of item i on screen, scrolling there if need be: a binary search on the scroll bar, each step
-    /// judged by which items are on screen.
-    nonisolated private func bringIntoView(_ i: Int, name wanted: String) -> AXUIElement? {
-        func name(_ s: String) -> String { (s.components(separatedBy: ",").first ?? s).trimmingCharacters(in: .whitespaces) }
-        func lookOnScreen() -> AXUIElement? { visibleRows().first { name(Self.identity(of: $0)) == wanted && onScreen($0) } }
-        if let r = lookOnScreen() { return r }
-        let rows = visibleRows()
-        Log.io("app store: \(rows.count) rows on screen; names \(rows.prefix(6).map { "\"\(Log.words(name(Self.identity(of: $0))))\"\(onScreen($0) ? "" : " (off)")" }.joined(separator: ", ")); root \(pageRoot().map { "\($0.scroll.role) > \($0.list.role)" } ?? "none")")
-        guard let (scroll, _) = pageRoot() else { return nil }
-        guard let bar = scroll.element(kAXVerticalScrollBarAttribute) else {
-            // No scroll bar to drive (the search results' group): the row itself, or its list, asked to scroll into
-            // view; then a look at what is on screen.
-            if let row = rows.first(where: { name(Self.identity(of: $0)) == wanted }) ?? page[i].element as AXUIElement? {
-                _ = AXUIElementPerformAction(row, "AXScrollToVisible" as CFString)
-                usleep(200_000)
-                if let r = lookOnScreen() { Log.io("app store: \"\(Log.words(wanted))\" scrolled into view"); return r }
-            }
-            return nil
-        }
-        var lo = 0.0, hi = 1.0
-        var at = Double(i) / Double(max(1, page.count - 1))
-        for step in 0..<10 {
-            _ = bar.set(kAXValueAttribute, NSNumber(value: min(1, max(0, at))))
-            usleep(180_000)
-            if let r = lookOnScreen() { Log.io("app store: \"\(Log.words(wanted))\" brought on screen in \(step + 1) steps"); return r }
-            // Which items are on screen: above or below the one wanted?
-            let shown = visibleRows().compactMap { row -> Int? in let n = name(Self.identity(of: row)); return page.firstIndex { name($0.label) == n } }
-            guard let lowest = shown.min(), let highest = shown.max() else { at = (lo + hi) / 2; continue }
-            if i < lowest { hi = at } else if i > highest { lo = at } else { break }
-            at = (lo + hi) / 2
-        }
-        return lookOnScreen()
-    }
-
     nonisolated static func isItem(_ e: AXUIElement) -> Bool {
         let id = e.string(kAXIdentifierAttribute) ?? ""
         return id.contains("shelfItem") && !id.contains("SubComponent")
-    }
-
-    /// The rest of a carousel, read when the arrows reach the end of what was read of it; put in place after it.
-    private func extendShelf(_ shelf: Int) -> Bool {
-        guard let tail = tails[shelf], let lastIndex = page.lastIndex(where: { $0.shelf == shelf }) else { return false }
-        tails[shelf] = nil
-        let section = page[lastIndex].section ?? tail
-        var added: [Entry] = []
-        var item = tail.element("AXNextContentSibling")
-        var lastRead = tail
-        var n = 0
-        while let it = item, n < 30, Self.isItem(it), !known(it) {
-            seen.append(it)
-            added += Self.entries(for: it, shelf: shelf, section: section)
-            lastRead = it
-            item = it.element("AXNextContentSibling"); n += 1
-        }
-        if let more = item, Self.isItem(more), !known(more) { tails[shelf] = lastRead }
-        for k in added.indices { added[k].check = Self.identity(of: added[k].element) }
-        page.insert(contentsOf: added, at: lastIndex + 1)
-        return !added.isEmpty
     }
 
     /// "Apps updated for macOS 27, Section 4" → "Apps updated for macOS 27"; "Section 3" → "".
@@ -466,51 +325,6 @@ public final class AppStoreView {
         var s = d
         if let r = s.range(of: #"(,\s*)?Section \d+$"#, options: .regularExpression) { s.removeSubrange(r) }
         return s.trimmingCharacters(in: .whitespaces)
-    }
-
-    nonisolated private func walk(_ e: AXUIElement, shelf: Int, section: AXUIElement, known: (AXUIElement) -> Bool, mark: (AXUIElement) -> Void, depth: Int = 0) {
-        guard depth < 8 else { return }
-        for c in e.elements(kAXChildrenAttribute) {
-            if known(c) { continue }
-            let role = c.role, id = c.string(kAXIdentifierAttribute) ?? ""
-            if id.contains("shelfItem"), !id.contains("SubComponent") {
-                // The item and, from it, the start of its carousel; the rest when the arrows get there. A list
-                // scrolled down shows only its middle: back to its first item first.
-                var head = c; var back = 0
-                while let p = head.element("AXPreviousContentSibling"), Self.isItem(p), !known(p), back < 400 { head = p; back += 1 }
-                var item: AXUIElement? = head
-                var n = 0
-                var lastRead: AXUIElement?
-                while let it = item, n < Self.perCarousel, !known(it), Self.isItem(it) {
-                    mark(it)
-                    page += Self.entries(for: it, shelf: shelf, section: section)
-                    lastRead = it
-                    item = it.element("AXNextContentSibling"); n += 1
-                }
-                if let lastRead, let more = item, Self.isItem(more), !known(more) { tails[shelf] = lastRead }
-                continue
-            }
-            if id.hasPrefix("chevron.") { continue }
-            switch role {
-            case "AXHeading":
-                // The shelf's own heading is its name, said on arriving; a heading inside a shelf is read as one.
-                let t = c.string(kAXDescriptionAttribute) ?? c.string(kAXValueAttribute) ?? ""
-                if !t.isEmpty, t != shelves[shelf] { page.append(Entry(label: t, element: c, kind: .heading, shelf: shelf, section: section)) }
-            case "AXButton":
-                let t = c.string(kAXTitleAttribute) ?? c.string(kAXDescriptionAttribute) ?? ""
-                if !t.isEmpty, !["Backward", "Forward", "Play", "Pause", "Unmute", "Mute"].contains(t) {
-                    let label = t == "See All" && !shelves[shelf].isEmpty ? "See all, \(shelves[shelf])" : t
-                    page.append(Entry(label: label, element: c, kind: .button, shelf: shelf, section: section))
-                }
-            case "AXStaticText":
-                let t = (c.string(kAXValueAttribute) ?? c.string(kAXDescriptionAttribute) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-                if !t.isEmpty, page.last?.label != t, t != shelves[shelf] { page.append(Entry(label: Self.tidy(t), element: c, kind: .text, shelf: shelf, section: section)) }
-            case "AXImage":
-                continue
-            default:
-                walk(c, shelf: shelf, section: section, known: known, mark: mark, depth: depth + 1)
-            }
-        }
     }
 
     /// A shelf item: one entry, or, for a block of text with links under it (the description, with Website and
@@ -645,40 +459,39 @@ public final class AppStoreView {
         }.joined(separator: ", ")
     }
 
-    public func buildSidebar() {
-        _ = 0
-        sidebar = []
-        guard let w = window, let split = w.elements(kAXChildrenAttribute).first(where: { $0.role == "AXSplitGroup" }) else { return }
-        let page = pageRoot()?.scroll
-        func visit(_ c: AXUIElement, _ depth: Int) {
-            if let page, Self.same(c, page) { return }
-            if c.string(kAXSubroleAttribute) == "AXSearchField" {
-                let v = (c.attr(kAXValueAttribute) as? String) ?? ""
-                sidebar.append(Entry(label: v.isEmpty ? "Search" : "Search, \(v)", element: c, kind: .search, shelf: 0))
-            } else if c.role == "AXOutline" {
-                for row in c.elements(kAXChildrenAttribute) where row.role == "AXRow" {
-                    guard let cell = row.elements(kAXChildrenAttribute).first, let d = cell.string(kAXDescriptionAttribute) else { continue }
-                    let selected = (row.attr(kAXSelectedAttribute) as? Bool) == true
-                    sidebar.append(Entry(label: d + (selected ? ", selected" : ""), element: cell, kind: .tab, shelf: 0))
-                }
-            } else if (c.string(kAXIdentifierAttribute) ?? "") == "AppStore.accountButton", let t = c.string(kAXTitleAttribute) {
-                sidebar.append(Entry(label: "Account, \(t)", element: c, kind: .account, shelf: 0))
-            } else if depth < 2, c.role == "AXGroup" {
-                for k in c.elements(kAXChildrenAttribute) { visit(k, depth + 1) }
-            }
+    public func buildSidebar(then: @escaping @MainActor @Sendable () -> Void = {}) {
+        modelOwner.read(.sidebar) { [weak self] _ in
+            guard let self, canUseResult else { return }
+            sidebarBuiltAt = Date(); then()
         }
-        for c in split.elements(kAXChildrenAttribute) { visit(c, 0) }
     }
 
-    private func ensureCurrent() {
-        guard !loading || flatDrives else { return }   // the lists are being written off the main thread
-        if card != nil { area = .page }   // a card over the window: no sidebar to be in
-        // Under the flat view the list element comes and goes as the Store redraws; the view's own waves keep up, so
-        // a changed key with the same title is no reason to start over (Return emptied the page and did nothing,
-        // 27 Oct 2026).
-        let samePage = flatDrives && pageTitle == builtTitle
-        if area == .page, page.isEmpty || (currentKey() != pageKey && !samePage) { buildPage(); pageIndex = min(pageIndex, max(0, page.count - 1)) }
-        if area == .sidebar { buildSidebar(); sideIndex = min(sideIndex, max(0, sidebar.count - 1)) }
+    private func ensureCurrent(retry: @escaping @MainActor @Sendable () -> Void) -> Bool {
+        guard canUseResult else { stop(); return false }
+        guard !loading || flatDrives else { queue(retry); return false }
+        if hasCard { area = .page }
+        if area == .sidebar, sidebar.isEmpty || Date().timeIntervalSince(sidebarBuiltAt) > 1 {
+            buildSidebar(then: retry); return false
+        }
+        if area == .page, !flatDrives, page.isEmpty {
+            buildPage { [weak self] in
+                guard let self else { return }
+                if !page.isEmpty || flatDrives { retry() }
+                else { Speech.speakMessage("still reading the page; try again in a moment") }
+            }
+            return false
+        }
+        if Date().timeIntervalSince(checkedAt) > 0.7, !flatDrives {
+            modelOwner.read(.metadata) { [weak self] result in
+                guard let self, canUseResult else { return }
+                checkedAt = Date()
+                if let metadata = result?.metadata, !metadata.key.isEmpty, metadata.key != pageKey {
+                    invalidatePage(); buildPage(then: retry)
+                } else { retry() }
+            }
+            return false
+        }
+        return true
     }
 
     // MARK: Speaking
@@ -702,8 +515,10 @@ public final class AppStoreView {
             let n = page.filter { $0.shelf == e.shelf }.count
             s = "\(shelves[e.shelf]), \(n) item\(n == 1 ? "" : "s"). " + s
         }
+        let hint = hint(for: e)
+        guard acceptsCurrentPage() else { return }
         Speech.speakItem(s)
-        Hints.schedule(hint(for: e))
+        Hints.schedule(hint)
     }
 
     /// What can be done with an item, for the hint.
@@ -728,27 +543,30 @@ public final class AppStoreView {
         }
     }
 
-    nonisolated private func reveal(_ e: Entry) {
-        if let s = e.section { _ = AXUIElementPerformAction(s, "AXScrollToVisible" as CFString) }
-        _ = AXUIElementPerformAction(e.element, "AXScrollToVisible" as CFString)
-    }
-
-    public func arrive(tries: Int = 8) {
+    public func arrive(tries: Int = 8, moves initialMoves: Int? = nil, keys initialKeys: Int? = nil) {
+        let startMoves = initialMoves ?? moves
+        let startKeys = initialKeys ?? ScriptHandler.keysArrivedCount
+        guard moves == startMoves, ScriptHandler.keysArrivedCount == startKeys else { return }
+        if tries == 8 { active = true; invalidatePage() }
         area = .page
-        buildPage()
-        // At launch the page isn't there yet (only "App Store" was said, 7 Oct 2026): wait for it.
-        if page.isEmpty, tries > 0 {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { [weak self] in
-                guard let self, NSWorkspace.shared.frontmostApplication?.processIdentifier == self.pid else { return }
-                self.arrive(tries: tries - 1)
+        let generation = modelOwner.session
+        buildPage { [weak self] in
+            guard let self, canUseResult, modelOwner.session == generation,
+                  moves == startMoves, ScriptHandler.keysArrivedCount == startKeys else { return }
+            if page.isEmpty, !flatDrives, tries > 0 {
+                onMain(after: 0.7) { [weak self] in
+                    guard let self, canUseResult, modelOwner.session == generation,
+                          moves == startMoves, ScriptHandler.keysArrivedCount == startKeys,
+                          NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { return }
+                    arrive(tries: tries - 1, moves: startMoves, keys: startKeys)
+                }
+                return
             }
-            return
+            pageIndex = 0
+            let title = pageTitle, n = shelves.filter { !$0.isEmpty }.count
+            Speech.speakMessage("\(title.isEmpty ? "App Store" : title)\(n > 0 ? ", \(n) shelves" : "")")
+            if !page.isEmpty { speak(0, crossing: true) }
         }
-        pageIndex = 0
-        let title = pageTitle
-        let n = shelves.filter { !$0.isEmpty }.count
-        Speech.speakMessage("\(title.isEmpty ? "App Store" : title)\(n > 0 ? ", \(n) shelves" : "")")
-        if !page.isEmpty { speak(0, crossing: true) }
     }
 
     // MARK: Moving
@@ -756,93 +574,76 @@ public final class AppStoreView {
     public func move(_ d: Int) {
         if let c = catalog, catalogDrives, area == .page { c.move(d); return }
         if let r = results, area == .page { r.move(d); return }
-        guard !loading else { queued.append { [weak self] in self?.move(d) }; return }
+        guard ensureCurrent(retry: { [weak self] in self?.move(d) }) else { return }
         moves += 1
-        ensureCurrent()
         if area == .sidebar {
             let j = sideIndex + d
             guard sidebar.indices.contains(j) else { Tones.edge(); speak(sideIndex, crossing: false); return }
-            sideIndex = j; speak(j, crossing: false); return
+            purchaseConfirmation.reset(); sideIndex = j; speak(j, crossing: false); return
         }
         if d > 0, page.indices.contains(pageIndex), tails[page[pageIndex].shelf] != nil,
            pageIndex + 1 >= page.count || page[pageIndex + 1].shelf != page[pageIndex].shelf {
-            _ = extendShelf(page[pageIndex].shelf)
-        }
-        let j = pageIndex + d
-        if j >= page.count, area == .page, lastSection != nil || nextSection != nil {
-            // Past what has been read: the App Store makes the next shelves as they come into view, so the move
-            // waits for them off the main thread, then goes on (8 Oct 2026).
-            loading = true
-            Poll.background({ [weak self] in self?.loadMore() ?? false }) { [weak self] more in
+            modelOwner.read(.carousel(page[pageIndex].shelf)) { [weak self] result in
                 guard let self else { return }
-                loading = false
-                if more { move(d) } else { Tones.edge(); speak(pageIndex, crossing: false) }
+                if result != nil { move(d) } else { Tones.edge() }
             }
             return
         }
-        guard page.indices.contains(j) else { Tones.edge(); speak(pageIndex, crossing: false); return }
+        let j = pageIndex + d
+        if j >= page.count, lastSection != nil || nextSection != nil {
+            modelOwner.read(.more) { [weak self] result in
+                guard let self else { return }
+                if result?.more == true { move(d) } else { Tones.edge(); speak(pageIndex, crossing: false) }
+            }
+            return
+        }
+        guard page.indices.contains(j), page.indices.contains(pageIndex) else { Tones.edge(); speak(pageIndex, crossing: false); return }
         let crossing = page[j].shelf != page[pageIndex].shelf
-        pageIndex = j
-        speak(j, crossing: crossing)
+        purchaseConfirmation.reset(); pageIndex = j; speak(j, crossing: crossing)
     }
 
     public func jumpShelf(_ d: Int) {
-        guard !loading else { queued.append { [weak self] in self?.jumpShelf(d) }; return }
+        guard ensureCurrent(retry: { [weak self] in self?.jumpShelf(d) }) else { return }
         moves += 1
-        ensureCurrent()
         guard area == .page, page.indices.contains(pageIndex) else { move(d); return }
         let cur = page[pageIndex].shelf
         if d > 0, !page.contains(where: { $0.shelf > cur }), lastSection != nil || nextSection != nil {
-            loading = true
-            Poll.background({ [weak self] in self?.loadMore() ?? false }) { [weak self] more in
+            modelOwner.read(.more) { [weak self] result in
                 guard let self else { return }
-                loading = false
-                if more { jumpShelf(d) } else { Tones.edge() }
+                if result?.more == true { jumpShelf(d) } else { Tones.edge() }
             }
             return
         }
         let target = d > 0 ? page.firstIndex { $0.shelf > cur } : page.lastIndex { $0.shelf < cur }.map { last in page.firstIndex { $0.shelf == page[last].shelf } ?? last }
         guard let t = target else { Tones.edge(); return }
-        pageIndex = t
-        speak(t, crossing: true)
+        purchaseConfirmation.reset(); pageIndex = t; speak(t, crossing: true)
     }
 
     public func toEnd(_ last: Bool) {
         if let c = catalog, catalogDrives, area == .page { c.toEnd(last); return }
         if let r = results, area == .page { r.toEnd(last); return }
-        moves += 1
-        ensureCurrent()
+        guard ensureCurrent(retry: { [weak self] in self?.toEnd(last) }) else { return }
+        moves += 1; purchaseConfirmation.reset()
         if area == .sidebar { sideIndex = last ? sidebar.count - 1 : 0; speak(sideIndex, crossing: false); return }
         guard !page.isEmpty else { return }
-        guard !loading else { queued.append { [weak self] in self?.toEnd(last) }; return }
         if last {
-            // The App Store makes its shelves only as they come into view: reading to the end scrolls and waits,
-            // shelf by shelf, off the main thread, with "please wait" if it takes long (8 Oct 2026).
-            loading = true
-            Poll.background({ [weak self] in var n = 0; while let self, n < 30, self.loadMore() { n += 1 } }) { [weak self] _ in
+            modelOwner.read(.end) { [weak self] _ in
                 guard let self else { return }
-                loading = false
-                pageIndex = page.count - 1
-                speak(pageIndex, crossing: true)
+                pageIndex = page.count - 1; speak(pageIndex, crossing: true)
             }
-            return
-        }
-        pageIndex = 0
-        speak(pageIndex, crossing: true)
+        } else { pageIndex = 0; speak(pageIndex, crossing: true) }
     }
     /// Reading on a background queue: keys pressed meanwhile are kept and run when it is done (as MediaView does;
     /// they were dropped with "please wait", code review, 8 Oct 2026).
-    private var loading = false { didSet { if !loading, !queued.isEmpty { let q = queued; queued = []; q.forEach { $0() } } } }
-    private var queued: [() -> Void] = []
+
 
     public func letter(_ ch: Character) {
         if let c = catalog, catalogDrives, area == .page { c.letter(ch); return }
         if let r = results, area == .page { r.letter(ch); return }
         // While shelves are being read off the main thread, their lists are being written: wait, as the arrows do
         // (a code review, 14 Oct 2026).
-        guard !loading else { queued.append { [weak self] in self?.letter(ch) }; return }
-        moves += 1
-        ensureCurrent()
+        guard ensureCurrent(retry: { [weak self] in self?.letter(ch) }) else { return }
+        moves += 1; purchaseConfirmation.reset()
         let list = area == .page ? page : sidebar
         let cur = area == .page ? pageIndex : sideIndex
         guard !list.isEmpty else { return }
@@ -859,16 +660,22 @@ public final class AppStoreView {
     public func switchArea() {
         // While shelves are being read off the main thread, their lists are being written: wait, as the arrows do
         // (a code review, 14 Oct 2026).
-        guard !loading else { queued.append { [weak self] in self?.switchArea() }; return }
-        moves += 1
+        guard ensureCurrent(retry: { [weak self] in self?.switchArea() }) else { return }
+        moves += 1; purchaseConfirmation.reset()
         // A card over the window has no sidebar: say how out, and stay.
-        if card != nil {
-            if area == .sidebar { area = .page; ensureCurrent(); speak(pageIndex, crossing: true) }
+        if hasCard {
+            if area == .sidebar { area = .page; speak(pageIndex, crossing: true) }
             else { Speech.speakMessage("no sidebar here; Escape goes back") }
             return
         }
         area = area == .page ? .sidebar : .page
-        ensureCurrent()
+        if area == .sidebar, sidebar.isEmpty || Date().timeIntervalSince(sidebarBuiltAt) > 1 {
+            buildSidebar { [weak self] in self?.announceArea() }; return
+        }
+        announceArea()
+    }
+
+    private func announceArea() {
         if area == .sidebar {
             // Search first, where it is on screen (it could not be found under Discover, 6 Oct 2026); the tab in
             // use is said with it.
@@ -884,15 +691,15 @@ public final class AppStoreView {
 
     // MARK: Acting
 
-    public func open() {
+    public func open(press: AppStoreActionPress = .synthetic) {
         // While shelves are being read off the main thread, their lists are being written: wait, as the arrows do
         // (a code review, 14 Oct 2026). Not under the flat view, which has its own waits: a stale `loading` left
         // Return queued for good (27 Oct 2026).
-        guard !loading || flatDrives else { queued.append { [weak self] in self?.open() }; return }
-        ensureCurrent()
+        guard ensureCurrent(retry: { [weak self] in self?.open(press: press) }) else { return }
         if let c = catalog, catalogDrives, area == .page { c.openCurrent(); return }
         if let r = results, area == .page { r.open(); return }
         if area == .sidebar {
+            purchaseConfirmation.reset()
             guard sidebar.indices.contains(sideIndex) else { return }
             let e = sidebar[sideIndex]
             switch e.kind {
@@ -904,11 +711,14 @@ public final class AppStoreView {
                 let before = currentKey()
                 var r = AXError.failure
                 if let row = e.element.element(kAXParentAttribute), let outline = row.element(kAXParentAttribute) {
+                    guard acceptsCurrentPage() else { return }
                     r = outline.set(kAXSelectedRowsAttribute, [row] as CFArray)
                 }
                 if r != .success, let button = Self.first(in: e.element, depth: 3, where: { ($0.string(kAXIdentifierAttribute) ?? "").hasPrefix("AppStore.tabBar.") }) {
+                    guard acceptsCurrentPage() else { return }
                     r = AXUIElementPerformAction(button, kAXPressAction as CFString)
                 }
+                guard acceptsCurrentPage() else { return }
                 Log.io("app store: tab \(Log.words(e.label)) chosen (\(r.rawValue))")
                 Speech.speakMessage(e.label.replacingOccurrences(of: ", selected", with: ""))
                 area = .page; pageIndex = 0
@@ -918,6 +728,7 @@ public final class AppStoreView {
                 guard let f = TurnOverObject.frame(e.element) else { return }
                 let before = currentKey()
                 let home = CGEvent(source: nil)?.location
+                guard acceptsCurrentPage() else { return }
                 Mouse.click(at: CGPoint(x: f.midX, y: f.midY), button: .left, count: 1)
                 if let home { DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { Mouse.move(to: home) } }
                 Speech.speakMessage("account")
@@ -927,22 +738,29 @@ public final class AppStoreView {
             }
             return
         }
-        confirmed(pageIndex) { [weak self] e in if let e { self?.open(confirmed: e) } }
+        confirmed(pageIndex) { [weak self] e in if let e { self?.open(confirmed: e, press: press) } }
     }
-    private func open(confirmed e: Entry) {
+    private func open(confirmed e: Entry, press: AppStoreActionPress) {
+        guard acceptsCurrentPage() else { return }
         let before = pageKey
         switch e.kind {
         case .button:
+            purchaseConfirmation.reset()
             _ = AXUIElementPerformAction(e.element, kAXPressAction as CFString)
             waitForNewPage(from: before)
         case .heading, .text:
+            purchaseConfirmation.reset()
             Speech.speakMessage(e.label)
         case .app where Self.isProductTop(e.element):
             // On the app's own page, its first line is the app itself: Return presses its button, as Space does.
-            offer()
+            offer(press: press)
         default:
+            purchaseConfirmation.reset()
             // An app opens with a click on its icon (a press on the row reports success and does nothing).
-            guard clickIcon(e) else { Speech.speakMessage("cannot open this one"); return }
+            guard clickIcon(e) else {
+                if acceptsCurrentPage() { Speech.speakMessage("cannot open this one") }
+                return
+            }
             waitForNewPage(from: before)
         }
     }
@@ -975,6 +793,7 @@ public final class AppStoreView {
         guard let p = candidates.first(where: { c in
             !(offer?.insetBy(dx: -6, dy: -6).contains(c) ?? false) && area.insetBy(dx: 2, dy: 2).contains(c) && (flatDrives || hitIsSafe(c, for: e))
         }) else { Log.io("app store: no safe point on the item to click (area \(area))"); return false }
+        guard acceptsCurrentPage() else { return false }
         let home = CGEvent(source: nil)?.location
         Mouse.click(at: p, button: .left, count: 1)
         if let home { DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { Mouse.move(to: home) } }
@@ -983,21 +802,7 @@ public final class AppStoreView {
     }
 
     /// Whether the system's hit test under the row's icon (or its left edge) names this row. Off the main thread.
-    nonisolated private func hitAgrees(_ row: AXUIElement, wanted: String) -> Bool {
-        guard let f = TurnOverObject.frame(row) else { return false }
-        let icon = Self.first(in: row, depth: 5, where: { $0.role == "AXImage" && ($0.string(kAXDescriptionAttribute) ?? "Artwork") != "Artwork" }).flatMap { TurnOverObject.frame($0) }
-        let p = icon.map { CGPoint(x: $0.midX, y: $0.midY) } ?? CGPoint(x: f.minX + min(20, f.width * 0.1), y: f.midY)
-        var hit: AXUIElement?
-        guard AXUIElementCopyElementAtPosition(app, Float(p.x), Float(p.y), &hit) == .success, let hit else { return false }
-        func name(_ s: String) -> String { (s.components(separatedBy: ",").first ?? s).trimmingCharacters(in: .whitespaces) }
-        var x: AXUIElement? = hit; var hops = 0
-        while let y = x, hops < 8 {
-            if CFEqual(y, row) { return true }
-            if Self.isItem(y) { return name(Self.identity(of: y)) == wanted }
-            x = y.element(kAXParentAttribute); hops += 1
-        }
-        return false
-    }
+
 
     private func hitIsSafe(_ p: CGPoint, for e: Entry) -> Bool {
         var hit: AXUIElement?
@@ -1024,52 +829,85 @@ public final class AppStoreView {
 
     /// The app's own button. Open, Get, Update and Re-download press at once; a price is a purchase, and needs
     /// Space again within five seconds.
-    public func offer() {
-        ensureCurrent()
-        guard area == .page, page.indices.contains(pageIndex) else { open(); return }
-        confirmed(pageIndex) { [weak self] e in if let e { self?.offer(confirmed: e) } }
+    public func offer(press: AppStoreActionPress = .synthetic) {
+        guard ensureCurrent(retry: { [weak self] in self?.offer(press: press) }) else { return }
+        guard area == .page, page.indices.contains(pageIndex) else { open(press: press); return }
+        confirmed(pageIndex) { [weak self] e in if let e { self?.offer(confirmed: e, press: press) } }
     }
-    private func offer(confirmed e: Entry) {
+    private func offer(confirmed e: Entry, press: AppStoreActionPress) {
         // The button as it is now, inside the row just checked (never one remembered from earlier).
-        guard let o = Self.first(in: e.element, depth: 5, where: { ($0.string(kAXIdentifierAttribute) ?? "").contains("offerButton") }) else {
+        let button = Self.first(in: e.element, depth: 5, where: { ($0.string(kAXIdentifierAttribute) ?? "").contains("offerButton") })
+        guard acceptsCurrentPage() else { return }
+        guard let o = button else {
+            purchaseConfirmation.reset()
             Speech.speakMessage("no button here"); return
         }
         let title = o.string(kAXTitleAttribute) ?? o.string(kAXDescriptionAttribute) ?? ""
+        guard acceptsCurrentPage() else { return }
+        guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            purchaseConfirmation.reset()
+            Speech.speakMessage("the button is not ready; try again"); return
+        }
         let name = e.label.components(separatedBy: ",").first ?? "this app"
         // Downloading: the button is Cancel now ("2.1% loaded", help "Cancel"). Space and Return only say how far it
         // has got; Delete cancels (two Spaces five seconds apart, checking progress, cancelled Outlook,
         // 14 Oct 2026).
         if Self.isDownloading(title) {
+            purchaseConfirmation.reset()
             Speech.speakMessage("\(name), \(title). Delete cancels the download.")
             return
         }
         // Open pressed already and the app still starting (a big app takes seconds): once is enough.
         if title.hasPrefix("Open"), let (n, at) = lastOpen, n == name, Date().timeIntervalSince(at) < 6 {
+            purchaseConfirmation.reset()
             Speech.speakMessage("opening \(name)")
             return
         }
         let free = ["Open", "Get", "Update", "Re-download", "Install", "Cancel", "Play"].contains { title.hasPrefix($0) }
         if !free {
-            if let (el, at) = pendingBuy, Self.same(el, o), Date().timeIntervalSince(at) < 5 {
-                pendingBuy = nil
+            let identity = e.check.isEmpty ? e.label : e.check
+            let context = AppStorePurchaseConfirmation.Context(page: modelOwner.session, itemIdentity: identity, offerTitle: title, button: o)
+            switch purchaseConfirmation.decide(context, press: press, at: Date(), armTick: mach_absolute_time()) {
+            case .confirm:
+                guard acceptsCurrentPage() else { return }
                 _ = AXUIElementPerformAction(o, kAXPressAction as CFString)
                 Log.io("app store: buy pressed (confirmed)")
                 Speech.speakMessage("buying; the App Store asks you to confirm")
-                return
+            case .prompt:
+                Speech.speakMessage("Buy \(name) for \(title)? Press Space again to buy.")
+            case .ignore:
+                break
             }
-            pendingBuy = (o, Date())
-            Speech.speakMessage("Buy \(name) for \(title)? Press Space again to buy.")
             return
         }
+        purchaseConfirmation.reset()
+        guard acceptsCurrentPage() else { return }
         _ = AXUIElementPerformAction(o, kAXPressAction as CFString)
         Log.io("app store: \(Log.words(title)) pressed")
         if title.hasPrefix("Open") { lastOpen = (name, Date()); Speech.speakMessage("opening \(name)") }
         else { Speech.speakMessage(title.components(separatedBy: ",").first ?? title) }
         if !title.hasPrefix("Open") { watchDownload(o, name: name) }
         // Get becomes Install (or starts at once); say what the button says now.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-            let now = o.string(kAXTitleAttribute) ?? o.string(kAXDescriptionAttribute) ?? ""
-            if !now.isEmpty, now != title { Speech.speakMessage(now == "Install" ? "Install; press Space again to install" : now) }
+        let owner = modelOwner, generation = modelOwner.session, startMoves = moves
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+            guard let self, canUseResult, owner.session == generation, moves == startMoves, area == .page,
+                  owner.model.containsSelection(e, at: pageIndex) else { return }
+            // Read only; this delayed status must not hold main or follow a recycled button onto another app.
+            DispatchQueue.global(qos: .utility).async {
+                guard owner.isCurrentSession(generation),
+                      let currentButton = Self.first(in: e.element, depth: 5, where: { ($0.string(kAXIdentifierAttribute) ?? "").contains("offerButton") }),
+                      CFEqual(currentButton, o), owner.isCurrentSession(generation) else { return }
+                let now = currentButton.string(kAXTitleAttribute) ?? currentButton.string(kAXDescriptionAttribute) ?? ""
+                guard owner.isCurrentSession(generation) else { return }
+                let identity = Self.identity(of: e.element)
+                guard AppStoreEntryIdentity.fullText(identity) == AppStoreEntryIdentity.fullIdentity(e),
+                      owner.isCurrentSession(generation) else { return }
+                onMain { [weak self] in
+                    guard let self, canUseResult, owner.session == generation, moves == startMoves, area == .page,
+                          owner.model.containsSelection(e, at: pageIndex) else { return }
+                    if !now.isEmpty, now != title { Speech.speakMessage(now == "Install" ? "Install; press Space again to install" : now) }
+                }
+            }
         }
     }
 
@@ -1109,12 +947,16 @@ public final class AppStoreView {
     }
 
     public func back() {
+        purchaseConfirmation.reset()
+        guard acceptsCurrentPage() else { return }
         let before = currentKey()
         // The Back button in the window's toolbar (a card over the window has one too).
         if let w = window, let tb = w.elements(kAXChildrenAttribute).first(where: { $0.role == "AXToolbar" }),
            let b = Self.first(in: tb, depth: 3, where: { $0.role == "AXButton" && ($0.string(kAXDescriptionAttribute) == "Back" || ($0.string(kAXIdentifierAttribute) ?? "").hasSuffix("backButton")) }) {
+            guard acceptsCurrentPage() else { return }
             _ = AXUIElementPerformAction(b, kAXPressAction as CFString)
         } else {
+            guard acceptsCurrentPage() else { return }
             Speech.speakMessage("no page to go back to"); return
         }
         area = .page
@@ -1122,11 +964,14 @@ public final class AppStoreView {
     }
 
     public func focusSearch() {
-        buildSidebar()
-        guard let s = sidebar.first(where: { $0.kind == .search }) else { Speech.speakMessage("no search field"); return }
-        let r = s.element.set(kAXFocusedAttribute, kCFBooleanTrue)
-        Log.io("app store: search field focused (\(r.rawValue))")
-        if r != .success { Speech.speakMessage("could not reach the search field") }
+        moves += 1
+        purchaseConfirmation.reset()
+        buildSidebar { [weak self] in
+            guard let self, let s = sidebar.first(where: { $0.kind == .search }) else { Speech.speakMessage("no search field"); return }
+            let r = s.element.set(kAXFocusedAttribute, kCFBooleanTrue)
+            Log.io("app store: search field focused (\(r.rawValue))")
+            if r != .success { Speech.speakMessage("could not reach the search field") }
+        }
     }
 
     /// After Return in the search field: wait for the results, read them, and give the keys back to the page.
@@ -1142,60 +987,54 @@ public final class AppStoreView {
 
     private var lastPositions: [String: Int] = [:]
     /// The page's title when it was read (the title now may already be the next page's).
-    private var builtTitle = ""
+    private var builtTitle: String { modelOwner.model.title }
 
     /// A new page comes a moment after the click; read its title and first item once it has settled.
     private func settleResults(key: String, wave: Int) {
-        let delay = wave == 1 ? 0.7 : 0.8
-        let names = page.map { $0.label }
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            guard let self, self.area == .page, self.currentKey() == key else { return }
-            let current = page.indices.contains(pageIndex) ? page[pageIndex].label : ""
-            self.buildPage()
-            let changed = page.map { $0.label } != names
-            if changed {
-                Log.io("app store: the results changed as they settled (\(names.count) → \(page.count) items); read again")
-                if let i = page.firstIndex(where: { $0.label == current }) { pageIndex = i } else { pageIndex = min(pageIndex, max(0, page.count - 1)) }
+        let generation = modelOwner.session
+        onMain(after: wave == 1 ? 0.7 : 0.8) { [weak self] in
+            guard let self, canUseResult, modelOwner.session == generation, area == .page, pageKey == key else { return }
+            buildPage { [weak self] in
+                guard let self, modelOwner.session == generation else { return }
+                if wave < 2 { settleResults(key: key, wave: 2) }
             }
-            if wave < 2 { self.settleResults(key: key, wave: 2) }
         }
     }
 
     private func waitForNewPage(from before: String, back: Bool = false, thenFocusPage: Bool = false, tries: Int = 0, moves startMoves: Int? = nil) {
-        // The place on this page, by its title (the collection element is a new one when the page comes back).
-        if tries == 0, !builtTitle.isEmpty { lastPositions[builtTitle] = pageIndex }
-        let start = startMoves ?? moves
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
-            guard let self else { return }
-            let moved = self.moves != start && !self.searching
-            let now = self.currentKey()
-            // The same search again leaves the same page: after a moment, read it all the same.
-            let limit = thenFocusPage ? 20 : 16
-            if (now == before || now.isEmpty) && tries < limit { self.waitForNewPage(from: before, back: back, thenFocusPage: thenFocusPage, tries: tries + 1, moves: start); return }
-            let fromSearch = self.searching
-            self.area = .page
-            self.searching = false
-            // A new search gives the same list element and title ("Results for …"): the flat view starts over.
-            if fromSearch { self.resultsKey = "" }
-            // The title first: reading a product page right after it loads takes the Store two seconds (41 items in
-            // 1.8 s, 27 Oct 2026), and the person needn't wait for that to hear where they are.
-            let early = self.pageTitle
-            let announced = self.openingTitle; self.openingTitle = ""
-            if now != before, !early.isEmpty, !self.flatDrives, early != announced { Speech.speakMessage(early) }
-            self.buildPage()
-            // Keys pressed while waiting were on the old page: the new page starts at its top (or where it was left).
-            self.pageIndex = back ? min(self.lastPositions[self.pageTitle] ?? 0, max(0, self.page.count - 1)) : 0
-            // Search results arrive in stages: the first read of "water" had 23 items starting with one app, the
-            // screen a moment later 25 starting with another, and Return then looked for rows the page no longer had
-            // (27 Oct 2026). Looked at again after 0.7 s and 1.5 s: a different list is read again, quietly, the
-            // place kept by name.
-            self.settleResults(key: now, wave: 1)
-            _ = moved
-            if thenFocusPage, let (_, list) = self.pageRoot() { _ = list.set(kAXFocusedAttribute, kCFBooleanTrue) }
-            let title = self.pageTitle
-            if now == before, !thenFocusPage { Log.io("app store: the page did not change"); return }
-            if (title != early || early.isEmpty) && title != announced { Speech.speakMessage(title.isEmpty ? "page" : title) }
-            if !self.page.isEmpty, !self.flatDrives { self.speak(self.pageIndex, crossing: true) }   // the flat view says its first row itself
+        if tries == 0 {
+            if !builtTitle.isEmpty { lastPositions[builtTitle] = pageIndex }
+            invalidatePage()
+        }
+        let generation = modelOwner.session, start = startMoves ?? moves
+        onMain(after: 0.35) { [weak self] in
+            guard let self, canUseResult, modelOwner.session == generation, moves == start || searching else { return }
+            modelOwner.read(.metadata) { [weak self] result in
+                guard let self, canUseResult, modelOwner.session == generation, moves == start || searching else { return }
+                let metadata = result?.metadata
+                let now = metadata?.key ?? ""
+                let limit = thenFocusPage ? 20 : 16
+                if (now == before || now.isEmpty), tries < limit {
+                    waitForNewPage(from: before, back: back, thenFocusPage: thenFocusPage, tries: tries + 1, moves: start); return
+                }
+                let fromSearch = searching
+                area = .page; searching = false
+                if fromSearch { resultsKey = "" }
+                let early = metadata?.title ?? ""
+                let announced = openingTitle; openingTitle = ""
+                if now != before, !early.isEmpty, !flatDrives, early != announced { Speech.speakMessage(early) }
+                buildPage { [weak self] in
+                    guard let self, canUseResult, modelOwner.session == generation, moves == start || fromSearch else { return }
+                    pageIndex = back ? min(lastPositions[pageTitle] ?? 0, max(0, page.count - 1)) : 0
+                    settleResults(key: pageKey, wave: 1)
+                    // Focusing the page and action preparation remain separate from model construction (#119).
+                    if thenFocusPage, let (_, list) = pageRoot() { _ = list.set(kAXFocusedAttribute, kCFBooleanTrue) }
+                    let title = pageTitle
+                    if now == before, !thenFocusPage { Log.io("app store: the page did not change"); return }
+                    if (title != early || early.isEmpty), title != announced { Speech.speakMessage(title.isEmpty ? "page" : title) }
+                    if !page.isEmpty, !flatDrives { speak(pageIndex, crossing: true) }
+                }
+            }
         }
     }
 }

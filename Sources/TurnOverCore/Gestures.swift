@@ -84,6 +84,17 @@ nonisolated public struct KeyboardGesture: CustomStringConvertible, Sendable {
     /// The normalized identifier: "kb:turnover+shift+upArrow".
     public var identifier: String { "kb:" + (modifiers.names + [keyName]).joined(separator: "+") }
 
+    /// Diagnostics must not identify typing, including when main is stalled and no focus or script is known
+    /// (issue 60, 28 Oct 2026). Option/dead keys and composed text can type without a single typedCharacter.
+    /// A known script may name its key, as browse-mode commands do, except in a password field.
+    public func logDescription(commandName: String? = nil, secure: Bool = false) -> String {
+        // Key codes 54–62 are modifier keys, rather than text keys (including Caps Lock).
+        let mayType = modifiers.intersection([.control, .command, .turnover]).isEmpty &&
+            (typedCharacter != nil || (!KeyNames.isSpecial(keyCode) && !(54...62).contains(keyCode)))
+        if mayType, commandName == nil || secure { return "(a typed key)" }
+        return identifier + (commandName.map { " → \($0)" } ?? "")
+    }
+
     /// Identifiers to try in order: layout-specific first, then the general one (NVDA: normalizedIdentifiers).
     @MainActor public var identifiers: [String] {
         let body = (modifiers.names + [keyName]).joined(separator: "+")

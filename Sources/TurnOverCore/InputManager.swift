@@ -93,6 +93,7 @@ public enum InputManager {
 
     public static func handleKeyDown(_ gesture: KeyboardGesture) -> Bool {
         Hints.cancel()
+        ObjectNavigator.shared.cancelWindowSearch()
         lastKeyDownAt = Date()
         // The keyboard commands editor is waiting for a key: this one is it (Escape cancels). Nothing else runs.
         if let capture = captureNext, !gesture.isRepeat {
@@ -105,7 +106,7 @@ public enum InputManager {
         if ["kb:command+[", "kb:command+]"].contains(gesture.identifier) { BrowseModeHandler.historyKeyAt = Date() }
         if passNextKey, !gesture.isRepeat {
             passNextKey = false
-            Log.io("input \(gesture.identifier) passed through")
+            Log.io("input \(gesture.logDescription()) passed through")
             return false
         }
         // Every key stops speech (NVDA) — except a typed key while only the echo of earlier typing is speaking:
@@ -131,11 +132,7 @@ public enum InputManager {
         // What the user types is never written down: a password typed where TurnOver thought a password field was
         // went into the log character by character (5 Oct 2026), and every e-mail typed was there too. A typed key
         // is logged as just that; a key that runs a script (browse mode's single letters) by its name.
-        if typing, API.focusObject?.role == .passwordEdit || script == nil {
-            Log.io("input (a typed key)")
-        } else {
-            Log.io("input \(gesture.identifier)\(script.map { " → \($0.name)" } ?? "")")
-        }
+        Log.io("input \(gesture.logDescription(commandName: script?.name, secure: API.focusObject?.role == .passwordEdit))")
 
         // Never type into one place while saying another. TurnOver had put its focus on a system dialog's password
         // field ("Password, password edit") while macOS left the keyboard in Mail: the password went into an e-mail

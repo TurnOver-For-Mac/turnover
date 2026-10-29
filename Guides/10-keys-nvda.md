@@ -1,6 +1,6 @@
 # NVDA keys: every key
 
-This page is made from TurnOver's own command tables (`turnover-coretest --keys-reference`, 21 Oct 2026), so it matches the build it came with. Don't edit it by hand.
+This page is made from TurnOver's own command tables (`turnover-coretest --keys-reference`, 29 Oct 2026), so it matches the build it came with. Don't edit it by hand.
 
 The NVDA keys style (the Windows style): NVDA's own keys, doing what they do in NVDA. **TurnOver** in a key means the NVDA key: Caps Lock, or Control and Option together. NVDA's Alt is the Mac's Command key, by position. Keyboard help (the TurnOver menu, Keys) says what any key does without doing it; Command Control Comma, then Slash, lists the keys that work where you are.
 
@@ -176,13 +176,14 @@ Switch styles with Command Control Comma, then K. TurnOver's own commands behind
 | Command F4 | Quits the application (Windows: Alt+F4) |
 | Control F4 | Closes the window or tab (Windows: Control+F4) |
 | Option B | Status menus; lists the status menus at the right of the menu bar, TurnOver's own item last (Windows: Windows+B) |
+| Option D | Opens the Desktop folder in Finder, its items under the arrows (Windows: Windows+D) |
 | Option Tab | Application chooser; lists every application with a window, system alerts too, to switch to (Windows: Windows+Tab, Task View) |
 | Shift F10 | Opens the context menu, as Control+Return does (Windows: the Applications key, Shift+F10). Also right Option on its own |
 | Control Shift Escape | Force quit, as Task Manager's key (Windows: Control+Shift+Escape) |
 
 # In the apps
 
-Keys an app's own support adds at the app level, in that app only; the keys above work there too. Keys that belong to a document inside an app (Word's headings, comments and tables, a web page's quick keys) are in [The apps](the-apps.html) and [Reading and say all](reading-and-say-all.html).
+Keys an app's own support adds at the app level, in that app only; the keys above work there too. Some commands apply only in the relevant control or window. Keys that belong to a document inside an app (Word's headings, comments and tables, a web page's quick keys) are in [The apps](the-apps.html) and [Reading and say all](reading-and-say-all.html).
 
 ## App Store
 
@@ -198,7 +199,7 @@ Keys an app's own support adds at the app level, in that app only; the keys abov
 | Down arrow | Next item |
 | E | Jumps to the next item starting with the letter |
 | End | Last item |
-| Enter | Opens the app's page, or presses the button |
+| Enter | Searches, then reads the results |
 | Escape | Goes back a page |
 | F | Jumps to the next item starting with the letter |
 | G | Jumps to the next item starting with the letter |
@@ -238,11 +239,59 @@ Keys an app's own support adds at the app level, in that app only; the keys abov
 | Escape | Clear |
 | Numpad enter | Equals, then the answer |
 
+## Calendar
+
+| Key | What it does |
+|---|---|
+| Command T | Back to today |
+| Down arrow | The day's next event |
+| Enter | Saves the event, says it and goes to its day |
+| Left arrow | The previous day |
+| Option Down arrow | The same day next week |
+| Option Up arrow | The same day last week |
+| Right arrow | The next day, and how many events it has |
+| Shift Tab | The event box's previous field |
+| Space | Presses the event box's button |
+| Tab | The event box's next field |
+| Up arrow | The day's previous event |
+
 ## Claude
 
 | Key | What it does |
 |---|---|
 | TurnOver Shift R | Reads Claude's latest reply |
+
+## Contacts
+
+| Key | What it does |
+|---|---|
+| Shift Tab | From the card back to the list |
+| Tab | From the list to the person's card, read as a page |
+
+## Discord
+
+| Key | What it does |
+|---|---|
+| Command Down arrow | The last one |
+| Command Up arrow | The first one |
+| Control Command 1 | Reads the newest message |
+| Control Command 2 | Reads the message 2 from the newest |
+| Control Command 3 | Reads the message 3 from the newest |
+| Control Command 4 | Reads the message 4 from the newest |
+| Control Command 5 | Reads the message 5 from the newest |
+| Control Command 6 | Reads the message 6 from the newest |
+| Control Command 7 | Reads the message 7 from the newest |
+| Control Command 8 | Reads the message 8 from the newest |
+| Control Command 9 | Reads the message 9 from the newest |
+| Down arrow | Next message or conversation |
+| End | The last one |
+| Enter | Opens the conversation, or presses the message (a link, a photo) |
+| Escape | Back to the message box |
+| Home | The first one |
+| Numpad enter | Opens the conversation, or presses the message (a link, a photo) |
+| Shift Tab | Back to the previous part |
+| Tab | On to the next part, in the screen's order: sections, conversations, messages, the message box |
+| Up arrow | Previous message or conversation |
 
 ## Excel
 
@@ -257,23 +306,95 @@ Keys an app's own support adds at the app level, in that app only; the keys abov
 
 | Key | What it does |
 |---|---|
+| Command Down arrow | Opens the selected item (Command Down); a folder is asked for again if Finder ignored it |
+| Command Up arrow | Goes to the enclosing folder (Command Up); asked for again if Finder ignored it |
 | Enter | Opens the selected item, as in Windows Explorer (Windows style; on a Mac, Command Down) |
 | F2 | Renames the selected item: F2, as in Windows Explorer, or Shift Return (Windows style) |
 | Numpad enter | Opens the selected item, as in Windows Explorer (Windows style; on a Mac, Command Down) |
 | Shift Enter | Renames the selected item: F2, as in Windows Explorer, or Shift Return (Windows style) |
+| Shift Tab | To the sidebar; from the toolbar's first button, Shift Tab goes back to the sidebar |
+| Tab | From the files, Tab goes to the sidebar |
+
+## Freeform
+
+| Key | What it does |
+|---|---|
+| Left arrow | The board to the left |
+| Right arrow | The board to the right |
+
+## Keynote
+
+| Key | What it does |
+|---|---|
+| Down arrow | The previous or next slide, read (Keynote says nothing as it moves) |
+| End | The previous or next slide, read (Keynote says nothing as it moves) |
+| Enter | While playing: the next or previous slide, read |
+| Home | The previous or next slide, read (Keynote says nothing as it moves) |
+| Left arrow | The previous or next slide, read (Keynote says nothing as it moves) |
+| N | While playing: the next or previous slide, read |
+| P | While playing: the next or previous slide, read |
+| Page down | The previous or next slide, read (Keynote says nothing as it moves) |
+| Page up | The previous or next slide, read (Keynote says nothing as it moves) |
+| Right arrow | The previous or next slide, read (Keynote says nothing as it moves) |
+| Space | While playing: the next or previous slide, read |
+| Up arrow | The previous or next slide, read (Keynote says nothing as it moves) |
+
+## Kindle
+
+| Key | What it does |
+|---|---|
+| Down arrow | Next line; on the page's last line, the next page |
+| Page down | The next page, read from its first line |
+| Page up | The previous page, read from its first line |
+| Shift Tab | From a field on Kindle's page to the next or previous control |
+| Tab | From a field on Kindle's page to the next or previous control |
+| Up arrow | Previous line; on the page's first line, the previous page's last |
 
 ## Mail
 
 | Key | What it does |
 |---|---|
+| Command Apostrophe | Writing a message: increases the quote level, and says it |
+| Command Shift D | Writing a message: Command Shift D sends it, and says so |
 | Command Shift N | Checks for new mail and says so |
 | Command Shift U | Marks the message read or unread, and says which |
+| Enter | Searching: Return searches, says how many results, and goes to them |
+| Escape | Reading a message: back to the message list (closes the message's own window) |
+| Option Command Apostrophe | Writing a message: decreases the quote level, and says it |
+| Shift Tab | From the message list: the mailbox list (Shift Tab) |
+| Tab | From the mailbox list: the message list (Tab) |
 
 ## Maps
 
 | Key | What it does |
 |---|---|
 | Command F | Search Maps; typing goes into the search field |
+
+## Messages
+
+| Key | What it does |
+|---|---|
+| Command Down arrow | The last one |
+| Command T | Reacts to the message: a list of Tapbacks, Return to choose (Command T) |
+| Command Up arrow | The first one |
+| Control Command 1 | Reads the newest message |
+| Control Command 2 | Reads the message 2 from the newest |
+| Control Command 3 | Reads the message 3 from the newest |
+| Control Command 4 | Reads the message 4 from the newest |
+| Control Command 5 | Reads the message 5 from the newest |
+| Control Command 6 | Reads the message 6 from the newest |
+| Control Command 7 | Reads the message 7 from the newest |
+| Control Command 8 | Reads the message 8 from the newest |
+| Control Command 9 | Reads the message 9 from the newest |
+| Down arrow | Next message or conversation |
+| End | The last one |
+| Enter | Opens the conversation, or presses the message (a link, a photo) |
+| Escape | Back to the message box |
+| Home | The first one |
+| Numpad enter | Opens the conversation, or presses the message (a link, a photo) |
+| Shift Tab | Back to the previous part |
+| Tab | On to the next part, in the screen's order: sections, conversations, messages, the message box |
+| Up arrow | Previous message or conversation |
 
 ## Music
 
@@ -286,7 +407,7 @@ Keys an app's own support adds at the app level, in that app only; the keys abov
 | Down arrow | Next item |
 | E | Jumps to the next item starting with the letter |
 | End | Last item |
-| Enter | Plays the item when it can be played, otherwise opens it; in the sidebar, goes to that section |
+| Enter | Searches, then reads the results |
 | Escape | Goes back a page |
 | F | Jumps to the next item starting with the letter |
 | G | Jumps to the next item starting with the letter |
@@ -299,7 +420,7 @@ Keys an app's own support adds at the app level, in that app only; the keys abov
 | Left arrow | Previous shelf of the page |
 | M | Jumps to the next item starting with the letter |
 | N | Jumps to the next item starting with the letter |
-| Numpad enter | Plays the item when it can be played, otherwise opens it; in the sidebar, goes to that section |
+| Numpad enter | Searches, then reads the results |
 | O | Jumps to the next item starting with the letter |
 | P | Jumps to the next item starting with the letter |
 | Q | Jumps to the next item starting with the letter |
@@ -319,6 +440,46 @@ Keys an app's own support adds at the app level, in that app only; the keys abov
 | X | Jumps to the next item starting with the letter |
 | Y | Jumps to the next item starting with the letter |
 | Z | Jumps to the next item starting with the letter |
+
+## Notes
+
+| Key | What it does |
+|---|---|
+| Control Command 1 | Straight to Folders |
+| Control Command 2 | Straight to Notes list |
+| Control Command 3 | Straight to Note |
+| Shift Tab | The previous part of the window |
+| Tab | The next part of the window: Folders, Notes list, Note |
+
+## Numbers
+
+| Key | What it does |
+|---|---|
+| Down arrow | Into the sheet's first table (Numbers selects nothing from the keyboard) |
+| Enter | Into the sheet's first table (Numbers selects nothing from the keyboard) |
+| Left arrow | Into the sheet's first table (Numbers selects nothing from the keyboard) |
+| Right arrow | Into the sheet's first table (Numbers selects nothing from the keyboard) |
+| Tab | Into the sheet's first table (Numbers selects nothing from the keyboard) |
+| Up arrow | Into the sheet's first table (Numbers selects nothing from the keyboard) |
+
+## Pages
+
+| Key | What it does |
+|---|---|
+| Down arrow | In a table: the next cell that way |
+| Escape | Out of the table, back to the text (Escape) |
+| Left arrow | In a table: the next cell that way |
+| Right arrow | In a table: the next cell that way |
+| Up arrow | In a table: the next cell that way |
+
+## Photos
+
+| Key | What it does |
+|---|---|
+| Down arrow | The next photo that way, read |
+| Left arrow | The next photo that way, read |
+| Right arrow | The next photo that way, read |
+| Up arrow | The next photo that way, read |
 
 ## Podcasts
 
@@ -331,7 +492,7 @@ Keys an app's own support adds at the app level, in that app only; the keys abov
 | Down arrow | Next item |
 | E | Jumps to the next item starting with the letter |
 | End | Last item |
-| Enter | Plays the item when it can be played, otherwise opens it; in the sidebar, goes to that section |
+| Enter | Searches, then reads the results |
 | Escape | Goes back a page |
 | F | Jumps to the next item starting with the letter |
 | G | Jumps to the next item starting with the letter |
@@ -344,7 +505,7 @@ Keys an app's own support adds at the app level, in that app only; the keys abov
 | Left arrow | Previous shelf of the page |
 | M | Jumps to the next item starting with the letter |
 | N | Jumps to the next item starting with the letter |
-| Numpad enter | Plays the item when it can be played, otherwise opens it; in the sidebar, goes to that section |
+| Numpad enter | Searches, then reads the results |
 | O | Jumps to the next item starting with the letter |
 | P | Jumps to the next item starting with the letter |
 | Q | Jumps to the next item starting with the letter |
@@ -365,15 +526,58 @@ Keys an app's own support adds at the app level, in that app only; the keys abov
 | Y | Jumps to the next item starting with the letter |
 | Z | Jumps to the next item starting with the letter |
 
+## Reminders
+
+| Key | What it does |
+|---|---|
+| Shift Tab | From the reminders to the lists |
+| Tab | From the lists to the reminders |
+
 ## Safari
 
 | Key | What it does |
 |---|---|
+| Command 1 | Switches tab and says the tab's title |
+| Command 2 | Switches tab and says the tab's title |
+| Command 3 | Switches tab and says the tab's title |
+| Command 4 | Switches tab and says the tab's title |
+| Command 5 | Switches tab and says the tab's title |
+| Command 6 | Switches tab and says the tab's title |
+| Command 7 | Switches tab and says the tab's title |
+| Command 8 | Switches tab and says the tab's title |
+| Command 9 | Switches tab and says the tab's title |
 | Command G | Finds the next or previous match and reads it |
 | Command Left bracket | Goes back or forward a page |
 | Command R | Reloads the page and says so |
 | Command Right bracket | Goes back or forward a page |
 | Command Shift G | Finds the next or previous match and reads it |
+| Command Shift Left bracket | Switches tab and says the tab's title |
+| Command Shift Right bracket | Switches tab and says the tab's title |
+| Control Shift Tab | Switches tab and says the tab's title |
+| Control Tab | Switches tab and says the tab's title |
+| Enter | In the Find bar: finds the next or previous match and reads it |
+| Shift Enter | In the Find bar: finds the next or previous match and reads it |
+
+## Shortcuts
+
+| Key | What it does |
+|---|---|
+| Escape | From the describe box to reading the folders and shortcuts, from the top |
+
+## Siri
+
+| Key | What it does |
+|---|---|
+| Shift Tab | In Spotlight: the previous control, the microphone included |
+| Tab | In Spotlight: the next control, the microphone included |
+
+## System Settings
+
+| Key | What it does |
+|---|---|
+| Control Command 1 | Moves to the sidebar; uses the review cursor if keyboard focus is unavailable |
+| Control Command 2 | Moves to the settings pane; uses the review cursor if keyboard focus is unavailable |
+| Control Command 3 | Moves to the search; uses the review cursor if keyboard focus is unavailable |
 
 ## TV
 
@@ -386,7 +590,7 @@ Keys an app's own support adds at the app level, in that app only; the keys abov
 | Down arrow | Next item |
 | E | Jumps to the next item starting with the letter |
 | End | Last item |
-| Enter | Plays the item when it can be played, otherwise opens it; in the sidebar, goes to that section |
+| Enter | Searches, then reads the results |
 | Escape | Goes back a page |
 | F | Jumps to the next item starting with the letter |
 | G | Jumps to the next item starting with the letter |
@@ -399,7 +603,7 @@ Keys an app's own support adds at the app level, in that app only; the keys abov
 | Left arrow | Previous shelf of the page |
 | M | Jumps to the next item starting with the letter |
 | N | Jumps to the next item starting with the letter |
-| Numpad enter | Plays the item when it can be played, otherwise opens it; in the sidebar, goes to that section |
+| Numpad enter | Searches, then reads the results |
 | O | Jumps to the next item starting with the letter |
 | P | Jumps to the next item starting with the letter |
 | Q | Jumps to the next item starting with the letter |
@@ -419,3 +623,47 @@ Keys an app's own support adds at the app level, in that app only; the keys abov
 | X | Jumps to the next item starting with the letter |
 | Y | Jumps to the next item starting with the letter |
 | Z | Jumps to the next item starting with the letter |
+
+## TurnOver Settings
+
+| Key | What it does |
+|---|---|
+| Shift Tab | The previous control |
+| Tab | The next control: the sidebar, then the section's controls in order |
+
+## WhatsApp
+
+| Key | What it does |
+|---|---|
+| Command Down arrow | The last one |
+| Command Up arrow | The first one |
+| Control Command 1 | Reads the newest message |
+| Control Command 2 | Reads the message 2 from the newest |
+| Control Command 3 | Reads the message 3 from the newest |
+| Control Command 4 | Reads the message 4 from the newest |
+| Control Command 5 | Reads the message 5 from the newest |
+| Control Command 6 | Reads the message 6 from the newest |
+| Control Command 7 | Reads the message 7 from the newest |
+| Control Command 8 | Reads the message 8 from the newest |
+| Control Command 9 | Reads the message 9 from the newest |
+| Down arrow | Next message or conversation |
+| End | The last one |
+| Enter | Opens the conversation, or presses the message (a link, a photo) |
+| Escape | Back to the message box |
+| Home | The first one |
+| Numpad enter | Opens the conversation, or presses the message (a link, a photo) |
+| Shift Tab | Back to the previous part |
+| Tab | On to the next part, in the screen's order: sections, conversations, messages, the message box |
+| Up arrow | Previous message or conversation |
+
+## Word
+
+| Key | What it does |
+|---|---|
+| Escape | In the ribbon, sidebar, status bar or toolbar: back to the document |
+| Shift Tab | In a sheet: the previous control, its buttons included |
+| Tab | In a sheet: the next control, its buttons included |
+| TurnOver Down arrow | In a table: the cell below, the caret at its start (NVDA's table keys; TurnOver plus the arrows) |
+| TurnOver Left arrow | In a table: the previous cell in the row, the caret at its start (NVDA's table keys; TurnOver plus the arrows) |
+| TurnOver Right arrow | In a table: the next cell in the row, the caret at its start (NVDA's table keys; TurnOver plus the arrows) |
+| TurnOver Up arrow | In a table: the cell above, the caret at its start (NVDA's table keys; TurnOver plus the arrows) |
