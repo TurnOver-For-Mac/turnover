@@ -382,17 +382,20 @@ if let dir = opt("--keys-reference") {
         var appRows: [(String, [(String, String)])] = []
         for m in modules {
             var rows: [(String, String)] = []
-            for (id, s) in m.allBindings {
+            // Documentation has no live focus (pid 0). Availability-filtered help omitted every guarded
+            // Settings command, so list declared bindings in their registered precedence instead (29 Oct 2026).
+            let declared = m.everyBinding.compactMap { id, scripts in scripts.first.map { (id, $0) } }
+            for (id, s) in declared {
                 guard let p = plain(id), let g = KeyboardGesture(identifier: p) else { continue }
                 // Only a key nothing global takes first: in the Mac style a VoiceOver key beats an app's own.
                 if StyleKeymap.script(for: g) != nil || GlobalPluginHandler.shared.plugins.contains(where: { $0.script(for: g) != nil }) { continue }
                 rows.append((display(p), s.description))
             }
-            print("  \(m.appName): \(m.allBindings.count) keys bound, \(rows.count) listed")
+            print("  \(m.appName): \(declared.count) keys bound, \(rows.count) listed")
             if !rows.isEmpty { appRows.append((m.appName, rows.sorted { $0.0 < $1.0 })) }
         }
         if !appRows.isEmpty {
-            md += "\n# In the apps\n\nKeys an app's own support adds at the app level, in that app only; the keys above work there too. Keys that belong to a document inside an app (Word's headings, comments and tables, a web page's quick keys) are in [The apps](the-apps.html) and [Reading and say all](reading-and-say-all.html).\n"
+            md += "\n# In the apps\n\nKeys an app's own support adds at the app level, in that app only; the keys above work there too. Some commands apply only in the relevant control or window. Keys that belong to a document inside an app (Word's headings, comments and tables, a web page's quick keys) are in [The apps](the-apps.html) and [Reading and say all](reading-and-say-all.html).\n"
             for (app, rows) in appRows.sorted(by: { $0.0 < $1.0 }) {
                 md += "\n## \(app)\n\n| Key | What it does |\n|---|---|\n"
                 for (k, d) in rows { md += "| \(cell(k)) | \(cell(d)) |\n" }
