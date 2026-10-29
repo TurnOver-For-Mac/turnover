@@ -1394,9 +1394,11 @@ JAWS keys
   TurnOver Control O: Reads the next paragraph (VO-Shift-Page Down)
   TurnOver Control U: Reads the previous paragraph (VO-Shift-Page Up)
   TurnOver Control V: Reports the name and version of the app in front (JAWS: Insert+Control+V)
+  TurnOver Left arrow: Moves to the previous item in the window
   TurnOver Left bracket: Pointer to this item; moves the mouse pointer to the item object navigation is on (NVDA+Shift+M)
   TurnOver Option V: Braille mode; switches braille between following the cursors and showing speech (NVDA+Alt+T)
   TurnOver Option X: Reports the text on the clipboard (NVDA+C)
+  TurnOver Right arrow: Next item in the window; moves to the next item in the window, whether or not it can take the focus
   TurnOver Shift A: Reports the selected text. Pressed twice, spells it (JAWS: Insert+Shift+Down)
   TurnOver Shift Comma: Reports the shortcut key of the item with focus (NVDA+Control+Shift+Period)
   TurnOver Shift F1: The item's description; in text, the word and character; twice, how many lines (VO-F3, VO-F3-F3)
@@ -1516,8 +1518,6 @@ Object navigation
   Key: What it does
   TurnOver Backspace: Brings object navigation back to the focus
   TurnOver Enter: Activates the item object navigation is on: presses it, or puts the focus in it for typing
-  TurnOver Left arrow: Moves to the previous item in the window
-  TurnOver Right arrow: Next item in the window; moves to the next item in the window, whether or not it can take the focus
   TurnOver Shift Backspace: Move focus here; moves the keyboard focus to the item object navigation is on
   TurnOver Shift O: Reports the item object navigation is on
   TurnOver Shift Down arrow: Moves in, to the first item inside this one
