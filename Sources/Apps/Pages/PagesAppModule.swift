@@ -89,13 +89,19 @@ final class PagesAppModule: AppModule {
             // A jump (Command-Up or Down, Page Up or Down) lands in another page's copy of the text, where the key's
             // own reading lost track of the caret: the line it landed on is read here instead (silence, 17 Oct 2026),
             // unless the key read it (said twice, 28 Oct 2026). So is any caret key whose reading was left to this
-            // focus (PagesBody), by the key.
-            let reading = Self.keyReading.flatMap { $0.at >= InputManager.lastKeyDownAt ? $0.leftToHop : nil }
-            if let unit = Self.hopReading(key: InputManager.lastKeyIdentifier, leftToHop: reading), let info = try? event.obj.makeTextInfo(.caret) {
+            // focus (PagesBody), as the key reads a move within a copy (EditableText.readMove): by the arrow it sent,
+            // which a VoiceOver or JAWS key's is too, and from where the caret was, so Right on the Mac says the
+            // character crossed and Option Right the word (each read amiss or not at all: a code review, 29 Oct 2026).
+            let reading = Self.keyReading.flatMap { $0.at >= InputManager.lastKeyDownAt ? $0 : nil }
+            // The copy's own focus event, which starts the watch on its selection, isn't run: started here (Shift with
+            // the arrows said nothing after a hop, the same review).
+            let text = event.obj as? EditableText
+            text?.initAutoSelectDetection()
+            if let key = reading?.key ?? KeyboardGesture(identifier: InputManager.lastKeyIdentifier),
+               let unit = Self.hopReading(key: key.identifier, leftToHop: reading?.leftToHop), let text, let info = try? text.makeTextInfo(.caret) {
                 Log.io("pages: the focus hopped to another page's body text after a key; read as the key's move")
-                info.expand(unit)
                 Speech.cancel()
-                Speech.speakTextInfo(info, unit: unit, reason: .caret)
+                text.readMove(key, unit, from: reading?.from.map { Bookmark(start: $0, end: $0) }, to: info)
             } else {
                 Log.io("pages: the focus hopped to another page's body text after a key; not read")
             }
@@ -104,9 +110,11 @@ final class PagesAppModule: AppModule {
         next()
     }
 
-    /// What the last caret key did with its reading (PagesBody): left it to the hop after it (the key went to a copy of
-    /// the text that answered nothing, or its wait for the caret saw the focus move), or read its own move.
-    static var keyReading: (at: Date, leftToHop: Bool)?
+    /// The last caret key (PagesBody): the arrow it sent, where the caret was before it (the copies share the story's
+    /// offsets), and what it did with its reading: left it to the hop after it (the key went to a copy of the text that
+    /// answered nothing, or its wait for the caret saw the focus move), read its own move, or neither yet (nil).
+    struct KeyReading { let at: Date; let key: KeyboardGesture; let from: Int?; var leftToHop: Bool? = nil }
+    static var keyReading: KeyReading?
 
     /// How a hop to another page's copy just after a key is read: a jump by its line, unless the key read its own move;
     /// any other caret key by the key, as the core reads a paragraph box's hop (EditableText.readParagraphHop), when its
@@ -325,9 +333,11 @@ final class PagesBody: EditableText {
     /// A caret key coming to a copy that answers nothing goes to the copy Pages has its focus on, which moves, reads or
     /// bumps as any; with none, the hop after the key reads the move.
     override func caretMovement(_ gesture: KeyboardGesture, _ unit: TextUnit) {
-        if (try? makeTextInfo(.caret)) == nil {
+        let caret = try? makeTextInfo(.caret)
+        PagesAppModule.keyReading = .init(at: Date(), key: gesture, from: caret?.start)
+        if caret == nil {
             if let text = takeOverFromPagesFocus() { text.caretMovement(gesture, unit); return }
-            PagesAppModule.keyReading = (Date(), true)
+            PagesAppModule.keyReading?.leftToHop = true
         }
         super.caretMovement(gesture, unit)
     }
@@ -337,23 +347,25 @@ final class PagesBody: EditableText {
     /// read) gives way to the copy Pages has its focus on, which reads it.
     override func caretMoved(speak unit: TextUnit?, gesture: KeyboardGesture, info: TextInfo?) {
         if EventHandler.isPending(.gainFocus) {
-            PagesAppModule.keyReading = (Date(), true)
+            PagesAppModule.keyReading?.leftToHop = true
         } else if info == nil, !ScriptHandler.isScriptWaiting, (try? makeTextInfo(.caret)) == nil, let text = takeOverFromPagesFocus() {
             text.caretMoved(speak: unit, gesture: gesture, info: nil)
             return
         } else if unit != nil, !ScriptHandler.isScriptWaiting, !SayAll.willResume(gesture), info != nil || (try? makeTextInfo(.caret)) != nil {
-            PagesAppModule.keyReading = (Date(), false)
+            PagesAppModule.keyReading?.leftToHop = false
         }
         super.caretMoved(speak: unit, gesture: gesture, info: info)
     }
 
-    /// The copy Pages has its focus on, when it is another copy of the text giving the caret: TurnOver's focus too.
+    /// The copy Pages has its focus on, when it is another copy of the text giving the caret: TurnOver's focus too, its
+    /// selection watched as a focus would start it (Shift with the arrows said nothing after it took over, a code review).
     private func takeOverFromPagesFocus() -> EditableText? {
         guard let live = AXUIElementCreateApplication(pid).element(kAXFocusedUIElementAttribute), !live.isSame(element),
               live.role == "AXTextArea", live.element(kAXParentAttribute)?.role == "AXPage", PagesAppModule.caret(live) != nil,
               let text = ObjectFactory.make(live) as? EditableText else { return nil }
         Log.io("pages: the copy of the text is gone; the copy Pages has its focus on takes over")
         API.setFocusObject(text, ancestors: text.ancestors)
+        text.initAutoSelectDetection()
         return text
     }
 }
