@@ -320,7 +320,9 @@ public final class ScreenRecognition {
         Speech.speakMessage(kind == .right ? "right clicked" : kind == .double ? "double clicked" : "clicked")
         // The screen changes after a click: the result is out of date. Recognised again after a moment (the setting;
         // the screen interface again where that was open), else TurnOver follows the app's focus from here.
-        if config.recognition.refreshAfterClick, kind != .right {
+        // (Developer builds only: a feature for a whole build. A setting saved as on by an earlier build is not
+        // honoured in a public one, where its toggle is hidden; a code review, 29 Oct 2026.)
+        if Edition.isDevBuild, config.recognition.refreshAfterClick, kind != .right {
             let interface = showingInterface
             close(silently: true)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { [weak self] in
