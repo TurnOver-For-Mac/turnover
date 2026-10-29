@@ -43,6 +43,21 @@ func localizationTests() {
         expect(MailRowWords.saysUnread("Ann, Hello", word: "okunmamış"), false, "a read row")
         expect(MailRowWords.saysUnread("Ann, unread messages", word: "okunmamış"), false, "unread later in the words")
     }
+    test("localization: a capital is lowered in the language it is typed or written in") {
+        let tr = Locale(identifier: "tr"), en = Locale(identifier: "en")
+        // Typing: the keyboard layout's language (Turkish Q and F are "tr"); a layout naming none gives nil.
+        expect(Symbols.typingLocale(layoutLanguages: ["tr"])?.identifier, "tr", "a Turkish layout")
+        expect(Symbols.typingLocale(layoutLanguages: ["en", "fr"])?.identifier, "en", "the layout's first language")
+        expect(Symbols.typingLocale(layoutLanguages: [])?.identifier, nil, "no language")
+        // Reading: the line's language when it is clear, nil when the line is too short to tell.
+        expect(Symbols.textLocale("The quick brown fox jumps over the lazy dog in the morning")?.identifier, "en", "an English line")
+        expect(Symbols.textLocale("Bugün hava çok güzel, ışıklı bir sabah ve İstanbul sakin")?.identifier, "tr", "a Turkish line")
+        expect(Symbols.textLocale("I")?.identifier, nil, "too short to tell")
+        // The letter after "cap", by that language.
+        expect(Symbols.name(of: "I", sayCap: true, locale: en), "cap i", "English I")
+        expect(Symbols.name(of: "I", sayCap: true, locale: tr), "cap ı", "Turkish I")
+        expect(Symbols.name(of: "İ", sayCap: true, locale: tr), "cap i", "Turkish İ")
+    }
     test("localization: every translation keeps the English string's placeholders") {
         let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Resources/Localizable.xcstrings")

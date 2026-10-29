@@ -5,6 +5,8 @@
 // for a comma, nothing for a quote). A lone character is always named. The names
 // are TurnOver's own: the plain English names, as macOS and VoiceOver use them.
 import Foundation
+import Carbon
+import NaturalLanguage
 
 nonisolated public enum Symbols {
     private struct Symbol { let name: String; let level: SymbolLevel }
@@ -31,16 +33,38 @@ nonisolated public enum Symbols {
 
     /// The name of one character, always (the caret-character and spelling rule).
     /// The name of one character, with "cap" before a capital when the setting says so (main thread: the setting).
-    @MainActor public static func name(of c: Character) -> String {
-        let n = name(of: c, sayCap: config.speech.sayCapForCapitals)
+    /// `locale`: the language the letter is in, for lowering a capital (`letterLocale`); nil, TurnOver's own.
+    @MainActor public static func name(of c: Character, locale: Locale? = nil) -> String {
+        let n = name(of: c, sayCap: config.speech.sayCapForCapitals, locale: locale)
         // A capital with its pitch to be raised: marked for the speech queue, which strips the mark (Speech.enqueue).
         return c.isUppercase && config.speech.capitalPitch > 0 ? Speech.capitalMark + n : n
     }
 
-    /// The language TurnOver's own words are in (the catalog's, from the Mac's language): "cap" is said in it, so the
-    /// letter after it is lowered by its rules too. Not the voice's: the name is made before the speech queue picks a
-    /// voice, which language switching can change, and "cap" and its letter must agree.
+    /// The language TurnOver's own words are in (the catalog's, from the Mac's language): a capital's letter is lowered
+    /// by its rules when nothing says what language the letter itself is in.
     nonisolated public static var interfaceLocale: Locale { Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en") }
+
+    // The language a capital's letter is lowered in (Oliver's review of PR 123, 29 Oct 2026: an English text read by a
+    // Turkish TurnOver said dotless ı for I). Typing, the keyboard layout's language: Turkish Q and F type Turkish.
+    // Moving through text, the text's own language, when the line says it clearly enough. Else TurnOver's language.
+
+    /// The keyboard layout's language, from the input source in use (Turkish Q and Turkish F are "tr").
+    @MainActor public static var typingLocale: Locale? {
+        guard let src = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue(),
+              let ptr = TISGetInputSourceProperty(src, kTISPropertyInputSourceLanguages) else { return nil }
+        return typingLocale(layoutLanguages: Unmanaged<CFArray>.fromOpaque(ptr).takeUnretainedValue() as? [String] ?? [])
+    }
+    /// The first of a layout's languages (the one it is for), or nil when it names none.
+    public static func typingLocale(layoutLanguages: [String]) -> Locale? { layoutLanguages.first.map { Locale(identifier: $0) } }
+
+    /// The language of a line of text, when it is long enough and recognised with confidence; nil otherwise.
+    public static func textLocale(_ text: String) -> Locale? {
+        guard text.filter(\.isLetter).count >= 12 else { return nil }
+        let r = NLLanguageRecognizer()
+        r.processString(String(text.prefix(400)))
+        guard let (language, p) = r.languageHypotheses(withMaximum: 1).first, p >= 0.8 else { return nil }
+        return Locale(identifier: language.rawValue)
+    }
 
     /// A capital lowered by its language's rules: in Turkish I is ı and İ is i, where lowercased(), which ignores the
     /// language, makes both i (a tester building PR 123 with JAWS fixes, 28 Oct 2026).
@@ -50,7 +74,7 @@ nonisolated public enum Symbols {
     public static func lowered(_ s: String, locale: Locale = interfaceLocale) -> String { s.lowercased(with: locale) }
     public static func raised(_ s: String, locale: Locale = interfaceLocale) -> String { s.uppercased(with: locale) }
 
-    public static func name(of c: Character, sayCap: Bool) -> String {
+    public static func name(of c: Character, sayCap: Bool, locale: Locale? = nil) -> String {
         if let s = table[c] { return s.name }
         switch c {
         case " ": return String(localized: "symbol.space", defaultValue: "space", comment: "The space character")
@@ -61,7 +85,7 @@ nonisolated public enum Symbols {
         case "\t": return String(localized: "symbol.tab", defaultValue: "tab", comment: "The tab character")
         case "\u{8}": return String(localized: "key.backspace", defaultValue: "backspace", comment: "A key's name")
         default:
-            if c.isUppercase, sayCap { return String(localized: "cap \(lowered(c))", comment: "A capital letter: %@ is the letter") }
+            if c.isUppercase, sayCap { return String(localized: "cap \(lowered(c, locale: locale ?? interfaceLocale))", comment: "A capital letter: %@ is the letter") }
             return String(c)
         }
     }

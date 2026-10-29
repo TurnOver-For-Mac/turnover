@@ -252,9 +252,10 @@ public enum Speech {
     }
 
     /// NVDA: processText — symbol processing, with lone characters and pure punctuation always named.
-    public static func processed(_ text: String, symbolLevel: SymbolLevel? = nil) -> String {
+    /// `locale`: the language a lone character is in, for a capital (Symbols.name(of:locale:)).
+    public static func processed(_ text: String, symbolLevel: SymbolLevel? = nil, locale: Locale? = nil) -> String {
         let t = text.replacingOccurrences(of: "\r\n", with: "\n")
-        if t.count == 1, let c = t.first { return Symbols.name(of: c) }
+        if t.count == 1, let c = t.first { return Symbols.name(of: c, locale: locale) }
         if Symbols.isAllSymbols(t) { return Symbols.spelled(t.filter { !$0.isWhitespace }) }
         let flat = t.replacingOccurrences(of: "\r", with: " ").replacingOccurrences(of: "\n", with: " ")
         return Symbols.process(flat, level: symbolLevel ?? config.speech.symbolLevel)
@@ -590,11 +591,17 @@ public enum Speech {
             if text.count == 1, let c = text.first, c != "\r", c != "\n", c != "\u{2029}", c != "\u{a0}" { return (prefix + [Symbols.name(of: c)]).joined(separator: " ") }
             return (prefix + [Phrases.blank]).joined(separator: " ")
         }
+        // A capital read by character: lowered in its line's language when the line says it clearly (an English
+        // line under a Turkish TurnOver: I is i), else in TurnOver's.
+        var letterLocale: Locale?
+        if unit == .character, trimmed.count == 1, trimmed.first?.isUppercase == true {
+            let line = info.copy(); line.expand(.line); letterLocale = Symbols.textLocale(line.text)
+        }
         // VoiceOver's order: the words, then what they are, innermost first ("AppleVis, heading level 1").
         if config.documentFormatting.rolesAfterText, !prefix.isEmpty {
-            return ([processed(trimmed)] + [ui(prefix.reversed().joined(separator: ", "))]).filter { !$0.isEmpty }.joined(separator: ", ")
+            return ([processed(trimmed, locale: letterLocale)] + [ui(prefix.reversed().joined(separator: ", "))]).filter { !$0.isEmpty }.joined(separator: ", ")
         }
-        return ([ui(prefix.joined(separator: " "))] + [processed(trimmed)]).filter { !$0.isEmpty }.joined(separator: " ")
+        return ([ui(prefix.joined(separator: " "))] + [processed(trimmed, locale: letterLocale)]).filter { !$0.isEmpty }.joined(separator: " ")
     }
 
     // MARK: - Typing
@@ -652,20 +659,20 @@ public enum Speech {
                 // short, and two separate echoes lost the second.
                 let chars = config.keyboard.speakTypedCharacters
                 if ch > " ", chars == .always || (chars == .editControls && editable) || (!ch.isLetter && !ch.isNumber) {
-                    echo(processed(word) + " " + Symbols.name(of: ch)); return
+                    echo(processed(word) + " " + Symbols.name(of: ch, locale: Symbols.typingLocale)); return
                 }
                 echo(processed(word))
             }
         }
         let mode = config.keyboard.speakTypedCharacters
         guard ch >= " " else { return }
-        if mode == .always || (mode == .editControls && editable) { echo(Symbols.name(of: ch)); return }
+        if mode == .always || (mode == .editControls && editable) { echo(Symbols.name(of: ch, locale: Symbols.typingLocale)); return }
         // Typed words only: a symbol is never part of a word, so it would never be heard. Say it as it is typed
         // (` grave, § section, / slash), as a word is said when it ends.
         let words = config.keyboard.speakTypedWords
         // (Not an apostrophe: it is part of a word, and "I've" was heard as "apostrophe", then "I've".)
         if ch != " ", ch != "'", ch != "’", !ch.isLetter, !ch.isNumber, words == .always || (words == .editControls && editable) {
-            echo(Symbols.name(of: ch))
+            echo(Symbols.name(of: ch, locale: Symbols.typingLocale))
         }
     }
 
