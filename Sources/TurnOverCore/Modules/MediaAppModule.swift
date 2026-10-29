@@ -11,6 +11,8 @@ final class MediaAppModule: AppModule {
     static var bundles: [String] { Recipes.bundles(kind: "media") }
     private lazy var view = MediaView(pid: pid)
     private static let arrivalTries = 6
+    private var focusGeneration = 0
+    private var terminated = false
 
     required init(pid: pid_t, bundleIdentifier: String, appName: String) {
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
@@ -58,20 +60,35 @@ final class MediaAppModule: AppModule {
         script("media_nowPlaying", "Says what is playing", gestures: ["kb:turnover+shift+n"], category: cat) { [weak self] _ in self?.view.nowPlaying() }
     }
 
-    override func event_appModuleGainFocus() { arrive(tries: Self.arrivalTries) }
+    override func event_appModuleGainFocus() {
+        guard !terminated else { return }
+        focusGeneration += 1
+        view.beginSession()
+        arrive(tries: Self.arrivalTries, generation: focusGeneration, keys: ScriptHandler.keysArrivedCount)
+    }
+
+    override func event_appModuleLoseFocus() { focusGeneration += 1; view.stop() }
+
+    override func terminate() {
+        terminated = true; focusGeneration += 1; view.stop()
+        super.terminate()
+    }
 
     /// Arriving in the app: where the media view is, after the app has said its window. An app just launched has
     /// nothing to read yet ("Podcasts, starting… Home, window", then silence, 7 Oct 2026): look again until it has.
-    private func arrive(tries: Int) {
+    private func arrive(tries: Int, generation: Int, keys: Int) {
         DispatchQueue.main.asyncAfter(deadline: .now() + (tries == Self.arrivalTries ? 0.4 : 1.0)) { [weak self] in
-            guard let self else { return }
+            guard let self, !terminated, focusGeneration == generation, Core.active,
+                  ScriptHandler.keysArrivedCount == keys else { return }
             // (The frontmost application, not only TurnOver's focus: a launch can hand the focus to a helper first.)
             let front = NSWorkspace.shared.frontmostApplication?.processIdentifier
             Log.io("media: arriving (\(Self.arrivalTries + 1 - tries)), focus pid \(API.focusPid ?? 0), front \(front ?? 0)")
-            guard API.focusPid == self.pid || front == self.pid else { return }
+            guard front == self.pid else { return }
             self.view.refresh { [weak self] in
-                guard let self, API.focusPid == self.pid || NSWorkspace.shared.frontmostApplication?.processIdentifier == self.pid else { return }
-                if self.view.shelves.isEmpty, tries > 1 { self.arrive(tries: tries - 1); return }
+                guard let self, !terminated, focusGeneration == generation, Core.active,
+                      ScriptHandler.keysArrivedCount == keys,
+                      NSWorkspace.shared.frontmostApplication?.processIdentifier == self.pid else { return }
+                if self.view.shelves.isEmpty, tries > 1 { self.arrive(tries: tries - 1, generation: generation, keys: keys); return }
                 self.view.pane = .page
                 self.view.switchPane(0)
             }
@@ -84,7 +101,13 @@ final class MediaAppModule: AppModule {
             if MediaView.showsVideo(pid: pid) { next(); return }
             if view.inVideo {
                 view.inVideo = false
-                view.refresh { [weak self] in self?.view.pane = .page; self?.view.switchPane(0) }
+                let generation = focusGeneration, keys = ScriptHandler.keysArrivedCount
+                view.refresh { [weak self] in
+                    guard let self, !terminated, focusGeneration == generation, Core.active,
+                          ScriptHandler.keysArrivedCount == keys,
+                          NSWorkspace.shared.frontmostApplication?.processIdentifier == self.pid else { return }
+                    view.pane = .page; view.switchPane(0)
+                }
                 return
             }
         }
