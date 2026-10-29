@@ -61,6 +61,7 @@ public final class MediaView {
 
     public let pid: pid_t
     private let sidebarNavigation: SidebarNavigation
+    private let bundleIdentifier: String?
     private let work: MediaWorkOwner<ReadResult>
     nonisolated private let collector: Collector
     nonisolated private let windowQuery: WindowQuery
@@ -71,19 +72,20 @@ public final class MediaView {
         self.init(pid: pid, eligible: { Core.active && NSWorkspace.shared.frontmostApplication?.processIdentifier == pid })
     }
 
-    package convenience init(pid: pid_t, sidebarNavigation: SidebarNavigation) {
-        self.init(pid: pid, sidebarNavigation: sidebarNavigation,
+    package convenience init(pid: pid_t, sidebarNavigation: SidebarNavigation, bundleIdentifier: String? = nil) {
+        self.init(pid: pid, sidebarNavigation: sidebarNavigation, bundleIdentifier: bundleIdentifier,
                   eligible: { Core.active && NSWorkspace.shared.frontmostApplication?.processIdentifier == pid })
     }
 
     package init(pid: pid_t, collector: Collector? = nil, queue: DispatchQueue? = nil,
-                 sidebarNavigation: SidebarNavigation = .pressCell,
+                 sidebarNavigation: SidebarNavigation = .pressCell, bundleIdentifier: String? = nil,
                  windowQuery: WindowQuery? = nil, keys: @escaping @Sendable () -> Int = { ScriptHandler.keysArrivedCount },
                  deliver: @escaping @Sendable (@escaping @MainActor @Sendable () -> Void) -> Void = { onMain($0) },
                  delay: @escaping @MainActor (TimeInterval, @escaping @MainActor @Sendable () -> Void) -> Void = { onMain(after: $0, $1) },
                  eligible: @escaping @MainActor () -> Bool) {
         self.pid = pid; self.collector = collector ?? Self.collect
         self.sidebarNavigation = sidebarNavigation
+        self.bundleIdentifier = bundleIdentifier ?? Speech.bundleIdentifier(of: pid)
         self.windowQuery = windowQuery ?? Self.focusedWindow
         self.keyCount = keys
         self.delay = delay
@@ -1080,6 +1082,7 @@ public final class MediaView {
         guard let i = index[pane], all.indices.contains(i) else { return }
         let item = all[i]
         var parts: [String] = []
+        var pieces: [(String, [String])] = []
         if pane == .page {
             let flat = flatPage
             let s = flat[i].shelf
@@ -1089,14 +1092,17 @@ public final class MediaView {
                 let title = shelves[s].title
                 if !title.isEmpty { parts.append("\(title), \(inShelf.count) item\(inShelf.count == 1 ? "" : "s")") }
             }
-            parts.append(label(item, at: i))
-            parts.append("\(pos) of \(inShelf.count)")
+            pieces.append(("name", [label(item, at: i)]))
+            pieces.append(("position", ["\(pos) of \(inShelf.count)"]))
         } else {
-            parts.append(item.label)
-            if item.isHeader { parts.append("heading") }
-            if item.selected { parts.append("selected") }
-            parts.append("\(i + 1) of \(all.count)")
+            pieces.append(("name", [item.label]))
+            if item.isHeader { pieces.append(("role", ["heading"])) }
+            if item.selected { pieces.append(("state", ["selected"])) }
+            pieces.append(("position", ["\(i + 1) of \(all.count)"]))
         }
+        // Flat media items use the same Item details policy/order as ordinary objects. Shelf context remains
+        // outside the item pieces; Number in list must not be hardcoded back on here (#187, 29 Oct 2026).
+        parts += Speech.arranged(pieces, by: config.presentation.verbosity(for: bundleIdentifier))
         Speech.speakItem(parts.joined(separator: ", "), processed: true)
         Hints.schedule(hint(for: item))
     }

@@ -64,7 +64,7 @@ private final class MediaTestRig {
     private let allowed: OSAllocatedUnfairLock<Bool>
 
     init(liveCollector: Bool = false, actualWindow: Bool = false,
-         sidebarNavigation: MediaView.SidebarNavigation = .pressCell) {
+         sidebarNavigation: MediaView.SidebarNavigation = .pressCell, bundleIdentifier: String? = nil) {
         let source = MediaTestSource(), deliveries = MediaTestDeliveries()
         let worker = DispatchQueue(label: "turnover.tests.media-work")
         let allowed = OSAllocatedUnfairLock(initialState: true)
@@ -78,7 +78,7 @@ private final class MediaTestRig {
         let windowQuery: MediaView.WindowQuery? = liveCollector || actualWindow ? nil : fixedWindow
         // All dependencies are init-local checked values; no partially initialized self crosses to the worker.
         view = MediaView(pid: AXReplay.floor, collector: collector,
-                         queue: worker, sidebarNavigation: sidebarNavigation, windowQuery: windowQuery,
+                         queue: worker, sidebarNavigation: sidebarNavigation, bundleIdentifier: bundleIdentifier, windowQuery: windowQuery,
                          keys: { keys.withLock { $0 } }, deliver: { deliveries.enqueue($0) },
                          delay: { delays.enqueue($0, $1) },
                          eligible: { allowed.withLock { $0 } })
@@ -534,6 +534,90 @@ func mediaWorkTests() {
         selectTVHome(rig); rig.view.activate(); rig.settle()
         expect(AXReplay.actions.map(\.id), [40], "default media path still presses the existing cell")
         check(AXReplay.sets.isEmpty, "TV row strategy was not applied to default media")
+    }
+    func withMediaAnnouncements(bundle: String = "com.apple.TV", _ body: (MediaView, () -> [String]) -> Void) {
+        let savedConfig = config, savedSink = Speech.sink
+        config.presentation.speakHints = false
+        var said: [String] = []; Speech.sink = { said.append($0) }
+        let rig = MediaTestRig(bundleIdentifier: bundle)
+        defer { rig.view.stop(); rig.worker.sync {}; config = savedConfig; Speech.sink = savedSink }
+        let first = MediaView.Item(label: "Public episode A", element: AXReplay.element(100))
+        let second = MediaView.Item(label: "Public episode B", element: AXReplay.element(101))
+        var home = MediaView.Item(label: "Home", element: AXReplay.element(30)); home.selected = true
+        var library = MediaView.Item(label: "Library", element: AXReplay.element(31)); library.isHeader = true
+        rig.source.result(.init(built: .init(sidebar: [home, library], shelves: [.init(title: "Featured", items: [first, second])],
+                                            player: [.init(label: "Play", element: AXReplay.element(50))], pageTitle: "Public page",
+                                            pageID: "public", toolbar: [.init(label: "Back", element: AXReplay.element(60))])))
+        rig.view.refresh {}; rig.settle()
+        body(rig.view, { said })
+    }
+    test("media announcements: global position off applies to page sidebar player and toolbar") {
+        withMediaAnnouncements { view, said in
+            config.presentation.verbosity = Config.Verbosity()
+            config.presentation.verbosity.set("position", said: false)
+            config.presentation.verbosityByApp = [:]
+            for pane in [MediaView.Pane.page, .sidebar, .player, .toolbar] {
+                view.pane = pane; view.switchPane(0)
+                check(said().last?.contains(" of ") == false, "position is absent from the actual \(pane) announcement")
+            }
+            view.pane = .page; view.switchPane(0)
+            expect(said().last, "Featured, 2 items, Public episode A", "shelf context and item name remain")
+            view.pane = .sidebar; view.switchPane(0)
+            expect(said().last, "Home, selected", "selection state remains")
+            view.move(1)
+            expect(said().last, "Library, heading", "header role remains")
+        }
+    }
+    test("media announcements: global position on retains correct item and shelf positions") {
+        withMediaAnnouncements { view, said in
+            config.presentation.verbosity = Config.Verbosity(); config.presentation.verbosityByApp = [:]
+            view.pane = .page; view.switchPane(0)
+            expect(said().last, "Featured, 2 items, Public episode A, 1 of 2")
+            view.move(1)
+            expect(said().last, "Public episode B, 2 of 2")
+            view.pane = .sidebar; view.switchPane(0)
+            expect(said().last, "Home, selected, 1 of 2")
+            for pane in [MediaView.Pane.player, .toolbar] {
+                view.pane = pane; view.switchPane(0)
+                check(said().last?.hasSuffix("1 of 1") == true, "enabled position is retained in \(pane)")
+            }
+        }
+    }
+    test("media announcements: effective per-app position override wins in both directions") {
+        for appSaysPosition in [false, true] {
+            withMediaAnnouncements(bundle: "com.apple.TV") { view, said in
+                var everywhere = Config.Verbosity(), app = Config.Verbosity()
+                everywhere.set("position", said: !appSaysPosition); app.set("position", said: appSaysPosition)
+                config.presentation.verbosity = everywhere; config.presentation.verbosityByApp = ["com.apple.TV": app]
+                view.pane = .sidebar; view.switchPane(0)
+                expect(said().last?.contains("1 of 2"), appSaysPosition, "TV's app-specific item details override the global policy")
+            }
+            withMediaAnnouncements(bundle: "com.apple.Music") { view, said in
+                var everywhere = Config.Verbosity(), tv = Config.Verbosity()
+                everywhere.set("position", said: !appSaysPosition); tv.set("position", said: appSaysPosition)
+                config.presentation.verbosity = everywhere; config.presentation.verbosityByApp = ["com.apple.TV": tv]
+                view.pane = .sidebar; view.switchPane(0)
+                expect(said().last?.contains("1 of 2"), !appSaysPosition, "another app keeps the global policy")
+            }
+        }
+    }
+    test("media announcements: configured item-detail order and explicit state role switches are honored") {
+        withMediaAnnouncements { view, said in
+            config.presentation.verbosity = Config.Verbosity(order: ["position", "state", "role", "name"], off: [])
+            config.presentation.verbosityByApp = [:]
+            view.pane = .page; view.switchPane(0)
+            expect(said().last, "Featured, 2 items, 1 of 2, Public episode A", "shelf context precedes reordered item pieces")
+            view.pane = .sidebar; view.switchPane(0)
+            expect(said().last, "1 of 2, selected, Home")
+            view.move(1)
+            expect(said().last, "2 of 2, heading, Library")
+            config.presentation.verbosity.set("role", said: false)
+            view.move(0)
+            expect(said().last, "2 of 2, Library", "heading is omitted only when its role setting requests that")
+            config.presentation.verbosity.set("state", said: false)
+            view.move(-1)
+            expect(said().last, "1 of 2, Home", "selection state is omitted only when its state setting requests that")
+        }
     }
     test("media work: an expired request releases the lane without calling its provider") {
         let worker = DispatchQueue(label: "turnover.tests.media-deadline"), delivery = MediaTestDeliveries()
