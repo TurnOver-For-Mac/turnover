@@ -335,7 +335,7 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // its state be
             case (15, false, false):   // NVDA+R: TurnOver's screen recognition, stepping in for the result (28 Oct 2026)
                 DispatchQueue.main.async { MainActor.assumeIsolated { MenuAnywhere.shared.recognize() } }
                 return nil
-            case (15, true, false):    // NVDA+Shift+R: the screen interface (experimental)
+            case (15, true, false) where Edition.isDevBuild:    // NVDA+Shift+R: the screen interface (experimental; developer builds)
                 DispatchQueue.main.async { MainActor.assumeIsolated { MenuAnywhere.shared.recognizeInterface() } }
                 return nil
             default: break
