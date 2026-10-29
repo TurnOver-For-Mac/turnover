@@ -36,6 +36,13 @@ func localizationTests() {
         expect(a["düğme"], "btn", "a word of its own")
         expect(a, b, "the same whatever the order")
     }
+    test("localization: a Mail row's own unread is recognised in English and in TurnOver's language") {
+        expect(MailRowWords.saysUnread("unread, Ann, Hello", word: "okunmamış"), true, "Mail in English")
+        expect(MailRowWords.saysUnread("Unread, Ann", word: "okunmamış"), true, "a capital")
+        expect(MailRowWords.saysUnread("okunmamış, Ayşe, Merhaba", word: "okunmamış"), true, "Mail in Turkish")
+        expect(MailRowWords.saysUnread("Ann, Hello", word: "okunmamış"), false, "a read row")
+        expect(MailRowWords.saysUnread("Ann, unread messages", word: "okunmamış"), false, "unread later in the words")
+    }
     test("localization: every translation keeps the English string's placeholders") {
         let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Resources/Localizable.xcstrings")

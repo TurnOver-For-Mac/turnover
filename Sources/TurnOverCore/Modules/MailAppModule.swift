@@ -273,13 +273,23 @@ final class MailPriorityPopup: TurnOverObject {
     override var name: String { "Priority" }
 }
 
+public enum MailRowWords {
+    /// Whether a message row's own words already start with unread. Which rows are unread comes from Mail itself (its
+    /// Read action); only this check reads words, and they are Mail's, in Mail's language: English "unread" and
+    /// TurnOver's word both count, so a Turkish TurnOver over an English Mail doesn't say it twice.
+    public static func saysUnread(_ name: String, word: String) -> Bool {
+        ["unread", word].contains { !$0.isEmpty && name.range(of: $0, options: [.anchored, .caseInsensitive]) != nil }
+    }
+}
+
 final class MailMessageRow: TurnOverObject {
     override var name: String {
         let n = super.name
         let unread = String(localized: "unread", comment: "A Mail message not yet read")
-        if n.hasPrefix(unread) { return n }
+        if MailRowWords.saysUnread(n, word: unread) { return n }
         return Self.isUnread(element) || MailUnread.wasUnread(element) ? "\(unread), \(n)" : n
     }
+
 
     static func isMessageRow(_ e: AXUIElement) -> Bool {
         e.element(kAXParentAttribute)?.string(kAXDescriptionAttribute) == "messages"
