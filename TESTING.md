@@ -293,20 +293,7 @@ An earlier VoiceOver-on inspection also lacked phone controls. These are sampled
 of every possible Mirroring state or a working adapter. Separate paired-device developer diagnostics are not
 part of this command, and a readable tree alone would not establish successful activation or audible reading.
 
-## Passive Safari restoration and Word native boundaries (29 Oct 2026)
-
-`SafariPageShapingTests` evaluates the exact `Extension/content.js` with a synthetic DOM in Apple's
-JavaScriptCore. Its plain JavaScript harness checks protected fields (including role overrides, autocomplete
-and CSS masking), preserved authored semantics and literal names, conservative icon/loading repairs,
-attribute ownership, passivity, finite work and lifecycle retirement. No browser, private page or Node dependency
-is required. The optional Node wrapper is a development convenience. No page tree is captured or transmitted.
-
-`build.sh` always assembles PageReader.appex, validates passive manifest/resources, extension-safe Mach-O flags,
-sandbox-only entitlements and signatures. Real local builds default to an Apple Development extension signed
-by the parent's team, leaving the reader identity unchanged. Ad-hoc contributor builds still package the
-extension; they do not establish Safari availability. Distribution can override the extension identity and still
-requires its normal notarization process. Registration does not enable the extension or grant site access.
-Live validation needs Safari's extension enabled, site access and a reloaded public page; say what was checked.
+## Word native boundaries (29 Oct 2026)
 
 `WordCaretBoundaryTests` intercepts keys/audio and exercises the actual inherited caret paths and registered
 Word policy. It verifies sound-only suppression, retained haptics/key retries, other-app defaults, and owned

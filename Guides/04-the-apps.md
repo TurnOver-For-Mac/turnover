@@ -2,16 +2,6 @@
 
 What TurnOver adds in each app it reads. To give an app to TurnOver or back to VoiceOver: Command Control Comma, T.
 
-## Safari
-
-Web pages use browse mode and focus mode as described in Reading and say all. The optional **TurnOver Page Reader**
-extension can improve missing page semantics, such as redundant icons and unnamed loading indicators. Enable it
-in Safari Settings, Extensions, choose which websites it may access, then reload a page to try it.
-
-This version shapes the page for Safari's accessibility reader. It preserves the site's explicit labels and roles,
-does not click or fill anything, and does not send a separate page-reading tree. Reloading a page also removes
-changes made by an earlier extension version. Unusual pages may still need work.
-
 ## Mail
 
 Up and Down move through the messages; Home and End go to the first and last. The message is read as a document.
