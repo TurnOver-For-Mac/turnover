@@ -20,6 +20,9 @@ let gates: [String: (name: String, help: String, run: ([String]) -> Void)] = [
     "capabilities": ("capabilities",
                  "Bounded metadata-only public AX sample of one running app. Requires --bundle id. Optional --extended uses a larger fixed content sample; --system-settings reports known structural tags only for System Settings. These modes cannot be combined. No labels, document text, actions, flag writes or activation.",
                  runCapabilitiesGate),
+    "tv-structure": ("tv-structure",
+                 "Bounded read-only TV structure and known Home/Search sidebar capabilities. Existing TV only; no arguments, arbitrary labels, identifiers, actions, writes or activation.",
+                 runTVStructureGate),
     "inspect":  ("inspect",
                  "Read-only look at an app's focused window and element: roles, attributes, text queries. --app Name | --bundle id | --pid N [--value]",
                  runInspectGate),
@@ -75,7 +78,7 @@ guard let gateName = args.first, let gate = gates[gateName] else {
 
 Log.open(gate: gate.name)
 // Metadata gates never persist raw arguments, including rejected content or malformed target arguments.
-let metadataGate = gateName == "appstore-ax" || gateName == "appstore-navigation" || gateName == "capabilities"
+let metadataGate = gateName == "appstore-ax" || gateName == "appstore-navigation" || gateName == "capabilities" || gateName == "tv-structure"
 Log.line(metadataGate ? "turnover-probe \(gate.name)" : "turnover-probe \(gate.name) \(args.dropFirst().joined(separator: " "))")
 Log.line("macOS \(ProcessInfo.processInfo.operatingSystemVersionString), pid \(getpid()), VoiceOver enabled flag: \(voiceOverRunning())")
 gate.run(Array(args.dropFirst()))
