@@ -1169,6 +1169,27 @@ func browseTextNavTests() {
             check(Speech.demandedUntil > Date(), "\(name) may speak on demand")
         }
     }
+    test("JAWS keys: where VoiceOver reads, the reading keys stand for their arrows, as the aliases for their NVDA keys") {
+        // The key layer gave a twin only to the aliases ("=kb:turnover+…"), so where VoiceOver reads the six went quiet or
+        // ran NVDA's meaning of the letter, L reading the line (the review of pull request 144, 29 Oct 2026).
+        let standIns = StyleKeymap.voiceOverStandIns(for: .jaws)
+        for (key, arrow) in [("u", "upArrow"), ("o", "downArrow"), ("j", "option+leftArrow"), ("l", "option+rightArrow"), ("m", "leftArrow"), (".", "rightArrow")] {
+            expect(standIns[normalizeGestureIdentifier("kb:turnover+" + key)], normalizeGestureIdentifier("kb:" + arrow), "Caps Lock \(key) stands for its arrow")
+        }
+        expect(standIns[normalizeGestureIdentifier("kb:turnover+k")], normalizeGestureIdentifier("kb:turnover+control+."), "an alias still stands for its NVDA key")
+    }
+    test("JAWS keys: a reading key given back its own command sends the arrow on, rather than calling itself") {
+        // Down Arrow set to Caps Lock O's command in the keyboard commands editor: run at once, the command found itself as
+        // Down's and called itself until TurnOver crashed (the review of pull request 144, 29 Oct 2026).
+        let sent = Locked<[String]>([])
+        let (saved, poster) = (config.keyboard.userGestures, KeyboardGesture.poster)
+        defer { config.keyboard.userGestures = saved; KeyboardGesture.poster = poster; ScriptHandler.clearLastScript() }
+        KeyboardGesture.poster = { g in sent.value.append(g.identifier) }
+        config.keyboard.userGestures[normalizeGestureIdentifier("kb:downArrow")] = "script:jaws_sayNextLine"
+        guard let nextLine = ScriptHandler.findScript(named: "jaws_sayNextLine") else { return Harness.fail("no jaws_sayNextLine") }
+        ScriptHandler.executeScript(nextLine, gesture: KeyboardGesture(identifier: "kb:downArrow")!)
+        expect(sent.value, ["kb:downArrow"], "Down went on to the app, once")
+    }
     test("Steam's Big Picture choice survives a save: written and read under the same name") {
         var g = Config.Games(); g.readBigPicture = true
         let data = try JSONEncoder().encode(g)
