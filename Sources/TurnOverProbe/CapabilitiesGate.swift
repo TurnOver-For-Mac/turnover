@@ -156,7 +156,8 @@ private final class AXCapabilitiesSample {
         }
         let app = AXUIElementCreateApplication(pid)
         if let focus = element(app, kAXFocusedUIElementAttribute), budget.beginNode(depth: 0) {
-            seen.insert(ElementKey(focus))
+            // Focus inspection may be the window itself. It uses the detail cache, not traversal's seen set,
+            // so the later bounded window walk can still discover that window's children (overnight #177).
             let rawRole = role(focus)
             Log.line("sample=focus role=\(AXDiagnosticReport.role(rawRole)) isWebArea=\(rawRole == "AXWebArea")")
             inspect(focus, kind: "focus")
