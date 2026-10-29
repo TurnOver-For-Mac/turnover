@@ -189,7 +189,7 @@ public final class MediaView {
             self.built = built; self.found = found; self.video = video
         }
     }
-    nonisolated package typealias Collector = @Sendable (ReadInput, @escaping @Sendable () -> Bool) -> ReadResult?
+    package typealias Collector = @Sendable (ReadInput, @escaping @Sendable () -> Bool) -> ReadResult?
 
     private func read(_ operation: ReadOperation, then: @escaping @MainActor @Sendable (ReadResult?) -> Void) {
         work.enqueue { [weak self] in
