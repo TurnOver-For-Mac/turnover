@@ -10,10 +10,16 @@ nonisolated public enum Phrases {
         String(localized: "\(String(index)) of \(String(count))", comment: "An item's position among the others: 3 of 9")
     }
 
-    /// Whether words are a position as `position` says it ("3 of 9"), in the reader's language.
-    public static func isPosition(_ words: String) -> Bool {
-        let numbers = words.split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
-        return numbers.count == 2 && words == position(numbers[0], of: numbers[1])
+    /// Whether words are a position: TurnOver's own, as `position` says it in the reader's language ("3 / 9"), with
+    /// any digits ("03 / 09"); or the English pattern this check had before, kept alongside for an app's own words
+    /// ("1 of 2", "01 of 02") whatever TurnOver's language (Oliver's review of PR 123, 29 Oct 2026).
+    public static func isPosition(_ words: String) -> Bool { isPosition(words, template: position(111111, of: 222222)) }
+    /// `template`: a position said with 111111 and 222222 for its numbers.
+    public static func isPosition(_ words: String, template: String) -> Bool {
+        if words.range(of: #"^\d+ of \d+$"#, options: .regularExpression) != nil { return true }
+        let pattern = "^" + NSRegularExpression.escapedPattern(for: template)
+            .replacingOccurrences(of: "111111", with: #"\d+"#).replacingOccurrences(of: "222222", with: #"\d+"#) + "$"
+        return words.range(of: pattern, options: .regularExpression) != nil
     }
 
     /// "level 2": how deep an item is (an outline's rows, a list inside a list).

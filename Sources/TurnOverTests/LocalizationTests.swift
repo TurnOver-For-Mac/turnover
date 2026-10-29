@@ -58,6 +58,16 @@ func localizationTests() {
         expect(Symbols.name(of: "I", sayCap: true, locale: tr), "cap ı", "Turkish I")
         expect(Symbols.name(of: "İ", sayCap: true, locale: tr), "cap i", "Turkish İ")
     }
+    test("localization: a position is recognised in TurnOver's words and in the app's English") {
+        expect(Phrases.isPosition("1 of 2"), true, "English")
+        expect(Phrases.isPosition("01 of 02"), true, "English with leading zeros")
+        let turkish = "111111 / 222222"
+        expect(Phrases.isPosition("3 / 9", template: turkish), true, "TurnOver's Turkish")
+        expect(Phrases.isPosition("03 / 09", template: turkish), true, "Turkish with leading zeros")
+        expect(Phrases.isPosition("1 of 2", template: turkish), true, "an app's own English under a Turkish TurnOver")
+        expect(Phrases.isPosition("3 / 9 items", template: turkish), false, "more words")
+        expect(Phrases.isPosition("Page 3", template: turkish), false, "not a position")
+    }
     test("localization: every translation keeps the English string's placeholders") {
         let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Resources/Localizable.xcstrings")
