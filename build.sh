@@ -257,10 +257,9 @@ cp "$BIN/turnover-page-reader" "$APPEX_EXE"
 cp Resources/PageReader-Info.plist "$APPEX/Contents/Info.plist"
 cp Extension/manifest.json Extension/content.js "$APPEX/Contents/Resources/"
 printf 'XPC!????' > "$APPEX/Contents/PkgInfo"
-# 29 Oct 2026: the earlier working appex and installed vendor Safari appexes are MH_EXECUTE without
-# APP_EXTENSION_SAFE. Keep the compiler's extension restriction, and verify LC_MAIN actually enters the
-# Foundation stub selected by our linker flags. Do not patch a Mach-O header to satisfy a false flag check.
-python3 Tools/tests/verify-safari-entry.py "$APPEX_EXE"
+for arch in $(lipo -archs "$APPEX_EXE"); do
+  otool -arch "$arch" -hv "$APPEX_EXE" | grep -qw APP_EXTENSION_SAFE || { echo "STOP: Page Reader's $arch slice is not app-extension safe" >&2; exit 1; }
+done
 sign --force --sign "$EXTENSION_IDENTITY" "${EXTENSION_RUNTIME[@]}" --entitlements Resources/PageReader.entitlements --identifier com.turnover.reader.PageReader "$APPEX"
 codesign --verify --strict "$APPEX" || { echo "STOP: Page Reader signature verification failed; not installing" >&2; exit 1; }
 sign --force --sign "$IDENTITY" --identifier com.turnover.key "$KEYAPP"
