@@ -255,6 +255,14 @@ action strings are suppressed. Selection membership is definitive only for a com
 No selection/focus/action/flag write is attempted. Use a separate five-second process deadline. This helps
 distinguish an ineffective activation from stale extraction; advertised settable support does not prove a change.
 
+The nine TV sidebar cases in `MediaWorkTests` exercise actual Enter/selection, unchanged and empty content,
+ordinary-refresh publication, newer-key ownership, idempotent verified selection, wrong/malformed membership,
+reparented/reused rows, native window changes and the unchanged default cell-press strategy. The fixture bridge
+accepts bounded replay-only element-array writes so selected rows read back through the real provider protocol.
+The installed trial still needs native Home/Search selection and audible content checks. A cached already-open
+page whose native selection no longer agrees is conservatively refused; it is not permission to accept a new
+sidebar title with an unverified old body.
+
 The registered overnight suites exercise real owners/providers through public or synthetic fixtures:
 `WordPageReadingTests` (current page ranges and window changes), `MailMessageReadingTests` (editable siblings),
 `TerminalUnicodeTests` (complete graphemes), `SafariReplyTests` (late Find/tab replies), `MediaWorkTests`
