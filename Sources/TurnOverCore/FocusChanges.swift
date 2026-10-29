@@ -538,6 +538,9 @@ extension AXHandler {
         }
         lastGainFocus = (target, Date())
         let interceptor = BrowseModeHandler.shared.document(for: obj, ancestors: ancestors)
+        // Into a document from outside it (another app, the window around the page): its focus event is told, as NVDA's
+        // tree interceptor is (_enteringFromOutside).
+        interceptor?.focusFromOutside = interceptor !== API.focusTreeInterceptor
         API.setFocusObject(obj, ancestors: ancestors, interceptor: interceptor)
         ObjectNavigator.shared.focusMoved(to: obj.element, pid: pid)
         EventHandler.queue(Event(.gainFocus, obj))
