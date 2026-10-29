@@ -499,6 +499,14 @@ public enum Speech {
     private static var inMisspelling = false
 
     public static func textInfoSpeech(_ info: TextInfo, unit: TextUnit?, reason: OutputReason) -> String {
+        var blank = false
+        return textInfoSpeech(info, unit: unit, reason: reason, onlyBlank: &blank)
+    }
+    /// `onlyBlank`: set when the words are TurnOver's own blank and nothing more (no heading, link or formatting
+    /// before it): the range holds no text. Say all skips those by this, not by the words, so a paragraph that is
+    /// just the word "blank" (or "boş") is read.
+    public static func textInfoSpeech(_ info: TextInfo, unit: TextUnit?, reason: OutputReason, onlyBlank: inout Bool) -> String {
+        onlyBlank = false
         let spellingError = String(localized: "spelling error", comment: "Said before a misspelled word")
         var text = info.text
         var prefix: [String] = []
@@ -541,7 +549,8 @@ public enum Speech {
             text = text.replacingOccurrences(of: "\r\n", with: "\n")
             // One character that stands for more (an attachment: Mail's recipient token) is said whole.
             if text.count > 1 { return (prefix + [text]).joined(separator: " ") }
-            return (prefix + [text.isEmpty ? Phrases.blank : Symbols.spelled(text)]).joined(separator: " ")
+            if text.isEmpty { onlyBlank = prefix.isEmpty; return (prefix + [Phrases.blank]).joined(separator: " ") }
+            return (prefix + [Symbols.spelled(text)]).joined(separator: " ")
         }
         // A misspelled word inside the line, not only at its start: "spelling error" before it, as NVDA says it.
         if reason != .sayAll, unit == .line || unit == .paragraph || unit == .sentence, config.documentFormatting.spellingErrors != .off {
@@ -589,6 +598,7 @@ public enum Speech {
             // (Not a lone non-breaking space: Mail fills each empty line of a message with one, and it was read as
             // "non breaking space" on every blank line, 5 Oct 2026.)
             if text.count == 1, let c = text.first, c != "\r", c != "\n", c != "\u{2029}", c != "\u{a0}" { return (prefix + [Symbols.name(of: c)]).joined(separator: " ") }
+            onlyBlank = prefix.isEmpty
             return (prefix + [Phrases.blank]).joined(separator: " ")
         }
         // A capital read by character: lowered in its line's language when the line says it clearly (an English

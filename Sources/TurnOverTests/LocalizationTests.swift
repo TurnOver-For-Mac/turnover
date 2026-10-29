@@ -2,6 +2,7 @@
 // The translations (Resources/Localizable.xcstrings, make-strings.py, 23 Oct 2026): the tests hear English on a Mac in
 // any language, and no translation can break a sentence by losing or changing the English string's placeholders.
 import Foundation
+import ApplicationServices
 import TurnOverCore
 
 func localizationTests() {
@@ -67,6 +68,23 @@ func localizationTests() {
         expect(Phrases.isPosition("1 of 2", template: turkish), true, "an app's own English under a Turkish TurnOver")
         expect(Phrases.isPosition("3 / 9 items", template: turkish), false, "more words")
         expect(Phrases.isPosition("Page 3", template: turkish), false, "not a position")
+    }
+    test("localization: say all skips an empty paragraph by TurnOver's own mark, not by the word blank") {
+        final class Paragraphs: TextInfo {
+            static let text = "blank\n\nboş" as NSString
+            override func storyLength() -> Int { Self.text.length }
+            override func textRange(_ s: Int, _ e: Int) -> String { Self.text.substring(with: NSRange(location: s, length: max(0, e - s))) }
+        }
+        let obj = ObjectFactory.make(AXUIElementCreateApplication(getpid()))
+        @MainActor func said(_ s: Int, _ e: Int) -> (String, Bool) {
+            var blank = false
+            let t = Speech.textInfoSpeech(Paragraphs(obj: obj, start: s, end: e), unit: .readingChunk, reason: .sayAll, onlyBlank: &blank)
+            return (t, blank)
+        }
+        expect(said(0, 5).1, false, "a paragraph that is the word blank")
+        expect(said(0, 5).0, "blank", "its words read")
+        expect(said(6, 7).1, true, "an empty paragraph")
+        expect(said(7, 10).1, false, "a paragraph that is the word boş")
     }
     test("localization: every translation keeps the English string's placeholders") {
         let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()

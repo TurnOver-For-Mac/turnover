@@ -62,9 +62,11 @@ public enum SayAll {
         let obj = r.obj
         let chunk = r.copy()
         r.collapse(toEnd: true)
-        let text = Speech.textInfoSpeech(chunk, unit: .readingChunk, reason: .sayAll)
+        var blank = false
+        let text = Speech.textInfoSpeech(chunk, unit: .readingChunk, reason: .sayAll, onlyBlank: &blank)
         nonisolated(unsafe) let tones = Speech.takeSayAllTones()   // sounded as this chunk starts, below (run on main there)
-        if text == Phrases.blank || Speech.cleaned(text).isEmpty {
+        // By TurnOver's own mark for an empty range, not by the words: a paragraph that is just "blank" is read.
+        if blank || Speech.cleaned(text).isEmpty {
             // Empty paragraphs are skipped, but not endlessly without yielding. (They never counted as queued speech:
             // counting them left "end of document" unsaid and the next arrow resuming say all, 8 Oct 2026.)
             blanks += 1
