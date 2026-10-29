@@ -1,0 +1,90 @@
+{
+  "processExitCode": 1,
+  "result": {
+    "AXRequestsAttempted": 0,
+    "AXServiceAdvertised": false,
+    "DTXAborted": false,
+    "DTXClosed": true,
+    "DTXConnected": false,
+    "RSDConnectionsClosed": 0,
+    "RSDConnectionsOpened": 0,
+    "RSDHandshakeComplete": false,
+    "XPCConnectionsCancelled": 2,
+    "XPCConnectionsReleased": 2,
+    "actionsAttempted": 0,
+    "assertionAcquired": true,
+    "assertionCreationUncertain": false,
+    "assertionInfoShape": {
+      "fields": {
+        "rsdDeviceInfo": {
+          "fields": {
+            "name": {
+              "type": "string"
+            },
+            "uuid": {
+              "type": "uuid"
+            }
+          },
+          "omittedKeyCount": 0,
+          "type": "dictionary"
+        },
+        "tunnelIPAddress": {
+          "type": "string"
+        }
+      },
+      "omittedKeyCount": 0,
+      "type": "dictionary"
+    },
+    "assertionReleaseAttempted": true,
+    "assertionReleaseErrorPresent": false,
+    "assertionReleaseReplyReceived": true,
+    "assertionRequested": true,
+    "attributesRead": false,
+    "cleanupConfirmed": true,
+    "clientEntitlementsModified": false,
+    "dependencyVersion": "11.10.2",
+    "deviceAPIVersionNegotiated": false,
+    "deviceIdentifiersLogged": false,
+    "dispatchQueueReleased": true,
+    "elapsedMilliseconds": 571,
+    "eligiblePhoneCount": 1,
+    "encryptionHandling": "native-netcat-owned",
+    "endpointAddressesLogged": false,
+    "errorClass": "ConnectionTerminatedError",
+    "localTransportClosed": true,
+    "method": "native-existing-paired-signed-netcat-DTX-negotiation-only",
+    "nativeAXServiceFound": false,
+    "nativeDeviceFound": false,
+    "nativeDeviceUUIDMatches": false,
+    "nativeEndpointMatched": true,
+    "nativeObjectCleanupConfirmed": false,
+    "nativeRSDUUIDPresent": true,
+    "nativeWorkerCompleted": false,
+    "nativeWorkerForcedStop": false,
+    "nativeWorkerStarted": false,
+    "netcatExitCode": 69,
+    "netcatFDPassing": false,
+    "netcatKilled": false,
+    "netcatReaped": true,
+    "netcatStarted": true,
+    "netcatTerminated": false,
+    "pairingAttempted": false,
+    "phoneTextLogged": false,
+    "processExitMethod": "explicit-after-owned-resource-cleanup",
+    "schemaVersion": 1,
+    "selectedNativeTransport": "network",
+    "selectedPhoneIdentityConfirmed": false,
+    "serviceFDClosed": false,
+    "serviceFDReturned": false,
+    "serviceSocketAttempted": false,
+    "socketPayloadBytesRead": 0,
+    "socketPayloadBytesSent": 0,
+    "status": "native-netcat-DTX-negotiation-error",
+    "subscriptionStarted": false,
+    "systemCLIAdditionalEntitlements": true,
+    "uidRetargeted": false,
+    "unsolicitedAXPacketCount": 0,
+    "unsolicitedAXPayloadBytes": 0
+  },
+  "stderrBytes": 0
+}
