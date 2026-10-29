@@ -247,6 +247,14 @@ a separate parent-process deadline (five seconds in the local trials). Clipping,
 errors remain explicit; no result claims the complete provider tree. No text, labels or arbitrary identifiers
 are emitted, no application is activated and no accessibility flag or action is written by this command.
 
+`turnover-probe tv-structure` takes no arguments and inspects only an already-running TV app. It shares the
+extended profile's limits and additionally compares focused/main/focus-owner window references, Sidebar
+selection membership, Home/Search row and first-cell roles/actions, and settable selection/focus attributes.
+Only the exact public names Sidebar, Home and Search are recognized; arbitrary labels, identifiers and custom
+action strings are suppressed. Selection membership is definitive only for a complete sampled selection array.
+No selection/focus/action/flag write is attempted. Use a separate five-second process deadline. This helps
+distinguish an ineffective activation from stale extraction; advertised settable support does not prove a change.
+
 The registered overnight suites exercise real owners/providers through public or synthetic fixtures:
 `WordPageReadingTests` (current page ranges and window changes), `MailMessageReadingTests` (editable siblings),
 `TerminalUnicodeTests` (complete graphemes), `SafariReplyTests` (late Find/tab replies), `MediaWorkTests`

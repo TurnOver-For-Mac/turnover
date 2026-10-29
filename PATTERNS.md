@@ -418,3 +418,12 @@ and no title. A tooltip names an icon button, but never the window's own buttons
   narrow label bridge prefers the standard fields, caps decoding, and falls back when the optional shape changes.
 - A successful AXFocused write does not prove keyboard movement. Settings re-resolves the part and reads the
   actual focused element; missing or incomplete ancestry is not proof that focus is elsewhere.
+
+## A sidebar press that returns success without changing page (TV, 29 Oct 2026, issue 186)
+
+TV 1.7.2 on macOS 27.2 advertised AXPress on the first cell of each sidebar row. Oliver's live trial returned
+success pressing Home, but Search remained selected and later reads still held its Browse categories. A separate
+bounded read-only probe confirmed Home unselected, Search selected, and AXSelectedRows settable on the outline.
+The row itself did not advertise AXPress. These are different observations: an advertised operation or successful
+action return is not the resulting selection. Verify selection and body change separately. A page title derived
+from the sidebar selection alone cannot establish that the old content has been replaced.
