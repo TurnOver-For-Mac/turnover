@@ -31,7 +31,6 @@ let package = Package(
         .executable(name: "turnover-plugin", targets: ["TurnOverPlugin"]),
         .executable(name: "turnover-key", targets: ["TurnOverKey"]),
         .executable(name: "turnover-settings", targets: ["TurnOverSettings"]),
-        .executable(name: "turnover-page-reader", targets: ["TurnOverPageReader"]),
         .executable(name: "turnover-tests", targets: ["TurnOverTests"]),
         // Dynamic: dyld honours interposing only in a library loaded at launch, never in the executable itself.
         .library(name: "AXReplayShim", type: .dynamic, targets: ["AXReplayShim"]),
@@ -126,17 +125,6 @@ let package = Package(
             dependencies: ["TurnOverControl"],
             path: "Sources/TurnOverSettings",
             linkerSettings: [.linkedFramework("SwiftUI"), .linkedFramework("AppKit"), .linkedFramework("AVFoundation")]
-        ),
-        // Safari hosts this standalone extension; it neither links the reader nor opens its control channel.
-        // Foundation's extension entry point instantiates the principal class named in PageReader-Info.plist.
-        .executableTarget(
-            name: "TurnOverPageReader",
-            path: "Sources/TurnOverPageReader",
-            swiftSettings: [.unsafeFlags(["-application-extension"])],
-            linkerSettings: [
-                .linkedFramework("Foundation"), .linkedFramework("SafariServices"),
-                .unsafeFlags(["-Xlinker", "-e", "-Xlinker", "_NSExtensionMain", "-Xlinker", "-application_extension"]),
-            ]
         ),
         // Command+Control+T starts and quits TurnOver: a tiny login-item helper inside TurnOver.app.
         .executableTarget(

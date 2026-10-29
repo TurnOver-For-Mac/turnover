@@ -1,8 +1,8 @@
 #!/bin/bash
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Build TurnOver and the probe harness, wrap the reader in an app bundle, sign it
-# with the existing reader identity (so the Accessibility grant survives rebuilds),
-# install it to /Applications and relaunch it.
+# with the Apple Development identity (so the Accessibility grant survives
+# rebuilds), install it to /Applications and relaunch it.
 #
 # Read the newest file in ~/Library/Application Support/TurnOver/logs/ afterwards.
 #
@@ -19,26 +19,6 @@ DEVID=$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID A
 # No Developer ID: an Apple Development certificate if there is one, otherwise ad hoc ("-"), so anyone can build.
 [ -n "$DEVID" ] || DEVID=$(security find-identity -v -p codesigning | sed -n 's/.*"\(Apple Development:[^"]*\)".*/\1/p' | head -1)
 IDENTITY="${TURNOVER_IDENTITY:-${DEVID:--}}"
-# Safari accepts Apple Development for local signed extension trials; Developer ID extensions need notarization
-# for distribution (Apple's Safari web-extension guidance; local observation, 28 Oct 2026). Keep the parent reader's
-# identity above unchanged. Release tooling can explicitly choose Developer ID with TURNOVER_EXTENSION_IDENTITY.
-# Certificate-free contributor builds still include an ad-hoc extension; Safari ignores it by default.
-EXTENSION_RUNTIME=()
-if [ -n "${TURNOVER_EXTENSION_IDENTITY:-}" ]; then
-  EXTENSION_IDENTITY="$TURNOVER_EXTENSION_IDENTITY"
-elif [ "$IDENTITY" = "-" ]; then
-  EXTENSION_IDENTITY="-"
-elif [ "$TURNOVER_STRIP" = 1 ]; then
-  EXTENSION_IDENTITY="$IDENTITY"
-else
-  EXTENSION_IDENTITY=$(security find-identity -v -p codesigning | sed -n 's/.*"\(Apple Development:[^"]*\)".*/\1/p' | head -1)
-fi
-[ "$TURNOVER_STRIP" != 1 ] || EXTENSION_RUNTIME=(--options runtime)
-if [ -z "$EXTENSION_IDENTITY" ]; then
-  echo "STOP: the signed local Safari extension needs an Apple Development identity; the installed app is untouched" >&2
-  echo "Distribution tooling may set TURNOVER_EXTENSION_IDENTITY explicitly; Developer ID also requires notarization" >&2
-  exit 1
-fi
 # One app, named "TurnOver". The marker is checked in every slice of the core below (code review, 16 Oct 2026).
 APPNAME="TurnOver"
 SWIFTFLAGS=""
@@ -70,7 +50,7 @@ mkdir -p "$BUILD"
 # A failed compile must not install yesterday's binary.
 # (Every product, the Settings app and the test runners too: a stale one of those installed or ran as if new. From an
 # outside audit, pull request 13, 26 Oct 2026.)
-for f in turnover turnover-probe turnover-plugin turnover-key turnover-settings turnover-page-reader turnover-tests turnover-coretest libTurnOverCore.dylib; do
+for f in turnover turnover-probe turnover-plugin turnover-key turnover-settings turnover-tests turnover-coretest libTurnOverCore.dylib; do
   rm -f "$BUILD/release/$f"
 done
 # The recipes and official listings, built into the program (make-embedded.py).
@@ -82,7 +62,7 @@ swift build -c release --scratch-path "$BUILD" $SWIFTFLAGS 2>&1 | grep -vE '^\[[
 BUILD_STATUS=${PIPESTATUS[0]}
 set -e
 [ "$BUILD_STATUS" -eq 0 ] || { echo "build failed"; exit "$BUILD_STATUS"; }
-[ -x "$BUILD/release/turnover" ] && [ -x "$BUILD/release/turnover-key" ] && [ -x "$BUILD/release/turnover-page-reader" ] && [ -f "$BUILD/release/libTurnOverCore.dylib" ] || { echo "build failed"; exit 1; }
+[ -x "$BUILD/release/turnover" ] && [ -x "$BUILD/release/turnover-key" ] && [ -f "$BUILD/release/libTurnOverCore.dylib" ] || { echo "build failed"; exit 1; }
 # The unit tests (Sources/TurnOverTests): a failing test stops the install (8 Oct 2026). TURNOVER_SKIP_TESTS=1 to skip.
 if [ "$TURNOVER_SKIP_TESTS" != 1 ]; then
   "$BUILD/release/turnover-tests" || { echo "build.sh: tests failed; not installing"; exit 1; }
@@ -93,7 +73,7 @@ fi
 BIN="$BUILD/release"
 if [ "$TURNOVER_UNIVERSAL" = 1 ]; then
   X86="$BUILD-x86_64"
-  for f in turnover turnover-probe turnover-plugin turnover-key turnover-settings turnover-page-reader turnover-tests turnover-coretest libTurnOverCore.dylib; do
+  for f in turnover turnover-probe turnover-plugin turnover-key turnover-settings turnover-tests turnover-coretest libTurnOverCore.dylib; do
     rm -f "$X86/release/$f"
   done
   set +e
@@ -101,10 +81,10 @@ if [ "$TURNOVER_UNIVERSAL" = 1 ]; then
   X86_BUILD_STATUS=${PIPESTATUS[0]}
   set -e
   [ "$X86_BUILD_STATUS" -eq 0 ] || { echo "Intel build failed"; exit "$X86_BUILD_STATUS"; }
-  [ -x "$X86/release/turnover" ] && [ -x "$X86/release/turnover-key" ] && [ -x "$X86/release/turnover-page-reader" ] && [ -f "$X86/release/libTurnOverCore.dylib" ] || { echo "Intel build failed"; exit 1; }
+  [ -x "$X86/release/turnover" ] && [ -x "$X86/release/turnover-key" ] && [ -f "$X86/release/libTurnOverCore.dylib" ] || { echo "Intel build failed"; exit 1; }
   BIN="$BUILD/universal"
   rm -rf "$BIN"; mkdir -p "$BIN"
-  for f in turnover turnover-plugin turnover-key turnover-settings turnover-page-reader libTurnOverCore.dylib; do
+  for f in turnover turnover-plugin turnover-key turnover-settings libTurnOverCore.dylib; do
     lipo -create "$BUILD/release/$f" "$X86/release/$f" -output "$BIN/$f"
   done
   echo "Universal: $(lipo -archs "$BIN/turnover")"
@@ -140,40 +120,6 @@ for H in steam-speech trackpad-gestures voiceover-quiet; do
   fi
   HELPERBINS+=("$H:$BINH")
 done
-
-# Only the passive scripts are packaged. Missing assets stop the build rather than silently installing a reader
-# without its extension, or carrying a stale active prototype's background/native-messaging permissions.
-python3 - <<'PAGEREADER_ASSETS'
-import json
-from pathlib import Path
-import plistlib
-
-def require(condition):
-    if not condition:
-        raise ValueError("invalid passive extension assets")
-
-try:
-    manifest = json.loads(Path("Extension/manifest.json").read_text())
-    info = plistlib.loads(Path("Resources/PageReader-Info.plist").read_bytes())
-    entitlements = plistlib.loads(Path("Resources/PageReader.entitlements").read_bytes())
-    require(isinstance(manifest, dict))
-    require(Path("Extension/content.js").is_file())
-    require(manifest.get("manifest_version") == 3)
-    require(not manifest.get("permissions") and "background" not in manifest)
-    scripts = manifest["content_scripts"]
-    require(len(scripts) == 1 and scripts[0]["js"] == ["content.js"])
-    require(manifest["version"] == info["CFBundleShortVersionString"])
-    require(info["CFBundleIdentifier"] == "com.turnover.reader.PageReader")
-    require(info["CFBundleExecutable"] == "turnover-page-reader")
-    require(info["LSMinimumSystemVersion"] == "14.0")
-    require(info["NSExtension"] == {
-        "NSExtensionPointIdentifier": "com.apple.Safari.web-extension",
-        "NSExtensionPrincipalClass": "SafariWebExtensionHandler",
-    })
-    require(set(entitlements) == {"com.apple.security.app-sandbox"} and entitlements["com.apple.security.app-sandbox"] is True)
-except (OSError, ValueError, KeyError, TypeError):
-    raise SystemExit("STOP: passive Page Reader assets are missing or invalid; not installing")
-PAGEREADER_ASSETS
 
 # The probe: sign in place.
 sign --force --sign "$IDENTITY" --identifier com.turnover.probe "$BUILD/release/turnover-probe"
@@ -249,19 +195,6 @@ if [ "$TURNOVER_STRIP" = 1 ]; then
   strip -x "$APP/Contents/Frameworks/libTurnOverCore.dylib" || { echo "STOP: strip failed on the core library"; exit 1; }   # keeps what the programs link against
   echo "Stripped: $(nm "$APP/Contents/MacOS/turnover" 2>/dev/null | wc -l | tr -d ' ') names left in turnover; unstripped copies in ~/Library/Developer/TurnOver/symbols"
 fi
-# Safari's standalone extension. It has no app group and does not link the reader or control-channel library.
-APPEX="$APP/Contents/PlugIns/PageReader.appex"
-APPEX_EXE="$APPEX/Contents/MacOS/turnover-page-reader"
-mkdir -p "$APPEX/Contents/MacOS" "$APPEX/Contents/Resources"
-cp "$BIN/turnover-page-reader" "$APPEX_EXE"
-cp Resources/PageReader-Info.plist "$APPEX/Contents/Info.plist"
-cp Extension/manifest.json Extension/content.js "$APPEX/Contents/Resources/"
-printf 'XPC!????' > "$APPEX/Contents/PkgInfo"
-for arch in $(lipo -archs "$APPEX_EXE"); do
-  otool -arch "$arch" -hv "$APPEX_EXE" | grep -qw APP_EXTENSION_SAFE || { echo "STOP: Page Reader's $arch slice is not app-extension safe" >&2; exit 1; }
-done
-sign --force --sign "$EXTENSION_IDENTITY" "${EXTENSION_RUNTIME[@]}" --entitlements Resources/PageReader.entitlements --identifier com.turnover.reader.PageReader "$APPEX"
-codesign --verify --strict "$APPEX" || { echo "STOP: Page Reader signature verification failed; not installing" >&2; exit 1; }
 sign --force --sign "$IDENTITY" --identifier com.turnover.key "$KEYAPP"
 sign --force --sign "$IDENTITY" --identifier com.turnover.settings "$SETAPP"
 # Sparkle inside out, as its documentation sets out (a published build is signed again for distribution).
@@ -273,43 +206,6 @@ sign --force --sign "$IDENTITY" --identifier com.turnover.core "$APP/Contents/Fr
 [ -f "$APP/Contents/MacOS/turnover-plugin" ] && sign --force --sign "$IDENTITY" --identifier com.turnover.plugin-tool "$APP/Contents/MacOS/turnover-plugin"
 for h in steam-speech trackpad-gestures voiceover-quiet; do [ -f "$APP/Contents/Helpers/$h" ] && sign --force --sign "$IDENTITY" --identifier "com.turnover.$h" "$APP/Contents/Helpers/$h"; done
 sign --force --sign "$IDENTITY" --identifier "$BUNDLEID" "$APP"
-
-# Check the signatures actually written, not certificate display names. A different-team nested extension would
-# invalidate the containing app. Neither these checks nor codesign verification prove Safari has loaded it.
-python3 - "$APP" "$APPEX" "$IDENTITY" "$EXTENSION_IDENTITY" <<'PAGEREADER_SIGNATURES'
-import plistlib
-import subprocess
-import sys
-
-app, extension, reader_identity, extension_identity = sys.argv[1:]
-def require(condition):
-    if not condition:
-        raise ValueError("invalid passive extension signature")
-
-def metadata(path):
-    result = subprocess.run(["/usr/bin/codesign", "-d", "--verbose=2", path], capture_output=True, check=True)
-    return dict(line.split("=", 1) for line in result.stderr.decode().splitlines() if "=" in line)
-
-try:
-    reader = metadata(app)
-    nested = metadata(extension)
-    require(reader["Identifier"] == "com.turnover.reader")
-    require(nested["Identifier"] == "com.turnover.reader.PageReader")
-    if reader_identity != "-":
-        require(extension_identity != "-")
-        require(reader.get("TeamIdentifier") not in (None, "not set"))
-        require(reader["TeamIdentifier"] == nested.get("TeamIdentifier"))
-    result = subprocess.run(["/usr/bin/codesign", "-d", "--entitlements", ":-", extension], capture_output=True, check=True)
-    entitlements = plistlib.loads(result.stdout)
-    require(set(entitlements) == {"com.apple.security.app-sandbox"} and entitlements["com.apple.security.app-sandbox"] is True)
-except (OSError, ValueError, KeyError, TypeError, subprocess.CalledProcessError):
-    raise SystemExit("STOP: Page Reader identity, team or sandbox verification failed; not installing")
-PAGEREADER_SIGNATURES
-if [ "$IDENTITY" = "-" ] || [ "$EXTENSION_IDENTITY" = "-" ]; then
-  echo "Page Reader is packaged for an ad-hoc contributor build; Safari will ignore it by default (registration not attempted)"
-else
-  echo "Page Reader is packaged and signed; Safari loading is unverified (Developer ID distribution also needs notarization)"
-fi
 
 # Never install a TurnOver macOS will not trust: it would come up with no permissions and no speech.
 if ! codesign --verify --deep --strict "$APP" 2>/dev/null; then
@@ -346,13 +242,6 @@ if [ "$1" != "--no-install" ]; then
   i=0; while [ $i -lt 10 ] && ! pgrep -x turnover >/dev/null; do sleep 0.5; i=$((i+1)); done
   if ! pgrep -x turnover >/dev/null; then echo "TurnOver did not start; starting VoiceOver"; open -a VoiceOver; fi
   sleep 2
-  # Register the installed bundle without activating Safari, changing its extension settings or restarting it.
-  # Registration only makes it discoverable; the user controls enablement and site access in Safari.
-  if [ "$IDENTITY" != "-" ] && [ "$EXTENSION_IDENTITY" != "-" ]; then
-    if ! pluginkit -a "$INSTALL/Contents/PlugIns/PageReader.appex"; then
-      echo "Page Reader registration failed; Safari loading remains unverified" >&2
-    fi
-  fi
   LOG=$(ls -t "$HOME/Library/Application Support/TurnOver/logs/turnover-"*.log 2>/dev/null | head -1)
   echo "Installed and launched: $INSTALL"
   echo "Log: $LOG"
