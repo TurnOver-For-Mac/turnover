@@ -271,6 +271,28 @@ page/window/session changes, and the unchanged default media policy. The normal 
 existing work allowance. The optional budget is not a provider-loading timeout or proof of end of content.
 Cold/slower-provider errors and general slow-network completion still need live evidence; AXHealth is honored.
 
+## iPhone Mirroring route diagnostic (29 Oct 2026, issue 191)
+
+`turnover-probe iphone-mirroring` takes no arguments and requires an already-running Mirroring app and the
+probe's own Accessibility trust. It does not request a grant. It compares actual focus, focused/main windows,
+focus ancestry, ordinary/visible/navigation child routes, and five public hit tests per focus/window frame.
+The shared allowance is 512 queries including exact-reference timeout setup, 64 nodes, depth 12, eight-element
+prefixes and a two-second cooperative deadline. Use a separate six-second process deadline. Geometry is used
+only for reads, never logged or used to send input. The command reads no images, labels or identifiers, writes
+no flags and performs no UI actions. Rejected arguments are not logged.
+
+The focused element also receives five public text-parameter probes at index zero or range `(0, 1)` when it is
+not explicitly protected or a secure text field. Those reads can return text; only its stored length and type
+are reported. An unavailable protection attribute means unknown protection. No text content, selections or
+coordinates enter the report. Empty children, unsupported reads, provider errors and client limits stay distinct.
+
+On Mirroring 2.1 / macOS 27.2 (26B118), a user-confirmed connected session returned an AXUnknown focus, zero
+children on all three routes, an empty native group at all ten hit points, and noValue from the five advertised
+text parameters. The probe was trusted, Mac VoiceOver was off, and the sample completed without clipping.
+An earlier VoiceOver-on inspection also lacked phone controls. These are sampled-state observations, not proof
+of every possible Mirroring state or a working adapter. Separate paired-device developer diagnostics are not
+part of this command, and a readable tree alone would not establish successful activation or audible reading.
+
 ## Passive Safari restoration and Word native boundaries (29 Oct 2026)
 
 `SafariPageShapingTests` evaluates the exact `Extension/content.js` with a synthetic DOM in Apple's
