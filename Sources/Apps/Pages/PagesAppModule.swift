@@ -72,6 +72,9 @@ final class PagesAppModule: AppModule {
     /// The focus that last left in Pages, from its loseFocus: whether it was a page's body text (a gone copy too) or
     /// the page layout.
     private var leftFocus: (textOrLayout: Bool, at: Date)?
+    /// Pages coming to the front: the focus it lost on going away is no hop's. Kept, Command-Tab back within a second
+    /// took the body text's focus for a hop and said nothing again (a code review, 29 Oct 2026).
+    override func event_appModuleGainFocus() { leftFocus = nil }
     /// Typing or the caret moving ends the reading of a table.
     private func endTableOnEdit(_ event: Event) { if table != nil, [.caret, .valueChange, .typedCharacter].contains(event.kind) { table = nil } }
     /// Not read: the hop ignoresFocus picked out (the focus object still follows it).
