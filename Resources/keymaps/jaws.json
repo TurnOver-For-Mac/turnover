@@ -38,6 +38,8 @@
     "kb:turnover+control+h": "jaws_speechHistory",
     "kb:turnover+;": "=kb:turnover+backspace",
     "kb:turnover+'": "=kb:turnover+shift+backspace",
+    "kb:turnover+leftArrow": "=kb:turnover+shift+leftArrow",
+    "kb:turnover+rightArrow": "=kb:turnover+shift+rightArrow",
     "kb:turnover+p": "=kb:turnover+shift+n",
     "kb:turnover+[": "=kb:turnover+shift+m",
     "kb:turnover+8": "=kb:turnover+[",

@@ -288,6 +288,24 @@ func focusRuleTests() {
             check(focusIs(3), "the page inside the group is the focus, not the group")
         }
     }
+    // NVDA+Left and Right Arrow review by character in text (NVDA-PARITY.md, decision 3). JAWS has no such keys: its
+    // characters are Caps Lock M, Comma and Period, and Insert+Left and Right Arrow are its words. In JAWS keys the two
+    // stay the previous and next item in text too: in a text field they became the character review, and at the end of
+    // the text said "bottom" at every press instead of going on (29 Oct 2026).
+    test("JAWS keys: Caps Lock Left and Right Arrow are the previous and next item in a text field too") {
+        playing {
+            // Set, not reported: the rules would set aside a focus another test has just reported.
+            API.setFocusObject(ObjectFactory.make(AXReplay.element(1)), ancestors: [])
+            let style = config.general.keyboardStyle
+            defer { config.general.keyboardStyle = style }
+            @MainActor func command(_ key: String) -> String? { KeyboardGesture(identifier: key).flatMap { ScriptHandler.findScript(for: $0) }?.name }
+            config.general.keyboardStyle = "windows"
+            expect(command("kb:turnover+rightArrow"), "nvda_reviewNextCharacter", "NVDA keys: in text, NVDA's review by character")
+            config.general.keyboardStyle = "jaws"
+            expect(command("kb:turnover+rightArrow"), "reviewNext", "JAWS keys: the next item, in a text field as everywhere")
+            expect(command("kb:turnover+leftArrow"), "reviewPrevious", "JAWS keys: the previous item, in a text field as everywhere")
+        }
+    }
 
     /// A Pages document: a window (0) in the application (9), its page layout (2) holding two pages (3, 5), each
     /// with its copy of the body text (4, 6). Both copies give the caret, or (a document just opened) neither does.
