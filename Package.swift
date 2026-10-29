@@ -110,7 +110,7 @@ let package = Package(
             dependencies: ["TurnOverCore", "TurnOverSpeech", "TurnOverControl", "AXFixtures", "PluginTestKit"],
             path: "Sources/TurnOverTests",
             swiftSettings: [.defaultIsolation(MainActor.self)],
-            linkerSettings: [.linkedFramework("ApplicationServices"), .linkedFramework("AppKit"), .linkedFramework("JavaScriptCore")]
+            linkerSettings: [.linkedFramework("ApplicationServices"), .linkedFramework("AppKit")]
         ),
         // Exercises the core's text layer and script resolution against a running app, silently.
         .executableTarget(
