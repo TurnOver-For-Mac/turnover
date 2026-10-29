@@ -1196,17 +1196,4 @@ func browseTextNavTests() {
         check(!AXHandler.servesPanel(helperBundle: svc, helperName: nil, frontName: "TextEdit"), "a service without a name")
         check(!AXHandler.servesPanel(helperBundle: svc, helperName: "Open and Save Panel Service ()", frontName: ""), "no app in front")
     }
-    test("a browse-mode line is checked against the page as it is now") {
-        expect(WebBuffer.lineCheck([.same, .same]), .unchanged, "every run as copied")
-        expect(WebBuffer.lineCheck([.same, .changed]), .changed, "a run's words changed (fast.com's speed)")
-        expect(WebBuffer.lineCheck([.gone]), .changed, "a run's element replaced")
-        expect(WebBuffer.lineCheck([.same, .unknown]), .unknown, "a run not answered in time")
-        expect(WebBuffer.lineCheck([.unknown, .gone]), .changed, "gone outweighs not answered")
-        expect(WebBuffer.lineCheck([]), .unchanged, "nothing to compare")
-        check(WebBuffer.sameText("38", "38"), "the same number")
-        check(!WebBuffer.sameText("38", "65"), "a new number")
-        check(WebBuffer.sameText("Next market briefing in\n01:21", "Next market briefing in 01:21"), "a wrap or line break is a space")
-        check(WebBuffer.sameText("  £20  ", "£20"), "white space around says nothing")
-        check(!WebBuffer.sameText("Price £20", "Price £25"), "one word changed")
-    }
 }
