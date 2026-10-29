@@ -353,11 +353,18 @@ open class EditableText: TurnOverObject {
             caretMoved(speak: unit == .line && readsLineAtEdge ? .line : nil, gesture: gesture, info: newInfo)
             return
         }
+        readMove(gesture, unit, from: bookmark, to: newInfo)
+    }
+
+    /// Reads what a caret key moved over: the unit at the new caret, but the character passed over for a plain Right on
+    /// the Mac, and the word passed over for Option Right (in the Windows style, the next word). Also for a key whose
+    /// move ended in another text box of the same text (Pages' next page: PagesAppModule).
+    func readMove(_ gesture: KeyboardGesture, _ unit: TextUnit, from bookmark: Bookmark?, to newInfo: TextInfo?) {
         // VoiceOver's reading of a plain Right by character: the character just passed over, now before the caret, so
         // what you hear is what Backspace will delete (Oliver, 20 Oct 2026: "you have to be to the right of the
         // object you want to backspace"). NVDA reads the character after the caret; the Windows family keeps that.
         if unit == .character, config.general.macKeys, gesture.keyName == "rightArrow", gesture.modifiers.isEmpty,
-           let n = newInfo, n.start > 0, let old = try? makeTextInfo(.bookmark(bookmark)), n.start > old.start {
+           let n = newInfo, n.start > 0, let bookmark, let old = try? makeTextInfo(.bookmark(bookmark)), n.start > old.start {
             let passed = n.copy(); passed.collapse(); _ = passed.move(.character, -1); passed.expand(.character)
             caretMoved(speak: nil, gesture: gesture, info: n)
             Speech.speakTextInfo(passed, unit: .character, reason: .caret)
