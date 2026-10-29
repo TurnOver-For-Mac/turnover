@@ -219,8 +219,16 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // its state be
         ("shift+control+right", "vo+command+shift+right", 1), ("shift+control+left", "vo+command+shift+left", 1),
         ("shift+control+up", "vo+command+shift+up", 1), ("shift+control+down", "vo+command+shift+down", 1),
     ]
-    /// A JAWS or Narrator table's keys that stand for an NVDA key ("=kb:turnover+…"), given that key's VoiceOver twin;
-    /// built on the main thread as the layer starts (28 Oct 2026: JAWS keys where VoiceOver reads too).
+    /// A JAWS or Narrator table's own commands and VoiceOver's key for each. A key that names a command, rather than
+    /// standing for an NVDA key, has no twin to take, so where VoiceOver reads it was swallowed (the maintainer, 29 Oct
+    /// 2026). A command not listed here still has no key there.
+    static let commandTable: [(String, String, Int)] = [
+        // JAWS's lists of one kind: VoiceOver's rotor, as NVDA+F7's list.
+        ("jaws_linksList", "vo+u", 1), ("jaws_headingsList", "vo+u", 1), ("jaws_formFieldsList", "vo+u", 1),
+    ]
+    /// A JAWS or Narrator table's keys that stand for an NVDA key ("=kb:turnover+…"), given that key's VoiceOver twin,
+    /// and its keys that name a command of commandTable, given that command's; built on the main thread as the layer
+    /// starts (28 Oct 2026: JAWS keys where VoiceOver reads too).
     nonisolated static let styleChords = Locked<[Chord: Target]>([:])
     @MainActor static func buildStyleChords() {
         var d: [Chord: Target] = [:]
@@ -238,8 +246,12 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // its state be
                 guard !parts.contains("command"), !parts.contains("option") else { return nil }
                 return chord(parts.joined(separator: "+"))
             }
-            for (k, v) in StyleKeymap.keys(for: style) where v.hasPrefix("=") {
-                if let from = parse(k), let to = parse(String(v.dropFirst())), let t = chords[to] { d[from] = t }
+            var commands: [String: Target] = [:]
+            for (name, v, times) in commandTable { if let t = target(v, times: times) { commands[name] = t } }
+            for (k, v) in StyleKeymap.keys(for: style) {
+                guard let from = parse(k) else { continue }
+                if v.hasPrefix("=") { if let to = parse(String(v.dropFirst())), let t = chords[to] { d[from] = t } }
+                else if let t = commands[v] { d[from] = t }
             }
         }
         styleChords.value = d
