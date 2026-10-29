@@ -14,9 +14,12 @@ On sites Safari permits it to access, the content script supplies conservative m
   receive a percentage. Native controls and containers with focus, editing or click behavior keep their semantics.
 
 Explicit site labels, roles, focus order and live-region settings remain authoritative. The script remembers the
-exact attributes it supplied and stops managing an attribute if the site changes it. It does not turn guessed divs
-into buttons, add keyboard handlers, quiet alerts or generate Loaded announcements. Text/candidate limits leave
-incomplete repairs alone; they do not provide complete accessibility repair for a large or unusual page.
+exact attributes it supplied and stops managing an attribute if the site changes it. Hidden icons are reassessed
+when content changes; meaningful content or loss of the other control name releases the owned hide. It does not turn
+guessed divs into buttons, add keyboard handlers, quiet alerts or generate Loaded announcements. Text/candidate limits leave
+incomplete repairs alone. A pass shares 4,000 work units across text/shape walks and ancestor protection checks;
+exhaustion preserves remaining semantics. Browser selector/layout calls cannot be preempted, so this is not a hard
+time limit or complete accessibility repair for a large or unusual page.
 
 ## Privacy and actions
 

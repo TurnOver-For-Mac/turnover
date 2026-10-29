@@ -13,18 +13,30 @@
   const owned = new WeakMap();
   const spinners = new Set();
   const progressBars = new Set();
+  const hiddenIcons = new Set();
   const documents = new WeakMap();
 
   function text(s) { return (s || '').replace(/\s+/g, ' ').trim(); }
   function style(el) { return getComputedStyle(el); }
 
+  // One shared allowance covers repeated text/shape walks and ancestor protection
+  // checks during a pass. Exhaustion is incomplete evidence, never a negative match.
+  function workBudget() { return { used: 0, clipped: false }; }
+  function spend(budget) {
+    if (!budget) return true;
+    if (budget.clipped) return false;
+    if (budget.used >= 4000) { budget.clipped = true; return false; }
+    budget.used++; return true;
+  }
+  function incomplete(budget) { if (budget) budget.clipped = true; }
+
   // Check the actual input type before its ARIA role. A password presented as a
   // slider/combobox still contains a secret. CSS masking and autocomplete can mark
   // non-input widgets, so descendants inherit the refusal too. No value is read.
-  function protectedField(el) {
+  function protectedField(el, budget = null) {
     let depth = 0;
     for (let p = el; p && p.nodeType === 1; p = p.parentElement) {
-      if (++depth > 64) return true;
+      if (!spend(budget) || ++depth > 64) { incomplete(budget); return true; }
       if ((p.getAttribute('type') || '').trim().toLowerCase() === 'password') return true;
       const tokens = (p.getAttribute('autocomplete') || '').toLowerCase().split(/\s+/);
       if (tokens.some(t => SECRET_AUTOCOMPLETE.has(t))) return true;
@@ -35,8 +47,9 @@
     return false;
   }
 
-  function visible(el) {
-    if (!el || el.nodeType !== 1 || protectedField(el) || el.hidden || el.getAttribute('aria-hidden') === 'true') return false;
+  function visible(el, budget = null, ignoreOwnHidden = false) {
+    if (!el || el.nodeType !== 1 || protectedField(el, budget) || el.hidden) return false;
+    if (el.getAttribute('aria-hidden') === 'true' && !(ignoreOwnHidden && owns(el, 'aria-hidden', budget))) return false;
     const css = style(el);
     if (css.display === 'none' || css.visibility === 'hidden' || css.opacity === '0') return false;
     const r = el.getBoundingClientRect();
@@ -46,21 +59,22 @@
   // Walk text nodes rather than reading a container's textContent: the latter can
   // copy a masked contenteditable's text before its child can be excluded. Clipped
   // reads cannot become an accessible name. Ordinary form values are never read.
-  function words(root, omit = null) {
+  function words(root, omit = null, budget = null, ignoreOwnHiddenRoot = false) {
     const pieces = [];
     let nodes = 0, length = 0, complete = true;
     function visit(n, depth) {
       if (!complete || n === omit) return;
-      if (++nodes > 2000 || depth > 64) { complete = false; return; }
+      if (!spend(budget) || ++nodes > 2000 || depth > 64) { incomplete(budget); complete = false; return; }
       if (n.nodeType === 3) {
         const s = n.textContent || '';
         length += s.length;
-        if (length > 4096) { complete = false; return; }
+        if (length > 4096) { incomplete(budget); complete = false; return; }
         pieces.push(s); return;
       }
-      if (n.nodeType !== 1 || protectedField(n)) return;
-      if (n.hidden || n.getAttribute('aria-hidden') === 'true' || /^(SCRIPT|STYLE|NOSCRIPT|TEMPLATE|INPUT|TEXTAREA|SELECT)$/.test(n.tagName) || n.isContentEditable) return;
-      if (n !== root && !visible(n)) return;
+      if (n.nodeType !== 1 || protectedField(n, budget)) { if (budget?.clipped) complete = false; return; }
+      const ownRoot = n === root && ignoreOwnHiddenRoot && owns(n, 'aria-hidden', budget);
+      if (n.hidden || (n.getAttribute('aria-hidden') === 'true' && !ownRoot) || /^(SCRIPT|STYLE|NOSCRIPT|TEMPLATE|INPUT|TEXTAREA|SELECT)$/.test(n.tagName) || n.isContentEditable) return;
+      if (n !== root && !visible(n, budget)) { if (budget?.clipped) complete = false; return; }
       for (const c of n.childNodes) { visit(c, depth + 1); if (!complete) break; }
     }
     visit(root, 0);
@@ -80,16 +94,29 @@
     return ['aria-label', 'aria-labelledby', 'title', 'alt'].some(a => el.hasAttribute(a));
   }
 
-  function name(el) {
-    if (protectedField(el)) return '';
-    const by = el.getAttribute('aria-labelledby');
-    if (by) {
-      const labels = by.split(/\s+/).map(id => document.getElementById(id)).filter(Boolean).map(n => words(n));
-      if (labels.some(x => !x.complete)) return '';
-      return text(labels.map(x => x.text).join(' '));
+  function name(el, budget = null, omit = null) {
+    if (protectedField(el, budget)) return '';
+    if (el.hasAttribute('aria-labelledby')) {
+      const by = text(el.getAttribute('aria-labelledby'));
+      if (!by) return '';
+      const ids = by.split(/\s+/);
+      if (by.length > 4096 || ids.length > 32) { incomplete(budget); return ''; }
+      const labels = [];
+      for (const id of ids) {
+        if (!spend(budget)) return '';
+        const label = document.getElementById(id);
+        if (!label) return ''; // Broken references cannot justify hiding a sole icon.
+        const result = words(label, omit, budget);
+        if (!result.complete) return '';
+        labels.push(result.text);
+      }
+      return text(labels.join(' '));
     }
-    for (const a of ['aria-label', 'alt', 'title', 'placeholder']) if (el.hasAttribute(a)) return text(el.getAttribute(a));
-    const w = words(el);
+    for (const a of ['aria-label', 'alt', 'title', 'placeholder']) {
+      if (a === 'alt' && !/^(IMG|AREA|INPUT)$/.test(el.tagName)) continue;
+      if (el.hasAttribute(a)) return text(el.getAttribute(a));
+    }
+    const w = words(el, omit, budget);
     return w.complete ? clean(w.text) : '';
   }
 
@@ -109,8 +136,8 @@
     return result;
   }
 
-  function owns(el, attr) {
-    if (!el || el.nodeType !== 1 || protectedField(el)) return false;
+  function owns(el, attr, budget = null) {
+    if (!el || el.nodeType !== 1 || protectedField(el, budget)) return false;
     const record = owned.get(el);
     return record?.has(attr) && el.getAttribute(attr) === record.get(attr);
   }
@@ -132,22 +159,35 @@
     owned.get(el)?.delete(attr);
   }
 
-  function decorative(el) {
-    if (!visible(el) || authorName(el) || el.hasAttribute('role') || el.hasAttribute('aria-live') || !plainContainer(el)) return false;
+  function decorative(el, budget = null, ignoreOwnHidden = false) {
     const tag = el.tagName.toLowerCase();
     if (tag === 'img') return false; // Missing alt is a site error; guessing could hide meaningful content.
+    if (tag !== 'svg') {
+      const cls = typeof el.className === 'string' ? el.className : '';
+      // Ordinary generic containers never trigger a subtree text read.
+      if (!/icon|ligature|glyph|material|symbol/i.test(cls + ' ' + style(el).fontFamily)) return false;
+      if (el.childElementCount !== 0 || el.closest('kbd, code, pre')) return false;
+    }
+    if (!visible(el, budget, ignoreOwnHidden) || authorName(el) || el.hasAttribute('role') || el.hasAttribute('aria-live') || !plainContainer(el, budget)) return false;
     if (tag === 'svg') return !el.querySelector('title, desc');
-    const w = words(el);
-    if (!w.complete || el.childElementCount !== 0 || el.closest('kbd, code, pre')) return false;
-    const cls = typeof el.className === 'string' ? el.className : '';
-    return /icon|ligature|glyph|material|symbol/i.test(cls + ' ' + style(el).fontFamily) && (LIGATURE.test(w.text) || gluedIcon(w.text));
+    const w = words(el, null, budget, ignoreOwnHidden);
+    return w.complete && (LIGATURE.test(w.text) || gluedIcon(w.text));
   }
 
-  function canHide(el) {
-    const control = el.parentElement?.closest(CONTROL);
+  function canHide(el, budget = null) {
+    let control = el.parentElement, depth = 0;
+    while (control && !control.matches(CONTROL)) {
+      if (!spend(budget) || ++depth > 64) { incomplete(budget); return false; }
+      control = control.parentElement;
+    }
     if (!control) return false;
-    if (authorName(control) && name(control)) return true;
-    const other = words(control, el);
+    // Empty/broken author references are not names, and an unrelated alt attribute
+    // on a button is not an HTML naming mechanism. Do not fall back to icon text.
+    if (authorName(control)) {
+      if (!['aria-label', 'aria-labelledby', 'title'].some(a => control.hasAttribute(a))) return false;
+      return !!name(control, budget, el);
+    }
+    const other = words(control, el, budget);
     return other.complete && /[\p{L}\p{N}]/u.test(clean(other.text));
   }
 
@@ -160,11 +200,12 @@
   // CSS class names do not erase implicit HTML semantics. Only small generic
   // containers with no interactive or author-named descendants can receive
   // guessed semantics; a clipped inspection is refused.
-  function plainContainer(el) {
+  function plainContainer(el, budget = null) {
     if (!/^(DIV|SPAN|I|SVG)$/.test(el.tagName)) return false;
     let count = 0;
     function inspect(node, depth) {
-      if (++count > 32 || depth > 8 || protectedField(node) || interactive(node)) return false;
+      if (!spend(budget) || ++count > 32 || depth > 8) { incomplete(budget); return false; }
+      if (protectedField(node, budget) || interactive(node)) return false;
       if (node !== el && (authorName(node) || node.hasAttribute('role') || node.hasAttribute('aria-live'))) return false;
       for (const child of node.children) if (!inspect(child, depth + 1)) return false;
       return true;
@@ -172,21 +213,22 @@
     return inspect(el, 0);
   }
 
-  function spinner(el) {
-    if (protectedField(el) || !plainContainer(el) || el.childElementCount > 3) return false;
-    if (['role', 'aria-label'].some(a => el.hasAttribute(a) && !owns(el, a)) || el.hasAttribute('aria-labelledby') || el.hasAttribute('title') || el.hasAttribute('aria-live')) return false;
-    const w = words(el);
-    if (!w.complete || w.text || el.querySelector('title, desc')) return false;
+  function spinner(el, budget = null) {
     const cls = ((typeof el.className === 'string' ? el.className : '') + ' ' + (el.id || '')).toLowerCase();
-    if (!/(^|[\s_-])(spinner|loader|loading|spin|throbber)([\s_-]|$)/.test(cls)) return false;
+    if (!/(^|[\s_-])(spinner|loader|loading|spin|throbber)([\s_-]|$)/.test(cls) || el.childElementCount > 3) return false;
+    if (protectedField(el, budget) || !plainContainer(el, budget)) return false;
+    if (['role', 'aria-label'].some(a => el.hasAttribute(a) && !owns(el, a, budget)) || el.hasAttribute('aria-labelledby') || el.hasAttribute('title') || el.hasAttribute('aria-live')) return false;
+    const w = words(el, null, budget);
+    if (!w.complete || w.text || el.querySelector('title, desc')) return false;
     const r = el.getBoundingClientRect();
     return r.width > 0 && r.width <= 96 && r.height > 0 && r.height <= 96;
   }
 
-  function progress(el) {
-    if (protectedField(el) || !plainContainer(el) || el.childElementCount !== 1 || !/progress/i.test(typeof el.className === 'string' ? el.className : '')) return null;
-    if (['role', 'aria-label', 'aria-labelledby', 'title', 'aria-live', 'aria-valuemin', 'aria-valuemax', 'aria-valuenow', 'aria-valuetext'].some(a => el.hasAttribute(a) && !owns(el, a))) return null;
-    const w = words(el), fill = el.firstElementChild;
+  function progress(el, budget = null) {
+    if (!/progress/i.test(typeof el.className === 'string' ? el.className : '') || el.childElementCount !== 1) return null;
+    if (protectedField(el, budget) || !plainContainer(el, budget)) return null;
+    if (['role', 'aria-label', 'aria-labelledby', 'title', 'aria-live', 'aria-valuemin', 'aria-valuemax', 'aria-valuenow', 'aria-valuetext'].some(a => el.hasAttribute(a) && !owns(el, a, budget))) return null;
+    const w = words(el, null, budget), fill = el.firstElementChild;
     if (!w.complete || w.text || fill.childElementCount !== 0 || !/fill|bar|value|progress|indicator|inner/i.test(typeof fill.className === 'string' ? fill.className : '')) return null;
     const r = el.getBoundingClientRect(), f = fill.getBoundingClientRect();
     if (r.width < 40 || r.height <= 0 || r.height > 40 || f.width < 0 || f.width > r.width || Math.abs(f.left - r.left) > 2) return null;
@@ -194,34 +236,62 @@
   }
 
   function tidy(root = document) {
-    let hidden = 0, renamed = 0, seen = 0, clipped = false;
-    // The old tree path walked the complete DOM on every change. This passive
-    // pass coalesces changes and caps candidates; clipped controls keep site semantics.
-    for (const el of Array.from(spinners)) {
-      if (el.isConnected && visible(el) && spinner(el)) continue;
+    let hidden = 0, renamed = 0, seen = 0;
+    const budget = workBudget();
+    function result() { return { hidden, renamed, clipped: budget.clipped, work: budget.used }; }
+    // Reassess only the exact hidden root we own. Ordinary names still omit it;
+    // no temporary unhide/re-hide events are needed to inspect its new contents.
+    for (const el of hiddenIcons) {
+      if (!spend(budget)) return result();
+      const ownedHide = owns(el, 'aria-hidden', budget);
+      if (budget.clipped) return result();
+      if (!ownedHide) { owned.get(el)?.delete('aria-hidden'); hiddenIcons.delete(el); continue; }
+      const keep = el.isConnected && decorative(el, budget, true) && canHide(el, budget);
+      if (budget.clipped) return result();
+      if (keep) continue;
+      release(el, 'aria-hidden'); hiddenIcons.delete(el);
+    }
+    for (const el of spinners) {
+      if (!spend(budget)) return result();
+      const keep = el.isConnected && visible(el, budget) && spinner(el, budget);
+      if (budget.clipped) return result();
+      if (keep) continue;
       release(el, 'role'); release(el, 'aria-label'); spinners.delete(el);
     }
-    for (const el of Array.from(progressBars)) {
-      if (el.isConnected && visible(el) && progress(el) !== null) continue;
+    for (const el of progressBars) {
+      if (!spend(budget)) return result();
+      const keep = el.isConnected && visible(el, budget) && progress(el, budget) !== null;
+      if (budget.clipped) return result();
+      if (keep) continue;
       for (const attr of ['role', 'aria-valuemin', 'aria-valuemax', 'aria-valuenow']) release(el, attr);
       progressBars.delete(el);
     }
+    // Candidate enumeration is also finite at the script level; the browser's
+    // selector/layout calls are not preemptible, so this is no hard time limit.
     for (const el of root.querySelectorAll(CANDIDATES)) {
-      if (++seen > 1000) { clipped = true; break; }
-      if (!visible(el)) continue;
-      if (spinner(el)) {
+      if (++seen > 1000) { budget.clipped = true; break; }
+      if (!spend(budget)) break;
+      const isVisible = visible(el, budget);
+      if (budget.clipped) break;
+      if (!isVisible) continue;
+      const isSpinner = spinner(el, budget);
+      if (budget.clipped) break;
+      if (isSpinner) {
         if (supply(el, 'role', 'img')) renamed++;
         if (supply(el, 'aria-label', 'Loading')) renamed++;
         spinners.add(el); continue;
       }
-      const value = progress(el);
+      const value = progress(el, budget);
+      if (budget.clipped) break;
       if (value !== null) {
         for (const [attr, v] of [['role', 'progressbar'], ['aria-valuemin', '0'], ['aria-valuemax', '100'], ['aria-valuenow', String(value)]]) if (supply(el, attr, v)) renamed++;
         progressBars.add(el); continue;
       }
-      if (decorative(el) && canHide(el) && supply(el, 'aria-hidden', 'true')) { hidden++; continue; }
+      const hide = decorative(el, budget) && canHide(el, budget);
+      if (budget.clipped) break;
+      if (hide && supply(el, 'aria-hidden', 'true')) { hiddenIcons.add(el); hidden++; }
     }
-    return { hidden, renamed, clipped };
+    return result();
   }
 
   function start(doc = document) {
@@ -237,8 +307,11 @@
     function schedule() { if (active && timer === null) timer = setTimeout(run, 150); }
     function refreshProgress() {
       if (!active || doc.hidden) return;
+      const budget = workBudget();
       for (const el of progressBars) {
-        const value = el.isConnected && visible(el) ? progress(el) : null;
+        if (!spend(budget)) break;
+        const value = el.isConnected && visible(el, budget) ? progress(el, budget) : null;
+        if (budget.clipped) break;
         if (value !== null) supply(el, 'aria-valuenow', String(value));
       }
     }

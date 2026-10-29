@@ -16,7 +16,7 @@ function runPassiveExtensionTests(source) {
     catch (e) { results.push({ name, passed: false, error: String(e && e.stack || e) }); }
   }
 function fixture(automatic = false) {
-  const timers = new Map(), intervals = new Map(), observers = [], effects = [];
+  const timers = new Map(), intervals = new Map(), observers = [], effects = [], reads = { text: 0 };
   let nextTimer = 1;
   const listeners = new Map();
   function events(target) {
@@ -26,7 +26,7 @@ function fixture(automatic = false) {
   }
   class Text {
     constructor(s) { this.nodeType = 3; this._text = s; this.parentElement = null; }
-    get textContent() { if (this.poison) throw new Error('protected text was read'); return this._text; }
+    get textContent() { if (this.poison) throw new Error('protected text was read'); reads.text++; return this._text; }
   }
   class Element {
     constructor(tag, attrs = {}, children = []) {
@@ -83,7 +83,7 @@ function fixture(automatic = false) {
   };
   Function(...Object.keys(sandbox), source)(...Object.values(sandbox));
   return {
-    api: sandbox.module?.exports, doc, Element, Text, timers, intervals, observers, effects,
+    api: sandbox.module?.exports, doc, Element, Text, timers, intervals, observers, effects, reads,
     el: (tag, attrs, children) => new Element(tag, attrs, children),
     flush() { const ready = [...timers.values()]; timers.clear(); for (const fn of ready) fn(); },
     mutate(records = [{ type: 'childList', target: doc.body }]) { for (const o of observers) if (o.active) o.callback(records); }
@@ -182,6 +182,40 @@ test('actual tidy: only redundant unnamed icons are hidden; named, explicit and 
   assert.equal(explicit.getAttribute('aria-hidden'), 'false'); assert.equal(f.api.name(button), 'Help');
 });
 
+test('ownership: empty or unresolved author references cannot hide a sole icon', () => {
+  for (const by of ['', 'missing-label', 'empty-label', 'real-label missing-label']) {
+    const f = fixture(), icon = f.el('span', { class: 'material-icons' }, ['chevron_right']);
+    f.doc.body.append(f.el('span', { id: 'empty-label' })); f.doc.body.append(f.el('span', { id: 'real-label' }, ['Real author name']));
+    f.doc.body.append(f.el('button', { 'aria-labelledby': by }, [icon]));
+    f.api.tidy(f.doc); assert.equal(icon.hasAttribute('aria-hidden'), false);
+  }
+  const f = fixture(), icon = f.el('span', { id: 'sole-icon', class: 'material-icons' }, ['chevron_right']);
+  f.doc.body.append(f.el('button', { 'aria-labelledby': 'sole-icon' }, [icon]));
+  f.api.tidy(f.doc); assert.equal(icon.hasAttribute('aria-hidden'), false);
+});
+
+test('ownership: mutated hidden icon content and lost control names restore the icon', () => {
+  for (const change of ['meaningful-text', 'lost-text', 'lost-author-name']) {
+    const f = fixture(), icon = f.el('span', { class: 'material-icons' }, ['chevron_right']);
+    const button = f.el('button', change === 'lost-author-name' ? { 'aria-label': 'Next' } : {}, change === 'lost-author-name' ? [icon] : ['Next', icon]);
+    f.doc.body.append(button); const owner = f.api.start(f.doc); assert.equal(icon.getAttribute('aria-hidden'), 'true');
+    // Ordinary name reads still omit the owned root until its classification is retired.
+    assert.equal(f.api.words(icon).text, '');
+    if (change === 'meaningful-text') icon.childNodes[0]._text = 'Useful note';
+    else if (change === 'lost-text') button.childNodes = [icon];
+    else button.setAttribute('aria-label', '');
+    f.mutate([{ type: change === 'meaningful-text' ? 'characterData' : 'childList', target: button }]); f.flush();
+    assert.equal(icon.hasAttribute('aria-hidden'), false); owner.stop();
+  }
+});
+
+test('ownership: a site replacement of an owned hidden attribute is preserved', () => {
+  const f = fixture(), icon = f.el('svg'), button = f.el('button', {}, ['Next', icon]); f.doc.body.append(button);
+  const owner = f.api.start(f.doc); assert.equal(icon.getAttribute('aria-hidden'), 'true');
+  icon.setAttribute('aria-hidden', 'false'); f.mutate([{ type: 'attributes', target: icon, attributeName: 'aria-hidden' }]); f.flush();
+  assert.equal(icon.getAttribute('aria-hidden'), 'false'); owner.stop();
+});
+
 test('actual tidy: anonymous spinner is named without announcements, then site semantics win', () => {
   const f = fixture(), spinner = f.el('div', { class: 'spinner' }); f.doc.body.append(spinner);
   f.api.tidy(f.doc); assert.equal(spinner.getAttribute('role'), 'img'); assert.equal(spinner.getAttribute('aria-label'), 'Loading');
@@ -252,6 +286,41 @@ test('bounds: incomplete names and candidates past the cap keep the original sem
   const g = fixture(); for (let i = 0; i < 1000; i++) g.doc.body.append(g.el('span', {}, ['word']));
   const lateIcon = g.el('span', { class: 'material-icons' }, ['chevron_right']), last = g.el('button', {}, ['Next', lateIcon]); g.doc.body.append(last);
   assert.equal(g.api.tidy(g.doc).clipped, true); assert.equal(lateIcon.hasAttribute('aria-hidden'), false);
+});
+
+test('bounds: unrelated generic classes never trigger subtree text inspection', () => {
+  const f = fixture(); let parent = f.doc.body;
+  for (let i = 0; i < 20; i++) parent = parent.append(f.el('div', { class: 'ordinary-layout' }));
+  const leaf = parent.append(new f.Text('Ordinary page content')); leaf.poison = true;
+  f.api.tidy(f.doc); assert.equal(f.reads.text, 0);
+});
+
+test('bounds: aggregate work clips remaining candidates before their semantics change', () => {
+  const f = fixture(), icons = [];
+  for (let i = 0; i < 200; i++) {
+    const icon = f.el('span', { class: 'material-icons' }, ['chevron_right']); icons.push(icon);
+    f.doc.body.append(f.el('button', {}, ['Public route ' + i, icon]));
+  }
+  const result = f.api.tidy(f.doc);
+  assert.equal(result.clipped, true); assert.equal(result.work <= 4000, true); assert.equal(f.reads.text <= 4000, true);
+  assert.equal(result.hidden > 0, true); assert.equal(icons[icons.length - 1].hasAttribute('aria-hidden'), false);
+});
+
+test('bounds: incomplete owned-icon revalidation retains existing semantics', () => {
+  const f = fixture(), controls = [];
+  for (let i = 0; i < 3; i++) {
+    const icon = f.el('span', { class: 'material-icons' }, ['chevron_right']), button = f.el('button', {}, ['Next', icon]);
+    controls.push({ icon, button }); f.doc.body.append(button);
+  }
+  f.api.tidy(f.doc);
+  for (const { icon, button } of controls) {
+    assert.equal(icon.getAttribute('aria-hidden'), 'true'); button.childNodes = [];
+    for (let i = 0; i < 1900; i++) button.append('x'); button.append(icon);
+  }
+  f.reads.text = 0;
+  const result = f.api.tidy(f.doc);
+  assert.equal(result.clipped, true); assert.equal(result.work, 4000); assert.equal(f.reads.text <= 4000, true);
+  for (const { icon } of controls) assert.equal(icon.getAttribute('aria-hidden'), 'true');
 });
 
 test('lifecycle: mutations coalesce, own writes do not loop, and stop cancels delayed work', () => {
