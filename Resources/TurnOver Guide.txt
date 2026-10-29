@@ -1826,6 +1826,7 @@ JAWS keys
   TurnOver 6: Opens TurnOver's settings in its menu (JAWS: Insert+F2, Insert+6)
   TurnOver 8: Clicks the left mouse button where the pointer is (NVDA+Left Bracket)
   TurnOver 9: Clicks the right mouse button where the pointer is (NVDA+Right Bracket)
+  TurnOver Apostrophe: Move focus here; moves the keyboard focus to the item object navigation is on
   TurnOver Backslash: Opens or closes the disclosure triangle (VO-Backslash)
   TurnOver Comma: Reports the current character. Twice, its name; three times, its code (JAWS: Insert+Numpad 5)
   TurnOver Escape: Rebuilds the page's browse mode view (NVDA+F5)
@@ -1833,8 +1834,11 @@ JAWS keys
   TurnOver F10: Application chooser; lists every application with a window, system alerts too, to switch to (Windows: Windows+Tab, Task View)
   TurnOver F11: Status menus; lists the status menus at the right of the menu bar, TurnOver's own item last (Windows: Windows+B)
   TurnOver F2: Opens TurnOver's settings in its menu (JAWS: Insert+F2, Insert+6)
+  TurnOver F3: Finds the next match of the last search (VO-G; NVDA+F3)
   TurnOver F4: Quits TurnOver
-  TurnOver F5: Rebuilds the page's browse mode view (NVDA+F5)
+  TurnOver F5: Form fields list; lists the page's form fields and buttons; Enter goes there. In Word and Excel, their elements list (JAWS: Insert+F5)
+  TurnOver F6: Headings list; lists the page's headings; Enter goes there. In Word and Excel, their elements list (JAWS: Insert+F6)
+  TurnOver F7: Links list; lists the page's links; Enter goes there. In Word and Excel, their elements list (JAWS: Insert+F7)
   TurnOver F9: Marks the review cursor as the start of text to copy (NVDA+F9)
   TurnOver H: Reports the current sentence
   TurnOver I: Reports the current line. Pressed twice, spells it
@@ -1850,6 +1854,7 @@ JAWS keys
   TurnOver S: Turns reporting of dynamic content changes on or off
   TurnOver Semicolon: Brings object navigation back to the focus
   TurnOver U: Moves the review cursor to the previous line (NVDA+Up Arrow, laptop)
+  TurnOver V: Opens TurnOver's settings in its menu (JAWS: Insert+F2, Insert+6)
   TurnOver Y: Reads the previous sentence (VO-Command-Page Up)
   TurnOver Z: Switches between browse mode and focus mode in a document
   TurnOver Control F1: Open the log; writes the navigator object's details to the log and opens the log (NVDA+F1)
@@ -1860,8 +1865,11 @@ JAWS keys
   TurnOver Control O: Reads the next paragraph (VO-Shift-Page Down)
   TurnOver Control U: Reads the previous paragraph (VO-Shift-Page Up)
   TurnOver Control V: Reports the name and version of the app in front (JAWS: Insert+Control+V)
+  TurnOver Left arrow: Moves to the previous item in the window
   TurnOver Left bracket: Pointer to this item; moves the mouse pointer to the item object navigation is on (NVDA+Shift+M)
   TurnOver Option V: Braille mode; switches braille between following the cursors and showing speech (NVDA+Alt+T)
+  TurnOver Option X: Reports the text on the clipboard (NVDA+C)
+  TurnOver Right arrow: Next item in the window; moves to the next item in the window, whether or not it can take the focus
   TurnOver Shift A: Reports the selected text. Pressed twice, spells it (JAWS: Insert+Shift+Down)
   TurnOver Shift Comma: Reports the shortcut key of the item with focus (NVDA+Control+Shift+Period)
   TurnOver Shift F1: The item's description; in text, the word and character; twice, how many lines (VO-F3, VO-F3-F3)
@@ -1889,7 +1897,6 @@ NVDA keys
   TurnOver C: Reports the text on the clipboard (NVDA+C)
   TurnOver End: Moves the review cursor to the end of the line (NVDA+End)
   TurnOver Home: Moves the review cursor to the start of the line (NVDA+Home)
-  TurnOver V: Screen layout on or off in browse mode: things side by side on one line (NVDA+V)
   TurnOver X: Repeats the last thing spoken (NVDA+X)
   TurnOver Command End: Moves the review cursor to the end of the selection (NVDA+Alt+End)
   TurnOver Command Home: Moves the review cursor to the start of the selection (NVDA+Alt+Home)
@@ -1982,8 +1989,6 @@ Object navigation
   Key: What it does
   TurnOver Backspace: Brings object navigation back to the focus
   TurnOver Enter: Activates the item object navigation is on: presses it, or puts the focus in it for typing
-  TurnOver Left arrow: Moves to the previous item in the window
-  TurnOver Right arrow: Next item in the window; moves to the next item in the window, whether or not it can take the focus
   TurnOver Shift Backspace: Move focus here; moves the keyboard focus to the item object navigation is on
   TurnOver Shift O: Reports the item object navigation is on
   TurnOver Shift Down arrow: Moves in, to the first item inside this one
@@ -1997,7 +2002,6 @@ Text review
   TurnOver A: Reads from the caret to the end of the text
   TurnOver Delete: Reports where the caret is: the page and line where the application knows them
   TurnOver F: Reports the formatting at the caret (NVDA+F)
-  TurnOver F3: Finds the next match of the last search (VO-G; NVDA+F3)
   TurnOver G: Finds the next match of the last search (VO-G; NVDA+F3)
   TurnOver W: Reports the current word. Pressed twice, spells it
   TurnOver Control F: Finds text: type it, then Return; the match is where you are left (VO-F; NVDA+Control+F)
@@ -2138,7 +2142,6 @@ Excel
 
   Key: What it does
   TurnOver Command C: Reports the cell's note; twice, shows it to read line by line (NVDA+Alt+C)
-  TurnOver F7: Elements list; lists the workbook's sheets and the cells with notes; Enter goes there (NVDA+F7)
   TurnOver Option C: Reports the cell's note; twice, shows it to read line by line (NVDA+Alt+C)
   TurnOver Space: Cell review; reads the cells around with the arrows, protected ones too; Escape stops (NVDA+Space in Excel)
 

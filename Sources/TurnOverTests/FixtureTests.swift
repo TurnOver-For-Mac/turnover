@@ -42,6 +42,28 @@ func fixtureTests() {
         AXReplay.load(fixture); ObjectNavigator.forgetGroupItems()
         expect(ObjectNavigator.groupItems(AXReplay.root!).compactMap { AXReplay.id(of: $0) }, [1, 2, 5])
     }
+    // System Settings' panes, macOS 27 (29 Oct 2026): 40 of a window's 169 elements, the focused button among them, give
+    // no AXWindow, only a parent. Review took its bounds from AXWindow alone and said "nothing to review" at every step.
+    test("navigation: an item that doesn't name its window is reviewed in the window its parents lead to") {
+        let saved = config, sink = Speech.sink
+        config.general.focusFollowsCursor = "off"
+        Speech.sink = { _ in }
+        var fixture = AXFixture(app: "System Settings", bundle: "com.apple.systempreferences", recorded: "", root: 0, application: nil, focus: 2, nodes: [])
+        fixture.nodes = [
+            .init(id: 0, attrs: ["AXRole": .string("AXWindow"), "AXChildren": .elements([1])]),
+            .init(id: 1, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(0), "AXChildren": .elements([2, 3])]),
+            .init(id: 2, attrs: ["AXRole": .string("AXButton"), "AXDescription": .string("Update Now"), "AXParent": .element(1)]),
+            .init(id: 3, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("The Mac restarts to install the update."), "AXParent": .element(1)]),
+        ]
+        AXReplay.load(fixture)
+        defer { AXReplay.unload(); config = saved; Speech.sink = sink }
+        let navigator = ObjectNavigator.shared
+        navigator.focusMoved(to: AXReplay.focus!, pid: AXReplay.focus!.pid)
+        navigator.next()
+        expect(navigator.reviewElement.flatMap { AXReplay.id(of: $0) }, 3, "on to the text after the button")
+        navigator.previous()
+        expect(navigator.reviewElement.flatMap { AXReplay.id(of: $0) }, 2, "and back to the button")
+    }
 
     test("replay: a recording answers like the application") {
         var f = AXFixture(app: "Test", bundle: "test", recorded: "", root: 0, application: nil, focus: 2, nodes: [])
@@ -144,6 +166,76 @@ func fixtureTests() {
         let parts = Speech.objectPropertiesSpeech(doc, reason: .focus)
         check(parts.contains("edit") || parts.contains("document") || parts.contains("text"), "says what it is: \(parts)")
     }
+
+    // JAWS's lists of one kind (issue 125), on a made-up page: a heading, two links and a search field.
+    test("JAWS keys: Caps Lock F7, F6 and F5 list a page's links, headings or form fields alone; F3 and F9 the whole list") {
+        var f = AXFixture(app: "T", bundle: "t", recorded: "", root: 0, application: 9, focus: 0, nodes: [])
+        f.nodes = [
+            .init(id: 0, attrs: ["AXRole": .string("AXWebArea"), "AXURL": .url("https://example.com/"), "AXParent": .element(9), "AXChildren": .elements([1, 7, 8, 6])]),
+            .init(id: 1, attrs: ["AXRole": .string("AXHeading"), "AXTitle": .string("News"), "AXValue": .number(1), "AXParent": .element(0)]),
+            .init(id: 7, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(0), "AXChildren": .elements([2])]),
+            .init(id: 2, attrs: ["AXRole": .string("AXLink"), "AXParent": .element(7), "AXChildren": .elements([3])]),
+            .init(id: 3, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("Home"), "AXParent": .element(2)]),
+            .init(id: 8, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(0), "AXChildren": .elements([4])]),
+            .init(id: 4, attrs: ["AXRole": .string("AXLink"), "AXParent": .element(8), "AXChildren": .elements([5])]),
+            .init(id: 5, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("About"), "AXParent": .element(4)]),
+            .init(id: 6, attrs: ["AXRole": .string("AXTextField"), "AXTitle": .string("Search"), "AXValue": .string(""), "AXParent": .element(0)]),
+            .init(id: 9, attrs: ["AXRole": .string("AXApplication"), "AXTitle": .string("T"), "AXChildren": .elements([0])]),
+        ]
+        let saved = config, keep = Speech.sink
+        var said = ""
+        Speech.sink = { said += $0 + " " }
+        AXReplay.load(f)
+        defer { TurnOverMenu.shared.close(); AXReplay.unload(); API.setFocusObject(nil, ancestors: []); config = saved; Speech.sink = keep }
+        config.general.keyboardStyle = "jaws"
+        let page = BrowseModeHandler.shared.document(root: AXReplay.root!)
+        API.setFocusObject(ObjectFactory.make(AXReplay.root!), ancestors: [], interceptor: page)
+        /// The key's command, run as the key runs it; `said` from then on.
+        @MainActor func press(_ id: String) -> String? {
+            if TurnOverMenu.shared.isOpen { TurnOverMenu.shared.close() }
+            guard let g = KeyboardGesture(identifier: id), let s = ScriptHandler.findScript(for: g) else { return nil }
+            said = ""
+            s.handler(g)
+            return s.name
+        }
+        expect(press("kb:turnover+f7"), "jaws_linksList", "Caps Lock F7 is JAWS's links list")
+        check(said.contains("Links, 2 items"), "the links alone: \(said)")
+        said = ""
+        let edges = Locked(0)
+        Tones.onEdge = { edges.value += 1 }
+        TurnOverMenu.shared.handle(KeyboardGesture(identifier: "kb:rightArrow")!)
+        Tones.onEdge = nil
+        check(TurnOverMenu.shared.isOpen && !said.contains("Headings") && edges.value == 1, "Right stays on the links, with the edge sound: \(said)")
+        expect(press("kb:turnover+f6"), "jaws_headingsList", "Caps Lock F6 is JAWS's headings list")
+        check(said.contains("Headings, 1 items"), "the heading alone: \(said)")
+        expect(press("kb:turnover+f5"), "jaws_formFieldsList", "Caps Lock F5 is JAWS's form fields list")
+        check(said.contains("Form controls, 1 items"), "the search field alone: \(said)")
+        for key in ["kb:turnover+f3", "kb:turnover+f9"] {
+            expect(press(key), "elementsList", "\(key) is still the whole elements list")
+            check(said.contains("rotor"), "\(key): every kind, Left and Right between them: \(said)")
+        }
+        // In focus mode and off a page they do what NVDA+F7 does there: nothing on a page in focus mode, and an app's
+        // own list where it has one (Word's document, Excel's module).
+        page.passThrough = true
+        expect(press("kb:turnover+f7"), "jaws_linksList")
+        check(!TurnOverMenu.shared.isOpen, "in focus mode no list opens, as with NVDA+F7")
+        page.passThrough = false
+        let word = OwnF7(element: AXReplay.element(6))
+        var ran = 0
+        word.pressed = { ran += 1 }
+        API.setFocusObject(word, ancestors: [])
+        for key in ["kb:turnover+f5", "kb:turnover+f6", "kb:turnover+f7"] { _ = press(key) }
+        expect(ran, 3, "off a page each runs the focus's own Caps Lock F7, as Word's elements list")
+        config.general.keyboardStyle = "windows"
+        API.setFocusObject(ObjectFactory.make(AXReplay.root!), ancestors: [], interceptor: page)
+        expect(press("kb:turnover+f7"), "elementsList", "NVDA keys: Caps Lock F7 is still the whole elements list")
+    }
+}
+
+/// An object with a Caps Lock F7 of its own, as Word's document has (its elements list).
+final class OwnF7: TurnOverObject {
+    var pressed: () -> Void = {}
+    override func initOverlay() { script("test_ownF7", "", gestures: ["kb:turnover+f7"]) { [weak self] _ in self?.pressed() } }
 }
 
 // The focus rules (FocusChanges.swift) against made-up trees: what is ignored, what is followed.
@@ -195,6 +287,67 @@ func focusRuleTests() {
             AXHandler.shared.focusChanged(AXReplay.element(2), pid: 900_009)
             check(focusIs(3), "the page inside the group is the focus, not the group")
         }
+    }
+    // NVDA+Left and Right Arrow review by character in text (NVDA-PARITY.md, decision 3). JAWS has no such keys: its
+    // characters are Caps Lock M, Comma and Period, and Insert+Left and Right Arrow are its words. In JAWS keys the two
+    // stay the previous and next item in text too: in a text field they became the character review, and at the end of
+    // the text said "bottom" at every press instead of going on (29 Oct 2026).
+    test("JAWS keys: Caps Lock Left and Right Arrow are the previous and next item in a text field too") {
+        playing {
+            // Set, not reported: the rules would set aside a focus another test has just reported.
+            API.setFocusObject(ObjectFactory.make(AXReplay.element(1)), ancestors: [])
+            let style = config.general.keyboardStyle
+            defer { config.general.keyboardStyle = style }
+            @MainActor func command(_ key: String) -> String? { KeyboardGesture(identifier: key).flatMap { ScriptHandler.findScript(for: $0) }?.name }
+            config.general.keyboardStyle = "windows"
+            expect(command("kb:turnover+rightArrow"), "nvda_reviewNextCharacter", "NVDA keys: in text, NVDA's review by character")
+            config.general.keyboardStyle = "jaws"
+            expect(command("kb:turnover+rightArrow"), "reviewNext", "JAWS keys: the next item, in a text field as everywhere")
+            expect(command("kb:turnover+leftArrow"), "reviewPrevious", "JAWS keys: the previous item, in a text field as everywhere")
+        }
+    }
+
+    /// A Pages document: a window (0) in the application (9), its page layout (2) holding two pages (3, 5), each
+    /// with its copy of the body text (4, 6). Both copies give the caret, or (a document just opened) neither does.
+    func pages(caret: Bool) -> AXFixture {
+        var f = AXFixture(app: "Pages", bundle: "com.apple.Pages", recorded: "", root: 0, application: 9, focus: 2, nodes: [])
+        func body(_ id: Int, page: Int, shared: (Int, Int)) -> AXFixture.Node {
+            var attrs: [String: AXFixture.Value] = ["AXRole": .string("AXTextArea"), "AXParent": .element(page), "AXWindow": .element(0), "AXFocused": .bool(true),
+                                                    "AXNumberOfCharacters": .number(20), "AXSharedCharacterRange": .range(shared.0, shared.1)]
+            if caret { attrs["AXSelectedTextRange"] = .range(5, 0) }
+            return .init(id: id, attrs: attrs)
+        }
+        f.nodes = [
+            .init(id: 0, attrs: ["AXRole": .string("AXWindow"), "AXParent": .element(9), "AXChildren": .elements([1])]),
+            .init(id: 1, attrs: ["AXRole": .string("AXScrollArea"), "AXParent": .element(0), "AXWindow": .element(0), "AXChildren": .elements([2])]),
+            .init(id: 2, attrs: ["AXRole": .string("AXLayoutArea"), "AXParent": .element(1), "AXWindow": .element(0), "AXFocused": .bool(true), "AXChildren": .elements([3, 5])]),
+            .init(id: 3, attrs: ["AXRole": .string("AXPage"), "AXParent": .element(2), "AXWindow": .element(0), "AXChildren": .elements([4])]),
+            body(4, page: 3, shared: (0, 12)),
+            .init(id: 5, attrs: ["AXRole": .string("AXPage"), "AXParent": .element(2), "AXWindow": .element(0), "AXChildren": .elements([6])]),
+            body(6, page: 5, shared: (12, 8)),
+            .init(id: 9, attrs: ["AXRole": .string("AXApplication"), "AXChildren": .elements([0]), "AXWindows": .elements([0]),
+                                 "AXFocusedWindow": .element(0), "AXFocusedUIElement": .element(2)]),
+        ]
+        return f
+    }
+    func pagesModule() -> AppModule? {
+        BuiltInModules.register()
+        return AppModuleHandler.shared.moduleType(for: "com.apple.Pages")?.init(pid: 900_009, bundleIdentifier: "com.apple.Pages", appName: "Pages")
+    }
+    func setsSaid() -> String { AXReplay.sets.map { "\($0.id) \($0.attribute)" }.joined(separator: ", ") }
+
+    test("Pages: the layout with no caret in its body text gives the body text the focus") {
+        AXReplay.load(pages(caret: false)); defer { AXReplay.unload() }
+        guard let module = pagesModule() else { return Harness.fail("Pages' module is registered") }
+        expect(module.redirectFocus(AXReplay.element(2)).flatMap { AXReplay.id(of: $0) }, 4, "the first page's body text is the focus")
+        check(AXReplay.sets.contains { $0.id == 4 && $0.attribute == "AXFocused" && $0.value == .bool(true) },
+              "the body text was given the focus, so Pages shows its caret (set: \(setsSaid()))")
+    }
+    test("Pages: the layout with the caret in its body text sets nothing in Pages") {
+        AXReplay.load(pages(caret: true)); defer { AXReplay.unload() }
+        guard let module = pagesModule() else { return Harness.fail("Pages' module is registered") }
+        expect(module.redirectFocus(AXReplay.element(2)).flatMap { AXReplay.id(of: $0) }, 4, "the first page's body text is the focus")
+        check(AXReplay.sets.isEmpty, "nothing set in Pages (set: \(setsSaid()))")
     }
 }
 

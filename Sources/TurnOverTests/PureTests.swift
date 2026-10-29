@@ -1109,6 +1109,21 @@ func browseTextNavTests() {
                 check(GlobalCommands.shared.script(named: value) != nil || vo.script(named: value) != nil, "\(key) → \(value): a command TurnOver has")
             }
         }
+        // Four JAWS keys had no line here, so NVDA's ran (issue 125): Caps Lock Apostrophe and Option Caps Lock X did
+        // nothing, Caps Lock V turned screen layout on and off, and Caps Lock F3 found the next match on a page too (a log
+        // of 28 Oct 2026). F3 now does what Caps Lock F7 does; where that is nothing (outside browse mode, Word and Excel)
+        // it still finds the next match.
+        expect(jaws[normalizeGestureIdentifier("kb:turnover+'")], "=kb:turnover+shift+backspace", "Caps Lock Apostrophe moves the focus to the navigator object, as JAWS's Route PC Cursor to JAWS Cursor")
+        expect(jaws[normalizeGestureIdentifier("kb:turnover+option+x")], "=kb:turnover+c", "Option Caps Lock X reads the clipboard, as JAWS's Caps Lock Windows X")
+        expect(jaws[normalizeGestureIdentifier("kb:turnover+v")], "jaws_settings", "Caps Lock V opens the settings, as JAWS's Quick Settings")
+        expect(jaws[normalizeGestureIdentifier("kb:turnover+f3")], "=kb:turnover+f7", "Caps Lock F3 lists the page's elements, as JAWS's Virtual HTML Features")
+        // Caps Lock F5, F6 and F7 are JAWS's lists of one kind (issue 125). F5 and F6 pointed at "=kb:turnover+f7" and
+        // F7 had no line, so all three opened the same elements list, on the kind used last (29 Oct 2026). F3 and F9
+        // still open the whole list: "=" looks the other key up without this table, so F7's new line never reaches them.
+        expect(jaws[normalizeGestureIdentifier("kb:turnover+f5")], "jaws_formFieldsList", "Caps Lock F5 lists the form fields, as JAWS's Insert+F5")
+        expect(jaws[normalizeGestureIdentifier("kb:turnover+f6")], "jaws_headingsList", "Caps Lock F6 lists the headings, as JAWS's Insert+F6")
+        expect(jaws[normalizeGestureIdentifier("kb:turnover+f7")], "jaws_linksList", "Caps Lock F7 lists the links, as JAWS's Insert+F7")
+        expect(jaws[normalizeGestureIdentifier("kb:turnover+f9")], "=kb:turnover+f7", "Caps Lock F9 keeps the whole elements list")
         // Caps Lock H is JAWS's Say Sentence. It pointed at "=kb:turnover+control+s", and NVDA+Control+S opens the
         // Speech settings in the Windows family since 12 Oct 2026 (NVDA-PARITY.md, decision 6), so Caps Lock H
         // opened them too (Guides/11-keys-jaws.md, 21 Oct 2026: "TurnOver H | Opens TurnOver's Speech").
