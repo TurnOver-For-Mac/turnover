@@ -196,8 +196,9 @@ extension BrowseModeDocument {
 
     /// NVDA's Elements List (NVDA+F7), VoiceOver's Item Chooser (VO-I): the page's headings, links, form fields,
     /// buttons and landmarks, each kind a submenu in reading order. Enter puts the reading position on the item and
-    /// reads it, as quick navigation does; typing a few letters jumps to the item that starts with them.
-    func elementsList() {
+    /// reads it, as quick navigation does; typing a few letters jumps to the item that starts with them. Given a kind,
+    /// that kind alone, as JAWS's lists of links, headings and form fields (Insert+F7, F6, F5): Left and Right stay on it.
+    func elementsList(only kind: String? = nil) {
         refreshIfNavigated()
         if buffer.isDirty { rebuildKeepingPlace() }
         let kinds: [(String, Set<String>)] = [
@@ -206,7 +207,7 @@ extension BrowseModeDocument {
             ("Form controls", ["AXTextField", "AXTextArea", "AXCheckBox", "AXRadioButton", "AXPopUpButton", "AXComboBox", "AXSlider", "AXButton", "AXMenuButton"]),
             ("Landmarks", ["AXLandmark"]),
             ("Tables", ["AXTable"]),
-        ]
+        ].filter { kind == nil || $0.0 == kind }
         var groups: [(name: String, items: [MenuItem])] = []
         for (title, roles) in kinds {
             var items: [MenuItem] = []
@@ -222,6 +223,7 @@ extension BrowseModeDocument {
             }
             groups.append((title, items))
         }
+        if let kind { TurnOverMenu.shared.openChooser(kind, items: groups.first?.items ?? []); return }
         TurnOverMenu.shared.openRotor(groups)
     }
 

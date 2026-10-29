@@ -265,6 +265,20 @@ public final class GlobalCommands: ScriptableObject {
         script("jaws_settings", "Opens TurnOver's settings in its menu (JAWS: Insert+F2, Insert+6)", gestures: [], category: sys) { _ in
             TurnOverMenu.shared.openSettings()
         }
+        // JAWS's lists of one kind (issue 125): on a page in browse mode, its links, headings or form fields alone.
+        // Elsewhere what NVDA+F7 does there (Word's and Excel's elements lists), and where that is nothing, the key's
+        // own command (NVDA+F5 refreshes a page): what these keys did while JAWS's table sent them to NVDA+F7.
+        let lists = [("jaws_linksList", "Links", "Links list; lists the page's links; Enter goes there. In Word and Excel, their elements list (JAWS: Insert+F7)"),
+                     ("jaws_headingsList", "Headings", "Headings list; lists the page's headings; Enter goes there. In Word and Excel, their elements list (JAWS: Insert+F6)"),
+                     ("jaws_formFieldsList", "Form controls", "Form fields list; lists the page's form fields and buttons; Enter goes there. In Word and Excel, their elements list (JAWS: Insert+F5)")]
+        for (name, kind, description) in lists {
+            script(name, description, gestures: [], category: "Browse mode") { g in
+                if let d = API.focusTreeInterceptor, !d.passThrough { d.elementsList(only: kind); return }
+                // Never one of these lists again: a key of the user's own may name one.
+                let elsewhere = [KeyboardGesture(identifier: "kb:turnover+f7"), g].compactMap { $0.flatMap { ScriptHandler.findScript(for: $0, styleTable: false) } }
+                elsewhere.first { s in !lists.contains { $0.0 == s.name } }?.handler(g)
+            }
+        }
         script("jaws_sayAllBack", "During say all: back a sentence, and carries on reading (JAWS: Left Arrow)", gestures: [], category: text) { _ in
             SayAll.carryOn(bySentences: -1)
         }

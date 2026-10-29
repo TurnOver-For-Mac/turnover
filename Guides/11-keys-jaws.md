@@ -24,7 +24,9 @@ Switch styles with Command Control Comma, then K. TurnOver's own commands behind
 | TurnOver F2 | Opens TurnOver's settings in its menu (JAWS: Insert+F2, Insert+6) |
 | TurnOver F3 | Finds the next match of the last search (VO-G; NVDA+F3) |
 | TurnOver F4 | Quits TurnOver |
-| TurnOver F5 | Rebuilds the page's browse mode view (NVDA+F5) |
+| TurnOver F5 | Form fields list; lists the page's form fields and buttons; Enter goes there. In Word and Excel, their elements list (JAWS: Insert+F5) |
+| TurnOver F6 | Headings list; lists the page's headings; Enter goes there. In Word and Excel, their elements list (JAWS: Insert+F6) |
+| TurnOver F7 | Links list; lists the page's links; Enter goes there. In Word and Excel, their elements list (JAWS: Insert+F7) |
 | TurnOver F9 | Marks the review cursor as the start of text to copy (NVDA+F9) |
 | TurnOver H | Reports the current sentence |
 | TurnOver I | Reports the current line. Pressed twice, spells it |
@@ -296,7 +298,6 @@ Keys an app's own support adds at the app level, in that app only; the keys abov
 | Key | What it does |
 |---|---|
 | TurnOver Command C | Reports the cell's note; twice, shows it to read line by line (NVDA+Alt+C) |
-| TurnOver F7 | Elements list; lists the workbook's sheets and the cells with notes; Enter goes there (NVDA+F7) |
 | TurnOver Option C | Reports the cell's note; twice, shows it to read line by line (NVDA+Alt+C) |
 | TurnOver Space | Cell review; reads the cells around with the arrows, protected ones too; Escape stops (NVDA+Space in Excel) |
 

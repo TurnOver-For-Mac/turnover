@@ -166,6 +166,76 @@ func fixtureTests() {
         let parts = Speech.objectPropertiesSpeech(doc, reason: .focus)
         check(parts.contains("edit") || parts.contains("document") || parts.contains("text"), "says what it is: \(parts)")
     }
+
+    // JAWS's lists of one kind (issue 125), on a made-up page: a heading, two links and a search field.
+    test("JAWS keys: Caps Lock F7, F6 and F5 list a page's links, headings or form fields alone; F3 and F9 the whole list") {
+        var f = AXFixture(app: "T", bundle: "t", recorded: "", root: 0, application: 9, focus: 0, nodes: [])
+        f.nodes = [
+            .init(id: 0, attrs: ["AXRole": .string("AXWebArea"), "AXURL": .url("https://example.com/"), "AXParent": .element(9), "AXChildren": .elements([1, 7, 8, 6])]),
+            .init(id: 1, attrs: ["AXRole": .string("AXHeading"), "AXTitle": .string("News"), "AXValue": .number(1), "AXParent": .element(0)]),
+            .init(id: 7, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(0), "AXChildren": .elements([2])]),
+            .init(id: 2, attrs: ["AXRole": .string("AXLink"), "AXParent": .element(7), "AXChildren": .elements([3])]),
+            .init(id: 3, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("Home"), "AXParent": .element(2)]),
+            .init(id: 8, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(0), "AXChildren": .elements([4])]),
+            .init(id: 4, attrs: ["AXRole": .string("AXLink"), "AXParent": .element(8), "AXChildren": .elements([5])]),
+            .init(id: 5, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("About"), "AXParent": .element(4)]),
+            .init(id: 6, attrs: ["AXRole": .string("AXTextField"), "AXTitle": .string("Search"), "AXValue": .string(""), "AXParent": .element(0)]),
+            .init(id: 9, attrs: ["AXRole": .string("AXApplication"), "AXTitle": .string("T"), "AXChildren": .elements([0])]),
+        ]
+        let saved = config, keep = Speech.sink
+        var said = ""
+        Speech.sink = { said += $0 + " " }
+        AXReplay.load(f)
+        defer { TurnOverMenu.shared.close(); AXReplay.unload(); API.setFocusObject(nil, ancestors: []); config = saved; Speech.sink = keep }
+        config.general.keyboardStyle = "jaws"
+        let page = BrowseModeHandler.shared.document(root: AXReplay.root!)
+        API.setFocusObject(ObjectFactory.make(AXReplay.root!), ancestors: [], interceptor: page)
+        /// The key's command, run as the key runs it; `said` from then on.
+        @MainActor func press(_ id: String) -> String? {
+            if TurnOverMenu.shared.isOpen { TurnOverMenu.shared.close() }
+            guard let g = KeyboardGesture(identifier: id), let s = ScriptHandler.findScript(for: g) else { return nil }
+            said = ""
+            s.handler(g)
+            return s.name
+        }
+        expect(press("kb:turnover+f7"), "jaws_linksList", "Caps Lock F7 is JAWS's links list")
+        check(said.contains("Links, 2 items"), "the links alone: \(said)")
+        said = ""
+        let edges = Locked(0)
+        Tones.onEdge = { edges.value += 1 }
+        TurnOverMenu.shared.handle(KeyboardGesture(identifier: "kb:rightArrow")!)
+        Tones.onEdge = nil
+        check(TurnOverMenu.shared.isOpen && !said.contains("Headings") && edges.value == 1, "Right stays on the links, with the edge sound: \(said)")
+        expect(press("kb:turnover+f6"), "jaws_headingsList", "Caps Lock F6 is JAWS's headings list")
+        check(said.contains("Headings, 1 items"), "the heading alone: \(said)")
+        expect(press("kb:turnover+f5"), "jaws_formFieldsList", "Caps Lock F5 is JAWS's form fields list")
+        check(said.contains("Form controls, 1 items"), "the search field alone: \(said)")
+        for key in ["kb:turnover+f3", "kb:turnover+f9"] {
+            expect(press(key), "elementsList", "\(key) is still the whole elements list")
+            check(said.contains("rotor"), "\(key): every kind, Left and Right between them: \(said)")
+        }
+        // In focus mode and off a page they do what NVDA+F7 does there: nothing on a page in focus mode, and an app's
+        // own list where it has one (Word's document, Excel's module).
+        page.passThrough = true
+        expect(press("kb:turnover+f7"), "jaws_linksList")
+        check(!TurnOverMenu.shared.isOpen, "in focus mode no list opens, as with NVDA+F7")
+        page.passThrough = false
+        let word = OwnF7(element: AXReplay.element(6))
+        var ran = 0
+        word.pressed = { ran += 1 }
+        API.setFocusObject(word, ancestors: [])
+        for key in ["kb:turnover+f5", "kb:turnover+f6", "kb:turnover+f7"] { _ = press(key) }
+        expect(ran, 3, "off a page each runs the focus's own Caps Lock F7, as Word's elements list")
+        config.general.keyboardStyle = "windows"
+        API.setFocusObject(ObjectFactory.make(AXReplay.root!), ancestors: [], interceptor: page)
+        expect(press("kb:turnover+f7"), "elementsList", "NVDA keys: Caps Lock F7 is still the whole elements list")
+    }
+}
+
+/// An object with a Caps Lock F7 of its own, as Word's document has (its elements list).
+final class OwnF7: TurnOverObject {
+    var pressed: () -> Void = {}
+    override func initOverlay() { script("test_ownF7", "", gestures: ["kb:turnover+f7"]) { [weak self] _ in self?.pressed() } }
 }
 
 // The focus rules (FocusChanges.swift) against made-up trees: what is ignored, what is followed.
