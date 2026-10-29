@@ -263,6 +263,14 @@ The installed trial still needs native Home/Search selection and audible content
 page whose native selection no longer agrees is conservatively refused; it is not permission to accept a new
 sidebar title with an unverified old body.
 
+`MediaWorkTests` also exercises effective global/per-app item-detail verbosity and ordering through actual media
+announcements. `MediaShelfReadinessTests` exercises the TV-only optional early shelf read (150 ms scheduling,
+250 ms cooperative work allowance), unchanged/expired early replies retaining the original same-position
+500 ms settling point, overlap retirement, one completion, queued navigation and newer immediate input,
+page/window/session changes, and the unchanged default media policy. The normal settled read retains its
+existing work allowance. The optional budget is not a provider-loading timeout or proof of end of content.
+Cold/slower-provider errors and general slow-network completion still need live evidence; AXHealth is honored.
+
 The registered overnight suites exercise real owners/providers through public or synthetic fixtures:
 `WordPageReadingTests` (current page ranges and window changes), `MailMessageReadingTests` (editable siblings),
 `TerminalUnicodeTests` (complete graphemes), `SafariReplyTests` (late Find/tab replies), `MediaWorkTests`

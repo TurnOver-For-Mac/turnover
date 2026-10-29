@@ -427,3 +427,15 @@ bounded read-only probe confirmed Home unselected, Search selected, and AXSelect
 The row itself did not advertise AXPress. These are different observations: an advertised operation or successful
 action return is not the resulting selection. Verify selection and body change separately. A page title derived
 from the sidebar selection alone cannot establish that the old content has been replaced.
+
+## Useful media content before a fixed pause ends (TV, 29 Oct 2026, issue 188)
+
+Nine clean shelf completions in Oliver's TV trial took 557–678 ms, including a fixed 500 ms client pause; one
+overlapping current snapshot already had new items at 223 ms. The TV module now enables an optional early
+read with a small work budget. An unchanged/incomplete early result waits at the same scroll position until
+the existing settling point, rather than scrolling again prematurely. A current same-page publication with
+genuine new item keys can fulfill that load and retire its timers. New executed navigation owns the cursor,
+even if it returns to the same item; queued arrows keep their order. Other media apps keep the default timing.
+This fast path does not establish that a half-second is enough for every machine or network. Timers are
+scheduling choices; only observed content establishes readiness. Full provider-unavailable handling remains
+a separate live-check limitation, not an invented empty page.
