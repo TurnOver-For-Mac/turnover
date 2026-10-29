@@ -2,8 +2,10 @@
 import Foundation
 import TurnOverAX
 
-/// Fixed profiles for this executable's metadata sample. The directed Settings mode needs a deeper container
-/// path than App Store diagnostics; it does not relax AXProbeBudget's shared hard caps or accept numeric limits.
+enum CapabilitiesProfile: String { case standard, systemSettings, extended }
+
+/// Fixed profiles for this executable's metadata sample. Explicit Settings/content passes can reach deeper
+/// containers without relaxing AXProbeBudget's shared hard caps or accepting numeric limits from arguments.
 struct CapabilitiesBudget {
     let maximumQueries: Int, maximumNodes: Int, maximumDepth: Int
     let maximumChildren = 8
@@ -12,10 +14,12 @@ struct CapabilitiesBudget {
     private(set) var depthClipped = false, arraysClipped = false
     private(set) var stopped: AXProbeBudget.Stop?
 
-    init(settingsShape: Bool) {
-        maximumQueries = settingsShape ? 256 : 128
-        maximumNodes = settingsShape ? 32 : 16
-        maximumDepth = settingsShape ? 9 : 6
+    init(profile: CapabilitiesProfile) {
+        switch profile {
+        case .standard: maximumQueries = 128; maximumNodes = 16; maximumDepth = 6
+        case .systemSettings: maximumQueries = 256; maximumNodes = 32; maximumDepth = 9
+        case .extended: maximumQueries = 512; maximumNodes = 64; maximumDepth = 12
+        }
     }
     mutating func canContinue(now: UInt64 = DispatchTime.now().uptimeNanoseconds) -> Bool {
         guard stopped == nil else { return false }

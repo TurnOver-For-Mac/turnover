@@ -7,10 +7,11 @@ import TurnOverAX
 
 func runCapabilitiesGate(_ args: [String]) {
     let settingsShape = args.count == 3 && args.last == "--system-settings"
-    guard args.count == (settingsShape ? 3 : 2), args[0] == "--bundle", args[1].utf8.count <= 128,
+    let extended = args.count == 3 && args.last == "--extended"
+    guard (args.count == 2 || settingsShape || extended), args[0] == "--bundle", args[1].utf8.count <= 128,
           !settingsShape || args[1] == "com.apple.systempreferences",
           args[1].contains("."), args[1].utf8.allSatisfy({ (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) || [45, 46, 95].contains($0) }) else {
-        Log.line("capabilities requires --bundle id; optional --system-settings is restricted to com.apple.systempreferences; rejected arguments are not logged")
+        Log.line("capabilities requires --bundle id with at most one of --extended or --system-settings; Settings mode requires com.apple.systempreferences; rejected arguments are not logged")
         return
     }
     guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: args[1]).first else {
@@ -25,20 +26,25 @@ func runCapabilitiesGate(_ args: [String]) {
     }
     Log.line("targetBundle=\(args[1]) version=\(version("CFBundleShortVersionString")) build=\(version("CFBundleVersion")) targetIsFrontmost=\(NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier)")
     Log.line("probeAccessibilityTrusted=\(AXIsProcessTrusted()) permissionPromptRequested=false VoiceOverProcessPresent=\(!NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.VoiceOver").isEmpty) readerActive=unobserved muteLease=unobserved")
-    AXCapabilitiesSample(pid: app.processIdentifier, settingsShape: settingsShape).run()
+    let profile: CapabilitiesProfile = settingsShape ? .systemSettings : (extended ? .extended : .standard)
+    AXCapabilitiesSample(pid: app.processIdentifier, profile: profile).run()
 }
 
 private final class AXCapabilitiesSample {
     private let pid: pid_t
-    private let settingsShape: Bool
+    private let profile: CapabilitiesProfile
+    private var settingsShape: Bool { profile == .systemSettings }
+    private var extended: Bool { profile == .extended }
     private var shapeTags: [ElementKey: String] = [:]
     private var budget: CapabilitiesBudget
     // Messaging timeouts belong to the exact object, not to every CFEqual reference. Retaining the configured
     // object prevents address reuse during this one synchronous sample; no application flag is changed.
     private var configured: [ObjectIdentifier: AXUIElement] = [:]
-    private var seen = Set<ElementKey>(), details = Set<ElementKey>(), settableSamples = Set<ElementKey>()
+    private var seen = Set<ElementKey>(), details = Set<ElementKey>(), completedDetails = Set<ElementKey>(), settableSamples = Set<ElementKey>()
+    private var webAreas = Set<ElementKey>(), textAreas = Set<ElementKey>()
     private var malformed = false, unvisited = 0, skipped = 0, oversizedMetadata = 0
     private var localStop: String?
+    private var prunedToolbars = 0, prunedRows = 0, ancestorClipped = false
     private let started = DispatchTime.now().uptimeNanoseconds, initialAXMilliseconds = AXStats.ms
     private static let leaves: Set<String> = ["AXButton", "AXTextField", "AXSearchField", "AXTextArea", "AXStaticText", "AXImage", "AXScrollBar", "AXLink"]
     private static let detailRoles: Set<String> = ["AXWebArea", "AXTextArea", "AXTable", "AXOutline", "AXList", "AXDocument"]
@@ -51,11 +57,12 @@ private final class AXCapabilitiesSample {
         "AXChildren", "AXVisibleChildren", "AXChildrenInNavigationOrder", "AXSelectedChildren", "AXRows", "AXColumns",
         "AXNumberOfCharacters", "AXSelectedTextRange", "AXSelectedTextMarkerRange", "AXStartTextMarker", "AXEndTextMarker",
         "AXValue", "AXEditable", "AXProtectedContent", "AXFocusedUIElement", "AXWebArea",
+        "AXSharedTextUIElements", "AXSharedCharacterRange", "AXVisibleCharacterRange",
     ]
 
-    init(pid: pid_t, settingsShape: Bool) {
-        self.pid = pid; self.settingsShape = settingsShape
-        budget = CapabilitiesBudget(settingsShape: settingsShape)
+    init(pid: pid_t, profile: CapabilitiesProfile) {
+        self.pid = pid; self.profile = profile
+        budget = CapabilitiesBudget(profile: profile)
     }
 
     private func prepare(_ element: AXUIElement) -> Bool {
@@ -105,9 +112,15 @@ private final class AXCapabilitiesSample {
         return raw as? String
     }
 
+    private func noteContentRole(_ role: String?, of element: AXUIElement) -> String? {
+        if role == "AXWebArea" { webAreas.insert(ElementKey(element)) }
+        if role == "AXTextArea" { textAreas.insert(ElementKey(element)) }
+        return role
+    }
+
     private func role(_ element: AXUIElement) -> String? {
         guard settingsShape else {
-            return boundedString(query(element, "AXRole", { element.attributeResult(kAXRoleAttribute) })?.value)
+            return noteContentRole(boundedString(query(element, "AXRole", { element.attributeResult(kAXRoleAttribute) })?.value), of: element)
         }
         shapeTags[ElementKey(element)] = nil
         var batch: AXAttributeBatchResult?
@@ -133,7 +146,7 @@ private final class AXCapabilitiesSample {
             generalLabelMetadata(element)
             focusedSettable(element)
         }
-        return role
+        return noteContentRole(role, of: element)
     }
 
     private func generalLabelMetadata(_ element: AXUIElement) {
@@ -199,6 +212,7 @@ private final class AXCapabilitiesSample {
         focusedSettable(target)
         names(target, kind: "attributes"); names(target, kind: "parameters"); names(target, kind: "actions")
         let names = [kAXNumberOfCharactersAttribute, kAXSelectedTextRangeAttribute, "AXSelectedTextMarkerRange", "AXStartTextMarker", "AXEndTextMarker"]
+            + (extended ? ["AXSharedCharacterRange", "AXVisibleCharacterRange"] : [])
         var batch: AXAttributeBatchResult?
         _ = query(target, "textMetadata") { let result = target.attributesResult(names); batch = result; return result.query }
         if let batch, batch.query.status == .returned(.success) {
@@ -211,16 +225,48 @@ private final class AXCapabilitiesSample {
         }
         _ = children(target, "AXVisibleChildren")
         _ = children(target, "AXChildrenInNavigationOrder")
+        if budget.canContinue() { completedDetails.insert(ElementKey(target)) }
+    }
+
+    /// A focused DOM leaf may sit outside the window's first child prefix. Inspect its enclosing web area
+    /// without widening any child array or touching another window. These admissions share the sample budget.
+    private func focusedWebAncestor(_ focus: AXUIElement, role initialRole: String?) {
+        var candidate = focus, candidateRole = initialRole
+        var ancestry: Set<ElementKey> = [ElementKey(focus)]
+        for hop in 0...8 {
+            guard budget.canContinue() else { return }
+            if candidateRole == "AXWebArea" {
+                inspect(candidate, kind: "focusedAncestorWebArea")
+                Log.line("focusedAncestorWebArea=found hops=\(hop)")
+                return
+            }
+            if candidateRole == "AXWindow" || candidateRole == "AXApplication" {
+                Log.line("focusedAncestorWebArea=notOnSampledAncestorPath hops=\(hop)"); return
+            }
+            guard hop < 8 else { ancestorClipped = true; break }
+            guard let parent = element(candidate, kAXParentAttribute) else {
+                Log.line("focusedAncestorWebArea=parentNotAcquired hops=\(hop)"); return
+            }
+            guard ancestry.insert(ElementKey(parent)).inserted else {
+                malformed = true; Log.line("focusedAncestorWebArea=ancestorCycle"); return
+            }
+            guard budget.beginNode(depth: hop + 1) else { return }
+            candidate = parent; candidateRole = role(parent)
+            Log.line("sample=focusAncestor hops=\(hop + 1) role=\(AXDiagnosticReport.role(candidateRole)) isWebArea=\(candidateRole == "AXWebArea")")
+        }
+        Log.line("focusedAncestorWebArea=notFoundWithinEightHops ancestorPathClipped=true")
     }
 
     func run() {
         Log.line("method=boundedPublicAXCapabilities healthScope=probeProcess policy=respectBackoff")
         Log.line("bounds queriesAndTimeoutSetups=\(budget.maximumQueries) nodes=\(budget.maximumNodes) childrenPerRead=\(budget.maximumChildren) depth=\(budget.maximumDepth) cooperativeDeadlineMs=2000 timeoutPerExactReferenceMs=50")
         Log.line("labels=false identifierValuesLogged=false textValues=false customActionStrings=false actionsAttempted=0 activationAttempted=false flagsWritten=0 fullControlValidated=false")
-        Log.line("systemSettingsShapeMode=\(settingsShape) knownStructuralTagsOnly=true outlineAndTableRowsPruned=\(settingsShape)")
+        Log.line("profile=\(profile.rawValue) systemSettingsShapeMode=\(settingsShape) knownStructuralTagsOnly=true outlineAndTableRowsPruned=\(settingsShape || extended) toolbarsPruned=\(extended)")
+        Log.line("focusedTargetInspectedIndependently=true focusedAncestorHopLimit=\(extended ? 8 : 0) sharedTextUIElementsArrayRead=false sharedRangeValuesLogged=false")
         Log.line("nameEnumeration=oneNonpaginatedProviderCallWithBoundedClientDecoding; caller must impose an external process deadline")
         defer {
-            Log.line("summary queries=\(budget.queries) nodes=\(budget.nodes) capabilitySamples=\(details.count) stop=\(localStop ?? budget.stopped?.rawValue ?? "sampleFinished") depthClipped=\(budget.depthClipped) arraysClipped=\(budget.arraysClipped) skippedBranches=\(skipped) unvisitedBranches=\(unvisited) malformed=\(malformed) oversizedMetadata=\(oversizedMetadata) providerTreeComplete=false")
+            Log.line("summary queries=\(budget.queries) nodes=\(budget.nodes) capabilitySamples=\(details.count) completedCapabilitySamples=\(completedDetails.count) stop=\(localStop ?? budget.stopped?.rawValue ?? "sampleFinished") depthClipped=\(budget.depthClipped) arraysClipped=\(budget.arraysClipped) skippedBranches=\(skipped) unvisitedBranches=\(unvisited) malformed=\(malformed) oversizedMetadata=\(oversizedMetadata) prunedToolbars=\(prunedToolbars) prunedRowContainers=\(prunedRows) ancestorClipped=\(ancestorClipped) providerTreeComplete=false")
+            Log.line("contentCoverage webAreasObserved=\(webAreas.count) webAreaCapabilitySamples=\(webAreas.intersection(completedDetails).count) textAreasObserved=\(textAreas.count) textAreaCapabilitySamples=\(textAreas.intersection(completedDetails).count); capability sample means all planned metadata reads admitted, not successful content or action support")
             Log.line("AXQueryTimeMs=\(String(format: "%.2f", AXStats.ms - initialAXMilliseconds)) wallMs=\((DispatchTime.now().uptimeNanoseconds - started) / 1_000_000); advertised capabilities and sampled reads do not prove action success or complete document support")
         }
         let app = AXUIElementCreateApplication(pid)
@@ -230,6 +276,7 @@ private final class AXCapabilitiesSample {
             let rawRole = role(focus)
             Log.line("sample=focus role=\(AXDiagnosticReport.role(rawRole)) isWebArea=\(rawRole == "AXWebArea") knownStructure=\(shapeTags[ElementKey(focus)] ?? "unmatched")")
             inspect(focus, kind: "focus")
+            if extended { focusedWebAncestor(focus, role: rawRole) }
         }
         guard let window = element(app, kAXFocusedWindowAttribute) ?? element(app, kAXMainWindowAttribute) else {
             Log.line("window=notAcquired; no empty-provider conclusion"); return
@@ -241,10 +288,15 @@ private final class AXCapabilitiesSample {
             let rawRole = role(target)
             let tag = shapeTags[ElementKey(target)]
             Log.line("sample=window node=\(budget.nodes) depth=\(depth) role=\(AXDiagnosticReport.role(rawRole)) isWebArea=\(rawRole == "AXWebArea") knownStructure=\(tag ?? "unmatched")")
-            if details.count < 4, tag != nil || rawRole.map({ Self.detailRoles.contains($0) }) == true {
+            let detailRoles: Set<String> = extended ? ["AXWebArea", "AXTextArea", "AXDocument"] : Self.detailRoles
+            if details.count < (extended ? 8 : 4), tag != nil || rawRole.map({ detailRoles.contains($0) }) == true {
                 inspect(target, kind: tag ?? (rawRole == "AXWebArea" ? "webArea" : "content"))
             }
-            guard let rawRole, !Self.leaves.contains(rawRole), !(settingsShape && ["AXOutline", "AXTable"].contains(rawRole)) else { skipped += 1; continue }
+            if extended, rawRole == "AXToolbar" { prunedToolbars += 1; skipped += 1; continue }
+            if settingsShape || extended, rawRole == "AXOutline" || rawRole == "AXTable" {
+                prunedRows += 1; skipped += 1; continue
+            }
+            guard let rawRole, !Self.leaves.contains(rawRole) else { skipped += 1; continue }
             guard depth < budget.maximumDepth else { _ = budget.beginNode(depth: depth + 1); unvisited += 1; continue }
             let found = children(target, kAXChildrenAttribute)
             stack.append(contentsOf: found.reversed().map { ($0, depth + 1) })
