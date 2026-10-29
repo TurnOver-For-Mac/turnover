@@ -74,6 +74,11 @@ final class LeadWatcher {
     private var lockTurnedVoiceOverOn = false
     /// Each lock starts a new cycle; a wait from an earlier unlock stands down when it sees a newer one.
     private var lockCycle = 0
+    /// TurnOver turned VoiceOver on for this lock or sleep, while TurnOver itself was speaking: after the unlock it turns
+    /// VoiceOver off again, whatever the swap setting. The swap-off rule that TurnOver never turns VoiceOver off is
+    /// about a VoiceOver the user chose; this one was TurnOver's own, and it stayed on after every wake until it was
+    /// turned off by hand (Oliver, 29 Oct 2026). Cleared when VoiceOver goes off by any means.
+    private var restoreAfterUnlock = false
 
     /// The "VoiceOver is on" notice just came: was it the lock's own? Taken once.
     func takeLockVoiceOverOn() -> Bool {
@@ -89,6 +94,8 @@ final class LeadWatcher {
         guard !NSWorkspace.shared.isVoiceOverEnabled else { Log.info("lead watcher: \(why); VoiceOver already on"); return }
         Log.info("lead watcher: \(why); VoiceOver on for the lock screen")
         lockTurnedVoiceOverOn = true
+        // (Sleep, display sleep and the lock can each come within a tenth of a second: a later one never clears it.)
+        restoreAfterUnlock = restoreAfterUnlock || (turnOverActive() && !suspended)   // not when TurnOver was off by its own key
         handOver(voiceOverOn: true)
     }
 
@@ -127,6 +134,17 @@ final class LeadWatcher {
                 if front == nil || front?.activationPolicy != .regular, Date().timeIntervalSince(looking) < 10 {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { decide() }
                     return
+                }
+                // The lock's own VoiceOver, put back as it was: TurnOver read before the lock, so it reads again.
+                // Readers per app with the switch on decide by the app in front instead, as below.
+                if self.restoreAfterUnlock {
+                    self.restoreAfterUnlock = false
+                    if NSWorkspace.shared.isVoiceOverEnabled, !Coexist.on, !self.suspended, !config.applications.switchesAsAppsChange {
+                        Log.info("lead watcher: VoiceOver was on only for the lock screen; turning it off again")
+                        self.initialTakeOverPending = false
+                        self.handOver(voiceOverOn: false)
+                        return
+                    }
                 }
                 if let front { self.appActivated(front) }
             }
@@ -548,7 +566,7 @@ final class LeadWatcher {
 
     /// `byLock`: the lock's own VoiceOver, noticed late; no pin and no choice of the user's.
     func voiceOverChanged(on: Bool, byLock: Bool = false) {
-        if !on { lockTurnedVoiceOverOn = false }   // whatever turned it on, it is off: nothing pending
+        if !on { lockTurnedVoiceOverOn = false; restoreAfterUnlock = false }   // whatever turned it on, it is off: nothing pending
         guard !byLock, !locked else { return }
         guard Date().timeIntervalSince(startedAt) > 3 else { return }
         if let t = Watchdog.shared.lastTrip, Date().timeIntervalSince(t) < 30 { return }

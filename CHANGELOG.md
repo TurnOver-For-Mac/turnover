@@ -27,6 +27,10 @@ Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
 
 ### Fixed
 
+- After the Mac wakes and is unlocked, TurnOver takes over again when the swap is off. TurnOver turns VoiceOver on
+  for the lock screen, which it can't read; with the swap off it then never turned VoiceOver off again, so VoiceOver
+  stayed in charge after every wake until it was turned off by hand. A VoiceOver that was already on before the Mac
+  slept stays on. Reported by the maintainer.
 - App Store: Return on a search result opens it. The results page's container reports no size, so every row counted
   as off screen and Return said "could not reach … try again" for an app plainly on screen; the page's list, or the
   window, now gives the area, and a page with no scroll bar asks the row to scroll into view. Search results that
