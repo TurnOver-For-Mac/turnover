@@ -90,7 +90,7 @@ func wordPageReadingTests() {
         let text = "Expanded current page line\nNext page\n"
         fixture.nodes[2] = wordPageNode(11, window: 1, start: 0, length: 25, text: text, shared: [11, 12])
         // Word's wrong-page query returns that page's last line. A short replay backing value models that reply.
-        fixture.nodes[3] = wordPageNode(12, window: 1, start: 26, length: 10, text: "old\npage\n", shared: [11, 12], characters: text.utf16.count)
+        fixture.nodes[3] = wordPageNode(12, window: 1, start: 26, length: 10, text: "old\npage", shared: [11, 12], characters: text.utf16.count)
         AXReplay.load(fixture)
         expect(line(textInfo, at: 20), range("Expanded current page line\n", in: text))
     }
@@ -102,14 +102,14 @@ func wordPageReadingTests() {
         check(line(textInfo, at: 20) != nil, "seeded the original cached candidate")
         let text = "short page\nReplacement page row\nend"
         fixture.nodes[2] = wordPageNode(11, window: 1, start: 0, length: 10, text: text, shared: [11, 12, 13])
-        fixture.nodes[3] = wordPageNode(12, window: 1, start: 40, length: 2, text: "old\npage\n", shared: [11, 12, 13], characters: text.utf16.count)
+        fixture.nodes[3] = wordPageNode(12, window: 1, start: 40, length: 2, text: "old\npage", shared: [11, 12, 13], characters: text.utf16.count)
         fixture.nodes.append(wordPageNode(13, window: 1, start: 11, length: text.utf16.count - 11, text: text, shared: [11, 12, 13]))
         AXReplay.load(fixture)
         expect(line(textInfo, at: 20), range("Replacement page row\n", in: text), "moved old candidate is refused and current shared pages are remapped")
     }
     test("Word pages: a provider line outside the requested position is refused") {
         var fixture = wordPageFixture()
-        fixture.nodes[2] = wordPageNode(11, window: 1, start: 0, length: 40, text: "old\npage\n", shared: [11], characters: 40)
+        fixture.nodes[2] = wordPageNode(11, window: 1, start: 0, length: 40, text: "old\npage", shared: [11], characters: 40)
         AXReplay.load(fixture); defer { AXReplay.unload() }
         guard let module = module(), let textInfo = info(11, module: module, at: 20) else { return Harness.fail("Word text provider") }
         defer { module.terminate() }
