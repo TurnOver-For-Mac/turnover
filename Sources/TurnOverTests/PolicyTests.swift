@@ -4,6 +4,7 @@
 import Foundation
 import AppKit
 import TurnOverCore
+import TurnOverControl
 import AXFixtures
 
 func policyTests() {
@@ -47,6 +48,28 @@ func policyTests() {
         check(Speech.testDropForFocusPending, "the second, at once, waits to drop")
         Speech.speakMessage("not a focus")
         check(Speech.testDropForFocusPending, "a message is not the focus's words; still waiting")
+    }
+    test("TurnOver Key: a TurnOver started and quit between two looks lets its quit go, so the key quits the next one") {
+        // TurnOver Key looks once a second. Between two looks, Command Control Period starts TurnOver 101 and quits it:
+        // no look ever has 101 (the maintainer, 28 Oct 2026).
+        var watch = ReaderWatch(seen: [])
+        watch.quit(101)
+        expect(watch.look([]), .init(quit: true), "101 gone, never seen: its quit")
+        check(!watch.isQuitting(102), "the next TurnOver, 102, is not taken for one going: Command Control Period quits it")
+        expect(watch.look([102]), .init(), "102 started")
+        expect(watch.look([]), .init(stopped: true), "102 gone with no quit: a crash, so the restart's check runs")
+        // The same with TurnOver's own notice as it quits (the menu, Command Q), which names no process.
+        watch = ReaderWatch(seen: [])
+        watch.quitAnnounced(running: [103])
+        expect(watch.look([]), .init(quit: true), "103 gone, never seen: its quit")
+        check(!watch.isQuitting(104), "the next TurnOver, 104, is not taken for one going")
+    }
+    test("TurnOver Key: an end is seen even when the next TurnOver starts within the same second") {
+        var watch = ReaderWatch(seen: [101])
+        watch.quit(101)
+        expect(watch.look([102]), .init(quit: true), "101 quit, and 102 started before the next look")
+        check(!watch.isQuitting(102), "102 is not going")
+        expect(watch.look([103]), .init(stopped: true), "102 crashed, and 103 started before the next look")
     }
     test("fixtures: every recorded window's focus reads as something, within a call budget") {
         let dir = fixtureURL("textedit-guide").deletingLastPathComponent()
