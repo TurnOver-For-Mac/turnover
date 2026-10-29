@@ -27,6 +27,10 @@ final class WordAppModule: AppModule {
     // Word's own dictionary is the one that counts when it supplies spelling marks, including in dialog fields.
     override var supplementsSpellingMarks: Bool { false }
 
+    // Word/macOS already sounds at a rejected native caret key (reported 29 Oct 2026, #190), including when
+    // TurnOver leads without coexist. Keep the native sound alone; review/table commands remain TurnOver's.
+    override var playsNativeCaretBoundarySound: Bool { false }
+
     required init(pid: pid_t, bundleIdentifier: String, appName: String) {
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
         declareTableScripts()
