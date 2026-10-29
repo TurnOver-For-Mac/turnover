@@ -363,6 +363,66 @@ public final class WebBuffer {
         return lo
     }
 
+    // MARK: The line under the caret, against the page as it is now
+    // VoiceOver keeps no copy of a page and asks at every move, so it reads what the page says now; this copy is
+    // rebuilt only when Safari reports a change, and a page can change without one. fast.com swapped its speed's
+    // text eight times a second with no notification at all, and every arrow said the copy's "38" while the page
+    // climbed to 65 (29 Oct 2026). The line just reached is asked again, briefly: a copy that no longer matches is
+    // made again by the caller.
+
+    /// What the page says now for one of a line's text runs, against the copy.
+    nonisolated public enum RunCheck: Equatable, Sendable { case same, changed, gone, unknown }
+    /// A line's copy against the page: changed when a run changed or went; unknown when a run could not be asked.
+    nonisolated public enum LineCheck: Equatable, Sendable { case unchanged, changed, unknown }
+
+    nonisolated public static func lineCheck(_ runs: [RunCheck]) -> LineCheck {
+        if runs.contains(where: { $0 == .changed || $0 == .gone }) { return .changed }
+        return runs.contains(.unknown) ? .unknown : .unchanged
+    }
+
+    /// The copy's text and the page's compared as the copy was made: line breaks became spaces, a long line wrapped
+    /// at a space, and runs of white space say nothing.
+    nonisolated public static func sameText(_ copied: String, _ live: String) -> Bool {
+        func words(_ s: String) -> String { s.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ") }
+        return words(copied) == words(live)
+    }
+
+    /// The plain text runs of line `index` asked for their value again. Bounded so a busy page can't hold a key up
+    /// (the "Safari not responding" VoiceOver gives, asking at every move): at most `maxRuns` runs, each question
+    /// with a 50 ms messaging timeout and under AXHealth, so an app resting after a timeout is not asked at all, and
+    /// `budgetMs` for the whole line. Control lines (a field's value is not its line's words) and runs that are not
+    /// static text (an image's description) are not compared.
+    public func check(line index: Int, maxRuns: Int = 8, budgetMs: UInt64 = 60) -> LineCheck {
+        guard lines.indices.contains(index), !lines[index].isControl else { return .unknown }
+        let line = lines[index]
+        let started = DispatchTime.now().uptimeNanoseconds
+        var runs: [RunCheck] = [], asked = 0
+        func ask(_ e: AXUIElement, _ name: String) -> AXQueryResult<CFTypeRef> {
+            AXUIElementSetMessagingTimeout(e, 0.05)
+            defer { AXUIElementSetMessagingTimeout(e, 0) }   // back to the app's own timeout for later questions
+            return e.attributeResult(name)
+        }
+        for seg in segments where seg.end > line.start && seg.start < line.end {
+            guard asked < maxRuns else { break }
+            if DispatchTime.now().uptimeNanoseconds &- started > budgetMs * 1_000_000 { runs.append(.unknown); break }
+            guard seg.start >= 0, seg.end <= text.length, seg.end > seg.start else { continue }
+            let copied = text.substring(with: NSRange(location: seg.start, length: seg.end - seg.start))
+            guard !copied.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+            asked += 1
+            let role = ask(seg.element, kAXRoleAttribute)
+            if role.error == .invalidUIElement { runs.append(.gone); continue }
+            guard let r = role.value as? String else { runs.append(.unknown); continue }
+            guard r == "AXStaticText" else { continue }
+            let value = ask(seg.element, kAXValueAttribute)
+            switch value.status {
+            case .returned(.success): runs.append((value.value as? String).map { Self.sameText(copied, $0) ? .same : .changed } ?? .unknown)
+            case .returned(.invalidUIElement): runs.append(.gone)
+            default: runs.append(.unknown)
+            }
+        }
+        return Self.lineCheck(runs)
+    }
+
     public func segment(at offset: Int) -> Segment? {
         segments.first { offset >= $0.start && offset < $0.end }
     }

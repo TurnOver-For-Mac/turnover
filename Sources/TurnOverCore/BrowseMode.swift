@@ -424,6 +424,20 @@ public final class BrowseModeDocument: ScriptableObject {
 
     func caretInfo() -> TextInfo? { makeTextInfo(.caret) }
 
+    /// The line at the reading position, against the page as it is now (WebBuffer.check): changed on a page quick to
+    /// read again (the last build under 250 ms), the copy is made again, keeping the place; on a slow page it is
+    /// left for the next rebuild, and the line is read from the copy as before.
+    func freshenLine() {
+        guard let index = buffer.lineIndex(at: position), buffer.check(line: index) == .changed else { return }
+        guard buffer.lastBuildMs < 250 else {
+            buffer.isDirty = true
+            Log.io("browse mode: the line has changed on the page; the page is slow to read again, so the copy is read")
+            return
+        }
+        Log.io("browse mode: the line has changed on the page; reading the page again")
+        rebuildKeepingPlace(lineHint: index)
+    }
+
     func speakUnit(_ unit: TextUnit) {
         guard let info = caretInfo() else { return }
         info.expand(unit)
@@ -592,6 +606,7 @@ public final class BrowseModeDocument: ScriptableObject {
         // Say all carries on from here and reads this line itself (NVDA's willSayAllResume).
         if SayAll.resuming { return }
         announcePageIfChanged()
+        freshenLine()
         speakUnit(unit == .character ? .character : unit)
         if unit == .line || unit == .paragraph { sayMarksOnLine() }
     }

@@ -301,12 +301,28 @@ extension BrowseModeDocument {
 
     /// Read the page again (NVDA's buffer follows the page as it changes) and stay at the same place: on `anchor` if
     /// given, otherwise on the same line's text nearest where it was.
-    func rebuildKeepingPlace(anchor: AXUIElement? = nil) {
+    /// `lineHint`: the index of a line whose own words just changed (freshenLine), so they can't be found again by
+    /// their text: the same index, if the lines either side are still the same, is the place.
+    func rebuildKeepingPlace(anchor: AXUIElement? = nil, lineHint: Int? = nil) {
         let oldLine = lineText(at: position).trimmingCharacters(in: .whitespacesAndNewlines)
         let oldPosition = position
+        func lineString(_ i: Int) -> String {
+            guard i >= 0, i < buffer.lines.count else { return "" }
+            let l = buffer.lines[i]
+            guard l.end > l.start, l.end <= buffer.text.length else { return "" }
+            return String(buffer.text.substring(with: NSRange(location: l.start, length: min(l.end - l.start, 120)))).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let oldIndex = buffer.lineIndex(at: position)
+        let before = oldIndex.map { lineString($0 - 1) } ?? "", after = oldIndex.map { lineString($0 + 1) } ?? ""
+        let into = oldIndex.map { max(0, position - buffer.lines[$0].start) } ?? 0
         buffer.build()
         let n = buffer.text.length
         if let a = anchor, let o = buffer.offset(of: a) { position = o; return }
+        if let i = lineHint, i == oldIndex, buffer.lines.indices.contains(i), lineString(i - 1) == before, lineString(i + 1) == after {
+            let l = buffer.lines[i]
+            position = min(l.start + into, max(l.start, l.end - 1))
+            return
+        }
         if !oldLine.isEmpty {
             var best: Int?; var from = 0
             while from < n {

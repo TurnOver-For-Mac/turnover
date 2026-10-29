@@ -27,6 +27,9 @@ Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
 
 ### Fixed
 
+- Browse mode reads a line as the page shows it now. A page can change its text without telling Safari's readers
+  (fast.com's speed changed eight times a second, and every arrow said the first figure); the line reached is checked
+  against the page, briefly, and a changed line is read again. A busy page is never waited for.
 - Open and Save dialogs are read: a file dialog in TextEdit, or "browse for file" on a web page in Safari. macOS
   draws them in a separate service, which TurnOver ignored as a process that isn't an application; the service
   serving the app in front now counts as that app. Reported by Maldalain (issue 14).
