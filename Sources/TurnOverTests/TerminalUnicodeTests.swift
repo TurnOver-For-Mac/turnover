@@ -42,7 +42,11 @@ func terminalUnicodeTests() {
                 guard let script = object.script(named: "terminal_backspace") else { return Harness.fail("actual Backspace script exists") }
                 script.handler(KeyboardGesture(identifier: "kb:backspace")!)
                 expect(delivered.value, 1, "one Backspace still goes to the shell")
-                expect(said(), [Symbols.name(of: character.first!)], "the spoken slice contains the complete grapheme")
+                let expected = Symbols.name(of: character.first!)
+                // lastRaw is the actual input to speakText. The sink observes later shared cleanup, which
+                // intentionally strips zero-width joiners; it cannot alone establish the selected character.
+                expect(Speech.lastRaw, expected, "Terminal passes the complete grapheme to speech before cleanup")
+                expect(said(), [Speech.cleaned(expected)], "the existing speech cleanup policy still applies")
                 check(!said().joined().contains("\u{fffd}"), "no surrogate repair character is spoken")
             }
         }
@@ -53,7 +57,9 @@ func terminalUnicodeTests() {
                 guard let script = object.script(named: "terminal_deleteForward") else { return Harness.fail("actual Delete script exists") }
                 script.handler(KeyboardGesture(identifier: "kb:delete")!)
                 expect(delivered.value, 1)
-                expect(said(), [Symbols.name(of: character.first!)])
+                let expected = Symbols.name(of: character.first!)
+                expect(Speech.lastRaw, expected, "forward Delete passes one complete grapheme before cleanup")
+                expect(said(), [Speech.cleaned(expected)])
             }
         }
     }
