@@ -236,3 +236,20 @@ prototype does not establish universal responsiveness, VoiceOver-off parity, pur
 scrolled/materialized. The exact deferred shelf remains next for more/End; provisional screenshot identities,
 carousel tails and shelf slots are rolled back. Recorded-provider tests recover following content in order once
 and preserve eager materialization when there is no readable prefix. Scroll actions in these tests hit only the shim.
+
+## Bounded application capabilities and overnight regressions (29 Oct 2026)
+
+`turnover-probe capabilities --bundle <bundle>` is metadata-only. The default profile allows 128 admissions,
+16 inspected nodes and depth 6. `--system-settings` uses 256/32/depth 9 to sample known Settings structure;
+`--extended` uses 512/64/depth 12 with focus ancestry and toolbar/list pruning to reach browser/document content.
+All use eight-element prefixes, exact-reference 50 ms timeouts and a two-second cooperative deadline. Run under
+a separate parent-process deadline (five seconds in the local trials). Clipping, skipped branches and returned
+errors remain explicit; no result claims the complete provider tree. No text, labels or arbitrary identifiers
+are emitted, no application is activated and no accessibility flag or action is written by this command.
+
+The registered overnight suites exercise real owners/providers through public or synthetic fixtures:
+`WordPageReadingTests` (current page ranges and window changes), `MailMessageReadingTests` (editable siblings),
+`TerminalUnicodeTests` (complete graphemes), `SafariReplyTests` (late Find/tab replies), `MediaWorkTests`
+(serial ownership, unique selection and actual native windows), and `SystemSettingsModuleTests` (part resolution,
+fresh focus/dialog guards, verified fallback and typed bounded labels). These do not establish audible speech
+quality, physical keyboard delivery, every live app page or VoiceOver-on parity. Record those checks separately.

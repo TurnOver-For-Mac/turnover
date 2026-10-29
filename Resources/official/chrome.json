@@ -1,0 +1,13 @@
+{
+  "id": "official-chrome",
+  "name": "Chrome",
+  "version": "1.0",
+  "author": "TurnOver",
+  "contact": "https://github.com/TurnOver-For-Mac/turnover/issues",
+  "summary": "Web pages in Chrome using TurnOver's shared Chromium browse and focus modes. Preview.",
+  "description": "Chrome uses TurnOver's existing Chromium web reader, with browse-mode quick keys and focus mode for forms. This preview lists that shared support; it does not add a separate browser engine. Turn it on in Applications to try it.",
+  "apps": ["com.google.Chrome"],
+  "kind": "official",
+  "privacy": "Reads Chrome on your Mac; nothing is sent anywhere.",
+  "changes": [{"version": "1.0", "notes": "List the existing shared Chromium reader as a preview."}]
+}

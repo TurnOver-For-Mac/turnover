@@ -403,3 +403,18 @@ and no title. A tooltip names an icon button, but never the window's own buttons
    their own user intent and confirmation; they are excluded from the structural preview.
 6. Retire work on newer focus, page or reader intent; reject stale callbacks and incomplete publication. Turn each
    observed shape into a public-content fixture with cancellation/error cases before widening live coverage.
+
+## App probing refinements (29 Oct 2026, macOS 27.2)
+
+- An inspected focus element must not suppress traversal when that same element is also the window. Inspection
+  and traversal have different visited sets. A clipped prefix establishes only what was visited, not absence.
+- Probe foreground state explicitly. Music and Podcasts initially returned cannotComplete in background samples;
+  their warmed foreground samples succeeded without VoiceOver. This does not establish why the first call failed.
+- Chromium's content can sit below toolbar/list branches. The bounded extended profile can reach its WebArea;
+  advertised text-marker names still need successful read/action checks before claiming behavior.
+- Media requests carry the actual native window, not just a process ID, page title or MainWindow. Two windows in
+  one app can share those other properties. Recheck current window before publication, scrolling or activation.
+- Settings' General buttons exposed AXAttributedDescription but omitted standard title/description/help. The
+  narrow label bridge prefers the standard fields, caps decoding, and falls back when the optional shape changes.
+- A successful AXFocused write does not prove keyboard movement. Settings re-resolves the part and reads the
+  actual focused element; missing or incomplete ancestry is not proof that focus is elsewhere.

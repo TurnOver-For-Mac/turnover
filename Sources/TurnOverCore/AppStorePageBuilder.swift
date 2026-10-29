@@ -250,6 +250,7 @@ nonisolated final class AppStorePageBuilder {
                     seen.removeSubrange(seenBefore..<seen.count)
                     tails.removeValue(forKey: shelf)
                     nextSection = sec
+                    Log.io("app store: deferred empty shelf after \(before) readable items")
                     return
                 }
                 _ = AXUIElementPerformAction(sec, "AXScrollToVisible" as CFString)
