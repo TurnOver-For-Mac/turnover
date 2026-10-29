@@ -24,6 +24,7 @@ nonisolated private final class MediaTestSource: Sendable {
         var result: MediaView.ReadResult?
         var gate: MediaTestGate?
         var sidebars: [[String]] = []
+        var windows: [Int?] = []
         var onMain: [Bool] = []
         var cancelled = 0
     }
@@ -32,7 +33,8 @@ nonisolated private final class MediaTestSource: Sendable {
         let values = state.withLock { state in
             let values = (state.result, state.gate)
             state.gate = nil
-            state.sidebars.append(input.sidebar.map(\.label)); state.onMain.append(Thread.isMainThread)
+            state.sidebars.append(input.sidebar.map(\.label)); state.windows.append(AXReplay.id(of: input.window))
+            state.onMain.append(Thread.isMainThread)
             return values
         }
         values.1?.hold()
@@ -60,7 +62,7 @@ private final class MediaTestRig {
     let delays: MediaTestDelays
     private let allowed: OSAllocatedUnfairLock<Bool>
 
-    init(liveCollector: Bool = false) {
+    init(liveCollector: Bool = false, actualWindow: Bool = false) {
         let source = MediaTestSource(), deliveries = MediaTestDeliveries()
         let worker = DispatchQueue(label: "turnover.tests.media-work")
         let allowed = OSAllocatedUnfairLock(initialState: true)
@@ -69,9 +71,11 @@ private final class MediaTestRig {
         self.delays = delays
         let fakeCollector: MediaView.Collector = { source.read($0, current: $1) }
         let collector: MediaView.Collector? = liveCollector ? nil : fakeCollector
+        let fixedWindow: MediaView.WindowQuery = { _ in AXReplay.element(1) }
+        let windowQuery: MediaView.WindowQuery? = liveCollector || actualWindow ? nil : fixedWindow
         // All dependencies are init-local checked values; no partially initialized self crosses to the worker.
         view = MediaView(pid: AXReplay.floor, collector: collector,
-                         queue: worker, deliver: { deliveries.enqueue($0) },
+                         queue: worker, windowQuery: windowQuery, deliver: { deliveries.enqueue($0) },
                          delay: { delays.enqueue($0, $1) },
                          eligible: { allowed.withLock { $0 } })
     }
@@ -107,6 +111,29 @@ private func mediaPlayable(_ name: String, element: Int) -> MediaView.Item {
     var item = MediaView.Item(label: name, element: AXReplay.element(element), ident: "sample[id=\(name)]", desc: name)
     item.play = item.element
     return item
+}
+
+/// Both native windows intentionally share a title and application PID. Only the provider's actual focused
+/// window attribute can distinguish them; tests change it while no replay AX query is executing.
+private func mediaTwoWindowFixture(focused: Int?, main: Int? = nil, firstScrollValue: Double = 0) -> AXFixture {
+    var app: [String: AXFixture.Value] = ["AXRole": .string("AXApplication")]
+    if let focused { app["AXFocusedWindow"] = .element(focused) }
+    if let main { app["AXMainWindow"] = .element(main) }
+    return .init(app: "Public Music window sample", bundle: "test.media", recorded: "synthetic", root: 1,
+                 application: 0, focus: nil, nodes: [
+        .init(id: 0, attrs: app),
+        .init(id: 1, attrs: ["AXRole": .string("AXWindow"), "AXTitle": .string("Shared public title"), "AXChildren": .elements([10])]),
+        .init(id: 2, attrs: ["AXRole": .string("AXWindow"), "AXTitle": .string("Shared public title"), "AXChildren": .elements([20])]),
+        .init(id: 10, attrs: ["AXRole": .string("AXScrollArea"), "AXIdentifier": .string("sample.window.one"),
+                            "AXChildren": .elements([100]), "AXVerticalScrollBar": .element(11)]),
+        .init(id: 11, attrs: ["AXRole": .string("AXScrollBar"), "AXValue": .number(firstScrollValue)]),
+        .init(id: 20, attrs: ["AXRole": .string("AXScrollArea"), "AXIdentifier": .string("sample.window.two"),
+                            "AXChildren": .elements([200]), "AXVerticalScrollBar": .element(21)]),
+        .init(id: 21, attrs: ["AXRole": .string("AXScrollBar"), "AXValue": .number(0)]),
+        .init(id: 99, attrs: ["AXRole": .string("AXButton"), "AXIdentifier": .string("reused"), "AXDescription": .string("Other")], actions: ["AXPress"]),
+        .init(id: 100, attrs: ["AXRole": .string("AXButton"), "AXIdentifier": .string("sample[id=A]"), "AXDescription": .string("A"), "AXParent": .element(10)], actions: ["AXPress"]),
+        .init(id: 200, attrs: ["AXRole": .string("AXButton"), "AXIdentifier": .string("sample[id=B]"), "AXDescription": .string("B"), "AXParent": .element(20)], actions: ["AXPress"]),
+    ])
 }
 
 func mediaWorkTests() {
@@ -280,6 +307,72 @@ func mediaWorkTests() {
         expect(rig.view.pageTitle, "Public page")
         expect(rig.view.shelves.flatMap(\.items).map(\.label), ["Public episode"])
         check(AXReplay.actions.isEmpty && AXReplay.sets.isEmpty, "initial reading did not scroll, play, buy or change focus")
+    }
+    test("media work: a real same-PID focused-window change rejects held refresh and clears the old model") {
+        AXReplay.load(mediaTwoWindowFixture(focused: 1)); defer { AXReplay.unload() }
+        let rig = MediaTestRig(actualWindow: true); defer { rig.view.stop(); rig.worker.sync {} }
+        rig.load("First", items: [mediaPlayable("A", element: 100)])
+        rig.source.result(MediaTestRig.result("Stale first"))
+        var applied = false
+        rig.view.refresh { applied = true }; rig.worker.sync {} // AX is idle; only main delivery is held.
+        AXReplay.load(mediaTwoWindowFixture(focused: 2))
+        rig.settle()
+        check(!applied, "old-window completion cannot run despite the same PID and title")
+        expect(rig.view.pageTitle, "")
+        check(rig.view.shelves.isEmpty && rig.view.sidebar.isEmpty && rig.view.player.isEmpty, "all old-window model regions are retired")
+        rig.source.result(MediaTestRig.result("Second", items: [mediaPlayable("B", element: 200)]))
+        rig.view.move(0); rig.settle()
+        expect(rig.view.pageTitle, "Second", "the next key builds the current native window")
+        expect(rig.source.state.withLock { $0.windows }, [1, 1, 2])
+        expect(rig.source.state.withLock { $0.sidebars.last ?? ["missing"] }, [], "new window cannot inherit the old sidebar cache")
+        check(AXReplay.actions.isEmpty && AXReplay.sets.isEmpty, "refresh and cursor movement performed no stale UI action")
+    }
+    test("media work: a real same-PID window change rejects a held stale-item activation") {
+        AXReplay.load(mediaTwoWindowFixture(focused: 1)); defer { AXReplay.unload() }
+        let rig = MediaTestRig(actualWindow: true); defer { rig.view.stop(); rig.worker.sync {} }
+        rig.load("First", items: [mediaPlayable("A", element: 99)])
+        let fresh = mediaPlayable("A", element: 100)
+        var found = MediaTestRig.result("First", items: [fresh]); found.found = fresh
+        rig.source.result(found)
+        let gate = rig.gate(); defer { gate.release.signal() }
+        rig.view.activate(); rig.wait(gate)
+        // The fake collector is held without AX reads, so only the actual window-query seam sees this change.
+        AXReplay.load(mediaTwoWindowFixture(focused: 2))
+        gate.release.signal(); rig.settle()
+        check(AXReplay.actions.isEmpty && AXReplay.sets.isEmpty, "late resolution cannot play, scroll or focus the old native window")
+        expect(rig.view.pageTitle, "")
+    }
+    test("media work: committed-model activation rebuilds the actual equal-title window before pressing") {
+        AXReplay.load(mediaTwoWindowFixture(focused: 1)); defer { AXReplay.unload() }
+        let rig = MediaTestRig(liveCollector: true); defer { rig.view.stop(); rig.worker.sync {} }
+        rig.view.refresh {}; rig.settle()
+        expect(rig.view.currentItem()?.label, "A", "real collector initially read window one")
+        AXReplay.load(mediaTwoWindowFixture(focused: 2))
+        rig.view.activate(); rig.settle()
+        expect(rig.view.currentItem()?.label, "B", "real collector rebuilt only window two")
+        expect(AXReplay.actions.map(\.id), [200], "the old committed item's button was never pressed")
+    }
+    test("media work: real worker refuses captured-window scrolling after an actual window switch") {
+        AXReplay.load(mediaTwoWindowFixture(focused: 1, firstScrollValue: 0.8)); defer { AXReplay.unload() }
+        let rig = MediaTestRig(liveCollector: true); defer { rig.view.stop(); rig.worker.sync {} }
+        let gate = MediaTestGate(); defer { gate.release.signal() }
+        rig.worker.async { gate.hold() }; rig.wait(gate)
+        rig.view.refresh {} // Main snapshots window one; its collector has not started yet.
+        AXReplay.load(mediaTwoWindowFixture(focused: 2, firstScrollValue: 0.8))
+        gate.release.signal(); rig.settle()
+        check(AXReplay.sets.isEmpty && AXReplay.actions.isEmpty, "window one's off-top scroller was not touched by the real collector")
+        expect(rig.view.pageTitle, "", "a mismatched captured window cannot publish another window's content")
+    }
+    test("media work: missing focused window does not fall back to an unrelated main window") {
+        AXReplay.load(mediaTwoWindowFixture(focused: 1)); defer { AXReplay.unload() }
+        let rig = MediaTestRig(actualWindow: true); defer { rig.view.stop(); rig.worker.sync {} }
+        rig.load("First", items: [mediaPlayable("A", element: 100)])
+        let reads = rig.source.state.withLock { $0.windows.count }
+        AXReplay.load(mediaTwoWindowFixture(focused: nil, main: 2))
+        rig.view.activate(); rig.settle()
+        expect(rig.source.state.withLock { $0.windows.count }, reads, "no collector is admitted without confirmed actual focus")
+        check(rig.view.shelves.isEmpty && rig.view.pageTitle.isEmpty, "unconfirmed focus invalidates the old model")
+        check(AXReplay.actions.isEmpty && AXReplay.sets.isEmpty, "neither old nor main-window controls were driven")
     }
     test("media work: an expired request releases the lane without calling its provider") {
         let worker = DispatchQueue(label: "turnover.tests.media-deadline"), delivery = MediaTestDeliveries()
