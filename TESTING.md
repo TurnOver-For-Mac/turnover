@@ -279,7 +279,7 @@ and CSS masking), preserved authored semantics and literal names, conservative i
 attribute ownership, passivity, finite work and lifecycle retirement. No browser, private page or Node dependency
 is required. The optional Node wrapper is a development convenience. No page tree is captured or transmitted.
 
-`build.sh` always assembles PageReader.appex, validates passive manifest/resources, extension-safe Mach-O flags,
+`build.sh` always assembles PageReader.appex, validates passive manifest/resources, Foundation's executable entry,
 sandbox-only entitlements and signatures. Real local builds default to an Apple Development extension signed
 by the parent's team, leaving the reader identity unchanged. Ad-hoc contributor builds still package the
 extension; they do not establish Safari availability. Distribution can override the extension identity and still
