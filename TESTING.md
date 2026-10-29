@@ -271,6 +271,26 @@ page/window/session changes, and the unchanged default media policy. The normal 
 existing work allowance. The optional budget is not a provider-loading timeout or proof of end of content.
 Cold/slower-provider errors and general slow-network completion still need live evidence; AXHealth is honored.
 
+## Passive Safari restoration and Word native boundaries (29 Oct 2026)
+
+`SafariPageShapingTests` evaluates the exact `Extension/content.js` with a synthetic DOM in Apple's
+JavaScriptCore. Its plain JavaScript harness checks protected fields (including role overrides, autocomplete
+and CSS masking), preserved authored semantics and literal names, conservative icon/loading repairs,
+attribute ownership, passivity, finite work and lifecycle retirement. No browser, private page or Node dependency
+is required. The optional Node wrapper is a development convenience. No page tree is captured or transmitted.
+
+`build.sh` always assembles PageReader.appex, validates passive manifest/resources, extension-safe Mach-O flags,
+sandbox-only entitlements and signatures. Real local builds default to an Apple Development extension signed
+by the parent's team, leaving the reader identity unchanged. Ad-hoc contributor builds still package the
+extension; they do not establish Safari availability. Distribution can override the extension identity and still
+requires its normal notarization process. Registration does not enable the extension or grant site access.
+Live validation needs Safari's extension enabled, site access and a reloaded public page; say what was checked.
+
+`WordCaretBoundaryTests` intercepts keys/audio and exercises the actual inherited caret paths and registered
+Word policy. It verifies sound-only suppression, retained haptics/key retries, other-app defaults, and owned
+table/review edges. It never opens Word or a private document. The native system sound still needs a listening
+trial with the actual key and Word/macOS version recorded.
+
 The registered overnight suites exercise real owners/providers through public or synthetic fixtures:
 `WordPageReadingTests` (current page ranges and window changes), `MailMessageReadingTests` (editable siblings),
 `TerminalUnicodeTests` (complete graphemes), `SafariReplyTests` (late Find/tab replies), `MediaWorkTests`

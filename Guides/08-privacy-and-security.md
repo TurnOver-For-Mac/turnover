@@ -17,6 +17,10 @@ permissions. This page says what each is for, what never leaves your Mac, and ho
 
 TurnOver does not ask for Full Disk Access.
 
+The optional Safari Page Reader extension has separate website-access permissions in Safari. It changes limited
+accessibility attributes locally, without reading text-field contents, sending a page tree or making network
+requests. It does not click consent buttons, move focus or fill forms. Safari lets you choose which sites it uses.
+
 ## What leaves your Mac
 
 TurnOver connects to one place by itself: **its update site**, `doll-eye.github.io/turnover-updates`, to check for a
