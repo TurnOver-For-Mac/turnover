@@ -23,6 +23,19 @@ func localizationTests() {
         expect(Symbols.lowered("1,2 B DEĞERLENDİRME", locale: tr), "1,2 b değerlendirme", "a Turkish App Store count")
         expect(Symbols.lowered("IŞIK", locale: tr), "ışık", "Turkish I in a word")
     }
+    test("localization: braille short forms follow the role, the same at every launch") {
+        // Turkish says "tablo" for a table and a tree view: each keeps its own short form by its role.
+        expect(Braille.roleShortForms[.table], "tbl", "table")
+        expect(Braille.roleShortForms[.treeView], "tv", "tree view")
+        expect(Braille.brailleText(["Files", "tree view"], role: .treeView), "Files tv", "an item's own role")
+        expect(Braille.brailleText(["Mail", "table"], role: .table), "Mail tbl", "an item's own role")
+        // From words alone, a word two short forms share is left as said, whatever order the words come in.
+        let words: [(spoken: String, short: String)] = [("tablo", "tv"), ("düğme", "btn"), ("tablo", "tbl")]
+        let a = Braille.spokenShortForms(base: [:], words: words), b = Braille.spokenShortForms(base: [:], words: words.reversed())
+        expect(a["tablo"], nil, "a shared word")
+        expect(a["düğme"], "btn", "a word of its own")
+        expect(a, b, "the same whatever the order")
+    }
     test("localization: every translation keeps the English string's placeholders") {
         let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Resources/Localizable.xcstrings")

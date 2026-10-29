@@ -206,11 +206,15 @@ public enum Braille {
 
     /// Speech's parts for an item, as a display shows them: short roles and states, "h2" for "heading level 2",
     /// "lv 2" for "level 2", joined by spaces.
-    public static func brailleText(_ parts: [String], separator: String = " ") -> String {
+    /// `role`: the item's own role, when the parts are an item's: its word is shortened by the role itself, so two roles
+    /// that one language says alike (Turkish "tablo" for table and tree view) keep their own short forms.
+    public static func brailleText(_ parts: [String], role: Role? = nil, separator: String = " ") -> String {
         var out: [String] = []
+        let roleWord = role.map { $0.displayString.lowercased() }
         for raw in parts {
             let p = raw.trimmingCharacters(in: .whitespaces)
             let k = p.lowercased()
+            if let role, k == roleWord, let short = roleShortForms[role] { if !short.isEmpty { out.append(short) }; continue }
             if let short = spokenShortForms[k] { if !short.isEmpty { out.append(short) }; continue }
             if let n = levelNumber(k, Phrases.headingLevel) { out.append("h\(n)"); continue }
             if let n = levelNumber(k, Phrases.level) { out.append("lv \(n)"); continue }
@@ -219,16 +223,41 @@ public enum Braille {
         return out.joined(separator: separator)
     }
 
-    /// The short forms by the words as speech says them in the reader's language: the roles and states are
-    /// translated, so "düğme" is "btn" as "button" is (the English keys stay, for words that aren't translated).
+    /// The short forms by role and by state: bound to what the item is, not to the words a language says it with.
+    public static let roleShortForms: [Role: String] = [
+        .button: "btn", .menuButton: "mnubtn", .popUpButton: "cbo", .comboBox: "cbo", .checkBox: "chk", .radioButton: "rbtn",
+        .editableText: "edt", .searchField: "edt", .passwordEdit: "pwdedt", .link: "lnk", .list: "lst", .treeView: "tv",
+        .outline: "tv", .table: "tbl", .menu: "mnu", .menuBar: "mnubar", .menuItem: "", .tab: "tab", .tabControl: "tabctl",
+        .toolBar: "tlbr", .dialog: "dlg", .window: "wnd", .groupBox: "grp", .heading: "h", .slider: "sldr",
+        .spinButton: "spnbtn", .progressBar: "prgbar", .separator: "-----", .graphic: "gra", .image: "gra", .document: "doc",
+        .webArea: "doc", .staticText: "", .statusBar: "stbar", .toggleButton: "tgbtn", .disclosureTriangle: "dsclsr",
+        .tableRow: "", .tableColumn: "", .tableCell: "", .cell: "", .treeViewItem: "", .listItem: "",
+    ]
+    public static let stateShortForms: [State: String] = [
+        .checked: "(x)", .halfChecked: "(-)", .expanded: "-", .collapsed: "+", .selected: "sel", .pressed: "=]",
+        .unavailable: "unavbl", .required: "req", .readOnly: "ro", .on: "(x)", .off: "( )", .hasPopup: "submnu",
+    ]
+
+    /// The short forms by the words as speech says them in the reader's language: each role's and state's own word,
+    /// over the English ones (kept for words an app says itself, in English). Built in a fixed order, so it is the
+    /// same at every launch; a word two different short forms share in a language is left as it is said.
     private static let spokenShortForms: [String: String] = {
-        var out = shortForms
-        for (english, short) in shortForms {
-            let spoken = Bundle.main.localizedString(forKey: english, value: english, table: nil).lowercased()
-            if !spoken.isEmpty, out[spoken] == nil { out[spoken] = short }
-        }
-        return out
+        var words = Role.allCases.compactMap { r in roleShortForms[r].map { (r.displayString, $0) } }
+        words += State.allCases.compactMap { st in stateShortForms[st].map { (st.displayString, $0) } }
+        words += [(State.checked.negativeDisplayString, "( )"), (Phrases.blank, "")]
+        return spokenShortForms(base: shortForms, words: words)
     }()
+    /// Adds the spoken words to `base`, in their order; a word given two different short forms gets neither.
+    public static func spokenShortForms(base: [String: String], words: [(spoken: String, short: String)]) -> [String: String] {
+        var out = base, added: [String: String] = [:], ambiguous = Set<String>()
+        for (spoken, short) in words {
+            let k = spoken.lowercased()
+            guard !k.isEmpty, base[k] == nil else { continue }
+            if let had = added[k], had != short { ambiguous.insert(k) } else { added[k] = short }
+        }
+        for (k, short) in added where !ambiguous.contains(k) { out[k] = short }
+        return out
+    }
 
     /// The number in "heading level 2" or "level 2", as `phrase` says it in the reader's language.
     private static func levelNumber(_ words: String, _ phrase: (Int) -> String) -> Int? {
@@ -377,7 +406,7 @@ public enum Braille {
             // table", 6 Oct 2026).
             let obj = selectedItem(in: focus) ?? focus
             source = .object(obj)
-            text = brailleText(Speech.objectPropertiesSpeech(obj, reason: .focus))
+            text = brailleText(Speech.objectPropertiesSpeech(obj, reason: .focus), role: obj.role)
             cursor = nil; selection = nil
             windowStart = 0
             layout()
