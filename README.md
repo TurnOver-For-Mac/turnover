@@ -101,6 +101,10 @@ The plans in docs/ say which decisions are settled and which are open; docs/DECI
 
 ## Finding your way around the code
 
+The [app index](Sources/Apps/README.md) links app implementations and their support records. App modules live under
+`Sources/Apps` and still compile in TurnOverCore. See [working with app folders](docs/APP-FOLDERS.md) for source,
+record and test boundaries.
+
 - [docs/HOW-A-KEY-BECOMES-SPEECH.md](docs/HOW-A-KEY-BECOMES-SPEECH.md): the story of one key press, from the event
   tap to the voice, with the log line for each step. Start here.
 - [docs/HOW-FOCUS-BECOMES-AN-OBJECT.md](docs/HOW-FOCUS-BECOMES-AN-OBJECT.md): how an app's focus change becomes

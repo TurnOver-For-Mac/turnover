@@ -71,7 +71,7 @@ findScript in ScriptHandler.swift asks, in this order, and the first answer wins
 1. **The user's own keys** (UserGestures): a key the user gave to a command, or took away.
 2. **The style's table** (StyleKeymap): Narrator and JAWS keys mapped onto TurnOver's commands.
 3. **Global plugins**: VoiceOver's keys and NVDA's keys live here.
-4. **The app module** for the focused process (FinderAppModule and the rest, under Sources/TurnOverCore/Modules).
+4. **The app module** for the focused process (FinderAppModule and the rest, under Sources/Apps).
 5. **The document**, when browse mode or a text document is intercepting (the focusTreeInterceptor).
 6. **The focus object** itself, then its ancestors for scripts marked canPropagate.
 7. **The global commands** (GlobalCommands.swift): everything that works everywhere.

@@ -22,6 +22,15 @@ notes explain its rules. Read it top to bottom once; then PATTERNS.md for how Ma
 | `TurnOverPlugin` | `turnover-plugin`: the plugin maker's tool. Parked; not built into the product. |
 | `TurnOverTests`, `AXFixtures`, `AXReplayShim`, `PluginTestKit`, `TurnOverCoreTest`, `TurnOverProbe` | The tests, the recorded-window replay, a plugin's own screens, the recorder and the probes. TESTING.md. |
 
+## App folders
+
+App modules live under `Sources/Apps`, alongside their records, and still compile in TurnOverCore with its existing
+MainActor isolation and dependencies. Shared `BuiltInModules` registration and `AppWake` remain in Core's `Modules`
+folder. `Package.swift` discovers the shared `TurnOverCore` folder and lists app source files individually; it never
+includes the whole Sources tree. App records, Tests, Fixtures and Experiments are excluded. The existing test runner
+and fixture locations are unchanged. `Tools/check-migration.py` checks this source boundary.
+See [working with app folders](docs/APP-FOLDERS.md) and [app records](Sources/Apps/README.md).
+
 ## The mechanisms that can leave a blind user with no reader
 
 These five decide whether anyone is speaking. Each has a named rule, and since 16 Oct a test where the logic is pure.
@@ -69,10 +78,10 @@ These five decide whether anyone is speaking. Each has a named rule, and since 1
 | Browse mode (pages) | `BrowseMode*.swift`, `WebBuffer.swift` (the virtual buffer: a 2 s deadline, `isPartial`), `WebTextInfo.swift`, `FocusModePolicy.swift` | `rebuildIfCheap` for the arrows, letters and container keys; `reachForMore` at the end of a page that loads as it scrolls; focus mode on editable and player elements, honouring the automatic-focus-mode setting | `PureTests` (wrap, find, comma keys) |
 | Views (data over a window) | `ChatView.swift` (Messages, WhatsApp, Discord: the transcript, loading more at both ends), `MediaView.swift` (Music, Podcasts, TV), `AppStoreView.swift`, `PanesView.swift`; `Recipes.swift` and `Resources/recipes/*.json` describe each app; `TurnOverParts.swift` names the parts a plugin can ask for | a recipe gone unregisters its module | `PureTests` (recipes), `FixtureTests` (panes on a big window) |
 | App Store model | `AppStoreModel.swift`, `AppStorePageBuilder.swift`, `AppStorePurchaseConfirmation.swift` | Main owns the complete committed model and command order. One serial worker builds a local copy; session/request/revision checks reject retired results. A confirmation resolves the captured identity; only its live element patches the current entry. | `AppStoreModelTests` (controlled replies, command ordering, recorded carousel); `AppStorePurchaseConfirmationTests` |
-| App modules | `Modules/*` (Word 1,465 lines, the Code health milestone's first split, Excel, Mail, Finder, Terminal, Safari, Claude, Dock, the recipe-driven Chat, Media, Panes, App Store) | narrow exceptions per app, never a shared-rule change (the project's working rules; "keep what works") | scenarios (live) |
-| Settings parts | `Modules/SystemSettingsAppModule.swift`, `SystemSettingsParts.swift`, `SystemSettingsLabels.swift` | explicit part commands use a bounded worker; fresh window/focus/dialog checks precede writes and delivery; only verified native focus is reported as such. Optional attributed button labels are confined to Settings. | `SystemSettingsModuleTests` |
+| App modules | `Apps/*` (Word 1,465 lines, the Code health milestone's first split, Excel, Mail, Finder, Terminal, Safari, Claude, Dock, the recipe-driven Chat, Media, Panes, App Store) | narrow exceptions per app, never a shared-rule change (the project's working rules; "keep what works") | scenarios (live) |
+| Settings parts | `Apps/SystemSettings/SystemSettingsAppModule.swift`, `SystemSettingsParts.swift`, `SystemSettingsLabels.swift` | explicit part commands use a bounded worker; fresh window/focus/dialog checks precede writes and delivery; only verified native focus is reported as such. Optional attributed button labels are confined to Settings. | `SystemSettingsModuleTests` |
 | Media work ownership | `MediaWorkOwner.swift`, `MediaView.swift` | one serial collection lane; immutable snapshots carry actual native window identity. New intent, handover or another window retires reads, publications and actions. | `MediaWorkTests` |
-| TV sidebar selection | `MediaSidebarSelection.swift`, selected by `Modules/MediaAppModule.swift` | the worker validates captured row/outline/cell/label, writes one selected row and verifies membership under a 500 ms cooperative limit. All snapshot publication rejects unchanged/empty body during the transition; a sidebar-derived title is insufficient. | `MediaWorkTests` TV sidebar cases |
+| TV sidebar selection | `MediaSidebarSelection.swift`, selected by `Apps/Media/MediaAppModule.swift` | the worker validates captured row/outline/cell/label, writes one selected row and verifies membership under a 500 ms cooperative limit. All snapshot publication rejects unchanged/empty body during the transition; a sidebar-derived title is insufficient. | `MediaWorkTests` TV sidebar cases |
 | The Mac around the apps | `SystemPrompts.swift`, `NotificationBanners.swift`, `ApplicationChooser.swift`, `ForceQuit.swift`, `MenuNavigation.swift`, `StatusMenus.swift` | TurnOver reads the tuned app and whatever appears over it; VoiceOver reads the rest | none |
 | Games | `Games.swift` (Steam: Big Picture and Electron games through the open helper `helpers/steam-speech` in the public repo, started without TurnOver's permissions by `DisclaimedSpawn`; the CrossOver bridge on one Mac) | GAMES.md | `GamesTests` |
 
