@@ -229,6 +229,13 @@ public final class GlobalCommands: ScriptableObject {
         script("jaws_sayCursorToLineEnd", "Reads the line from the cursor to its end. Pressed twice, spells it (JAWS: Insert+Page Up)", gestures: [], category: text) { _ in
             GlobalCommands.reportLinePart(toCursor: false)
         }
+        // JAWS's laptop reading keys move the cursor, as the arrows they stand for do on the desktop layout (JAWS
+        // 2026's keyboard help: "Moves to the prior line and speaks it"; in Notepad, a letter typed after Caps Lock O
+        // went to the next line, 27 Oct 2026). NVDA's review keys on the same letters moved the review cursor only,
+        // so typing went on at the old place.
+        for (name, key, what) in GlobalCommands.readingKeys {
+            script(name, what, gestures: [], category: text) { _ in GlobalCommands.pressInstead(key) }
+        }
         script("jaws_sayCharacter", "Reports the current character. Twice, its name; three times, its code (JAWS: Insert+Numpad 5)", gestures: [], category: text) { _ in
             guard ScriptHandler.lastScriptRepeatCount >= 2 else { GlobalCommands.reportUnit(.character); return }
             guard let obj = API.caretObject, let info = try? obj.makeTextInfo(.caret) else { Speech.speakMessage("no character"); return }
@@ -397,6 +404,35 @@ public final class GlobalCommands: ScriptableObject {
         if text.trimmingCharacters(in: .whitespaces).isEmpty { Speech.speakMessage("blank"); return }
         if ScriptHandler.lastScriptRepeatCount > 0 { Speech.speakSpelling(text) } else { Speech.speakTextInfo(part, unit: .line, reason: .caret) }
     }
+
+    /// Does what `key` does here, as if it had been pressed instead: its command, run with that key, or else the key
+    /// sent on to the app. A "=" entry in a style's table runs the other key's command with the key pressed, and the
+    /// caret commands send on and read by the key they are given (EditableText.caretMovement), so Caps Lock U would
+    /// reach the app as itself. Posting the arrow as typed is no way round it either: with Caps Lock still held, the
+    /// tap counts the arrow as a TurnOver key (KeyboardHandler, capsDown). The command runs at once, as VO-Right runs the
+    /// caret's (VoiceOverKeys): queued, it went behind a key pressed straight after, and Caps Lock O then Caps Lock I read
+    /// the line the caret had not yet left (the review of pull request 144, 28 Oct 2026). Run at once, a key given back its
+    /// own command (Down Arrow set to Caps Lock O's, in the keyboard commands editor) found that command again and called
+    /// it until TurnOver crashed: inside one, the key goes on to the app (the review, 29 Oct 2026).
+    static func pressInstead(_ key: String) {
+        guard let g = KeyboardGesture(identifier: "kb:" + key) else { return }
+        guard !pressingInstead, let s = ScriptHandler.findScript(for: g, styleTable: false) else { g.send(); return }
+        pressingInstead = true
+        defer { pressingInstead = false }
+        s.handler(g)
+    }
+    private static var pressingInstead = false
+
+    /// JAWS's laptop reading keys, Caps Lock U, O, J, L, M and Period in jaws.json: each command, the arrow it presses
+    /// instead, and what it does. Where VoiceOver reads, the key layer posts the arrow itself (StyleKeymap.voiceOverStandIns).
+    static let readingKeys: [(name: String, key: String, what: String)] = [
+        ("jaws_sayPriorLine", "upArrow", "Moves to the previous line and reads it, as Up Arrow does (JAWS: Caps Lock U)"),
+        ("jaws_sayNextLine", "downArrow", "Moves to the next line and reads it, as Down Arrow does (JAWS: Caps Lock O)"),
+        ("jaws_sayPriorWord", "option+leftArrow", "Moves to the previous word and reads it, as Option Left Arrow does (JAWS: Insert+Left Arrow, Caps Lock J)"),
+        ("jaws_sayNextWord", "option+rightArrow", "Moves to the next word and reads it, as Option Right Arrow does (JAWS: Insert+Right Arrow, Caps Lock L)"),
+        ("jaws_sayPriorCharacter", "leftArrow", "Moves to the previous character and reads it, as Left Arrow does (JAWS: Caps Lock M)"),
+        ("jaws_sayNextCharacter", "rightArrow", "Moves to the next character and reads it, as Right Arrow does (JAWS: Caps Lock Period)"),
+    ]
 
     static func changeRate(_ delta: Float) {
         // Through VoiceOver first, as the speech settings ring is (SpeechParity): one rate for both readers.
