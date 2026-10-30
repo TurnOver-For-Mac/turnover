@@ -42,3 +42,9 @@ Slow readiness and failed handovers are covered by controlled regression scenari
 The current installed 22.4 bundle was copied to ~/Library/Developer/TurnOver/rollback/TurnOver-before-wake-edge-fix-20261030.app and verified by matching 145 file hashes and deep strict code-signature verification. A corresponding hash manifest is beside it. This local rollback path is not portable contributor evidence.
 
 No code push, PR update or release before Oliver tries the local installed result. GitHub status updates identify checks performed and remaining trial limits.
+
+## User trial and publication checkpoint
+
+30 October 2026: Oliver reported that the installed 22.5 wake build works. This is a general confirmation of the local trial, not a claim that every delayed-start or failure ordering was individually reproduced. Both full build loops passed 418 tests, including the 12 wake regressions, plus the braille thread and three helper self-tests. Installed signature, Accessibility and keyboard startup were verified. The notification-attribution limit above remains documented.
+
+The wake fix is submitted separately from the folder migration, following the review's publication order.
