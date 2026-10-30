@@ -86,6 +86,28 @@ func localizationTests() {
         expect(said(6, 7).1, true, "an empty paragraph")
         expect(said(7, 10).1, false, "a paragraph that is the word boş")
     }
+    test("localization: moving by character, a capital is lowered in its line's language") {
+        // The tests speak English: a Turkish line's I is still dotless ı, so the line's language reached the letter.
+        final class Line: TextInfo {
+            static let text = "Bugün hava çok güzel, Işık geldi ve İstanbul sakin" as NSString
+            override func storyLength() -> Int { Self.text.length }
+            override func textRange(_ s: Int, _ e: Int) -> String { Self.text.substring(with: NSRange(location: s, length: max(0, e - s))) }
+        }
+        let saved = (config.speech.sayCapForCapitals, config.speech.capitalPitch)
+        defer { config.speech.sayCapForCapitals = saved.0; config.speech.capitalPitch = saved.1 }
+        config.speech.sayCapForCapitals = true; config.speech.capitalPitch = 0
+        let obj = ObjectFactory.make(AXUIElementCreateApplication(getpid()))
+        let at = Line.text.range(of: "Işık").location
+        expect(Speech.textInfoSpeech(Line(obj: obj, start: at, end: at + 1), unit: .character, reason: .caret), "cap ı", "Turkish I in a Turkish line")
+    }
+    test("localization: a typed word is echoed with the typing language") {
+        let saved = (config.speech.sayCapForCapitals, config.speech.capitalPitch)
+        defer { config.speech.sayCapForCapitals = saved.0; config.speech.capitalPitch = saved.1 }
+        config.speech.sayCapForCapitals = true; config.speech.capitalPitch = 0
+        expect(Speech.typedWordSpeech("I", locale: Locale(identifier: "tr")), "cap ı", "the word I on a Turkish layout")
+        expect(Speech.typedWordSpeech("I", locale: Locale(identifier: "en")), "cap i", "the word I on an English layout")
+        expect(Speech.typedWordSpeech("Işık", locale: Locale(identifier: "tr")), "Işık", "a longer word as it is")
+    }
     test("localization: every translation keeps the English string's placeholders") {
         let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Resources/Localizable.xcstrings")

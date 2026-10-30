@@ -498,6 +498,17 @@ public enum Speech {
     /// one and "out of spelling error" on leaving, not on every letter (as NVDA and VoiceOver;).
     private static var inMisspelling = false
 
+    /// The language a lone capital is in: its line's, when the line is recognised clearly; nil (TurnOver's) otherwise,
+    /// and for anything but a capital, which needs no language.
+    static func characterLocale(_ info: TextInfo, _ text: String) -> Locale? {
+        guard text.count == 1, text.first?.isUppercase == true else { return nil }
+        let line = info.copy(); line.expand(.line)
+        return Symbols.textLocale(line.text)
+    }
+
+    /// A typed word as it is echoed: a one-letter word ("I") is named, its capital lowered in the typing language.
+    public static func typedWordSpeech(_ word: String, locale: Locale?) -> String { processed(word, locale: locale) }
+
     public static func textInfoSpeech(_ info: TextInfo, unit: TextUnit?, reason: OutputReason) -> String {
         var blank = false
         return textInfoSpeech(info, unit: unit, reason: reason, onlyBlank: &blank)
@@ -550,7 +561,10 @@ public enum Speech {
             // One character that stands for more (an attachment: Mail's recipient token) is said whole.
             if text.count > 1 { return (prefix + [text]).joined(separator: " ") }
             if text.isEmpty { onlyBlank = prefix.isEmpty; return (prefix + [Phrases.blank]).joined(separator: " ") }
-            return (prefix + [Symbols.spelled(text)]).joined(separator: " ")
+            // A capital read by character: lowered in its line's language when the line says it clearly (an English
+            // line under a Turkish TurnOver: I is i), else in TurnOver's (Oliver's review of PR 123, 30 Oct 2026: this
+            // return came before the check, so the line's language never reached it).
+            return (prefix + [Symbols.spelled(text, locale: characterLocale(info, text))]).joined(separator: " ")
         }
         // A misspelled word inside the line, not only at its start: "spelling error" before it, as NVDA says it.
         if reason != .sayAll, unit == .line || unit == .paragraph || unit == .sentence, config.documentFormatting.spellingErrors != .off {
@@ -601,12 +615,7 @@ public enum Speech {
             onlyBlank = prefix.isEmpty
             return (prefix + [Phrases.blank]).joined(separator: " ")
         }
-        // A capital read by character: lowered in its line's language when the line says it clearly (an English
-        // line under a Turkish TurnOver: I is i), else in TurnOver's.
-        var letterLocale: Locale?
-        if unit == .character, trimmed.count == 1, trimmed.first?.isUppercase == true {
-            let line = info.copy(); line.expand(.line); letterLocale = Symbols.textLocale(line.text)
-        }
+        let letterLocale = trimmed.count == 1 ? characterLocale(info, trimmed) : nil
         // VoiceOver's order: the words, then what they are, innermost first ("AppleVis, heading level 1").
         if config.documentFormatting.rolesAfterText, !prefix.isEmpty {
             return ([processed(trimmed, locale: letterLocale)] + [ui(prefix.reversed().joined(separator: ", "))]).filter { !$0.isEmpty }.joined(separator: ", ")
@@ -669,9 +678,9 @@ public enum Speech {
                 // short, and two separate echoes lost the second.
                 let chars = config.keyboard.speakTypedCharacters
                 if ch > " ", chars == .always || (chars == .editControls && editable) || (!ch.isLetter && !ch.isNumber) {
-                    echo(processed(word) + " " + Symbols.name(of: ch, locale: Symbols.typingLocale)); return
+                    echo(typedWordSpeech(word, locale: Symbols.typingLocale) + " " + Symbols.name(of: ch, locale: Symbols.typingLocale)); return
                 }
-                echo(processed(word))
+                echo(typedWordSpeech(word, locale: Symbols.typingLocale))
             }
         }
         let mode = config.keyboard.speakTypedCharacters
@@ -753,7 +762,7 @@ public enum Speech {
         typedWord.removeAll()
         Log.io("typed word (\(word.count) characters)")
         let mode = config.keyboard.speakTypedWords
-        if mode != .off { echo(processed(word)) }
+        if mode != .off { echo(typedWordSpeech(word, locale: Symbols.typingLocale)) }
     }
 
     // MARK: - Selection

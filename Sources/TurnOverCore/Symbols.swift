@@ -126,7 +126,7 @@ nonisolated public enum Symbols {
     }
 
     /// Spelled out: every character by name.
-    @MainActor public static func spelled(_ text: String) -> String {
-        text.map { name(of: $0) }.joined(separator: ", ")
+    @MainActor public static func spelled(_ text: String, locale: Locale? = nil) -> String {
+        text.map { name(of: $0, locale: locale) }.joined(separator: ", ")
     }
 }
