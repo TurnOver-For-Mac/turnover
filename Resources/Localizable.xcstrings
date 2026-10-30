@@ -1347,7 +1347,7 @@
       }
     },
     "%@, %@ shelves" : {
-      "comment" : "An App Store page and how many shelves it has",
+      "comment" : "An App Store page: its title, then how many shelves",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1466,7 +1466,7 @@
       }
     },
     "%@, %@. Delete cancels the download." : {
-      "comment" : "A download in the App Store: the app, then how far it has got",
+      "comment" : "Spoken message",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1675,6 +1675,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@, önizleme"
+          }
+        }
+      }
+    },
+    "%@, review cursor. Keyboard focus is elsewhere" : {
+      "comment" : "Spoken message: %@ is a part of System Settings",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, inceleme imleci. Klavye odağı başka yerde"
           }
         }
       }
@@ -2536,6 +2547,7 @@
     },
     "Account, %@" : {
       "comment" : "The App Store's account button: %@ is its name",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -2864,6 +2876,7 @@
     },
     "Arcade" : {
       "comment" : "An App Store page",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -3255,7 +3268,7 @@
       }
     },
     "Buy %@ for %@? Press Space again to buy." : {
-      "comment" : "Buying an app: its name, then its price",
+      "comment" : "Spoken message",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3368,6 +3381,7 @@
     },
     "Cannot connect" : {
       "comment" : "An App Store page",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -4110,7 +4124,7 @@
       }
     },
     "Could not start Steam in the %@ bottle: %@" : {
-      "comment" : "Steam speech: the bottle, then why",
+      "comment" : "The Steam program's message",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4127,7 +4141,7 @@
       }
     },
     "Could not start Steam: %@" : {
-      "comment" : "Steam speech: %@ is why",
+      "comment" : "The Steam program's message",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -4472,6 +4486,7 @@
     },
     "Discover" : {
       "comment" : "An App Store page",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -6238,6 +6253,7 @@
     },
     "Install; press Space again to install" : {
       "comment" : "An App Store button became Install",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -7740,6 +7756,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pencereyi ok tuşlarıyla taşır; Esc durdurur (VO-Ters Kesme İşareti)"
+          }
+        }
+      }
+    },
+    "Moves to the %@; uses the review cursor if keyboard focus is unavailable" : {
+      "comment" : "A command, as the key list and keyboard help say it: %@ is a part of System Settings",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ bölümüne gider; klavye odağı kullanılamıyorsa inceleme imlecini kullanır"
           }
         }
       }
@@ -11793,7 +11820,7 @@
       }
     },
     "Restarting Steam in the %@ bottle. It takes a few seconds." : {
-      "comment" : "Steam speech: %@ is a CrossOver bottle",
+      "comment" : "The Steam program's message",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -12522,6 +12549,7 @@
     },
     "Search" : {
       "comment" : "The App Store's search field",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -12542,8 +12570,20 @@
         }
       }
     },
+    "Search stopped before finishing. Try again." : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arama bitmeden durdu. Yeniden deneyin."
+          }
+        }
+      }
+    },
     "Search, %@" : {
       "comment" : "The App Store's search field and what is in it",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -13415,7 +13455,7 @@
       }
     },
     "Starting Steam in the %@ bottle." : {
-      "comment" : "Steam speech: %@ is a CrossOver bottle",
+      "comment" : "The Steam program's message",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -15141,6 +15181,17 @@
         }
       }
     },
+    "This item changed. Reading the page again." : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu öğe değişti. Sayfa yeniden okunuyor."
+          }
+        }
+      }
+    },
     "This plugin can act on %@: %@. To install it anyway, choose the same Install again within 20 seconds." : {
       "comment" : "A plugin's warnings: the app, then the warnings (in English)",
       "localizations" : {
@@ -15697,7 +15748,6 @@
     },
     "TurnOver is not responding. If it doesn't recover, it restarts in twenty seconds." : {
       "comment" : "Spoken message",
-      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -15947,6 +15997,17 @@
         }
       }
     },
+    "TurnOver's keyboard is unavailable. VoiceOver is taking over. Check TurnOver's Accessibility and Input Monitoring permissions before turning TurnOver on again." : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TurnOver'ın klavyesi kullanılamıyor. VoiceOver devralıyor. TurnOver'ı yeniden açmadan önce TurnOver'ın Erişilebilirlik ve Giriş İzleme izinlerini denetleyin."
+          }
+        }
+      }
+    },
     "TurnOver's own windows cannot be changed" : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -15987,6 +16048,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "TurnOver'ın ayarları ve izinleri silindi; uygulamanın kendisi Çöp Sepeti'ne taşınamadı, kendiniz sürükleyin."
+          }
+        }
+      }
+    },
+    "TurnOver's speech output stopped. Handing back to VoiceOver. Press Command Control Period to try TurnOver again." : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TurnOver'ın ses çıkışı durdu. VoiceOver'a devrediliyor. TurnOver'ı yeniden denemek için Komut Kontrol Ç'ye basın."
           }
         }
       }
@@ -16537,6 +16609,7 @@
     },
     "VoiceOver" : {
       "comment" : "Spoken message",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -18727,6 +18800,28 @@
         }
       }
     },
+    "could not identify this item unambiguously" : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bu öğe kesin olarak belirlenemedi"
+          }
+        }
+      }
+    },
+    "could not locate the %@" : {
+      "comment" : "Spoken message: %@ is a part of System Settings",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ bulunamadı"
+          }
+        }
+      }
+    },
     "could not open %@" : {
       "comment" : "A menu could not be opened: %@ is its name",
       "localizations" : {
@@ -18766,6 +18861,17 @@
         }
       }
     },
+    "could not reach the %@" : {
+      "comment" : "Spoken message: %@ is a part of System Settings",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ bölümüne ulaşılamadı"
+          }
+        }
+      }
+    },
     "could not reach the search field" : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -18784,6 +18890,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "pencere görülemedi"
+          }
+        }
+      }
+    },
+    "could not select that sidebar item" : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kenar çubuğundaki o öğe seçilemedi"
           }
         }
       }
@@ -22873,7 +22990,7 @@
       }
     },
     "opening %@" : {
-      "comment" : "An app being opened: %@ is its name",
+      "comment" : "An app being opened: %@ is its name\nSpoken message",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -24089,7 +24206,7 @@
       }
     },
     "search" : {
-      "comment" : "A role, spoken after an item's name\nSpoken message",
+      "comment" : "A part of the System Settings window\nA role, spoken after an item's name\nSpoken message",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -24308,6 +24425,17 @@
         }
       }
     },
+    "settings pane" : {
+      "comment" : "A part of the System Settings window",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ayarlar bölmesi"
+          }
+        }
+      }
+    },
     "settings window" : {
       "comment" : "A letter's command in the TurnOver layer (Command Control Comma)",
       "localizations" : {
@@ -24375,7 +24503,7 @@
       }
     },
     "sidebar" : {
-      "comment" : "An area of the Music, Podcasts or TV window\nSpoken message\nThe App Store's sidebar",
+      "comment" : "A part of the System Settings window\nAn area of the Music, Podcasts or TV window\nSpoken message\nThe App Store's sidebar",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -24733,6 +24861,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "hâlâ betimleniyor"
+          }
+        }
+      }
+    },
+    "still reading the page; try again in a moment" : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayfa hâlâ okunuyor; biraz sonra yeniden deneyin"
           }
         }
       }
@@ -26094,6 +26233,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "uygulama"
+          }
+        }
+      }
+    },
+    "the button is not ready; try again" : {
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "düğme hazır değil; yeniden deneyin"
           }
         }
       }

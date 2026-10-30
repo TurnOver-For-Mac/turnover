@@ -660,7 +660,7 @@ public final class ObjectNavigator {
                 self.land(on: target)
             case .end:
                 Tones.edge()
-                Speech.speakMessage(forward ? "no next \(kind)" : "no previous \(kind)")
+                Speech.speakMessage(forward ? String(localized: "no next \(kind)", comment: "Nothing more of a kind ahead: %@ is the kind (heading)") : String(localized: "no previous \(kind)", comment: "Nothing more of a kind behind: %@ is the kind (heading)"))
             case .unavailable:
                 Speech.speakMessage(String(localized: "nothing to search", comment: "Spoken message"))
             case .incomplete(.cancelled): break

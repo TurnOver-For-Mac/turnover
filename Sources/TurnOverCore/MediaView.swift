@@ -1495,7 +1495,7 @@ public final class MediaView {
         } else { refreshPlayer(); sayNowPlaying() }
     }
 
-    private func sayNowPlaying() { Speech.speakText(player.first { $0.press == nil }?.label ?? "nothing playing") }
+    private func sayNowPlaying() { Speech.speakText(player.first { $0.press == nil }?.label ?? String(localized: "nothing playing", comment: "Spoken message")) }
 
     /// Where the user was on each page, so Back lands on the item that was opened.
     /// (The item's key, not its place in the list: the page is read again from the top when it comes back, and the
