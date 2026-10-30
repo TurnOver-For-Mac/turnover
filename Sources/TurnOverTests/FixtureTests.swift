@@ -349,6 +349,81 @@ func focusRuleTests() {
         expect(module.redirectFocus(AXReplay.element(2)).flatMap { AXReplay.id(of: $0) }, 4, "the first page's body text is the focus")
         check(AXReplay.sets.isEmpty, "nothing set in Pages (set: \(setsSaid()))")
     }
+
+    /// A conversation page (60) in a window (59) of the application (9), as the Claude app's: two lines of a reply (62,
+    /// 64), its Copy button (65) and the prompt (66).
+    func conversation() -> AXFixture {
+        var f = AXFixture(app: "T", bundle: "t", recorded: "", root: 59, application: 9, focus: 65, nodes: [])
+        f.nodes = [
+            .init(id: 59, attrs: ["AXRole": .string("AXWindow"), "AXSubrole": .string("AXStandardWindow"), "AXTitle": .string("Chat"), "AXParent": .element(9),
+                                  "AXChildren": .elements([60])]),
+            .init(id: 60, attrs: ["AXRole": .string("AXWebArea"), "AXURL": .url("https://example.com/chat"), "AXParent": .element(59), "AXWindow": .element(59),
+                                  "AXChildren": .elements([61, 63, 65, 66])]),
+            .init(id: 61, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(60), "AXWindow": .element(59), "AXChildren": .elements([62])]),
+            .init(id: 62, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("The reply starts here."), "AXParent": .element(61), "AXWindow": .element(59)]),
+            .init(id: 63, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(60), "AXWindow": .element(59), "AXChildren": .elements([64])]),
+            .init(id: 64, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("The reading stopped on this line."), "AXParent": .element(63), "AXWindow": .element(59)]),
+            .init(id: 65, attrs: ["AXRole": .string("AXButton"), "AXTitle": .string("Copy"), "AXParent": .element(60), "AXWindow": .element(59)]),
+            .init(id: 66, attrs: ["AXRole": .string("AXTextArea"), "AXDescription": .string("Prompt"), "AXValue": .string(""), "AXParent": .element(60), "AXWindow": .element(59)]),
+            .init(id: 9, attrs: ["AXRole": .string("AXApplication"), "AXTitle": .string("T"), "AXChildren": .elements([59]), "AXWindows": .elements([59]),
+                                 "AXFocusedWindow": .element(59), "AXMainWindow": .element(59), "AXFocusedUIElement": .element(65)]),
+        ]
+        return f
+    }
+
+    // Command-Tab away and back: the Claude app and Safari give the focus back to the control that had it, and the
+    // reading position went there too, into focus mode on the prompt (28 and 29 Oct 2026). NVDA leaves the reading
+    // position and the mode as they were, and reads the line there.
+    test("browse mode: back from another app onto the control that had the focus, the reading position and the mode stay") {
+        AXReplay.load(conversation())
+        let saved = config, keep = Speech.sink
+        var said = ""
+        Speech.sink = { said += $0 + " " }
+        defer { AXReplay.unload(); API.setFocusObject(nil, ancestors: []); BrowseModeHandler.shared.forget(pid: 900_060); config = saved; Speech.sink = keep }
+        config.virtualBuffers.autoFocusMode = true
+        Speech.testResetFocusTiming()
+        let page = BrowseModeHandler.shared.document(root: AXReplay.element(60))
+        /// The focus on `id`, given to the page as AXHandler.present() and the event chain give it, from outside the page
+        /// or from inside it. (Replayed, present() can't find the page from its focus: every replayed attribute is
+        /// settable, so the web area reads as an editable one.) True when the page passes the event on to the control, as
+        /// for a focus it follows.
+        @MainActor func focus(_ id: Int, fromOutside: Bool) -> Bool {
+            let f = ObjectFactory.make(AXReplay.element(id))
+            API.setFocusObject(f, ancestors: f.ancestors, interceptor: page)
+            page.focusFromOutside = fromOutside
+            said = ""
+            var passed = false
+            page.handleEvent(Event(.gainFocus, f)) { passed = true }
+            return passed
+        }
+        let stopped = page.buffer.text.range(of: "The reading stopped").location
+        check(stopped != NSNotFound, "the reply is on the page")
+
+        // Browse mode with the focus on Copy; the reading went on to the reply's second line; another app; back.
+        check(focus(65, fromOutside: true), "the first focus on Copy is followed")
+        page.position = stopped
+        check(!focus(65, fromOutside: true), "back onto Copy, it is not read itself")
+        expect(page.position, stopped, "the reading position stays where the reading stopped")
+        check(said.contains("The reading stopped on this line"), "the line there is read: \(said)")
+
+        // The prompt: focus mode as it takes the focus, Escape for browse mode, the reading went on, another app, back.
+        check(focus(66, fromOutside: false), "into the prompt from inside the page, the focus is followed")
+        check(page.passThrough && page.position != stopped, "focus mode on the prompt, the reading position on it")
+        page.setPassThrough(false, announce: false)
+        page.position = stopped
+        check(!focus(66, fromOutside: true), "back onto the prompt, it is not read itself")
+        check(!page.passThrough, "browse mode stays, though the prompt has the focus")
+        expect(page.position, stopped, "the reading position stays where the reading stopped")
+
+        // Back onto another control than the one that had the focus: followed, as NVDA does.
+        check(focus(65, fromOutside: true), "back onto Copy while the prompt had the focus, it is followed")
+        check(page.position != stopped, "the reading position went to Copy")
+
+        // Typing in the prompt (focus mode), another app, back: typing still.
+        check(focus(66, fromOutside: false) && page.passThrough, "into the prompt, focus mode")
+        check(focus(66, fromOutside: true), "back into the prompt in focus mode, the focus is followed as before")
+        check(page.passThrough, "focus mode stays")
+    }
 }
 
 // Scale: a generated window with a 1,000-row list. Searches for a window's parts must not walk the rows, and
