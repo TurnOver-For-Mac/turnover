@@ -1,0 +1,128 @@
+[   0.000] turnover-probe textedit-menu
+[   0.019] targetBundle=com.apple.TextEdit targetIsFrontmost=true probeAccessibilityTrusted=true permissionPromptRequested=false
+[   0.019] method=boundedMenuMetadata requestedOpen=File documentText=false menuItemLabels=false arbitraryTitlesLogged=false activationAttempted=false keyInjection=false
+[   0.019] bounds=2sCooperativeDeadline,50msPerExactReference,512Queries,80References,16TopTitles,16ItemRoles; external process deadline required
+[   0.019] reference=e1 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.052] reference=e1 query=AXFocusedUIElement status=returned:success attempted=true elapsedMs=32.93 hasValue=true
+[   0.052] reference=e2 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.052] reference=e2 query=AXRole status=returned:success attempted=true elapsedMs=0.04 hasValue=true
+[   0.053] phase=before focusedRole=AXTextArea reference=e2
+[   0.053] reference=e1 query=AXMenuBar status=returned:success attempted=true elapsedMs=0.03 hasValue=true
+[   0.053] reference=e3 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.053] reference=e3 query=AXChildren.count status=returned:success attempted=true elapsedMs=0.04 hasValue=true
+[   0.053] reference=e3 query=AXChildren.prefix status=returned:success attempted=true elapsedMs=0.08 hasValue=true
+[   0.053] reference=e3 children reportedCount=8 sampled=8 complete=true
+[   0.053] reference=e4 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.053] reference=e4 query=AXTitle status=returned:success attempted=true elapsedMs=0.04 hasValue=true
+[   0.053] reference=e4 query=AXRole status=returned:success attempted=true elapsedMs=0.03 hasValue=true
+[   0.053] topIndex=0 publicTitle=Apple role=AXMenuBarItem reference=e4
+[   0.053] reference=e5 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.053] reference=e5 query=AXTitle status=returned:success attempted=true elapsedMs=0.03 hasValue=true
+[   0.053] reference=e5 query=AXRole status=returned:success attempted=true elapsedMs=0.03 hasValue=true
+[   0.053] topIndex=1 publicTitle=TextEdit role=AXMenuBarItem reference=e5
+[   0.053] reference=e6 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.053] reference=e6 query=AXTitle status=returned:success attempted=true elapsedMs=0.03 hasValue=true
+[   0.053] reference=e6 query=AXRole status=returned:success attempted=true elapsedMs=0.03 hasValue=true
+[   0.053] topIndex=2 publicTitle=File role=AXMenuBarItem reference=e6
+[   0.053] reference=e6 query=actionNames status=returned:success attempted=true elapsedMs=0.05 hasValue=true
+[   0.053] reference=e6 actionNames returned=3 examined=3 total=3 standard=[AXCancel,AXPick,AXPress] customCount=0 otherCount=0
+[   0.053] reference=e6 query=AXChildren.count status=returned:success attempted=true elapsedMs=0.03 hasValue=true
+[   0.053] reference=e6 query=AXChildren.prefix status=returned:success attempted=true elapsedMs=0.04 hasValue=true
+[   0.053] reference=e6 children reportedCount=1 sampled=1 complete=true
+[   0.053] reference=e7 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.053] reference=e7 query=AXRole status=returned:success attempted=true elapsedMs=0.02 hasValue=true
+[   0.053] reference=e8 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.053] reference=e8 query=AXTitle status=returned:success attempted=true elapsedMs=0.03 hasValue=true
+[   0.053] reference=e8 query=AXRole status=returned:success attempted=true elapsedMs=0.03 hasValue=true
+[   0.053] topIndex=3 publicTitle=Edit role=AXMenuBarItem reference=e8
+[   0.054] reference=e8 query=actionNames status=returned:success attempted=true elapsedMs=0.03 hasValue=true
+[   0.054] reference=e8 actionNames returned=3 examined=3 total=3 standard=[AXCancel,AXPick,AXPress] customCount=0 otherCount=0
+[   0.054] reference=e8 query=AXChildren.count status=returned:success attempted=true elapsedMs=0.03 hasValue=true
+[   0.054] reference=e8 query=AXChildren.prefix status=returned:success attempted=true elapsedMs=0.03 hasValue=true
+[   0.054] reference=e8 children reportedCount=1 sampled=1 complete=true
+[   0.054] reference=e9 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.054] reference=e9 query=AXRole status=returned:success attempted=true elapsedMs=0.02 hasValue=true
+[   0.054] reference=e10 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.054] reference=e10 query=AXTitle status=returned:success attempted=true elapsedMs=0.03 hasValue=true
+[   0.054] reference=e10 query=AXRole status=returned:success attempted=true elapsedMs=0.03 hasValue=true
+[   0.054] topIndex=4 publicTitle=otherOrUnavailable role=AXMenuBarItem reference=e10
+[   0.054] reference=e11 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.054] reference=e11 query=AXTitle status=returned:success attempted=true elapsedMs=0.02 hasValue=true
+[   0.054] reference=e11 query=AXRole status=returned:success attempted=true elapsedMs=0.03 hasValue=true
+[   0.054] topIndex=5 publicTitle=otherOrUnavailable role=AXMenuBarItem reference=e11
+[   0.054] reference=e12 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.054] reference=e12 query=AXTitle status=returned:success attempted=true elapsedMs=0.03 hasValue=true
+[   0.054] reference=e12 query=AXRole status=returned:success attempted=true elapsedMs=0.03 hasValue=true
+[   0.054] topIndex=6 publicTitle=otherOrUnavailable role=AXMenuBarItem reference=e12
+[   0.054] reference=e13 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.054] reference=e13 query=AXTitle status=returned:success attempted=true elapsedMs=0.02 hasValue=true
+[   0.054] reference=e13 query=AXRole status=returned:success attempted=true elapsedMs=0.03 hasValue=true
+[   0.054] topIndex=7 publicTitle=otherOrUnavailable role=AXMenuBarItem reference=e13
+[   0.054] reference=e7 query=AXSize status=returned:success attempted=true elapsedMs=0.04 hasValue=true
+[   0.054] reference=e6 query=action.AXPress status=returned:success attempted=true elapsedMs=0.04 hasValue=true
+[   0.108] reference=e7 query=AXRole status=returned:cannotComplete(-25204) attempted=true elapsedMs=53.87 hasValue=false
+[   0.122] reference=e7 query=AXSize status=returned:success attempted=true elapsedMs=14.14 hasValue=true
+[   0.122] reference=e7 query=AXSelectedChildren.count status=returned:success attempted=true elapsedMs=0.04 hasValue=true
+[   0.122] phase=afterPress menu=File reference=e7 role=unavailableSeeQueryStatus nonzeroSize=true selectedChildren=0
+[   0.123] reference=e7 query=actionNames status=returned:success attempted=true elapsedMs=0.18 hasValue=true
+[   0.123] reference=e7 actionNames returned=1 examined=1 total=1 standard=[AXCancel] customCount=0 otherCount=0
+[   0.123] reference=e7 query=AXChildren.count status=returned:success attempted=true elapsedMs=0.03 hasValue=true
+[   0.123] reference=e7 query=AXChildren.prefix status=returned:success attempted=true elapsedMs=0.14 hasValue=true
+[   0.123] reference=e7 children reportedCount=22 sampled=16 complete=false
+[   0.123] reference=e14 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.123] reference=e14 query=AXRole status=returned:success attempted=true elapsedMs=0.02 hasValue=true
+[   0.123] reference=e15 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.123] reference=e15 query=AXRole status=returned:success attempted=true elapsedMs=0.02 hasValue=true
+[   0.123] reference=e16 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.123] reference=e16 query=AXRole status=returned:success attempted=true elapsedMs=0.06 hasValue=true
+[   0.123] reference=e17 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.123] reference=e17 query=AXRole status=returned:success attempted=true elapsedMs=0.05 hasValue=true
+[   0.123] reference=e18 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.123] reference=e18 query=AXRole status=returned:success attempted=true elapsedMs=0.02 hasValue=true
+[   0.123] reference=e19 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.123] reference=e19 query=AXRole status=returned:success attempted=true elapsedMs=0.03 hasValue=true
+[   0.123] reference=e20 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.123] reference=e20 query=AXRole status=returned:success attempted=true elapsedMs=0.02 hasValue=true
+[   0.123] reference=e21 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.123] reference=e21 query=AXRole status=returned:success attempted=true elapsedMs=0.03 hasValue=true
+[   0.123] reference=e22 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.123] reference=e22 query=AXRole status=returned:success attempted=true elapsedMs=0.02 hasValue=true
+[   0.123] reference=e23 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.123] reference=e23 query=AXRole status=returned:success attempted=true elapsedMs=0.01 hasValue=true
+[   0.123] reference=e24 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.123] reference=e24 query=AXRole status=returned:success attempted=true elapsedMs=0.02 hasValue=true
+[   0.123] reference=e25 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.123] reference=e25 query=AXRole status=returned:success attempted=true elapsedMs=0.01 hasValue=true
+[   0.123] reference=e26 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.123] reference=e26 query=AXRole status=returned:success attempted=true elapsedMs=0.03 hasValue=true
+[   0.123] reference=e27 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.123] reference=e27 query=AXRole status=returned:success attempted=true elapsedMs=0.02 hasValue=true
+[   0.123] reference=e28 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.123] reference=e28 query=AXRole status=returned:success attempted=true elapsedMs=0.02 hasValue=true
+[   0.123] reference=e29 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.123] reference=e29 query=AXRole status=returned:success attempted=true elapsedMs=0.02 hasValue=true
+[   0.123] phase=afterPress menu=File immediateChildRoles=AXMenuItem:16 labelsRead=false
+[   0.123] reference=e7 query=AXParent status=returned:success attempted=true elapsedMs=0.02 hasValue=true
+[   0.123] reference=e6 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.124] reference=e6 query=AXRole status=returned:success attempted=true elapsedMs=0.02 hasValue=true
+[   0.124] phase=afterPress menu=File ancestorDepth=1 role=AXMenuBarItem
+[   0.124] reference=e6 query=AXParent status=returned:success attempted=true elapsedMs=0.02 hasValue=true
+[   0.124] reference=e3 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.124] reference=e3 query=AXRole status=returned:success attempted=true elapsedMs=0.01 hasValue=true
+[   0.124] phase=afterPress menu=File ancestorDepth=2 role=AXMenuBar
+[   0.124] reference=e3 query=AXParent status=returned:success attempted=true elapsedMs=0.03 hasValue=true
+[   0.124] reference=e1 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.124] reference=e1 query=AXRole status=returned:success attempted=true elapsedMs=0.02 hasValue=true
+[   0.124] phase=afterPress menu=File ancestorDepth=3 role=AXApplication
+[   0.124] reference=e1 query=ownerPidMatchesTarget status=returned:success attempted=true elapsedMs=0.00 hasValue=true
+[   0.124] phase=afterPress menu=File nativeApplicationReached=true ownerMatchesTarget=true
+[   0.124] reference=e1 query=AXFocusedUIElement status=returned:success attempted=true elapsedMs=0.02 hasValue=true
+[   0.124] reference=e2 query=timeoutConfiguration status=returned:success requestedMs=50
+[   0.124] reference=e2 query=AXRole status=returned:success attempted=true elapsedMs=0.02 hasValue=true
+[   0.124] phase=afterPress focusedRole=AXTextArea reference=e2
+[   0.131] reference=e7 query=action.AXCancel status=returned:success attempted=true elapsedMs=7.33 hasValue=true
+[   0.131] reference=e7 query=AXSize status=returned:success attempted=true elapsedMs=0.19 hasValue=true
+[   0.131] cleanup cancelAttempted=true cancelStatus=returned:success closedReadback=false userEscapeMayBeNeeded=true
+[   0.131] summary queriesAndTimeoutSetups=97 exactReferences=33 stop=none malformed=false clipped=true wallMs=111 fullControlValidated=false
+[   0.131] end
+

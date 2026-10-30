@@ -69,14 +69,14 @@ identifier through AppModuleHandler.appModule(for:), made on first use. An app w
 A module can:
 
 - **choose object classes** for the app's controls (objectClass): TurnOverSettingsAppModule in
-  [TurnOverSettingsAppModule.swift](Sources/TurnOverCore/Modules/TurnOverSettingsAppModule.swift) gives every control
+  [TurnOverSettingsAppModule.swift](../Sources/Apps/TurnOverSettings/TurnOverSettingsAppModule.swift) gives every control
   a class that looks harder for a label, because the Settings app hands over labels late;
 - **redirect a misreported focus** and **handle the app's events** before the objects do;
 - **carry scripts** that work anywhere in the app: Finder's module declares what Command Down says with nothing
   selected, and the Windows-style Return and F2.
 
 The modules TurnOver ships are registered in one place,
-[BuiltInModules.swift](Sources/TurnOverCore/Modules/BuiltInModules.swift); plugins register theirs the same way.
+[BuiltInModules.swift](../Sources/TurnOverCore/Modules/BuiltInModules.swift); plugins register theirs the same way.
 
 ## 5. Events reaching the object
 

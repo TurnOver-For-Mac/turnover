@@ -5,7 +5,8 @@
 TurnOver is a Swift 6 macOS screen reader that works alongside VoiceOver. `Package.swift` defines its targets:
 
 - `Sources/TurnOver/`: app lifecycle, keyboard handling, menus, and VoiceOver coordination.
-- `Sources/TurnOverCore/`: reading, navigation, settings, and app-specific `Modules/`.
+- `Sources/TurnOverCore/`: reading, navigation, settings and shared app assembly in `Modules/`.
+- `Sources/Apps/`: app implementations and records. Implementations still belong to TurnOverCore: `Package.swift` discovers its `TurnOverCore` folder and explicitly lists app Swift files. Add new app files to that list; new shared Core files are discovered automatically. App records, tests, fixtures and experiments are excluded. See `Sources/Apps/README.md`.
 - `Sources/TurnOverAX/`, `TurnOverSpeech/`, `TurnOverBraille/`, and `TurnOverControl/`: accessibility, audio, braille, and local communication.
 - `Sources/TurnOverTests/`: test executable; `Tests/Fixtures/` and `Tests/Plugins/`: recorded windows and plugin samples.
 - `Resources/`: bundle configuration, sounds, recipes, and keymaps. `Helpers/` contains separate Swift packages; `Tools/` contains development utilities.
@@ -19,7 +20,9 @@ Use a Mac with full Xcode 27 and the macOS 27 SDK; the app targets macOS 14 onwa
 - `./build.sh`: additionally replace `/Applications/TurnOver.app` and restart it.
 - `~/Library/Developer/TurnOver/build/release/turnover-tests -v`: rerun tests verbosely; add a name substring to filter.
 
-Both build commands compile and run tests; `./build.sh` is not an install-only step. Allow a minute or two, with longer builds possible after larger changes. The last displayed product name can remain unchanged while compilation continues; check compiler activity before treating it as a hang. Running `turnover-tests` directly only reruns tests and does not build anything.
+Both build commands check source membership and the generated app index, then compile and run tests; `./build.sh` is not an install-only step. Allow a minute or two, with longer builds possible after larger changes. The last displayed product name can remain unchanged while compilation continues; check compiler activity before treating it as a hang. Running `turnover-tests` directly only reruns tests and does not build anything.
+
+For a byte-identical folder move, verify file hashes/modes, target membership, build and tests; no reinstall or listening trial is required. Behavior changes still require the installed-app loop and Oliver's trial.
 
 For real app testing, follow the README's Developing loop: `./build.sh --no-install`, then `./build.sh`, then exercise `/Applications/TurnOver.app` and inspect the newest log in `~/Library/Application Support/TurnOver/logs/`. Do not use `swift run turnover` for this: the app needs its bundle configuration, resources, embedded helpers, and the code signature its permissions are tied to. A bare executable does not reproduce the installed app's behavior.
 
@@ -62,7 +65,7 @@ Keep private interfaces in their existing narrow bridges. The current dependenci
 | `MultitouchSupport.framework`, including `MTActuator` | `Helpers/trackpad-gestures/Sources/trackpad-gestures/main.swift` reads finger contacts for VoiceOver-style gestures; `Haptics.swift` plays Force Touch waveforms, with public `NSHapticFeedbackManager` as its fallback. The private interface stays in the helper. |
 | `responsibility_spawnattrs_setdisclaim` | `Sources/TurnOverCore/DisclaimedSpawn.swift` asks macOS to separate a helper's permission responsibility from TurnOver's, so it does not borrow Accessibility and Input Monitoring access. Check the returned `disclaimed` flag: the current bridge can still launch when this call is unavailable or fails. |
 | `AudioDeviceDuck` | `Sources/TurnOverCore/Ducking.swift` lowers other audio clients while leaving TurnOver's voice at full volume. This avoids recording and replaying system audio, which needed recording permission and extra work. Missing symbols disable ducking; preserve restoration on speech end, handover, device changes and exit. |
-| Optional `AXAttributedDescription` provider attribute | `Sources/TurnOverCore/Modules/SystemSettingsLabels.swift` reads a bounded label through public AX calls when Settings buttons omit standard title, description and help. Observed on macOS 27.2, Settings 1.0 (2027.1.9.102), 29 Oct 2026. No private symbol or framework is loaded. Missing, malformed or oversized values use the existing object name. Keep this undocumented provider dependency confined to Settings. |
+| Optional `AXAttributedDescription` provider attribute | `Sources/Apps/SystemSettings/SystemSettingsLabels.swift` reads a bounded label through public AX calls when Settings buttons omit standard title, description and help. Observed on macOS 27.2, Settings 1.0 (2027.1.9.102), 29 Oct 2026. No private symbol or framework is loaded. Missing, malformed or oversized values use the existing object name. Keep this undocumented provider dependency confined to Settings. |
 
 `Sources/TurnOverCore/VoiceOverCommands.swift` and `VoiceOverSounds.swift` also read private ScreenReader resources for copied command names and familiar event sounds. Preserve their missing-resource fallbacks. The `voiceover-quiet` helper's Core Audio process tap is a public API, separate from the private ducking call.
 

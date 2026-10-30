@@ -20,7 +20,8 @@ mostly about not wasting your time or mine.
 - [docs/HOW-A-KEY-BECOMES-SPEECH.md](docs/HOW-A-KEY-BECOMES-SPEECH.md) and
   [docs/HOW-FOCUS-BECOMES-AN-OBJECT.md](docs/HOW-FOCUS-BECOMES-AN-OBJECT.md): the two paths through the code, step by step.
 - [docs/DECISIONS.md](docs/DECISIONS.md): why things are the way they are, dated.
-- `Sources/TurnOverCore/Modules/`: one file per app. An app's quirk belongs there, never in shared code.
+- [Sources/Apps/README.md](Sources/Apps/README.md): the app record index and fixed support/effort categories. App implementations live beside their records; shared registration and app wake helpers remain in `Sources/TurnOverCore/Modules/`. App quirks belong in their app implementation.
+- App implementations compile in TurnOverCore. New shared Core files are discovered from its folder; list new app Swift files in `coreSources` in `Package.swift`. Keep app Tests, Fixtures and Experiments out. Run `python3 Tools/build-app-index.py` after changing a status record. `build.sh` checks membership and index freshness.
 - The log (`~/Library/Application Support/TurnOver/logs`): what TurnOver saw and said. Most questions are answered
   there before the code.
 - If you think the code is untidy, the **Code health** milestone on GitHub is the list of what to tidy. Each item
@@ -36,7 +37,7 @@ mostly about not wasting your time or mine.
   issue first and say what you have in mind. Those parts are shared by every app, and a change that helps one app
   can silently break another.
 - **Moving app logic into app modules** is welcome, and is the direction the code is going: less special-casing in
-  the core, more in `Sources/TurnOverCore/Modules/`. That work doesn't need to come as a string of tiny pull requests.
+  the core, more in `Sources/Apps/`. That work doesn't need to come as a string of tiny pull requests.
   Open an issue or a Discussion with the plan first, so two people don't move the same thing, then send it in a few
   larger pieces, an app or a mechanism at a time.
 - **Keep what works.** TurnOver follows VoiceOver's keys in the Mac style and NVDA's in the Windows style. A change
