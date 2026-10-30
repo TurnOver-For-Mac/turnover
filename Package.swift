@@ -18,16 +18,23 @@
 // turnover-probe    measurement probes, run by hand
 import PackageDescription
 
-// Shared Core remains a folder entry, so new Core files are discovered automatically. App implementations
-// are listed individually; records, tests and experiments are excluded from production source membership.
+// Shared Core and Mac system integration use folder entries, so their new files are discovered automatically.
+// App implementations are listed individually; records, tests and experiments are excluded from production membership.
 // Tools/check-migration.py validates this boundary without fixing it to one historical checkout.
 let coreSources: [String] = [
     "TurnOverCore",
+    "System",
     "Apps/AppStore/AppStoreAppModule.swift",
+    "Apps/AppStore/AppStoreFlat.swift",
+    "Apps/AppStore/AppStoreModel.swift",
+    "Apps/AppStore/AppStorePageBuilder.swift",
+    "Apps/AppStore/AppStorePurchaseConfirmation.swift",
+    "Apps/AppStore/AppStoreView.swift",
     "Apps/Books/BooksAppModule.swift",
     "Apps/Calculator/CalculatorAppModule.swift",
     "Apps/Calendar/CalendarAppModule.swift",
     "Apps/Chat/ChatAppModule.swift",
+    "Apps/Chat/ChatView.swift",
     "Apps/Claude/ClaudeAppModule.swift",
     "Apps/Contacts/ContactsAppModule.swift",
     "Apps/Dock/DockAppModule.swift",
@@ -36,14 +43,20 @@ let coreSources: [String] = [
     "Apps/FaceTime/FaceTimeAppModule.swift",
     "Apps/Finder/FinderAppModule.swift",
     "Apps/Freeform/FreeformAppModule.swift",
+    "Apps/Games/Games.swift",
     "Apps/Keynote/KeynoteAppModule.swift",
     "Apps/Kindle/KindleAppModule.swift",
     "Apps/Mail/MailAppModule.swift",
     "Apps/Maps/MapsAppModule.swift",
     "Apps/Media/MediaAppModule.swift",
+    "Apps/Media/MediaShelfReadiness.swift",
+    "Apps/Media/MediaSidebarSelection.swift",
+    "Apps/Media/MediaView.swift",
+    "Apps/Media/MediaWorkOwner.swift",
     "Apps/Numbers/NumbersAppModule.swift",
     "Apps/Pages/PagesAppModule.swift",
     "Apps/Panes/PanesAppModule.swift",
+    "Apps/Panes/PanesView.swift",
     "Apps/Photos/PhotosAppModule.swift",
     "Apps/Preview/PreviewAppModule.swift",
     "Apps/Reminders/RemindersAppModule.swift",
@@ -127,6 +140,7 @@ let package = Package(
                 "TurnOverSettings",
                 "TurnOverSpeech",
                 "TurnOverTests",
+                "System/README.md",
                 "Apps/README.md",
                 "Apps/AppStore/STATUS.md",
                 "Apps/Books/STATUS.md",
@@ -140,6 +154,7 @@ let package = Package(
                 "Apps/FaceTime/STATUS.md",
                 "Apps/Finder/STATUS.md",
                 "Apps/Freeform/STATUS.md",
+                "Apps/Games/README.md",
                 "Apps/Keynote/STATUS.md",
                 "Apps/Kindle/STATUS.md",
                 "Apps/Mail/STATUS.md",
@@ -156,6 +171,7 @@ let package = Package(
                 "Apps/Safari/STATUS.md",
                 "Apps/Shortcuts/STATUS.md",
                 "Apps/Spotlight/STATUS.md",
+                "Apps/Steam/STATUS.md",
                 "Apps/SystemSettings/STATUS.md",
                 "Apps/TV/STATUS.md",
                 "Apps/Terminal/STATUS.md",

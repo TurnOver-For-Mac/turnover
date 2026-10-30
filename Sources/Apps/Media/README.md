@@ -9,3 +9,7 @@
 ## Checks
 
 Check sidebar movement, content loading, shelves, item activation and return from detail pages in each app. Record the app and macOS versions, keyboard style and VoiceOver state; a result from one app does not establish support in the others.
+
+## Reading model
+
+[MediaView.swift](MediaView.swift) builds the shared sidebar and shelf view. [MediaWorkOwner.swift](MediaWorkOwner.swift), [MediaShelfReadiness.swift](MediaShelfReadiness.swift) and [MediaSidebarSelection.swift](MediaSidebarSelection.swift) keep background work, staged loading and sidebar changes with that implementation.

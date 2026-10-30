@@ -5,8 +5,9 @@
 TurnOver is a Swift 6 macOS screen reader that works alongside VoiceOver. `Package.swift` defines its targets:
 
 - `Sources/TurnOver/`: app lifecycle, keyboard handling, menus, and VoiceOver coordination.
-- `Sources/TurnOverCore/`: reading, navigation, settings and shared app assembly in `Modules/`.
-- `Sources/Apps/`: app implementations and records. Implementations still belong to TurnOverCore: `Package.swift` discovers its `TurnOverCore` folder and explicitly lists app Swift files. Add new app files to that list; new shared Core files are discovered automatically. App records, tests, fixtures and experiments are excluded. See `Sources/Apps/README.md`.
+- `Sources/TurnOverCore/`: shared reading, navigation and settings.
+- `Sources/System/`: shared Mac menus, prompts, notifications, application chooser and built-in app registration. These files still compile in TurnOverCore.
+- `Sources/Apps/`: app implementations and records. Implementations still belong to TurnOverCore: `Package.swift` discovers the `TurnOverCore` and `System` folders and explicitly lists app Swift files. Add new app files to that list; new shared Core or System files are discovered automatically. App records, tests, fixtures and experiments are excluded. See `Sources/Apps/README.md`.
 - `Sources/TurnOverAX/`, `TurnOverSpeech/`, `TurnOverBraille/`, and `TurnOverControl/`: accessibility, audio, braille, and local communication.
 - `Sources/TurnOverTests/`: test executable; `Tests/Fixtures/` and `Tests/Plugins/`: recorded windows and plugin samples.
 - `Resources/`: bundle configuration, sounds, recipes, and keymaps. `Helpers/` contains separate Swift packages; `Tools/` contains development utilities.

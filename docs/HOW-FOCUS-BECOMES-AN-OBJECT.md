@@ -76,7 +76,7 @@ A module can:
   selected, and the Windows-style Return and F2.
 
 The modules TurnOver ships are registered in one place,
-[BuiltInModules.swift](../Sources/TurnOverCore/Modules/BuiltInModules.swift); plugins register theirs the same way.
+[BuiltInModules.swift](../Sources/System/BuiltInModules.swift); plugins register theirs the same way.
 
 ## 5. Events reaching the object
 

@@ -69,7 +69,7 @@ def index(entries):
            '**Effort:** None means no app-specific adaptation; Settings or plugin means configuration is sufficient; Module means app-specific code; Workaround means an indirect route; No route known means no usable approach has been demonstrated. Blank effort remains unassessed. These are categories, not time estimates.', '',
            '**Being worked on** records a current person and issue, or Unclaimed; it creates no permanent ownership. AI assistance and historical work are described in the evidence. VoiceOver on/off is a test condition, not a limit on TurnOver’s intended support.', '',
            'Assess support by checking the named tasks and recording the app/macOS versions, reader build, keyboard style and VoiceOver state. Use public sample content for saved evidence.', '',
-           'Shared implementations: [Media](Media/README.md), [Chat](Chat/README.md), [Panes](Panes/README.md). They are not separate app support grades.', '',
+           'Shared implementations: [Media](Media/README.md), [Chat](Chat/README.md), [Panes](Panes/README.md), [Games](Games/README.md). They are not separate app support grades.', '',
            'Regenerate with `python3 Tools/build-app-index.py` from the repository root; check records, local links and stale output with `--check`.', '']
     for support in SUPPORT:
         out.extend([f'## {support}', ''])

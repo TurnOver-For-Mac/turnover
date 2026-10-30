@@ -9,3 +9,7 @@
 ## Checks
 
 Use sample content to check movement between the folder list, item list and document. Record which app and recipe were used, the macOS version, keyboard style and VoiceOver state.
+
+## Reading model
+
+[PanesView.swift](PanesView.swift) builds the named parts and navigation used by panes recipes.

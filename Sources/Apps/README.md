@@ -12,7 +12,7 @@ Generated from each app’s STATUS.md. Only the recorded tasks and setups are as
 
 Assess support by checking the named tasks and recording the app/macOS versions, reader build, keyboard style and VoiceOver state. Use public sample content for saved evidence.
 
-Shared implementations: [Media](Media/README.md), [Chat](Chat/README.md), [Panes](Panes/README.md). They are not separate app support grades.
+Shared implementations: [Media](Media/README.md), [Chat](Chat/README.md), [Panes](Panes/README.md), [Games](Games/README.md). They are not separate app support grades.
 
 Regenerate with `python3 Tools/build-app-index.py` from the repository root; check records, local links and stale output with `--check`.
 
@@ -56,6 +56,7 @@ No entries recorded in this category.
 - [Safari](Safari/STATUS.md) — Effort: Module; being worked on: Unclaimed.
 - [Shortcuts](Shortcuts/STATUS.md) — Effort: Module; being worked on: Unclaimed.
 - [Spotlight](Spotlight/STATUS.md) — Effort: Module; being worked on: Unclaimed.
+- [Steam](Steam/STATUS.md) — Effort: Module; being worked on: Unclaimed.
 - [System Settings](SystemSettings/STATUS.md) — Effort: Module; being worked on: Unclaimed.
 - [Terminal](Terminal/STATUS.md) — Effort: Module; being worked on: Unclaimed.
 - [TurnOver Settings](TurnOverSettings/STATUS.md) — Effort: Module; being worked on: Unclaimed.
