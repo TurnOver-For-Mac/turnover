@@ -15,78 +15,78 @@ enum BrailleCommands {
 
     static let table: [(Set<Int>, String, Action)] = [
         // Navigation
-        (dots("1"), "previous item", .key("turnover+leftArrow")),
-        (dots("4"), "next item", .key("turnover+rightArrow")),
-        (dots("3"), "move up", .key("upArrow")),
-        (dots("6"), "move down", .key("downArrow")),
-        (dots("123"), "first item", .run { BrailleCommands.toEnd(first: true) }),
-        (dots("456"), "last item", .run { BrailleCommands.toEnd(first: false) }),
-        (dots("236"), "start interacting", .key("turnover+shift+downArrow")),
-        (dots("356"), "stop interacting", .key("turnover+shift+upArrow")),
-        (dots("24"), "item chooser", .key("turnover+i")),
-        (dots("124"), "find", .key("command+f")),
-        (dots("234"), "menu bar", .key("turnover+m")),
-        (dots("25"), "shortcut menu", .key("turnover+shift+m")),
-        (dots("12"), "escape", .key("escape")),
+        (dots("1"), String(localized: "previous item", comment: "A braille chord's command, as braille help says it"), .key("turnover+leftArrow")),
+        (dots("4"), String(localized: "next item", comment: "A braille chord's command, as braille help says it"), .key("turnover+rightArrow")),
+        (dots("3"), String(localized: "move up", comment: "A braille chord's command, as braille help says it"), .key("upArrow")),
+        (dots("6"), String(localized: "move down", comment: "A braille chord's command, as braille help says it"), .key("downArrow")),
+        (dots("123"), String(localized: "first item", comment: "A braille chord's command, as braille help says it"), .run { BrailleCommands.toEnd(first: true) }),
+        (dots("456"), String(localized: "last item", comment: "A braille chord's command, as braille help says it"), .run { BrailleCommands.toEnd(first: false) }),
+        (dots("236"), String(localized: "start interacting", comment: "A braille chord's command, as braille help says it"), .key("turnover+shift+downArrow")),
+        (dots("356"), String(localized: "stop interacting", comment: "A braille chord's command, as braille help says it"), .key("turnover+shift+upArrow")),
+        (dots("24"), String(localized: "item chooser", comment: "A braille chord's command, as braille help says it"), .key("turnover+i")),
+        (dots("124"), String(localized: "find", comment: "A braille chord's command, as braille help says it"), .key("command+f")),
+        (dots("234"), String(localized: "menu bar", comment: "A braille chord's command, as braille help says it"), .key("turnover+m")),
+        (dots("25"), String(localized: "shortcut menu", comment: "A braille chord's command, as braille help says it"), .key("turnover+shift+m")),
+        (dots("12"), String(localized: "escape", comment: "A braille chord's command, as braille help says it"), .key("escape")),
         // Scrolling
-        (dots("246"), "scroll left", .key("shift+pageUp")),
-        (dots("135"), "scroll right", .key("shift+pageDown")),
-        (dots("3456"), "page up", .key("pageUp")),
-        (dots("1456"), "page down", .key("pageDown")),
+        (dots("246"), String(localized: "scroll left", comment: "A braille chord's command, as braille help says it"), .key("shift+pageUp")),
+        (dots("135"), String(localized: "scroll right", comment: "A braille chord's command, as braille help says it"), .key("shift+pageDown")),
+        (dots("3456"), String(localized: "page up", comment: "A braille chord's command, as braille help says it"), .key("pageUp")),
+        (dots("1456"), String(localized: "page down", comment: "A braille chord's command, as braille help says it"), .key("pageDown")),
         // Interaction
-        (dots("36"), "perform action", .key("turnover+space")),
-        (dots("34"), "where you are: page and line", .key("turnover+delete")),
+        (dots("36"), String(localized: "perform action", comment: "A braille chord's command, as braille help says it"), .key("turnover+space")),
+        (dots("34"), String(localized: "where you are: page and line", comment: "A braille chord's command, as braille help says it"), .key("turnover+delete")),
         // Reading
-        (dots("2456"), "read from the top", .run { BrailleCommands.readFromTop() }),
-        (dots("1235"), "read the current item", .key("turnover+l")),
-        (dots("23456"), "text attributes", .key("turnover+t")),
+        (dots("2456"), String(localized: "read from the top", comment: "A braille chord's command, as braille help says it"), .run { BrailleCommands.readFromTop() }),
+        (dots("1235"), String(localized: "read the current item", comment: "A braille chord's command, as braille help says it"), .key("turnover+l")),
+        (dots("23456"), String(localized: "text attributes", comment: "A braille chord's command, as braille help says it"), .key("turnover+t")),
         // Editing
-        (dots("2356"), "select all", .key("command+a")),
-        (dots("235"), "select left", .key("shift+leftArrow")),
-        (dots("256"), "select right", .key("shift+rightArrow")),
+        (dots("2356"), String(localized: "select all", comment: "A braille chord's command, as braille help says it"), .key("command+a")),
+        (dots("235"), String(localized: "select left", comment: "A braille chord's command, as braille help says it"), .key("shift+leftArrow")),
+        (dots("256"), String(localized: "select right", comment: "A braille chord's command, as braille help says it"), .key("shift+rightArrow")),
         // Control
-        (dots("136"), "TurnOver menu", .key("turnover+n")),
-        (dots("123456"), "Screen Curtain", .run { ScriptHandler.findScript(named: "screenCurtain").map { $0.handler(KeyboardGesture(identifier: "kb:turnover+shift+escape")!) } }),
-        (dots("1234"), "pause or continue speech", .run { Speech.togglePause() }),
-        (dots("134"), "speech on or off", .run { ScriptHandler.findScript(named: "speechMode").map { $0.handler(KeyboardGesture(identifier: "kb:turnover+s")!) } }),
-        (dots("125"), "help", .key("turnover+/")),
-        (dots("13"), "keyboard help", .key("turnover+k")),
-        (dots("12345"), "quick navigation on or off", .key("turnover+q")),
+        (dots("136"), String(localized: "TurnOver menu", comment: "A braille chord's command, as braille help says it"), .key("turnover+n")),
+        (dots("123456"), String(localized: "Screen Curtain", comment: "A braille chord's command, as braille help says it"), .run { ScriptHandler.findScript(named: "screenCurtain").map { $0.handler(KeyboardGesture(identifier: "kb:turnover+shift+escape")!) } }),
+        (dots("1234"), String(localized: "pause or continue speech", comment: "A braille chord's command, as braille help says it"), .run { Speech.togglePause() }),
+        (dots("134"), String(localized: "speech on or off", comment: "A braille chord's command, as braille help says it"), .run { ScriptHandler.findScript(named: "speechMode").map { $0.handler(KeyboardGesture(identifier: "kb:turnover+s")!) } }),
+        (dots("125"), String(localized: "help", comment: "A braille chord's command, as braille help says it"), .key("turnover+/")),
+        (dots("13"), String(localized: "keyboard help", comment: "A braille chord's command, as braille help says it"), .key("turnover+k")),
+        (dots("12345"), String(localized: "quick navigation on or off", comment: "A braille chord's command, as braille help says it"), .key("turnover+q")),
         // Braille
-        (dots("2"), "pan left", .braille("scrollBack")),
-        (dots("5"), "pan right", .braille("scrollForward")),
-        (dots("1245"), "contracted or uncontracted braille", .run {
+        (dots("2"), String(localized: "pan left", comment: "A braille chord's command, as braille help says it"), .braille("scrollBack")),
+        (dots("5"), String(localized: "pan right", comment: "A braille chord's command, as braille help says it"), .braille("scrollForward")),
+        (dots("1245"), String(localized: "contracted or uncontracted braille", comment: "A braille chord's command, as braille help says it"), .run {
             config.braille.contractedInput.toggle(); config.save()
-            Speech.speakMessage(config.braille.contractedInput ? "contracted braille input" : "uncontracted braille input")
+            Speech.speakMessage(config.braille.contractedInput ? String(localized: "contracted braille input", comment: "Spoken message") : String(localized: "uncontracted braille input", comment: "Spoken message"))
         }),
-        (dots("145"), "delete", .key("delete")),
-        (dots("15"), "return", .key("return")),
-        (dots("2345"), "tab", .key("tab")),
-        (dots("2567"), "desktop", .run { Speech.speakMessage("Go to Desktop is not available in TurnOver yet") }),
+        (dots("145"), String(localized: "delete", comment: "A braille chord's command, as braille help says it"), .key("delete")),
+        (dots("15"), String(localized: "return", comment: "A braille chord's command, as braille help says it"), .key("return")),
+        (dots("2345"), String(localized: "tab", comment: "A braille chord's command, as braille help says it"), .key("tab")),
+        (dots("2567"), String(localized: "desktop", comment: "A braille chord's command, as braille help says it"), .run { Speech.speakMessage(String(localized: "Go to Desktop is not available in TurnOver yet", comment: "Spoken message")) }),
         // Modifiers: with dot 7 for the next key, with dot 8 locked until the same chord again.
-        (dots("47"), "shift", .run { BrailleInput.modifier(.shift, name: "shift", lock: false) }),
-        (dots("48"), "shift lock", .run { BrailleInput.modifier(.shift, name: "shift", lock: true) }),
-        (dots("17"), "command", .run { BrailleInput.modifier(.command, name: "command", lock: false) }),
-        (dots("18"), "command lock", .run { BrailleInput.modifier(.command, name: "command", lock: true) }),
-        (dots("37"), "control", .run { BrailleInput.modifier(.control, name: "control", lock: false) }),
-        (dots("38"), "control lock", .run { BrailleInput.modifier(.control, name: "control", lock: true) }),
-        (dots("27"), "option", .run { BrailleInput.modifier(.option, name: "option", lock: false) }),
-        (dots("28"), "option lock", .run { BrailleInput.modifier(.option, name: "option", lock: true) }),
-        (dots("57"), "fn", .run { Speech.speakMessage("Fn is not available from the display yet") }),
-        (dots("58"), "fn lock", .run { Speech.speakMessage("Fn is not available from the display yet") }),
-        (dots("7"), "delete", .key("backspace")),
-        (dots("8"), "return", .key("enter")),
+        (dots("47"), String(localized: "shift", comment: "A braille chord's command, as braille help says it"), .run { BrailleInput.modifier(.shift, name: KeyNames.spokenNames["shift"] ?? "shift", lock: false) }),
+        (dots("48"), String(localized: "shift lock", comment: "A braille chord's command, as braille help says it"), .run { BrailleInput.modifier(.shift, name: KeyNames.spokenNames["shift"] ?? "shift", lock: true) }),
+        (dots("17"), String(localized: "command", comment: "A braille chord's command, as braille help says it"), .run { BrailleInput.modifier(.command, name: KeyNames.spokenNames["command"] ?? "command", lock: false) }),
+        (dots("18"), String(localized: "command lock", comment: "A braille chord's command, as braille help says it"), .run { BrailleInput.modifier(.command, name: KeyNames.spokenNames["command"] ?? "command", lock: true) }),
+        (dots("37"), String(localized: "control", comment: "A braille chord's command, as braille help says it"), .run { BrailleInput.modifier(.control, name: KeyNames.spokenNames["control"] ?? "control", lock: false) }),
+        (dots("38"), String(localized: "control lock", comment: "A braille chord's command, as braille help says it"), .run { BrailleInput.modifier(.control, name: KeyNames.spokenNames["control"] ?? "control", lock: true) }),
+        (dots("27"), String(localized: "option", comment: "A braille chord's command, as braille help says it"), .run { BrailleInput.modifier(.option, name: KeyNames.spokenNames["option"] ?? "option", lock: false) }),
+        (dots("28"), String(localized: "option lock", comment: "A braille chord's command, as braille help says it"), .run { BrailleInput.modifier(.option, name: KeyNames.spokenNames["option"] ?? "option", lock: true) }),
+        (dots("57"), String(localized: "fn", comment: "A braille chord's command, as braille help says it"), .run { Speech.speakMessage(String(localized: "Fn is not available from the display yet", comment: "Spoken message")) }),
+        (dots("58"), String(localized: "fn lock", comment: "A braille chord's command, as braille help says it"), .run { Speech.speakMessage(String(localized: "Fn is not available from the display yet", comment: "Spoken message")) }),
+        (dots("7"), String(localized: "delete", comment: "A braille chord's command, as braille help says it"), .key("backspace")),
+        (dots("8"), String(localized: "return", comment: "A braille chord's command, as braille help says it"), .key("enter")),
         // Rotor: TurnOver's rotor opens; Left and Right (or the joystick) change its kind.
-        (dots("23"), "rotor", .key("turnover+u")),
-        (dots("56"), "rotor", .key("turnover+u")),
+        (dots("23"), String(localized: "rotor", comment: "A braille chord's command, as braille help says it"), .key("turnover+u")),
+        (dots("56"), String(localized: "rotor", comment: "A braille chord's command, as braille help says it"), .key("turnover+u")),
         // Volume
-        (dots("345"), "volume up", .run { BrailleCommands.volume(by: 10) }),
-        (dots("126"), "volume down", .run { BrailleCommands.volume(by: -10) }),
+        (dots("345"), String(localized: "volume up", comment: "A braille chord's command, as braille help says it"), .run { BrailleCommands.volume(by: 10) }),
+        (dots("126"), String(localized: "volume down", comment: "A braille chord's command, as braille help says it"), .run { BrailleCommands.volume(by: -10) }),
         // Announcements and typing
-        (dots("1345"), "announcement history", .run { Braille.toggleHistory() }),
-        (dots("45"), "translate", .run { BrailleInput.flush() }),
-        (dots("137"), "keyboard help", .key("turnover+k")),
-        (dots("1347"), "speech on or off", .run { ScriptHandler.findScript(named: "speechMode").map { $0.handler(KeyboardGesture(identifier: "kb:turnover+s")!) } }),
+        (dots("1345"), String(localized: "announcement history", comment: "A braille chord's command, as braille help says it"), .run { Braille.toggleHistory() }),
+        (dots("45"), String(localized: "translate", comment: "A braille chord's command, as braille help says it"), .run { BrailleInput.flush() }),
+        (dots("137"), String(localized: "keyboard help", comment: "A braille chord's command, as braille help says it"), .key("turnover+k")),
+        (dots("1347"), String(localized: "speech on or off", comment: "A braille chord's command, as braille help says it"), .run { ScriptHandler.findScript(named: "speechMode").map { $0.handler(KeyboardGesture(identifier: "kb:turnover+s")!) } }),
     ]
 
     /// Space with these dots: true if it is a command.
@@ -130,7 +130,7 @@ enum BrailleCommands {
         config.speech.volume = min(200, max(10, config.speech.volume + step))
         Speech.player?.volume = Float(config.speech.volume) / 100
         config.save()
-        Speech.speakMessage("volume \(config.speech.volume) percent")
+        Speech.speakMessage(String(localized: "volume \(String(config.speech.volume)) percent", comment: "The speech volume changed: %@ is the percentage"))
     }
 
     private static func readFromTop() {

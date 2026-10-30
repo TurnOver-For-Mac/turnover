@@ -28,7 +28,7 @@ public final class VoiceOverKeysPlugin: GlobalPlugin {
             script("vo_\(name)", description, gestures: gestures, category: cat, run).isAvailable = on
         }
         /// Run another command by name, or say why not.
-        func run(_ name: String, _ g: KeyboardGesture, otherwise: String = "not available here") {
+        func run(_ name: String, _ g: KeyboardGesture, otherwise: String = String(localized: "not available here", comment: "Spoken message")) {
             if let s = ScriptHandler.findScript(named: name) { s.handler(g) } else { Speech.speakMessage(otherwise) }
         }
         /// VO-Command-letter: the next or previous heading, link, control… VoiceOver finds them anywhere, not only
@@ -47,10 +47,10 @@ public final class VoiceOverKeysPlugin: GlobalPlugin {
                 s.handler(g); return
             }
             if let roles = windowRoles[name] { ObjectNavigator.shared.findInWindow(roles: roles, forward: forward, kind: spoken); return }
-            Speech.speakMessage("not in a document")
+            Speech.speakMessage(String(localized: "not in a document", comment: "Spoken message"))
         }
 
-        add("menuBar", "The application's menus (VO-M); pressed twice, the status menus (VO-M-M)", ["kb:turnover+m"]) { _ in
+        add("menuBar", String(localized: "The application's menus (VO-M); pressed twice, the status menus (VO-M-M)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+m"]) { _ in
             if ScriptHandler.lastScriptRepeatCount > 0 {
                 for m in AXHandler.shared.openMenus.reversed() { _ = AXUIElementPerformAction(m, kAXCancelAction as CFString) }
                 AXHandler.shared.menusClosed()
@@ -59,54 +59,56 @@ public final class VoiceOverKeysPlugin: GlobalPlugin {
                 GlobalCommands.toggleMenus()
             }
         }
-        add("dock", "The Dock (VO-D)", ["kb:turnover+d"]) { _ in KeyboardGesture(identifier: "kb:control+f3")?.send() }
-        add("shortcutMenu", "The shortcut menu for the item (VO-Shift-M)", ["kb:turnover+shift+m"]) { _ in if GlobalCommands.openContextMenu() { return }; if SpellingCorrections.offer() { return }; if GlobalCommands.contextMenuAtCaret() { return }; _ = GlobalCommands.contextMenuForItem() }
-        add("keyboardHelp", "Keyboard help: every key says what it does (VO-K)", ["kb:turnover+k"]) { _ in InputManager.toggleInputHelp() }
+        add("dock", String(localized: "The Dock (VO-D)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+d"]) { _ in KeyboardGesture(identifier: "kb:control+f3")?.send() }
+        add("shortcutMenu", String(localized: "The shortcut menu for the item (VO-Shift-M)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+shift+m"]) { _ in if GlobalCommands.openContextMenu() { return }; if SpellingCorrections.offer() { return }; if GlobalCommands.contextMenuAtCaret() { return }; _ = GlobalCommands.contextMenuForItem() }
+        add("keyboardHelp", String(localized: "Keyboard help: every key says what it does (VO-K)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+k"]) { _ in InputManager.toggleInputHelp() }
         // VO-H (the commands list) is left out: TurnOver+H is Word's next heading, and TurnOver+slash lists the
         // shortcuts everywhere (4 Oct 2026).
-        add("paragraph", "Reads the paragraph (VO-P)", ["kb:turnover+p"]) { g in run("reportCurrentParagraph", g) }
-        add("sentence", "Reads the sentence (VO-S)", ["kb:turnover+s"]) { g in run("reportCurrentSentence", g) }
-        add("attributes", "Reads the text attributes (VO-T)", ["kb:turnover+t"]) { g in run("reportFormatting", g) }
-        add("repeatLast", "Repeats the last thing spoken (VO-Z)", ["kb:turnover+z"]) { _ in
+        add("paragraph", String(localized: "Reads the paragraph (VO-P)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+p"]) { g in run("reportCurrentParagraph", g) }
+        add("sentence", String(localized: "Reads the sentence (VO-S)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+s"]) { g in run("reportCurrentSentence", g) }
+        add("attributes", String(localized: "Reads the text attributes (VO-T)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+t"]) { g in run("reportFormatting", g) }
+        add("repeatLast", String(localized: "Repeats the last thing spoken (VO-Z)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+z"]) { _ in
             let t = Speech.lastRaw.isEmpty ? Speech.lastSpoken : Speech.lastRaw
-            if t.isEmpty { Speech.speakMessage("nothing spoken yet", remember: false) } else { Speech.speakText(t) }
+            if t.isEmpty { Speech.speakMessage(String(localized: "nothing spoken yet", comment: "Spoken message"), remember: false) } else { Speech.speakText(t) }
         }
-        add("copyLast", "Copies the last thing spoken (VO-Shift-C)", ["kb:turnover+shift+c"]) { _ in Speech.copyLastSpoken() }
-        add("appSummary", "Says the application and its windows; pressed twice, the application chooser (VO-F1, VO-F1-F1)", ["kb:turnover+f1"]) { _ in
+        add("copyLast", String(localized: "Copies the last thing spoken (VO-Shift-C)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+shift+c"]) { _ in Speech.copyLastSpoken() }
+        add("appSummary", String(localized: "Says the application and its windows; pressed twice, the application chooser (VO-F1, VO-F1-F1)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+f1"]) { _ in
             if ScriptHandler.lastScriptRepeatCount > 0 { DispatchQueue.main.async { ApplicationChooser.open() }; return }
             guard let pid = API.focusPid, let app = NSRunningApplication(processIdentifier: pid) else { return }
             let windows = AXUIElementCreateApplication(pid).elements(kAXWindowsAttribute).filter { $0.string(kAXSubroleAttribute) == "AXStandardWindow" }
             // With its plugins, so you always know what's working in it (the plugin design notes 13).
             let plugins = ProfilesPlugin.pluginNames(for: app.bundleIdentifier ?? "")
             // Big Picture's process is "Steam Helper"; to the person it is Steam (a tester, 16 Oct 2026).
-            let name = app.bundleIdentifier == Games.steamHelperBundle ? "Steam" : (app.localizedName ?? "application")
-            Speech.speakMessage("\(name), \(windows.count) \(windows.count == 1 ? "window" : "windows")" + (plugins.isEmpty ? "" : ", plugins: " + plugins.joined(separator: ", ")))
+            let name = app.bundleIdentifier == Games.steamHelperBundle ? "Steam" : (app.localizedName ?? Role.application.displayString)
+            let count = windows.count == 1 ? String(localized: "\(name), 1 window", comment: "An application and how many windows it has")
+                : String(localized: "\(name), \(String(windows.count)) windows", comment: "An application and how many windows it has")
+            Speech.speakMessage(count + (plugins.isEmpty ? "" : String(localized: ", plugins: \(plugins.joined(separator: ", "))", comment: "The plugins an app has, after its name")))
         }
-        add("windowSummary", "Says the window's title; pressed twice, the window chooser (VO-F2, VO-F2-F2)", ["kb:turnover+f2"]) { g in
+        add("windowSummary", String(localized: "Says the window's title; pressed twice, the window chooser (VO-F2, VO-F2-F2)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+f2"]) { g in
             guard ScriptHandler.lastScriptRepeatCount > 0 else { run("title", g); return }
             Self.windowChooser()
         }
-        add("describeItem", "Describes the item with keyboard focus; twice, more about it (in text, where the insertion point is) (VO-F4, VO-F4-F4)", ["kb:turnover+f4"]) { g in
+        add("describeItem", String(localized: "Describes the item with keyboard focus; twice, more about it (in text, where the insertion point is) (VO-F4, VO-F4-F4)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+f4"]) { g in
             if ScriptHandler.lastScriptRepeatCount > 0 { Self.focusDetails(); return }
             run("reportCurrentFocus", g)
         }
-        add("dateTime", "The date and time; twice, the battery; three times, the network (VO-F7, VO-F7-F7, VO-F7-F7-F7)", ["kb:turnover+f7"]) { g in
+        add("dateTime", String(localized: "The date and time; twice, the battery; three times, the network (VO-F7, VO-F7-F7, VO-F7-F7-F7)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+f7"]) { g in
             if ScriptHandler.lastScriptRepeatCount > 1 { Self.networkStatus(); return }
             if ScriptHandler.lastScriptRepeatCount > 0 { Speech.speakMessage(GlobalCommands.batteryText()); return }
             let f = DateFormatter(); f.dateStyle = .full; f.timeStyle = .short
             Speech.speakMessage(f.string(from: Date()))
         }
-        add("rotor", "The rotor: headings, links, form controls, landmarks… Left and Right change kind (VO-U)", ["kb:turnover+u"]) { g in
+        add("rotor", String(localized: "The rotor: headings, links, form controls, landmarks… Left and Right change kind (VO-U)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+u"]) { g in
             if let s = ScriptHandler.findScript(named: "elementsList") { s.handler(g) } else { ItemChooser.openRotor() }
         }
-        add("itemChooser", "Everything in the window or page, narrowed as you type; Enter goes there (VO-I)", ["kb:turnover+i"]) { _ in
+        add("itemChooser", String(localized: "Everything in the window or page, narrowed as you type; Enter goes there (VO-I)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+i"]) { _ in
             ItemChooser.open()
         }
-        add("quickNav", "Browse mode on or off: single-letter navigation (VO-Q)", ["kb:turnover+q"]) { g in
-            if API.focusTreeInterceptor != nil { run("toggleVirtualBufferPassThrough", g, otherwise: "not in a document") }
+        add("quickNav", String(localized: "Browse mode on or off: single-letter navigation (VO-Q)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+q"]) { g in
+            if API.focusTreeInterceptor != nil { run("toggleVirtualBufferPassThrough", g, otherwise: String(localized: "not in a document", comment: "Spoken message")) }
             else { ArrowQuickNav.toggle() }   // outside a document VoiceOver's Quick Nav toggles all the same (the code review, 17 Oct 2026)
         }
-        add("defaultAction", "Activates the item under the VoiceOver cursor (VO-Space)", ["kb:turnover+space"]) { g in
+        add("defaultAction", String(localized: "Activates the item under the VoiceOver cursor (VO-Space)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+space"]) { g in
             // By accessibility's press, as VoiceOver's VO-Space is: a page that ignores the real key (Squarespace's
             // switches are links styled as switches; Space scrolls, Enter and a click work, 25 Oct 2026) still answers
             // the press. Enter and Space themselves go to the page as real keys (activatePosition).
@@ -124,7 +126,7 @@ public final class VoiceOverKeysPlugin: GlobalPlugin {
             if let pid = API.focusPid, let s = AppModuleHandler.shared.appModule(for: pid).script(named: name), s.isAvailable?() ?? true { return s }
             return nil
         }
-        add("next", "Next item (VO-Right)", ["kb:turnover+rightArrow"]) { g in
+        add("next", String(localized: "Next item (VO-Right)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+rightArrow"]) { g in
             if let s = tableScript("table_nextColumn") { s.handler(g); return }   // Word: the next cell in the row
             if let d = API.focusTreeInterceptor, !d.passThrough, ObjectNavigator.shared.isWithin(d.webArea), let s = d.script(named: "moveByLine_forward") { s.handler(g); return }
             // At the end of the text, VO-Right leaves the field for the next item, as VoiceOver's cursor does (it bumped
@@ -135,7 +137,7 @@ public final class VoiceOverKeysPlugin: GlobalPlugin {
             }
             if config.general.navigateByGroups { ObjectNavigator.shared.groupStep(forward: true) } else { ObjectNavigator.shared.next() }
         }
-        add("previous", "Previous item (VO-Left)", ["kb:turnover+leftArrow"]) { g in
+        add("previous", String(localized: "Previous item (VO-Left)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+leftArrow"]) { g in
             if let s = tableScript("table_previousColumn") { s.handler(g); return }
             if let d = API.focusTreeInterceptor, !d.passThrough, ObjectNavigator.shared.isWithin(d.webArea), let s = d.script(named: "moveByLine_back") { s.handler(g); return }
             if Self.inTextArea(), let f = API.focusObject, let s = f.script(named: "caret_moveByCharacter") {
@@ -149,17 +151,18 @@ public final class VoiceOverKeysPlugin: GlobalPlugin {
             guard let pid = API.focusPid, let s = AppModuleHandler.shared.appModule(for: pid).script(named: name), s.isAvailable?() ?? true else { return nil }
             return s
         }
-        add("interact", "Into the item: its first part (VO-Shift-Down)", ["kb:turnover+shift+downArrow"]) { g in
+        add("interact", String(localized: "Into the item: its first part (VO-Shift-Down)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+shift+downArrow"]) { g in
             if let s = appInteract("app_interact") { s.handler(g); return }
             if config.general.navigateByGroups { ObjectNavigator.shared.interact() } else { ObjectNavigator.shared.firstChild() }
         }
-        add("stopInteracting", "Out of the item: what holds it (VO-Shift-Up)", ["kb:turnover+shift+upArrow"]) { g in
+        add("stopInteracting", String(localized: "Out of the item: what holds it (VO-Shift-Up)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+shift+upArrow"]) { g in
             if let s = appInteract("app_stopInteracting") { s.handler(g); return }
             if config.general.navigateByGroups { ObjectNavigator.shared.stopInteracting() } else { ObjectNavigator.shared.parent() }
         }
         // VO-Up and VO-Down: the previous and next line in text or a page; elsewhere the item above or below.
         for (name, down) in [("up", false), ("down", true)] {
-            add(name, down ? "Next line in text; elsewhere the item below (VO-Down)" : "Previous line in text; elsewhere the item above (VO-Up)", ["kb:turnover+\(name)Arrow"]) { g in
+            add(name, down ? String(localized: "Next line in text; elsewhere the item below (VO-Down)", comment: "A command, as the key list and keyboard help say it")
+                           : String(localized: "Previous line in text; elsewhere the item above (VO-Up)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+\(name)Arrow"]) { g in
                 // Word: the cell below or above, as VO-Right goes to the next cell (VO-Down left the table, 7 Oct 2026).
                 if let s = tableScript(down ? "table_nextRow" : "table_previousRow") { s.handler(g); return }
                 // Terminal: the lines of output, as VoiceOver reads the screen (VO-Up landed on the window, 8 Oct 2026).
@@ -175,8 +178,10 @@ public final class VoiceOverKeysPlugin: GlobalPlugin {
         // last item (the parity audit, 13 Oct 2026: in text they went to the group's items).
         for (key, last, visible) in [("home", false, false), ("end", true, false), ("shift+home", false, true), ("shift+end", true, true)] {
             add(visible ? (last ? "lastVisibleWord" : "firstVisibleWord") : (last ? "groupEnd" : "groupStart"),
-                visible ? (last ? "In text, the last word in view; elsewhere the last item in the group (VO-Shift-End)" : "In text, the first word in view; elsewhere the first item in the group (VO-Shift-Home)")
-                        : (last ? "In text, the end of the text; elsewhere the last item in the group (VO-End)" : "In text, the start of the text; elsewhere the first item in the group (VO-Home)"),
+                visible ? (last ? String(localized: "In text, the last word in view; elsewhere the last item in the group (VO-Shift-End)", comment: "A command, as the key list and keyboard help say it")
+                                : String(localized: "In text, the first word in view; elsewhere the first item in the group (VO-Shift-Home)", comment: "A command, as the key list and keyboard help say it"))
+                        : (last ? String(localized: "In text, the end of the text; elsewhere the last item in the group (VO-End)", comment: "A command, as the key list and keyboard help say it")
+                                : String(localized: "In text, the start of the text; elsewhere the first item in the group (VO-Home)", comment: "A command, as the key list and keyboard help say it")),
                 ["kb:turnover+\(key)"]) { g in
                 if let d = API.focusTreeInterceptor, !d.passThrough, ObjectNavigator.shared.isWithin(d.webArea),
                    let s = d.script(named: last ? "bottomOfDocument" : "topOfDocument") { s.handler(g); return }
@@ -186,42 +191,43 @@ public final class VoiceOverKeysPlugin: GlobalPlugin {
                 ObjectNavigator.shared.groupEdge(last: last)
             }
         }
-        add("windowStart", "The first item in the window (VO-Command-Home)", ["kb:turnover+command+home"]) { _ in ObjectNavigator.shared.windowEdge(last: false) }
-        add("windowEnd", "The last item in the window (VO-Command-End)", ["kb:turnover+command+end"]) { _ in ObjectNavigator.shared.windowEdge(last: true) }
-        add("topLevel", "Out to the top level of the window (VO-Shift-Escape)", ["kb:turnover+shift+escape"]) { _ in ObjectNavigator.shared.topLevel() }
-        add("jumpLinked", "Jump to the linked item; jumps to the linked item, such as from the message list to the message (VO-J)", ["kb:turnover+j"]) { _ in ObjectNavigator.shared.jumpLinked() }
-        add("selectItem", "In a text field, starts or stops selecting text; elsewhere selects the list or menu item (VO-Return)", ["kb:turnover+enter"]) { _ in
+        add("windowStart", String(localized: "The first item in the window (VO-Command-Home)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+command+home"]) { _ in ObjectNavigator.shared.windowEdge(last: false) }
+        add("windowEnd", String(localized: "The last item in the window (VO-Command-End)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+command+end"]) { _ in ObjectNavigator.shared.windowEdge(last: true) }
+        add("topLevel", String(localized: "Out to the top level of the window (VO-Shift-Escape)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+shift+escape"]) { _ in ObjectNavigator.shared.topLevel() }
+        add("jumpLinked", String(localized: "Jump to the linked item; jumps to the linked item, such as from the message list to the message (VO-J)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+j"]) { _ in ObjectNavigator.shared.jumpLinked() }
+        add("selectItem", String(localized: "In a text field, starts or stops selecting text; elsewhere selects the list or menu item (VO-Return)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+enter"]) { _ in
             if let f = API.focusObject, f.hasNavigableText, ObjectNavigator.shared.isWithin(f.element) { Self.textSelection(f); return }
             ObjectNavigator.shared.selectItem()
         }
-        add("disclosure", "Opens or closes the disclosure triangle (VO-Backslash)", ["kb:turnover+\\"]) { _ in ObjectNavigator.shared.toggleDisclosure() }
-        add("click", "Clicks the item with the mouse; pressed twice, a double click (VO-Shift-Space, VO-Shift-Space-Space)", ["kb:turnover+shift+space"]) { _ in
+        add("disclosure", String(localized: "Opens or closes the disclosure triangle (VO-Backslash)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+\\"]) { _ in ObjectNavigator.shared.toggleDisclosure() }
+        add("click", String(localized: "Clicks the item with the mouse; pressed twice, a double click (VO-Shift-Space, VO-Shift-Space-Space)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+shift+space"]) { _ in
             ObjectNavigator.shared.click(double: ScriptHandler.lastScriptRepeatCount > 0)
         }
-        add("helpTag", "Reads the item's help tag (VO-Shift-H)", ["kb:turnover+shift+h"]) { _ in ObjectNavigator.shared.readHelp() }
-        add("hint", "Reads the hint for the item (VO-Shift-N)", ["kb:turnover+shift+n"]) { g in
+        add("helpTag", String(localized: "Reads the item's help tag (VO-Shift-H)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+shift+h"]) { _ in ObjectNavigator.shared.readHelp() }
+        add("hint", String(localized: "Reads the hint for the item (VO-Shift-N)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+shift+n"]) { g in
             // Music, Podcasts and TV: what is playing (the app's own script; the table's hint won before, 8 Oct 2026).
             if let s = ScriptHandler.findScript(named: "media_nowPlaying") { s.handler(g); return }
             let h = API.focusObject.map { Hints.forObject($0) } ?? ""
-            Speech.speakMessage(h.isEmpty ? "no hint" : h)
+            Speech.speakMessage(h.isEmpty ? String(localized: "no hint", comment: "Spoken message") : h)
         }
-        add("readWindow", "Reads everything in the window (VO-Shift-W)", ["kb:turnover+shift+w"]) { _ in ObjectNavigator.shared.readWindow() }
-        add("linkAddress", "Reads a link's address (VO-Shift-U)", ["kb:turnover+shift+u"]) { _ in ObjectNavigator.shared.readURL() }
-        add("actions", "The item's actions, to choose from (VO-Command-Space)", ["kb:turnover+command+space"]) { _ in ObjectNavigator.shared.actionsMenu() }
-        add("focusToCursor", "The keyboard focus to the VoiceOver cursor (VO-Command-F4)", ["kb:turnover+command+f4"]) { _ in ObjectNavigator.shared.moveFocusHere() }
-        add("cursorToFocus", "The VoiceOver cursor to the keyboard focus (VO-Shift-F4)", ["kb:turnover+shift+f4"]) { _ in ObjectNavigator.shared.toFocus() }
-        add("closeWindow", "Closes the window (VO-Command-Escape)", ["kb:turnover+command+escape"]) { _ in KeyboardGesture(identifier: "kb:command+w")?.send() }
-        add("passNextKey", "The next key goes to the application untouched (VO-Tab)", ["kb:turnover+tab"]) { _ in
+        add("readWindow", String(localized: "Reads everything in the window (VO-Shift-W)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+shift+w"]) { _ in ObjectNavigator.shared.readWindow() }
+        add("linkAddress", String(localized: "Reads a link's address (VO-Shift-U)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+shift+u"]) { _ in ObjectNavigator.shared.readURL() }
+        add("actions", String(localized: "The item's actions, to choose from (VO-Command-Space)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+command+space"]) { _ in ObjectNavigator.shared.actionsMenu() }
+        add("focusToCursor", String(localized: "The keyboard focus to the VoiceOver cursor (VO-Command-F4)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+command+f4"]) { _ in ObjectNavigator.shared.moveFocusHere() }
+        add("cursorToFocus", String(localized: "The VoiceOver cursor to the keyboard focus (VO-Shift-F4)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+shift+f4"]) { _ in ObjectNavigator.shared.toFocus() }
+        add("closeWindow", String(localized: "Closes the window (VO-Command-Escape)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+command+escape"]) { _ in KeyboardGesture(identifier: "kb:command+w")?.send() }
+        add("passNextKey", String(localized: "The next key goes to the application untouched (VO-Tab)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+tab"]) { _ in
             InputManager.passNextKey = true
-            Speech.speakMessage("pass next key")
+            Speech.speakMessage(String(localized: "pass next key", comment: "Spoken message"))
         }
         // VoiceOver's web navigation (VO-Command-letter; Shift for previous), in any document TurnOver reads.
-        for (key, name, spoken) in [("h", "Heading", "heading"), ("l", "Link", "link"), ("j", "FormField", "form control"),
-                                    ("t", "Table", "table"), ("x", "List", "list"), ("g", "Graphic", "graphic"),
+        for (key, name, spoken) in [("h", "Heading", Role.heading.displayString), ("l", "Link", Role.link.displayString), ("j", "FormField", String(localized: "form control", comment: "A kind of thing to find, after next or previous")),
+                                    ("t", "Table", Role.table.displayString), ("x", "List", Role.list.displayString), ("g", "Graphic", Role.graphic.displayString),
                                     // Word's own (VO-Command-M is VoiceOver's same-level heading: comments are in the rotor, 12 Oct 2026)
-                                    ("r", "Revision", "tracked change"), ("e", "SpellingError", "spelling error")] {
-            add("next\(name)", "Next \(spoken) (VO-Command-\(key.uppercased()))", ["kb:turnover+command+\(key)"]) { g in find(name, spoken, forward: true, g) }
-            add("previous\(name)", "Previous \(spoken) (VO-Command-Shift-\(key.uppercased()))", ["kb:turnover+command+shift+\(key)"]) { g in find(name, spoken, forward: false, g) }
+                                    ("r", "Revision", String(localized: "tracked change", comment: "A kind of thing to find, after next or previous")),
+                                    ("e", "SpellingError", String(localized: "spelling error", comment: "Said before a misspelled word"))] {
+            add("next\(name)", String(localized: "Next \(spoken) (VO-Command-\(key.uppercased()))", comment: "A command: %1$@ is a kind of thing to find (bold text), %2$@ a letter"), ["kb:turnover+command+\(key)"]) { g in find(name, spoken, forward: true, g) }
+            add("previous\(name)", String(localized: "Previous \(spoken) (VO-Command-Shift-\(key.uppercased()))", comment: "A command: %1$@ is a kind of thing to find (bold text), %2$@ a letter"), ["kb:turnover+command+shift+\(key)"]) { g in find(name, spoken, forward: false, g) }
         }
         // The rest of VoiceOver's commands (VoiceOverParity.swift; 12 Oct 2026).
         addVoiceOverParity(add, run: { name, g in run(name, g) })
@@ -237,8 +243,8 @@ extension VoiceOverKeysPlugin {
         guard let pid = API.focusPid else { return }
         let windows = AXUIElementCreateApplication(pid).elements(kAXWindowsAttribute)
         let items = windows.map { w -> MenuItem in
-            let t = w.string(kAXTitleAttribute).flatMap { $0.isEmpty ? nil : $0 } ?? "untitled window"
-            return MenuItem(t, .action {
+            let t = w.string(kAXTitleAttribute).flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "untitled window", comment: "A window with no title")
+            return MenuItem(verbatim: t, .action {
                 _ = AXUIElementPerformAction(w, kAXRaiseAction as CFString)
                 _ = w.set(kAXMainAttribute, kCFBooleanTrue)
                 AXHandler.shared.refocus(pid: pid)

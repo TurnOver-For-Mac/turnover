@@ -200,7 +200,7 @@ final class TerminalText: TurnOverObject {
             let command = parts.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
             if let (start, text) = cursorLine() { s.anchor = start; s.anchorText = text } else { s.anchor = total }
             s.review = nil
-            Speech.speakText(command.isEmpty ? "blank" : command)
+            Speech.speakText(command.isEmpty ? Phrases.blank : command)
             return
         }
         guard s.anchor >= 0, s.anchor <= total else {
@@ -263,7 +263,7 @@ final class TerminalText: TurnOverObject {
         super.initOverlay()
         let cat = "Terminal"
         // Return: the command goes; the word typed last is spoken (typed words), and what follows is output.
-        script("terminal_enter", "Sends the command line to the shell", gestures: ["kb:enter", "kb:numpadEnter"], category: cat) { [weak self] g in
+        script("terminal_enter", String(localized: "Sends the command line to the shell", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:enter", "kb:numpadEnter"], category: cat) { [weak self] g in
             guard let self else { g.send(); return }
             let s = self.state
             s.enterAt = Date()
@@ -271,13 +271,13 @@ final class TerminalText: TurnOverObject {
             Speech.speakTypedCharacter("\n", inEditable: true)
             g.send()
         }
-        script("terminal_reviewPrevious", "Previous line of output; reads the previous line of the terminal, without disturbing the shell", gestures: ["kb:turnover+upArrow"], category: cat) { [weak self] _ in self?.review(-1) }
-        script("terminal_reviewNext", "Next line of output; reads the next line of the terminal", gestures: ["kb:turnover+downArrow"], category: cat) { [weak self] _ in self?.review(1) }
-        script("terminal_reviewTop", "Reads the first line of the terminal's history", gestures: ["kb:turnover+home"], category: cat) { [weak self] _ in self?.reviewTo(top: true) }
-        script("terminal_reviewBottom", "Reads the last line of output", gestures: ["kb:turnover+end"], category: cat) { [weak self] _ in self?.reviewTo(top: false) }
-        script("terminal_reviewCurrent", "Reads the line the review cursor is on; the cursor's line if it has not moved", gestures: ["kb:turnover+l"], category: cat) { [weak self] _ in self?.review(0) }
+        script("terminal_reviewPrevious", String(localized: "Previous line of output; reads the previous line of the terminal, without disturbing the shell", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+upArrow"], category: cat) { [weak self] _ in self?.review(-1) }
+        script("terminal_reviewNext", String(localized: "Next line of output; reads the next line of the terminal", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+downArrow"], category: cat) { [weak self] _ in self?.review(1) }
+        script("terminal_reviewTop", String(localized: "Reads the first line of the terminal's history", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+home"], category: cat) { [weak self] _ in self?.reviewTo(top: true) }
+        script("terminal_reviewBottom", String(localized: "Reads the last line of output", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+end"], category: cat) { [weak self] _ in self?.reviewTo(top: false) }
+        script("terminal_reviewCurrent", String(localized: "Reads the line the review cursor is on; the cursor's line if it has not moved", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+l"], category: cat) { [weak self] _ in self?.review(0) }
         // Editing keys, as in any edit field: what was deleted is said, and where the cursor went.
-        script("terminal_backspace", "Deletes the character before the cursor and says it", gestures: ["kb:backspace"], category: cat) { [weak self] g in
+        script("terminal_backspace", String(localized: "Deletes the character before the cursor and says it", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:backspace"], category: cat) { [weak self] g in
             guard let self, let c = self.cursor, !self.atInputStart(c) else { Tones.edge(); g.send(); return }
             let ch = self.character(at: c - 1)
             g.send()
@@ -285,25 +285,25 @@ final class TerminalText: TurnOverObject {
             Speech.clearTypedWordBuffer()
             if let ch { self.sayCharacter(ch) }
         }
-        script("terminal_deleteForward", "Deletes the character at the cursor and says it", gestures: ["kb:delete"], category: cat) { [weak self] g in
+        script("terminal_deleteForward", String(localized: "Deletes the character at the cursor and says it", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:delete"], category: cat) { [weak self] g in
             guard let self, let c = self.cursor else { g.send(); return }
             let ch = self.character(at: c)
             g.send()
             guard let ch else { return }
             if ch.isEmpty || ch == "\n" || self.inputAfter(c).isEmpty { Tones.edge() } else { self.sayCharacter(ch) }
         }
-        script("terminal_deleteWord", "Deletes the word before the cursor and says it", gestures: ["kb:option+backspace", "kb:control+w"], category: cat) { [weak self] g in
+        script("terminal_deleteWord", String(localized: "Deletes the word before the cursor and says it", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:option+backspace", "kb:control+w"], category: cat) { [weak self] g in
             guard let self, let c = self.cursor, !self.atInputStart(c) else { Tones.edge(); g.send(); return }
             let before = self.inputBefore(c)
             let trimmed = before.replacingOccurrences(of: "\\s+$", with: "", options: .regularExpression)
             let word = trimmed.split(whereSeparator: { $0 == " " || $0 == "/" }).last.map(String.init) ?? trimmed
             g.send()
-            Speech.speakText(word.isEmpty ? "space" : word)
+            Speech.speakText(word.isEmpty ? String(localized: "space", comment: "Spoken message") : word)
         }
-        script("terminal_clearLine", "Clears what has been typed on the command line", gestures: ["kb:control+u"], category: cat) { [weak self] g in
+        script("terminal_clearLine", String(localized: "Clears what has been typed on the command line", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:control+u"], category: cat) { [weak self] g in
             g.send()
             self?.state.typed = ""
-            Speech.speakMessage("line cleared", remember: false)
+            Speech.speakMessage(String(localized: "line cleared", comment: "Spoken message"), remember: false)
         }
         for (key, forward) in [("option+leftArrow", false), ("option+rightArrow", true)] {
             script("terminal_word_\(forward ? "next" : "previous")", "Moves the shell's cursor by a word and reads it", gestures: ["kb:\(key)"], category: cat) { [weak self] g in
@@ -312,7 +312,7 @@ final class TerminalText: TurnOverObject {
                     guard let self, let c = self.cursor else { return }
                     let after = self.inputAfter(c)
                     let word = after.split(whereSeparator: { $0 == " " }).first.map(String.init) ?? ""
-                    if word.isEmpty { Tones.edge(); Speech.speakText("blank") } else { Speech.speakText(word) }
+                    if word.isEmpty { Tones.edge(); Speech.speakText(String(localized: "blank", comment: "Spoken message")) } else { Speech.speakText(word) }
                 }
             }
         }
@@ -322,7 +322,7 @@ final class TerminalText: TurnOverObject {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
                     guard let self, let c = self.cursor else { return }
                     let rest = self.inputAfter(c)
-                    Speech.speakText(start ? (rest.isEmpty ? "blank" : rest) : "end")
+                    Speech.speakText(start ? (rest.isEmpty ? Phrases.blank : rest) : String(localized: "end", comment: "The end of the typed command line"))
                 }
             }
         }
@@ -330,7 +330,7 @@ final class TerminalText: TurnOverObject {
         // At the start of what was typed (Left) or past its end (Right) the shell cannot move: a bump, as an edit
         // field gives, and the key is kept from the shell.
         for key in ["leftArrow", "rightArrow"] {
-            script("terminal_\(key)", "Moves the shell's cursor and reads the character there", gestures: ["kb:\(key)"], category: cat) { [weak self] g in
+            script("terminal_\(key)", String(localized: "Moves the shell's cursor and reads the character there", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:\(key)"], category: cat) { [weak self] g in
                 if let self, let c = self.cursor, key == "leftArrow" ? self.atInputStart(c) : self.atInputEnd(c) {
                     Tones.edge()
                     return
@@ -374,7 +374,7 @@ final class TerminalText: TurnOverObject {
         return string(c, r.location + r.length - c).trimmingCharacters(in: .newlines).isEmpty
     }
     private func sayCharacter(_ ch: String) {
-        guard let first = ch.first, ch != "\n" else { Speech.speakText("blank"); return }
+        guard let first = ch.first, ch != "\n" else { Speech.speakText(String(localized: "blank", comment: "Spoken message")); return }
         Speech.speakText(Symbols.name(of: first))
     }
 
@@ -387,7 +387,7 @@ final class TerminalText: TurnOverObject {
         if target > last { target = last; Tones.edge() }
         s.review = target
         let t = (lineText(target) ?? "").trimmingCharacters(in: .whitespaces)
-        Speech.speakItem(t.isEmpty ? "blank" : t, processed: true)   // on the display too, until the shell line moves (8 Oct 2026)
+        Speech.speakItem(t.isEmpty ? Phrases.blank : t, processed: true)   // on the display too, until the shell line moves (8 Oct 2026)
     }
 
     private func reviewTo(top: Bool) {
@@ -395,6 +395,6 @@ final class TerminalText: TurnOverObject {
         let target = top ? 0 : lastContentLine()
         s.review = target
         let t = (lineText(target) ?? "").trimmingCharacters(in: .whitespaces)
-        Speech.speakItem(t.isEmpty ? "blank" : t, processed: true)   // on the display too, until the shell line moves (8 Oct 2026)
+        Speech.speakItem(t.isEmpty ? Phrases.blank : t, processed: true)   // on the display too, until the shell line moves (8 Oct 2026)
     }
 }

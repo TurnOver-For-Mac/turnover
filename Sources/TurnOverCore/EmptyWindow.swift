@@ -103,6 +103,6 @@ public enum EmptyWindowNotice {
         // the screen when the cursor isn't on a picture), the TurnOver key with R in the NVDA and JAWS styles.
         let key = GlobalCommands.spoken(config.general.style == .voiceOver ? "kb:turnover+shift+l" : "kb:turnover+r")
         Log.info("empty window: nothing readable in the front window of pid \(pid); screen recognition offered (\(key))")
-        Speech.speakMessage("Nothing in this window can be read. Press \(key) to recognise the screen.")
+        Speech.speakMessage(String(localized: "Nothing in this window can be read. Press \(key) to recognise the screen.", comment: "Spoken message"))
     }
 }

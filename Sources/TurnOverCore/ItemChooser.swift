@@ -12,7 +12,7 @@ public enum ItemChooser {
     public static func open() {
         if let d = API.focusTreeInterceptor, !d.passThrough { d.openItemChooser(); return }
         collect { found in
-            TurnOverMenu.shared.openChooser("Items", items: found.map { f in MenuItem(f.label, .action { go(to: f.element) }) })
+            TurnOverMenu.shared.openChooser("Items", items: found.map { f in MenuItem(verbatim: f.label, .action { go(to: f.element) }) })
         }
     }
 
@@ -31,7 +31,7 @@ public enum ItemChooser {
                 ("Text", { r, _ in r == "AXStaticText" }),
             ]
             let groups = kinds.map { (name, test) in
-                (name: name, items: found.filter { test($0.role, $0.subrole) }.map { f in MenuItem(f.label, .action { go(to: f.element) }) })
+                (name: name, items: found.filter { test($0.role, $0.subrole) }.map { f in MenuItem(verbatim: f.label, .action { go(to: f.element) }) })
             }
             TurnOverMenu.shared.openRotor(groups)
         }
@@ -43,7 +43,7 @@ public enum ItemChooser {
     /// elements, Mail's message list; a slow walk on the main thread trips the watchdog). Delivered on the main thread.
     private static func collect(_ done: @escaping @MainActor ([Found]) -> Void) {
         guard let f = API.focusObject, let window = f.element.element(kAXWindowAttribute) ?? (f.role == .window ? f.element : nil) else {
-            Speech.speakMessage("no items"); return
+            Speech.speakMessage(String(localized: "no items", comment: "Spoken message")); return
         }
         walkQueue.async {
             let deadline = Date().addingTimeInterval(2.5)

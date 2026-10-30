@@ -20,28 +20,90 @@ public enum Role: String, Codable, CaseIterable {
         .image, .layoutArea, .toolBar, .table, .tableCell, .cell, .tableRow, .treeView, .outline, .tabControl, .window, .webArea, .document, .pane, .section, .landmark]
 
     /// What the role is called (NVDA: Role.displayString).
-    public var displayString: String {
+    nonisolated public var displayString: String {
         switch self {
-        case .unknown: return "unknown"; case .window: return "window"; case .dialog: return "dialog"; case .sheet: return "sheet"
-        case .drawer: return "drawer"; case .application: return "application"; case .pane: return "pane"; case .groupBox: return "grouping"
-        case .splitPane: return "split pane"; case .separator: return "separator"; case .toolBar: return "tool bar"; case .scrollPane: return "scroll pane"
-        case .scrollBar: return "scroll bar"; case .statusBar: return "status bar"; case .menuBar: return "menu bar"; case .menu: return "menu"
-        case .menuItem: return "menu item"; case .checkMenuItem: return "check menu item"; case .radioMenuItem: return "radio menu item"; case .popupMenu: return "popup menu"
-        case .button: return "button"; case .menuButton: return "menu button"; case .toggleButton: return "toggle button"; case .switchControl: return "switch"; case .checkBox: return "check box"
-        case .radioButton: return "radio button"; case .link: return "link"; case .comboBox: return "combo box"; case .dropDownList: return "drop down list"
-        case .popUpButton: return "pop up button"; case .spinButton: return "spin button"; case .slider: return "slider"
-        case .editableText: return "edit"; case .document: return "document"; case .searchField: return "search"; case .passwordEdit: return "password edit"
-        case .staticText: return "text"; case .heading: return "heading"; case .label: return "label"; case .placeholder: return "placeholder"
-        case .list: return "list"; case .listItem: return "list item"; case .table: return "table"; case .tableRow: return "row"; case .tableColumn: return "column"
-        case .tableCell: return "cell"; case .tableHeader: return "header"; case .treeView: return "tree view"; case .treeViewItem: return "tree view item"
-        case .treeViewButton: return "tree view button"; case .outline: return "tree view"; case .browser: return "browser"
-        case .tabControl: return "tab control"; case .tab: return "tab"; case .progressBar: return "progress bar"; case .busyIndicator: return "busy indicator"
-        case .levelIndicator: return "level indicator"; case .colorChooser: return "color chooser"; case .image: return "image"; case .graphic: return "graphic"
-        case .dateEditor: return "date editor"; case .timeEditor: return "time editor"; case .toolTip: return "tool tip"; case .layoutArea: return "layout area"
-        case .layoutItem: return "layout item"; case .handle: return "handle"; case .grid: return "grid"; case .cell: return "cell"; case .matte: return "matte"
-        case .ruler: return "ruler"; case .valueIndicator: return "value indicator"; case .incrementor: return "stepper"; case .disclosureTriangle: return "disclosure triangle"
-        case .dockItem: return "dock item"; case .webArea: return "document"; case .textFrame: return "text frame"; case .section: return "section"
-        case .page: return "page"; case .landmark: return "landmark"; case .embeddedObject: return "embedded object"; case .math: return "math"; case .terminal: return "terminal"
+        case .unknown: return String(localized: "unknown", comment: "A role, spoken after an item's name")
+        case .window: return String(localized: "window", comment: "A role, spoken after an item's name")
+        case .dialog: return String(localized: "dialog", comment: "A role, spoken after an item's name")
+        case .sheet: return String(localized: "sheet", comment: "A role, spoken after an item's name")
+        case .drawer: return String(localized: "drawer", comment: "A role, spoken after an item's name")
+        case .application: return String(localized: "application", comment: "A role, spoken after an item's name")
+        case .pane: return String(localized: "pane", comment: "A role, spoken after an item's name")
+        case .groupBox: return String(localized: "grouping", comment: "A role, spoken after an item's name")
+        case .splitPane: return String(localized: "split pane", comment: "A role, spoken after an item's name")
+        case .separator: return String(localized: "separator", comment: "A role, spoken after an item's name")
+        case .toolBar: return String(localized: "tool bar", comment: "A role, spoken after an item's name")
+        case .scrollPane: return String(localized: "scroll pane", comment: "A role, spoken after an item's name")
+        case .scrollBar: return String(localized: "scroll bar", comment: "A role, spoken after an item's name")
+        case .statusBar: return String(localized: "status bar", comment: "A role, spoken after an item's name")
+        case .menuBar: return String(localized: "menu bar", comment: "A role, spoken after an item's name")
+        case .menu: return String(localized: "menu", comment: "A role, spoken after an item's name")
+        case .menuItem: return String(localized: "menu item", comment: "A role, spoken after an item's name")
+        case .checkMenuItem: return String(localized: "check menu item", comment: "A role, spoken after an item's name")
+        case .radioMenuItem: return String(localized: "radio menu item", comment: "A role, spoken after an item's name")
+        case .popupMenu: return String(localized: "popup menu", comment: "A role, spoken after an item's name")
+        case .button: return String(localized: "button", comment: "A role, spoken after an item's name")
+        case .menuButton: return String(localized: "menu button", comment: "A role, spoken after an item's name")
+        case .toggleButton: return String(localized: "toggle button", comment: "A role, spoken after an item's name")
+        case .switchControl: return String(localized: "switch", comment: "A role, spoken after an item's name")
+        case .checkBox: return String(localized: "check box", comment: "A role, spoken after an item's name")
+        case .radioButton: return String(localized: "radio button", comment: "A role, spoken after an item's name")
+        case .link: return String(localized: "link", comment: "A role, spoken after an item's name")
+        case .comboBox: return String(localized: "combo box", comment: "A role, spoken after an item's name")
+        case .dropDownList: return String(localized: "drop down list", comment: "A role, spoken after an item's name")
+        case .popUpButton: return String(localized: "pop up button", comment: "A role, spoken after an item's name")
+        case .spinButton: return String(localized: "spin button", comment: "A role, spoken after an item's name")
+        case .slider: return String(localized: "slider", comment: "A role, spoken after an item's name")
+        case .editableText: return String(localized: "edit", comment: "A role, spoken after an item's name")
+        case .document: return String(localized: "document", comment: "A role, spoken after an item's name")
+        case .searchField: return String(localized: "search", comment: "A role, spoken after an item's name")
+        case .passwordEdit: return String(localized: "password edit", comment: "A role, spoken after an item's name")
+        case .staticText: return String(localized: "text", comment: "A role, spoken after an item's name")
+        case .heading: return String(localized: "heading", comment: "A role, spoken after an item's name")
+        case .label: return String(localized: "label", comment: "A role, spoken after an item's name")
+        case .placeholder: return String(localized: "placeholder", comment: "A role, spoken after an item's name")
+        case .list: return String(localized: "list", comment: "A role, spoken after an item's name")
+        case .listItem: return String(localized: "list item", comment: "A role, spoken after an item's name")
+        case .table: return String(localized: "table", comment: "A role, spoken after an item's name")
+        case .tableRow: return String(localized: "row", comment: "A role, spoken after an item's name")
+        case .tableColumn: return String(localized: "column", comment: "A role, spoken after an item's name")
+        case .tableCell: return String(localized: "cell", comment: "A role, spoken after an item's name")
+        case .tableHeader: return String(localized: "header", comment: "A role, spoken after an item's name")
+        case .treeView: return String(localized: "tree view", comment: "A role, spoken after an item's name")
+        case .treeViewItem: return String(localized: "tree view item", comment: "A role, spoken after an item's name")
+        case .treeViewButton: return String(localized: "tree view button", comment: "A role, spoken after an item's name")
+        case .outline: return String(localized: "tree view", comment: "A role, spoken after an item's name")
+        case .browser: return String(localized: "browser", comment: "A role, spoken after an item's name")
+        case .tabControl: return String(localized: "tab control", comment: "A role, spoken after an item's name")
+        case .tab: return String(localized: "tab", comment: "A role, spoken after an item's name")
+        case .progressBar: return String(localized: "progress bar", comment: "A role, spoken after an item's name")
+        case .busyIndicator: return String(localized: "busy indicator", comment: "A role, spoken after an item's name")
+        case .levelIndicator: return String(localized: "level indicator", comment: "A role, spoken after an item's name")
+        case .colorChooser: return String(localized: "color chooser", comment: "A role, spoken after an item's name")
+        case .image: return String(localized: "image", comment: "A role, spoken after an item's name")
+        case .graphic: return String(localized: "graphic", comment: "A role, spoken after an item's name")
+        case .dateEditor: return String(localized: "date editor", comment: "A role, spoken after an item's name")
+        case .timeEditor: return String(localized: "time editor", comment: "A role, spoken after an item's name")
+        case .toolTip: return String(localized: "tool tip", comment: "A role, spoken after an item's name")
+        case .layoutArea: return String(localized: "layout area", comment: "A role, spoken after an item's name")
+        case .layoutItem: return String(localized: "layout item", comment: "A role, spoken after an item's name")
+        case .handle: return String(localized: "handle", comment: "A role, spoken after an item's name")
+        case .grid: return String(localized: "grid", comment: "A role, spoken after an item's name")
+        case .cell: return String(localized: "cell", comment: "A role, spoken after an item's name")
+        case .matte: return String(localized: "matte", comment: "A role, spoken after an item's name")
+        case .ruler: return String(localized: "ruler", comment: "A role, spoken after an item's name")
+        case .valueIndicator: return String(localized: "value indicator", comment: "A role, spoken after an item's name")
+        case .incrementor: return String(localized: "stepper", comment: "A role, spoken after an item's name")
+        case .disclosureTriangle: return String(localized: "disclosure triangle", comment: "A role, spoken after an item's name")
+        case .dockItem: return String(localized: "dock item", comment: "A role, spoken after an item's name")
+        case .webArea: return String(localized: "document", comment: "A role, spoken after an item's name")
+        case .textFrame: return String(localized: "text frame", comment: "A role, spoken after an item's name")
+        case .section: return String(localized: "section", comment: "A role, spoken after an item's name")
+        case .page: return String(localized: "page", comment: "A role, spoken after an item's name")
+        case .landmark: return String(localized: "landmark", comment: "A role, spoken after an item's name")
+        case .embeddedObject: return String(localized: "embedded object", comment: "A role, spoken after an item's name")
+        case .math: return String(localized: "math", comment: "A role, spoken after an item's name")
+        case .terminal: return String(localized: "terminal", comment: "A role, spoken after an item's name")
         }
     }
 
@@ -144,21 +206,42 @@ public enum State: String, Codable, CaseIterable {
     case unavailable, focused, selected, busy, pressed, checked, halfChecked, readOnly, expanded, collapsed, invisible
     case hasPopup, protected, required, editable, multiLine, focusable, selectable, modal, defaultButton, on, off, invalidEntry, sorted
 
-    public var displayString: String {
+    nonisolated public var displayString: String {
         switch self {
-        case .unavailable: return "unavailable"; case .focused: return "focused"; case .selected: return "selected"; case .busy: return "busy"
-        case .pressed: return "pressed"; case .checked: return "checked"; case .halfChecked: return "half checked"; case .readOnly: return "read only"
-        case .expanded: return "expanded"; case .collapsed: return "collapsed"; case .invisible: return "invisible"; case .hasPopup: return "submenu"
-        case .protected: return "protected"; case .required: return "required"; case .editable: return "editable"; case .multiLine: return "multi line"
-        case .focusable: return "focusable"; case .selectable: return "selectable"; case .modal: return "modal"; case .defaultButton: return "default"
-        case .on: return "on"; case .off: return "off"; case .invalidEntry: return "invalid entry"; case .sorted: return "sorted"
+        case .unavailable: return String(localized: "unavailable", comment: "A state, spoken after an item's role")
+        case .focused: return String(localized: "focused", comment: "A state, spoken after an item's role")
+        case .selected: return String(localized: "selected", comment: "A state, spoken after an item's role")
+        case .busy: return String(localized: "busy", comment: "A state, spoken after an item's role")
+        case .pressed: return String(localized: "pressed", comment: "A state, spoken after an item's role")
+        case .checked: return String(localized: "checked", comment: "A state, spoken after an item's role")
+        case .halfChecked: return String(localized: "half checked", comment: "A state, spoken after an item's role")
+        case .readOnly: return String(localized: "read only", comment: "A state, spoken after an item's role")
+        case .expanded: return String(localized: "expanded", comment: "A state, spoken after an item's role")
+        case .collapsed: return String(localized: "collapsed", comment: "A state, spoken after an item's role")
+        case .invisible: return String(localized: "invisible", comment: "A state, spoken after an item's role")
+        case .hasPopup: return String(localized: "submenu", comment: "A state, spoken after an item's role")
+        case .protected: return String(localized: "protected", comment: "A state, spoken after an item's role")
+        case .required: return String(localized: "required", comment: "A state, spoken after an item's role")
+        case .editable: return String(localized: "editable", comment: "A state, spoken after an item's role")
+        case .multiLine: return String(localized: "multi line", comment: "A state, spoken after an item's role")
+        case .focusable: return String(localized: "focusable", comment: "A state, spoken after an item's role")
+        case .selectable: return String(localized: "selectable", comment: "A state, spoken after an item's role")
+        case .modal: return String(localized: "modal", comment: "A state, spoken after an item's role")
+        case .defaultButton: return String(localized: "default", comment: "A state, spoken after an item's role")
+        case .on: return String(localized: "on", comment: "A state, spoken after an item's role")
+        case .off: return String(localized: "off", comment: "A state, spoken after an item's role")
+        case .invalidEntry: return String(localized: "invalid entry", comment: "A state, spoken after an item's role")
+        case .sorted: return String(localized: "sorted", comment: "A state, spoken after an item's role")
         }
     }
     /// NVDA: _negativeStateLabels, spoken when a state the user expects is absent.
-    public var negativeDisplayString: String {
+    nonisolated public var negativeDisplayString: String {
         switch self {
-        case .selected: return "not selected"; case .pressed: return "not pressed"; case .checked: return "not checked"; case .on: return "off"
-        default: return "not \(displayString)"
+        case .selected: return String(localized: "not selected", comment: "A state that is absent")
+        case .pressed: return String(localized: "not pressed", comment: "A state that is absent")
+        case .checked: return String(localized: "not checked", comment: "A state that is absent")
+        case .on: return String(localized: "off", comment: "A state that is absent")
+        default: return String(localized: "not \(displayString)", comment: "A state that is absent: %@ is the state")
         }
     }
 

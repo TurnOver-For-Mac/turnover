@@ -162,8 +162,8 @@ import AppKit
         case .success(let list):
             entries = list; ready = true; index = 0
             Log.io("catalog (\(what)): \"\(Log.words(term))\": \(list.count) results in \(ms) ms (\(Self.country))")
-            if list.isEmpty { Speech.speakMessage("No catalog results for \(term); reading the page."); fallBack("nothing found"); return }
-            Speech.speakMessage("\(list.count) catalog results for \(term)")
+            if list.isEmpty { Speech.speakMessage(String(localized: "No catalog results for \(term); reading the page.", comment: "Spoken message")); fallBack("nothing found"); return }
+            Speech.speakMessage(String(localized: "\(String(list.count)) catalog results for \(term)", comment: "Spoken message"))
             speak(0)
             Hints.schedule("Up and Down move through the catalog's results; Return opens one. Command F searches again.")
         }
@@ -177,7 +177,7 @@ import AppKit
     }
 
     func move(_ d: Int) {
-        guard ready else { Speech.speakMessage(failed == nil ? "asking the catalog; a moment" : "the catalog did not answer"); return }
+        guard ready else { Speech.speakMessage(failed == nil ? String(localized: "asking the catalog; a moment", comment: "Spoken message") : String(localized: "the catalog did not answer", comment: "Spoken message")); return }
         let j = index + d
         guard entries.indices.contains(j) else { Tones.edge(); speak(index); return }
         index = j; speak(j)
@@ -195,7 +195,7 @@ import AppKit
         Tones.edge()
     }
     func openCurrent() {
-        guard ready, entries.indices.contains(index) else { Speech.speakMessage("nothing to open yet"); return }
+        guard ready, entries.indices.contains(index) else { Speech.speakMessage(String(localized: "nothing to open yet", comment: "Spoken message")); return }
         open(entries[index])
     }
 }

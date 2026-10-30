@@ -129,7 +129,7 @@ public final class WebBuffer {
         isPartial = Date() >= buildDeadline
         // Said once per page: nothing read the flag, so K said "no next link" and "bottom" mid-page without a word
         // (a code review, 14 Oct 2026).
-        if isPartial, !saidPartial { saidPartial = true; DispatchQueue.main.async { MainActor.assumeIsolated { Speech.speakMessage("page read in part, it is very long") } } }
+        if isPartial, !saidPartial { saidPartial = true; DispatchQueue.main.async { MainActor.assumeIsolated { Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")) } } }
         if isPartial, !loggedPartial { loggedPartial = true; Log.error("virtual buffer: stopped at 2 s after \(visited) elements; the page is read only in part") }
         lastBuildMs = Int(Date().timeIntervalSince(t0) * 1000)
         Log.info("virtual buffer: \(lines.count) lines, \(text.length) characters from \(visited) elements in \(Int(Date().timeIntervalSince(t0) * 1000)) ms")
@@ -167,7 +167,7 @@ public final class WebBuffer {
         let role = el.role
         // A separator (a page's <hr>, WebKit's AXSplitter) is a line of its own, as NVDA shows it: S finds it.
         if role == "AXSplitter", depth > 0, el.string(kAXRoleDescriptionAttribute)?.lowercased().contains("separator") ?? true {
-            flush(); currentElement = el; append("separator", el); flush()
+            flush(); currentElement = el; append(Role.separator.displayString, el); flush()
             return
         }
         if Self.skipRoles.contains(role) { return }
@@ -229,7 +229,7 @@ public final class WebBuffer {
         case "AXImage":
             var d = el.string(kAXDescriptionAttribute) ?? el.string(kAXTitleAttribute) ?? ""
             if d.isEmpty, config.virtualBuffers.imageFileNames { d = ImageNames.fromFile(el) }
-            if !d.isEmpty || linkDepth == 0 { append(d.isEmpty ? "graphic" : "graphic \(d)", el) }
+            if !d.isEmpty || linkDepth == 0 { append(d.isEmpty ? Role.graphic.displayString : "\(Role.graphic.displayString) \(d)", el) }
         case "AXLink":
             // Screen layout off (NVDA): each link on a line of its own.
             let ownLine = !config.virtualBuffers.screenLayout
@@ -625,7 +625,7 @@ public final class BufferTextInfo: TextInfo {
         if let lvl = (element(at: start)?.attr("AXBlockQuoteLevel") as? NSNumber)?.intValue, lvl != Self.lastQuoteLevel {
             if lvl > 0 {
                 switch config.documentFormatting.blockQuotes {
-                case .speech: prefix.append("quote level \(lvl)")
+                case .speech: prefix.append(String(localized: "quote level \(String(lvl))", comment: "How deep a quote is in a Mail message"))
                 case .tone: pendingTones.append { Tones.blockQuote() }
                 case .off: break
                 }
@@ -658,7 +658,7 @@ public final class BufferTextInfo: TextInfo {
             let after = config.documentFormatting.rolesAfterText
             if s.isLink, !insideEarlierLink, lastLink.map({ !$0.isSame(s.element) }) ?? true {
                 switch linkMode {
-                case .speech: if !after { pieces.append(" " + Speech.ui("link") + " ") }
+                case .speech: if !after { pieces.append(" " + Speech.ui(Role.link.displayString) + " ") }
                 case .tone: pendingTones.append { Tones.link() }
                 case .off: break
                 }
@@ -667,7 +667,7 @@ public final class BufferTextInfo: TextInfo {
             pieces.append(textRange(a, b))
             // VoiceOver's order: "About us, link", where the link ends (once, on the piece that ends it).
             if after, s.isLink, linkMode == .speech, s.end <= end, !(s.start < start && start > line.start && s.end > end) {
-                pieces.append(", " + Speech.ui("link") + " ")
+                pieces.append(", " + Speech.ui(Role.link.displayString) + " ")
             }
             cursor = b
         }

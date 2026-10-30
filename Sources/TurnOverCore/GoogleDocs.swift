@@ -107,7 +107,7 @@ enum GoogleDocs {
             Log.io("Google Docs: screen reader support \(found ? "on" : "off (no Accessibility menu)")")
             guard !found else { return }
             told.insert(url)
-            Hints.schedule("Google's screen reader support is off for this document, so its text can't be read. Press Command Option Z to turn it on; Google remembers it.")
+            Hints.schedule(String(localized: "Google's screen reader support is off for this document, so its text can't be read. Press Command Option Z to turn it on; Google remembers it.", comment: "Spoken message"))
         }
     }
 

@@ -144,7 +144,7 @@ open class TurnOverObject: ScriptableObject {
             let value = a[kAXValueAttribute], title = trimmed(a[kAXTitleAttribute]), desc = trimmed(a[kAXDescriptionAttribute])
             if r == "AXCheckBox", let t = title {
                 let on = (value as? NSNumber)?.intValue == 1
-                parts.append("\(t), \(on ? "checked" : "not checked")")
+                parts.append("\(t), \(on ? State.checked.displayString : State.checked.negativeDisplayString)")
             } else if r == "AXStaticText" || r == "AXTextField" {
                 if let v = trimmed(value) { parts.append(String(v.prefix(300))) }
                 else if r == "AXTextField" { queue.append(contentsOf: kids()) }
@@ -253,13 +253,13 @@ open class TurnOverObject: ScriptableObject {
                 if let s = element.string("AXValueDescription"), !s.isEmpty { return s }
                 // A slider from 0 to 1 is a fraction: said as a percentage, as VoiceOver says it (9 Oct 2026).
                 if role == .slider, let lo = element.attr(kAXMinValueAttribute) as? NSNumber, let hi = element.attr(kAXMaxValueAttribute) as? NSNumber,
-                   lo.doubleValue == 0, hi.doubleValue == 1 { return "\(Int((n.doubleValue * 100).rounded())) percent" }
+                   lo.doubleValue == 0, hi.doubleValue == 1 { return Phrases.percent(Int((n.doubleValue * 100).rounded())) }
                 // A progress bar is always a percentage of its range, as VoiceOver and NVDA say it: an installer's
                 // download was "0.9" (18 Oct 2026).
                 if role == .progressBar {
                     let lo = (element.attr(kAXMinValueAttribute) as? NSNumber)?.doubleValue ?? 0
                     let hi = (element.attr(kAXMaxValueAttribute) as? NSNumber)?.doubleValue ?? (n.doubleValue <= 1 ? 1 : 100)
-                    if hi > lo { return "\(Int(((n.doubleValue - lo) / (hi - lo) * 100).rounded())) percent" }
+                    if hi > lo { return Phrases.percent(Int(((n.doubleValue - lo) / (hi - lo) * 100).rounded())) }
                 }
                 return n.doubleValue == n.doubleValue.rounded() ? "\(n.intValue)" : String(format: "%.1f", n.doubleValue)
             default: return n.stringValue
@@ -511,10 +511,10 @@ open class TurnOverObject: ScriptableObject {
         if menuName.isEmpty, let (n, at) = StatusMenus.lastOpened, Date().timeIntervalSince(at) < 3 {
             StatusMenus.lastOpened = nil
             menuName = n.components(separatedBy: ",").first ?? n
-            Speech.speakMessage("\(menuName) menu")
+            Speech.speakMessage(String(localized: "\(menuName) menu", comment: "A menu bar item: %@ is its name (View menu)"))
             return
         }
-        let kind = parentRole == "AXMenuItem" ? "submenu" : "menu"
+        let isSubmenu = parentRole == "AXMenuItem"
         if parentRole == "AXMenuBarItem", Date().timeIntervalSince(Speech.lastMenuBarItemSpoken) < 0.4 { return }   // already said ("View menu, 5 of 10")
         // A context menu says so (6 Oct 2026): one just asked for (VO Shift M, the right Option, Shift F10), or
         // any menu that hangs off no menu bar, menu or button, even when the app gives it a name.
@@ -523,10 +523,11 @@ open class TurnOverObject: ScriptableObject {
         if asked || (!ownMenu.contains(parentRole) && parent?.string(kAXSubroleAttribute) != "AXMenuExtra" && StatusMenus.lastOpened == nil) {
             Self.contextMenuRequestedAt = .distantPast
             VoiceOverSounds.play("PopupAppeared.aiff")
-            Speech.speakMessage("context menu")
+            Speech.speakMessage(String(localized: "context menu", comment: "Spoken message"))
             return
         }
-        Speech.speakMessage(menuName.isEmpty ? "context menu" : "\(menuName) \(kind)")
+        Speech.speakMessage(menuName.isEmpty ? String(localized: "context menu", comment: "Spoken message")
+            : isSubmenu ? String(localized: "\(menuName) submenu", comment: "A submenu opened: its name") : String(localized: "\(menuName) menu", comment: "A menu bar item: %@ is its name (View menu)"))
     }
     /// When a context menu was last asked for by key; the menu that opens then is announced as one.
     public static var contextMenuRequestedAt = Date.distantPast

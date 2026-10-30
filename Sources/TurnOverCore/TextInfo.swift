@@ -42,12 +42,13 @@ public struct FormatField {
     public init() {}
 
     /// The detail JAWS gives on a second press (a tester, 8 Oct 2026): everything, plus colour and the rest.
+    /// (The colour and alignment are kept in English, as values, and put into words here.)
     public var detailedDescription: String {
         var parts = [fullDescription]
-        if let c = colour { parts.append("\(c) text") }
-        if let b = background, b != "white" { parts.append("on \(b)") }
-        if superscript > 0 { parts.append("superscript") } else if superscript < 0 { parts.append("subscript") }
-        if let a = alignment { parts.append("aligned \(a)") }
+        if let c = colour { parts.append(String(localized: "\(TextFormat.colour(c)) text", comment: "The text's colour: %@ is the colour (red text)")) }
+        if let b = background, b != "white" { parts.append(String(localized: "on \(TextFormat.colour(b))", comment: "The colour behind the text: %@ is the colour (on yellow)")) }
+        if superscript > 0 { parts.append(String(localized: "superscript", comment: "Text formatting")) } else if superscript < 0 { parts.append(String(localized: "subscript", comment: "Text formatting")) }
+        if let a = alignment { parts.append(TextFormat.aligned(a)) }
         return parts.joined(separator: ", ")
     }
 
@@ -80,16 +81,74 @@ public struct FormatField {
     public var fullDescription: String {
         var parts: [String] = []
         if let n = fontName { parts.append(n) }
-        if let s = fontSize { parts.append("\(s) point") }
-        if bold { parts.append("bold") }
-        if italic { parts.append("italic") }
-        if underline { parts.append("underlined") }
-        if strikethrough { parts.append("strikethrough") }
-        if link { parts.append("link") }
-        if misspelled { parts.append("spelling error") }
+        if let s = fontSize { parts.append(TextFormat.points(s)) }
+        if bold { parts.append(TextFormat.bold) }
+        if italic { parts.append(TextFormat.italic) }
+        if underline { parts.append(TextFormat.underlined) }
+        if strikethrough { parts.append(String(localized: "strikethrough", comment: "Text formatting")) }
+        if link { parts.append(Role.link.displayString) }
+        if misspelled { parts.append(String(localized: "spelling error", comment: "Said before a misspelled word")) }
         // The language by name ("English (United Kingdom)"), not its code ("en_GB").
-        if let l = language { parts.append(Locale(identifier: "en_GB").localizedString(forIdentifier: l) ?? l) }
-        return parts.isEmpty ? "plain" : parts.joined(separator: ", ")
+        if let l = language { parts.append(Phrases.languageName(l)) }
+        return parts.isEmpty ? String(localized: "plain", comment: "Text with no formatting") : parts.joined(separator: ", ")
+    }
+}
+
+/// Formatting in words.
+nonisolated public enum TextFormat {
+    public static var bold: String { String(localized: "bold", comment: "Text formatting") }
+    public static var italic: String { String(localized: "italic", comment: "Text formatting") }
+    public static var underlined: String { String(localized: "underlined", comment: "Text formatting") }
+    /// "12 point".
+    public static func points(_ size: Int) -> String { String(localized: "\(String(size)) point", comment: "A font size: 12 point") }
+
+    /// A colour named by FormatField.name(ofColour:) ("dark red", "light grey"), in the reader's language.
+    public static func colour(_ english: String) -> String {
+        if english.hasPrefix("dark ") { return String(localized: "dark \(colour(String(english.dropFirst(5))))", comment: "A colour: %@ is the colour (dark red)") }
+        if english.hasPrefix("light ") { return String(localized: "light \(colour(String(english.dropFirst(6))))", comment: "A colour: %@ is the colour (light grey)") }
+        switch english {
+        case "red": return String(localized: "red", comment: "A colour")
+        case "orange": return String(localized: "orange", comment: "A colour")
+        case "yellow": return String(localized: "yellow", comment: "A colour")
+        case "green": return String(localized: "green", comment: "A colour")
+        case "turquoise": return String(localized: "turquoise", comment: "A colour")
+        case "blue": return String(localized: "blue", comment: "A colour")
+        case "purple": return String(localized: "purple", comment: "A colour")
+        case "pink": return String(localized: "pink", comment: "A colour")
+        case "brown": return String(localized: "brown", comment: "A colour")
+        case "black": return String(localized: "black", comment: "A colour")
+        case "white": return String(localized: "white", comment: "A colour")
+        case "grey": return String(localized: "grey", comment: "A colour")
+        default: return english
+        }
+    }
+
+    /// Paragraph formatting Word reports (alignment and line spacing), by its English words.
+    public static func word(_ english: String) -> String {
+        switch english {
+        case "centred": return String(localized: "centred", comment: "Paragraph alignment")
+        case "right aligned": return String(localized: "right aligned", comment: "Paragraph alignment")
+        case "left aligned": return String(localized: "left aligned", comment: "Paragraph alignment")
+        case "justified": return String(localized: "justified", comment: "Paragraph alignment")
+        case "distributed": return String(localized: "distributed", comment: "Paragraph alignment")
+        case "double spacing": return String(localized: "double spacing", comment: "Paragraph line spacing")
+        case "1.5 line spacing": return String(localized: "1.5 line spacing", comment: "Paragraph line spacing")
+        case "single spacing": return String(localized: "single spacing", comment: "Paragraph line spacing")
+        case "line spacing at least": return String(localized: "line spacing at least", comment: "Paragraph line spacing")
+        case "exact line spacing": return String(localized: "exact line spacing", comment: "Paragraph line spacing")
+        default: return english
+        }
+    }
+
+    /// An alignment as FormatField keeps it ("left", "right", "centre", "justified"), in words.
+    public static func aligned(_ alignment: String) -> String {
+        switch alignment {
+        case "left": return String(localized: "aligned left", comment: "Paragraph alignment")
+        case "right": return String(localized: "aligned right", comment: "Paragraph alignment")
+        case "centre": return String(localized: "aligned centre", comment: "Paragraph alignment")
+        case "justified": return String(localized: "aligned justified", comment: "Paragraph alignment")
+        default: return String(localized: "aligned \(alignment)", comment: "Paragraph alignment: %@ is how")
+        }
     }
 }
 

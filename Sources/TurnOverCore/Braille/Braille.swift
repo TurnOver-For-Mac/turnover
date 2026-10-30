@@ -152,8 +152,8 @@ public enum Braille {
     private static var historyIndex: Int?
 
     static func toggleHistory() {
-        if historyIndex != nil { historyIndex = nil; Speech.speakMessage("announcement history off"); messageUntil = nil; refresh(); return }
-        guard !history.isEmpty else { Speech.speakMessage("no announcements"); return }
+        if historyIndex != nil { historyIndex = nil; Speech.speakMessage(String(localized: "announcement history off", comment: "Spoken message")); messageUntil = nil; refresh(); return }
+        guard !history.isEmpty else { Speech.speakMessage(String(localized: "no announcements", comment: "Spoken message")); return }
         historyIndex = 0
         showHistory()
     }
@@ -206,17 +206,63 @@ public enum Braille {
 
     /// Speech's parts for an item, as a display shows them: short roles and states, "h2" for "heading level 2",
     /// "lv 2" for "level 2", joined by spaces.
-    public static func brailleText(_ parts: [String], separator: String = " ") -> String {
+    /// `role`: the item's own role, when the parts are an item's: its word is shortened by the role itself, so two roles
+    /// that one language says alike (Turkish "tablo" for table and tree view) keep their own short forms.
+    public static func brailleText(_ parts: [String], role: Role? = nil, separator: String = " ") -> String {
         var out: [String] = []
+        let roleWord = role.map { $0.displayString.lowercased() }
         for raw in parts {
             let p = raw.trimmingCharacters(in: .whitespaces)
             let k = p.lowercased()
-            if let short = shortForms[k] { if !short.isEmpty { out.append(short) }; continue }
-            if k.hasPrefix("heading level "), let n = Int(k.dropFirst(14)) { out.append("h\(n)"); continue }
-            if k.hasPrefix("level "), let n = Int(k.dropFirst(6)) { out.append("lv \(n)"); continue }
+            if let role, k == roleWord, let short = roleShortForms[role] { if !short.isEmpty { out.append(short) }; continue }
+            if let short = spokenShortForms[k] { if !short.isEmpty { out.append(short) }; continue }
+            if let n = levelNumber(k, Phrases.headingLevel) { out.append("h\(n)"); continue }
+            if let n = levelNumber(k, Phrases.level) { out.append("lv \(n)"); continue }
             if !p.isEmpty { out.append(p) }
         }
         return out.joined(separator: separator)
+    }
+
+    /// The short forms by role and by state: bound to what the item is, not to the words a language says it with.
+    public static let roleShortForms: [Role: String] = [
+        .button: "btn", .menuButton: "mnubtn", .popUpButton: "cbo", .comboBox: "cbo", .checkBox: "chk", .radioButton: "rbtn",
+        .editableText: "edt", .searchField: "edt", .passwordEdit: "pwdedt", .link: "lnk", .list: "lst", .treeView: "tv",
+        .outline: "tv", .table: "tbl", .menu: "mnu", .menuBar: "mnubar", .menuItem: "", .tab: "tab", .tabControl: "tabctl",
+        .toolBar: "tlbr", .dialog: "dlg", .window: "wnd", .groupBox: "grp", .heading: "h", .slider: "sldr",
+        .spinButton: "spnbtn", .progressBar: "prgbar", .separator: "-----", .graphic: "gra", .image: "gra", .document: "doc",
+        .webArea: "doc", .staticText: "", .statusBar: "stbar", .toggleButton: "tgbtn", .disclosureTriangle: "dsclsr",
+        .tableRow: "", .tableColumn: "", .tableCell: "", .cell: "", .treeViewItem: "", .listItem: "",
+    ]
+    public static let stateShortForms: [State: String] = [
+        .checked: "(x)", .halfChecked: "(-)", .expanded: "-", .collapsed: "+", .selected: "sel", .pressed: "=]",
+        .unavailable: "unavbl", .required: "req", .readOnly: "ro", .on: "(x)", .off: "( )", .hasPopup: "submnu",
+    ]
+
+    /// The short forms by the words as speech says them in the reader's language: each role's and state's own word,
+    /// over the English ones (kept for words an app says itself, in English). Built in a fixed order, so it is the
+    /// same at every launch; a word two different short forms share in a language is left as it is said.
+    private static let spokenShortForms: [String: String] = {
+        var words = Role.allCases.compactMap { r in roleShortForms[r].map { (r.displayString, $0) } }
+        words += State.allCases.compactMap { st in stateShortForms[st].map { (st.displayString, $0) } }
+        words += [(State.checked.negativeDisplayString, "( )"), (Phrases.blank, "")]
+        return spokenShortForms(base: shortForms, words: words)
+    }()
+    /// Adds the spoken words to `base`, in their order; a word given two different short forms gets neither.
+    public static func spokenShortForms(base: [String: String], words: [(spoken: String, short: String)]) -> [String: String] {
+        var out = base, added: [String: String] = [:], ambiguous = Set<String>()
+        for (spoken, short) in words {
+            let k = spoken.lowercased()
+            guard !k.isEmpty, base[k] == nil else { continue }
+            if let had = added[k], had != short { ambiguous.insert(k) } else { added[k] = short }
+        }
+        for (k, short) in added where !ambiguous.contains(k) { out[k] = short }
+        return out
+    }
+
+    /// The number in "heading level 2" or "level 2", as `phrase` says it in the reader's language.
+    private static func levelNumber(_ words: String, _ phrase: (Int) -> String) -> Int? {
+        guard let n = words.split(whereSeparator: { !$0.isNumber }).compactMap({ Int($0) }).first, phrase(n).lowercased() == words else { return nil }
+        return n
     }
 
     // MARK: TurnOver's own cursor (NVDA: braille tethered to review)
@@ -360,7 +406,7 @@ public enum Braille {
             // table", 6 Oct 2026).
             let obj = selectedItem(in: focus) ?? focus
             source = .object(obj)
-            text = brailleText(Speech.objectPropertiesSpeech(obj, reason: .focus))
+            text = brailleText(Speech.objectPropertiesSpeech(obj, reason: .focus), role: obj.role)
             cursor = nil; selection = nil
             windowStart = 0
             layout()
@@ -558,25 +604,27 @@ public enum Braille {
 
     /// NVDA+Control+T.
     public static func cycleTether() {
-        let order = ["auto", "focus", "review"], names = ["automatically", "to focus", "to review"]
+        let order = ["auto", "focus", "review"]
+        let names = [String(localized: "braille tethered automatically", comment: "What braille follows"), String(localized: "braille tethered to focus", comment: "What braille follows"),
+                     String(localized: "braille tethered to review", comment: "What braille follows")]
         let i = ((order.firstIndex(of: config.braille.tether) ?? 0) + 1) % order.count
         config.braille.tether = order[i]; config.save()
-        Speech.speakMessage("braille tethered \(names[i])")
+        Speech.speakMessage(names[i])
         refresh()
     }
     /// NVDA+Alt+T.
     public static func cycleMode() {
         config.braille.mode = config.braille.mode == "speechOutput" ? "followCursors" : "speechOutput"; config.save()
-        Speech.speakMessage(config.braille.mode == "speechOutput" ? "braille mode display speech output" : "braille mode follow cursors")
+        Speech.speakMessage(config.braille.mode == "speechOutput" ? String(localized: "braille mode display speech output", comment: "NVDA's braille modes") : String(localized: "braille mode follow cursors", comment: "NVDA's braille modes"))
         refresh()
     }
     private static var autoScroll: Timer?
     /// NVDA+Alt+K: on to the next window by itself every few seconds; NVDA+Alt+L and J faster and slower.
     public static func toggleAutoScroll() {
-        if let t = autoScroll { t.invalidate(); autoScroll = nil; Speech.speakMessage("auto scroll off"); return }
-        guard display != nil else { Speech.speakMessage("no braille display"); return }
+        if let t = autoScroll { t.invalidate(); autoScroll = nil; Speech.speakMessage(String(localized: "auto scroll off", comment: "Spoken message")); return }
+        guard display != nil else { Speech.speakMessage(String(localized: "no braille display", comment: "Spoken message")); return }
         startAutoScroll()
-        Speech.speakMessage("auto scroll on")
+        Speech.speakMessage(String(localized: "auto scroll on", comment: "Spoken message"))
     }
     private static func startAutoScroll() {
         autoScroll?.invalidate()
@@ -587,7 +635,7 @@ public enum Braille {
     public static func autoScrollRate(faster: Bool) {
         config.braille.autoScrollSeconds = max(0.5, min(20, config.braille.autoScrollSeconds + (faster ? -0.5 : 0.5))); config.save()
         if autoScroll != nil { startAutoScroll() }
-        Speech.speakMessage(String(format: "%.1f seconds", config.braille.autoScrollSeconds))
+        Speech.speakMessage(String(localized: "\(String(format: "%.1f", config.braille.autoScrollSeconds)) seconds", comment: "Braille auto scroll's speed: %@ is seconds"))
     }
 
     private static func pan(forward: Bool) {

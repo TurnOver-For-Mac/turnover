@@ -138,7 +138,7 @@ public final class BrailleDisplays {
         guard !toldUnopened else { return }
         toldUnopened = true
         // Only ever said with VoiceOver off (noteUnopened returns while it is on), so it doesn't blame VoiceOver.
-        Speech.speakMessage("A braille display was found, but TurnOver couldn't open it.")
+        Speech.speakMessage(String(localized: "A braille display was found, but TurnOver couldn't open it.", comment: "Spoken message"))
     }
 
     /// VoiceOver's braille server (scrod) keeps a Bluetooth display's one connection open even with VoiceOver off,

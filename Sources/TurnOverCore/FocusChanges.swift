@@ -568,8 +568,18 @@ extension AXHandler {
             Log.io("foreground: Notification Centre's panel, for the key; the key says it")
             return
         }
-        let kind = obj.role == .dialog || obj.role == .sheet ? "dialog" : "window"
-        let text = Speech.joined([appName ?? "", appName == title ? "" : title, kind])
+        let isDialog = obj.role == .dialog || obj.role == .sheet
+        let shownTitle = appName == title ? "" : title
+        // The app's name alone with the role is one phrase, as the language says it ("Finder penceresi" in Turkish);
+        // in English as before: "Finder, window" in the Mac style, "Finder window" in the Windows style.
+        let text = if let appName, !appName.isEmpty, shownTitle.isEmpty {
+            switch (isDialog, config.general.windowsKeys) {
+            case (false, false): String(localized: "\(appName), window", comment: "A window in front: %@ is its app (Mac style)")
+            case (false, true): String(localized: "\(appName) window", comment: "A window in front: %@ is its app (Windows style)")
+            case (true, false): String(localized: "\(appName), dialog", comment: "A dialog in front: %@ is its app (Mac style)")
+            case (true, true): String(localized: "\(appName) dialog", comment: "A dialog in front: %@ is its app (Windows style)")
+            }
+        } else { Speech.joined([appName ?? "", shownTitle, (isDialog ? Role.dialog : Role.window).displayString]) }
         if obj is Dialog { EventHandler.queue(Event(.focusEntered, obj)) } else { Speech.speakOnly(text) }   // a window's name: the display shows the focus in it
         // A window with nothing to read (OpenGL, custom drawing): said a moment later, with the recognition key (issue 74).
         if !(obj is Dialog), window.pid != ProcessInfo.processInfo.processIdentifier { EmptyWindowNotice.check(window, pid: window.pid) }

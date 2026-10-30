@@ -479,8 +479,8 @@ final class LeadWatcher {
         InputManager.directPid = on ? app.processIdentifier : nil
         appActivated(app)   // TurnOver takes the app if it wasn't reading it (its tap sends the keys)
         // Said by TurnOver, which leads here now (VoiceOver is kept quiet), once the take-over has been said.
-        let words = on ? "Direct. Keys go straight to \(name), and TurnOver stays quiet here. Command Control Comma, then D, to leave."
-                       : "Direct off. TurnOver reads \(name) again."
+        let words = on ? String(localized: "Direct. Keys go straight to \(name), and TurnOver stays quiet here. Command Control Comma, then D, to leave.", comment: "Direct mode on: %@ is the app")
+                       : String(localized: "Direct off. TurnOver reads \(name) again.", comment: "Direct mode off: %@ is the app")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
             if self?.turnOverActive() == true { Speech.speakMessage(words) } else { self?.say(words) }
         }
@@ -490,7 +490,7 @@ final class LeadWatcher {
         // Without readers per app there is nothing to give an app to: TurnOver is on or off (22 Oct 2026).
         guard config.applications.perAppReaders else {
             Log.info("switch reader: readers per app are off; nothing to switch")
-            Speech.speakMessage("Readers per app are off: TurnOver reads everywhere while it is on. Command Control Period turns it off and on; Settings, Experimental, turns readers per app on.")
+            Speech.speakMessage(String(localized: "Readers per app are off: TurnOver reads everywhere while it is on. Command Control Period turns it off and on; Settings, Experimental, turns readers per app on.", comment: "Spoken message"))
             return
         }
         guard let app = NSWorkspace.shared.frontmostApplication, app.activationPolicy == .regular,
@@ -503,7 +503,7 @@ final class LeadWatcher {
         let toTurnOver = wanted ?? !shouldLead(bundle)
         // Saved in the mode's own list: TurnOver's apps, or (everywhere) the apps VoiceOver keeps.
         if config.applications.leadMode == "voiceover" {
-            say("VoiceOver reads everywhere. Command Control Comma, then A, to change that.")
+            say(String(localized: "VoiceOver reads everywhere. Command Control Comma, then A, to change that.", comment: "Spoken message"))
             return
         }
         if config.applications.leadMode == "everywhere" {
@@ -522,13 +522,13 @@ final class LeadWatcher {
         if toTurnOver, Coexist.on {
             // Said first, then the app, as "VoiceOver leads in" is: said once TurnOver was up, it came after the app's
             // window, field and all, and wasn't heard (19 Oct 2026, twice).
-            Speech.speakMessage("TurnOver leads in \(name)")
+            Speech.speakMessage(String(localized: "TurnOver leads in \(name)", comment: "Spoken message"))
             settleReader(after: 1.0, generation: choiceGeneration)
         } else if toTurnOver {
             handOver(voiceOverOn: false)
-            sayWhenTurnOverIsUp("TurnOver leads in \(name)", generation: choiceGeneration)
+            sayWhenTurnOverIsUp(String(localized: "TurnOver leads in \(name)", comment: "TurnOver reads the app in front: %@ is the app"), generation: choiceGeneration)
         } else {
-            Speech.speakMessage("VoiceOver leads in \(name)")
+            Speech.speakMessage(String(localized: "VoiceOver leads in \(name)", comment: "VoiceOver reads the app in front: %@ is the app"))
             settleReader(after: 0.8, generation: choiceGeneration)
         }
     }

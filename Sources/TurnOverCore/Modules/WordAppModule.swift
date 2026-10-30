@@ -35,7 +35,7 @@ final class WordAppModule: AppModule {
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
         declareTableScripts()
         // Windows' Escape from the ribbon: back to the document. Word on the Mac leaves the focus where it is.
-        script("word_leaveBars", "In the ribbon, sidebar, status bar or toolbar: back to the document", gestures: ["kb:escape"], category: "Microsoft Word") { [weak self] g in
+        script("word_leaveBars", String(localized: "In the ribbon, sidebar, status bar or toolbar: back to the document", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:escape"], category: "Microsoft Word") { [weak self] g in
             g.send()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { self?.backToPage() }
         }.isAvailable = { [weak self] in
@@ -160,7 +160,7 @@ final class WordAppModule: AppModule {
                 if let d = API.focusObject as? WordDocument { d.goToTable(forward: forward); return }
                 // (lastDocument is cleared by the loseFocus the first move queued, so the second press from the cell
                 // needs the caret's area: code review, 16 Oct 2026.)
-                guard let page = lastDocument?.element ?? caretArea else { Tones.edge(); Speech.speakMessage("not in a document"); return }
+                guard let page = lastDocument?.element ?? caretArea else { Tones.edge(); Speech.speakMessage(String(localized: "not in a document", comment: "Spoken message")); return }
                 Log.io("Word: \(name) from a table cell, through the page")
                 WordDocument(element: page).goToTable(forward: forward)
             }
@@ -171,17 +171,20 @@ final class WordAppModule: AppModule {
             script(name, "Moves to the \(name.hasPrefix("next") ? "next" : "previous") \(name.replacingOccurrences(of: "next", with: "").replacingOccurrences(of: "previous", with: "").lowercased())", gestures: [], category: "Microsoft Word") { [weak self] g in
                 guard let self else { return }
                 if let d = API.focusObject as? WordDocument, let s = d.script(named: name) { s.handler(g); return }
-                guard let page = lastDocument?.element ?? caretArea else { Tones.edge(); Speech.speakMessage("not in a document"); return }
+                guard let page = lastDocument?.element ?? caretArea else { Tones.edge(); Speech.speakMessage(String(localized: "not in a document", comment: "Spoken message")); return }
                 let doc = WordDocument(element: page)
-                guard let s = doc.script(named: name) else { Tones.edge(); Speech.speakMessage("not in a document"); return }
+                guard let s = doc.script(named: name) else { Tones.edge(); Speech.speakMessage(String(localized: "not in a document", comment: "Spoken message")); return }
                 Log.io("Word: \(name) from a table cell, through the page")
                 s.handler(g)
             }
         }
         for (name, dr, dc, keys) in [("table_nextColumn", 0, 1, ["kb:turnover+rightArrow"]), ("table_previousColumn", 0, -1, ["kb:turnover+leftArrow"]),
                                      ("table_nextRow", 1, 0, ["kb:turnover+downArrow"]), ("table_previousRow", -1, 0, ["kb:turnover+upArrow"])] {
-            let what = dr == 0 ? (dc > 0 ? "next cell in the row" : "previous cell in the row") : (dr > 0 ? "cell below" : "cell above")
-            script(name, "In a table: the \(what), the caret at its start (NVDA's table keys; TurnOver plus the arrows)", gestures: keys, category: "Microsoft Word") { [weak self] _ in
+            let description = dr == 0 ? (dc > 0 ? String(localized: "In a table: the next cell in the row, the caret at its start (NVDA's table keys; TurnOver plus the arrows)", comment: "A command, as the key list and keyboard help say it")
+                                                : String(localized: "In a table: the previous cell in the row, the caret at its start (NVDA's table keys; TurnOver plus the arrows)", comment: "A command, as the key list and keyboard help say it"))
+                : (dr > 0 ? String(localized: "In a table: the cell below, the caret at its start (NVDA's table keys; TurnOver plus the arrows)", comment: "A command, as the key list and keyboard help say it")
+                          : String(localized: "In a table: the cell above, the caret at its start (NVDA's table keys; TurnOver plus the arrows)", comment: "A command, as the key list and keyboard help say it"))
+            script(name, description, gestures: keys, category: "Microsoft Word") { [weak self] _ in
                 self?.liveCell()?.move(dr, dc)
             }.isAvailable = { [weak self] in
                 guard let self, API.focusPid == pid else { return false }
@@ -443,7 +446,7 @@ final class WordAppModule: AppModule {
             if let d = event.obj as? WordDocument {
                 // NVDA's words, then the line the caret came out on. The page's own focus news stays quiet: Word
                 // hands the focus back to the page it took it from.
-                Speech.speakOnly("out of table")   // the display shows the line itself
+                Speech.speakOnly(String(localized: "out of table", comment: "The caret left a table"))   // the display shows the line itself
                 if let c = try? d.makeTextInfo(.caret) { c.expand(.line); Speech.speakTextInfo(c, unit: .line, reason: .caret) }
                 lastLostWasPage = true
             }
@@ -565,7 +568,7 @@ final class WordAppModule: AppModule {
               let view = bar.elements(kAXChildrenAttribute).first(where: { $0.string(kAXTitleAttribute) == "View" }),
               let item = Self.sidebarItem(in: view) else { return }
         AXUIElementPerformAction(item, kAXPressAction as CFString)
-        Speech.speakMessage("sidebar")
+        Speech.speakMessage(String(localized: "sidebar", comment: "Spoken message"))
     }
 
     /// The rows of View > Sidebar > Document Map (Word's navigation outline), opening the sidebar if it is closed,
@@ -691,7 +694,7 @@ final class WordDocument: EditableText {
                 super.caretMoved(speak: nil, gesture: gesture, info: caret)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
                     guard let self, API.focusObject?.isSameElement(as: self) == true else { return }
-                    Speech.speakMessage("table")
+                    Speech.speakMessage(String(localized: "table", comment: "Spoken message"))
                 }
                 return
             }
@@ -709,7 +712,7 @@ final class WordDocument: EditableText {
               let page = Int((area.string(kAXDescriptionAttribute) ?? "").filter(\.isNumber)) else { return }
         defer { lastPage = page }
         guard let last = lastPage, last != page else { return }
-        Speech.speakMessage("page \(page)")
+        Speech.speakMessage(Phrases.page(page))
     }
 
     /// Word's AXSelectedTextChanged arrives before AXSelectedTextRange is updated (measured 30 Sep 2026:
@@ -737,34 +740,34 @@ final class WordDocument: EditableText {
     override func initOverlay() {
         super.initOverlay()
         let cat = "Microsoft Word"
-        script("nextHeading", "Moves to the next heading", gestures: ["kb:turnover+h"], category: cat) { [weak self] _ in guard let self else { return }; goTo("goto a heading item", forward: true) }
-        script("previousHeading", "Moves to the previous heading", gestures: ["kb:turnover+shift+h"], category: cat) { [weak self] _ in guard let self else { return }; goTo("goto a heading item", forward: false) }
-        script("nextComment", "Moves to the next comment (in the rotor and This app)", gestures: [], category: cat) { [weak self] _ in guard let self else { return }; goToComment(forward: true) }
-        script("previousComment", "Moves to the previous comment", gestures: [], category: cat) { [weak self] _ in guard let self else { return }; goToComment(forward: false) }
-        script("nextRevision", "Moves to the next tracked change", gestures: ["kb:turnover+r"], category: cat) { [weak self] _ in guard let self else { return }; goToRevision(forward: true) }
-        script("previousRevision", "Moves to the previous tracked change", gestures: ["kb:turnover+shift+r"], category: cat) { [weak self] _ in guard let self else { return }; goToRevision(forward: false) }
-        script("nextSpellingError", "Moves to the next spelling error", gestures: ["kb:turnover+e"], category: cat) { [weak self] _ in guard let self else { return }; goToSpellingError(forward: true) }
-        script("previousSpellingError", "Moves to the previous spelling error", gestures: ["kb:turnover+shift+e"], category: cat) { [weak self] _ in guard let self else { return }; goToSpellingError(forward: false) }
+        script("nextHeading", String(localized: "Moves to the next heading", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+h"], category: cat) { [weak self] _ in guard let self else { return }; goTo("goto a heading item", forward: true) }
+        script("previousHeading", String(localized: "Moves to the previous heading", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+shift+h"], category: cat) { [weak self] _ in guard let self else { return }; goTo("goto a heading item", forward: false) }
+        script("nextComment", String(localized: "Moves to the next comment (in the rotor and This app)", comment: "A command, as the key list and keyboard help say it"), gestures: [], category: cat) { [weak self] _ in guard let self else { return }; goToComment(forward: true) }
+        script("previousComment", String(localized: "Moves to the previous comment", comment: "A command, as the key list and keyboard help say it"), gestures: [], category: cat) { [weak self] _ in guard let self else { return }; goToComment(forward: false) }
+        script("nextRevision", String(localized: "Moves to the next tracked change", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+r"], category: cat) { [weak self] _ in guard let self else { return }; goToRevision(forward: true) }
+        script("previousRevision", String(localized: "Moves to the previous tracked change", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+shift+r"], category: cat) { [weak self] _ in guard let self else { return }; goToRevision(forward: false) }
+        script("nextSpellingError", String(localized: "Moves to the next spelling error", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+e"], category: cat) { [weak self] _ in guard let self else { return }; goToSpellingError(forward: true) }
+        script("previousSpellingError", String(localized: "Moves to the previous spelling error", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+shift+e"], category: cat) { [weak self] _ in guard let self else { return }; goToSpellingError(forward: false) }
         // VO-Command-T: Word's own table search, the caret into the first cell (the VoiceOver cursor went to the
         // table, but the caret stayed, and the arrows read from where it was; a tester, 12 Oct 2026).
-        script("nextTable", "Moves to the next table, the caret in its first cell", gestures: [], category: cat) { [weak self] _ in self?.goToTable(forward: true) }
-        script("previousTable", "Moves to the previous table, the caret in its first cell", gestures: [], category: cat) { [weak self] _ in self?.goToTable(forward: false) }
-        script("nextPage", "Moves to the next page", gestures: ["kb:turnover+pageDown"], category: cat) { [weak self] _ in guard let self else { return }; goToPage(forward: true) }
-        script("previousPage", "Moves to the previous page", gestures: ["kb:turnover+pageUp"], category: cat) { [weak self] _ in guard let self else { return }; goToPage(forward: false) }
+        script("nextTable", String(localized: "Moves to the next table, the caret in its first cell", comment: "A command, as the key list and keyboard help say it"), gestures: [], category: cat) { [weak self] _ in self?.goToTable(forward: true) }
+        script("previousTable", String(localized: "Moves to the previous table, the caret in its first cell", comment: "A command, as the key list and keyboard help say it"), gestures: [], category: cat) { [weak self] _ in self?.goToTable(forward: false) }
+        script("nextPage", String(localized: "Moves to the next page", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+pageDown"], category: cat) { [weak self] _ in guard let self else { return }; goToPage(forward: true) }
+        script("previousPage", String(localized: "Moves to the previous page", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+pageUp"], category: cat) { [weak self] _ in guard let self else { return }; goToPage(forward: false) }
         // NVDA's Word scripts: the key goes to Word, then the result is reported.
-        script("toggleBold", "Toggles bold and reports it", gestures: ["kb:command+b"], category: cat) { [weak self] g in self?.afterKey(g) { $0.fontState { "bold \($0.bold ? "on" : "off")" } } }
-        script("toggleItalic", "Toggles italic and reports it", gestures: ["kb:command+i"], category: cat) { [weak self] g in self?.afterKey(g) { $0.fontState { "italic \($0.italic ? "on" : "off")" } } }
-        script("toggleUnderline", "Toggles underline and reports it", gestures: ["kb:command+u"], category: cat) { [weak self] g in self?.afterKey(g) { $0.fontState { "underline \($0.underline ? "on" : "off")" } } }
-        script("increaseFontSize", "Makes the text bigger and reports the size", gestures: ["kb:command+shift+."], category: cat) { [weak self] g in self?.afterKey(g) { $0.fontState { "\($0.size) point" } } }
-        script("decreaseFontSize", "Makes the text smaller and reports the size", gestures: ["kb:command+shift+,"], category: cat) { [weak self] g in self?.afterKey(g) { $0.fontState { "\($0.size) point" } } }
-        script("alignLeft", "Aligns left and reports the alignment", gestures: ["kb:command+l"], category: cat) { [weak self] g in self?.afterKey(g) { $0.alignment() } }
-        script("alignCenter", "Centres and reports the alignment", gestures: ["kb:command+e"], category: cat) { [weak self] g in self?.afterKey(g) { $0.alignment() } }
-        script("alignRight", "Aligns right and reports the alignment", gestures: ["kb:command+r"], category: cat) { [weak self] g in self?.afterKey(g) { $0.alignment() } }
-        script("justify", "Justifies and reports the alignment", gestures: ["kb:command+j"], category: cat) { [weak self] g in self?.afterKey(g) { $0.alignment() } }
-        script("lineSpacingSingle", "Sets single spacing and reports it", gestures: ["kb:command+1"], category: cat) { [weak self] g in self?.afterKey(g) { $0.lineSpacing() } }
-        script("lineSpacingDouble", "Sets double spacing and reports it", gestures: ["kb:command+2"], category: cat) { [weak self] g in self?.afterKey(g) { $0.lineSpacing() } }
-        script("lineSpacingOneAndHalf", "Sets 1.5 spacing and reports it", gestures: ["kb:command+5"], category: cat) { [weak self] g in self?.afterKey(g) { $0.lineSpacing() } }
-        script("applyStyle", "Apply a style; applies a heading or the Normal style and reports the style", gestures: ["kb:command+option+1", "kb:command+option+2", "kb:command+option+3", "kb:command+shift+n"], category: cat) { [weak self] g in
+        script("toggleBold", String(localized: "Toggles bold and reports it", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+b"], category: cat) { [weak self] g in self?.afterKey(g) { $0.fontState { String(localized: "bold \(Phrases.onOff($0.bold))", comment: "Bold turned on or off in Word") } } }
+        script("toggleItalic", String(localized: "Toggles italic and reports it", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+i"], category: cat) { [weak self] g in self?.afterKey(g) { $0.fontState { String(localized: "italic \(Phrases.onOff($0.italic))", comment: "Italic turned on or off in Word") } } }
+        script("toggleUnderline", String(localized: "Toggles underline and reports it", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+u"], category: cat) { [weak self] g in self?.afterKey(g) { $0.fontState { String(localized: "underline \(Phrases.onOff($0.underline))", comment: "Underline turned on or off in Word") } } }
+        script("increaseFontSize", String(localized: "Makes the text bigger and reports the size", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+shift+."], category: cat) { [weak self] g in self?.afterKey(g) { $0.fontState { TextFormat.points($0.size) } } }
+        script("decreaseFontSize", String(localized: "Makes the text smaller and reports the size", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+shift+,"], category: cat) { [weak self] g in self?.afterKey(g) { $0.fontState { TextFormat.points($0.size) } } }
+        script("alignLeft", String(localized: "Aligns left and reports the alignment", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+l"], category: cat) { [weak self] g in self?.afterKey(g) { $0.alignment() } }
+        script("alignCenter", String(localized: "Centres and reports the alignment", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+e"], category: cat) { [weak self] g in self?.afterKey(g) { $0.alignment() } }
+        script("alignRight", String(localized: "Aligns right and reports the alignment", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+r"], category: cat) { [weak self] g in self?.afterKey(g) { $0.alignment() } }
+        script("justify", String(localized: "Justifies and reports the alignment", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+j"], category: cat) { [weak self] g in self?.afterKey(g) { $0.alignment() } }
+        script("lineSpacingSingle", String(localized: "Sets single spacing and reports it", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+1"], category: cat) { [weak self] g in self?.afterKey(g) { $0.lineSpacing() } }
+        script("lineSpacingDouble", String(localized: "Sets double spacing and reports it", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+2"], category: cat) { [weak self] g in self?.afterKey(g) { $0.lineSpacing() } }
+        script("lineSpacingOneAndHalf", String(localized: "Sets 1.5 spacing and reports it", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+5"], category: cat) { [weak self] g in self?.afterKey(g) { $0.lineSpacing() } }
+        script("applyStyle", String(localized: "Apply a style; applies a heading or the Normal style and reports the style", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+option+1", "kb:command+option+2", "kb:command+option+3", "kb:command+shift+n"], category: cat) { [weak self] g in
             guard let self else { return }
             g.send()
             // Word marks the paragraph style in AXCustom ("Heading 1"); a paragraph with none of those is Normal.
@@ -777,19 +780,20 @@ final class WordDocument: EditableText {
                 Speech.speakMessage(custom.first(where: { $0.hasPrefix("Heading") || $0 == "Title" || $0.hasPrefix("List") }) ?? "Normal")
             }
         }
-        script("toggleTrackChanges", "Turns track changes on or off and reports it", gestures: ["kb:command+shift+e"], category: cat) { [weak self] g in self?.afterKey(g) { $0.trackChanges() } }
-        script("reportCurrentComment", "Reports the comment at the caret (NVDA+Alt+C)", gestures: ["kb:turnover+option+c", "kb:turnover+command+c"], category: cat) { [weak self] _ in
+        script("toggleTrackChanges", String(localized: "Turns track changes on or off and reports it", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+shift+e"], category: cat) { [weak self] g in self?.afterKey(g) { $0.trackChanges() } }
+        script("reportCurrentComment", String(localized: "Reports the comment at the caret (NVDA+Alt+C)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+option+c", "kb:turnover+command+c"], category: cat) { [weak self] _ in
             guard let self, let s = module?.script else { return }
-            s.commentAtSelection { c in DispatchQueue.main.async { Speech.speakMessage(c ?? "no comment at the caret") } }
+            s.commentAtSelection { c in DispatchQueue.main.async { Speech.speakMessage(c ?? String(localized: "no comment at the caret", comment: "Spoken message")) } }
         }
         // NVDA in Word: Alt Up and Down Arrow, the previous and next sentence. Windows style only, where the PC's Alt is
         // the Mac's Command (Control Home and End still go to the top and bottom) (12 Oct 2026).
         for (name, forward) in [("windows_nextSentence", true), ("windows_previousSentence", false)] {
-            script(name, forward ? "Moves to the next sentence (Windows style: Alt Down Arrow)" : "Moves to the previous sentence (Windows style: Alt Up Arrow)",
+            script(name, forward ? String(localized: "Moves to the next sentence (Windows style: Alt Down Arrow)", comment: "A command, as the key list and keyboard help say it")
+                               : String(localized: "Moves to the previous sentence (Windows style: Alt Up Arrow)", comment: "A command, as the key list and keyboard help say it"),
                    gestures: [forward ? "kb:command+downArrow" : "kb:command+upArrow"], category: cat) { _ in VoiceOverKeysPlugin.sentence(forward: forward) }
                 .isAvailable = { config.general.windowsKeys }
         }
-        script("elementsList", "Elements list; opens the elements list: headings and comments", gestures: ["kb:turnover+f7"], category: cat) { [weak self] _ in self?.elementsList() }
+        script("elementsList", String(localized: "Elements list; opens the elements list: headings and comments", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+f7"], category: cat) { [weak self] _ in self?.elementsList() }
     }
 
     /// Send the key, then ask Word (off the main thread) and speak the answer.
@@ -816,13 +820,13 @@ final class WordDocument: EditableText {
             guard !title.isEmpty else { continue }
             let level = (row.element.int("AXDisclosureLevel") ?? 0) + 1
             let number = items.count + 1
-            items.append(MenuItem("\(title), heading level \(level)", .action { [weak self] in
+            items.append(MenuItem(verbatim: "\(title), \(Phrases.headingLevel(level))", .action { [weak self] in
                 // (The menu's onClose restores the sidebar; doing it here too opened it again, 8 Oct 2026.)
                 guard let self else { return }
-                self.scripted("heading") { done in
+                self.scripted(String(localized: "no heading", comment: "Spoken message")) { done in
                     s.goToHeading(number: number) { landing in
                         DispatchQueue.main.async { module.adoptPage() }
-                        done((landing.level.map { "heading level \($0), " } ?? "heading, ") + (landing.text.isEmpty ? "blank" : Speech.processed(String(landing.text.prefix(300)))))
+                        done(Self.headingLanding(landing.level, landing.text))
                     }
                 }
             }))
@@ -831,7 +835,7 @@ final class WordDocument: EditableText {
             DispatchQueue.main.async {
                 var commentItems: [MenuItem] = []
                 for c in comments {
-                    commentItems.append(MenuItem("comment by \(c.author): \(c.text.prefix(80))", .action {
+                    commentItems.append(MenuItem(verbatim: String(localized: "comment by \(c.author): \(String(c.text.prefix(80)))", comment: "A comment in the elements list: its author, then its words"), .action {
                         s.goToOffset(c.start) {
                             // Back to the page, as for a heading: the sidebar had the focus.
                             _ = module.caretArea.map { _ = $0.set(kAXFocusedAttribute, kCFBooleanTrue) }
@@ -841,34 +845,40 @@ final class WordDocument: EditableText {
                         }
                     }))
                 }
-                if items.isEmpty && commentItems.isEmpty { restore(); Speech.speakMessage("no headings or comments"); return }
+                if items.isEmpty && commentItems.isEmpty { restore(); Speech.speakMessage(String(localized: "no headings or comments", comment: "Spoken message")); return }
                 TurnOverMenu.shared.onClose = { restore() }
                 // The rotor (VO-U): Left and Right between headings and comments.
-                TurnOverMenu.shared.openRotor([(name: "Headings", items: items), (name: "Comments", items: commentItems)])
+                TurnOverMenu.shared.openRotor([(name: String(localized: "Headings", comment: "A rotor kind"), items: items), (name: String(localized: "Comments", comment: "A rotor kind"), items: commentItems)])
             }
         }
     }
 
     /// Run a scripted move off the main thread and speak what it landed on. The caret
     /// notification it causes carries a collapsed selection, so it says nothing itself.
-    private func scripted(_ what: String, _ body: @escaping (@escaping @MainActor (String?) -> Void) -> Void) {
+    /// `nothing`: what is said when the move finds nothing ("no next heading").
+    private func scripted(_ nothing: String, _ body: @escaping (@escaping @MainActor (String?) -> Void) -> Void) {
         guard let module else { return }
         SayAll.stop()
         body { result in
             DispatchQueue.main.async {
                 (API.focusObject as? EditableText)?.initAutoSelectDetection()
-                Speech.speakMessage(result.map { $0.isEmpty ? "no \(what)" : $0 } ?? "no \(what)")
+                Speech.speakMessage(result.map { $0.isEmpty ? nothing : $0 } ?? nothing)
             }
         }
         _ = module
     }
 
+    /// "heading level 2, Results": where a move to a heading landed.
+    static func headingLanding(_ level: Int?, _ text: String) -> String {
+        (level.map(Phrases.headingLevel) ?? Role.heading.displayString) + ", " + (text.isEmpty ? Phrases.blank : Speech.processed(String(text.prefix(300))))
+    }
+
     private func goTo(_ item: String, forward: Bool) {
         guard let s = module?.script else { return }
-        scripted(forward ? "next heading" : "previous heading") { done in
+        scripted(Phrases.noNext(Role.heading.displayString, forward: forward)) { done in
             s.goTo(item: item, forward: forward) { landing in
                 guard landing.moved else { done(nil); return }
-                done((landing.level.map { "heading level \($0), " } ?? "heading, ") + (landing.text.isEmpty ? "blank" : Speech.processed(String(landing.text.prefix(300)))))
+                done(Self.headingLanding(landing.level, landing.text))
             }
         }
     }
@@ -881,7 +891,7 @@ final class WordDocument: EditableText {
         let s = module.script
         let pid = element.pid
         s.goTo(item: "goto a table item", forward: forward) { landing in
-            guard landing.moved else { Tones.edge(); Speech.speakMessage(forward ? "no next table" : "no previous table"); return }
+            guard landing.moved else { Tones.edge(); Speech.speakMessage(forward ? String(localized: "no next table", comment: "Spoken message") : String(localized: "no previous table", comment: "Spoken message")); return }
             // Word moves its focus to the cell's text area, and the cell says the table, row and column; if that
             // focus doesn't come, follow it here.
             // Word is slow to know its cell: a second look before the fallback ("edit, ITEM" then "table, ITEM" were
@@ -910,7 +920,7 @@ final class WordDocument: EditableText {
         }
         guard !standIns.isEmpty, standIns.count == tables.count else {
             Log.io("Word tables: \(standIns.count) in the text, \(tables.count) in the window; asking Word instead")
-            return standIns.isEmpty && tables.isEmpty ? { Tones.edge(); Speech.speakMessage(forward ? "no next table" : "no previous table"); return true }() : false
+            return standIns.isEmpty && tables.isEmpty ? { Tones.edge(); Speech.speakMessage(forward ? String(localized: "no next table", comment: "Spoken message") : String(localized: "no previous table", comment: "Spoken message")); return true }() : false
         }
         let caret = info.start
         // Inside a table the page reports the offset just after its stand-in: that table is "here", not next.
@@ -918,7 +928,7 @@ final class WordDocument: EditableText {
         let pick = forward ? standIns.indices.first { $0 != here && standIns[$0].location > caret }
                            : standIns.indices.last { $0 != here && NSMaxRange(standIns[$0]) < caret }
         guard let k = pick, let cell = WordTableCell.textArea(tables[k], row: 0, column: 0) else {
-            Tones.edge(); Speech.speakMessage(forward ? "no next table" : "no previous table"); return true
+            Tones.edge(); Speech.speakMessage(forward ? String(localized: "no next table", comment: "Spoken message") : String(localized: "no previous table", comment: "Spoken message")); return true
         }
         _ = cell.set(kAXSelectedTextRangeAttribute, axRangeValue(0, 0))
         WordTableCell.last = nil
@@ -928,10 +938,10 @@ final class WordDocument: EditableText {
 
     private func goToComment(forward: Bool) {
         guard let s = module?.script else { return }
-        scripted(forward ? "next comment" : "previous comment") { done in
+        scripted(Phrases.noNext(String(localized: "comment", comment: "A Word comment, as a kind of thing to find"), forward: forward)) { done in
             s.goTo(item: "goto a comment item", forward: forward) { landing in
                 guard landing.moved else { done(nil); return }
-                s.commentAtSelection { done($0 ?? "comment") }
+                s.commentAtSelection { done($0 ?? String(localized: "comment", comment: "A Word comment, as a kind of thing to find")) }
             }
         }
     }
@@ -939,7 +949,7 @@ final class WordDocument: EditableText {
     private func goToRevision(forward: Bool) {
         if goToMarkedChange(forward: forward) { return }
         guard let s = module?.script else { return }
-        scripted(forward ? "next change" : "previous change") { done in s.nextRevision(forward: forward, completion: done) }
+        scripted(Phrases.noNext(String(localized: "change", comment: "A tracked change in Word, as a kind of thing to find"), forward: forward)) { done in s.nextRevision(forward: forward, completion: done) }
     }
 
     /// Word marks misspellings in the text it gives accessibility (AXMarkedMisspelled): the next or previous one on
@@ -952,7 +962,7 @@ final class WordDocument: EditableText {
         guard let info = try? makeTextInfo(.caret) as? AXTextInfo else { return false }
         let el = info.textElement
         let n = info.storyLength()
-        if n == 0 { Tones.edge(); Speech.speakMessage(forward ? "no next spelling error" : "no previous spelling error"); return true }   // nothing to search: answered without Word's script (it errored -1728 each press)
+        if n == 0 { Tones.edge(); Speech.speakMessage(forward ? String(localized: "no next spelling error", comment: "Spoken message") : String(localized: "no previous spelling error", comment: "Spoken message")); return true }   // nothing to search: answered without Word's script (it errored -1728 each press)
         guard n > 0, let a = el.param(kAXAttributedStringForRangeParameterizedAttribute, axRangeValue(0, min(n, 50_000))) as? NSAttributedString else { return false }
         var words: [NSRange] = []
         let ns = a.string as NSString
@@ -974,7 +984,7 @@ final class WordDocument: EditableText {
         }
         info.setCaretOffset(r.location)
         initAutoSelectDetection()
-        Speech.speakMessage("\(ns.substring(with: r)), misspelled")
+        Speech.speakMessage(String(localized: "\(ns.substring(with: r)), misspelled", comment: "A misspelled word reached: %@ is the word"))
         return true
     }
 
@@ -985,7 +995,7 @@ final class WordDocument: EditableText {
         guard let info = try? makeTextInfo(.caret) as? AXTextInfo else { return false }
         let el = info.textElement
         let n = info.storyLength()
-        if n == 0 { Tones.edge(); Speech.speakMessage(forward ? "no next spelling error" : "no previous spelling error"); return true }   // nothing to search: answered without Word's script (it errored -1728 each press)
+        if n == 0 { Tones.edge(); Speech.speakMessage(forward ? String(localized: "no next spelling error", comment: "Spoken message") : String(localized: "no previous spelling error", comment: "Spoken message")); return true }   // nothing to search: answered without Word's script (it errored -1728 each press)
         guard n > 0, let a = el.param(kAXAttributedStringForRangeParameterizedAttribute, axRangeValue(0, min(n, 50_000))) as? NSAttributedString else { return false }
         var changes: [(NSRange, String)] = []
         a.enumerateAttribute(NSAttributedString.Key("AXAnnotation"), in: NSRange(location: 0, length: a.length)) { val, range, _ in
@@ -1019,24 +1029,24 @@ final class WordDocument: EditableText {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { settleTableLanding(pid: pid, text: text, look: look + 1) }
         } else if Speech.sinceFocusSpoken > 1.5 {
             // Nothing was said for the landing at all: the table's first cell, at least.
-            Speech.speakMessage("table, " + (text.isEmpty ? "blank" : Speech.processed(String(text.prefix(200)))))
+            Speech.speakMessage(Role.table.displayString + ", " + (text.isEmpty ? Phrases.blank : Speech.processed(String(text.prefix(200)))))
         }
     }
 
     private func goToSpellingError(forward: Bool) {
         if goToMisspelling(forward: forward) { return }
-        guard let s = module?.script else { Log.io("Word: no script bridge for the spelling move"); Tones.edge(); Speech.speakMessage(forward ? "no next spelling error" : "no previous spelling error"); return }
-        scripted(forward ? "next spelling error" : "previous spelling error") { done in
-            s.nextSpellingError(forward: forward, from: self.misspellingSearchFrom) { done($0.map { $0 + ", misspelled" }) }
+        guard let s = module?.script else { Log.io("Word: no script bridge for the spelling move"); Tones.edge(); Speech.speakMessage(forward ? String(localized: "no next spelling error", comment: "Spoken message") : String(localized: "no previous spelling error", comment: "Spoken message")); return }
+        scripted(forward ? String(localized: "no next spelling error", comment: "Spoken message") : String(localized: "no previous spelling error", comment: "Spoken message")) { done in
+            s.nextSpellingError(forward: forward, from: self.misspellingSearchFrom) { done($0.map { String(localized: "\($0), misspelled", comment: "A misspelled word reached: %@ is the word") }) }
         }
     }
 
     private func goToPage(forward: Bool) {
         guard let s = module?.script else { return }
-        scripted(forward ? "next page" : "previous page") { done in
+        scripted(Phrases.noNext(Role.page.displayString, forward: forward)) { done in
             s.goTo(item: "goto a page item", forward: forward) { landing in
                 guard landing.moved else { done(nil); return }
-                s.selectionInformation { page, _ in done((page.map { "page \($0), " } ?? "") + Speech.processed(String(landing.text.prefix(200)))) }
+                s.selectionInformation { page, _ in done((page.map { Phrases.page($0) + ", " } ?? "") + Speech.processed(String(landing.text.prefix(200)))) }
             }
         }
     }
@@ -1104,19 +1114,19 @@ final class WordTableCell: WordTextArea {
         if !sameTable {
             let rows = (p.table.attr("AXRowCount") as? Int) ?? p.table.elements("AXRows").count
             let columns = (p.table.attr("AXColumnCount") as? Int) ?? p.table.elements("AXColumns").count
-            parts.append("table with \(rows) rows and \(columns) columns")
+            parts.append(String(localized: "table with \(String(rows)) rows and \(String(columns)) columns", comment: "A Word table reached: its size"))
         }
         // Back in the same table within the 10 s, but with no last cell (the focus went to the page between): row and
         // column are news. The force-unwrap here crashed TurnOver in a 201-row table (a tester, 12 Oct 2026).
         let rowChanged = !sameTable || (old.map { $0.row != p.row } ?? true)
         let columnChanged = !sameTable || (old.map { $0.column != p.column } ?? true)
         let coords = config.documentFormatting.tableCellCoordinates
-        if rowChanged, coords { parts.append("row \(p.row + 1)") }
-        if columnChanged, coords { parts.append("column \(p.column + 1)") }
+        if rowChanged, coords { parts.append(Phrases.row(p.row + 1)) }
+        if columnChanged, coords { parts.append(Phrases.column(p.column + 1)) }
         if config.documentFormatting.tableHeaders, columnChanged, p.row > 0, let h = Self.textArea(p.table, row: 0, column: p.column).map(Self.text(of:)), !h.isEmpty { parts.append(h) }
         if config.documentFormatting.tableHeaders, rowChanged, p.row > 0, p.column > 0, let h = Self.textArea(p.table, row: p.row, column: 0).map(Self.text(of:)), !h.isEmpty { parts.append(h) }
-        parts.append(t.isEmpty ? "blank" : t)
-        if !t.isEmpty, let sel = cfRange(element.attr(kAXSelectedTextRangeAttribute)), sel.length > 0, sel.length >= t.count { parts.append("selected") }
+        parts.append(t.isEmpty ? Phrases.blank : t)
+        if !t.isEmpty, let sel = cfRange(element.attr(kAXSelectedTextRangeAttribute)), sel.length > 0, sel.length >= t.count { parts.append(State.selected.displayString) }
         return parts.joined(separator: ", ")
     }
 
@@ -1125,8 +1135,11 @@ final class WordTableCell: WordTextArea {
         let cat = "Microsoft Word"
         for (name, dr, dc, keys) in [("table_nextColumn", 0, 1, [String]()), ("table_previousColumn", 0, -1, []),
                                      ("table_nextRow", 1, 0, ["kb:turnover+downArrow"]), ("table_previousRow", -1, 0, ["kb:turnover+upArrow"])] {
-            let what = dr == 0 ? (dc > 0 ? "next cell in the row" : "previous cell in the row") : (dr > 0 ? "cell below" : "cell above")
-            script(name, "In a table: the \(what), the caret at its start (NVDA's table keys; TurnOver plus the arrows)", gestures: keys, category: cat) { [weak self] _ in
+            let description = dr == 0 ? (dc > 0 ? String(localized: "In a table: the next cell in the row, the caret at its start (NVDA's table keys; TurnOver plus the arrows)", comment: "A command, as the key list and keyboard help say it")
+                                                : String(localized: "In a table: the previous cell in the row, the caret at its start (NVDA's table keys; TurnOver plus the arrows)", comment: "A command, as the key list and keyboard help say it"))
+                : (dr > 0 ? String(localized: "In a table: the cell below, the caret at its start (NVDA's table keys; TurnOver plus the arrows)", comment: "A command, as the key list and keyboard help say it")
+                          : String(localized: "In a table: the cell above, the caret at its start (NVDA's table keys; TurnOver plus the arrows)", comment: "A command, as the key list and keyboard help say it"))
+            script(name, description, gestures: keys, category: cat) { [weak self] _ in
                 self?.move(dr, dc)
             }
         }
@@ -1135,7 +1148,7 @@ final class WordTableCell: WordTextArea {
     func move(_ dr: Int, _ dc: Int) {
         guard let p = place else { return }
         guard let target = Self.textArea(p.table, row: p.row + dr, column: p.column + dc) else {
-            Tones.edge(); Speech.speakOnly("edge of table"); return
+            Tones.edge(); Speech.speakOnly(String(localized: "edge of table", comment: "Spoken message")); return
         }
         _ = target.set(kAXSelectedTextRangeAttribute, axRangeValue(0, 0))
         AXHandler.shared.focusChanged(target, pid: element.pid)
@@ -1223,7 +1236,7 @@ final class WordTextInfo: AXTextInfo {
             switch config.documentFormatting.headings {
             case .off: break
             case .tone: pendingTones.append { Tones.heading(level: level) }
-            case .speech: prefix.append(level > 0 && config.documentFormatting.reportHeadingLevel ? "heading level \(level)" : "heading")
+            case .speech: prefix.append(level > 0 && config.documentFormatting.reportHeadingLevel ? Phrases.headingLevel(level) : Role.heading.displayString)
             }
         }
         // Annotations anywhere in the range (measured 2 Oct 2026): a comment is an AXAnnotation with an element and
@@ -1239,7 +1252,7 @@ final class WordTextInfo: AXTextInfo {
             switch WordAppModule.commentReport {
             case .off: break
             case .tone: pendingTones.append { Tones.comment() }
-            case .speech: prefix.append("comment")
+            case .speech: prefix.append(String(localized: "comment", comment: "A Word comment, as a kind of thing to find"))
             }
         }
         for label in labels {
@@ -1257,7 +1270,7 @@ final class WordTextInfo: AXTextInfo {
     override func locationText(_ done: @escaping (String?) -> Void) {
         guard let module = obj.appModule as? WordAppModule else { done(nil); return }
         module.script.selectionInformation { page, line in
-            let parts = [page.map { "page \($0)" }, line.map { "line \($0)" }].compactMap { $0 }
+            let parts = [page.map(Phrases.page), line.map { String(localized: "line \(String($0))", comment: "Where the caret is: the line number") }].compactMap { $0 }
             DispatchQueue.main.async { done(parts.isEmpty ? nil : parts.joined(separator: ", ")) }
         }
     }
@@ -1369,7 +1382,7 @@ final class WordScript {
             let kind = parts[0].replacingOccurrences(of: "revision ", with: "")
             let author = parts.count > 1 ? parts[1] : ""
             let text = parts.count > 2 ? parts[2...].joined(separator: "|") : ""
-            let answer = "\(kind)\(author.isEmpty ? "" : " by \(author)"): \(text.prefix(400))"
+            let answer = author.isEmpty ? "\(kind): \(text.prefix(400))" : String(localized: "\(kind) by \(author): \(String(text.prefix(400)))", comment: "A tracked change: its kind (from Word), author and text")
             DispatchQueue.main.async { completion(answer) }
         }
     }
@@ -1419,14 +1432,15 @@ final class WordScript {
     func alignment() {
         queue.async {
             let r = self.run("tell application \"Microsoft Word\" to return (alignment of paragraph format of selection) as text") ?? ""
-            let words = r.contains("center") ? "centred" : r.contains("right") ? "right aligned" : r.contains("justify") ? "justified" : "left aligned"
+            let words = r.contains("center") ? TextFormat.word("centred") : r.contains("right") ? TextFormat.word("right aligned") : r.contains("justify") ? TextFormat.word("justified") : TextFormat.word("left aligned")
             DispatchQueue.main.async { Speech.speakMessage(words) }
         }
     }
     func lineSpacing() {
         queue.async {
             let r = self.run("tell application \"Microsoft Word\" to return (line spacing rule of paragraph format of selection) as text") ?? ""
-            let words = r.contains("double") ? "double spacing" : r.contains("1pt5") || r.contains("one and a half") ? "1.5 line spacing" : r.contains("single") ? "single spacing" : "line spacing \(r)"
+            let words = r.contains("double") ? TextFormat.word("double spacing") : r.contains("1pt5") || r.contains("one and a half") ? TextFormat.word("1.5 line spacing")
+                : r.contains("single") ? TextFormat.word("single spacing") : String(localized: "line spacing \(r)", comment: "Word's line spacing rule, as Word names it")
             DispatchQueue.main.async { Speech.speakMessage(words) }
         }
     }
@@ -1441,18 +1455,18 @@ final class WordScript {
             // paragraphs that differ comes back as missing value or 9999999 (code review, 13 Oct: raw values were said).
             let aw = a.lowercased().replacingOccurrences(of: " ", with: ""), lw = l.lowercased().replacingOccurrences(of: " ", with: "")
             func mixed(_ v: String) -> Bool { v.isEmpty || v.contains("missing") || v.contains("9999999") }
-            let align = mixed(aw) ? "" : aw.contains("center") ? "centred" : aw.contains("right") ? "right aligned"
-                : aw.contains("distribute") ? "distributed" : aw.contains("justify") ? "justified" : aw.contains("left") ? "left aligned" : ""
+            let align = mixed(aw) ? "" : aw.contains("center") ? TextFormat.word("centred") : aw.contains("right") ? TextFormat.word("right aligned")
+                : aw.contains("distribute") ? TextFormat.word("distributed") : aw.contains("justify") ? TextFormat.word("justified") : aw.contains("left") ? TextFormat.word("left aligned") : ""
             let points = Double(pts.replacingOccurrences(of: ",", with: ".")).map { $0 == $0.rounded() ? String(Int($0)) : String(format: "%.1f", $0) }
             let space: String
             if mixed(lw) { space = "" }
-            else if lw.contains("double") { space = "double spacing" }
-            else if lw.contains("1pt5") || lw.contains("onepointfive") { space = "1.5 line spacing" }
-            else if lw.contains("single") { space = "single spacing" }
-            else if lw.contains("atleast") { space = points.map { "line spacing at least \($0) points" } ?? "line spacing at least" }
-            else if lw.contains("exactly") { space = points.map { "line spacing exactly \($0) points" } ?? "exact line spacing" }
+            else if lw.contains("double") { space = TextFormat.word("double spacing") }
+            else if lw.contains("1pt5") || lw.contains("onepointfive") { space = TextFormat.word("1.5 line spacing") }
+            else if lw.contains("single") { space = TextFormat.word("single spacing") }
+            else if lw.contains("atleast") { space = points.map { String(localized: "line spacing at least \($0) points", comment: "Paragraph line spacing: %@ is the size") } ?? TextFormat.word("line spacing at least") }
+            else if lw.contains("exactly") { space = points.map { String(localized: "line spacing exactly \($0) points", comment: "Paragraph line spacing: %@ is the size") } ?? TextFormat.word("exact line spacing") }
             else if lw.contains("multiple"), let p = Double(pts.replacingOccurrences(of: ",", with: ".")) {
-                let lines = p / 12; space = "line spacing \(lines == lines.rounded() ? String(Int(lines)) : String(format: "%.2g", lines)) lines"
+                let lines = p / 12; space = String(localized: "line spacing \(lines == lines.rounded() ? String(Int(lines)) : String(format: "%.2g", lines)) lines", comment: "Paragraph line spacing in lines: %@ is how many")
             } else { space = "" }
             let words = [align, space].filter { !$0.isEmpty }.joined(separator: ", ")
             DispatchQueue.main.async { completion(words) }
@@ -1461,7 +1475,7 @@ final class WordScript {
     func trackChanges() {
         queue.async {
             let r = self.run("tell application \"Microsoft Word\" to return (track revisions of active document) as text") ?? ""
-            DispatchQueue.main.async { Speech.speakMessage(r == "true" ? "track changes on" : "track changes off") }
+            DispatchQueue.main.async { Speech.speakMessage(r == "true" ? String(localized: "track changes on", comment: "Spoken message") : String(localized: "track changes off", comment: "Spoken message")) }
         }
     }
     struct Comment { let author: String; let text: String; let start: Int }
@@ -1512,7 +1526,7 @@ final class WordScript {
             Self.asking = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                 guard Self.asking, NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.UserNotificationCenter").contains(where: { !$0.isTerminated }) else { return }
-                Speech.speakMessage("macOS is asking whether TurnOver may control Microsoft Word. Choose Allow; there is no hurry.")
+                Speech.speakMessage(String(localized: "macOS is asking whether TurnOver may control Microsoft Word. Choose Allow; there is no hurry.", comment: "Spoken message"))
             }
         }
         var error: NSDictionary?
@@ -1526,7 +1540,7 @@ final class WordScript {
             if (error[NSAppleScript.errorNumber] as? Int) == -1743, Date().timeIntervalSince(Self.lastRefusalSpoken) > 30 {
                 Self.lastRefusalSpoken = Date()
                 DispatchQueue.main.async {
-                    Speech.speakMessage("TurnOver needs permission to control Word. In System Settings, Privacy and Security, Automation, turn on Microsoft Word under TurnOver.")
+                    Speech.speakMessage(String(localized: "TurnOver needs permission to control Word. In System Settings, Privacy and Security, Automation, turn on Microsoft Word under TurnOver.", comment: "Spoken message"))
                 }
             }
             return nil

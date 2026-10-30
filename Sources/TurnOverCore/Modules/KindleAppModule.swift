@@ -94,7 +94,7 @@ final class KindleAppModule: AppModule {
     /// were silent).
     required init(pid: pid_t, bundleIdentifier: String, appName: String) {
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
-        script("kindle_tabOut", "From a field on Kindle's page to the next or previous control", gestures: ["kb:tab", "kb:shift+tab"], category: "Kindle") { [weak self] g in
+        script("kindle_tabOut", String(localized: "From a field on Kindle's page to the next or previous control", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:tab", "kb:shift+tab"], category: "Kindle") { [weak self] g in
             guard let self, let doc = API.focusTreeInterceptor, doc.webArea.pid == self.pid else { g.send(); return }
             doc.setPassThrough(false, announce: true)
             let roles: Set<String> = ["AXLink", "AXButton", "AXTextField", "AXTextArea", "AXCheckBox", "AXRadioButton", "AXPopUpButton", "AXComboBox", "AXSlider"]
@@ -177,16 +177,16 @@ final class KindleAppModule: AppModule {
     /// arrows carrying on from page to page, as in any long document.
     private func bookScripts() {
         let cat = "Kindle"
-        script("kindle_nextPageByLine", "Next line; on the page's last line, the next page", gestures: ["kb:downArrow"], category: cat) { [weak self] g in
+        script("kindle_nextPageByLine", String(localized: "Next line; on the page's last line, the next page", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:downArrow"], category: cat) { [weak self] g in
             self?.turnAndRead(forward: true, atEnd: false, g)
         }.isAvailable = { [weak self] in self?.onEdgeLine(last: true) == true }
-        script("kindle_previousPageByLine", "Previous line; on the page's first line, the previous page's last", gestures: ["kb:upArrow"], category: cat) { [weak self] g in
+        script("kindle_previousPageByLine", String(localized: "Previous line; on the page's first line, the previous page's last", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:upArrow"], category: cat) { [weak self] g in
             self?.turnAndRead(forward: false, atEnd: true, g)
         }.isAvailable = { [weak self] in self?.onEdgeLine(last: false) == true }
-        script("kindle_nextPage", "The next page, read from its first line", gestures: ["kb:pageDown"], category: cat) { [weak self] g in
+        script("kindle_nextPage", String(localized: "The next page, read from its first line", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:pageDown"], category: cat) { [weak self] g in
             self?.turnAndRead(forward: true, atEnd: false, g)
         }.isAvailable = { [weak self] in self?.bookDocument() != nil }
-        script("kindle_previousPage", "The previous page, read from its first line", gestures: ["kb:pageUp"], category: cat) { [weak self] g in
+        script("kindle_previousPage", String(localized: "The previous page, read from its first line", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:pageUp"], category: cat) { [weak self] g in
             self?.turnAndRead(forward: false, atEnd: false, g)
         }.isAvailable = { [weak self] in self?.bookDocument() != nil }
     }
@@ -202,7 +202,7 @@ final class KindleAppModule: AppModule {
     private func turnAndRead(forward: Bool, atEnd: Bool, _ g: KeyboardGesture) {
         turnPage(forward: forward) { [weak self] turned in
             guard let self, let (doc, page) = self.bookDocument() else { return }
-            guard turned else { Tones.edge(); Speech.speakMessage(forward ? "end of the book" : "start of the book"); return }
+            guard turned else { Tones.edge(); Speech.speakMessage(forward ? String(localized: "end of the book", comment: "Spoken message") : String(localized: "start of the book", comment: "Spoken message")); return }
             guard let lines = self.textLines(doc, page) else { Speech.speakMessage(Self.noTextWords); return }
             doc.position = doc.buffer.lines[atEnd ? lines.last : lines.first].start
             doc.speakUnit(.line)
@@ -213,7 +213,7 @@ final class KindleAppModule: AppModule {
     override func sayAllReachedEnd(_ obj: TurnOverObject, resume: @escaping (TextInfo) -> Void) -> Bool {
         guard obj.pid == pid, bookDocument() != nil else { return false }
         turnPage(forward: true) { [weak self] turned in
-            guard let self, turned, let (doc, page) = self.bookDocument() else { if !turned { Speech.speakMessage("end of the book") }; return }
+            guard let self, turned, let (doc, page) = self.bookDocument() else { if !turned { Speech.speakMessage(String(localized: "end of the book", comment: "Spoken message")) }; return }
             guard let lines = self.textLines(doc, page) else { Speech.speakMessage(Self.noTextWords); return }
             doc.position = doc.buffer.lines[lines.first].start
             if let info = doc.makeTextInfo(.caret) { resume(info) }

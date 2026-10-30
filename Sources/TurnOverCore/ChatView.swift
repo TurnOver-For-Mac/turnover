@@ -347,7 +347,7 @@ public final class ChatView {
         if !(keepList && p == .conversations) { listShift = 0 }   // back to the same list: its numbers stay
         let list = p == .transcript ? messages() : p == .sections ? sections() : conversations()
         guard !list.isEmpty else {
-            Speech.speakMessage(p == .transcript ? "no messages" : p == .sections ? "no sections" : "no conversations")
+            Speech.speakMessage(p == .transcript ? String(localized: "no messages", comment: "A chat app's list is empty") : p == .sections ? String(localized: "no sections", comment: "A chat app's list is empty") : String(localized: "no conversations", comment: "A chat app's list is empty"))
             return
         }
         pane = p
@@ -358,7 +358,7 @@ public final class ChatView {
         }
         if let element, let at = list.firstIndex(where: { CFEqual($0, element) }) { i = at }
         index[p] = min(i, list.count - 1)
-        Speech.speakOnly(p == .transcript ? "messages" : p == .sections ? "sections" : "conversations")
+        Speech.speakOnly(p == .transcript ? String(localized: "messages", comment: "A part of the chat window") : p == .sections ? String(localized: "sections", comment: "A part of the chat window") : String(localized: "conversations", comment: "A part of the chat window"))
         announce()
     }
 
@@ -366,7 +366,7 @@ public final class ChatView {
     public func toComposer(quietly: Bool = false) {
         // No conversation open: Escape says so and leaves the cursor where it is. Dropping out left the keyboard
         // on WhatsApp's own focus, where the arrows wandered the sections and Return did nothing (10 Oct 2026).
-        guard let c = composer else { Speech.speakMessage("no conversation open"); return }
+        guard let c = composer else { Speech.speakMessage(String(localized: "no conversation open", comment: "Spoken message")); return }
         pane = .composer
         Braille.releaseItem()
         // The box usually still has the keyboard (TurnOver only moved its cursor), so no focus event comes: say it.
@@ -519,15 +519,15 @@ public final class ChatView {
     private func announce() {
         guard let e = currentItem(), let i = index[pane] else { return }
         var parts = [Self.words(e)]
-        if parts[0].isEmpty { parts[0] = "blank" }
-        if pane == .conversations, (e.attr(kAXSelectedAttribute) as? Bool) == true { parts.append("selected") }
+        if parts[0].isEmpty { parts[0] = Phrases.blank }
+        if pane == .conversations, (e.attr(kAXSelectedAttribute) as? Bool) == true { parts.append(State.selected.displayString) }
         // A list that drops rows as it scrolls (WhatsApp's Archived) keeps its numbering from before the load.
         let shift = pane == .conversations ? listShift : 0
-        parts.append("\(i + 1 + shift) of \(items.count + shift)")
+        parts.append(Phrases.position(i + 1 + shift, of: items.count + shift))
         Speech.speakItem(parts.joined(separator: ", "), processed: true)
         Hints.schedule(pane == .transcript
-            ? "Up and Down move through the messages; the shortcut menu has reply, tapback and copy. Escape goes back to the message box."
-            : pane == .sections ? "Return shows that section. Tab goes on." : "Return opens the conversation. Escape goes back to the message box.")
+            ? String(localized: "Up and Down move through the messages; the shortcut menu has reply, tapback and copy. Escape goes back to the message box.", comment: "A hint in a chat app")
+            : pane == .sections ? String(localized: "Return shows that section. Tab goes on.", comment: "A hint in a chat app") : String(localized: "Return opens the conversation. Escape goes back to the message box.", comment: "A hint in a chat app"))
     }
 
     /// For the test tool: how many of each part were found (no words, as they are private).
@@ -592,7 +592,8 @@ public final class ChatView {
                 if !matches {
                     Log.io("chat: still open: \(Log.words(open ?? "")); staying in the list")
                     Tones.edge()
-                    Speech.speakMessage("\(open ?? "Another conversation") is open, not the one chosen. Press Return again.")
+                    Speech.speakMessage(open.map { String(localized: "\($0) is open, not the one chosen. Press Return again.", comment: "Spoken message: %@ is the conversation open") }
+                        ?? String(localized: "Another conversation is open, not the one chosen. Press Return again.", comment: "Spoken message"))
                     return
                 }
                 // The app puts its focus in the box as the conversation opens, and that is said; only if it didn't, say it.
@@ -629,10 +630,10 @@ public final class ChatView {
             let buttons = Self.pickerButtons(pid: pid)
             guard found, !buttons.isEmpty else {
                 Log.io("chat: the Tapback picker did not appear (\(before.count) buttons before)")
-                Speech.speakMessage("no reactions offered for this message"); return
+                Speech.speakMessage(String(localized: "no reactions offered for this message", comment: "Spoken message")); return
             }
             Log.io("chat: Tapback picker with \(buttons.count) reactions")
-            let items = buttons.map { b in MenuItem(b.0, .action { _ = AXUIElementPerformAction(b.1, kAXPressAction as CFString) }) }
+            let items = buttons.map { b in MenuItem(verbatim: b.0, .action { _ = AXUIElementPerformAction(b.1, kAXPressAction as CFString) }) }
             TurnOverMenu.shared.openList("React", items: items)
             // The list closed without a choice (Escape): Messages' own picker would stay open on the message. Close it
             // too, with Escape to Messages (marked, so TurnOver lets it by). Tried live, 10 Oct 2026.
@@ -707,16 +708,16 @@ public final class ChatView {
                 Log.io("chat: the item's context menu → \(r.rawValue)")
                 if r == .success { return }
             }
-            Speech.speakMessage("no actions"); return
+            Speech.speakMessage(String(localized: "no actions", comment: "Spoken message")); return
         }
-        let menu = found.map { f in MenuItem(f.title, .action { _ = AXUIElementPerformAction(f.owner, f.action as CFString) }) }
+        let menu = found.map { f in MenuItem(verbatim: f.title, .action { _ = AXUIElementPerformAction(f.owner, f.action as CFString) }) }
         TurnOverMenu.shared.openList("Actions", items: menu)
     }
 
     /// Command Control 1 to 9: the latest messages, 1 the newest, without moving.
     public func readLatest(_ n: Int) {
         let list = messages().filter { !Self.words($0).isEmpty && $0.role != "AXHeading" && !Self.isTimeStamp($0) }
-        guard list.count >= n else { Speech.speakMessage(list.isEmpty ? "no messages" : "only \(list.count) messages"); return }
+        guard list.count >= n else { Speech.speakMessage(list.isEmpty ? String(localized: "no messages", comment: "A chat app's list is empty") : String(localized: "only \(String(list.count)) messages", comment: "Fewer messages than asked for: how many there are")); return }
         Speech.speakText(Self.words(list[list.count - n]))
     }
 

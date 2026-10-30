@@ -18,13 +18,13 @@ final class PanesAppModule: AppModule {
             if let f = API.focusObject, f.role == .dialog || f.role == .sheet || API.focusAncestors.contains(where: { $0.role == .dialog || $0.role == .sheet }) { return false }
             return true
         }
-        script("panes_next", "The next part of the window: \(panes.parts.map(\.name).joined(separator: ", "))", gestures: ["kb:tab"], category: cat) { [weak self] _ in self?.view.step(forward: true) }.isAvailable = active
-        script("panes_previous", "The previous part of the window", gestures: ["kb:shift+tab"], category: cat) { [weak self] _ in self?.view.step(forward: false) }.isAvailable = active
+        script("panes_next", String(localized: "The next part of the window: \(panes.parts.map(\.name).joined(separator: ", "))", comment: "A command: %@ lists the window's parts"), gestures: ["kb:tab"], category: cat) { [weak self] _ in self?.view.step(forward: true) }.isAvailable = active
+        script("panes_previous", String(localized: "The previous part of the window", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+tab"], category: cat) { [weak self] _ in self?.view.step(forward: false) }.isAvailable = active
         for (i, part) in panes.parts.prefix(9).enumerated() {
-            script("panes_part\(i + 1)", "Straight to \(part.name)", gestures: ["kb:control+command+\(i + 1)"], category: cat) { [weak self] _ in self?.view.go(to: i) }.isAvailable = active
+            script("panes_part\(i + 1)", String(localized: "Straight to \(part.name)", comment: "A command: %@ is a part of the window"), gestures: ["kb:control+command+\(i + 1)"], category: cat) { [weak self] _ in self?.view.go(to: i) }.isAvailable = active
         }
         // (No key of its own: VO Shift W is VoiceOver's "read window" in the Mac style; it is in the shortcuts list.)
-        script("panes_where", "Says which part of the window you are in", gestures: [], category: cat) { [weak self] _ in
+        script("panes_where", String(localized: "Says which part of the window you are in", comment: "A command, as the key list and keyboard help say it"), gestures: [], category: cat) { [weak self] _ in
             guard let self else { return }
             Speech.speakMessage(view.whereAmI())
         }.isAvailable = active

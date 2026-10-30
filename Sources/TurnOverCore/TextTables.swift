@@ -26,7 +26,7 @@ public enum TextTables {
         case (nil, nil): return (false, nil)
         case (.some, nil): return (true, nil)
         case (let l, .some(let n)):
-            guard let l, l.table == n.table else { return (true, "row \(n.row + 1), column \(n.column + 1)") }
+            guard let l, l.table == n.table else { return (true, "\(Phrases.row(n.row + 1)), \(Phrases.column(n.column + 1))") }
             return (false, news(from: l, to: n))
         }
     }
@@ -35,15 +35,17 @@ public enum TextTables {
     nonisolated public static func news(from last: Place?, to now: Place?) -> String? {
         switch (last, now) {
         case (nil, nil): return nil
-        case (.some, nil): return "out of table"
+        case (.some, nil): return String(localized: "out of table", comment: "The caret left a table")
         case (let l, .some(let n)):
-            let cell = "row \(n.row + 1), column \(n.column + 1)"
+            let cell = "\(Phrases.row(n.row + 1)), \(Phrases.column(n.column + 1))"
             guard let l, l.table == n.table else {
-                return "table with \(n.rows) row\(n.rows == 1 ? "" : "s") and \(n.columns) column\(n.columns == 1 ? "" : "s"), \(cell)"
+                let rows = n.rows == 1 ? String(localized: "1 row", comment: "A table's size") : String(localized: "\(String(n.rows)) rows", comment: "A table's size")
+                let columns = n.columns == 1 ? String(localized: "1 column", comment: "A table's size") : String(localized: "\(String(n.columns)) columns", comment: "A table's size")
+                return String(localized: "table with \(rows) and \(columns), \(cell)", comment: "A table entered: its rows, its columns, then the cell")
             }
             if l.row != n.row && l.column != n.column { return cell }
-            if l.row != n.row { return "row \(n.row + 1)" }
-            if l.column != n.column { return "column \(n.column + 1)" }
+            if l.row != n.row { return Phrases.row(n.row + 1) }
+            if l.column != n.column { return Phrases.column(n.column + 1) }
             return nil
         }
     }

@@ -15,13 +15,13 @@ open class SelectableList: TurnOverObject {
         for key in ["upArrow", "downArrow", "home", "end", "pageUp", "pageDown", "option+upArrow", "option+downArrow"] {
             script("list_\(key.replacingOccurrences(of: "+", with: "_"))", "Moves the selection and reads it", gestures: ["kb:\(key)"], category: cat) { [weak self] g in self?.moveSelection(g) }
         }
-        script("list_activate", "Opens the selected item: the application's own Return, or a press when Return does nothing", gestures: ["kb:enter"], category: cat) { [weak self] g in self?.activate(g) }
-        script("list_toggleCheckBox", "Ticks or unticks the check box in the selected row", gestures: ["kb:space"], category: cat) { [weak self] g in self?.toggleRowCheckBox(g) }
+        script("list_activate", String(localized: "Opens the selected item: the application's own Return, or a press when Return does nothing", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:enter"], category: cat) { [weak self] g in self?.activate(g) }
+        script("list_toggleCheckBox", String(localized: "Ticks or unticks the check box in the selected row", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:space"], category: cat) { [weak self] g in self?.toggleRowCheckBox(g) }
         // Only when the row has a check box to tick. Otherwise Space is the application's: play and pause in
         // Podcasts and Music, Quick Look in Finder (10 Oct 2026: Space did nothing in Podcasts).
         script(named: "list_toggleCheckBox")?.isAvailable = { [weak self] in self?.selectedRowCheckBox() != nil }
         if axRole == "AXOutline" {
-            script("tree_expandCollapse", "Expands or collapses the item, and says which", gestures: ["kb:rightArrow", "kb:leftArrow"], category: cat) { [weak self] g in self?.expandOrCollapse(g) }
+            script("tree_expandCollapse", String(localized: "Expands or collapses the item, and says which", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:rightArrow", "kb:leftArrow"], category: cat) { [weak self] g in self?.expandOrCollapse(g) }
         }
     }
 
@@ -55,7 +55,7 @@ open class SelectableList: TurnOverObject {
             after = row.attr("AXDisclosing") as? Bool
             return after != before || EventHandler.isPending(.selection) || EventHandler.isPending(.gainFocus)
         }
-        if let after, after != before { Speech.speakMessage(after ? "expanded" : "collapsed"); return }
+        if let after, after != before { Speech.speakMessage(after ? String(localized: "expanded", comment: "Spoken message") : String(localized: "collapsed", comment: "Spoken message")); return }
         if !moved { Tones.edge(keySent: true) }   // nothing to open or close here
     }
 
@@ -144,7 +144,7 @@ open class SelectableList: TurnOverObject {
         // An empty list: the arrow has nothing to move to; say so rather than nothing (Finder's empty folder).
         if g.modifiers.isEmpty, ["upArrow", "downArrow"].contains(key), rowsAndKey.0.isEmpty {
             Log.io("list: empty")
-            Speech.speakMessage("empty")
+            Speech.speakMessage(String(localized: "empty", comment: "Spoken message"))
             return
         }
         // A list that ignores the arrows and has nothing selected (Safari's Feature Flags: 228 rows, every arrow did
@@ -180,8 +180,8 @@ open class SelectableList: TurnOverObject {
         let row = rows[i]
         _ = row.set(kAXSelectedAttribute, kCFBooleanTrue)   // the list's own selection follows, where it will
         let obj = ObjectFactory.make(row)
-        var parts = Speech.objectPropertiesSpeech(obj, reason: .focus).filter { $0.range(of: #"^\d+ of \d+$"#, options: .regularExpression) == nil }
-        parts.append("\(i + 1) of \(rows.count)")
+        var parts = Speech.objectPropertiesSpeech(obj, reason: .focus).filter { !Phrases.isPosition($0) }
+        parts.append(Phrases.position(i + 1, of: rows.count))
         Speech.cancel()
         Speech.speakMessage(parts.joined(separator: ", "))
     }
@@ -212,7 +212,7 @@ open class SelectableList: TurnOverObject {
 
     /// Speak the selected row, as a selection event would.
     private func readSelection() {
-        guard let row = element.elements(rowsAndKey.1).first else { Speech.speakMessage("nothing selected"); return }
+        guard let row = element.elements(rowsAndKey.1).first else { Speech.speakMessage(String(localized: "nothing selected", comment: "Spoken message")); return }
         EventHandler.queue(Event(.selection, ObjectFactory.make(row)))
     }
 }

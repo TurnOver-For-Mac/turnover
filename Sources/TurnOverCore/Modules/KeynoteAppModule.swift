@@ -19,13 +19,13 @@ final class KeynoteAppModule: AppModule {
         let cat = "Keynote"
         // Playing: every key that moves the show reads the slide it lands on.
         for key in ["rightArrow", "leftArrow", "downArrow", "upArrow", "space", "enter", "pageDown", "pageUp", "home", "end", "n", "p"] {
-            script("keynote_play_\(key)", "While playing: the next or previous slide, read", gestures: ["kb:\(key)"], category: cat) { [weak self] g in
+            script("keynote_play_\(key)", String(localized: "While playing: the next or previous slide, read", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:\(key)"], category: cat) { [weak self] g in
                 g.send()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self?.readPlayingSlide() }
             }.isAvailable = { [weak self] in self?.isPlaying() == true }
         }
         for key in ["upArrow", "downArrow", "pageUp", "pageDown", "home", "end", "leftArrow", "rightArrow"] {
-            script("keynote_slide_\(key)", "The previous or next slide, read (Keynote says nothing as it moves)", gestures: ["kb:\(key)"], category: cat) { [weak self] g in
+            script("keynote_slide_\(key)", String(localized: "The previous or next slide, read (Keynote says nothing as it moves)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:\(key)"], category: cat) { [weak self] g in
                 guard let self else { return }
                 let before = self.selectedSlide()?.index
                 g.send()
@@ -83,16 +83,16 @@ final class KeynoteAppModule: AppModule {
                     // The number only: the message can quote the slide's own text (a code review on 18 Oct 2026).
                     Log.warning("Keynote script error \(error[NSAppleScript.errorNumber] ?? "?")")
                     if (error[NSAppleScript.errorNumber] as? Int) == -1743 {
-                        Speech.speakMessage("TurnOver needs permission to read the slide. In System Settings, Privacy and Security, Automation, turn on Keynote under TurnOver.")
+                        Speech.speakMessage(String(localized: "TurnOver needs permission to read the slide. In System Settings, Privacy and Security, Automation, turn on Keynote under TurnOver.", comment: "Spoken message"))
                     }
                     return
                 }
                 guard let parts = text?.components(separatedBy: "\t"), parts.count >= 5 else { return }
                 let clean = { (t: String) in t.replacingOccurrences(of: "\n", with: ", ").replacingOccurrences(of: "\r", with: ", ").trimmingCharacters(in: .whitespaces) }
-                var words = ["Slide \(parts[0]) of \(parts[1])"]
-                if !clean(parts[2]).isEmpty { words.append("title, \(clean(parts[2]))") }
+                var words = [Self.slide(parts[0], of: parts[1])]
+                if !clean(parts[2]).isEmpty { words.append(Self.title(clean(parts[2]))) }
                 if !clean(parts[3]).isEmpty { words.append(clean(parts[3])) }
-                if !clean(parts[4]).isEmpty { words.append("notes, \(clean(parts[4]))") }
+                if !clean(parts[4]).isEmpty { words.append(Self.notes(clean(parts[4]))) }
                 Speech.cancel()
                 Speech.speakMessage(words.joined(separator: ", "))
             }
@@ -143,7 +143,7 @@ final class KeynoteAppModule: AppModule {
                 // A shape with nothing typed in it is named by its kind ("Square"); an empty text box is skipped.
                 guard !words.isEmpty else { return kind.isEmpty || kind == "Textbox" || kind == "Title" || kind == "Body" ? nil : kind }
                 if !["Title", "Body", "Textbox", ""].contains(kind) { return "\(kind), \(words)" }
-                return ["Title", "Body"].contains(kind) && kind == "Title" ? "title, \(words)" : words
+                return ["Title", "Body"].contains(kind) && kind == "Title" ? Self.title(words) : words
             }
             let d = item.string(kAXDescriptionAttribute) ?? ""
             return d.isEmpty ? nil : d
@@ -160,12 +160,19 @@ final class KeynoteAppModule: AppModule {
         return words.isEmpty ? nil : words
     }
 
+    /// "Slide 3 of 9", "title, Results", "notes, Thank everyone".
+    nonisolated static func slide(_ n: String, of total: String) -> String { String(localized: "Slide \(n) of \(total)", comment: "A Keynote slide's position") }
+    nonisolated static func title(_ words: String) -> String { String(localized: "title, \(words)", comment: "A Keynote slide's title: its words") }
+    nonisolated static func notes(_ words: String) -> String { String(localized: "notes, \(words)", comment: "A Keynote slide's presenter notes: their words") }
+
     private func saySlide() {
         guard let s = selectedSlide() else { return }
         // The title first, whatever order the boxes sit in.
         let items = contents()
-        let parts = ["Slide \(s.index + 1) of \(s.count)"] + items.filter { $0.hasPrefix("title, ") } + items.filter { !$0.hasPrefix("title, ") }
-            + (notes().map { ["notes, \($0)"] } ?? [])
+        // (The title found by how it was made, not by its words: they may be translated.)
+        let titlePrefix = Self.title("")
+        let parts = [Self.slide(String(s.index + 1), of: String(s.count))] + items.filter { $0.hasPrefix(titlePrefix) } + items.filter { !$0.hasPrefix(titlePrefix) }
+            + (notes().map { [Self.notes($0)] } ?? [])
         Speech.cancel()
         Speech.speakMessage(parts.joined(separator: ", "))
     }

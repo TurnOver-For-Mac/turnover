@@ -11,7 +11,7 @@ import TurnOverAX
 open class Slider: TurnOverObject {
     open override func initOverlay() {
         super.initOverlay()
-        script("slider_change", "Changes the slider and says its new value", gestures: ["kb:leftArrow", "kb:rightArrow", "kb:upArrow", "kb:downArrow", "kb:pageUp", "kb:pageDown", "kb:home", "kb:end"], category: "Sliders") { [weak self] g in
+        script("slider_change", String(localized: "Changes the slider and says its new value", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:leftArrow", "kb:rightArrow", "kb:upArrow", "kb:downArrow", "kb:pageUp", "kb:pageDown", "kb:home", "kb:end"], category: "Sliders") { [weak self] g in
             guard let self else { g.send(); return }
             let before = self.element.attr(kAXValueAttribute).map { "\($0)" }
             let spokenBefore = Speech.lastSpoken

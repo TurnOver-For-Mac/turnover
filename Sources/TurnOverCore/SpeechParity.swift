@@ -106,7 +106,7 @@ public enum SpeechParity {
         Log.warning("speech parity: VoiceOver refused AppleScript; TurnOver changes its own settings alone this session")
         guard !toldRefused else { return }
         toldRefused = true
-        Speech.speakMessage("VoiceOver's \(setting) wasn't changed: to keep the two in step, turn on Allow VoiceOver to be controlled with AppleScript, in VoiceOver Utility, General.")
+        Speech.speakMessage(String(localized: "VoiceOver's \(SynthRing.name(setting)) wasn't changed: to keep the two in step, turn on Allow VoiceOver to be controlled with AppleScript, in VoiceOver Utility, General.", comment: "VoiceOver refused a change: %@ is the setting"))
     }
 
     /// osascript's answer, nil on an error (VoiceOver's AppleScript off is error 4).

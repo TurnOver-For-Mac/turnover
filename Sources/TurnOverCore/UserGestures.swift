@@ -84,19 +84,19 @@ public enum UserGestures {
             // A command that only answers somewhere else (Word's, in Mail): the key falls back to TurnOver's own.
             return ScriptHandler.findScript(named: name).map { .script($0) }
         case .app(let bundle):
-            return .script(Script(name: "user_openApp", description: "Opens \(appName(bundle))", category: "Your keys", owner: nil) { _ in openApp(bundle) })
+            return .script(Script(name: "user_openApp", description: String(localized: "Opens \(appName(bundle))", comment: "Your own key: %@ is the app it opens"), category: "Your keys", owner: nil) { _ in openApp(bundle) })
         case .shortcut(let id):
-            return .script(Script(name: "user_shortcut", description: "Runs a Shortcut", category: "Your keys", owner: nil) { _ in VoiceOverCommands.runShortcut(id) })
+            return .script(Script(name: "user_shortcut", description: String(localized: "Runs a Shortcut", comment: "Your own key: it runs a Shortcut"), category: "Your keys", owner: nil) { _ in VoiceOverCommands.runShortcut(id) })
         case .file(let path):
-            return .script(Script(name: "user_scriptFile", description: "Runs \((path as NSString).lastPathComponent)", category: "Your keys", owner: nil) { _ in VoiceOverCommands.runScriptFile(path) })
+            return .script(Script(name: "user_scriptFile", description: String(localized: "Runs \((path as NSString).lastPathComponent)", comment: "Your own key: %@ is the script it runs"), category: "Your keys", owner: nil) { _ in VoiceOverCommands.runScriptFile(path) })
         case .voiceOver(let command):
             let name = VoiceOverCommands.englishName(of: command)
-            return .script(Script(name: "user_voiceOverCommand", description: "VoiceOver's \(name)", category: "Your keys", owner: nil) { _ in Speech.speakMessage("VoiceOver's \(name) isn't in TurnOver yet") })
+            return .script(Script(name: "user_voiceOverCommand", description: String(localized: "VoiceOver's \(name)", comment: "Your own key: %@ is a VoiceOver command's English name"), category: "Your keys", owner: nil) { _ in Speech.speakMessage(String(localized: "VoiceOver's \(name) isn't in TurnOver yet", comment: "A VoiceOver command TurnOver lacks: %@ is its English name")) })
         }
     }
 
     public static func set(_ g: KeyboardGesture, to t: Target) {
-        if isProtected(g) { Log.info("keys: \(g.identifier) is essential; not reassigned"); Speech.speakMessage("\(g.displayName) is one of TurnOver's essential keys and can't be changed"); return }
+        if isProtected(g) { Log.info("keys: \(g.identifier) is essential; not reassigned"); Speech.speakMessage(String(localized: "\(g.displayName) is one of TurnOver's essential keys and can't be changed", comment: "Spoken message: %@ is the command")); return }
         config.keyboard.userGestures[storedIdentifier(of: g)] = t.stored
         config.save()
         Log.info("user keys: \(storedIdentifier(of: g)) → \(t.stored)")
@@ -119,12 +119,12 @@ public enum UserGestures {
 
     public static func describe(_ t: Target) -> String {
         switch t {
-        case .removed: return "does nothing in TurnOver (goes to the application)"
-        case .app(let b): return "opens " + appName(b)
+        case .removed: return String(localized: "does nothing in TurnOver (goes to the application)", comment: "What your own key does")
+        case .app(let b): return String(localized: "opens \(appName(b))", comment: "What your own key does: %@ is the app")
         case .script(let n): return ScriptHandler.findScript(named: n)?.description ?? n
-        case .shortcut: return "runs a Shortcut"
-        case .file(let p): return "runs the script " + (p as NSString).lastPathComponent
-        case .voiceOver(let c): return "VoiceOver's " + VoiceOverCommands.englishName(of: c) + ", not in TurnOver yet"
+        case .shortcut: return String(localized: "runs a Shortcut", comment: "What your own key does")
+        case .file(let p): return String(localized: "runs the script \((p as NSString).lastPathComponent)", comment: "What your own key does: %@ is the script")
+        case .voiceOver(let c): return String(localized: "VoiceOver's \(VoiceOverCommands.englishName(of: c)), not in TurnOver yet", comment: "What your own key does: %@ is a VoiceOver command's English name")
         }
     }
 
@@ -132,9 +132,9 @@ public enum UserGestures {
         NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundle).map { FileManager.default.displayName(atPath: $0.path).replacingOccurrences(of: ".app", with: "") } ?? bundle
     }
     static func openApp(_ bundle: String) {
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundle) else { Speech.speakMessage("\(appName(bundle)) is not installed"); return }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundle) else { Speech.speakMessage(String(localized: "\(appName(bundle)) is not installed", comment: "An app is not installed: %@ is the app")); return }
         NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration()) { _, error in
-            if let error { onMain { Speech.speakMessage("could not open \(appName(bundle)): \(error.localizedDescription)") } }
+            if let error { onMain { Speech.speakMessage(String(localized: "could not open \(appName(bundle)): \(error.localizedDescription)", comment: "An app could not open: the app, then why")) } }
         }
     }
 

@@ -51,14 +51,14 @@ public enum SecureEcho {
         if single, delta == 1 {
             if VoiceOverSounds.play("SecureCharacter.aiff") { }
             else if config.general.navigationSounds { Speech.player?.playBell(frequencies: [1900], spacingMs: 0, ringMs: 14, volume: 0.12) }
-            else { Speech.speakMessage("star", remember: false) }
+            else { Speech.speakMessage(String(localized: "star", comment: "Spoken message"), remember: false) }
         } else if single, delta == -1 {
-            if lastSeen == 0 { Speech.speakMessage("blank", remember: false) }
+            if lastSeen == 0 { Speech.speakMessage(String(localized: "blank", comment: "Spoken message"), remember: false) }
             else if VoiceOverSounds.play("SecureCharacter.aiff") { }
             else if config.general.navigationSounds { Speech.player?.playBell(frequencies: [900], spacingMs: 0, ringMs: 14, volume: 0.12) }
-            else { Speech.speakMessage("deleted", remember: false) }
+            else { Speech.speakMessage(String(localized: "deleted", comment: "Spoken message"), remember: false) }
         } else {
-            Speech.speakMessage(lastSeen == 0 ? "blank" : lastSeen == 1 ? "1 character" : "\(lastSeen) characters", remember: false)
+            Speech.speakMessage(lastSeen == 0 ? Phrases.blank : Phrases.characters(lastSeen), remember: false)
         }
     }
 }
@@ -94,6 +94,6 @@ public enum SecureInputWatch {
         // The session's "holder" is not reliable (a test program holding it was reported as Mail, 4 Oct 2026): logged,
         // not spoken.
         Log.error("secure input: on outside a password field (session names \(name)); TurnOver cannot hear the keys")
-        Speech.speakMessage("Secure input is on, so TurnOver cannot hear your keys. Press Command Tab twice to get them back.")
+        Speech.speakMessage(String(localized: "Secure input is on, so TurnOver cannot hear your keys. Press Command Tab twice to get them back.", comment: "Spoken message"))
     }
 }

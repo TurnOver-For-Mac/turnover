@@ -86,7 +86,7 @@ public final class PanesView {
     /// Command Control 1 to 9.
     public func go(to i: Int) {
         guard parts.indices.contains(i) else { Tones.edge(); return }
-        guard let e = element(of: i) else { Tones.edge(); Speech.speakMessage("\(parts[i].name) is not on screen"); return }
+        guard let e = element(of: i) else { Tones.edge(); Speech.speakMessage(String(localized: "\(parts[i].name) is not on screen", comment: "Spoken message: %@ is a part of the window")); return }
         let part = parts[i]
         let obj = ObjectFactory.make(e)
         var settable: DarwinBoolean = false

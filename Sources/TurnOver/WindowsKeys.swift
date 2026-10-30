@@ -319,7 +319,7 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // its state be
             switch (code, shift, control) {
             case (49, false, false):   // NVDA+Space: browse mode on and off
                 browse.toggle()
-                Self.say(browse ? "browse mode" : "focus mode")
+                Self.say(browse ? String(localized: "browse mode", comment: "NVDA's browse mode") : String(localized: "focus mode", comment: "NVDA's focus mode"))
                 return nil
             case (111, false, false):  // NVDA+F12: the time
                 let f = DateFormatter(); f.dateStyle = .none; f.timeStyle = .short
@@ -327,7 +327,7 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // its state be
                 return nil
             case (120, false, false):  // NVDA+F2: the next key passes untouched
                 passNext = true
-                Self.say("pass next key through")
+                Self.say(String(localized: "pass next key through", comment: "Spoken message"))
                 return nil
             case (45, false, false):   // NVDA+N: TurnOver's menu
                 DispatchQueue.main.async { MainActor.assumeIsolated { MenuAnywhere.shared.open() } }

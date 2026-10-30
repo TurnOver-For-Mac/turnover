@@ -13,10 +13,10 @@ final class ClaudeAppModule: AppModule {
 
     required init(pid: pid_t, bundleIdentifier: String, appName: String) {
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
-        script("claude_readLatest", "Reads Claude's latest reply", gestures: ["kb:turnover+shift+r"], category: "Claude") { [weak self] _ in
-            guard let self, let chat = ClaudeTranscript.chat(pid: self.pid) else { Speech.speakMessage("no conversation"); return }
+        script("claude_readLatest", String(localized: "Reads Claude's latest reply", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+shift+r"], category: "Claude") { [weak self] _ in
+            guard let self, let chat = ClaudeTranscript.chat(pid: self.pid) else { Speech.speakMessage(String(localized: "no conversation", comment: "Spoken message")); return }
             let reply = ClaudeTranscript.latestReply(chat: chat)
-            Speech.speakText(reply.isEmpty ? "no reply yet" : reply)
+            Speech.speakText(reply.isEmpty ? String(localized: "no reply yet", comment: "Spoken message") : reply)
         }
     }
 

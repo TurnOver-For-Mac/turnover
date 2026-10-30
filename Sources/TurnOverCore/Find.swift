@@ -19,22 +19,22 @@ public final class FindPrompt {
     public func open() {
         typed = ""
         isOpen = true
-        Speech.speakMessage(lastSearch.isEmpty ? "find" : "find, last \(lastSearch)")
+        Speech.speakMessage(lastSearch.isEmpty ? String(localized: "find", comment: "Find opened") : String(localized: "find, last \(lastSearch)", comment: "Find opened: %@ is the last search"))
     }
 
     /// Every key while the prompt is open (InputManager routes them here, on the main thread).
     public func handle(_ g: KeyboardGesture) {
         switch g.keyName {
         case "escape":
-            isOpen = false; Speech.speakMessage("find cancelled")
+            isOpen = false; Speech.speakMessage(String(localized: "find cancelled", comment: "Spoken message"))
         case "enter", "numpadEnter":
             isOpen = false
             let s = typed.isEmpty ? lastSearch : typed
-            guard !s.isEmpty else { Speech.speakMessage("nothing to find"); return }
+            guard !s.isEmpty else { Speech.speakMessage(String(localized: "nothing to find", comment: "Spoken message")); return }
             lastSearch = s
             Self.find(s, forward: true)
         case "backspace":
-            if let c = typed.popLast() { Speech.speakSpelling(String(c)) } else { Speech.speakMessage("blank") }
+            if let c = typed.popLast() { Speech.speakSpelling(String(c)) } else { Speech.speakMessage(String(localized: "blank", comment: "Spoken message")) }
         default:
             // The key's own character; a synthetic or first key can arrive without one, so the key's name stands in.
             var ch = g.characters
@@ -48,7 +48,7 @@ public final class FindPrompt {
             guard g.modifiers.subtracting(.shift).isEmpty else { g.send(); return }
             guard !ch.isEmpty else { return }
             typed += ch
-            if ch == " " { Speech.speakMessage("space") } else { Speech.speakSpelling(ch) }
+            if ch == " " { Speech.speakMessage(String(localized: "space", comment: "Spoken message")) } else { Speech.speakSpelling(ch) }
         }
     }
 
@@ -63,11 +63,11 @@ public final class FindPrompt {
     public static func find(_ s: String, forward: Bool) {
         Log.io("find \(forward ? "next" : "previous"): \(Log.words(s))")
         if let d = API.focusTreeInterceptor, !d.passThrough {
-            if !d.find(s, forward: forward) { Speech.speakMessage("\(s) not found") }
+            if !d.find(s, forward: forward) { Speech.speakMessage(String(localized: "\(s) not found", comment: "Find found nothing: %@ is what was searched for")) }
             return
         }
         if let f = API.caretObject, f.hasNavigableText {
-            if !findInText(f, s, forward: forward) { Speech.speakMessage("\(s) not found") }
+            if !findInText(f, s, forward: forward) { Speech.speakMessage(String(localized: "\(s) not found", comment: "Find found nothing: %@ is what was searched for")) }
             return
         }
         findInWindow(s, forward: forward)
@@ -100,7 +100,7 @@ public final class FindPrompt {
 
     private static func findInWindow(_ s: String, forward: Bool) {
         guard let f = API.focusObject, let window = f.element.element(kAXWindowAttribute) ?? (f.role == .window ? f.element : nil) else {
-            Speech.speakMessage("\(s) not found"); return
+            Speech.speakMessage(String(localized: "\(s) not found", comment: "Find found nothing: %@ is what was searched for")); return
         }
         var here = ObjectNavigator.shared.element ?? f.element
         // In a list or table, "here" is the selected row: the next match is after the message you are on.
@@ -153,7 +153,7 @@ public final class FindPrompt {
             let timedOut = Date() >= deadline
             DispatchQueue.main.async {
                 Log.io("find: \(visited) items searched\(timedOut ? ", stopped at 3 s" : "")")
-                guard let hit else { Speech.speakMessage("\(s) not found"); return }
+                guard let hit else { Speech.speakMessage(String(localized: "\(s) not found", comment: "Find found nothing: %@ is what was searched for")); return }
                 go(to: hit)
             }
         }

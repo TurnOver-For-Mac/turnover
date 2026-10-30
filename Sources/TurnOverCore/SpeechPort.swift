@@ -55,8 +55,10 @@ final class SpeechPort {
     private func tellAll(_ id: String) { for c in open[id] ?? [] { tell(c, standing(of: id)) } }
 
     var status: String {
-        if !failed.isEmpty { return "The speech port could not listen: \(failed)." }
-        return connections == 0 ? "Listening for apps on port \(port); none connected." : "\(connections) app connection\(connections == 1 ? "" : "s"), \(lines) lines heard."
+        if !failed.isEmpty { return String(localized: "The speech port could not listen: \(String(describing: failed)).", comment: "The speech port's status: %@ is why (in English)") }
+        return connections == 0 ? String(localized: "Listening for apps on port \(String(describing: port)); none connected.", comment: "The speech port's status: %@ is the port")
+            : connections == 1 ? String(localized: "1 app connection, \(String(lines)) lines heard.", comment: "The speech port's status")
+            : String(localized: "\(String(connections)) app connections, \(String(lines)) lines heard.", comment: "The speech port's status")
     }
 
     // MARK: Listening
@@ -191,13 +193,13 @@ final class SpeechPort {
             self.save()
             self.tellAll(speaker.id)
             Log.info("speech port: \(speaker.name) \(allowed ? "allowed" : "not allowed")")
-            Speech.speakMessage(allowed ? "\(speaker.name) can speak through TurnOver." : "\(speaker.name) won't be heard.")
+            Speech.speakMessage(allowed ? String(localized: "\(speaker.name) can speak through TurnOver.", comment: "An app allowed to speak: its name") : String(localized: "\(speaker.name) won't be heard.", comment: "An app not allowed to speak: its name"))
             if allowed, case .speak(let text) = Games.bridgeCommand(line) {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self.say(text, from: speaker) }
             }
         }
         TurnOverMenu.shared.onClose = { [weak self] in if self?.asking.contains(speaker.id) == true { self?.asking.remove(speaker.id); self?.tellAll(speaker.id) } }
-        TurnOverMenu.shared.openList("\(speaker.name) wants TurnOver to speak for it. Do you trust it?", items: [
+        TurnOverMenu.shared.openList(verbatim: String(localized: "\(speaker.name) wants TurnOver to speak for it. Do you trust it?", comment: "An app asking to speak through TurnOver: its name"), items: [
             MenuItem("Don't allow", .action { decide(false) }, hint: "\(speaker.name) won't be heard; you can change this in Settings, Apps that speak through TurnOver"),
             MenuItem("Allow", .action { decide(true) }, hint: "\(speaker.name) can make TurnOver say anything while it is the app in front, and nothing else"),
             MenuItem("Not now", .action { decide(nil) }, hint: "Asked again the next time it wants to speak"),
@@ -233,7 +235,7 @@ final class SpeechPort {
     func menuItems() -> [MenuItem] {
         guard !decisions.isEmpty else { return [MenuItem("No app has asked yet", .action {})] }
         return decisions.sorted { $0.value.name.lowercased() < $1.value.name.lowercased() }.map { id, v in
-            MenuItem(v.name, .toggle(get: { [weak self] in self?.decisions[id]?.allowed ?? false },
+            MenuItem(verbatim: v.name, .toggle(get: { [weak self] in self?.decisions[id]?.allowed ?? false },
                                      set: { [weak self] on in self?.decisions[id]?.allowed = on; self?.save(); self?.tellAll(id) }),
                      hint: "Allowed: it can make TurnOver speak while it is the app in front")
         }
@@ -249,7 +251,7 @@ final class SpeechPort {
         let length = proc_pidpath(pid, &pathBuffer, UInt32(pathBuffer.count))
         let path = length > 0 ? String(decoding: pathBuffer.prefix(Int(length)).map { UInt8(bitPattern: $0) }, as: UTF8.self) : ""
         let exe = URL(fileURLWithPath: path).lastPathComponent
-        let name = NSRunningApplication(processIdentifier: pid)?.localizedName ?? (exe.isEmpty ? "a program" : exe)
+        let name = NSRunningApplication(processIdentifier: pid)?.localizedName ?? (exe.isEmpty ? String(localized: "a program", comment: "A program with no name") : exe)
         var id = "path:\(path)"
         var code: SecCode?
         if SecCodeCopyGuestWithAttributes(nil, [kSecGuestAttributePid: NSNumber(value: pid)] as CFDictionary, [], &code) == errSecSuccess, let code {

@@ -33,7 +33,7 @@ extension BrowseModeDocument {
                     var name = frame.string(kAXDescriptionAttribute) ?? frame.string(kAXTitleAttribute) ?? ""
                     var p = frame.element(kAXParentAttribute); var hops = 0
                     while name.isEmpty, let x = p, hops < 4 { name = x.string(kAXDescriptionAttribute) ?? x.string(kAXTitleAttribute) ?? ""; p = x.element(kAXParentAttribute); hops += 1 }
-                    Speech.speakMessage(name.isEmpty ? "frame" : "\(name), frame")
+                    Speech.speakMessage(name.isEmpty ? String(localized: "frame", comment: "A web page's frame") : String(localized: "\(name), frame", comment: "A web page's frame: %@ is its name"))
                 }
                 return
             }
@@ -45,7 +45,7 @@ extension BrowseModeDocument {
                     let waiting = url
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
                         guard let self, buffer.lines.isEmpty, url == waiting, API.focusTreeInterceptor === self else { return }
-                        Speech.speakMessage("loading page")
+                        Speech.speakMessage(String(localized: "loading page", comment: "Spoken message"))
                     }
                     watchForContent()   // and read it when it comes, even if no focus event says so
                     return

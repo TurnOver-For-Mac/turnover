@@ -17,6 +17,8 @@ import AppKit
 import ApplicationServices
 
 public enum PluginTry {
+    /// Said as an AI starts trying keys, and left out of what it hears back.
+    static func tryingWords(_ app: String) -> String { String(localized: "An AI is trying keys in \(app).", comment: "An AI is pressing keys in an app to test a plugin") }
     nonisolated static let consentKey = "pluginTryConsent"
     nonisolated public static let maxKeys = 30
     /// TurnOver's own settings domain, read and written directly: the plugin tool lives inside TurnOver.app and
@@ -51,7 +53,7 @@ public enum PluginTry {
         granted = [:]
         store(nil)
         Log.info("plugin try: consent withdrawn")
-        Speech.speakMessage("AIs can no longer try keys in any app.")
+        Speech.speakMessage(String(localized: "AIs can no longer try keys in any app.", comment: "Spoken message"))
     }
 
     nonisolated public static func consented(_ bundle: String, now: Date = Date()) -> Bool {
@@ -151,7 +153,7 @@ public enum PluginTry {
         let name = app.localizedName ?? bundle
         let previous = NSWorkspace.shared.frontmostApplication
         Log.info("plugin try: \(steps.count) steps in \(name)")
-        Speech.speakMessage("An AI is trying keys in \(name).")
+        Speech.speakMessage(Self.tryingWords(name))
         // To the front the way TurnOver's own app switches go (a background app may not simply activate another).
         _ = AXUIElementSetAttributeValue(AXUIElementCreateApplication(app.processIdentifier), kAXFrontmostAttribute as CFString, kCFBooleanTrue)
         app.activate()
@@ -177,7 +179,7 @@ public enum PluginTry {
         }
         func done(stopped: String? = nil) {
             let said = Speech.history.value.filter { $0.at >= started }.map(\.text)
-                .filter { !$0.hasPrefix("An AI is trying keys") }
+                .filter { $0 != Self.tryingWords(name) }
             if let previous, previous.processIdentifier != app.processIdentifier, !previous.isTerminated {
                 _ = AXUIElementSetAttributeValue(AXUIElementCreateApplication(previous.processIdentifier), kAXFrontmostAttribute as CFString, kCFBooleanTrue)
                 previous.activate()

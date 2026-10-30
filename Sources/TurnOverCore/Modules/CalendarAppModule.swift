@@ -31,14 +31,14 @@ final class CalendarAppModule: AppModule {
     required init(pid: pid_t, bundleIdentifier: String, appName: String) {
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
         let cat = "Calendar"
-        script("cal_nextDay", "The next day, and how many events it has", gestures: ["kb:rightArrow"], category: cat) { [weak self] g in self?.moveDays(1, g) }.isAvailable = { [weak self] in self?.inView() == true }
-        script("cal_previousDay", "The previous day", gestures: ["kb:leftArrow"], category: cat) { [weak self] g in self?.moveDays(-1, g) }.isAvailable = { [weak self] in self?.inView() == true }
-        script("cal_nextWeek", "The same day next week", gestures: ["kb:option+downArrow"], category: cat) { [weak self] g in self?.moveDays(7, g) }.isAvailable = { [weak self] in self?.inView() == true }
-        script("cal_previousWeek", "The same day last week", gestures: ["kb:option+upArrow"], category: cat) { [weak self] g in self?.moveDays(-7, g) }.isAvailable = { [weak self] in self?.inView() == true }
-        script("cal_nextEvent", "The day's next event", gestures: ["kb:downArrow"], category: cat) { [weak self] g in self?.moveEvent(1, g) }.isAvailable = { [weak self] in self?.inView() == true }
-        script("cal_previousEvent", "The day's previous event", gestures: ["kb:upArrow"], category: cat) { [weak self] g in self?.moveEvent(-1, g) }.isAvailable = { [weak self] in self?.inView() == true }
-        script("cal_open", "Opens the event (its details)", gestures: ["kb:enter"], category: cat) { [weak self] g in self?.openEvent(g) }.isAvailable = { [weak self] in self?.inView() == true && self?.eventIndex != nil }
-        script("cal_today", "Back to today", gestures: ["kb:command+t"], category: cat) { [weak self] g in
+        script("cal_nextDay", String(localized: "The next day, and how many events it has", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:rightArrow"], category: cat) { [weak self] g in self?.moveDays(1, g) }.isAvailable = { [weak self] in self?.inView() == true }
+        script("cal_previousDay", String(localized: "The previous day", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:leftArrow"], category: cat) { [weak self] g in self?.moveDays(-1, g) }.isAvailable = { [weak self] in self?.inView() == true }
+        script("cal_nextWeek", String(localized: "The same day next week", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:option+downArrow"], category: cat) { [weak self] g in self?.moveDays(7, g) }.isAvailable = { [weak self] in self?.inView() == true }
+        script("cal_previousWeek", String(localized: "The same day last week", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:option+upArrow"], category: cat) { [weak self] g in self?.moveDays(-7, g) }.isAvailable = { [weak self] in self?.inView() == true }
+        script("cal_nextEvent", String(localized: "The day's next event", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:downArrow"], category: cat) { [weak self] g in self?.moveEvent(1, g) }.isAvailable = { [weak self] in self?.inView() == true }
+        script("cal_previousEvent", String(localized: "The day's previous event", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:upArrow"], category: cat) { [weak self] g in self?.moveEvent(-1, g) }.isAvailable = { [weak self] in self?.inView() == true }
+        script("cal_open", String(localized: "Opens the event (its details)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:enter"], category: cat) { [weak self] g in self?.openEvent(g) }.isAvailable = { [weak self] in self?.inView() == true && self?.eventIndex != nil }
+        script("cal_today", String(localized: "Back to today", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+t"], category: cat) { [weak self] g in
             g.send()
             guard let self else { return }
             self.current = Calendar.current.startOfDay(for: Date()); self.eventIndex = nil
@@ -47,17 +47,17 @@ final class CalendarAppModule: AppModule {
         // The new event box (Command N, or Return on a day): Tab and Shift-Tab between its fields. Calendar's own Tab
         // left the box for the month and closed it, with only the title typed (18 Oct 2026: "struggling to add
         // an event"); macOS moves between all controls only with Keyboard navigation on.
-        script("cal_boxNext", "The event box's next field", gestures: ["kb:tab"], category: cat) { [weak self] _ in self?.moveInBox(1) }
+        script("cal_boxNext", String(localized: "The event box's next field", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:tab"], category: cat) { [weak self] _ in self?.moveInBox(1) }
             .isAvailable = { [weak self] in self?.eventBox() != nil }
-        script("cal_boxPrevious", "The event box's previous field", gestures: ["kb:shift+tab"], category: cat) { [weak self] _ in self?.moveInBox(-1) }
+        script("cal_boxPrevious", String(localized: "The event box's previous field", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+tab"], category: cat) { [weak self] _ in self?.moveInBox(-1) }
             .isAvailable = { [weak self] in self?.eventBox() != nil }
         // The box's buttons can't take the keyboard focus (probe): Tab rests on one by name, Return or Space presses it.
-        script("cal_boxPress", "Presses the event box's button", gestures: ["kb:enter", "kb:space"], category: cat) { [weak self] _ in
+        script("cal_boxPress", String(localized: "Presses the event box's button", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:enter", "kb:space"], category: cat) { [weak self] _ in
             guard let self else { return }
             if self.onDone() { self.saveFromDone() } else { self.pressBoxButton() }
         }.isAvailable = { [weak self] in self?.onDone() == true || self?.boxButton() != nil }
         // Return in the quick entry, the title or the place: Calendar saves and closes the box; TurnOver says what was saved and goes to it.
-        script("cal_boxSave", "Saves the event, says it and goes to its day", gestures: ["kb:enter"], category: cat) { [weak self] g in
+        script("cal_boxSave", String(localized: "Saves the event, says it and goes to its day", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:enter"], category: cat) { [weak self] g in
             guard let self, let box = self.eventBox() else { g.send(); return }
             self.saveBox(box) { g.send() }
         }.isAvailable = { [weak self] in
@@ -142,7 +142,7 @@ final class CalendarAppModule: AppModule {
         // Done: Calendar's box has no button to finish with (18 Oct 2026); Return in the title saves.
         if next == fields.count {
             restingFrom = focus; restingDone = true
-            Speech.cancel(); Speech.speakMessage("Done, button")
+            Speech.cancel(); Speech.speakMessage(String(localized: "Done, button", comment: "Spoken message"))
             return
         }
         let target = fields[next]
@@ -229,10 +229,10 @@ final class CalendarAppModule: AppModule {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { [weak self] in
             guard let self, self.eventBox() == nil else { return }
             self.lastOwnMove = Date()
-            var words = "Saved: \(summary.title)"
+            var words = String(localized: "Saved: \(summary.title)", comment: "A Calendar event saved: its title")
             if let d = summary.start {
                 words += ", " + DateFormatter.localizedString(from: d, dateStyle: .full, timeStyle: .none)
-                words += summary.allDay ? ", all day" : ", " + DateFormatter.localizedString(from: d, dateStyle: .none, timeStyle: .short)
+                words += ", " + (summary.allDay ? String(localized: "all day", comment: "A Calendar event lasting all day") : DateFormatter.localizedString(from: d, dateStyle: .none, timeStyle: .short))
             }
             Speech.cancel()
             Speech.speakMessage(words)
@@ -406,7 +406,7 @@ final class CalendarAppModule: AppModule {
     static func label(for date: Date) -> String {
         let f = DateFormatter(); f.locale = Locale.current; f.setLocalizedDateFormatFromTemplate("EEEEdMMMM")
         let words = f.string(from: date)
-        return Calendar.current.isDateInToday(date) ? "Today, \(words)" : words
+        return Calendar.current.isDateInToday(date) ? String(localized: "Today, \(words)", comment: "A Calendar day that is today: %@ is the date") : words
     }
 
     /// The first day of the month the month view shows ("October 2026" above the grid).
@@ -530,14 +530,14 @@ final class CalendarAppModule: AppModule {
         let n = events(day).count
         let label = day.label.isEmpty ? DateFormatter.localizedString(from: day.date, dateStyle: .full, timeStyle: .none) : day.label
         Speech.cancel()
-        Speech.speakMessage("\(prefix)\(label), \(n == 0 ? "no events" : n == 1 ? "1 event" : "\(n) events")")
+        Speech.speakMessage("\(prefix)\(label), \(n == 0 ? String(localized: "no events", comment: "Spoken message") : n == 1 ? String(localized: "1 event", comment: "A day's events") : String(localized: "\(String(n)) events", comment: "A day's events"))")
     }
 
     private func moveEvent(_ step: Int, _ g: KeyboardGesture) {
         if dayShowing(current) == nil, let start = startingDay() { current = start.date; eventIndex = nil }
         guard let day = dayShowing(current) else { g.send(); return }
         let list = events(day)
-        guard !list.isEmpty else { Tones.edge(); Speech.speakMessage("no events"); return }
+        guard !list.isEmpty else { Tones.edge(); Speech.speakMessage(String(localized: "no events", comment: "Spoken message")); return }
         let next: Int
         if let i = eventIndex { next = i + step } else { next = step > 0 ? 0 : -1 }
         if next < 0 { eventIndex = nil; Tones.edge(); sayDay(); return }   // above the first: the day again
@@ -551,7 +551,7 @@ final class CalendarAppModule: AppModule {
         let list = events(day)
         guard i < list.count else { return }
         Speech.cancel()
-        Speech.speakMessage("\(Self.brief(list[i])), \(i + 1) of \(list.count)")
+        Speech.speakMessage("\(Self.brief(list[i])), \(Phrases.position(i + 1, of: list.count))")
     }
 
     private func openEvent(_ g: KeyboardGesture) {
@@ -585,12 +585,13 @@ final class CalendarAppModule: AppModule {
 /// each said "2 Nov 2026 at 13:00" twice, a date picker and a time picker): "Video call, None", "Starts, date,
 /// 2 November 2026", "Starts, time, 13:00", "Repeat, Never".
 final class CalendarBoxPart: TurnOverObject {
-    static let names = [
-        "virtualconference-button": "Video call", "calendar-button": "Calendar", "recurrence-button": "Repeat",
-        "traveltime-button": "Travel time", "allday-checkbox": "All day",
-        "start-datepicker": "Starts, date", "start-timepicker": "Starts, time",
-        "end-datepicker": "Ends, date", "end-timepicker": "Ends, time",
-    ]
+    static var names: [String: String] { [
+        "virtualconference-button": String(localized: "Video call", comment: "A field of a Calendar event"), "calendar-button": String(localized: "Calendar", comment: "A field of a Calendar event"),
+        "recurrence-button": String(localized: "Repeat", comment: "A field of a Calendar event"), "traveltime-button": String(localized: "Travel time", comment: "A field of a Calendar event"),
+        "allday-checkbox": String(localized: "All day", comment: "A field of a Calendar event"),
+        "start-datepicker": String(localized: "Starts, date", comment: "A field of a Calendar event"), "start-timepicker": String(localized: "Starts, time", comment: "A field of a Calendar event"),
+        "end-datepicker": String(localized: "Ends, date", comment: "A field of a Calendar event"), "end-timepicker": String(localized: "Ends, time", comment: "A field of a Calendar event"),
+    ] }
     private var id: String { element.string(kAXIdentifierAttribute) ?? "" }
     override var name: String {
         let own = super.name
@@ -608,6 +609,6 @@ final class CalendarBoxPart: TurnOverObject {
 final class CalendarQuickEntry: EditableText {
     override var name: String {
         let own = super.name
-        return own.isEmpty ? "Quick entry: describe the event, like Lunch with a friend Friday at 1, then Return" : own
+        return own.isEmpty ? String(localized: "Quick entry: describe the event, like Lunch with a friend Friday at 1, then Return", comment: "Calendar's quick entry field") : own
     }
 }

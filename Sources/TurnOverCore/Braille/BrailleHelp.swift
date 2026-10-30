@@ -6,49 +6,51 @@ import Foundation
 enum BrailleHelp {
     /// TurnOver's actions for the display's keys, in words.
     static let actions: [String: String] = [
-        "scrollBack": "pans left; at the start of a line, goes to the end of the previous line",
-        "scrollForward": "pans right; at the end of a line, goes on to the next line",
-        "previousLine": "previous line, or the previous item in a list, spoken",
-        "nextLine": "next line, or the next item in a list, spoken",
-        "activate": "activates the item: presses a link or button",
+        "scrollBack": String(localized: "pans left; at the start of a line, goes to the end of the previous line", comment: "What a braille display key does"),
+        "scrollForward": String(localized: "pans right; at the end of a line, goes on to the next line", comment: "What a braille display key does"),
+        "previousLine": String(localized: "previous line, or the previous item in a list, spoken", comment: "What a braille display key does"),
+        "nextLine": String(localized: "next line, or the next item in a list, spoken", comment: "What a braille display key does"),
+        "activate": String(localized: "activates the item: presses a link or button", comment: "What a braille display key does"),
     ]
 
     /// The keys as VoiceOver names them in each display's key table.
     static let keyNames: [String: String] = [
-        "SCRBraille.panLeft": "Pan left key", "SCRBraille.panRight": "Pan right key",
-        "Global.interactUp": "Up (joystick up, or the key VoiceOver uses to move up)",
-        "Global.interactDown": "Down (joystick down, or the key VoiceOver uses to move down)",
-        "Global.interactLeft": "Left (joystick left)", "Global.interactRight": "Right (joystick right)",
-        "Global.defaultAction": "Action (joystick pressed in)",
-        "d1": "Display key 1", "d2": "Display key 2", "d3": "Display key 3", "d5": "Display key 5",
-        "joystickUp": "Joystick up", "joystickDown": "Joystick down", "joystickLeft": "Joystick left", "joystickRight": "Joystick right", "joystickPress": "Joystick pressed in",
+        "SCRBraille.panLeft": String(localized: "Pan left key", comment: "A braille display key, as VoiceOver names it"), "SCRBraille.panRight": String(localized: "Pan right key", comment: "A braille display key, as VoiceOver names it"),
+        "Global.interactUp": String(localized: "Up (joystick up, or the key VoiceOver uses to move up)", comment: "A braille display key, as VoiceOver names it"),
+        "Global.interactDown": String(localized: "Down (joystick down, or the key VoiceOver uses to move down)", comment: "A braille display key, as VoiceOver names it"),
+        "Global.interactLeft": String(localized: "Left (joystick left)", comment: "A braille display key, as VoiceOver names it"), "Global.interactRight": String(localized: "Right (joystick right)", comment: "A braille display key, as VoiceOver names it"),
+        "Global.defaultAction": String(localized: "Action (joystick pressed in)", comment: "A braille display key, as VoiceOver names it"),
+        "d1": String(localized: "Display key 1", comment: "A braille display key, as VoiceOver names it"), "d2": String(localized: "Display key 2", comment: "A braille display key, as VoiceOver names it"), "d3": String(localized: "Display key 3", comment: "A braille display key, as VoiceOver names it"), "d5": String(localized: "Display key 5", comment: "A braille display key, as VoiceOver names it"),
+        "joystickUp": String(localized: "Joystick up", comment: "A braille display key, as VoiceOver names it"), "joystickDown": String(localized: "Joystick down", comment: "A braille display key, as VoiceOver names it"), "joystickLeft": String(localized: "Joystick left", comment: "A braille display key, as VoiceOver names it"), "joystickRight": String(localized: "Joystick right", comment: "A braille display key, as VoiceOver names it"), "joystickPress": String(localized: "Joystick pressed in", comment: "A braille display key, as VoiceOver names it"),
     ]
 
     static func describe(_ key: BrailleKey) -> String {
         switch key {
-        case .routing(let i): return "Routing key \(i + 1): moves the cursor to this character; on a link or button, presses it"
+        case .routing(let i): return String(localized: "Routing key \(String(i + 1)): moves the cursor to this character; on a link or button, presses it", comment: "Braille help: %@ is the key's number")
         case .key(let name):
-            let what = Braille.keyMap[name].flatMap { actions[$0] } ?? "does nothing yet"
+            let what = Braille.keyMap[name].flatMap { actions[$0] } ?? String(localized: "does nothing yet", comment: "Braille help: a key with no command")
             return "\(keyNames[name] ?? name): \(what)"
         }
     }
 
     static func describe(dots: Set<Int>, space: Bool) -> String {
-        let spoken = "dot\(dots.count == 1 ? "" : "s") " + dots.sorted().map(String.init).joined(separator: " ")
-        if space && dots.isEmpty { return "Space: types a space; on its own after a word, translates it" }
+        let numbers = dots.sorted().map(String.init).joined(separator: " ")
+        let spoken = dots.count == 1 ? String(localized: "dot \(numbers)", comment: "Braille dots: dot 4") : String(localized: "dots \(numbers)", comment: "Braille dots: dots 1 2 5")
+        if space && dots.isEmpty { return String(localized: "Space: types a space; on its own after a word, translates it", comment: "Braille help") }
         if space {
-            if let (_, name, _) = BrailleCommands.table.first(where: { $0.0 == dots }) { return "Space with \(spoken): \(name)" }
+            if let (_, name, _) = BrailleCommands.table.first(where: { $0.0 == dots }) { return String(localized: "Space with \(spoken): \(name)", comment: "Braille help: the dots, then the command") }
             // Not one of VoiceOver's commands: say so plainly ("nothing yet" sounded unfinished, 7 Oct 2026), and what
             // it does when typing runs into the space.
-            return "Space with \(spoken): not a command. While typing, it types the letter and a space"
+            return String(localized: "Space with \(spoken): not a command. While typing, it types the letter and a space", comment: "Braille help: %@ is the dots")
         }
-        if dots == [7] { return "Dot 7: Backspace; held, keeps deleting" }
-        if dots == [8] { return "Dot 8: Return" }
+        if dots == [7] { return String(localized: "Dot 7: Backspace; held, keeps deleting", comment: "Braille help") }
+        if dots == [8] { return String(localized: "Dot 8: Return", comment: "Braille help") }
         let cell = dots.reduce(UInt8(0)) { $0 | UInt8(1 << ($1 - 1)) }
         // Dots 7 and 8 alone, together, are no character ("types space" was said).
-        if cell & 0x3F == 0 { return "\(spoken.prefix(1).uppercased() + spoken.dropFirst()): nothing" }
+        if cell & 0x3F == 0 { return String(localized: "\(spoken.prefix(1).uppercased() + spoken.dropFirst()): nothing", comment: "Braille help: dots that type nothing") }
         let text = BrailleOutput.backTranslate([cell], contracted: false)
-        return "\(spoken.prefix(1).uppercased() + spoken.dropFirst()): types \(text.isEmpty ? "nothing on its own" : Symbols.spelled(text))"
+        let typed = text.isEmpty ? String(localized: "nothing on its own", comment: "Braille help: dots that type nothing alone") : Symbols.spelled(text)
+        return String(localized: "\(spoken.prefix(1).uppercased() + spoken.dropFirst()): types \(typed)", comment: "Braille help: the dots, then what they type")
     }
 
     /// Input help: said and shown, not done.
@@ -64,16 +66,16 @@ enum BrailleHelp {
         for name in (Braille.displayKeyNames() ?? []) where !seen.contains(name) {
             seen.insert(name)
             guard let action = Braille.keyMap[name], let what = actions[action] else { continue }
-            keys.append(MenuItem("\(keyNames[name] ?? name), \(what)", .action {}))
+            keys.append(MenuItem(verbatim: "\(keyNames[name] ?? name), \(what)", .action {}))
         }
         keys.append(MenuItem("Routing keys, move the cursor to that character; on a link or button, press it", .action {}))
         keys.append(MenuItem("Dot 7, Backspace; held, keeps deleting. Dot 8, Return. Space, a space", .action {}))
         let chords = BrailleCommands.table.map { entry in
-            MenuItem("Space with dots \(entry.0.sorted().map(String.init).joined(separator: " ")), \(entry.1)", .action { _ = BrailleCommands.run(entry.0) })
+            MenuItem(verbatim: String(localized: "Space with dots \(entry.0.sorted().map(String.init).joined(separator: " ")), \(entry.1)", comment: "A braille chord: the dots, then the command"), .action { _ = BrailleCommands.run(entry.0) })
         }
         return [
-            MenuItem("Braille display keys, \(keys.count)", .submenu { keys }),
-            MenuItem("Braille chords (space with dots), \(chords.count)", .submenu { chords }),
+            MenuItem("Braille display keys, \(String(keys.count))", .submenu { keys }),
+            MenuItem("Braille chords (space with dots), \(String(chords.count))", .submenu { chords }),
         ]
     }
 }

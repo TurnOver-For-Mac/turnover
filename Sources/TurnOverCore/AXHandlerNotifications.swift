@@ -183,7 +183,7 @@ extension AXHandler {
                 return
             }
             if count == 0, before.count > 0, focused, element.elements(kAXChildrenAttribute).first(where: { ($0.attr(kAXFocusedAttribute) as? Bool) == true }) == nil {
-                Speech.speakMessage("nothing selected"); return
+                Speech.speakMessage(String(localized: "nothing selected", comment: "Spoken message")); return
             }
             // The Dock's Cmd+Tab list marks its highlighted item focused rather than selected.
             guard let selected = all.first ?? element.elements(kAXChildrenAttribute).first(where: { ($0.attr(kAXFocusedAttribute) as? Bool) == true }) else { return }
@@ -263,7 +263,7 @@ extension AXHandler {
             Log.io("window closed: no window left")
             API.setFocusObject(ObjectFactory.make(app), ancestors: [])
             let minimised = all.count
-            Speech.speakMessage(minimised == 0 ? "no windows" : "no windows open, \(minimised) minimised")
+            Speech.speakMessage(minimised == 0 ? String(localized: "no windows", comment: "An app with no windows") : String(localized: "no windows open, \(String(minimised)) minimised", comment: "Spoken message: %@ is how many windows are in the Dock"))
             return
         }
         if let f = API.focusObject, f.pid == pid, f.element.role == "?" || f.element.element(kAXWindowAttribute) == nil {
