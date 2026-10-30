@@ -6,12 +6,13 @@ recorded support, effort and current work. A folder or an existing module is not
 ## Code and build targets
 
 App modules still compile in TurnOverCore, with its MainActor default. Keep existing types and registration;
-`Sources/TurnOverCore/Modules/BuiltInModules.swift` assembles them. Shared app-wake code stays with Core. App-specific
-views may still be under Core while the remaining filing work proceeds. Separate target extraction requires interface
+`Sources/System/BuiltInModules.swift` assembles them. Shared Mac shell behavior and app wake code live in
+`Sources/System`, still within TurnOverCore. The app executable remains in `Sources/TurnOver`. App-specific views and reading models live with their app modules;
+shared objects, text and navigation remain in Core. Separate target extraction requires interface
 and dependency review; a folder move does not create a module boundary.
 
-`Package.swift` uses `TurnOverCore` as one folder entry and lists app Swift files individually. A new shared Core file
-needs no manifest edit. Add each new app implementation to `coreSources`; add its records, Tests, Fixtures and
+`Package.swift` uses `TurnOverCore` and `System` as folder entries and lists app Swift files individually. A new shared
+Core or System file needs no manifest edit. Add each new app implementation to `coreSources`; add its records, Tests, Fixtures and
 Experiments to the target's excludes. Never add all of Sources or Apps as a recursive production entry.
 
 ## Records
@@ -19,7 +20,7 @@ Experiments to the target's excludes. Never add all of Sources or Apps as a recu
 Use a short STATUS.md with the fixed fields and Findings/Evidence headings shown in the index. Say what was checked,
 what is missing, the relevant issue and how another person can check it. Keep dated experiment observations separate
 from current status. Build installation paths, migration inventories and rollback history belong with review material.
-Shared implementations such as Media, Chat and Panes have a README; Music, Podcasts and TV retain individual records.
+Shared implementations such as Media, Chat, Panes and Games have a README; Music, Podcasts and TV retain individual records.
 Unknown work stays Unclaimed and unknown support stays Not assessed. AI help does not assign permanent ownership.
 
 Run `python3 Tools/build-app-index.py` after editing statuses. `--check` checks categories, local links and stale output.

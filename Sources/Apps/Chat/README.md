@@ -9,3 +9,7 @@
 ## Checks
 
 Use a public sample conversation to check conversation selection, transcript reading, arrival of a new message and movement to the composer. Keep sending as a separate check. Record the app and macOS versions, keyboard style and VoiceOver state.
+
+## Reading model
+
+[ChatView.swift](ChatView.swift) builds the conversation, transcript and composer view shared by these app recipes.

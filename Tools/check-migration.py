@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Check ongoing SwiftPM source membership without a frozen migration snapshot.
 
-TurnOverCore discovers its own folder normally; app production files are explicit.
-App Tests, Experiments and Fixtures remain outside the reader's build.
+TurnOverCore discovers its shared Core and System folders; app files are explicit.
+Tests, Experiments and Fixtures remain outside the reader's build.
 """
 import argparse
 import copy
@@ -15,6 +15,7 @@ import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
+SHARED_FOLDERS = {"TurnOverCore", "System"}
 NONPRODUCTION = {"Tests", "Experiments", "Fixtures"}
 SOURCE_SUFFIXES = {".swift", ".m", ".c", ".mm", ".cpp"}
 
@@ -78,25 +79,33 @@ def app_production(path):
     return parts[:2] == ("Sources", "Apps") and not (set(parts[2:-1]) & NONPRODUCTION)
 
 
+def shared_production(path):
+    parts = PurePosixPath(path).parts
+    return (len(parts) >= 3 and parts[0] == "Sources" and parts[1] in SHARED_FOLDERS
+            and not (set(parts[2:-1]) & NONPRODUCTION))
+
+
 def source_membership(root, resolved, manifest):
     actual, declared = targets(resolved), targets(manifest)
     require(set(actual) == set(declared), "resolved and declared target names differ")
     core = declared.get("TurnOverCore")
     require(core is not None and core["path"] == "Sources", "TurnOverCore must retain the Sources anchor")
-    require(isinstance(core.get("sources"), list), "TurnOverCore requires Core's folder and explicit app files")
+    require(isinstance(core.get("sources"), list), "TurnOverCore requires shared folders and explicit app files")
     core_entries = [relative(p) for p in core["sources"]]
-    require(core_entries.count("TurnOverCore") == 1, "Core sources must contain exactly one TurnOverCore folder entry")
+    for folder in sorted(SHARED_FOLDERS):
+        require(core_entries.count(folder) == 1, f"Core sources must contain exactly one {folder} folder entry")
+        require((root / "Sources" / folder).is_dir(), f"shared source folder missing: {folder}")
     for name, item in declared.items():
         raw = item.get("sources")
         if raw is not None:
             normal = [relative(p) for p in raw]
             require(len(normal) == len(set(normal)), f"duplicate source entries in {name}")
-            require(all((name == "TurnOverCore" and p == "TurnOverCore") or
+            require(all((name == "TurnOverCore" and p in SHARED_FOLDERS) or
                         PurePosixPath(p).suffix in SOURCE_SUFFIXES for p in normal),
-                    f"only Core's TurnOverCore entry may name a source folder: {name}")
-    apps = {"Sources/" + p for p in core_entries if p != "TurnOverCore"}
+                    f"only Core's TurnOverCore and System entries may name source folders: {name}")
+    apps = {"Sources/" + p for p in core_entries if p not in SHARED_FOLDERS}
     require(all(app_production(p) and PurePosixPath(p).suffix == ".swift" for p in apps),
-            "Core entries outside its folder must be production Apps Swift files")
+            "Core entries outside its shared folders must be production Apps Swift files")
     expected_apps = {p.relative_to(root).as_posix() for p in (root / "Sources/Apps").rglob("*.swift")
                      if app_production(p.relative_to(root).as_posix())}
     require(apps == expected_apps,
@@ -110,11 +119,18 @@ def source_membership(root, resolved, manifest):
             require(canonical.is_relative_to(root.resolve()), f"resolved source escapes the repository: {path}")
             require(canonical not in owners, f"source compiled more than once: {path}")
             owners[canonical] = name
-            if path.startswith("Sources/Apps/"):
+            parts = PurePosixPath(path).parts
+            if parts[:2] == ("Sources", "Apps"):
                 require(app_production(path), f"app test/experiment/fixture compiled into {name}: {path}")
                 require(name == "TurnOverCore", f"app production source belongs to wrong target: {path}")
-    expected_core = {p.relative_to(root).as_posix() for p in (root / "Sources/TurnOverCore").rglob("*.swift")}
-    expected = expected_core | expected_apps
+            elif len(parts) >= 2 and parts[0] == "Sources" and parts[1] in SHARED_FOLDERS:
+                require(shared_production(path), f"shared test/experiment/fixture compiled into {name}: {path}")
+                require(name == "TurnOverCore", f"shared production source belongs to wrong target: {path}")
+    expected_shared = {p.relative_to(root).as_posix()
+                       for folder in SHARED_FOLDERS
+                       for p in (root / "Sources" / folder).rglob("*.swift")
+                       if shared_production(p.relative_to(root).as_posix())}
+    expected = expected_shared | expected_apps
     resolved_core = set(source_paths(actual["TurnOverCore"]))
     require(expected == resolved_core,
             f"Core resolved membership differs: missing={sorted(expected-resolved_core)}, extra={sorted(resolved_core-expected)}")
@@ -128,52 +144,69 @@ def self_test():
             p = root / "Sources" / path
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text("// public sample\n")
-        add("TurnOverCore/A.swift"); add("Apps/Calculator/B.swift")
+        originals = ["TurnOverCore/A.swift", "System/C.swift", "Apps/Calculator/B.swift"]
+        for path in originals:
+            add(path)
         manifest = {"targets": [{"name": "TurnOverCore", "path": "Sources",
-                                 "sources": ["TurnOverCore", "Apps/Calculator/B.swift"]}]}
+                                 "sources": ["TurnOverCore", "System", "Apps/Calculator/B.swift"]}]}
         resolved = copy.deepcopy(manifest)
-        resolved["targets"][0]["sources"][0] = "TurnOverCore/A.swift"
-        require(source_membership(root, resolved, manifest) == 2, "valid folder and app file rejected")
-        add("TurnOverCore/New.swift")
-        resolved["targets"][0]["sources"].append("TurnOverCore/New.swift")
-        require(source_membership(root, resolved, manifest) == 3, "new Core file should need no manifest edit")
-        failures = 0
-        def refuses(current, declaration):
-            nonlocal failures
+        resolved["targets"][0]["sources"] = list(originals)
+        require(source_membership(root, resolved, manifest) == 3, "valid shared folders and app file rejected")
+        for folder in sorted(SHARED_FOLDERS):
+            path = f"{folder}/New.swift"
+            add(path)
+            resolved["targets"][0]["sources"].append(path)
+        require(source_membership(root, resolved, manifest) == 5, "shared folder growth should need no manifest edit")
+        failures = []
+        def refuses(label, current, declaration):
             try:
                 source_membership(root, current, declaration)
             except ValueError:
-                failures += 1
+                failures.append(label)
             else:
-                raise AssertionError("invalid source membership accepted")
-        for entry in ("./TurnOverCore", "./Apps/Calculator/B.swift", "Apps/Calculator", "../Outside.swift"):
+                raise AssertionError(f"invalid source membership accepted: {label}")
+        for entry in ("./TurnOverCore", "./System", "./Apps/Calculator/B.swift", "Apps/Calculator",
+                      "Sources", "System/Subfolder", "System/New.swift", "../Outside.swift", "/Outside.swift"):
             bad = copy.deepcopy(manifest); bad["targets"][0]["sources"].append(entry)
-            refuses(resolved, bad)
-        missing_folder = copy.deepcopy(manifest); missing_folder["targets"][0]["sources"].remove("TurnOverCore")
-        refuses(resolved, missing_folder)
+            refuses(f"invalid manifest entry {entry}", resolved, bad)
+        for folder in sorted(SHARED_FOLDERS):
+            missing = copy.deepcopy(manifest); missing["targets"][0]["sources"].remove(folder)
+            refuses(f"missing shared folder {folder}", resolved, missing)
         missing_app = copy.deepcopy(manifest); missing_app["targets"][0]["sources"].pop()
-        refuses(resolved, missing_app)
-        for source in ("TurnOverCore/A.swift", "Apps/Calculator/B.swift"):
+        refuses("missing explicit app file", resolved, missing_app)
+        for source in originals:
             missing = copy.deepcopy(resolved); missing["targets"][0]["sources"].remove(source)
-            refuses(missing, manifest)
-        for folder in sorted(NONPRODUCTION):
-            path = f"Apps/Calculator/{folder}/Sample.swift"
+            refuses(f"source omitted from resolved target: {source}", missing, manifest)
+        for parent in ("TurnOverCore", "System", "Apps/Calculator"):
+            for folder in sorted(NONPRODUCTION):
+                path = f"{parent}/{folder}/Sample.swift"
+                add(path)
+                # Samples remain excluded even when a recursive shared folder discovers its neighbours.
+                require(source_membership(root, resolved, manifest) == 5, f"excluded {path} affected production")
+                compiled = copy.deepcopy(resolved); compiled["targets"][0]["sources"].append(path)
+                bad = copy.deepcopy(manifest)
+                if parent.startswith("Apps/"):
+                    bad["targets"][0]["sources"].append(path)
+                refuses(f"compiled nonproduction source {path}", compiled, bad)
+            path = f"{parent}/README.md"
             add(path)
-            # Unlisted samples remain excluded; listing one cannot make it production.
-            require(source_membership(root, resolved, manifest) == 3, f"excluded {folder} sample affected production")
-            bad = copy.deepcopy(manifest); bad["targets"][0]["sources"].append(path)
             compiled = copy.deepcopy(resolved); compiled["targets"][0]["sources"].append(path)
-            refuses(compiled, bad)
-        overlap = copy.deepcopy(resolved)
-        overlap["targets"].append({"name": "Other", "path": "Sources", "sources": ["TurnOverCore/A.swift"]})
-        overlap_manifest = copy.deepcopy(manifest); overlap_manifest["targets"].append(overlap["targets"][-1])
-        refuses(overlap, overlap_manifest)
-        wrong = copy.deepcopy(resolved); wrong["targets"][0]["sources"].remove("Apps/Calculator/B.swift")
-        wrong["targets"].append({"name": "Other", "path": "Sources", "sources": ["Apps/Calculator/B.swift"]})
-        wrong_manifest = copy.deepcopy(manifest); wrong_manifest["targets"].append(wrong["targets"][-1])
-        refuses(wrong, wrong_manifest)
-        require(failures == 13, "self-test count changed unexpectedly")
-        print(f"membership self-test: {failures} invalid changes rejected; folder growth and excluded samples accepted")
+            refuses(f"compiled documentation {path}", compiled, manifest)
+        for source in originals:
+            overlap = copy.deepcopy(resolved)
+            overlap["targets"].append({"name": "Other", "path": "Sources", "sources": [source]})
+            overlap_manifest = copy.deepcopy(manifest); overlap_manifest["targets"].append(overlap["targets"][-1])
+            refuses(f"source compiled by two targets: {source}", overlap, overlap_manifest)
+            wrong = copy.deepcopy(resolved); wrong["targets"][0]["sources"].remove(source)
+            wrong["targets"].append({"name": "Other", "path": "Sources", "sources": [source]})
+            wrong_manifest = copy.deepcopy(manifest); wrong_manifest["targets"].append(wrong["targets"][-1])
+            refuses(f"wrong target for source: {source}", wrong, wrong_manifest)
+        add("Apps/Calculator/New.swift")
+        refuses("new app file must be listed explicitly", resolved, manifest)
+        manifest["targets"][0]["sources"].append("Apps/Calculator/New.swift")
+        resolved["targets"][0]["sources"].append("Apps/Calculator/New.swift")
+        require(source_membership(root, resolved, manifest) == 6, "explicit new app file rejected")
+        print(f"membership self-test: {len(failures)} invalid changes rejected; shared folder growth, explicit app files and excluded samples accepted")
 
 
 def main():
@@ -187,7 +220,7 @@ def main():
         self_test(); return
     env = toolchain_environment() if not (args.package_json and args.dump_json) else os.environ.copy()
     count = source_membership(ROOT, metadata("resolved", args.package_json, env), metadata("manifest", args.dump_json, env))
-    print(f"source membership: {count} Core files, no omissions, duplicates or compiled app tests/experiments/fixtures")
+    print(f"source membership: {count} Core files, no omissions, duplicates or compiled tests/experiments/fixtures")
 
 
 if __name__ == "__main__":
