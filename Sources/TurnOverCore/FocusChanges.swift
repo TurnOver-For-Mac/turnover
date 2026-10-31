@@ -36,6 +36,7 @@ extension AXHandler {
         ("helper's window", ruleHelperWindow),
         ("switching preference tabs", rulePreferenceTabSwitch),
         ("background window", ruleBackgroundWindow),
+        ("stand-in for a text field", ruleTextStandIn),
         ("duplicate", ruleDuplicate),
         ("hidden scroll bar", ruleHiddenScrollBar),
         ("blank frame", ruleBlankFrame),
@@ -162,6 +163,22 @@ extension AXHandler {
             }
         }
         return .ignore
+    }
+
+    /// SwiftUI reports the focus on a text field twice (System Settings' search field and the fields in its panes, macOS
+    /// 27): first a stand-in in the same place that answers nothing about its text (value, caret and length all "no
+    /// value"), then the field itself, which the application gives as its focus. "Reported twice" kept the stand-in and
+    /// let the field go: the field was read as a bare "edit", and the review keys found no caret in it and said nothing,
+    /// press after press (29 Oct 2026). The application's own focus, the same control with text, is the one presented.
+    func ruleTextStandIn(_ target: AXUIElement, _ pid: pid_t, _ element: AXUIElement) -> FocusVerdict {
+        // Its length, or else its caret, never its value: a long document's whole text was copied at each report, only for
+        // the report to be set aside as a duplicate (the review of pull request 195, 29 Oct 2026).
+        func hasText(_ e: AXUIElement) -> Bool { e.attr(kAXNumberOfCharactersAttribute) != nil || e.attr(kAXSelectedTextRangeAttribute) != nil }
+        guard ["AXTextField", "AXTextArea"].contains(target.role), !hasText(target),
+              let focused = AXUIElementCreateApplication(pid).element(kAXFocusedUIElementAttribute), !focused.isSame(target),
+              hasText(focused), Self.sameControl(target, focused) else { return .go(target) }
+        Log.io("focus on a \(target.role) with nothing behind it; the application's focus in the same place taken instead")
+        return .go(focused)
     }
 
     /// The same element in the same window as TurnOver already has.

@@ -244,6 +244,9 @@ public enum AXReplay {
     /// Actions performed and attributes set during the test, in order.
     nonisolated(unsafe) public private(set) static var actions: [(id: Int, action: String)] = []
     nonisolated(unsafe) public private(set) static var sets: [(id: Int, attribute: String, value: AXFixture.Value?)] = []
+    /// Attributes read, in order, while a test keeps this list (nil, the default, records nothing): for checking that
+    /// something is left unread.
+    nonisolated(unsafe) public static var reads: [(id: Int, attribute: String)]?
 
     // The shim (Sources/AXReplayShim) must be a library dyld loaded at launch for its interposing to count, so
     // the test runner inserts libAXReplayShim.dylib (DYLD_INSERT_LIBRARIES) and this finds its install function
@@ -305,6 +308,7 @@ public enum AXReplay {
     private static let attrFn: AttrFn = { e, a, out in
         guard let i = id(of: e), var n = byId[i], let a else { return .invalidUIElement }
         let name = a as String
+        reads?.append((i, name))
         // Every replayed element has a pid of its own, so "the application of this pid" is the element itself:
         // the application's questions (its focused window, its focus) are answered by the recorded application.
         if n.attrs[name] == nil, Self.applicationAttributes.contains(name), let app = fixture?.application, let an = byId[app] { n = an }

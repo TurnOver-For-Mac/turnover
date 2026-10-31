@@ -259,9 +259,9 @@ func focusRuleTests() {
         return f
     }
     func focusIs(_ id: Int) -> Bool { API.focusObject.map { AXReplay.id(of: $0.element) == id } ?? false }
-    /// The replayed application is the one in front.
-    func playing(_ body: () -> Void) {
-        AXReplay.load(tree()); AXHandler.shared.activePid = 900_009
+    /// The replayed application (the tree above, or another) is the one in front.
+    func playing(_ fixture: AXFixture? = nil, _ body: () -> Void) {
+        AXReplay.load(fixture ?? tree()); AXHandler.shared.activePid = 900_009
         defer { AXReplay.unload(); AXHandler.shared.activePid = 0; API.setFocusObject(nil, ancestors: []) }
         API.setFocusObject(nil, ancestors: [])
         body()
@@ -304,6 +304,61 @@ func focusRuleTests() {
             config.general.keyboardStyle = "jaws"
             expect(command("kb:turnover+rightArrow"), "reviewNext", "JAWS keys: the next item, in a text field as everywhere")
             expect(command("kb:turnover+leftArrow"), "reviewPrevious", "JAWS keys: the previous item, in a text field as everywhere")
+        }
+    }
+
+    /// System Settings on macOS 27: the search field (22) has a stand-in (21) in the same place that answers nothing
+    /// about its text (no value, no caret). SwiftUI reports the stand-in focused first and the field straight after,
+    /// and the application gives the field as its focus. A switch (23) has a second reference (24); both answer. A
+    /// long document (25) is an ordinary text area.
+    /// Numbers of its own (the application stays 9, the pid the rules are given): the focus a test just before
+    /// presented counts as reported twice for half a second, and the replay's element 1 is the same in every tree.
+    func standIn() -> AXFixture {
+        var f = AXFixture(app: "Settings", bundle: "s", recorded: "", root: 20, application: 9, focus: 22, nodes: [])
+        func placed(_ attrs: [String: AXFixture.Value], _ x: Double, _ y: Double, _ w: Double, _ h: Double) -> [String: AXFixture.Value] {
+            attrs.merging(["AXPosition": .point(x, y), "AXSize": .size(w, h), "AXParent": .element(20), "AXWindow": .element(20)]) { a, _ in a }
+        }
+        f.nodes = [
+            .init(id: 20, attrs: ["AXRole": .string("AXWindow"), "AXSubrole": .string("AXStandardWindow"), "AXTitle": .string("About"), "AXParent": .element(9),
+                                  "AXChildren": .elements([22, 23, 25]), "AXFocused": .bool(false)]),
+            .init(id: 21, attrs: placed(["AXRole": .string("AXTextField"), "AXSubrole": .string("AXSearchField"), "AXFocused": .bool(true)], 10, 60, 232, 28)),
+            .init(id: 22, attrs: placed(["AXRole": .string("AXTextField"), "AXSubrole": .string("AXSearchField"), "AXFocused": .bool(true), "AXValue": .string(""),
+                                         "AXPlaceholderValue": .string("Search"), "AXSelectedTextRange": .range(0, 0), "AXNumberOfCharacters": .number(0)], 10, 60, 232, 28)),
+            .init(id: 23, attrs: placed(["AXRole": .string("AXCheckBox"), "AXSubrole": .string("AXSwitch"), "AXTitle": .string("Wi-Fi"), "AXValue": .number(1)], 300, 120, 40, 22)),
+            .init(id: 24, attrs: placed(["AXRole": .string("AXCheckBox"), "AXSubrole": .string("AXSwitch"), "AXTitle": .string("Wi-Fi"), "AXValue": .number(1)], 300, 120, 40, 22)),
+            .init(id: 25, attrs: placed(["AXRole": .string("AXTextArea"), "AXFocused": .bool(true), "AXValue": .string(String(repeating: "A long document. ", count: 2000)),
+                                         "AXSelectedTextRange": .range(0, 0), "AXNumberOfCharacters": .number(34_000)], 300, 200, 400, 300)),
+            .init(id: 9, attrs: ["AXRole": .string("AXApplication"), "AXTitle": .string("Settings"), "AXChildren": .elements([20]), "AXWindows": .elements([20]),
+                                  "AXFocusedWindow": .element(20), "AXMainWindow": .element(20), "AXFocusedUIElement": .element(22)]),
+        ]
+        return f
+    }
+    test("focus rules: a text field's stand-in gives way to the field the application has focused") {
+        playing(standIn()) {
+            AXHandler.shared.focusChanged(AXReplay.element(21), pid: 900_009)
+            check(focusIs(22), "the field itself is the focus, not its stand-in")
+            check((try? API.focusObject?.makeTextInfo(.caret)) != nil, "the focus gives its caret, so the review keys have text to move in")
+            AXHandler.shared.focusChanged(AXReplay.element(22), pid: 900_009)
+            check(focusIs(22), "the field, reported after its stand-in, is still the focus")
+        }
+    }
+    test("focus rules: two references to a switch are one control, the first kept") {
+        playing(standIn()) {
+            AXHandler.shared.focusChanged(AXReplay.element(23), pid: 900_009)
+            AXHandler.shared.focusChanged(AXReplay.element(24), pid: 900_009)
+            check(focusIs(23), "the second reference to the switch is not a new focus")
+        }
+    }
+    test("focus rules: a text area reported again is set aside without its whole text read") {
+        playing(standIn()) {
+            AXHandler.shared.focusChanged(AXReplay.element(25), pid: 900_009)
+            check(focusIs(25), "the long document is the focus")
+            AXReplay.reads = []
+            defer { AXReplay.reads = nil }
+            AXHandler.shared.focusChanged(AXReplay.element(25), pid: 900_009)
+            let valueReads = (AXReplay.reads ?? []).filter { $0.id == 25 && $0.attribute == kAXValueAttribute }.count
+            expect(valueReads, 0, "the same text area reported again: its value (34,000 characters) was not read")
+            check(focusIs(25), "and it is still the focus")
         }
     }
 
