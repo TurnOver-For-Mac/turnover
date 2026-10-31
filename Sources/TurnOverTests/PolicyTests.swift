@@ -71,6 +71,19 @@ func policyTests() {
         check(!watch.isQuitting(102), "102 is not going")
         expect(watch.look([103]), .init(stopped: true), "102 crashed, and 103 started before the next look")
     }
+    test("focus: a system agent with no window on screen is not where the keys go (Spotlight's hidden panel, 31 Oct 2026)") {
+        let table: [(String, String?, Bool, Bool)] = [
+            ("Spotlight's panel closed (Siri AI)", "com.apple.campo", false, true),
+            ("Spotlight's panel open", "com.apple.campo", true, false),
+            ("the Dock, always on screen", "com.apple.dock", true, false),
+            ("Control Center closed", "com.apple.controlcenter", false, true),
+            ("an ordinary app with no window: the background rule's business", "com.apple.TextEdit", false, false),
+            ("no bundle identifier", nil, false, false),
+        ]
+        for (what, bundle, onScreen, ignored) in table {
+            expect(AXHandler.ignoresHiddenAgent(bundleID: bundle, windowOnScreen: onScreen), ignored, what)
+        }
+    }
     test("fixtures: every recorded window's focus reads as something, within a call budget") {
         let dir = fixtureURL("textedit-guide").deletingLastPathComponent()
         let files = ((try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []).filter { $0.pathExtension == "json" }.sorted { $0.lastPathComponent < $1.lastPathComponent }

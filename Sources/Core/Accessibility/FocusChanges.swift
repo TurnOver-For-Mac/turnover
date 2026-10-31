@@ -31,6 +31,7 @@ extension AXHandler {
     var focusRules: [(String, FocusRule)] {[
         ("not an application", ruleNotAnApplication),
         ("background application", ruleBackgroundApplication),
+        ("system agent with nothing on screen", ruleHiddenAgent),
         ("set aside after a settings Tab", ruleSetAside),
         ("untitled window", ruleUntitledWindow),
         ("helper's window", ruleHelperWindow),
@@ -90,6 +91,34 @@ extension AXHandler {
             return .ignore
         }
         return .go(target)
+    }
+
+    /// A system agent with no window on screen does not have the keys either. Spotlight's panel (Siri AI,
+    /// com.apple.campo) clears its search field eight minutes after it closes and reports a nameless AXUnknown as the
+    /// focus; TurnOver held it as a new app's focus, and from then on the arrows read nothing, Tab went round the
+    /// hidden panel, and Command alone pressed Siri AI's Apple menu, which kept the keyboard until a restart (macOS
+    /// 27.2, 31 Oct 2026: four times in a morning, each eight minutes after Spotlight was used). Measured that
+    /// morning: the Dock and Notification Center always have a window on screen, Control Center and Siri AI none while
+    /// closed.
+    func ruleHiddenAgent(_ target: AXUIElement, _ pid: pid_t, _ element: AXUIElement) -> FocusVerdict {
+        if pid != activePid, let app = NSRunningApplication(processIdentifier: pid),
+           Self.ignoresHiddenAgent(bundleID: app.bundleIdentifier, windowOnScreen: Self.hasWindowOnScreen(pid)) {
+            Log.io("focus from \(app.localizedName ?? "pid \(pid)") with no window on screen; ignored")
+            return .ignore
+        }
+        return .go(target)
+    }
+
+    /// The rule's decision alone, for the tests' table: a system agent's focus counts only while it has a window on
+    /// screen. (The window list is asked only for an agent.)
+    public static func ignoresHiddenAgent(bundleID: String?, windowOnScreen: @autoclosure () -> Bool) -> Bool {
+        systemUIAgents.contains(bundleID ?? "") && !windowOnScreen()
+    }
+
+    /// Whether a window of the process is on screen: ordered in, whatever its alpha, so a panel still fading in counts.
+    static func hasWindowOnScreen(_ pid: pid_t) -> Bool {
+        let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+        return windows.contains { ($0[kCGWindowOwnerPID as String] as? Int) == Int(pid) }
     }
 
     /// Just after TurnOver took the place on a control that refused the focus: the application's own news is set aside.
@@ -360,7 +389,7 @@ extension AXHandler {
             // AXUnknown over its grid (Day 2, 10 Oct 2026). Held quietly instead, and the app asked again a moment
             // later: Excel names its cell once it has built its tree for an assistive app.
             if current.pid != pid {
-                Log.io("focus on a nameless AXUnknown in a new app; held quietly, asking again shortly")
+                Log.io("focus on a nameless AXUnknown in a new app (pid \(pid)); held quietly, asking again shortly")
                 let obj = ObjectFactory.make(target)
                 API.setFocusObject(obj, ancestors: obj.ancestors)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
