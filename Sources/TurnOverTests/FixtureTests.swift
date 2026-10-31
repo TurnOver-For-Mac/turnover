@@ -64,6 +64,24 @@ func fixtureTests() {
         navigator.previous()
         expect(navigator.reviewElement.flatMap { AXReplay.id(of: $0) }, 2, "and back to the button")
     }
+    // System Settings' password sheet on macOS 27.2 (31 Oct 2026): the application's focused element is a password field
+    // of another process (every replayed element has a pid of its own, the application's is 9's).
+    test("secure echo: a password field the application shows from another process is the one looked at") {
+        var fixture = AXFixture(app: "System Settings", bundle: "com.apple.systempreferences", recorded: "", root: 0, application: 9, focus: 3, nodes: [])
+        fixture.nodes = [
+            .init(id: 0, attrs: ["AXRole": .string("AXWindow"), "AXChildren": .elements([1])]),
+            .init(id: 1, attrs: ["AXRole": .string("AXSheet"), "AXParent": .element(0), "AXChildren": .elements([3])]),
+            .init(id: 3, attrs: ["AXRole": .string("AXTextField"), "AXSubrole": .string("AXSecureTextField"), "AXParent": .element(1),
+                                 "AXValue": .string("\u{2022}\u{2022}"), "AXSelectedTextRange": .range(2, 0)]),
+            .init(id: 9, attrs: ["AXRole": .string("AXApplication"), "AXChildren": .elements([0]), "AXFocusedUIElement": .element(3)]),
+        ]
+        AXReplay.load(fixture); defer { AXReplay.unload() }
+        expect(SecureEcho.otherProcessField(of: AXReplay.floor + 9).flatMap { AXReplay.id(of: $0) }, 3, "the sheet's password field")
+        expect(SecureEcho.length(AXReplay.element(3)), 2, "its length counts what was typed")
+        fixture.nodes[2].attrs["AXSubrole"] = nil
+        AXReplay.load(fixture)
+        check(SecureEcho.otherProcessField(of: AXReplay.floor + 9) == nil, "a plain text field there is not looked at")
+    }
 
     test("replay: a recording answers like the application") {
         var f = AXFixture(app: "Test", bundle: "test", recorded: "", root: 0, application: nil, focus: 2, nodes: [])
