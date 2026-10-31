@@ -12,11 +12,18 @@
 // highlighted item, Return, Space and Escape go through untouched and the menu
 // is watched until it closes, when the real focus is read again.
 import Foundation
+import AppKit
 import ApplicationServices
 import TurnOverAX
 
 final class MenuNavigationPlugin: GlobalPlugin {
     static var menuBarPid: pid_t = 0
+    /// The application whose menus the menu bar shows: the bar opened or held is its own, not that of whatever app
+    /// TurnOver's focus is in. Spotlight's hidden panel (Siri AI) had reported the focus, and Command alone pressed
+    /// Siri AI's Apple menu: a menu in an app with nothing on screen, never shown, which kept the keyboard until a
+    /// restart, every key a beep (macOS 27.2, 31 Oct 2026; WindowServer's log had Siri AI as the key thief from that
+    /// press on).
+    static var menuBarAppPid: pid_t? { NSWorkspace.shared.menuBarOwningApplication?.processIdentifier ?? API.focusPid }
     private var lastItem: AXUIElement?
     private var lastSpoken: (AXUIElement, Date)?
 
@@ -130,7 +137,7 @@ final class MenuNavigationPlugin: GlobalPlugin {
     /// Control-F2, VO-M, Command alone: open the Apple menu through accessibility, as macOS and VoiceOver land there
     /// (8 Oct 2026: the application menu is what the Mac does NOT do).
     private func openMenuBar(_ g: KeyboardGesture) {
-        guard let pid = API.focusPid, let bar = AXUIElementCreateApplication(pid).element(kAXMenuBarAttribute) else { g.send(); return }
+        guard let pid = Self.menuBarAppPid, let bar = AXUIElementCreateApplication(pid).element(kAXMenuBarAttribute) else { g.send(); return }
         let titles = bar.elements(kAXChildrenAttribute)
         guard titles.count > 1 else { g.send(); return }
         Self.menuBarPid = pid
@@ -138,7 +145,7 @@ final class MenuNavigationPlugin: GlobalPlugin {
         // focus is held back as in the gap between two menus, and dropped when the menu opens (a tester, 7 Oct 2026).
         AXHandler.shared.menuAboutToOpen(pid: pid)
         let r = AXUIElementPerformAction(titles[0], kAXPressAction as CFString)
-        Log.io("menu bar: open \"\(titles[0].string(kAXTitleAttribute).map(Log.words) ?? "Apple")\" → \(describeError(r))")
+        Log.io("menu bar: open \"\(titles[0].string(kAXTitleAttribute).map(Log.words) ?? "Apple")\" in pid \(pid) → \(describeError(r))")
         if r != .success { g.send() }
     }
 
@@ -172,7 +179,7 @@ final class MenuNavigationPlugin: GlobalPlugin {
     /// Right, Down opens one (a vertical list, with the arrows bumping, was the NVDA way: a tester, 8 Oct 2026).
     static func holdStatusItems() {
         let extras = StatusMenus.gather()
-        guard let pid = API.focusPid else { Tones.edge(); return }
+        guard let pid = menuBarAppPid else { Tones.edge(); return }
         // TurnOver's own item last, as in the list on Windows+B; it was missing here (9 Oct 2026).
         let me = getpid()
         heldBar = (pid, extras.map(\.element) + [AXUIElementCreateApplication(me)], 0)
@@ -183,7 +190,7 @@ final class MenuNavigationPlugin: GlobalPlugin {
     }
 
     static func holdMenuBar() {
-        guard let pid = API.focusPid, let bar = AXUIElementCreateApplication(pid).element(kAXMenuBarAttribute) else { Tones.edge(); return }
+        guard let pid = menuBarAppPid, let bar = AXUIElementCreateApplication(pid).element(kAXMenuBarAttribute) else { Tones.edge(); return }
         let titles = bar.elements(kAXChildrenAttribute)
         guard !titles.isEmpty else { Tones.edge(); return }
         heldBar = (pid, titles, 0)
@@ -214,7 +221,7 @@ final class MenuNavigationPlugin: GlobalPlugin {
 
     private static func barKey(_ g: KeyboardGesture) {
         guard var h = heldBar else { g.send(); return }
-        guard API.focusPid == h.pid else { heldBar = nil; g.send(); return }
+        guard menuBarAppPid == h.pid else { heldBar = nil; g.send(); return }
         switch g.keyName {
         case "leftArrow", "rightArrow":
             let j = h.index + (g.keyName == "rightArrow" ? 1 : -1)
@@ -241,7 +248,7 @@ final class MenuNavigationPlugin: GlobalPlugin {
             menuBarPid = h.pid
             AXHandler.shared.menuAboutToOpen(pid: h.pid)
             let r = AXUIElementPerformAction(title, kAXPressAction as CFString)
-            Log.io("menu bar: open \"\(title.string(kAXTitleAttribute).map(Log.words) ?? "Apple")\" → \(describeError(r))")
+            Log.io("menu bar: open \"\(title.string(kAXTitleAttribute).map(Log.words) ?? "Apple")\" in pid \(h.pid) → \(describeError(r))")
             if r != .success { Tones.edge() }
         case "escape":
             heldBar = nil; heldStatus = nil
