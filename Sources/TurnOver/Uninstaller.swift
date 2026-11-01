@@ -31,7 +31,7 @@ enum Uninstaller {
     static func confirm(keepSettings: Bool) {
         DispatchQueue.main.async {
             TurnOverMenu.shared.openList(keepSettings ? "Remove the app only?" : "Uninstall TurnOver completely? Settings, plugins and permissions go too", items: [
-                MenuItem("Cancel", .action { Speech.speakMessage("Not removed") }),
+                MenuItem("Cancel", .action { Speech.speakMessage(String(localized: "Not removed", comment: "Spoken message")) }),
                 MenuItem(keepSettings ? "Remove the app" : "Uninstall everything", .action { DispatchQueue.main.async { run(keepSettings: keepSettings) } }),
             ])
         }
@@ -44,7 +44,7 @@ enum Uninstaller {
         // Coexisting: VoiceOver's Activity first, while TurnOver still has its files and its permissions, or VoiceOver
         // stays silent in TurnOver's apps for good (a code review on 17 Oct 2026: a blocker). Then the rest.
         if ActivityFlow.shared.marker.installed {   // whatever the switch says: an Activity left installed mutes VoiceOver for good
-            Speech.speakMessage("Uninstalling TurnOver. First VoiceOver's settings: VoiceOver Utility opens and closes by itself, about ten seconds.")
+            Speech.speakMessage(String(localized: "Uninstalling TurnOver. First VoiceOver's settings: VoiceOver Utility opens and closes by itself, about ten seconds.", comment: "Spoken message"))
             ActivityFlow.shared.set(apps: nil) { text in
                 Log.info("uninstall: the Activity: \(text)")
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { removeEverything(keepSettings: keepSettings) }
@@ -56,7 +56,7 @@ enum Uninstaller {
 
     private static func removeEverything(keepSettings: Bool) {
         ScreenCurtain.off()
-        Speech.speakMessage(keepSettings ? "Removing TurnOver, keeping your settings. VoiceOver will come back on in a moment." : "Uninstalling TurnOver. VoiceOver will come back on in a moment.")
+        Speech.speakMessage(keepSettings ? String(localized: "Removing TurnOver, keeping your settings. VoiceOver will come back on in a moment.", comment: "Spoken message") : String(localized: "Uninstalling TurnOver. VoiceOver will come back on in a moment.", comment: "Spoken message"))
         DispatchQueue.global(qos: .userInitiated).async {
             removeLoginItems()
             removeSteamSwitchFiles()
@@ -65,12 +65,12 @@ enum Uninstaller {
             // TurnOver's own last words: while VoiceOver is on, TurnOver is silent.
             let summary: String
             switch (keepSettings, appTrashed) {
-            case (true, true): summary = "TurnOver is in the Bin. Your settings and permissions are kept for when you install it again."
-            case (true, false): summary = "The app could not be moved to the Bin; drag it there yourself. Your settings are kept."
-            case (false, true): summary = "TurnOver is uninstalled and in the Bin."
-            case (false, false): summary = "TurnOver's settings and permissions are removed; the app itself could not be moved to the Bin, so drag it there yourself."
+            case (true, true): summary = String(localized: "TurnOver is in the Bin. Your settings and permissions are kept for when you install it again.", comment: "Uninstalling")
+            case (true, false): summary = String(localized: "The app could not be moved to the Bin; drag it there yourself. Your settings are kept.", comment: "Uninstalling")
+            case (false, true): summary = String(localized: "TurnOver is uninstalled and in the Bin.", comment: "Uninstalling")
+            case (false, false): summary = String(localized: "TurnOver's settings and permissions are removed; the app itself could not be moved to the Bin, so drag it there yourself.", comment: "Uninstalling")
             }
-            DispatchQueue.main.async { Speech.speakMessage(summary + (left.isEmpty ? "" : " Some files could not be moved.")) }
+            DispatchQueue.main.async { Speech.speakMessage(summary + (left.isEmpty ? "" : " " + String(localized: "Some files could not be moved.", comment: "Uninstalling"))) }
             Log.info("uninstall: \(summary) Left behind: \(left)")
             sleep(4)
             DispatchQueue.main.async {

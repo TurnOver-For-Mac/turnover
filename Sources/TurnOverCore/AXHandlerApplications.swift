@@ -54,7 +54,7 @@ extension AXHandler {
         } else {
             // Just launched and no window yet: say so, so the wait is not mistaken for silence.
             let launching = app.launchDate.map { Date().timeIntervalSince($0) < 10 } ?? false
-            Speech.speakOnly((app.localizedName ?? "application") + (launching ? ", starting" : ""))   // the display shows the focus
+            Speech.speakOnly((app.localizedName ?? Role.application.displayString) + (launching ? ", " + String(localized: "starting", comment: "An app being launched") : ""))   // the display shows the focus
         }
         if let focused = appEl.element(kAXFocusedUIElementAttribute) { focusChanged(focused, pid: pid) }
         else if let win = firstWindow { focusChanged(win, pid: pid) }

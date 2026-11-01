@@ -16,8 +16,8 @@ final class FinderAppModule: AppModule {
         let cat = "Finder"
         // Command Down with nothing selected (after Command Up to the top: Finder selects nothing there) does nothing
         // at all: say so, rather than silence (a tester, 9 Oct 2026). With a selection, Finder's own key, untouched.
-        script("finder_openNothing", "Command Down with nothing selected: says so", gestures: ["kb:command+downArrow"], category: cat) { _ in
-            Speech.speakMessage("nothing selected; Down arrow to choose an item")
+        script("finder_openNothing", String(localized: "Command Down with nothing selected: says so", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+downArrow"], category: cat) { _ in
+            Speech.speakMessage(String(localized: "nothing selected; Down arrow to choose an item", comment: "Spoken message"))
         }.isAvailable = { [weak self] in
             guard let self, inFileView(), let f = API.focusObject else { return false }
             let e = f.element
@@ -29,38 +29,38 @@ final class FinderAppModule: AppModule {
         // the key reached Finder (a tap after VoiceOver's saw it, 21 Oct 2026) and no synthetic press ever failed.
         // A symptom fix, the cause in Finder unknown: the key is sent on, and if nothing changes within 350 ms it is
         // sent once more. Down only for a folder (a file would open twice), and only while Finder is still in front.
-        script("finder_openSelected", "Opens the selected item (Command Down); a folder is asked for again if Finder ignored it", gestures: ["kb:command+downArrow"], category: cat) { [weak self] g in
+        script("finder_openSelected", String(localized: "Opens the selected item (Command Down); a folder is asked for again if Finder ignored it", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+downArrow"], category: cat) { [weak self] g in
             self?.sendAgainIfIgnored(g, what: "Command Down", foldersOnly: true)
         }.isAvailable = { [weak self] in
             guard let self, inFileView(), let f = API.focusObject else { return false }
             return !(f.element.elements(kAXSelectedRowsAttribute) + f.element.elements(kAXSelectedChildrenAttribute)).isEmpty
         }
-        script("finder_enclosingFolder", "Goes to the enclosing folder (Command Up); asked for again if Finder ignored it", gestures: ["kb:command+upArrow"], category: cat) { [weak self] g in
+        script("finder_enclosingFolder", String(localized: "Goes to the enclosing folder (Command Up); asked for again if Finder ignored it", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+upArrow"], category: cat) { [weak self] g in
             self?.sendAgainIfIgnored(g, what: "Command Up", foldersOnly: false)
         }.isAvailable = { [weak self] in self?.inFileView() ?? false }
         // Windows style only: in Mac style Finder keeps its own keys (Return renames, Command Down opens), the muscle
         // memory VoiceOver users have (6 Oct 2026).
-        script("finder_open", "Opens the selected item, as in Windows Explorer (Windows style; on a Mac, Command Down)", gestures: ["kb:enter", "kb:numpadEnter"], category: cat) { [weak self] g in
+        script("finder_open", String(localized: "Opens the selected item, as in Windows Explorer (Windows style; on a Mac, Command Down)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:enter", "kb:numpadEnter"], category: cat) { [weak self] g in
             guard let self, inFileView() else { g.send(); return }
             Tones.press()
             KeyboardGesture(identifier: "kb:command+downArrow")?.send()
         }.isAvailable = { config.general.windowsKeys }
-        script("finder_rename", "Renames the selected item: F2, as in Windows Explorer, or Shift Return (Windows style)", gestures: ["kb:f2", "kb:shift+enter"], category: cat) { [weak self] g in
+        script("finder_rename", String(localized: "Renames the selected item: F2, as in Windows Explorer, or Shift Return (Windows style)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:f2", "kb:shift+enter"], category: cat) { [weak self] g in
             guard let self, inFileView() else { g.send(); return }
             KeyboardGesture(identifier: "kb:enter")?.send()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { Speech.speakMessage("rename") }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { Speech.speakMessage(String(localized: "rename", comment: "Spoken message")) }
         }.isAvailable = { config.general.windowsKeys }
         // Tab and Shift Tab between the parts of the window, as in Windows Explorer: toolbar … search, files, sidebar,
         // and round. Finder's own Tab in the files chose the next file, and its sidebar never takes the keyboard, so
         // TurnOver holds the sidebar (ObjectNavigator.hold) (7 Oct 2026).
-        script("finder_tabToSidebar", "From the files, Tab goes to the sidebar", gestures: ["kb:tab"], category: cat) { [weak self] g in
+        script("finder_tabToSidebar", String(localized: "From the files, Tab goes to the sidebar", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:tab"], category: cat) { [weak self] g in
             guard let self, let sb = sidebar() else { g.send(); return }
             ObjectNavigator.shared.enterHold(sb, name: "sidebar")
         }.isAvailable = { [weak self] in self?.inFileView() == true }
-        script("finder_shiftTabToSearch", "To the search field; from the files, Shift Tab goes back to the toolbar's search", gestures: ["kb:shift+tab"], category: cat) { [weak self] g in
+        script("finder_shiftTabToSearch", String(localized: "To the search field; from the files, Shift Tab goes back to the toolbar's search", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+tab"], category: cat) { [weak self] g in
             guard let self, focusSearch() else { g.send(); return }
         }.isAvailable = { [weak self] in self?.inFileView() == true }
-        script("finder_shiftTabToSidebar", "To the sidebar; from the toolbar's first button, Shift Tab goes back to the sidebar", gestures: ["kb:shift+tab"], category: cat) { [weak self] g in
+        script("finder_shiftTabToSidebar", String(localized: "To the sidebar; from the toolbar's first button, Shift Tab goes back to the sidebar", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+tab"], category: cat) { [weak self] g in
             guard let self, let sb = sidebar() else { g.send(); return }
             ObjectNavigator.shared.enterHold(sb, name: "sidebar")
         }.isAvailable = { [weak self] in

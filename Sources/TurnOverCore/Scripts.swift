@@ -27,6 +27,58 @@ public final class Script {
     /// brackets ("Next heading", not "…; elsewhere …(VO-Command-H)"). 13 Oct 2026: "It's all a bit verbose".
     /// The shortcuts list keeps the whole description.
     public var brief: String { Self.brief(description) }
+    /// The category as the key list says it. The category itself stays English: scripts are grouped and found by it.
+    public var categoryName: String { Self.categoryName(category) }
+    nonisolated public static func categoryName(_ category: String) -> String {
+        switch category {
+        case "Add-ons": return String(localized: "Add-ons", comment: "A group of commands in the key list")
+        case "App Store": return String(localized: "App Store", comment: "A group of commands in the key list")
+        case "Browse mode": return String(localized: "Browse mode", comment: "A group of commands in the key list")
+        case "Calculator": return String(localized: "Calculator", comment: "A group of commands in the key list")
+        case "Calendar": return String(localized: "Calendar", comment: "A group of commands in the key list")
+        case "Claude": return String(localized: "Claude", comment: "A group of commands in the key list")
+        case "Contacts": return String(localized: "Contacts", comment: "A group of commands in the key list")
+        case "Dialogs": return String(localized: "Dialogs", comment: "A group of commands in the key list")
+        case "Finder": return String(localized: "Finder", comment: "A group of commands in the key list")
+        case "Freeform": return String(localized: "Freeform", comment: "A group of commands in the key list")
+        case "Games": return String(localized: "Games", comment: "A group of commands in the key list")
+        case "Keynote": return String(localized: "Keynote", comment: "A group of commands in the key list")
+        case "Keypad": return String(localized: "Keypad", comment: "A group of commands in the key list")
+        case "Kindle": return String(localized: "Kindle", comment: "A group of commands in the key list")
+        case "Lists": return String(localized: "Lists", comment: "A group of commands in the key list")
+        case "Mail": return String(localized: "Mail", comment: "A group of commands in the key list")
+        case "Maps": return String(localized: "Maps", comment: "A group of commands in the key list")
+        case "Menus": return String(localized: "Menus", comment: "A group of commands in the key list")
+        case "Microsoft Excel": return String(localized: "Microsoft Excel", comment: "A group of commands in the key list")
+        case "Microsoft Word": return String(localized: "Microsoft Word", comment: "A group of commands in the key list")
+        case "NVDA keys": return String(localized: "NVDA keys", comment: "A group of commands in the key list")
+        case "Numbers": return String(localized: "Numbers", comment: "A group of commands in the key list")
+        case "Object navigation": return String(localized: "Object navigation", comment: "A group of commands in the key list")
+        case "Pages": return String(localized: "Pages", comment: "A group of commands in the key list")
+        case "Photos": return String(localized: "Photos", comment: "A group of commands in the key list")
+        case "Plugins": return String(localized: "Plugins", comment: "A group of commands in the key list")
+        case "Quick navigation": return String(localized: "Quick navigation", comment: "A group of commands in the key list")
+        case "Reminders": return String(localized: "Reminders", comment: "A group of commands in the key list")
+        case "Safari": return String(localized: "Safari", comment: "A group of commands in the key list")
+        case "Selecting": return String(localized: "Selecting", comment: "A group of commands in the key list")
+        case "Settings": return String(localized: "Settings", comment: "A group of commands in the key list")
+        case "Shortcuts": return String(localized: "Shortcuts", comment: "A group of commands in the key list")
+        case "Speech": return String(localized: "Speech", comment: "A group of commands in the key list")
+        case "Sliders": return String(localized: "Sliders", comment: "A group of commands in the key list")
+        case "System": return String(localized: "System", comment: "A group of commands in the key list")
+        case "Tabs": return String(localized: "Tabs", comment: "A group of commands in the key list")
+        case "Terminal": return String(localized: "Terminal", comment: "A group of commands in the key list")
+        case "Text navigation": return String(localized: "Text navigation", comment: "A group of commands in the key list")
+        case "Text review": return String(localized: "Text review", comment: "A group of commands in the key list")
+        case "This control": return String(localized: "This control", comment: "A group of commands in the key list")
+        case "TurnOver": return String(localized: "TurnOver", comment: "A group of commands in the key list")
+        case "VoiceOver keys": return String(localized: "VoiceOver keys", comment: "A group of commands in the key list")
+        case "Windows keys": return String(localized: "Windows keys", comment: "A group of commands in the key list")
+        case "Your keys": return String(localized: "Your keys", comment: "A group of commands in the key list")
+        case "navigation": return String(localized: "navigation", comment: "A group of commands in the key list")
+        default: return category
+        }
+    }
     nonisolated public static func brief(_ description: String) -> String {
         var d = description
         for cut in [" (", "; ", ": ", ". "] { if let r = d.range(of: cut) { d = String(d[..<r.lowerBound]) } }

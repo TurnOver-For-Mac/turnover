@@ -151,7 +151,7 @@ public final class AXHandler {
             let gone = field.map { $0.role == "?" || ($0.attr(kAXFocusedAttribute) as? Bool) != true } ?? true
             guard gone || AXUIElementCreateApplication(pid).element(kAXFocusedWindowAttribute) == nil else { return }
             Log.io("spotlight: closed; back to the application")
-            Speech.speakMessage("Spotlight closed")
+            Speech.speakMessage(String(localized: "Spotlight closed", comment: "Spoken message"))
             self.refocus(pid: self.activePid)
         }
     }

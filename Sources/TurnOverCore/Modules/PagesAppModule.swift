@@ -18,31 +18,31 @@ final class PagesAppModule: AppModule {
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
         let cat = "Pages"
         // Named as VO-Command-H asks for them (VoiceOverKeys' find: the application module's "nextHeading" first).
-        script("nextHeading", "The next heading in the document (VO-Command-H)", gestures: [], category: cat) { [weak self] g in
+        script("nextHeading", String(localized: "The next heading in the document (VO-Command-H)", comment: "A command, as the key list and keyboard help say it"), gestures: [], category: cat) { [weak self] g in
             self?.heading(forward: true, g)
         }.isAvailable = { [weak self] in self?.body() != nil }
-        script("previousHeading", "The previous heading in the document (VO-Command-Shift-H)", gestures: [], category: cat) { [weak self] g in
+        script("previousHeading", String(localized: "The previous heading in the document (VO-Command-Shift-H)", comment: "A command, as the key list and keyboard help say it"), gestures: [], category: cat) { [weak self] g in
             self?.heading(forward: false, g)
         }.isAvailable = { [weak self] in self?.body() != nil }
         // Tables: VO-Shift-Down on a table's line reads it cell by cell, as VoiceOver's interact does; the arrows move
         // by cell, VO-Shift-Up or Escape comes back to the text. Nothing in the document is selected or changed.
-        script("app_interact", "Into the table on this line (VO-Shift-Down)", gestures: [], category: cat) { [weak self] g in
+        script("app_interact", String(localized: "Into the table on this line (VO-Shift-Down)", comment: "A command, as the key list and keyboard help say it"), gestures: [], category: cat) { [weak self] g in
             guard let self, let t = self.tableOnLine() else { g.send(); return }
             self.table = t
             self.sayCell(entering: true)
         }.isAvailable = { [weak self] in self?.table == nil && self?.tableOnLine() != nil }
         for (key, dr, dc) in [("leftArrow", 0, -1), ("rightArrow", 0, 1), ("upArrow", -1, 0), ("downArrow", 1, 0)] {
-            script("pages_table_\(key)", "In a table: the next cell that way", gestures: ["kb:\(key)"], category: cat) { [weak self] _ in
+            script("pages_table_\(key)", String(localized: "In a table: the next cell that way", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:\(key)"], category: cat) { [weak self] _ in
                 self?.moveCell(dr, dc)
             }.isAvailable = { [weak self] in self?.table != nil }
         }
-        script("app_stopInteracting", "Out of the table, back to the text (VO-Shift-Up)", gestures: [], category: cat) { [weak self] _ in
+        script("app_stopInteracting", String(localized: "Out of the table, back to the text (VO-Shift-Up)", comment: "A command, as the key list and keyboard help say it"), gestures: [], category: cat) { [weak self] _ in
             self?.table = nil
-            Speech.cancel(); Speech.speakMessage("out of table")
+            Speech.cancel(); Speech.speakMessage(String(localized: "out of table", comment: "Spoken message"))
         }.isAvailable = { [weak self] in self?.table != nil }
-        script("pages_tableEscape", "Out of the table, back to the text (Escape)", gestures: ["kb:escape"], category: cat) { [weak self] _ in
+        script("pages_tableEscape", String(localized: "Out of the table, back to the text (Escape)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:escape"], category: cat) { [weak self] _ in
             self?.table = nil
-            Speech.cancel(); Speech.speakMessage("out of table")
+            Speech.cancel(); Speech.speakMessage(String(localized: "out of table", comment: "Spoken message"))
         }.isAvailable = { [weak self] in self?.table != nil }
     }
 
@@ -78,7 +78,7 @@ final class PagesAppModule: AppModule {
               let n = Int((page.string(kAXDescriptionAttribute) ?? "").components(separatedBy: CharacterSet.decimalDigits.inverted).first { !$0.isEmpty } ?? "") else { return }
         defer { lastPage = n }
         guard let last = lastPage, last != n else { return }
-        Speech.speakMessage("page \(n)")
+        Speech.speakMessage(Phrases.page(n))
     }
 
     override func handleEvent(_ event: Event, next: () -> Void) {
@@ -216,13 +216,13 @@ final class PagesAppModule: AppModule {
         let v = cell.map(PagesTable.value) ?? ""
         let words = v.isEmpty ? "blank" : v
         var parts: [String] = []
-        if entering { parts.append("\(t.name), \(t.rows) rows, \(t.cols) columns") }
+        if entering { parts.append(String(localized: "\(t.name), \(String(t.rows)) rows, \(String(t.cols)) columns", comment: "A Pages table: its name and size")) }
         // Along a row, the column's heading (the first row); down a column, the row's (the first column).
         if t.lastMove.1 != 0 || entering, t.row > 0, let h = PagesTable.cell(t.layout, t.name, row: 0, col: t.col).map(PagesTable.value), !h.isEmpty { parts.append(h) }
         if t.lastMove.0 != 0, t.col > 0, let h = PagesTable.cell(t.layout, t.name, row: t.row, col: 0).map(PagesTable.value), !h.isEmpty { parts.append(h) }
         parts.append(words)
-        if entering || t.lastMove.0 != 0 { parts.append("row \(t.row + 1)") }
-        if entering || t.lastMove.1 != 0 { parts.append("column \(t.col + 1)") }
+        if entering || t.lastMove.0 != 0 { parts.append(Phrases.row(t.row + 1)) }
+        if entering || t.lastMove.1 != 0 { parts.append(Phrases.column(t.col + 1)) }
         Speech.cancel()
         Speech.speakMessage(parts.joined(separator: ", "))
     }
@@ -275,19 +275,19 @@ final class PagesAppModule: AppModule {
     private func heading(forward: Bool, _ g: KeyboardGesture) {
         guard let text = body(), let caret = Self.caret(text) else {
             // Outside the body (a dialog, the sidebar): TurnOver's own search of the window.
-            if let s = GlobalCommands.shared.script(named: forward ? "nextHeading" : "previousHeading") { s.handler(g) } else { Speech.speakMessage("not in a document") }
+            if let s = GlobalCommands.shared.script(named: forward ? "nextHeading" : "previousHeading") { s.handler(g) } else { Speech.speakMessage(String(localized: "not in a document", comment: "Spoken message")) }
             return
         }
         let list = headings(text)
         Log.io("pages: \(list.count) headings; caret \(caret)")
         guard let h = forward ? list.first(where: { $0.start > caret }) : list.last(where: { $0.start < caret }) else {
-            Tones.edge(); Speech.speakMessage(forward ? "no next heading" : "no previous heading"); return
+            Tones.edge(); Speech.speakMessage(forward ? String(localized: "no next heading", comment: "Spoken message") : String(localized: "no previous heading", comment: "Spoken message")); return
         }
         var r = CFRange(location: h.start, length: 0)
         if let rv = AXValueCreate(.cfRange, &r) { _ = text.set(kAXSelectedTextRangeAttribute, rv) }
         let total = (text.attr(kAXNumberOfCharactersAttribute) as? Int) ?? h.start
         let words = (Self.text(text, h.start, min(300, total - h.start)) ?? "").components(separatedBy: "\n").first ?? ""
-        let kind = h.level == 0 ? "title" : h.level.map { "heading \($0)" } ?? "heading"
+        let kind = h.level == 0 ? String(localized: "title", comment: "A Pages paragraph style: the title") : h.level.map { String(localized: "heading \(String($0))", comment: "A Pages heading style: heading 2") } ?? Role.heading.displayString
         Speech.cancel()
         Speech.speakMessage("\(words.trimmingCharacters(in: .whitespaces)), \(kind)")
     }
@@ -351,11 +351,15 @@ final class PagesTextInfo: AXTextInfo {
         case "AXTable":
             // "Table 3, paginated, rows 1 to 4 of 8, columns 1 to 4 of 4": the whole table's size.
             let title = o.string(kAXTitleAttribute) ?? ""
-            if let size = PagesTable.size(of: o) { return "\(PagesTable.name(of: o)), \(size.rows) row\(size.rows == 1 ? "" : "s"), \(size.cols) column\(size.cols == 1 ? "" : "s")" }
+            if let size = PagesTable.size(of: o) {
+                let rows = size.rows == 1 ? String(localized: "1 row", comment: "A table's size") : String(localized: "\(String(size.rows)) rows", comment: "A table's size")
+                let cols = size.cols == 1 ? String(localized: "1 column", comment: "A table's size") : String(localized: "\(String(size.cols)) columns", comment: "A table's size")
+                return "\(PagesTable.name(of: o)), \(rows), \(cols)"
+            }
             return title.isEmpty ? "table" : title
         case "AXImage":
             let d = o.string(kAXDescriptionAttribute) ?? o.string(kAXTitleAttribute) ?? ""
-            return d.isEmpty ? "image" : "image, \(d)"
+            return d.isEmpty ? Role.image.displayString : "\(Role.image.displayString), \(d)"
         default:
             let d = o.string(kAXDescriptionAttribute) ?? ""
             return d.isEmpty ? "object" : d

@@ -207,9 +207,9 @@ func fixtureTests() {
         Tones.onEdge = nil
         check(TurnOverMenu.shared.isOpen && !said.contains("Headings") && edges.value == 1, "Right stays on the links, with the edge sound: \(said)")
         expect(press("kb:turnover+f6"), "jaws_headingsList", "Caps Lock F6 is JAWS's headings list")
-        check(said.contains("Headings, 1 items"), "the heading alone: \(said)")
+        check(said.contains("Headings, 1 item,"), "the heading alone: \(said)")
         expect(press("kb:turnover+f5"), "jaws_formFieldsList", "Caps Lock F5 is JAWS's form fields list")
-        check(said.contains("Form controls, 1 items"), "the search field alone: \(said)")
+        check(said.contains("Form controls, 1 item,"), "the search field alone: \(said)")
         for key in ["kb:turnover+f3", "kb:turnover+f9"] {
             expect(press(key), "elementsList", "\(key) is still the whole elements list")
             check(said.contains("rotor"), "\(key): every kind, Left and Right between them: \(said)")

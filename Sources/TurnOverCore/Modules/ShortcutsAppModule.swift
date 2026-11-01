@@ -16,7 +16,7 @@ final class ShortcutsAppModule: AppModule {
         WebBuffer.decorativeImageApps.insert(Self.bundleID)
         // Escape from the describe box: reading from the top (the folders, then the shortcuts), not from the box, the
         // page's last line, where every Down said "bottom" (driver, 18 Oct 2026).
-        script("shortcuts_read", "From the describe box to reading the folders and shortcuts, from the top", gestures: ["kb:escape"], category: "Shortcuts") { [weak self] g in
+        script("shortcuts_read", String(localized: "From the describe box to reading the folders and shortcuts, from the top", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:escape"], category: "Shortcuts") { [weak self] g in
             guard let self, let doc = API.focusTreeInterceptor, doc.webArea.pid == self.pid, doc.passThrough else { g.send(); return }
             doc.setPassThrough(false, announce: true)
             doc.position = 0

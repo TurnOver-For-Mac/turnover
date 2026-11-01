@@ -73,7 +73,7 @@ package final class SystemSettingsAppModule: AppModule {
                              }, speak: { Speech.speakOnly($0) })
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
         for part in SystemSettingsPart.allCases {
-            script("systemSettings_\(part)", "Moves to the \(part.name); uses the review cursor if keyboard focus is unavailable",
+            script("systemSettings_\(part)", String(localized: "Moves to the \(part.name); uses the review cursor if keyboard focus is unavailable", comment: "A command, as the key list and keyboard help say it: %@ is a part of System Settings"),
                    gestures: ["kb:control+command+\(part.rawValue + 1)"], category: "System Settings") { [weak self] _ in
                 self?.move(to: part)
             }.isAvailable = { [weak self] in self?.isAvailable == true }
@@ -129,7 +129,7 @@ package final class SystemSettingsAppModule: AppModule {
         guard accepts(value) else { finish(value.work); return }
         guard let result else {
             guard acceptsEffect(value, focus: value.context.focus) else { finish(value.work); return }
-            dependencies.speak("could not locate the \(value.request.part.name)"); finish(value.work); return
+            dependencies.speak(String(localized: "could not locate the \(value.request.part.name)", comment: "Spoken message: %@ is a part of System Settings")); finish(value.work); return
         }
         pending?.target = result.target
         if result.canFocus {
@@ -148,7 +148,7 @@ package final class SystemSettingsAppModule: AppModule {
                 guard let self, accepts(value, expected: result.target) else { self?.finish(value.work); return }
                 guard let verification else {
                     guard acceptsEffect(value, focus: value.context.focus, expected: result.target) else { finish(value.work); return }
-                    dependencies.speak("could not reach the \(value.request.part.name)"); finish(value.work); return
+                    dependencies.speak(String(localized: "could not reach the \(value.request.part.name)", comment: "Spoken message: %@ is a part of System Settings")); finish(value.work); return
                 }
                 let focused = verification.focused
                 guard let context = dependencies.context(),
@@ -167,7 +167,7 @@ package final class SystemSettingsAppModule: AppModule {
     private func fallback(_ target: AXUIElement, for value: Pending, focused: AXUIElement) {
         guard acceptsEffect(value, focus: focused, expected: target) else { finish(value.work); return }
         dependencies.review(target)
-        dependencies.speak("\(value.request.part.name), review cursor. Keyboard focus is elsewhere")
+        dependencies.speak(String(localized: "\(value.request.part.name), review cursor. Keyboard focus is elsewhere", comment: "Spoken message: %@ is a part of System Settings"))
         finish(value.work)
     }
 

@@ -63,7 +63,7 @@ public enum Core {
                 // A direct app speaks for itself: TurnOver says nothing there, "please wait" included.
                 guard InputManager.directPid != pid else { return }
                 Core.lastWaitSpoken = Date()
-                Speech.speakMessage("please wait")
+                Speech.speakMessage(String(localized: "please wait", comment: "Spoken message"))
             }
         }
         startStep = "the audio engine"
@@ -103,14 +103,14 @@ public enum Core {
                 let fallback = fallbacks.first { $0 != silent && AVSpeechSynthesisVoice(identifier: $0) != nil }
                     ?? AVSpeechSynthesisVoice(language: nil)?.identifier ?? AVSpeechSynthesisVoice(language: "en-GB")?.identifier ?? AVSpeechSynthesisVoice(language: "en-US")?.identifier
                 guard let fallback, fallback != silent else { return }
-                let name = AVSpeechSynthesisVoice(identifier: silent)?.name ?? "That voice"
+                let name = AVSpeechSynthesisVoice(identifier: silent)?.name ?? String(localized: "That voice", comment: "A voice with no name")
                 Log.warning("speech: \(silent) gave no sound twice; back to \(fallback)")
                 config.speech.voice = fallback
                 config.speech.languageVoices = config.speech.languageVoices.filter { $0.value != silent }
                 config.save(); Languages.forget()
                 Speech.player.voiceIdentifier = fallback
                 Speech.cancel()
-                Speech.speakMessage("\(name) doesn't speak in TurnOver, so TurnOver is back to \(AVSpeechSynthesisVoice(identifier: fallback)?.name ?? "its usual voice"). Choose another in the TurnOver menu, Settings, Speech.")
+                Speech.speakMessage(String(localized: "\(name) doesn't speak in TurnOver, so TurnOver is back to \(AVSpeechSynthesisVoice(identifier: fallback)?.name ?? String(localized: "its usual voice", comment: "TurnOver's usual voice, when it has no name")). Choose another in the TurnOver menu, Settings, Speech.", comment: "A silent voice replaced: the voice, then the one used instead"))
             }
         }
         startStep = "the commands"

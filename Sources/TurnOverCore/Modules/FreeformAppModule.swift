@@ -11,7 +11,7 @@ final class FreeformAppModule: AppModule {
     required init(pid: pid_t, bundleIdentifier: String, appName: String) {
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
         for key in ["leftArrow", "rightArrow"] {
-            script("freeform_\(key)", "The board to the \(key == "leftArrow" ? "left" : "right")", gestures: ["kb:\(key)"], category: "Freeform") { [weak self] g in
+            script("freeform_\(key)", key == "leftArrow" ? String(localized: "The board to the left", comment: "A command, as the key list and keyboard help say it") : String(localized: "The board to the right", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:\(key)"], category: "Freeform") { [weak self] g in
                 guard let self, let grid = self.grid() else { g.send(); return }
                 let before = self.chosen(in: grid)
                 g.send()

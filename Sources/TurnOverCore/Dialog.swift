@@ -14,7 +14,7 @@ open class Dialog: TurnOverObject {
     /// What TurnOver+Tab / VO-F3 adds after "dialog": its text and its choices, as when it opened.
     open override var description: String? {
         let list = choices.map(\.1)
-        let parts = [dialogText] + (list.isEmpty ? [] : ["\(list.count) choice\(list.count == 1 ? "" : "s"): " + list.joined(separator: ", ")])
+        let parts = [dialogText] + (list.isEmpty ? [] : [Self.choices(list)])
         let t = parts.filter { !$0.isEmpty }.joined(separator: ", ")
         return t.isEmpty ? nil : t
     }
@@ -130,7 +130,7 @@ open class Dialog: TurnOverObject {
         Self.spokenAt = (element, Date())
         let list = choices.map(\.1)
         var parts = [name, role.displayString, dialogText].filter { !$0.isEmpty }
-        if choicesToo, !list.isEmpty { parts.append("\(list.count) choice\(list.count == 1 ? "" : "s"): " + list.joined(separator: ", ")) }
+        if choicesToo, !list.isEmpty { parts.append(Self.choices(list)) }
         Speech.speakMessage(parts.joined(separator: ", "))
     }
 
@@ -161,22 +161,22 @@ open class Dialog: TurnOverObject {
         super.initOverlay()
         let cat = "Dialogs"
         for (key, delta) in [("tab", 1), ("shift+tab", -1), ("rightArrow", 1), ("leftArrow", -1)] {
-            script("dialog_choice_\(key)", "Moves between the dialog's choices", gestures: ["kb:\(key)"], category: cat) { [weak self] _ in self?.moveChoice(delta) }
+            script("dialog_choice_\(key)", String(localized: "Moves between the dialog's choices", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:\(key)"], category: cat) { [weak self] _ in self?.moveChoice(delta) }
                 .isAvailable = { [weak self] in !(self.map { SystemPrompts.isProtected($0.element.pid) } ?? false) }
         }
         for (key, delta) in [("downArrow", 1), ("upArrow", -1)] {
-            script("dialog_line_\(key)", "Reads the dialog line by line: its text and its choices", gestures: ["kb:\(key)"], category: cat) { [weak self] _ in self?.moveLine(delta) }
+            script("dialog_line_\(key)", String(localized: "Reads the dialog line by line: its text and its choices", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:\(key)"], category: cat) { [weak self] _ in self?.moveLine(delta) }
         }
-        script("dialog_press", "Presses the dialog's choice", gestures: ["kb:enter", "kb:numpadEnter", "kb:space"], category: cat) { [weak self] g in self?.pressChoice(g) }
+        script("dialog_press", String(localized: "Presses the dialog's choice", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:enter", "kb:numpadEnter", "kb:space"], category: cat) { [weak self] g in self?.pressChoice(g) }
             .isAvailable = { [weak self] in !(self.map { SystemPrompts.isProtected($0.element.pid) } ?? false) }
-        script("dialog_cancel", "Cancels the dialog", gestures: ["kb:escape"], category: cat) { [weak self] g in self?.cancel(g) }
+        script("dialog_cancel", String(localized: "Cancels the dialog", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:escape"], category: cat) { [weak self] g in self?.cancel(g) }
     }
 
     private var key: Int { Int(CFHash(element)) }
 
     private func moveLine(_ delta: Int) {
         let all = items
-        guard !all.isEmpty else { Speech.speakMessage("empty"); return }
+        guard !all.isEmpty else { Speech.speakMessage(String(localized: "empty", comment: "Spoken message")); return }
         // Start from the choice Tab is on, if any.
         let fromChoice = Self.choiceIndex[key].flatMap { ci -> Int? in let ch = choices; return ch.indices.contains(ci) ? all.firstIndex { $0.0.isSame(ch[ci].0) } : nil }
         let cur = Self.lineIndex[key] ?? fromChoice
@@ -185,20 +185,20 @@ open class Dialog: TurnOverObject {
         Self.lineIndex[key] = next
         let (e, n, isChoice) = all[next]
         if isChoice, let ci = choices.firstIndex(where: { $0.0.isSame(e) }) { Self.choiceIndex[key] = ci } else { Self.choiceIndex[key] = nil }
-        let kind = isChoice ? (e.role == "AXStaticText" ? "button" : ObjectFactory.make(e).role.displayString) : ""
+        let kind = isChoice ? (e.role == "AXStaticText" ? Role.button.displayString : ObjectFactory.make(e).role.displayString) : ""
         Speech.speakMessage(kind.isEmpty ? n : "\(n), \(kind)")
     }
 
     private func moveChoice(_ delta: Int) {
         let all = choices
-        guard !all.isEmpty else { Speech.speakMessage("no choices"); return }
+        guard !all.isEmpty else { Speech.speakMessage(String(localized: "no choices", comment: "Spoken message")); return }
         let cur = Self.choiceIndex[key]
         let next = cur.map { ($0 + delta + all.count) % all.count } ?? (delta > 0 ? 0 : all.count - 1)
         Self.choiceIndex[key] = next
         Self.lineIndex[key] = nil
         let (e, n) = all[next]
-        let kind = e.role == "AXStaticText" ? "button" : ObjectFactory.make(e).role.displayString
-        Speech.speakMessage("\(n), \(kind), \(next + 1) of \(all.count)")
+        let kind = e.role == "AXStaticText" ? Role.button.displayString : ObjectFactory.make(e).role.displayString
+        Speech.speakMessage("\(n), \(kind), \(Phrases.position(next + 1, of: all.count))")
         // VO-Space and NVDA+Enter press what the review cursor is on: keep it on the choice Tab reached. (Tab said
         // "Allow" and VO-Space pressed something else, so macOS's audio permission prompt stayed up, 12 Oct 2026.)
         ObjectNavigator.shared.place(e)
@@ -225,7 +225,13 @@ open class Dialog: TurnOverObject {
         let (e, n) = all[i]
         if press(e) { Log.io("dialog: pressed \(Log.words(n))"); SystemPrompts.checkPress(of: e, name: n) }
         else if ["not now", "cancel", "close", "no", "don’t allow", "don't allow", "later"].contains(n.lowercased()) { cancel(g) }
-        else { Speech.speakMessage("\(n) cannot be pressed") }
+        else { Speech.speakMessage(String(localized: "\(n) cannot be pressed", comment: "A dialog's choice could not be pressed: its name")) }
+    }
+
+    /// "2 choices: Allow, Don't Allow".
+    nonisolated static func choices(_ list: [String]) -> String {
+        list.count == 1 ? String(localized: "1 choice: \(list[0])", comment: "A dialog's one choice")
+            : String(localized: "\(String(list.count)) choices: \(list.joined(separator: ", "))", comment: "A dialog's choices: how many, then their names")
     }
 
     private func cancel(_ g: KeyboardGesture) {

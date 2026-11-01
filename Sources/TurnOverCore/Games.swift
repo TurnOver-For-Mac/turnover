@@ -116,10 +116,10 @@ public enum Games {
 
     /// Said from the menu: the bridge's state now, the Steam program's when it answers.
     static func sayStatus() {
-        guard available else { Speech.speakMessage("Games are not set up on this Mac."); return }
-        guard running else { Speech.speakMessage(ownSetup ? "Game speech is off." : "Steam reading is off."); return }
+        guard available else { Speech.speakMessage(String(localized: "Games are not set up on this Mac.", comment: "Spoken message")); return }
+        guard running else { Speech.speakMessage(ownSetup ? String(localized: "Game speech is off.", comment: "Spoken message") : String(localized: "Steam reading is off.", comment: "Spoken message")); return }
         let bridgeStatus = SpeechPort.shared.status
-        guard let steam, steam.isRunning else { Speech.speakMessage([bridgeStatus, "The Steam program is not running."].filter { !$0.isEmpty }.joined(separator: " ")); return }
+        guard let steam, steam.isRunning else { Speech.speakMessage([bridgeStatus, String(localized: "The Steam program is not running.", comment: "Game speech status")].filter { !$0.isEmpty }.joined(separator: " ")); return }
         steam.askStatus { Speech.speakMessage([bridgeStatus, $0].filter { !$0.isEmpty }.joined(separator: " ")) }
     }
 
@@ -173,7 +173,7 @@ public enum Games {
     }
 
     static func restartSteam() {
-        guard let steam, steam.isRunning else { Speech.speakMessage("Turn Steam reading on first: the Steam program restarts Steam."); return }
+        guard let steam, steam.isRunning else { Speech.speakMessage(String(localized: "Turn Steam reading on first: the Steam program restarts Steam.", comment: "Spoken message")); return }
         steam.send("restart-steam")
     }
 
@@ -357,7 +357,7 @@ final class SteamHelper {
     private static func ended(pid: pid_t, status: Int32) {
         guard let helper = live.removeValue(forKey: pid) else { return }
         helper.child = nil
-        for w in helper.statusWaiters { w("The Steam program stopped.") }
+        for w in helper.statusWaiters { w(String(localized: "The Steam program stopped.", comment: "Game speech status")) }
         helper.statusWaiters.removeAll()
         guard !helper.stopping else { return }
         Log.warning("games: the Steam program ended (status \(status))")
@@ -403,7 +403,7 @@ final class SteamHelper {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
             guard let self, !self.statusWaiters.isEmpty else { return }
             let waiting = self.statusWaiters; self.statusWaiters.removeAll()
-            for w in waiting { w("The Steam program did not answer.") }
+            for w in waiting { w(String(localized: "The Steam program did not answer.", comment: "Game speech status")) }
         }
     }
 

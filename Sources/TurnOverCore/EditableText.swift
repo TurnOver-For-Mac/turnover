@@ -32,18 +32,18 @@ open class EditableText: TurnOverObject {
     open override func initOverlay() {
         super.initOverlay()
         let cat = "Text navigation"
-        script("caret_moveByLine", "Moves the caret by a line and reads it", gestures: ["kb:upArrow", "kb:downArrow", "kb:pageUp", "kb:pageDown", "kb:command+upArrow", "kb:command+downArrow", "kb:command+home", "kb:command+end"], category: cat, resumesSayAll: true) { [weak self] g in guard let self else { return }; caretMovement(g, .line) }
-        script("caret_moveByCharacter", "Moves the caret by a character and reads it", gestures: ["kb:leftArrow", "kb:rightArrow", "kb:home", "kb:end", "kb:command+leftArrow", "kb:command+rightArrow"], category: cat) { [weak self] g in guard let self else { return }; caretMovement(g, .character) }
-        script("caret_moveByWord", "Moves the caret by a word and reads it", gestures: ["kb:option+leftArrow", "kb:option+rightArrow"], category: cat) { [weak self] g in guard let self else { return }; caretMovement(g, .word) }
-        script("caret_moveByParagraph", "Moves the caret by a paragraph and reads it", gestures: ["kb:option+upArrow", "kb:option+downArrow"], category: cat, resumesSayAll: true) { [weak self] g in guard let self else { return }; caretMovement(g, .paragraph) }
-        script("caret_deleteCharacter", "Deletes the character after the caret and reads the next", gestures: ["kb:delete", "kb:function+backspace"], category: cat) { [weak self] g in guard let self else { return }; deleteScript(g, .character) }
-        script("caret_deleteWord", "Deletes the word after the caret and reads the next", gestures: ["kb:option+delete"], category: cat) { [weak self] g in guard let self else { return }; deleteScript(g, .word) }
-        script("caret_backspaceCharacter", "Deletes the character before the caret and reads it", gestures: ["kb:backspace", "kb:shift+backspace"], category: cat) { [weak self] g in guard let self else { return }; backspaceScript(g, .character) }
-        script("caret_backspaceWord", "Deletes the word before the caret and reads it", gestures: ["kb:option+backspace"], category: cat) { [weak self] g in guard let self else { return }; backspaceScript(g, .word) }
-        script("caret_backspaceLine", "Deletes to the start of the line and reads it", gestures: ["kb:command+backspace"], category: cat) { [weak self] g in guard let self else { return }; backspaceScript(g, .line) }
+        script("caret_moveByLine", String(localized: "Moves the caret by a line and reads it", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:upArrow", "kb:downArrow", "kb:pageUp", "kb:pageDown", "kb:command+upArrow", "kb:command+downArrow", "kb:command+home", "kb:command+end"], category: cat, resumesSayAll: true) { [weak self] g in guard let self else { return }; caretMovement(g, .line) }
+        script("caret_moveByCharacter", String(localized: "Moves the caret by a character and reads it", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:leftArrow", "kb:rightArrow", "kb:home", "kb:end", "kb:command+leftArrow", "kb:command+rightArrow"], category: cat) { [weak self] g in guard let self else { return }; caretMovement(g, .character) }
+        script("caret_moveByWord", String(localized: "Moves the caret by a word and reads it", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:option+leftArrow", "kb:option+rightArrow"], category: cat) { [weak self] g in guard let self else { return }; caretMovement(g, .word) }
+        script("caret_moveByParagraph", String(localized: "Moves the caret by a paragraph and reads it", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:option+upArrow", "kb:option+downArrow"], category: cat, resumesSayAll: true) { [weak self] g in guard let self else { return }; caretMovement(g, .paragraph) }
+        script("caret_deleteCharacter", String(localized: "Deletes the character after the caret and reads the next", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:delete", "kb:function+backspace"], category: cat) { [weak self] g in guard let self else { return }; deleteScript(g, .character) }
+        script("caret_deleteWord", String(localized: "Deletes the word after the caret and reads the next", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:option+delete"], category: cat) { [weak self] g in guard let self else { return }; deleteScript(g, .word) }
+        script("caret_backspaceCharacter", String(localized: "Deletes the character before the caret and reads it", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:backspace", "kb:shift+backspace"], category: cat) { [weak self] g in guard let self else { return }; backspaceScript(g, .character) }
+        script("caret_backspaceWord", String(localized: "Deletes the word before the caret and reads it", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:option+backspace"], category: cat) { [weak self] g in guard let self else { return }; backspaceScript(g, .word) }
+        script("caret_backspaceLine", String(localized: "Deletes to the start of the line and reads it", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+backspace"], category: cat) { [weak self] g in guard let self else { return }; backspaceScript(g, .line) }
         // Shift with the arrows (NVDA: caret_changeSelection): the key goes on and the selection is read as soon as
         // it changes, not when the app's notice comes (Word's came 300 ms after the key: "draggy", 17 Oct 2026).
-        script("caret_changeSelection", "Extends or shrinks the selection and reads what changed", gestures: ["kb:shift+leftArrow", "kb:shift+rightArrow", "kb:shift+upArrow", "kb:shift+downArrow", "kb:shift+home", "kb:shift+end", "kb:shift+pageUp", "kb:shift+pageDown", "kb:option+shift+leftArrow", "kb:option+shift+rightArrow", "kb:option+shift+upArrow", "kb:option+shift+downArrow", "kb:command+shift+leftArrow", "kb:command+shift+rightArrow", "kb:command+shift+upArrow", "kb:command+shift+downArrow"], category: cat) { [weak self] g in guard let self else { return }; selectionScript(g) }
+        script("caret_changeSelection", String(localized: "Extends or shrinks the selection and reads what changed", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+leftArrow", "kb:shift+rightArrow", "kb:shift+upArrow", "kb:shift+downArrow", "kb:shift+home", "kb:shift+end", "kb:shift+pageUp", "kb:shift+pageDown", "kb:option+shift+leftArrow", "kb:option+shift+rightArrow", "kb:option+shift+upArrow", "kb:option+shift+downArrow", "kb:command+shift+leftArrow", "kb:command+shift+rightArrow", "kb:command+shift+upArrow", "kb:command+shift+downArrow"], category: cat) { [weak self] g in guard let self else { return }; selectionScript(g) }
         // Only while this field still has the keyboard: with Word's "save changes?" sheet up, Command Delete ran
         // the delete-to-line-start script before reaching Don't Save (8 Oct 2026). A sheet or dialog in front of
         // the field's application means its keys are the sheet's.
@@ -57,9 +57,9 @@ open class EditableText: TurnOverObject {
         }
         // Spelling errors in any text (TextEdit, Mail, Notes): Word's TurnOver E, everywhere (a tester, build 14,
         // 7 Oct 2026). Word's module has its own, which searches the whole document.
-        script("nextSpellingError", "Moves to the next spelling error", gestures: ["kb:turnover+e"], category: cat) { [weak self] _ in self?.goToMisspelling(forward: true) }
-        script("previousSpellingError", "Moves to the previous spelling error", gestures: ["kb:turnover+shift+e"], category: cat) { [weak self] _ in self?.goToMisspelling(forward: false) }
-        if announceNewLineText { script("caret_newLine", "Starts a new line", gestures: ["kb:enter", "kb:numpadEnter"], category: cat) { [weak self] g in guard let self else { return }; newLineScript(g) } }
+        script("nextSpellingError", String(localized: "Moves to the next spelling error", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+e"], category: cat) { [weak self] _ in self?.goToMisspelling(forward: true) }
+        script("previousSpellingError", String(localized: "Moves to the previous spelling error", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+shift+e"], category: cat) { [weak self] _ in self?.goToMisspelling(forward: false) }
+        if announceNewLineText { script("caret_newLine", String(localized: "Starts a new line", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:enter", "kb:numpadEnter"], category: cat) { [weak self] g in guard let self else { return }; newLineScript(g) } }
     }
 
     /// The next or previous misspelled word: the app's marks (AXMarkedMisspelled, AXMisspelled), else macOS's checker.
@@ -69,7 +69,7 @@ open class EditableText: TurnOverObject {
         forward ? words.first { $0.location > caret || ($0.location == caret && !placedHere) } : words.last { $0.location < caret }
     }
     func goToMisspelling(forward: Bool) {
-        guard let info = try? makeTextInfo(.caret) else { Speech.speakMessage("no text"); return }
+        guard let info = try? makeTextInfo(.caret) else { Speech.speakMessage(String(localized: "no text", comment: "Spoken message")); return }
         let n = info.storyLength()
         // The text with its marks: WebKit's (Safari's comment boxes, Mail's message body) through the bridge, a
         // Cocoa field's through its element ("no text" was said in every web field, 8 Oct 2026).
@@ -86,7 +86,7 @@ open class EditableText: TurnOverObject {
             guard let self else { return }
             let attributed = handed.value
             guard n > 0, let a = attributed ?? (info.textRange(0, min(n, 100_000)).isEmpty ? nil : NSAttributedString(string: info.textRange(0, min(n, 100_000)))) else {
-                Speech.speakMessage(forward ? "no next spelling error" : "no previous spelling error"); return
+                Speech.speakMessage(forward ? String(localized: "no next spelling error", comment: "Spoken message") : String(localized: "no previous spelling error", comment: "Spoken message")); return
             }
             goToMisspelling(forward: forward, in: a, info: info, length: n)
         }
@@ -135,10 +135,10 @@ open class EditableText: TurnOverObject {
         // caret, so the word just typed counts (the caret at 5 after "Thiss" found nothing; 14 Oct 2026).
         let placedHere = misspellingPlaced.map { $0.at == caret && Date().timeIntervalSince($0.when) < 60 } ?? false
         let target = Self.misspellingTarget(words, caret: caret, forward: forward, placedHere: placedHere)
-        guard let r = target else { Tones.edge(keySent: true); Speech.speakMessage(forward ? "no next spelling error" : "no previous spelling error"); return }
+        guard let r = target else { Tones.edge(keySent: true); Speech.speakMessage(forward ? String(localized: "no next spelling error", comment: "Spoken message") : String(localized: "no previous spelling error", comment: "Spoken message")); return }
         misspellingPlaced = (r.location, Date())
         info.setCaretOffset(r.location)
-        Speech.speakMessage("\(ns.substring(with: r)), misspelled")
+        Speech.speakMessage(String(localized: "\(ns.substring(with: r)), misspelled", comment: "A misspelled word reached: %@ is the word"))
     }
 
     // MARK: Did the caret move?
@@ -412,7 +412,7 @@ open class EditableText: TurnOverObject {
         // to say ("new line" was heard as Claude's prompt sent, 7 Oct 2026).
         if lengthBefore > 0, line.storyLength() < lengthBefore { Log.io("Return sent the text; no new line"); return }
         // Say the new line was made (the owner asked, 4 Oct 2026), then anything already on it (a list number).
-        if config.keyboard.speakNewLine { Speech.speakOnly("new line") }   // the display shows the new line itself
+        if config.keyboard.speakNewLine { Speech.speakOnly(String(localized: "new line", comment: "Spoken message")) }   // the display shows the new line itself
         line.expand(.line)
         line.setEndPoint(newInfo, .endToStart)
         if line.isCollapsed { return }
@@ -430,7 +430,8 @@ open class EditableText: TurnOverObject {
             gesture.send()
             _ = hasCaretMoved(from: bookmark)
             lastSelection = try? makeTextInfo(.selection)
-            Speech.speakMessage(gone.isEmpty ? "selection deleted" : gone.count <= 80 ? "deleted " + (gone.count == 1 ? Symbols.name(of: gone.first!) : gone) : "selection deleted")
+            Speech.speakMessage(gone.isEmpty || gone.count > 80 ? String(localized: "selection deleted", comment: "Selected text deleted")
+                : Phrases.deleted(gone.count == 1 ? Symbols.name(of: gone.first!) : gone))
             return
         }
         let test = old.copy()
@@ -459,7 +460,7 @@ open class EditableText: TurnOverObject {
             // A line break has nothing to spell: say what it was ("new line"), as for any character named on its own.
             if let only = c.first, c.count == 1, only.isNewline { Speech.speakMessage(Symbols.name(of: only)) }
             // A word or a line deleted says so ("deleted more"); a single character is just the character, as in NVDA.
-            else if c.count > 1 { Speech.speakText(unit == .character ? c : "deleted " + c.trimmingCharacters(in: .whitespaces)) } else { Speech.speakSpelling(c) }
+            else if c.count > 1 { Speech.speakText(unit == .character ? c : Phrases.deleted(c.trimmingCharacters(in: .whitespaces))) } else { Speech.speakSpelling(c) }
         }
         let (moved, newInfo) = hasCaretMoved(from: bookmark)
         guard moved else { return }
@@ -508,7 +509,7 @@ open class EditableText: TurnOverObject {
                     guard let self, API.focusObject?.isSameElement(as: self) == true,
                           Date().timeIntervalSince(InputManager.lastKeyDownAt) >= 0.5,
                           let sel = try? self.makeTextInfo(.selection), !sel.isCollapsed else { return }
-                    Speech.speakOnly("selected " + Speech.processed(sel.text))   // the display marks it with dots 7 and 8
+                    Speech.speakOnly(String(localized: "selected \(Speech.processed(sel.text))", comment: "Selected text, read: %@ is the text"))   // the display marks it with dots 7 and 8
                 }
                 completionWork = work
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: work)
@@ -552,7 +553,7 @@ open class EditableText: TurnOverObject {
         Speech.clearTypedWordBuffer()
         if let sel = try? makeTextInfo(.selection), sel.end > sel.start {
             lastSelection = sel
-            Speech.speakMessage("selected " + sel.text)
+            Speech.speakMessage(String(localized: "selected \(sel.text)", comment: "Selected text, read: %@ is the text"))
             return
         }
         guard let caret = try? makeTextInfo(.caret) else { return }

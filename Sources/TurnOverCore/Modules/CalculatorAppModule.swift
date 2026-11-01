@@ -16,11 +16,11 @@ final class CalculatorAppModule: AppModule {
     required init(pid: pid_t, bundleIdentifier: String, appName: String) {
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
         // Return and Escape aren't typed characters: their own keys.
-        script("calculator_equals", "Equals, then the answer", gestures: ["kb:enter", "kb:numpadEnter"], category: "Calculator") { [weak self] g in
+        script("calculator_equals", String(localized: "Equals, then the answer", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:enter", "kb:numpadEnter"], category: "Calculator") { [weak self] g in
             g.send(); self?.readDisplay(prefix: "equals")
         }
-        script("calculator_clear", "Clear", gestures: ["kb:escape"], category: "Calculator") { g in
-            g.send(); Speech.cancel(); Speech.speakMessage("clear")
+        script("calculator_clear", String(localized: "Clear", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:escape"], category: "Calculator") { g in
+            g.send(); Speech.cancel(); Speech.speakMessage(String(localized: "clear", comment: "Spoken message"))
         }
     }
 

@@ -289,12 +289,12 @@ public final class WebTextInfo: TextInfo {
         if let lvl = (bridge.element(at: start)?.attr("AXBlockQuoteLevel") as? NSNumber)?.intValue, lvl != BufferTextInfo.lastQuoteLevel {
             if lvl > 0 {
                 switch config.documentFormatting.blockQuotes {
-                case .speech: prefix.append("quote level \(lvl)")
+                case .speech: prefix.append(String(localized: "quote level \(String(lvl))", comment: "How deep a quote is in a Mail message"))
                 case .tone: pendingTones.append { Tones.blockQuote() }
                 case .off: break
                 }
             } else if BufferTextInfo.lastQuoteLevel > 0, config.documentFormatting.blockQuotes == .speech {
-                prefix.append("out of quote")
+                prefix.append(String(localized: "out of quote", comment: "The caret left a quote"))
             }
             BufferTextInfo.lastQuoteLevel = lvl
         }
@@ -310,7 +310,7 @@ public final class WebTextInfo: TextInfo {
                 let l = link as! AXUIElement
                 if lastLink.map({ !$0.isSame(l) }) ?? true {
                     switch linkMode {
-                    case .speech: pieces.append(" link ")
+                    case .speech: pieces.append(" \(Role.link.displayString) ")
                     case .tone: pendingTones.append { Tones.link() }
                     case .off: break
                     }
@@ -334,7 +334,7 @@ public final class WebTextInfo: TextInfo {
             }
         }
         // A range entirely inside one link already said "link" in the prefix.
-        if sawLinkRun, prefix.contains("link") { pieces.removeAll { $0 == " link " } }
+        if sawLinkRun, prefix.contains(Role.link.displayString) { pieces.removeAll { $0 == " \(Role.link.displayString) " } }
         return (prefix, pieces.joined().trimmingCharacters(in: .whitespaces))
     }
 
@@ -363,35 +363,35 @@ public final class WebTextInfo: TextInfo {
         switch role {
         case "AXHeading":
             let level = (el.attr(kAXValueAttribute) as? NSNumber)?.intValue ?? 0
-            return level > 0 && config.documentFormatting.reportHeadingLevel ? "heading level \(level)" : "heading"
-        case "AXLink": return forEntering ? "link" : "link " + (el.string(kAXTitleAttribute) ?? el.string(kAXDescriptionAttribute) ?? "")
-        case "AXButton": return forEntering ? "button" : "button " + (el.string(kAXTitleAttribute) ?? el.string(kAXDescriptionAttribute) ?? "")
-        case "AXPopUpButton", "AXComboBox": return "combo box"
-        case "AXCheckBox": return "check box" + (((el.attr(kAXValueAttribute) as? NSNumber)?.intValue ?? 0) != 0 ? " checked" : " not checked")
-        case "AXRadioButton": return "radio button" + (((el.attr(kAXValueAttribute) as? NSNumber)?.intValue ?? 0) != 0 ? " checked" : "")
-        case "AXTextField", "AXTextArea": return "edit"
+            return level > 0 && config.documentFormatting.reportHeadingLevel ? Phrases.headingLevel(level) : Role.heading.displayString
+        case "AXLink": return forEntering ? Role.link.displayString : Role.link.displayString + " " + (el.string(kAXTitleAttribute) ?? el.string(kAXDescriptionAttribute) ?? "")
+        case "AXButton": return forEntering ? Role.button.displayString : Role.button.displayString + " " + (el.string(kAXTitleAttribute) ?? el.string(kAXDescriptionAttribute) ?? "")
+        case "AXPopUpButton", "AXComboBox": return Role.comboBox.displayString
+        case "AXCheckBox": return Role.checkBox.displayString + " " + (((el.attr(kAXValueAttribute) as? NSNumber)?.intValue ?? 0) != 0 ? State.checked.displayString : State.checked.negativeDisplayString)
+        case "AXRadioButton": return Role.radioButton.displayString + (((el.attr(kAXValueAttribute) as? NSNumber)?.intValue ?? 0) != 0 ? " " + State.checked.displayString : "")
+        case "AXTextField", "AXTextArea": return Role.editableText.displayString
         case "AXImage":
             var d = el.string(kAXDescriptionAttribute) ?? el.string(kAXTitleAttribute) ?? ""
             if d.isEmpty, config.virtualBuffers.imageFileNames { d = ImageNames.fromFile(el) }
-            return "graphic" + (d.isEmpty ? "" : " " + d)
+            return Role.graphic.displayString + (d.isEmpty ? "" : " " + d)
         case "AXList":
             var count: CFIndex = 0
             AXUIElementGetAttributeValueCount(el, kAXChildrenAttribute as CFString, &count)
-            return forEntering ? "list with \(count) item\(count == 1 ? "" : "s")" : nil
-        case "AXTable": return forEntering ? "table" : nil
+            return forEntering ? (count == 1 ? String(localized: "list with 1 item", comment: "A list on a page, entered") : String(localized: "list with \(String(count)) items", comment: "A list on a page, entered: how many items")) : nil
+        case "AXTable": return forEntering ? Role.table.displayString : nil
         case "AXGroup":
             switch sub {
-            case "AXLandmarkNavigation": return "navigation landmark"
-            case "AXLandmarkMain": return "main landmark"
-            case "AXLandmarkBanner": return "banner landmark"
-            case "AXLandmarkContentInfo": return "content info landmark"
-            case "AXLandmarkSearch": return "search landmark"
-            case "AXLandmarkComplementary": return "complementary landmark"
-            case "AXLandmarkRegion": return "region"
-            case "AXDocumentArticle": return "article"
+            case "AXLandmarkNavigation": return String(localized: "navigation landmark", comment: "A web page's landmark")
+            case "AXLandmarkMain": return String(localized: "main landmark", comment: "A web page's landmark")
+            case "AXLandmarkBanner": return String(localized: "banner landmark", comment: "A web page's landmark")
+            case "AXLandmarkContentInfo": return String(localized: "content info landmark", comment: "A web page's landmark")
+            case "AXLandmarkSearch": return String(localized: "search landmark", comment: "A web page's landmark")
+            case "AXLandmarkComplementary": return String(localized: "complementary landmark", comment: "A web page's landmark")
+            case "AXLandmarkRegion": return String(localized: "region", comment: "A web page's landmark")
+            case "AXDocumentArticle": return String(localized: "article", comment: "A web page's article")
             // Chromium's dialogs and alerts (Google Docs' Share box; Day 3, 10 Oct 2026).
-            case "AXApplicationDialog": return forEntering ? "dialog" : nil
-            case "AXApplicationAlertDialog", "AXApplicationAlert": return forEntering ? "alert" : nil
+            case "AXApplicationDialog": return forEntering ? Role.dialog.displayString : nil
+            case "AXApplicationAlertDialog", "AXApplicationAlert": return forEntering ? String(localized: "alert", comment: "A role: an alert") : nil
             case "AXBlockQuote":
                 // A quoted message in Mail: "quote level 2" inside a quote, as VoiceOver says it (a tester).
                 var level = 1
@@ -402,9 +402,9 @@ public final class WebTextInfo: TextInfo {
                 return nil
             default: return nil
             }
-        case "AXMenuItem": return "menu item"
-        case "AXMenuBar": return forEntering ? "menu bar" : nil
-        case "AXToolbar": return forEntering ? "tool bar" : nil
+        case "AXMenuItem": return Role.menuItem.displayString
+        case "AXMenuBar": return forEntering ? Role.menuBar.displayString : nil
+        case "AXToolbar": return forEntering ? Role.toolBar.displayString : nil
         default: return nil
         }
     }

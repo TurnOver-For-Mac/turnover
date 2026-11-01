@@ -42,9 +42,11 @@ public enum NewToTry {
         guard let l = latest else { return [] }
         var pages: [(String, String)] = l.items.map(heading)
         let tests = latestTests
-        if !tests.isEmpty { pages.append(("What to test", tests.map { "• " + $0 }.joined(separator: "\n"))) }
+        if !tests.isEmpty { pages.append((whatToTest, tests.map { "• " + $0 }.joined(separator: "\n"))) }
         return pages
     }
+    /// The page of things to test, by its title.
+    static var whatToTest: String { String(localized: "What to test", comment: "A welcome page's title after an update") }
 
     /// An item's heading and the rest. Its first sentence when that is short; else what comes before its first colon,
     /// bracket or comma; else its first words. Items longer than a short sentence all came out as "New in build 20",
@@ -65,10 +67,12 @@ public enum NewToTry {
     /// with what to test. The details stay in the menu, What to test in build N.
     public static func summaryPages() -> [(String, String)] {
         guard let l = latest else { return [] }
-        let headings = buildPages().filter { $0.0 != "What to test" }.map { $0.0 }
-        var pages = [("New in build \(l.build)", headings.joined(separator: ". ") + ".\n\nEach is explained in the TurnOver menu, What to test in build \(l.build).")]
+        let headings = buildPages().filter { $0.0 != whatToTest }.map { $0.0 }
+        let build = String(describing: l.build)
+        var pages = [(String(localized: "New in build \(build)", comment: "A welcome page's title after an update: the build"),
+                      headings.joined(separator: ". ") + ".\n\n" + String(localized: "Each is explained in the TurnOver menu, What to test in build \(build).", comment: "A welcome page after an update: the build"))]
         let tests = latestTests
-        if !tests.isEmpty { pages.append(("What to test", tests.map { "• " + $0 }.joined(separator: "\n"))) }
+        if !tests.isEmpty { pages.append((whatToTest, tests.map { "• " + $0 }.joined(separator: "\n"))) }
         return pages
     }
 
@@ -99,7 +103,9 @@ public enum NewToTry {
         guard count > 0 else { return }
         Log.info("new to try: build \(current), \(count) new since build \(seen)")
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-            Speech.speakMessage("TurnOver has been updated to build \(current), with \(count) new thing\(count == 1 ? "" : "s") to try: TurnOver menu, New in build \(current).")
+            let build = String(describing: current)
+            Speech.speakMessage(count == 1 ? String(localized: "TurnOver has been updated to build \(build), with 1 new thing to try: TurnOver menu, New in build \(build).", comment: "After an update: the build")
+                : String(localized: "TurnOver has been updated to build \(build), with \(String(count)) new things to try: TurnOver menu, New in build \(build).", comment: "After an update: the build and how many new things"))
         }
     }
 
@@ -110,14 +116,14 @@ public enum NewToTry {
         var out: [MenuItem] = []
         // The welcome's pages, read here as a list (TurnOver reads its menu itself; an alert of its own would be silent).
         out.append(MenuItem("The welcome pages", .submenu { buildPages().map { page in
-            MenuItem(page.0, .submenu { sentences(page.1.replacingOccurrences(of: "\n• ", with: ". ").replacingOccurrences(of: "• ", with: "")).map { s in MenuItem(s, .action { Speech.speakMessage(s) }) } })
+            MenuItem(verbatim: page.0, .submenu { sentences(page.1.replacingOccurrences(of: "\n• ", with: ". ").replacingOccurrences(of: "• ", with: "")).map { s in MenuItem(verbatim: s, .action { Speech.speakMessage(s) }) } })
         } }))
         let tests = latestTests
-        if !tests.isEmpty { out.append(MenuItem("What to test", .submenu { tests.map { t in MenuItem(t, .action { Speech.speakMessage(t) }) } })) }
+        if !tests.isEmpty { out.append(MenuItem("What to test", .submenu { tests.map { t in MenuItem(verbatim: t, .action { Speech.speakMessage(t) }) } })) }
         return out + l.items.map { text in
             let lines = sentences(text)
-            guard lines.count > 1 else { return MenuItem(text, .action { Speech.speakMessage(text) }) }
-            return MenuItem(lines[0], .submenu { lines.map { line in MenuItem(line, .action { Speech.speakMessage(line) }) } })
+            guard lines.count > 1 else { return MenuItem(verbatim: text, .action { Speech.speakMessage(text) }) }
+            return MenuItem(verbatim: lines[0], .submenu { lines.map { line in MenuItem(verbatim: line, .action { Speech.speakMessage(line) }) } })
         }
     }
 

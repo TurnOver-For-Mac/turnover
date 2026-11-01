@@ -54,28 +54,28 @@ final class AppStoreAppModule: AppModule {
         func add(_ name: String, _ description: String, _ keys: [String], _ run: @escaping (KeyboardGesture) -> Void) {
             script("appStore_\(name)", description, gestures: keys.map { "kb:" + $0 }, category: cat, run).isAvailable = active
         }
-        add("previous", "Previous item", ["upArrow"]) { [weak self] _ in self?.view.move(-1) }
-        add("next", "Next item", ["downArrow"]) { [weak self] _ in self?.view.move(1) }
-        add("previousShelf", "Previous shelf of the page", ["leftArrow"]) { [weak self] _ in self?.view.jumpShelf(-1) }
-        add("nextShelf", "Next shelf of the page", ["rightArrow"]) { [weak self] _ in self?.view.jumpShelf(1) }
-        add("first", "First item", ["home"]) { [weak self] _ in self?.view.toEnd(false) }
-        add("last", "Last item", ["end"]) { [weak self] _ in self?.view.toEnd(true) }
-        add("open", "Opens the app's page, or presses the button", ["enter", "numpadEnter"]) { [weak self] gesture in
+        add("previous", String(localized: "Previous item", comment: "A command, as the key list and keyboard help say it"), ["upArrow"]) { [weak self] _ in self?.view.move(-1) }
+        add("next", String(localized: "Next item", comment: "A command, as the key list and keyboard help say it"), ["downArrow"]) { [weak self] _ in self?.view.move(1) }
+        add("previousShelf", String(localized: "Previous shelf of the page", comment: "A command, as the key list and keyboard help say it"), ["leftArrow"]) { [weak self] _ in self?.view.jumpShelf(-1) }
+        add("nextShelf", String(localized: "Next shelf of the page", comment: "A command, as the key list and keyboard help say it"), ["rightArrow"]) { [weak self] _ in self?.view.jumpShelf(1) }
+        add("first", String(localized: "First item", comment: "A command, as the key list and keyboard help say it"), ["home"]) { [weak self] _ in self?.view.toEnd(false) }
+        add("last", String(localized: "Last item", comment: "A command, as the key list and keyboard help say it"), ["end"]) { [weak self] _ in self?.view.toEnd(true) }
+        add("open", String(localized: "Opens the app's page, or presses the button", comment: "A command, as the key list and keyboard help say it"), ["enter", "numpadEnter"]) { [weak self] gesture in
             AppStoreActionPress.dispatch(gesture) { self?.view.open(press: $0) }
         }
-        add("offer", "The app's button: Open, Get, Update or Re-download; a price needs a second press; while downloading, how far it has got", ["space"]) { [weak self] gesture in
+        add("offer", String(localized: "The app's button: Open, Get, Update or Re-download; a price needs a second press; while downloading, how far it has got", comment: "A command, as the key list and keyboard help say it"), ["space"]) { [weak self] gesture in
             AppStoreActionPress.dispatch(gesture) { self?.view.offer(press: $0) }
         }
-        add("cancelDownload", "Cancels the app's download", ["backspace", "delete"]) { [weak self] _ in self?.view.cancelDownload() }
-        add("nextArea", "Next area: sidebar, page", ["tab"]) { [weak self] _ in self?.view.switchArea() }
-        add("previousArea", "Previous area", ["shift+tab"]) { [weak self] _ in self?.view.switchArea() }
-        add("back", "Goes back a page", ["escape"]) { [weak self] _ in self?.view.back() }
+        add("cancelDownload", String(localized: "Cancels the app's download", comment: "A command, as the key list and keyboard help say it"), ["backspace", "delete"]) { [weak self] _ in self?.view.cancelDownload() }
+        add("nextArea", String(localized: "Next area: sidebar, page", comment: "A command, as the key list and keyboard help say it"), ["tab"]) { [weak self] _ in self?.view.switchArea() }
+        add("previousArea", String(localized: "Previous area", comment: "A command, as the key list and keyboard help say it"), ["shift+tab"]) { [weak self] _ in self?.view.switchArea() }
+        add("back", String(localized: "Goes back a page", comment: "A command, as the key list and keyboard help say it"), ["escape"]) { [weak self] _ in self?.view.back() }
         for ch in "abcdefghijklmnopqrstuvwxyz" {
-            add("letter_\(ch)", "Jumps to the next item starting with the letter", [String(ch)]) { [weak self] _ in self?.view.letter(ch) }
+            add("letter_\(ch)", String(localized: "Jumps to the next item starting with the letter", comment: "A command, as the key list and keyboard help say it"), [String(ch)]) { [weak self] _ in self?.view.letter(ch) }
         }
-        script("appStore_search", "Goes to the search field", gestures: ["kb:command+f"], category: cat) { [weak self] _ in self?.view.focusSearch() }
+        script("appStore_search", String(localized: "Goes to the search field", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+f"], category: cat) { [weak self] _ in self?.view.focusSearch() }
         // Return in the search field: the App Store searches; the results are read and the keys come back to the page.
-        script("appStore_submitSearch", "Searches, then reads the results", gestures: ["kb:enter"], category: cat) { [weak self] g in
+        script("appStore_submitSearch", String(localized: "Searches, then reads the results", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:enter"], category: cat) { [weak self] g in
             // The term is read before the Store starts searching: afterwards its accessibility stops answering for
             // seconds (a read of the sidebar then took 2 s and the keys were dead for 3 s more, 27 Oct 2026).
             let term = API.focusObject.flatMap { $0.element.string(kAXValueAttribute) ?? $0.value } ?? ""

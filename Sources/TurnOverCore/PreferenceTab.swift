@@ -45,12 +45,12 @@ open class PreferenceTab: TurnOverObject {
     open override func initOverlay() {
         super.initOverlay()
         let cat = "Tabs"
-        script("tab_next", "Switches to the next pane", gestures: ["kb:downArrow", "kb:rightArrow"], category: cat) { [weak self] _ in self?.step(1) }
-        script("tab_previous", "Switches to the previous pane", gestures: ["kb:upArrow", "kb:leftArrow"], category: cat) { [weak self] _ in self?.step(-1) }
-        script("tab_first", "Switches to the first pane", gestures: ["kb:home"], category: cat) { [weak self] _ in self?.go(to: 0) }
-        script("tab_last", "Switches to the last pane", gestures: ["kb:end"], category: cat) { [weak self] _ in self?.go(to: Int.max) }
-        script("tab_intoPane", "Moves into the pane's controls", gestures: ["kb:tab"], category: cat) { [weak self] g in self?.intoPane(g) }
-        script("tab_intoPaneEnd", "Moves to the pane's last control (Tab in reverse)", gestures: ["kb:shift+tab"], category: cat) { [weak self] g in self?.intoPane(g, last: true) }
+        script("tab_next", String(localized: "Switches to the next pane", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:downArrow", "kb:rightArrow"], category: cat) { [weak self] _ in self?.step(1) }
+        script("tab_previous", String(localized: "Switches to the previous pane", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:upArrow", "kb:leftArrow"], category: cat) { [weak self] _ in self?.step(-1) }
+        script("tab_first", String(localized: "Switches to the first pane", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:home"], category: cat) { [weak self] _ in self?.go(to: 0) }
+        script("tab_last", String(localized: "Switches to the last pane", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:end"], category: cat) { [weak self] _ in self?.go(to: Int.max) }
+        script("tab_intoPane", String(localized: "Moves into the pane's controls", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:tab"], category: cat) { [weak self] g in self?.intoPane(g) }
+        script("tab_intoPaneEnd", String(localized: "Moves to the pane's last control (Tab in reverse)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+tab"], category: cat) { [weak self] g in self?.intoPane(g, last: true) }
     }
 
     /// Tab from a tab goes into the pane (Windows), not along the toolbar (macOS): the pane's first control in screen

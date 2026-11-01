@@ -40,29 +40,29 @@ final class MediaAppModule: AppModule {
         func add(_ name: String, _ description: String, _ keys: [String], listKeys: Bool = false, _ run: @escaping (KeyboardGesture) -> Void) {
             script("media_\(name)", description, gestures: keys.map { "kb:" + $0 }, category: cat, run).isAvailable = listKeys ? activeOrCatalog : active
         }
-        add("previous", "Previous item", ["upArrow"], listKeys: true) { [weak self] _ in self?.view.move(-1) }
-        add("next", "Next item", ["downArrow"], listKeys: true) { [weak self] _ in self?.view.move(1) }
-        add("previousShelf", "Previous shelf of the page", ["leftArrow"]) { [weak self] _ in self?.view.jumpShelf(-1) }
-        add("nextShelf", "Next shelf of the page", ["rightArrow"]) { [weak self] _ in self?.view.jumpShelf(1) }
-        add("first", "First item", ["home"], listKeys: true) { [weak self] _ in self?.view.toEnd(false) }
-        add("last", "Last item", ["end"], listKeys: true) { [weak self] _ in self?.view.toEnd(true) }
-        add("open", "Plays the item when it can be played, otherwise opens it; in the sidebar, goes to that section", ["enter", "numpadEnter"], listKeys: true) { [weak self] _ in self?.view.activate() }
-        add("openDetails", "Opens the item's page (an episode's details) instead of playing it", ["shift+enter"], listKeys: true) { [weak self] _ in self?.view.activate(openOnly: true) }
-        add("play", "Plays the item, or plays and pauses", ["space"]) { [weak self] g in self?.view.playOrPause(g) }
-        add("nextArea", "Next area: sidebar, page, player", ["tab"]) { [weak self] _ in self?.view.switchPane(1) }
-        add("previousArea", "Previous area", ["shift+tab"]) { [weak self] _ in self?.view.switchPane(-1) }
-        add("back", "Goes back a page", ["escape"], listKeys: true) { [weak self] _ in self?.view.back() }
+        add("previous", String(localized: "Previous item", comment: "A command, as the key list and keyboard help say it"), ["upArrow"], listKeys: true) { [weak self] _ in self?.view.move(-1) }
+        add("next", String(localized: "Next item", comment: "A command, as the key list and keyboard help say it"), ["downArrow"], listKeys: true) { [weak self] _ in self?.view.move(1) }
+        add("previousShelf", String(localized: "Previous shelf of the page", comment: "A command, as the key list and keyboard help say it"), ["leftArrow"]) { [weak self] _ in self?.view.jumpShelf(-1) }
+        add("nextShelf", String(localized: "Next shelf of the page", comment: "A command, as the key list and keyboard help say it"), ["rightArrow"]) { [weak self] _ in self?.view.jumpShelf(1) }
+        add("first", String(localized: "First item", comment: "A command, as the key list and keyboard help say it"), ["home"], listKeys: true) { [weak self] _ in self?.view.toEnd(false) }
+        add("last", String(localized: "Last item", comment: "A command, as the key list and keyboard help say it"), ["end"], listKeys: true) { [weak self] _ in self?.view.toEnd(true) }
+        add("open", String(localized: "Plays the item when it can be played, otherwise opens it; in the sidebar, goes to that section", comment: "A command, as the key list and keyboard help say it"), ["enter", "numpadEnter"], listKeys: true) { [weak self] _ in self?.view.activate() }
+        add("openDetails", String(localized: "Opens the item's page (an episode's details) instead of playing it", comment: "A command, as the key list and keyboard help say it"), ["shift+enter"], listKeys: true) { [weak self] _ in self?.view.activate(openOnly: true) }
+        add("play", String(localized: "Plays the item, or plays and pauses", comment: "A command, as the key list and keyboard help say it"), ["space"]) { [weak self] g in self?.view.playOrPause(g) }
+        add("nextArea", String(localized: "Next area: sidebar, page, player", comment: "A command, as the key list and keyboard help say it"), ["tab"]) { [weak self] _ in self?.view.switchPane(1) }
+        add("previousArea", String(localized: "Previous area", comment: "A command, as the key list and keyboard help say it"), ["shift+tab"]) { [weak self] _ in self?.view.switchPane(-1) }
+        add("back", String(localized: "Goes back a page", comment: "A command, as the key list and keyboard help say it"), ["escape"], listKeys: true) { [weak self] _ in self?.view.back() }
         for ch in "abcdefghijklmnopqrstuvwxyz" {
-            add("letter_\(ch)", "Jumps to the next item starting with the letter", [String(ch)]) { [weak self] _ in self?.view.letter(ch) }
+            add("letter_\(ch)", String(localized: "Jumps to the next item starting with the letter", comment: "A command, as the key list and keyboard help say it"), [String(ch)]) { [weak self] _ in self?.view.letter(ch) }
         }
-        script("media_submitSearch", "Searches, then reads the results", gestures: ["kb:enter", "kb:numpadEnter"], category: cat) { [weak self] g in
+        script("media_submitSearch", String(localized: "Searches, then reads the results", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:enter", "kb:numpadEnter"], category: cat) { [weak self] g in
             let term = API.focusObject.flatMap { $0.element.string(kAXValueAttribute) ?? $0.value } ?? ""   // read before the app starts searching (it answers slowly then)
             // Return again on the same term while the catalog's list is up opens the item it is on.
             if let self, let t = self.view.catalogTerm, t == term.trimmingCharacters(in: .whitespacesAndNewlines) { self.view.activate(); return }
             g.send()
             self?.view.afterSearch(term: term)
         }.isAvailable = { [weak self] in API.focusObject?.role == .searchField && API.focusPid == self?.pid }
-        script("media_nowPlaying", "Says what is playing", gestures: ["kb:turnover+shift+n"], category: cat) { [weak self] _ in self?.view.nowPlaying() }
+        script("media_nowPlaying", String(localized: "Says what is playing", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+shift+n"], category: cat) { [weak self] _ in self?.view.nowPlaying() }
     }
 
     override func event_appModuleGainFocus() {

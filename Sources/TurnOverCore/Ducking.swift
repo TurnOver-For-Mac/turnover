@@ -20,7 +20,8 @@ public enum Ducking {
     /// "off" (NVDA's no ducking), "speech" (while TurnOver speaks), "always" (while TurnOver runs).
     public static let modes = ["off", "speech", "always"]
     public static func name(_ mode: String) -> String {
-        ["off": "No ducking", "speech": "Duck when outputting speech", "always": "Always duck"][mode] ?? mode
+        ["off": String(localized: "No ducking", comment: "An audio ducking mode"), "speech": String(localized: "Duck when outputting speech", comment: "An audio ducking mode"),
+         "always": String(localized: "Always duck", comment: "An audio ducking mode")][mode] ?? mode
     }
     nonisolated static let ducked: Float32 = 0.3
 
@@ -48,7 +49,7 @@ public enum Ducking {
     public static func cycle() {
         let next = modes[((modes.firstIndex(of: config.speech.ducking) ?? 0) + 1) % modes.count]
         config.speech.ducking = next; config.save()
-        Speech.speakMessage(next != "off" && !isAvailable ? "Audio ducking isn't available on this Mac" : name(next))
+        Speech.speakMessage(next != "off" && !isAvailable ? String(localized: "Audio ducking isn't available on this Mac", comment: "Spoken message") : name(next))
         apply()
     }
 

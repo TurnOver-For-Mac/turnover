@@ -33,7 +33,7 @@ public enum PageWatch {
                   Date().timeIntervalSince(lastSpoken) > 5 else { return }
             lastSpoken = Date()
             Log.io("no news from pid \(pid) after \(unanswered) keys; the page seems stuck")
-            Speech.speakMessage("please wait")   // the page is busy; "not responding" overstated it
+            Speech.speakMessage(String(localized: "please wait", comment: "Spoken message"))   // the page is busy; "not responding" overstated it
         }
     }
 }
@@ -234,65 +234,65 @@ public final class BrowseModeDocument: ScriptableObject {
         refreshIfNavigated()
         let nav = "Browse mode"
         // NVDA's cursor manager, on Mac modifiers.
-        script("moveByLine_back", "Moves to the previous line", gestures: ["kb:upArrow"], category: nav, resumesSayAll: true) { [weak self] _ in guard let self else { return }; move(.line, -1) }
-        script("moveByLine_forward", "Moves to the next line", gestures: ["kb:downArrow"], category: nav, resumesSayAll: true) { [weak self] _ in guard let self else { return }; move(.line, 1) }
-        script("moveByCharacter_back", "Moves to the previous character", gestures: ["kb:leftArrow"], category: nav) { [weak self] _ in guard let self else { return }; move(.character, -1) }
-        script("moveByCharacter_forward", "Moves to the next character", gestures: ["kb:rightArrow"], category: nav) { [weak self] _ in guard let self else { return }; move(.character, 1) }
-        script("moveByWord_back", "Moves to the previous word", gestures: ["kb:option+leftArrow"], category: nav) { [weak self] _ in guard let self else { return }; move(.word, -1) }
-        script("moveByWord_forward", "Moves to the next word", gestures: ["kb:option+rightArrow"], category: nav) { [weak self] _ in guard let self else { return }; move(.word, 1) }
+        script("moveByLine_back", String(localized: "Moves to the previous line", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:upArrow"], category: nav, resumesSayAll: true) { [weak self] _ in guard let self else { return }; move(.line, -1) }
+        script("moveByLine_forward", String(localized: "Moves to the next line", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:downArrow"], category: nav, resumesSayAll: true) { [weak self] _ in guard let self else { return }; move(.line, 1) }
+        script("moveByCharacter_back", String(localized: "Moves to the previous character", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:leftArrow"], category: nav) { [weak self] _ in guard let self else { return }; move(.character, -1) }
+        script("moveByCharacter_forward", String(localized: "Moves to the next character", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:rightArrow"], category: nav) { [weak self] _ in guard let self else { return }; move(.character, 1) }
+        script("moveByWord_back", String(localized: "Moves to the previous word", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:option+leftArrow"], category: nav) { [weak self] _ in guard let self else { return }; move(.word, -1) }
+        script("moveByWord_forward", String(localized: "Moves to the next word", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:option+rightArrow"], category: nav) { [weak self] _ in guard let self else { return }; move(.word, 1) }
         // The Windows style adds NVDA's Control Up and Down for paragraphs (a tester, 14 Oct 2026); the Mac style
         // keeps VoiceOver's Option arrows only.
-        script("moveByParagraph_back", "Moves to the previous paragraph", gestures: ["kb:option+upArrow"], category: nav, resumesSayAll: true) { [weak self] _ in guard let self else { return }; move(.paragraph, -1) }
-        script("moveByParagraph_forward", "Moves to the next paragraph", gestures: ["kb:option+downArrow"], category: nav, resumesSayAll: true) { [weak self] _ in guard let self else { return }; move(.paragraph, 1) }
+        script("moveByParagraph_back", String(localized: "Moves to the previous paragraph", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:option+upArrow"], category: nav, resumesSayAll: true) { [weak self] _ in guard let self else { return }; move(.paragraph, -1) }
+        script("moveByParagraph_forward", String(localized: "Moves to the next paragraph", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:option+downArrow"], category: nav, resumesSayAll: true) { [weak self] _ in guard let self else { return }; move(.paragraph, 1) }
         // (Bound always and gated by the style at each press, as the letters are: bound once at the document's
         // creation, a style switch left every open page with the old keys. code review, 16 Oct 2026.)
-        script("moveByParagraph_back_nvda", "Moves to the previous paragraph (NVDA's Control Up)", gestures: ["kb:control+upArrow"], category: nav, resumesSayAll: true) { [weak self] _ in guard let self else { return }; move(.paragraph, -1) }
+        script("moveByParagraph_back_nvda", String(localized: "Moves to the previous paragraph (NVDA's Control Up)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:control+upArrow"], category: nav, resumesSayAll: true) { [weak self] _ in guard let self else { return }; move(.paragraph, -1) }
             .isAvailable = { config.general.windowsKeys }
-        script("moveByParagraph_forward_nvda", "Moves to the next paragraph (NVDA's Control Down)", gestures: ["kb:control+downArrow"], category: nav, resumesSayAll: true) { [weak self] _ in guard let self else { return }; move(.paragraph, 1) }
+        script("moveByParagraph_forward_nvda", String(localized: "Moves to the next paragraph (NVDA's Control Down)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:control+downArrow"], category: nav, resumesSayAll: true) { [weak self] _ in guard let self else { return }; move(.paragraph, 1) }
             .isAvailable = { config.general.windowsKeys }
-        script("moveByPage_back", "Moves up a page", gestures: ["kb:pageUp"], category: nav) { [weak self] _ in guard let self else { return }; move(.line, -20) }
-        script("moveByPage_forward", "Moves down a page", gestures: ["kb:pageDown"], category: nav) { [weak self] _ in guard let self else { return }; move(.line, 20) }
-        script("startOfLine", "Moves to the start of the line", gestures: ["kb:home", "kb:command+leftArrow"], category: nav) { [weak self] _ in guard let self else { return }; edgeOfLine(start: true) }
-        script("endOfLine", "Moves to the end of the line", gestures: ["kb:end", "kb:command+rightArrow"], category: nav) { [weak self] _ in guard let self else { return }; edgeOfLine(start: false) }
+        script("moveByPage_back", String(localized: "Moves up a page", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:pageUp"], category: nav) { [weak self] _ in guard let self else { return }; move(.line, -20) }
+        script("moveByPage_forward", String(localized: "Moves down a page", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:pageDown"], category: nav) { [weak self] _ in guard let self else { return }; move(.line, 20) }
+        script("startOfLine", String(localized: "Moves to the start of the line", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:home", "kb:command+leftArrow"], category: nav) { [weak self] _ in guard let self else { return }; edgeOfLine(start: true) }
+        script("endOfLine", String(localized: "Moves to the end of the line", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:end", "kb:command+rightArrow"], category: nav) { [weak self] _ in guard let self else { return }; edgeOfLine(start: false) }
         let sel = "Selecting"
-        script("selectCharacter_back", "Selects the previous character", gestures: ["kb:shift+leftArrow"], category: sel) { [weak self] _ in self?.select(.character, -1) }
-        script("selectCharacter_forward", "Selects the next character", gestures: ["kb:shift+rightArrow"], category: sel) { [weak self] _ in self?.select(.character, 1) }
-        script("selectWord_back", "Selects the previous word", gestures: ["kb:shift+option+leftArrow"], category: sel) { [weak self] _ in self?.select(.word, -1) }
-        script("selectWord_forward", "Selects the next word", gestures: ["kb:shift+option+rightArrow"], category: sel) { [weak self] _ in self?.select(.word, 1) }
-        script("selectLine_back", "Selects up a line", gestures: ["kb:shift+upArrow"], category: sel) { [weak self] _ in self?.select(.line, -1) }
-        script("selectLine_forward", "Selects down a line", gestures: ["kb:shift+downArrow"], category: sel) { [weak self] _ in self?.select(.line, 1) }
+        script("selectCharacter_back", String(localized: "Selects the previous character", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+leftArrow"], category: sel) { [weak self] _ in self?.select(.character, -1) }
+        script("selectCharacter_forward", String(localized: "Selects the next character", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+rightArrow"], category: sel) { [weak self] _ in self?.select(.character, 1) }
+        script("selectWord_back", String(localized: "Selects the previous word", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+option+leftArrow"], category: sel) { [weak self] _ in self?.select(.word, -1) }
+        script("selectWord_forward", String(localized: "Selects the next word", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+option+rightArrow"], category: sel) { [weak self] _ in self?.select(.word, 1) }
+        script("selectLine_back", String(localized: "Selects up a line", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+upArrow"], category: sel) { [weak self] _ in self?.select(.line, -1) }
+        script("selectLine_forward", String(localized: "Selects down a line", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+downArrow"], category: sel) { [weak self] _ in self?.select(.line, 1) }
         // Paragraphs too (a tester, : Shift Option Down selected nothing that was said). Windows's Control Shift
         // Down is the same in the Windows style.
-        script("selectParagraph_back", "Selects up a paragraph", gestures: ["kb:shift+option+upArrow", "kb:shift+control+upArrow"], category: sel) { [weak self] _ in self?.select(.paragraph, -1) }
-        script("selectParagraph_forward", "Selects down a paragraph", gestures: ["kb:shift+option+downArrow", "kb:shift+control+downArrow"], category: sel) { [weak self] _ in self?.select(.paragraph, 1) }
-        script("selectToLineStart", "Selects to the start of the line", gestures: ["kb:shift+home", "kb:shift+command+leftArrow"], category: sel) { [weak self] _ in
+        script("selectParagraph_back", String(localized: "Selects up a paragraph", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+option+upArrow", "kb:shift+control+upArrow"], category: sel) { [weak self] _ in self?.select(.paragraph, -1) }
+        script("selectParagraph_forward", String(localized: "Selects down a paragraph", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+option+downArrow", "kb:shift+control+downArrow"], category: sel) { [weak self] _ in self?.select(.paragraph, 1) }
+        script("selectToLineStart", String(localized: "Selects to the start of the line", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+home", "kb:shift+command+leftArrow"], category: sel) { [weak self] _ in
             guard let self, let info = caretInfo() else { return }; info.expand(.line); select(nil, 0, to: info.start)
         }
-        script("selectToLineEnd", "Selects to the end of the line", gestures: ["kb:shift+end", "kb:shift+command+rightArrow"], category: sel) { [weak self] _ in
+        script("selectToLineEnd", String(localized: "Selects to the end of the line", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+end", "kb:shift+command+rightArrow"], category: sel) { [weak self] _ in
             guard let self, let info = caretInfo() else { return }; info.expand(.line); select(nil, 0, to: info.end)
         }
-        script("selectToTop", "Selects to the top of the document", gestures: ["kb:shift+command+upArrow", "kb:shift+control+home"], category: sel) { [weak self] _ in self?.select(nil, 0, to: 0) }
-        script("selectToBottom", "Selects to the bottom of the document", gestures: ["kb:shift+command+downArrow", "kb:shift+control+end"], category: sel) { [weak self] _ in
+        script("selectToTop", String(localized: "Selects to the top of the document", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+command+upArrow", "kb:shift+control+home"], category: sel) { [weak self] _ in self?.select(nil, 0, to: 0) }
+        script("selectToBottom", String(localized: "Selects to the bottom of the document", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+command+downArrow", "kb:shift+control+end"], category: sel) { [weak self] _ in
             guard let self else { return }; select(nil, 0, to: buffer.text.length)
         }
-        script("selectAll", "Selects the whole document", gestures: ["kb:command+a"], category: sel) { [weak self] _ in
+        script("selectAll", String(localized: "Selects the whole document", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+a"], category: sel) { [weak self] _ in
             guard let self else { return }
             selectionAnchor = 0; position = buffer.text.length
-            Speech.speakMessage("all selected", remember: false)
+            Speech.speakMessage(String(localized: "all selected", comment: "Spoken message"), remember: false)
         }
-        script("copySelection", "Copies what is selected in the document; with nothing selected, the application's own copy", gestures: ["kb:command+c"], category: sel) { [weak self] g in
+        script("copySelection", String(localized: "Copies what is selected in the document; with nothing selected, the application's own copy", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+c"], category: sel) { [weak self] g in
             self?.copySelection(g)
         }
-        script("topOfDocument", "Moves to the top of the document", gestures: ["kb:command+upArrow", "kb:control+home"], category: nav, resumesSayAll: true) { [weak self] _ in guard let self else { return }; position = 0; speakUnit(.line) }
-        script("bottomOfDocument", "Moves to the bottom of the document", gestures: ["kb:command+downArrow", "kb:control+end"], category: nav) { [weak self] _ in guard let self else { return }; position = max(0, buffer.text.length - 1); speakUnit(.line) }
-        script("activatePosition", "Activates the element at the caret", gestures: ["kb:enter", "kb:numpadEnter", "kb:space"], category: nav) { [weak self] g in guard let self else { return }; activate(g) }
+        script("topOfDocument", String(localized: "Moves to the top of the document", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+upArrow", "kb:control+home"], category: nav, resumesSayAll: true) { [weak self] _ in guard let self else { return }; position = 0; speakUnit(.line) }
+        script("bottomOfDocument", String(localized: "Moves to the bottom of the document", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+downArrow", "kb:control+end"], category: nav) { [weak self] _ in guard let self else { return }; position = max(0, buffer.text.length - 1); speakUnit(.line) }
+        script("activatePosition", String(localized: "Activates the element at the caret", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:enter", "kb:numpadEnter", "kb:space"], category: nav) { [weak self] g in guard let self else { return }; activate(g) }
         // NVDA+F7 in the Windows style (the parity audit, 13 Oct 2026: it did nothing on a page); in the Mac style
         // VO-F7 stays VoiceOver's, and VO-U and VO-I reach this list.
-        let elements = script("elementsList", "Elements list; lists the page's headings, links, form fields, buttons and landmarks; Enter goes there (NVDA+F7, VoiceOver's Item Chooser)", gestures: ["kb:turnover+f7"], category: nav) { [weak self] _ in
+        let elements = script("elementsList", String(localized: "Elements list; lists the page's headings, links, form fields, buttons and landmarks; Enter goes there (NVDA+F7, VoiceOver's Item Chooser)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+f7"], category: nav) { [weak self] _ in
             self?.elementsList()
         }
         elements.isAvailable = { [weak self] in config.general.windowsKeys && self?.passThrough == false }
-        script("tabFromCaret", "Next link or control; moves to the next link or control after the reading position (Shift: before it)", gestures: ["kb:tab", "kb:shift+tab"], category: nav) { [weak self] g in
+        script("tabFromCaret", String(localized: "Next link or control; moves to the next link or control after the reading position (Shift: before it)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:tab", "kb:shift+tab"], category: nav) { [weak self] g in
             guard let self else { return }
             BrowseModeDocument.lastTabFromCaretAt = Date()
             if focusFromCaret(forward: !g.modifiers.contains(.shift)) { return }
@@ -305,7 +305,7 @@ public final class BrowseModeDocument: ScriptableObject {
             }
             g.send(); PageWatch.keySent(to: webArea.pid)
         }
-        script("disablePassThrough", "Switches back to browse mode", gestures: ["kb:escape"], category: nav) { [weak self] g in
+        script("disablePassThrough", String(localized: "Switches back to browse mode", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:escape"], category: nav) { [weak self] g in
             guard let self else { return }
             if passThrough {
                 // The virtual caret goes to the control that had focus (NVDA): on a page that was still arriving when
@@ -325,12 +325,12 @@ public final class BrowseModeDocument: ScriptableObject {
         for (table, windows) in [(BrowseModeDocument.quickNav, true), (BrowseModeDocument.voiceOverQuickNav, false)] {
             let prefix = windows ? "" : "vo_"
             for q in table {
-                let next = script("\(prefix)next\(q.name)", "Moves to the next \(q.spoken)", gestures: ["kb:\(q.key)"], category: "Quick navigation") { [weak self] g in
+                let next = script("\(prefix)next\(q.name)", String(localized: "Moves to the next \(q.spoken)", comment: "A command: %@ is a kind of thing to find (heading)"), gestures: ["kb:\(q.key)"], category: "Quick navigation") { [weak self] g in
                     guard let self else { return }
                     if !singleLetterNavigation { g.send(); return }
                     quickNav(q, forward: true)
                 }
-                let previous = script("\(prefix)previous\(q.name)", "Moves to the previous \(q.spoken)", gestures: ["kb:shift+\(q.key)"], category: "Quick navigation") { [weak self] g in
+                let previous = script("\(prefix)previous\(q.name)", String(localized: "Moves to the previous \(q.spoken)", comment: "A command: %@ is a kind of thing to find (heading)"), gestures: ["kb:shift+\(q.key)"], category: "Quick navigation") { [weak self] g in
                     guard let self else { return }
                     if !singleLetterNavigation { g.send(); return }
                     quickNav(q, forward: false)
@@ -340,12 +340,12 @@ public final class BrowseModeDocument: ScriptableObject {
             }
         }
         // NVDA's; VoiceOver has none, so the Mac style leaves comma to the page.
-        script("pastEndOfContainer", "Moves past the end of the list, table or other container (NVDA: comma)", gestures: ["kb:,"], category: "Quick navigation") { [weak self] g in
+        script("pastEndOfContainer", String(localized: "Moves past the end of the list, table or other container (NVDA: comma)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:,"], category: "Quick navigation") { [weak self] g in
             guard let self else { return }
             if !singleLetterNavigation { g.send(); return }
             moveToContainerEdge(end: true)
         }.isAvailable = { config.general.windowsKeys }
-        script("startOfContainer", "Moves to the start of the list, table or other container (NVDA: Shift comma)", gestures: ["kb:shift+,"], category: "Quick navigation") { [weak self] g in
+        script("startOfContainer", String(localized: "Moves to the start of the list, table or other container (NVDA: Shift comma)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+,"], category: "Quick navigation") { [weak self] g in
             guard let self else { return }
             if !singleLetterNavigation { g.send(); return }
             moveToContainerEdge(end: false)
@@ -354,65 +354,65 @@ public final class BrowseModeDocument: ScriptableObject {
 
     public struct QuickNavType { public let name: String; public let key: String; public let spoken: String; let searchKey: String; let roles: Set<String>? }
     public static let quickNav: [QuickNavType] = [
-        .init(name: "Heading", key: "h", spoken: "heading", searchKey: "AXHeadingSearchKey", roles: nil),
-        .init(name: "Heading1", key: "1", spoken: "heading level 1", searchKey: "AXHeadingLevel1SearchKey", roles: nil),
-        .init(name: "Heading2", key: "2", spoken: "heading level 2", searchKey: "AXHeadingLevel2SearchKey", roles: nil),
-        .init(name: "Heading3", key: "3", spoken: "heading level 3", searchKey: "AXHeadingLevel3SearchKey", roles: nil),
-        .init(name: "Heading4", key: "4", spoken: "heading level 4", searchKey: "AXHeadingLevel4SearchKey", roles: nil),
-        .init(name: "Heading5", key: "5", spoken: "heading level 5", searchKey: "AXHeadingLevel5SearchKey", roles: nil),
-        .init(name: "Heading6", key: "6", spoken: "heading level 6", searchKey: "AXHeadingLevel6SearchKey", roles: nil),
-        .init(name: "Heading7", key: "7", spoken: "heading level 7", searchKey: "", roles: nil),
-        .init(name: "Heading8", key: "8", spoken: "heading level 8", searchKey: "", roles: nil),
-        .init(name: "Heading9", key: "9", spoken: "heading level 9", searchKey: "", roles: nil),
-        .init(name: "Link", key: "k", spoken: "link", searchKey: "AXLinkSearchKey", roles: nil),
-        .init(name: "VisitedLink", key: "v", spoken: "visited link", searchKey: "AXVisitedLinkSearchKey", roles: nil),
-        .init(name: "UnvisitedLink", key: "u", spoken: "unvisited link", searchKey: "AXUnvisitedLinkSearchKey", roles: nil),
-        .init(name: "FormField", key: "f", spoken: "form field", searchKey: "AXControlSearchKey", roles: nil),
-        .init(name: "List", key: "l", spoken: "list", searchKey: "AXListSearchKey", roles: nil),
-        .init(name: "Button", key: "b", spoken: "button", searchKey: "AXButtonSearchKey", roles: nil),
-        .init(name: "Edit", key: "e", spoken: "edit field", searchKey: "AXTextFieldSearchKey", roles: nil),
-        .init(name: "Frame", key: "m", spoken: "frame", searchKey: "AXFrameSearchKey", roles: nil),
-        .init(name: "RadioButton", key: "r", spoken: "radio button", searchKey: "AXRadioGroupSearchKey", roles: nil),
-        .init(name: "ComboBox", key: "c", spoken: "combo box", searchKey: "AXControlSearchKey", roles: ["AXPopUpButton", "AXComboBox"]),
-        .init(name: "CheckBox", key: "x", spoken: "check box", searchKey: "AXCheckBoxSearchKey", roles: nil),
-        .init(name: "Graphic", key: "g", spoken: "graphic", searchKey: "AXGraphicSearchKey", roles: nil),
-        .init(name: "BlockQuote", key: "q", spoken: "block quote", searchKey: "AXBlockquoteSearchKey", roles: nil),
-        .init(name: "Landmark", key: "d", spoken: "landmark", searchKey: "AXLandmarkSearchKey", roles: nil),
-        .init(name: "Table", key: "t", spoken: "table", searchKey: "AXTableSearchKey", roles: nil),
-        .init(name: "Annotation", key: "a", spoken: "annotation", searchKey: "", roles: nil),
-        .init(name: "SpellingError", key: "w", spoken: "spelling error", searchKey: "AXMisspelledWordSearchKey", roles: nil),
+        .init(name: "Heading", key: "h", spoken: String(localized: "heading", comment: "A kind of thing to find, after next or previous"), searchKey: "AXHeadingSearchKey", roles: nil),
+        .init(name: "Heading1", key: "1", spoken: Phrases.headingLevel(1), searchKey: "AXHeadingLevel1SearchKey", roles: nil),
+        .init(name: "Heading2", key: "2", spoken: Phrases.headingLevel(2), searchKey: "AXHeadingLevel2SearchKey", roles: nil),
+        .init(name: "Heading3", key: "3", spoken: Phrases.headingLevel(3), searchKey: "AXHeadingLevel3SearchKey", roles: nil),
+        .init(name: "Heading4", key: "4", spoken: Phrases.headingLevel(4), searchKey: "AXHeadingLevel4SearchKey", roles: nil),
+        .init(name: "Heading5", key: "5", spoken: Phrases.headingLevel(5), searchKey: "AXHeadingLevel5SearchKey", roles: nil),
+        .init(name: "Heading6", key: "6", spoken: Phrases.headingLevel(6), searchKey: "AXHeadingLevel6SearchKey", roles: nil),
+        .init(name: "Heading7", key: "7", spoken: Phrases.headingLevel(7), searchKey: "", roles: nil),
+        .init(name: "Heading8", key: "8", spoken: Phrases.headingLevel(8), searchKey: "", roles: nil),
+        .init(name: "Heading9", key: "9", spoken: Phrases.headingLevel(9), searchKey: "", roles: nil),
+        .init(name: "Link", key: "k", spoken: String(localized: "link", comment: "A kind of thing to find, after next or previous"), searchKey: "AXLinkSearchKey", roles: nil),
+        .init(name: "VisitedLink", key: "v", spoken: String(localized: "visited link", comment: "A kind of thing to find, after next or previous"), searchKey: "AXVisitedLinkSearchKey", roles: nil),
+        .init(name: "UnvisitedLink", key: "u", spoken: String(localized: "unvisited link", comment: "A kind of thing to find, after next or previous"), searchKey: "AXUnvisitedLinkSearchKey", roles: nil),
+        .init(name: "FormField", key: "f", spoken: String(localized: "form field", comment: "A kind of thing to find, after next or previous"), searchKey: "AXControlSearchKey", roles: nil),
+        .init(name: "List", key: "l", spoken: String(localized: "list", comment: "A kind of thing to find, after next or previous"), searchKey: "AXListSearchKey", roles: nil),
+        .init(name: "Button", key: "b", spoken: String(localized: "button", comment: "A kind of thing to find, after next or previous"), searchKey: "AXButtonSearchKey", roles: nil),
+        .init(name: "Edit", key: "e", spoken: String(localized: "edit field", comment: "A kind of thing to find, after next or previous"), searchKey: "AXTextFieldSearchKey", roles: nil),
+        .init(name: "Frame", key: "m", spoken: String(localized: "frame", comment: "A kind of thing to find, after next or previous"), searchKey: "AXFrameSearchKey", roles: nil),
+        .init(name: "RadioButton", key: "r", spoken: String(localized: "radio button", comment: "A kind of thing to find, after next or previous"), searchKey: "AXRadioGroupSearchKey", roles: nil),
+        .init(name: "ComboBox", key: "c", spoken: String(localized: "combo box", comment: "A kind of thing to find, after next or previous"), searchKey: "AXControlSearchKey", roles: ["AXPopUpButton", "AXComboBox"]),
+        .init(name: "CheckBox", key: "x", spoken: String(localized: "check box", comment: "A kind of thing to find, after next or previous"), searchKey: "AXCheckBoxSearchKey", roles: nil),
+        .init(name: "Graphic", key: "g", spoken: String(localized: "graphic", comment: "A kind of thing to find, after next or previous"), searchKey: "AXGraphicSearchKey", roles: nil),
+        .init(name: "BlockQuote", key: "q", spoken: String(localized: "block quote", comment: "A kind of thing to find, after next or previous"), searchKey: "AXBlockquoteSearchKey", roles: nil),
+        .init(name: "Landmark", key: "d", spoken: String(localized: "landmark", comment: "A kind of thing to find, after next or previous"), searchKey: "AXLandmarkSearchKey", roles: nil),
+        .init(name: "Table", key: "t", spoken: String(localized: "table", comment: "A kind of thing to find, after next or previous"), searchKey: "AXTableSearchKey", roles: nil),
+        .init(name: "Annotation", key: "a", spoken: String(localized: "annotation", comment: "A kind of thing to find, after next or previous"), searchKey: "", roles: nil),
+        .init(name: "SpellingError", key: "w", spoken: String(localized: "spelling error", comment: "A kind of thing to find, after next or previous"), searchKey: "AXMisspelledWordSearchKey", roles: nil),
         // Text kinds: no WebKit search key; found in the buffer (BrowseModeDocument.quickNav).
-        .init(name: "Paragraph", key: "p", spoken: "paragraph", searchKey: "", roles: nil),
-        .init(name: "NotLinkBlock", key: "n", spoken: "text after links", searchKey: "", roles: nil),
-        .init(name: "ListItem", key: "i", spoken: "list item", searchKey: "", roles: nil),
-        .init(name: "Separator", key: "s", spoken: "separator", searchKey: "", roles: nil),
-        .init(name: "EmbeddedObject", key: "o", spoken: "embedded object", searchKey: "", roles: nil),
+        .init(name: "Paragraph", key: "p", spoken: String(localized: "paragraph", comment: "A kind of thing to find, after next or previous"), searchKey: "", roles: nil),
+        .init(name: "NotLinkBlock", key: "n", spoken: String(localized: "text after links", comment: "A kind of thing to find, after next or previous"), searchKey: "", roles: nil),
+        .init(name: "ListItem", key: "i", spoken: String(localized: "list item", comment: "A kind of thing to find, after next or previous"), searchKey: "", roles: nil),
+        .init(name: "Separator", key: "s", spoken: String(localized: "separator", comment: "A kind of thing to find, after next or previous"), searchKey: "", roles: nil),
+        .init(name: "EmbeddedObject", key: "o", spoken: String(localized: "embedded object", comment: "A kind of thing to find, after next or previous"), searchKey: "", roles: nil),
     ]
 
     /// The Mac style's letters: VoiceOver's own single-key Quick Nav, as its defaults on the Mac set them
     /// (ScreenReaderConfiguration, SCRQuickNavSingleLetterCommander; the parity audit, 13 Oct 2026). "mac keys
     /// should do what voiceover keys are expected to do, and windows mode should do what NVDA keys are expected to do."
     public static let voiceOverQuickNav: [QuickNavType] = [
-        .init(name: "Heading", key: "h", spoken: "heading", searchKey: "AXHeadingSearchKey", roles: nil),
-        .init(name: "Heading1", key: "1", spoken: "heading level 1", searchKey: "AXHeadingLevel1SearchKey", roles: nil),
-        .init(name: "Heading2", key: "2", spoken: "heading level 2", searchKey: "AXHeadingLevel2SearchKey", roles: nil),
-        .init(name: "Heading3", key: "3", spoken: "heading level 3", searchKey: "AXHeadingLevel3SearchKey", roles: nil),
-        .init(name: "Heading4", key: "4", spoken: "heading level 4", searchKey: "AXHeadingLevel4SearchKey", roles: nil),
-        .init(name: "Heading5", key: "5", spoken: "heading level 5", searchKey: "AXHeadingLevel5SearchKey", roles: nil),
-        .init(name: "Heading6", key: "6", spoken: "heading level 6", searchKey: "AXHeadingLevel6SearchKey", roles: nil),
-        .init(name: "SameLevelHeading", key: "m", spoken: "heading at the same level", searchKey: "AXHeadingSameLevelSearchKey", roles: nil),
-        .init(name: "Link", key: "l", spoken: "link", searchKey: "AXLinkSearchKey", roles: nil),
-        .init(name: "VisitedLink", key: "v", spoken: "visited link", searchKey: "AXVisitedLinkSearchKey", roles: nil),
-        .init(name: "TextField", key: "f", spoken: "text field", searchKey: "AXTextFieldSearchKey", roles: nil),
-        .init(name: "Control", key: "j", spoken: "control", searchKey: "AXControlSearchKey", roles: nil),
-        .init(name: "List", key: "x", spoken: "list", searchKey: "AXListSearchKey", roles: nil),
-        .init(name: "Button", key: "b", spoken: "button", searchKey: "AXButtonSearchKey", roles: nil),
-        .init(name: "Table", key: "t", spoken: "table", searchKey: "AXTableSearchKey", roles: nil),
-        .init(name: "Graphic", key: "g", spoken: "graphic", searchKey: "AXGraphicSearchKey", roles: nil),
-        .init(name: "Landmark", key: "n", spoken: "landmark", searchKey: "AXLandmarkSearchKey", roles: nil),
-        .init(name: "CheckBox", key: "c", spoken: "check box", searchKey: "AXCheckBoxSearchKey", roles: nil),
-        .init(name: "RadioGroup", key: "r", spoken: "radio group", searchKey: "AXRadioGroupSearchKey", roles: nil),
-        .init(name: "DifferentItem", key: "d", spoken: "different item", searchKey: "AXDifferentTypeSearchKey", roles: nil),
+        .init(name: "Heading", key: "h", spoken: String(localized: "heading", comment: "A kind of thing to find, after next or previous"), searchKey: "AXHeadingSearchKey", roles: nil),
+        .init(name: "Heading1", key: "1", spoken: Phrases.headingLevel(1), searchKey: "AXHeadingLevel1SearchKey", roles: nil),
+        .init(name: "Heading2", key: "2", spoken: Phrases.headingLevel(2), searchKey: "AXHeadingLevel2SearchKey", roles: nil),
+        .init(name: "Heading3", key: "3", spoken: Phrases.headingLevel(3), searchKey: "AXHeadingLevel3SearchKey", roles: nil),
+        .init(name: "Heading4", key: "4", spoken: Phrases.headingLevel(4), searchKey: "AXHeadingLevel4SearchKey", roles: nil),
+        .init(name: "Heading5", key: "5", spoken: Phrases.headingLevel(5), searchKey: "AXHeadingLevel5SearchKey", roles: nil),
+        .init(name: "Heading6", key: "6", spoken: Phrases.headingLevel(6), searchKey: "AXHeadingLevel6SearchKey", roles: nil),
+        .init(name: "SameLevelHeading", key: "m", spoken: String(localized: "heading at the same level", comment: "A kind of thing to find, after next or previous"), searchKey: "AXHeadingSameLevelSearchKey", roles: nil),
+        .init(name: "Link", key: "l", spoken: String(localized: "link", comment: "A kind of thing to find, after next or previous"), searchKey: "AXLinkSearchKey", roles: nil),
+        .init(name: "VisitedLink", key: "v", spoken: String(localized: "visited link", comment: "A kind of thing to find, after next or previous"), searchKey: "AXVisitedLinkSearchKey", roles: nil),
+        .init(name: "TextField", key: "f", spoken: String(localized: "text field", comment: "A kind of thing to find, after next or previous"), searchKey: "AXTextFieldSearchKey", roles: nil),
+        .init(name: "Control", key: "j", spoken: String(localized: "control", comment: "A kind of thing to find, after next or previous"), searchKey: "AXControlSearchKey", roles: nil),
+        .init(name: "List", key: "x", spoken: String(localized: "list", comment: "A kind of thing to find, after next or previous"), searchKey: "AXListSearchKey", roles: nil),
+        .init(name: "Button", key: "b", spoken: String(localized: "button", comment: "A kind of thing to find, after next or previous"), searchKey: "AXButtonSearchKey", roles: nil),
+        .init(name: "Table", key: "t", spoken: String(localized: "table", comment: "A kind of thing to find, after next or previous"), searchKey: "AXTableSearchKey", roles: nil),
+        .init(name: "Graphic", key: "g", spoken: String(localized: "graphic", comment: "A kind of thing to find, after next or previous"), searchKey: "AXGraphicSearchKey", roles: nil),
+        .init(name: "Landmark", key: "n", spoken: String(localized: "landmark", comment: "A kind of thing to find, after next or previous"), searchKey: "AXLandmarkSearchKey", roles: nil),
+        .init(name: "CheckBox", key: "c", spoken: String(localized: "check box", comment: "A kind of thing to find, after next or previous"), searchKey: "AXCheckBoxSearchKey", roles: nil),
+        .init(name: "RadioGroup", key: "r", spoken: String(localized: "radio group", comment: "A kind of thing to find, after next or previous"), searchKey: "AXRadioGroupSearchKey", roles: nil),
+        .init(name: "DifferentItem", key: "d", spoken: String(localized: "different item", comment: "A kind of thing to find, after next or previous"), searchKey: "AXDifferentTypeSearchKey", roles: nil),
     ]
 
     // MARK: The document object and its text
@@ -468,7 +468,7 @@ public final class BrowseModeDocument: ScriptableObject {
             DispatchQueue.main.async { AXHandler.shared.focusChanged(fresh, pid: pid) }
             return false
         }
-        Speech.speakMessage("nothing on this page yet; it may still be loading")
+        Speech.speakMessage(String(localized: "nothing on this page yet; it may still be loading", comment: "Spoken message"))
         watchForContent()
         return false
     }
@@ -587,7 +587,7 @@ public final class BrowseModeDocument: ScriptableObject {
             moved = again.move(unit, direction)
             if moved != 0 { info = again }
         }
-        if moved == 0 { Speech.speakMessage(direction > 0 ? "bottom" : "top") }
+        if moved == 0 { Speech.speakMessage(direction > 0 ? String(localized: "bottom", comment: "Spoken message") : String(localized: "top", comment: "Spoken message")) }
         position = info.start
         // Say all carries on from here and reads this line itself (NVDA's willSayAllResume).
         if SayAll.resuming { return }
@@ -617,7 +617,7 @@ public final class BrowseModeDocument: ScriptableObject {
         let isLetterOrDigit = gesture.typedCharacter.map { $0.isLetter || $0.isNumber } ?? false
         let isPlainKey = gesture.modifiers.subtracting(.shift).isEmpty
         if inBrowseMode, lettersAreCommands, isLetterOrDigit, isPlainKey {
-            return Script(name: "browseModeTrap", description: "A letter or digit with no command in browse mode: nothing", category: "navigation", owner: self) { _ in
+            return Script(name: "browseModeTrap", description: String(localized: "A letter or digit with no command in browse mode: nothing", comment: "A command, as the key list and keyboard help say it"), category: "navigation", owner: self) { _ in
                 Log.io("browse mode: a letter or digit with no command; kept from the page")
             }
         }

@@ -18,7 +18,7 @@ public enum ImageDescriber {
     /// The picture under TurnOver's cursor: the browse-mode reading position on a page, else the navigator object,
     /// else the focus.
     public static func describeCurrent() {
-        guard !busy else { Speech.speakMessage("still describing"); return }
+        guard !busy else { Speech.speakMessage(String(localized: "still describing", comment: "Spoken message")); return }
         var element: AXUIElement?
         if let doc = API.focusTreeInterceptor, !doc.passThrough { element = doc.elementAtPosition() }
         element = element ?? ObjectNavigator.shared.element ?? API.focusObject?.element
@@ -30,11 +30,11 @@ public enum ImageDescriber {
             ScreenRecognition.shared.recognize()
             return
         }
-        guard let frame = TurnOverObject.frame(element), frame.width >= 8, frame.height >= 8 else { Speech.speakMessage("nothing to describe here"); return }
+        guard let frame = TurnOverObject.frame(element), frame.width >= 8, frame.height >= 8 else { Speech.speakMessage(String(localized: "nothing to describe here", comment: "Spoken message")); return }
         let pid = element.pid
         let windowFrame = element.element(kAXWindowAttribute).flatMap { TurnOverObject.frame($0) }
         busy = true
-        Speech.speakMessage("describing")
+        Speech.speakMessage(String(localized: "describing", comment: "Spoken message"))
         Task { @MainActor in
             defer { busy = false }
             do {
@@ -46,10 +46,10 @@ public enum ImageDescriber {
                 }
                 let text = await describe(image)
                 Log.io("image description: \(text.count) characters")
-                Speech.speakMessage(text.isEmpty ? "no description" : text)
+                Speech.speakMessage(text.isEmpty ? String(localized: "no description", comment: "A picture could not be described") : text)
             } catch {
                 Log.warning("image description: capture failed: \(error.localizedDescription)")
-                Speech.speakMessage("the picture could not be captured. TurnOver needs Screen Recording, in System Settings, Privacy and Security")
+                Speech.speakMessage(String(localized: "the picture could not be captured. TurnOver needs Screen Recording, in System Settings, Privacy and Security", comment: "Spoken message"))
             }
         }
     }
@@ -71,7 +71,7 @@ public enum ImageDescriber {
                     let t = r.content.trimmingCharacters(in: .whitespacesAndNewlines)
                     if !t.isEmpty {
                         let words = readText(image)
-                        return words.isEmpty ? t : t + " Text: " + words
+                        return words.isEmpty ? t : t + " " + String(localized: "Text: \(words)", comment: "A picture's description: the text in it")
                     }
                 } catch {
                     Log.warning("image description: the language model failed: \(error.localizedDescription); Vision instead")
@@ -102,8 +102,8 @@ public enum ImageDescriber {
 
     nonisolated private static func join(labels: [String], words: String) -> String {
         var parts: [String] = []
-        if !labels.isEmpty { parts.append("Possibly: " + labels.joined(separator: ", ")) }
-        if !words.isEmpty { parts.append("Text: " + String(words.prefix(400))) }
+        if !labels.isEmpty { parts.append(String(localized: "Possibly: \(labels.joined(separator: ", "))", comment: "A picture's description: what it may show (in English)")) }
+        if !words.isEmpty { parts.append(String(localized: "Text: \(String(words.prefix(400)))", comment: "A picture's description: the text in it")) }
         return parts.joined(separator: ". ")
     }
 

@@ -39,14 +39,14 @@ extension BrowseModeDocument {
         /// Nothing further this way: from the other end of the page (wrapping on), or "no next heading".
         func wrapOrStop() {
             guard config.virtualBuffers.wrapQuickNav, let roles = BrowseModeDocument.quickNavRoles[q.name] else {
-                Speech.speakMessage(forward ? "no next \(q.spoken)" : "no previous \(q.spoken)"); return
+                Speech.speakMessage(Phrases.noNext(q.spoken, forward: forward)); return
             }
             let level = headingLevel(for: q)
             guard let (at, el) = buffer.find(from: forward ? -1 : buffer.text.length + 1, forward: forward, roles: roles, headingLevel: level), at != position else {
-                Speech.speakMessage(forward ? "no next \(q.spoken)" : "no previous \(q.spoken)"); return
+                Speech.speakMessage(Phrases.noNext(q.spoken, forward: forward)); return
             }
             Tones.edge()
-            Speech.speakMessage(forward ? "wrapped to the top" : "wrapped to the bottom")
+            Speech.speakMessage(forward ? String(localized: "wrapped to the top", comment: "Spoken message") : String(localized: "wrapped to the bottom", comment: "Spoken message"))
             land(at, el)
         }
         /// Put the caret on what was found and read it.
@@ -60,7 +60,7 @@ extension BrowseModeDocument {
             } else { speakQuickNavText(at: at, link: q.name.contains("Link"), element: el) }
         }
         func bufferSearch() {
-            guard let roles = BrowseModeDocument.quickNavRoles[q.name] else { Speech.speakMessage("not available here"); return }
+            guard let roles = BrowseModeDocument.quickNavRoles[q.name] else { Speech.speakMessage(String(localized: "not available here", comment: "Spoken message")); return }
             let level = headingLevel(for: q)
             var hit = buffer.find(from: position, forward: forward, roles: roles, headingLevel: level)
             // Nothing ahead on a page that may have more below (): once, the page read again from its end.
@@ -84,9 +84,9 @@ extension BrowseModeDocument {
             var hit = buffer.findText(from: position, forward: forward, kind: kind)
             if hit == nil, config.virtualBuffers.wrapQuickNav,
                let w = buffer.findText(from: forward ? -1 : buffer.text.length + 1, forward: forward, kind: kind), w.offset != position {
-                Tones.edge(); Speech.speakMessage(forward ? "wrapped to the top" : "wrapped to the bottom"); hit = w
+                Tones.edge(); Speech.speakMessage(forward ? String(localized: "wrapped to the top", comment: "Spoken message") : String(localized: "wrapped to the bottom", comment: "Spoken message")); hit = w
             }
-            guard let (at, el) = hit else { Speech.speakMessage(forward ? "no next \(q.spoken)" : "no previous \(q.spoken)"); return }
+            guard let (at, el) = hit else { Speech.speakMessage(Phrases.noNext(q.spoken, forward: forward)); return }
             position = at
             if let el { lastQuickNavTarget = el }
             speakQuickNavText(at: at, link: false, element: el)
@@ -97,7 +97,7 @@ extension BrowseModeDocument {
             let here = buffer.lineIndex(at: position).flatMap { buffer.lines[$0].element?.role }
             let order = forward ? Array(((buffer.lineIndex(at: position) ?? 0) + 1)..<buffer.lines.count) : Array((0..<(buffer.lineIndex(at: position) ?? 0)).reversed())
             guard let j = order.first(where: { !buffer.lineContinues($0) && buffer.lines[$0].element?.role != here }) else {
-                Speech.speakMessage(forward ? "no next different item" : "no previous different item"); return
+                Speech.speakMessage(forward ? String(localized: "no next different item", comment: "Spoken message") : String(localized: "no previous different item", comment: "Spoken message")); return
             }
             position = buffer.lines[j].start
             speakQuickNavText(at: position, link: false, element: buffer.lines[j].element)
@@ -139,7 +139,7 @@ extension BrowseModeDocument {
         // text is read with what it is inside of.
         if BrowseModeDocument.controlRoles.contains(target.role), !(target.role == "AXLink" && buffer.linkEnd(at: r.0) != nil) {
             let obj = ObjectFactory.make(target)
-            Speech.speakMessage(Speech.objectPropertiesSpeech(obj, reason: .focus).joined(separator: ", ") + (obj.value.map { _ in "" } ?? ((obj.hasNavigableText && ((try? obj.makeTextInfo(.all))?.text.isEmpty ?? true)) ? ", blank" : "")))
+            Speech.speakMessage(Speech.objectPropertiesSpeech(obj, reason: .focus).joined(separator: ", ") + (obj.value.map { _ in "" } ?? ((obj.hasNavigableText && ((try? obj.makeTextInfo(.all))?.text.isEmpty ?? true)) ? ", " + Phrases.blank : "")))
             lastChain = []
         } else {
             speakQuickNavText(at: r.0, link: q.name.contains("Link"))
@@ -212,10 +212,10 @@ extension BrowseModeDocument {
         guard ensureContent() else { return }
         rebuildIfCheap(stale: 20)
         guard let c = buffer.containers.filter({ $0.start <= position && position < $0.end }).min(by: { $0.end - $0.start < $1.end - $1.start }) else {
-            Speech.speakMessage("not in a container"); return
+            Speech.speakMessage(String(localized: "not in a container", comment: "Spoken message")); return
         }
         if end {
-            guard c.end < buffer.text.length else { Speech.speakMessage("no more text after the \(ObjectFactory.make(c.element).role.displayString)"); return }
+            guard c.end < buffer.text.length else { Speech.speakMessage(String(localized: "no more text after the \(ObjectFactory.make(c.element).role.displayString)", comment: "Moving past an element with no text after it: %@ is its role")); return }
             position = c.end
         } else {
             position = c.start

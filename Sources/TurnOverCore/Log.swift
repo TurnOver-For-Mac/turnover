@@ -76,16 +76,16 @@ nonisolated public enum Log {
         let size = ((try? FileManager.default.attributesOfItem(atPath: path))?[.size] as? NSNumber)?.uint64Value ?? 0
         guard let from = markedAt else {
             markedAt = size
-            Speech.speakMessage("log start marked; press again to copy from here")
+            Speech.speakMessage(String(localized: "log start marked; press again to copy from here", comment: "Spoken message"))
             return
         }
         markedAt = nil
-        guard let h = FileHandle(forReadingAtPath: path) else { Speech.speakMessage("the log can't be read"); return }
+        guard let h = FileHandle(forReadingAtPath: path) else { Speech.speakMessage(String(localized: "the log can't be read", comment: "Spoken message")); return }
         defer { try? h.close() }
         try? h.seek(toOffset: min(from, size))
         let text = String(decoding: (try? h.readToEnd()) ?? Data(), as: UTF8.self)
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
-        Speech.speakMessage("copied \(text.split(separator: "\n").count) lines of the log")
+        Speech.speakMessage(String(localized: "copied \(String(text.split(separator: "\n").count)) lines of the log", comment: "Part of the log copied: how many lines"))
     }
 }

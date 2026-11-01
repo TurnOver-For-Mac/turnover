@@ -110,7 +110,7 @@ public enum SettingsProfiles {
         guard bundle != Bundle.main.bundleIdentifier else { return }   // TurnOver's own menu doesn't change profiles
         if activeName != nil, !activeByApp { return }   // chosen by hand: stays
         if let p = all().first(where: { $0.apps.contains(bundle) }) {
-            if activeName != p.name { if activeName != nil { deactivate() }; activate(p.name, byApp: true); Speech.speakMessage("\(p.name) profile") }
+            if activeName != p.name { if activeName != nil { deactivate() }; activate(p.name, byApp: true); Speech.speakMessage(String(localized: "\(p.name) profile", comment: "A settings profile switched on for an app: its name")) }
         } else if activeName != nil {
             deactivate()
         }
@@ -121,17 +121,19 @@ public enum SettingsProfiles {
     public static func openChooser() {
         let front = NSWorkspace.shared.frontmostApplication
         let frontBundle = front?.bundleIdentifier ?? ""
-        let frontName = front?.localizedName ?? "this app"
+        let frontName = front?.localizedName ?? String(localized: "this app", comment: "An application with no name")
         var items: [MenuItem] = []
-        items.append(MenuItem("Normal settings\(activeName == nil ? ", active" : "")", .action { DispatchQueue.main.async { deactivate(); Speech.speakMessage("normal settings") } }))
+        items.append(MenuItem(activeName == nil ? "Normal settings, active" : "Normal settings", .action { DispatchQueue.main.async { deactivate(); Speech.speakMessage(String(localized: "normal settings", comment: "Spoken message")) } }))
         for p in all() {
             let on = activeName == p.name
             let apps = p.apps.map { b in NSWorkspace.shared.urlForApplication(withBundleIdentifier: b).map { FileManager.default.displayName(atPath: $0.path).replacingOccurrences(of: ".app", with: "") } ?? b }
-            items.append(MenuItem("\(p.name)\(on ? ", active" : "")\(apps.isEmpty ? "" : ", for \(apps.joined(separator: " and "))")", .submenu {
+            var title = on ? String(localized: "\(p.name), active", comment: "A settings profile in use") : p.name
+            if !apps.isEmpty { title += String(localized: ", for \(apps.joined(separator: Phrases.and))", comment: "The apps a settings profile is for") }
+            items.append(MenuItem(verbatim: title, .submenu {
                 var sub: [MenuItem] = []
                 sub.append(MenuItem(on ? "Switch off" : "Switch on", .action { DispatchQueue.main.async {
-                    if on { deactivate(); Speech.speakMessage("normal settings") }
-                    else { if activeName != nil { deactivate() }; activate(p.name, byApp: false); Speech.speakMessage("\(p.name) profile on") }
+                    if on { deactivate(); Speech.speakMessage(String(localized: "normal settings", comment: "Spoken message")) }
+                    else { if activeName != nil { deactivate() }; activate(p.name, byApp: false); Speech.speakMessage(String(localized: "\(p.name) profile on", comment: "A settings profile switched on")) }
                 } }))
                 if !frontBundle.isEmpty, frontBundle != Bundle.main.bundleIdentifier {
                     let uses = p.apps.contains(frontBundle)
@@ -140,7 +142,7 @@ public enum SettingsProfiles {
                         q.apps.removeAll { $0 == frontBundle }
                         if !uses { q.apps.append(frontBundle) }
                         write(q)
-                        Speech.speakMessage(uses ? "\(p.name) no longer used for \(frontName)" : "\(p.name) used for \(frontName)")
+                        Speech.speakMessage(uses ? String(localized: "\(p.name) no longer used for \(frontName)", comment: "A settings profile and an app: the profile, then the app") : String(localized: "\(p.name) used for \(frontName)", comment: "A settings profile and an app: the profile, then the app"))
                     } }))
                 }
                 sub.append(MenuItem("Remove \(p.name)", .action { DispatchQueue.main.async { remove(p.name) } }, hint: "Kept in the profiles-removed folder, not deleted"))
@@ -155,13 +157,13 @@ public enum SettingsProfiles {
     }
 
     static func newProfile(for app: (bundle: String, name: String)?) {
-        LineInput.ask("Profile name", initial: app?.name ?? "") { typed in
+        LineInput.ask(String(localized: "Profile name", comment: "Spoken message"), initial: app?.name ?? "") { typed in
             guard let raw = typed?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return }
-            guard !all().contains(where: { $0.name.lowercased() == raw.lowercased() }) else { Speech.speakMessage("There is a profile called \(raw) already"); return }
+            guard !all().contains(where: { $0.name.lowercased() == raw.lowercased() }) else { Speech.speakMessage(String(localized: "There is a profile called \(raw) already", comment: "Spoken message: %@ is the name typed")); return }
             write(Profile(name: raw, apps: app.map { [$0.bundle] } ?? [], settings: Sections(of: config)))
             if activeName != nil { deactivate() }
             activate(raw, byApp: app != nil)
-            Speech.speakMessage("\(raw) profile made and on. Changes to speech, verbosity, web pages and braille now go into it.")
+            Speech.speakMessage(String(localized: "\(raw) profile made and on. Changes to speech, verbosity, web pages and braille now go into it.", comment: "A settings profile made: its name"))
         }
     }
 
@@ -172,6 +174,6 @@ public enum SettingsProfiles {
         try? fm.createDirectory(at: aside, withIntermediateDirectories: true)
         let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
         try? fm.moveItem(at: file(name), to: aside.appendingPathComponent("\(name) \(stamp).json"))
-        Speech.speakMessage("\(name) removed")
+        Speech.speakMessage(String(localized: "\(name) removed", comment: "A settings profile removed: its name"))
     }
 }

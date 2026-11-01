@@ -58,6 +58,8 @@ python3 make-embedded.py || { echo "STOP: make-embedded.py failed"; exit 1; }
 # The compiler's own exit status decides, not only whether the files exist: a build that failed after a product was
 # written went on to install (the same audit).
 set +e
+# The compiler lists the translatable strings as it goes (Package.swift's translatable), for the catalog.
+export TURNOVER_STRINGS="$BUILD/strings"
 swift build -c release --scratch-path "$BUILD" $SWIFTFLAGS 2>&1 | grep -vE '^\[[0-9]+/[0-9]+\]'
 BUILD_STATUS=${PIPESTATUS[0]}
 set -e
@@ -121,6 +123,10 @@ for H in steam-speech trackpad-gestures voiceover-quiet; do
   HELPERBINS+=("$H:$BINH")
 done
 
+# New strings into Resources/Localizable.xcstrings, untranslated until someone translates them (make-strings.py):
+# TurnOver's own and its helpers' (Steam speech's words are said too), so after the helpers are built.
+python3 make-strings.py sync "$TURNOVER_STRINGS" || { echo "STOP: make-strings.py sync failed"; exit 1; }
+
 # The probe: sign in place.
 sign --force --sign "$IDENTITY" --identifier com.turnover.probe "$BUILD/release/turnover-probe"
 
@@ -179,6 +185,9 @@ cp "$BIN/turnover-key" "$KEYAPP/Contents/MacOS/turnover-key"
 cp Resources/TurnOverKey-Info.plist "$KEYAPP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :TOReaderID string $BUNDLEID" "$KEYAPP/Contents/Info.plist"   # the reader this helper starts
 printf 'APPL????' > "$KEYAPP/Contents/PkgInfo"
+# The translations, as <language>.lproj in each of the three apps: macOS picks the person's language, and English
+# where there is none (make-strings.py).
+python3 make-strings.py compile "$APP/Contents/Resources" "$SETAPP/Contents/Resources" "$KEYAPP/Contents/Resources" || { echo "STOP: make-strings.py compile failed"; exit 1; }
 # TURNOVER_STRIP=1 (for release builds): stripped before it is signed, to keep it small. Swift keeps
 # class names, which its runtime needs. The unstripped programs are
 # kept privately, by their UUID, to read crash reports: atos -o <copy> -l <load address> <addresses>.

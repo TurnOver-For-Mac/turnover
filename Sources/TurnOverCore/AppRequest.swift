@@ -20,9 +20,9 @@ public enum AppRequest {
     /// that kind of app, anyone can make its plugin: make one, or post it as wanted for plugin makers. If not (Java,
     /// Qt, Flutter, an app that tells the Mac almost nothing), what's missing is parts: ask TurnOver for them.
     public static func request() {
-        guard let app = frontApp else { Speech.speakMessage("Switch to the application you'd like help with, then choose this again."); return }
-        let name = app.localizedName ?? app.bundleIdentifier ?? "this app"
-        Speech.speakMessage("Looking at \(name)")
+        guard let app = frontApp else { Speech.speakMessage(String(localized: "Switch to the application you'd like help with, then choose this again.", comment: "Spoken message")); return }
+        let name = app.localizedName ?? app.bundleIdentifier ?? String(localized: "this app", comment: "An application with no name")
+        Speech.speakMessage(String(localized: "Looking at \(name)", comment: "Making a plugin: TurnOver gathers what the app shows"))
         let pid = app.processIdentifier
         let leads = config.applications.leadBundles.contains(app.bundleIdentifier ?? "") ? "TurnOver" : "VoiceOver", edition = Edition.fullName
         DispatchQueue.global(qos: .userInitiated).async {
@@ -41,8 +41,9 @@ public enum AppRequest {
                                   hint: "Opens a public request on GitHub, filled in with how the app is built, never what is in it. You need a GitHub account"))
             TurnOverMenu.shared.openList("\(name) is built with \(kind.name). TurnOver has the parts for it, so anyone can make its plugin", items: items)
         } else {
-            let why = nearlyEmpty ? "\(name) tells the Mac almost nothing about its window" : "TurnOver hasn't got the parts for apps built with \(kind.name) yet"
-            TurnOverMenu.shared.openList(why, items: [
+            let why = nearlyEmpty ? String(localized: "\(name) tells the Mac almost nothing about its window", comment: "Why an app can't be tuned yet: %@ is the app")
+                : String(localized: "TurnOver hasn't got the parts for apps built with \(kind.name) yet", comment: "Why an app can't be tuned yet: %@ is what it is built with")
+            TurnOverMenu.shared.openList(verbatim: why, items: [
                 MenuItem("Ask TurnOver for the parts", .action { send(name: name, bundle: bundle, kind: nearlyEmpty ? "an app that draws its own window" : kind.name, report: report) },
                          hint: "A public request on GitHub, filled in with how the app is built, never what is in it. You need a GitHub account"),
             ])
@@ -123,7 +124,7 @@ public enum AppRequest {
                         URLQueryItem(name: "idea", value: idea)]
         guard let url = c.url else { return }
         NSWorkspace.shared.open(url)
-        Speech.speakMessage("TurnOver's request form is open in your browser, filled in for \(name). Add what you use it for, then submit it. You need a GitHub account.")
+        Speech.speakMessage(String(localized: "TurnOver's request form is open in your browser, filled in for \(name). Add what you use it for, then submit it. You need a GitHub account.", comment: "A request for an app opened in the browser: %@ is the app"))
     }
 }
 

@@ -16,7 +16,7 @@ final class PhotosAppModule: AppModule {
     required init(pid: pid_t, bundleIdentifier: String, appName: String) {
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
         for key in ["leftArrow", "rightArrow", "upArrow", "downArrow"] {
-            script("photos_\(key)", "The next photo that way, read", gestures: ["kb:\(key)"], category: "Photos") { [weak self] g in
+            script("photos_\(key)", String(localized: "The next photo that way, read", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:\(key)"], category: "Photos") { [weak self] g in
                 guard let self, let grid = self.grid() else { g.send(); return }
                 let before = self.chosen(in: grid)
                 g.send()

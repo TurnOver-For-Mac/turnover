@@ -18,7 +18,7 @@ extension ExcelAppModule {
         if let error {
             Log.warning("Excel script error: \(error[NSAppleScript.errorNumber] ?? "?")")
             if (error[NSAppleScript.errorNumber] as? Int) == -1743 {
-                onMain { Speech.speakMessage("TurnOver needs permission to control Excel. In System Settings, Privacy and Security, Automation, turn on Microsoft Excel under TurnOver.") }
+                onMain { Speech.speakMessage(String(localized: "TurnOver needs permission to control Excel. In System Settings, Privacy and Security, Automation, turn on Microsoft Excel under TurnOver.", comment: "Spoken message")) }
             }
             return nil
         }
@@ -27,20 +27,20 @@ extension ExcelAppModule {
 
     func declareNVDAKeys() {
         let windows: () -> Bool = { config.general.windowsKeys }
-        script("excel_note", "Reports the cell's note; twice, shows it to read line by line (NVDA+Alt+C)", gestures: ["kb:turnover+option+c", "kb:turnover+command+c"], category: "Microsoft Excel") { _ in
+        script("excel_note", String(localized: "Reports the cell's note; twice, shows it to read line by line (NVDA+Alt+C)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+option+c", "kb:turnover+command+c"], category: "Microsoft Excel") { _ in
             let twice = ScriptHandler.lastScriptRepeatCount > 0
             Self.queue.async {
                 let note = Self.run("try\nreturn Excel comment text (Excel comment of active cell)\non error\nreturn \"\"\nend try") ?? ""
                 onMain {
-                    guard !note.isEmpty else { Speech.speakMessage("no note"); return }
+                    guard !note.isEmpty else { Speech.speakMessage(String(localized: "no note", comment: "Spoken message")); return }
                     if twice {
-                        TurnOverMenu.shared.openList("Note", items: note.components(separatedBy: .newlines).filter { !$0.isEmpty }.map { MenuItem($0, .action {}) })
+                        TurnOverMenu.shared.openList("Note", items: note.components(separatedBy: .newlines).filter { !$0.isEmpty }.map { MenuItem(verbatim: $0, .action {}) })
                     } else { Speech.speakMessage(note) }
                 }
             }
         }.isAvailable = windows
-        script("excel_elementsList", "Elements list; lists the workbook's sheets and the cells with notes; Enter goes there (NVDA+F7)", gestures: ["kb:turnover+f7"], category: "Microsoft Excel") { _ in
-            Speech.speakMessage("elements")
+        script("excel_elementsList", String(localized: "Elements list; lists the workbook's sheets and the cells with notes; Enter goes there (NVDA+F7)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+f7"], category: "Microsoft Excel") { _ in
+            Speech.speakMessage(String(localized: "elements", comment: "Spoken message"))
             Self.queue.async {
                 let sheets = (Self.run("return name of every worksheet of active workbook as list") ?? "")
                 let sheetList = Self.run("set out to \"\"\nrepeat with s in (every worksheet of active workbook)\nset out to out & name of s & linefeed\nend repeat\nreturn out") ?? sheets
@@ -65,12 +65,12 @@ extension ExcelAppModule {
                             Self.queue.async { _ = Self.run("select range \"\(address)\" of active sheet") }
                         }))
                     }
-                    if items.isEmpty { Speech.speakMessage("no sheets or notes found"); return }
+                    if items.isEmpty { Speech.speakMessage(String(localized: "no sheets or notes found", comment: "Spoken message")); return }
                     TurnOverMenu.shared.openList("Elements", items: items)
                 }
             }
         }.isAvailable = windows
-        script("excel_reviewCells", "Cell review; reads the cells around with the arrows, protected ones too; Escape stops (NVDA+Space in Excel)", gestures: ["kb:turnover+space"], category: "Microsoft Excel") { _ in
+        script("excel_reviewCells", String(localized: "Cell review; reads the cells around with the arrows, protected ones too; Escape stops (NVDA+Space in Excel)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+space"], category: "Microsoft Excel") { _ in
             Self.queue.async {
                 let at = Self.run("return (first row index of active cell as text) & \",\" & (first column index of active cell as text)") ?? "1,1"
                 let n = at.split(separator: ",").compactMap { Int($0) }
@@ -81,17 +81,17 @@ extension ExcelAppModule {
 
     /// The cell review: arrows move a cursor of TurnOver's over the sheet, reading each cell; nothing is selected.
     static func reviewCells(row: Int, column: Int) {
-        Speech.speakMessage("cell review. Arrows read the cells; Escape stops")
+        Speech.speakMessage(String(localized: "cell review. Arrows read the cells; Escape stops", comment: "Spoken message"))
         func read(_ r: Int, _ c: Int) {
             queue.async {
                 let v = run("return (string value of cell \(c) of row \(r) of active sheet)") ?? ""
-                onMain { Speech.speakMessage("\(v.isEmpty ? "blank" : v), \(ExcelAppModule.address(r, c))") }
+                onMain { Speech.speakMessage("\(v.isEmpty ? Phrases.blank : v), \(ExcelAppModule.address(r, c))") }
             }
         }
         read(row, column)
         func next(_ r: Int, _ c: Int) {
             InputManager.captureNext = { g in
-                guard let g, !["escape", "space"].contains(g.keyName) || (g.keyName == "space" && !g.modifiers.contains(.turnover)) else { Speech.speakMessage("cell review off"); return }
+                guard let g, !["escape", "space"].contains(g.keyName) || (g.keyName == "space" && !g.modifiers.contains(.turnover)) else { Speech.speakMessage(String(localized: "cell review off", comment: "Spoken message")); return }
                 var r2 = r, c2 = c
                 switch g.keyName {
                 case "upArrow": r2 = max(1, r - 1)

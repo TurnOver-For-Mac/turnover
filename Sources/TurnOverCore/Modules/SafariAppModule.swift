@@ -11,10 +11,10 @@ package final class SafariAppModule: AppModule {
     package required init(pid: pid_t, bundleIdentifier: String, appName: String) {
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
         let cat = "Safari"
-        script("safari_findInBar", "In the Find bar: finds the next or previous match and reads it", gestures: ["kb:enter", "kb:shift+enter"], category: cat) { [weak self] g in
+        script("safari_findInBar", String(localized: "In the Find bar: finds the next or previous match and reads it", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:enter", "kb:shift+enter"], category: cat) { [weak self] g in
             g.send(); self?.readMatch()
         }.isAvailable = { [weak self] in self?.focusInFindBanner ?? false }
-        script("safari_backForward", "Goes back or forward a page", gestures: ["kb:command+[", "kb:command+]"], category: cat) { [weak self] g in
+        script("safari_backForward", String(localized: "Goes back or forward a page", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+[", "kb:command+]"], category: cat) { [weak self] g in
             self?.cancelReply()
             self?.navigating = (Date(), API.focusObject?.element.enclosingWebArea().flatMap { Self.address(of: $0) } ?? "")
             g.send()
@@ -30,7 +30,7 @@ package final class SafariAppModule: AppModule {
         // Switching tabs said nothing (a tester, 9 Oct 2026): the new tab's title, once the window shows it (NVDA reads the
         // document's title as its tab takes the focus). The tab's page then reads as usual.
         let tabKeys = ["kb:command+shift+]", "kb:command+shift+[", "kb:control+tab", "kb:control+shift+tab"] + (1...9).map { "kb:command+\($0)" }
-        script("safari_switchTab", "Switches tab and says the tab's title", gestures: tabKeys, category: cat) { [weak self] g in
+        script("safari_switchTab", String(localized: "Switches tab and says the tab's title", comment: "A command, as the key list and keyboard help say it"), gestures: tabKeys, category: cat) { [weak self] g in
             guard let self, let request = self.beginReply() else { g.send(); return }
             let app = AXUIElementCreateApplication(self.pid)
             let window = app.element(kAXFocusedWindowAttribute)
@@ -63,11 +63,11 @@ package final class SafariAppModule: AppModule {
             guard let self, API.focusPid == self.pid, !AXHandler.shared.isMenuOpen, !TurnOverMenu.shared.isOpen else { return false }
             return true
         }
-        script("safari_reload", "Reloads the page and says so", gestures: ["kb:command+r"], category: cat) { [weak self] g in
+        script("safari_reload", String(localized: "Reloads the page and says so", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+r"], category: cat) { [weak self] g in
             self?.cancelReply()
-            g.send(); Speech.speakMessage("reload page")
+            g.send(); Speech.speakMessage(String(localized: "reload page", comment: "Spoken message"))
         }
-        script("safari_findAgain", "Finds the next or previous match and reads it", gestures: ["kb:command+g", "kb:command+shift+g"], category: cat) { [weak self] g in
+        script("safari_findAgain", String(localized: "Finds the next or previous match and reads it", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+g", "kb:command+shift+g"], category: cat) { [weak self] g in
             g.send(); self?.readMatch()
         }
     }
@@ -156,7 +156,7 @@ package final class SafariAppModule: AppModule {
             guard let sel = bridge.selection(), sel.1 > sel.0 else {
                 guard self.canReply(request) else { self.finishReply(request); return }
                 self.finishReply(request)
-                Speech.speakMessage("not found"); return
+                Speech.speakMessage(String(localized: "not found", comment: "Spoken message")); return
             }
             let line = bridge.unitRange("AXLineTextMarkerRangeForTextMarker", at: sel.0) ?? sel
             let text = bridge.range(line.0, line.1).map { bridge.string($0) } ?? ""

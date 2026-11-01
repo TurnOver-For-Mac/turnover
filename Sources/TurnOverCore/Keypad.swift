@@ -103,11 +103,11 @@ public enum Keypad {
         // The first keypad key in the Windows style says once what the keypad does now (12 Oct 2026).
         if windows, !UserDefaults.standard.bool(forKey: "keypadHintGiven") {
             UserDefaults.standard.set(true, forKey: "keypadHintGiven")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { Speech.speakMessage("Keypad commands, as NVDA with Num Lock off. Clear switches to numbers.") }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { Speech.speakMessage(String(localized: "Keypad commands, as NVDA with Num Lock off. Clear switches to numbers.", comment: "Spoken message")) }
         }
         switch parts[0] {
         case "vo":
-            guard let vg = KeyboardGesture(identifier: "kb:" + parts[1]), let s = ScriptHandler.findScript(for: vg) else { Speech.speakMessage("not available here"); return }
+            guard let vg = KeyboardGesture(identifier: "kb:" + parts[1]), let s = ScriptHandler.findScript(for: vg) else { Speech.speakMessage(String(localized: "not available here", comment: "Spoken message")); return }
             if InputManager.isInputHelpActive { InputManager.handleInputHelp(g, script: s) } else { ScriptHandler.queueScript(s, gesture: vg) }
         case "run":
             guard let s = KeypadCommands.shared.script(named: parts[1]) ?? GlobalCommands.shared.script(named: parts[1]) ?? ScriptHandler.findScript(named: parts[1]) else {
@@ -155,13 +155,13 @@ public enum Keypad {
     /// VO-Clear (Mac style).
     public static func toggleCommander() {
         config.keyboard.numpadCommander.toggle(); config.save(); KeySettings.refresh()
-        Speech.speakMessage(config.keyboard.numpadCommander ? "NumPad Commander on" : "NumPad Commander off")
+        Speech.speakMessage(config.keyboard.numpadCommander ? String(localized: "NumPad Commander on", comment: "Spoken message") : String(localized: "NumPad Commander off", comment: "Spoken message"))
     }
 
     /// Clear, in Num Lock's place (Windows style).
     public static func toggleWindows() {
         config.keyboard.keypadCommands.toggle(); config.save(); KeySettings.refresh()
-        Speech.speakMessage(config.keyboard.keypadCommands ? "keypad commands" : "keypad numbers")
+        Speech.speakMessage(config.keyboard.keypadCommands ? String(localized: "keypad commands", comment: "Spoken message") : String(localized: "keypad numbers", comment: "Spoken message"))
     }
 }
 
@@ -172,31 +172,31 @@ public final class KeypadCommands: ScriptableObject {
     private override init() {
         super.init()
         let cat = "Keypad"
-        script("keypad_guide", "Opens the TurnOver guide (keypad Minus, as VoiceOver's)", category: cat) { _ in TurnOverGuide.open() }
-        script("keypad_windows", "The window chooser (keypad Slash, as VoiceOver's)", category: cat) { _ in VoiceOverKeysPlugin.windowChooser() }
+        script("keypad_guide", String(localized: "Opens the TurnOver guide (keypad Minus, as VoiceOver's)", comment: "A command, as the key list and keyboard help say it"), category: cat) { _ in TurnOverGuide.open() }
+        script("keypad_windows", String(localized: "The window chooser (keypad Slash, as VoiceOver's)", comment: "A command, as the key list and keyboard help say it"), category: cat) { _ in VoiceOverKeysPlugin.windowChooser() }
         for (name, forward) in [("keypad_previousWord", false), ("keypad_nextWord", true)] {
-            script(name, forward ? "Next word (Command keypad 8)" : "Previous word (Command keypad 7)", category: cat) { _ in
+            script(name, forward ? String(localized: "Next word (Command keypad 8)", comment: "A command, as the key list and keyboard help say it") : String(localized: "Previous word (Command keypad 7)", comment: "A command, as the key list and keyboard help say it"), category: cat) { _ in
                 let key = KeyboardGesture(identifier: forward ? "kb:option+rightArrow" : "kb:option+leftArrow")!
                 if let d = API.focusTreeInterceptor, !d.passThrough, let s = d.script(named: forward ? "moveByWord_forward" : "moveByWord_back") { s.handler(key); return }
                 if let f = API.focusObject, f.hasNavigableText, let s = f.script(named: "caret_moveByWord") { s.handler(key); return }
-                Speech.speakMessage("not in text")
+                Speech.speakMessage(String(localized: "not in text", comment: "Spoken message"))
             }
         }
         for n in 1...9 {
-            script("keypad_sector\(n)", "The item in part \(n) of the screen, as the keypad lies: 7 top left, 3 bottom right (Option keypad)", category: cat) { _ in
+            script("keypad_sector\(n)", String(localized: "The item in part \(String(n)) of the screen, as the keypad lies: 7 top left, 3 bottom right (Option keypad)", comment: "A command: %@ is a keypad digit"), category: cat) { _ in
                 guard let screen = NSScreen.screens.first?.frame else { return }
                 let col = (n - 1) % 3, row = (n - 1) / 3
                 let p = CGPoint(x: screen.width * (CGFloat(col) + 0.5) / 3, y: screen.height * (CGFloat(row) + 0.5) / 3)
-                guard let e = VoiceOverKeysPlugin.element(at: p) else { Speech.speakMessage("nothing there"); return }
+                guard let e = VoiceOverKeysPlugin.element(at: p) else { Speech.speakMessage(String(localized: "nothing there", comment: "Spoken message")); return }
                 ObjectNavigator.shared.moveTo(e)
             }
         }
-        for (name, what) in [("keypad_selectText", "Selecting the text under the VoiceOver cursor"), ("keypad_tableHeader", "Moving to the table's header"),
-                             ("keypad_reviewModes", "Review modes")] {
-            script(name, "\(what): not in TurnOver yet", category: cat) { _ in Speech.speakMessage("\(what) isn't available in TurnOver yet") }
+        for (name, what) in [("keypad_selectText", String(localized: "Selecting the text under the VoiceOver cursor", comment: "A VoiceOver feature")), ("keypad_tableHeader", String(localized: "Moving to the table's header", comment: "A VoiceOver feature")),
+                             ("keypad_reviewModes", String(localized: "Review modes", comment: "A VoiceOver feature"))] {
+            script(name, String(localized: "\(what): not in TurnOver yet", comment: "A VoiceOver feature TurnOver lacks: %@ is the feature"), category: cat) { _ in Speech.speakMessage(String(localized: "\(what) isn't available in TurnOver yet", comment: "A VoiceOver feature TurnOver lacks: %@ is the feature")) }
         }
         // NVDA's keypad 1 and 3: review by character anywhere (Caps Lock Left and Right do it only in text).
-        script("keypad_reviewPreviousCharacter", "Moves the review cursor to the previous character (keypad 1)", category: cat) { _ in TextReview.move(.character, -1) }
-        script("keypad_reviewNextCharacter", "Moves the review cursor to the next character (keypad 3)", category: cat) { _ in TextReview.move(.character, 1) }
+        script("keypad_reviewPreviousCharacter", String(localized: "Moves the review cursor to the previous character (keypad 1)", comment: "A command, as the key list and keyboard help say it"), category: cat) { _ in TextReview.move(.character, -1) }
+        script("keypad_reviewNextCharacter", String(localized: "Moves the review cursor to the next character (keypad 3)", comment: "A command, as the key list and keyboard help say it"), category: cat) { _ in TextReview.move(.character, 1) }
     }
 }

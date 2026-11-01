@@ -55,7 +55,7 @@ final class ExcelAppModule: AppModule {
             if !self.lent, let lend = Core.lendToVoiceOver {
                 self.lent = true
                 Log.io("excel: no grid; lending Excel to VoiceOver for a moment, once")
-                Speech.speakMessage("Getting Excel ready")
+                Speech.speakMessage(String(localized: "Getting Excel ready", comment: "Spoken message"))
                 lend(3)
                 return
             }
@@ -102,7 +102,7 @@ final class ExcelAppModule: AppModule {
         let endName = endCell.map { ObjectFactory.make(Self.outerCell($0) ?? $0).name } ?? Self.address(end.row, end.col)
         Log.io("excel: \(count) cells highlighted")
         Speech.cancel()
-        Speech.speakMessage("\(endName), \(range) selected")
+        Speech.speakMessage(String(localized: "\(endName), \(Self.address(top, left)) to \(Self.address(bottom, right)) selected", comment: "Excel: the cell reached, then the range selected: A1 to C4"))
         return true
     }
 

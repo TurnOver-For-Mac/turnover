@@ -84,15 +84,46 @@ func bigPictureEvent(_ payload: String) -> BigPictureEvent {
         return .skipped(Diagnostic.skippedFocus(object))
     }
     var text = (object["name"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    // The page's script's own words ("top", "on"), not Steam's.
+    if object["own"] as? Bool == true { return text.isEmpty ? .nothing : .speak(word(text)) }
     let role = object["role"] as? String ?? ""
     let state = object["state"] as? String ?? ""
     guard !text.isEmpty || !role.isEmpty else { return .nothing }
-    if role == "tab" { text += ", tab" }
-    if ["slider", "checkbox", "switch", "radio"].contains(role) { text += ", \(role)" }
-    if !state.isEmpty { text += ", \(state)" }
+    if role == "tab" { text += ", " + word("tab") }
+    if ["slider", "checkbox", "switch", "radio"].contains(role) { text += ", " + word(role) }
+    if !state.isEmpty { text += ", " + state.components(separatedBy: ", ").map(word).joined(separator: ", ") }
     if text.isEmpty { text = role }
     if let blurb = object["blurb"] as? String, !blurb.isEmpty { text += ". \(blurb)" }
     return .speak(text)
+}
+
+// MARK: - TurnOver's words
+
+/// TurnOver.app, which this program lives in (Contents/Helpers): its translations are TurnOver's own. Outside the
+/// app (the self-test) there is none, and the English stands.
+let turnOverApp: Bundle? = {
+    let app = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    return app.pathExtension == "app" ? Bundle(url: app) : nil
+}()
+
+/// A word this program adds to Steam's, in the reader's language (an unknown word, a slider's number, as it is).
+func word(_ english: String) -> String {
+    switch english {
+    case "tab": return String(localized: "tab", bundle: turnOverApp, comment: "A role, spoken after an item's name")
+    case "slider": return String(localized: "slider", bundle: turnOverApp, comment: "A role, spoken after an item's name")
+    case "switch": return String(localized: "switch", bundle: turnOverApp, comment: "A role, spoken after an item's name")
+    case "checkbox": return String(localized: "checkbox", bundle: turnOverApp, comment: "A role in Steam's Big Picture: a check box")
+    case "radio": return String(localized: "radio", bundle: turnOverApp, comment: "A role in Steam's Big Picture: a radio button")
+    case "selected": return String(localized: "selected", bundle: turnOverApp, comment: "A state, spoken after an item's role")
+    case "on": return String(localized: "on", bundle: turnOverApp, comment: "A state, spoken after an item's role")
+    case "off": return String(localized: "off", bundle: turnOverApp, comment: "A state, spoken after an item's role")
+    case "mixed": return String(localized: "mixed", bundle: turnOverApp, comment: "A state in Steam's Big Picture: half checked")
+    case "top": return String(localized: "top", bundle: turnOverApp, comment: "Spoken message")
+    case "bottom": return String(localized: "bottom", bundle: turnOverApp, comment: "Spoken message")
+    case "nothing to read here": return String(localized: "nothing to read here", bundle: turnOverApp, comment: "Steam's Big Picture page has nothing to read")
+    default: return english
+    }
 }
 
 // MARK: - Chromium pages over a debugging port
@@ -308,12 +339,13 @@ final class BigPictureReader {
     private(set) var steamRunningWithoutPort = false
 
     var status: String {
-        guard let r = reader else { return "Not reading Big Picture." }
-        if steamRunningWithoutPort { return "Steam is running without its port; restart Steam from the Games menu." }
-        if r.portIsForeign { return "Port 8080 is in use by something that is not Steam." }
-        if !r.portIsUp { return "Waiting for Steam." }
-        if r.sessions.isEmpty { return "Steam is up; waiting for Big Picture." }
-        return lastSpoken.isEmpty ? "Reading Big Picture." : "Reading Big Picture. Last: \(lastSpoken.prefix(60))"
+        guard let r = reader else { return String(localized: "Not reading Big Picture.", bundle: turnOverApp, comment: "The Steam program's status") }
+        if steamRunningWithoutPort { return String(localized: "Steam is running without its port; restart Steam from the Games menu.", bundle: turnOverApp, comment: "The Steam program's status") }
+        if r.portIsForeign { return String(localized: "Port 8080 is in use by something that is not Steam.", bundle: turnOverApp, comment: "The Steam program's status") }
+        if !r.portIsUp { return String(localized: "Waiting for Steam.", bundle: turnOverApp, comment: "The Steam program's status") }
+        if r.sessions.isEmpty { return String(localized: "Steam is up; waiting for Big Picture.", bundle: turnOverApp, comment: "The Steam program's status") }
+        return lastSpoken.isEmpty ? String(localized: "Reading Big Picture.", bundle: turnOverApp, comment: "The Steam program's status")
+            : String(localized: "Reading Big Picture. Last: \(String(lastSpoken.prefix(60)))", bundle: turnOverApp, comment: "The Steam program's status: %@ is the last words read")
     }
 
     func start() {
@@ -397,7 +429,7 @@ final class BigPictureReader {
         guard !warnedPortDown else { return }
         warnedPortDown = true
         Out.log("Steam is running without its debugging port; it needs restarting before Big Picture can be read")
-        Out.say("Steam needs restarting before Big Picture can be read. Restart Steam is in the Games menu.")
+        Out.say(String(localized: "Steam needs restarting before Big Picture can be read. Restart Steam is in the Games menu.", bundle: turnOverApp, comment: "Steam speech"))
     }
 
     private func reconciled() {
@@ -406,7 +438,7 @@ final class BigPictureReader {
         if has && !hadBigPicture {
             hadBigPicture = true
             Out.log("Big Picture is open; reading")
-            Out.say("Reading Big Picture.")
+            Out.say(String(localized: "Reading Big Picture.", bundle: turnOverApp, comment: "Steam speech"))
         } else if !has {
             hadBigPicture = false
         }
@@ -516,7 +548,7 @@ enum SteamInstall {
 enum SteamRestart {
     /// Quits Steam and starts it again with the port enabled. Says what it is doing.
     static func run() {
-        guard let install = SteamInstall.toRestart else { Out.say("Steam does not seem to be installed."); return }
+        guard let install = SteamInstall.toRestart else { Out.say(String(localized: "Steam does not seem to be installed.", bundle: turnOverApp, comment: "Steam speech")); return }
         SteamInstall.ensureSwitchFiles()
         switch install {
         case .mac: restartMac()
@@ -526,20 +558,20 @@ enum SteamRestart {
 
     private static func restartMac() {
         let location = NSWorkspace.shared.urlForApplication(withBundleIdentifier: steamBundle) ?? URL(fileURLWithPath: "/Applications/Steam.app")
-        guard FileManager.default.fileExists(atPath: location.path) else { Out.say("Steam does not seem to be installed."); return }
+        guard FileManager.default.fileExists(atPath: location.path) else { Out.say(String(localized: "Steam does not seem to be installed.", bundle: turnOverApp, comment: "Steam speech")); return }
         let running = NSWorkspace.shared.runningApplications.first { app in
             let path = (app.executableURL?.path ?? "").lowercased()
             return path.hasSuffix("/steam_osx") || app.bundleIdentifier == steamBundle
         }
         running?.terminate()
         Out.log("Steam restart: asked \(running == nil ? "nothing" : "Steam") to quit; relaunching")
-        Out.say(running == nil ? "Starting Steam." : "Restarting Steam. It takes a few seconds.")
+        Out.say(running == nil ? String(localized: "Starting Steam.", bundle: turnOverApp, comment: "Steam speech") : String(localized: "Restarting Steam. It takes a few seconds.", bundle: turnOverApp, comment: "Steam speech"))
         // Long enough for Steam to finish shutting down; a second copy on top of a dying one is how you get two.
         DispatchQueue.main.asyncAfter(deadline: .now() + (running == nil ? 0.2 : 6.0)) {
             let c = NSWorkspace.OpenConfiguration(); c.activates = true
             NSWorkspace.shared.openApplication(at: location, configuration: c) { _, error in
                 DispatchQueue.main.async {
-                    if let error { Out.log("Steam restart failed: \(Diagnostic.error(error))"); Out.say("Could not start Steam: \(error.localizedDescription)") }
+                    if let error { Out.log("Steam restart failed: \(Diagnostic.error(error))"); Out.say(String(localized: "Could not start Steam: \(error.localizedDescription)", bundle: turnOverApp, comment: "The Steam program's message")) }
                     else { Out.log("Steam is starting") }
                 }
             }
@@ -550,7 +582,7 @@ enum SteamRestart {
     /// through CrossOver's app so the Wine server it gets can reach the network and the screen.
     private static func restartBottle(named name: String, steamExe: URL) {
         guard let crossOver = NSWorkspace.shared.urlForApplication(withBundleIdentifier: SteamInstall.crossOverBundle) else {
-            Out.say("CrossOver is not installed, so Steam in the \(name) bottle cannot be started."); return
+            Out.say(String(localized: "CrossOver is not installed, so Steam in the \(name) bottle cannot be started.", bundle: turnOverApp, comment: "Steam speech: %@ is a CrossOver bottle")); return
         }
         let running = NSWorkspace.shared.runningApplications.filter { ($0.localizedName ?? "").lowercased() == "steam.exe" }
         for app in running { app.forceTerminate() }
@@ -560,12 +592,12 @@ enum SteamRestart {
         sweep.arguments = ["-9", "-f", "steamwebhelper.exe"]
         try? sweep.run()
         Out.log("Steam restart (\(Diagnostic.text(name)) bottle): force-quit \(running.count) process(es); relaunching through CrossOver")
-        Out.say(running.isEmpty ? "Starting Steam in the \(name) bottle." : "Restarting Steam in the \(name) bottle. It takes a few seconds.")
+        Out.say(running.isEmpty ? String(localized: "Starting Steam in the \(name) bottle.", bundle: turnOverApp, comment: "The Steam program's message") : String(localized: "Restarting Steam in the \(name) bottle. It takes a few seconds.", bundle: turnOverApp, comment: "The Steam program's message"))
         DispatchQueue.main.asyncAfter(deadline: .now() + (running.isEmpty ? 0.2 : 4.0)) {
             let c = NSWorkspace.OpenConfiguration(); c.activates = true
             NSWorkspace.shared.open([steamExe], withApplicationAt: crossOver, configuration: c) { _, error in
                 DispatchQueue.main.async {
-                    if let error { Out.log("Steam restart (\(Diagnostic.text(name)) bottle) failed: \(Diagnostic.error(error))"); Out.say("Could not start Steam in the \(name) bottle: \(error.localizedDescription)") }
+                    if let error { Out.log("Steam restart (\(Diagnostic.text(name)) bottle) failed: \(Diagnostic.error(error))"); Out.say(String(localized: "Could not start Steam in the \(name) bottle: \(error.localizedDescription)", bundle: turnOverApp, comment: "The Steam program's message")) }
                     else { Out.log("Steam in the \(Diagnostic.text(name)) bottle is starting") }
                 }
             }
@@ -633,7 +665,7 @@ FileHandle.standardInput.readabilityHandler = { h in
             let line = String(decoding: pendingInput[pendingInput.startIndex..<nl], as: UTF8.self).trimmingCharacters(in: .whitespaces)
             pendingInput.removeSubrange(pendingInput.startIndex...nl)
             switch line {
-            case "status": Out.line("T", [bigPicture?.status ?? "Not reading Big Picture.", web.portIsUp ? "A web game is connected on port \(webPort)." : ""].filter { !$0.isEmpty }.joined(separator: " "))
+            case "status": Out.line("T", [bigPicture?.status ?? String(localized: "Not reading Big Picture.", bundle: turnOverApp, comment: "The Steam program's status"), web.portIsUp ? String(localized: "A web game is connected on port \(String(webPort)).", bundle: turnOverApp, comment: "The Steam program's status: %@ is the port") : ""].filter { !$0.isEmpty }.joined(separator: " "))
             case "restart-steam": SteamRestart.run()
             case let l where l.hasPrefix("key "):
                 let parts = l.split(separator: " ")

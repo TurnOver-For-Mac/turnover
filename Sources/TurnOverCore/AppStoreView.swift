@@ -5,6 +5,8 @@ import AppKit
 import ApplicationServices
 
 public final class AppStoreView {
+    /// ", selected" in the reader's language: added to the sidebar's selected entry, and found and taken off by it.
+    nonisolated static var selectedSuffix: String { ", " + State.selected.displayString }
     nonisolated public enum Kind: Sendable { case heading, app, card, text, button, tab, search, account }
     nonisolated public struct Entry: Sendable {
         public var label: String
@@ -60,15 +62,15 @@ public final class AppStoreView {
     public func cancelDownload() {
         purchaseConfirmation.reset()
         guard ensureCurrent(retry: { [weak self] in self?.cancelDownload() }) else { return }
-        guard area == .page, page.indices.contains(pageIndex) else { Speech.speakMessage("nothing downloading here"); return }
+        guard area == .page, page.indices.contains(pageIndex) else { Speech.speakMessage(String(localized: "nothing downloading here", comment: "Spoken message")); return }
         confirmed(pageIndex) { e in
             guard let e, let o = Self.first(in: e.element, depth: 5, where: { ($0.string(kAXIdentifierAttribute) ?? "").contains("offerButton") }) else { return }
             let title = o.string(kAXTitleAttribute) ?? o.string(kAXDescriptionAttribute) ?? ""
             guard self.acceptsCurrentPage() else { return }
-            guard Self.isDownloading(title) else { Speech.speakMessage("nothing downloading here"); return }
+            guard Self.isDownloading(title) else { Speech.speakMessage(String(localized: "nothing downloading here", comment: "Spoken message")); return }
             _ = AXUIElementPerformAction(o, kAXPressAction as CFString)
             Log.io("app store: download cancelled with Delete")
-            Speech.speakMessage("download cancelled")
+            Speech.speakMessage(String(localized: "download cancelled", comment: "Spoken message"))
         }
     }
     /// Counts the user's moves: a page change being waited for gives way to them (it reset the place to the top
@@ -146,7 +148,7 @@ public final class AppStoreView {
         let c = Catalog(kind: .apps, term: term, open: { [weak self] app in self?.openCatalogApp(app) },
                                 fallBack: { [weak self] why in
                                     guard let self else { return }
-                                    if why != "nothing found" { Speech.speakMessage("The catalog did not answer: \(why). Reading the page.") }
+                                    if why != "nothing found" { Speech.speakMessage(String(localized: "The catalog did not answer: \(why). Reading the page.", comment: "Spoken message")) }
                                     catalog = nil; catalogDrives = false; resultsKey = ""; buildPage()
                                 })
         catalog = c; catalogDrives = true
@@ -160,7 +162,7 @@ public final class AppStoreView {
         Log.io("app store catalog: opening \"\(Log.words(app.name.prefix(40).description))\"")
         // Said at once: the Store takes two or three seconds to bring the page, and its first item is said when
         // the page has been read, so the person hears the start and the end of the wait.
-        Speech.speakMessage("Opening \(app.name)")
+        Speech.speakMessage(String(localized: "Opening \(app.name)", comment: "Spoken message"))
         openingTitle = app.name
         waitForNewPage(from: before)
     }
@@ -269,7 +271,7 @@ public final class AppStoreView {
         let matches = AppStoreEntryIdentity.indices(for: captured, in: page)
         guard !wanted.isEmpty, matches.count == 1, let i = matches.first else {
             purchaseConfirmation.reset()
-            Speech.speakMessage("could not identify this item unambiguously"); then(nil); return
+            Speech.speakMessage(String(localized: "could not identify this item unambiguously", comment: "Spoken message")); then(nil); return
         }
         modelOwner.read(.resolve(captured, index: i)) { [weak self] result in
             guard let self, canUseResult else { return }
@@ -277,14 +279,14 @@ public final class AppStoreView {
                 purchaseConfirmation.reset()
                 if result?.needsRefresh == true {
                     invalidatePage()
-                    Speech.speakMessage("This item changed. Reading the page again.")
+                    Speech.speakMessage(String(localized: "This item changed. Reading the page again.", comment: "Spoken message"))
                     buildPage { [weak self] in
                         guard let self, canUseResult, !page.isEmpty else { return }
                         speak(pageIndex, crossing: true)
                     }
                     then(nil); return
                 }
-                Speech.speakMessage("could not reach \(wanted); try again"); then(nil); return
+                Speech.speakMessage(String(localized: "could not reach \(wanted); try again", comment: "Spoken message")); then(nil); return
             }
             then(resolved)
         }
@@ -392,7 +394,7 @@ public final class AppStoreView {
             if !offerTitle.isEmpty, title.hasSuffix(offerTitle) { title = String(title.dropLast(offerTitle.count)) }
             title = title.replacingOccurrences(of: ", ,", with: ",").trimmingCharacters(in: CharacterSet(charactersIn: ", "))
             let ratings = texts().last { $0.range(of: #"^[\d.,]+[kKmM]?$"#, options: .regularExpression) != nil }
-            label = [title, ratings.map { "\($0) ratings" }, offerTitle.isEmpty ? nil : offerTitle].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+            label = [title, ratings.map { String(localized: "\($0) ratings", comment: "How many ratings an app has: %@ is the count as the App Store shows it") }, offerTitle.isEmpty ? nil : offerTitle].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
         } else if id.contains("UpdatesLockup") {
             // Updates: the app and date, the button, then what's new.
             // The app and date are an inner group's description, or (the other layout) its first two texts.
@@ -401,7 +403,7 @@ public final class AppStoreView {
             let head = inner?.string(kAXDescriptionAttribute) ?? all.prefix(2).joined(separator: ", ")
             let notes = all.dropFirst(2).filter { $0 != all.dropFirst().first }.max { $0.count < $1.count } ?? ""
             let ipad = first(in: e, depth: 3) { ($0.string(kAXTitleAttribute) ?? "").hasPrefix("Designed for iPad") } != nil
-            label = [head, ipad ? "designed for iPad" : "", offerTitle].filter { !$0.isEmpty }.joined(separator: ", ") + (notes.count > 8 ? ". \(notes)" : "")
+            label = [head, ipad ? String(localized: "designed for iPad", comment: "An App Store app made for iPad") : "", offerTitle].filter { !$0.isEmpty }.joined(separator: ", ") + (notes.count > 8 ? ". \(notes)" : "")
         } else {
             // Tiles and cards: the description of the item or of the button inside it.
             let own = e.string(kAXTitleAttribute) ?? e.string(kAXDescriptionAttribute)
@@ -433,15 +435,15 @@ public final class AppStoreView {
         if id.hasSuffix("badge.rating") {
             let score = parts.first { Double($0) != nil } ?? ""
             let count = parts.first { $0.uppercased().contains("RATING") } ?? ""
-            return "Rating \(score) out of 5, \(count.lowercased())"
+            return String(localized: "Rating \(score) out of 5, \(Symbols.lowered(count))", comment: "An app's rating: the score, then how many ratings")
         }
         if id.hasSuffix("badge.chartPosition") {
             let n = parts.first { Int($0) != nil } ?? ""
             let cat = rest.last { Int($0) == nil && $0 != "No." } ?? ""
-            return "Chart: number \(n) in \(cat)"
+            return String(localized: "Chart: number \(n) in \(cat)", comment: "An app's chart position: the number, then the category")
         }
         if id.hasSuffix("badge.artwork") {
-            return "Developer: \(rest.joined(separator: " "))"
+            return String(localized: "Developer: \(rest.joined(separator: " "))", comment: "An app's developer")
         }
         guard let caption else { return t.string(kAXDescriptionAttribute) ?? "" }
         return "\(caption.capitalized): \(rest.joined(separator: " "))"
@@ -477,7 +479,7 @@ public final class AppStoreView {
             buildPage { [weak self] in
                 guard let self else { return }
                 if !page.isEmpty || flatDrives { retry() }
-                else { Speech.speakMessage("still reading the page; try again in a moment") }
+                else { Speech.speakMessage(String(localized: "still reading the page; try again in a moment", comment: "Spoken message")) }
             }
             return false
         }
@@ -506,14 +508,14 @@ public final class AppStoreView {
             s = now.isEmpty ? s.replacingOccurrences(of: ", " + e.offerTitle, with: "") : s.replacingOccurrences(of: e.offerTitle, with: now)
         }
         switch e.kind {
-        case .heading: s += ", heading"
-        case .button: s += ", button"
-        case .search: s += ", search field"
+        case .heading: s += ", " + Role.heading.displayString
+        case .button: s += ", " + Role.button.displayString
+        case .search: s += ", " + String(localized: "search field", comment: "A role: a search field")
         default: break
         }
         if area == .page, crossing, shelves.indices.contains(e.shelf), !shelves[e.shelf].isEmpty {
             let n = page.filter { $0.shelf == e.shelf }.count
-            s = "\(shelves[e.shelf]), \(n) item\(n == 1 ? "" : "s"). " + s
+            s = "\(shelves[e.shelf]), \(Phrases.items(n)). " + s
         }
         let hint = hint(for: e)
         guard acceptsCurrentPage() else { return }
@@ -525,20 +527,20 @@ public final class AppStoreView {
     private func hint(for e: Entry) -> String {
         if area == .sidebar {
             switch e.kind {
-            case .search: return "Return to type a search. Tab for the page."
-            case .tab: return "Return opens it. Tab for the page."
-            case .account: return "Return opens your account."
+            case .search: return String(localized: "Return to type a search. Tab for the page.", comment: "A hint in the App Store")
+            case .tab: return String(localized: "Return opens it. Tab for the page.", comment: "A hint in the App Store")
+            case .account: return String(localized: "Return opens your account.", comment: "A hint in the App Store")
             default: return ""
             }
         }
         switch e.kind {
         case .app:
-            if Self.isProductTop(e.element) { return "Return or Space presses its button." }
-            if e.offer == nil { return "Return opens it." }
-            return "Return opens its page. Space presses its button. Left and Right for other shelves."
-        case .card: return "Return opens it. Left and Right for other shelves."
-        case .button: return "Return presses it."
-        case .heading, .text: return "Up and Down to read on. Left and Right for other shelves."
+            if Self.isProductTop(e.element) { return String(localized: "Return or Space presses its button.", comment: "A hint in the App Store") }
+            if e.offer == nil { return String(localized: "Return opens it.", comment: "A hint in the App Store") }
+            return String(localized: "Return opens its page. Space presses its button. Left and Right for other shelves.", comment: "A hint in the App Store")
+        case .card: return String(localized: "Return opens it. Left and Right for other shelves.", comment: "A hint in the App Store")
+        case .button: return String(localized: "Return presses it.", comment: "A hint in the App Store")
+        case .heading, .text: return String(localized: "Up and Down to read on. Left and Right for other shelves.", comment: "A hint in the App Store")
         default: return ""
         }
     }
@@ -564,7 +566,8 @@ public final class AppStoreView {
             }
             pageIndex = 0
             let title = pageTitle, n = shelves.filter { !$0.isEmpty }.count
-            Speech.speakMessage("\(title.isEmpty ? "App Store" : title)\(n > 0 ? ", \(n) shelves" : "")")
+            let name = title.isEmpty ? "App Store" : title
+            Speech.speakMessage(n > 0 ? String(localized: "\(name), \(String(n)) shelves", comment: "An App Store page: its title, then how many shelves") : name)
             if !page.isEmpty { speak(0, crossing: true) }
         }
     }
@@ -665,7 +668,7 @@ public final class AppStoreView {
         // A card over the window has no sidebar: say how out, and stay.
         if hasCard {
             if area == .sidebar { area = .page; speak(pageIndex, crossing: true) }
-            else { Speech.speakMessage("no sidebar here; Escape goes back") }
+            else { Speech.speakMessage(String(localized: "no sidebar here; Escape goes back", comment: "Spoken message")) }
             return
         }
         area = area == .page ? .sidebar : .page
@@ -680,11 +683,11 @@ public final class AppStoreView {
             // Search first, where it is on screen (it could not be found under Discover, 6 Oct 2026); the tab in
             // use is said with it.
             sideIndex = 0
-            let current = sidebar.first { $0.label.hasSuffix(", selected") }?.label.replacingOccurrences(of: ", selected", with: "")
-            Speech.speakMessage("sidebar" + (current.map { ", on \($0)" } ?? ""))
+            let current = sidebar.first { $0.label.hasSuffix(Self.selectedSuffix) }?.label.replacingOccurrences(of: Self.selectedSuffix, with: "")
+            Speech.speakMessage(current.map { String(localized: "sidebar, on \($0)", comment: "The App Store's sidebar: %@ is the tab in use") } ?? String(localized: "sidebar", comment: "The App Store's sidebar"))
             speak(sideIndex, crossing: false)
         } else {
-            Speech.speakMessage(pageTitle.isEmpty ? "page" : pageTitle)
+            Speech.speakMessage(pageTitle.isEmpty ? Role.page.displayString : pageTitle)
             speak(pageIndex, crossing: true)
         }
     }
@@ -720,7 +723,7 @@ public final class AppStoreView {
                 }
                 guard acceptsCurrentPage() else { return }
                 Log.io("app store: tab \(Log.words(e.label)) chosen (\(r.rawValue))")
-                Speech.speakMessage(e.label.replacingOccurrences(of: ", selected", with: ""))
+                Speech.speakMessage(e.label.replacingOccurrences(of: Self.selectedSuffix, with: ""))
                 area = .page; pageIndex = 0
                 waitForNewPage(from: before)
             case .account:
@@ -731,7 +734,7 @@ public final class AppStoreView {
                 guard acceptsCurrentPage() else { return }
                 Mouse.click(at: CGPoint(x: f.midX, y: f.midY), button: .left, count: 1)
                 if let home { DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { Mouse.move(to: home) } }
-                Speech.speakMessage("account")
+                Speech.speakMessage(String(localized: "account", comment: "Spoken message"))
                 area = .page; pageIndex = 0
                 waitForNewPage(from: before)
             default: break
@@ -758,7 +761,7 @@ public final class AppStoreView {
             purchaseConfirmation.reset()
             // An app opens with a click on its icon (a press on the row reports success and does nothing).
             guard clickIcon(e) else {
-                if acceptsCurrentPage() { Speech.speakMessage("cannot open this one") }
+                if acceptsCurrentPage() { Speech.speakMessage(String(localized: "cannot open this one", comment: "Spoken message")) }
                 return
             }
             waitForNewPage(from: before)
@@ -840,13 +843,13 @@ public final class AppStoreView {
         guard acceptsCurrentPage() else { return }
         guard let o = button else {
             purchaseConfirmation.reset()
-            Speech.speakMessage("no button here"); return
+            Speech.speakMessage(String(localized: "no button here", comment: "Spoken message")); return
         }
         let title = o.string(kAXTitleAttribute) ?? o.string(kAXDescriptionAttribute) ?? ""
         guard acceptsCurrentPage() else { return }
         guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             purchaseConfirmation.reset()
-            Speech.speakMessage("the button is not ready; try again"); return
+            Speech.speakMessage(String(localized: "the button is not ready; try again", comment: "Spoken message")); return
         }
         let name = e.label.components(separatedBy: ",").first ?? "this app"
         // Downloading: the button is Cancel now ("2.1% loaded", help "Cancel"). Space and Return only say how far it
@@ -854,13 +857,13 @@ public final class AppStoreView {
         // 14 Oct 2026).
         if Self.isDownloading(title) {
             purchaseConfirmation.reset()
-            Speech.speakMessage("\(name), \(title). Delete cancels the download.")
+            Speech.speakMessage(String(localized: "\(name), \(title). Delete cancels the download.", comment: "Spoken message"))
             return
         }
         // Open pressed already and the app still starting (a big app takes seconds): once is enough.
         if title.hasPrefix("Open"), let (n, at) = lastOpen, n == name, Date().timeIntervalSince(at) < 6 {
             purchaseConfirmation.reset()
-            Speech.speakMessage("opening \(name)")
+            Speech.speakMessage(String(localized: "opening \(name)", comment: "Spoken message"))
             return
         }
         let free = ["Open", "Get", "Update", "Re-download", "Install", "Cancel", "Play"].contains { title.hasPrefix($0) }
@@ -872,9 +875,9 @@ public final class AppStoreView {
                 guard acceptsCurrentPage() else { return }
                 _ = AXUIElementPerformAction(o, kAXPressAction as CFString)
                 Log.io("app store: buy pressed (confirmed)")
-                Speech.speakMessage("buying; the App Store asks you to confirm")
+                Speech.speakMessage(String(localized: "buying; the App Store asks you to confirm", comment: "Spoken message"))
             case .prompt:
-                Speech.speakMessage("Buy \(name) for \(title)? Press Space again to buy.")
+                Speech.speakMessage(String(localized: "Buy \(name) for \(title)? Press Space again to buy.", comment: "Spoken message"))
             case .ignore:
                 break
             }
@@ -884,7 +887,7 @@ public final class AppStoreView {
         guard acceptsCurrentPage() else { return }
         _ = AXUIElementPerformAction(o, kAXPressAction as CFString)
         Log.io("app store: \(Log.words(title)) pressed")
-        if title.hasPrefix("Open") { lastOpen = (name, Date()); Speech.speakMessage("opening \(name)") }
+        if title.hasPrefix("Open") { lastOpen = (name, Date()); Speech.speakMessage(String(localized: "opening \(name)", comment: "An app being opened: %@ is its name")) }
         else { Speech.speakMessage(title.components(separatedBy: ",").first ?? title) }
         if !title.hasPrefix("Open") { watchDownload(o, name: name) }
         // Get becomes Install (or starts at once); say what the button says now.
@@ -929,18 +932,18 @@ public final class AppStoreView {
             }
             let t = o.string(kAXTitleAttribute) ?? ""
             if t.hasPrefix("Open") {
-                Tones.beep(880, 80); Speech.speakMessage("\(name) installed")
+                Tones.beep(880, 80); Speech.speakMessage(String(localized: "\(name) installed", comment: "An app finished installing"))
                 Log.io("app store: \(Log.words(name)) installed")
                 return
             }
             if t.hasPrefix("Get") || t.hasPrefix("Re-download") || t.hasPrefix("Update") {
-                if polls > 2 { Speech.speakMessage("\(name): download stopped") }
+                if polls > 2 { Speech.speakMessage(String(localized: "\(name): download stopped", comment: "An app's download stopped")) }
                 return
             }
             var quarter = lastQuarter
             if let r = t.range(of: #"^[\d.]+"#, options: .regularExpression), let pct = Double(t[r]) {
                 let q = Int(pct / 25)
-                if q > lastQuarter, q < 4 { quarter = q; Speech.speakMessage("\(name), \(q * 25) percent") }
+                if q > lastQuarter, q < 4 { quarter = q; Speech.speakMessage(String(localized: "\(name), \(String(q * 25)) percent", comment: "A download's progress: the app, then the percentage")) }
             }
             self.watchDownload(o, name: name, lastQuarter: quarter, polls: polls + 1)
         }
@@ -957,7 +960,7 @@ public final class AppStoreView {
             _ = AXUIElementPerformAction(b, kAXPressAction as CFString)
         } else {
             guard acceptsCurrentPage() else { return }
-            Speech.speakMessage("no page to go back to"); return
+            Speech.speakMessage(String(localized: "no page to go back to", comment: "Spoken message")); return
         }
         area = .page
         waitForNewPage(from: before, back: true)
@@ -967,10 +970,10 @@ public final class AppStoreView {
         moves += 1
         purchaseConfirmation.reset()
         buildSidebar { [weak self] in
-            guard let self, let s = sidebar.first(where: { $0.kind == .search }) else { Speech.speakMessage("no search field"); return }
+            guard let self, let s = sidebar.first(where: { $0.kind == .search }) else { Speech.speakMessage(String(localized: "no search field", comment: "Spoken message")); return }
             let r = s.element.set(kAXFocusedAttribute, kCFBooleanTrue)
             Log.io("app store: search field focused (\(r.rawValue))")
-            if r != .success { Speech.speakMessage("could not reach the search field") }
+            if r != .success { Speech.speakMessage(String(localized: "could not reach the search field", comment: "Spoken message")) }
         }
     }
 
@@ -1031,7 +1034,7 @@ public final class AppStoreView {
                     if thenFocusPage, let (_, list) = pageRoot() { _ = list.set(kAXFocusedAttribute, kCFBooleanTrue) }
                     let title = pageTitle
                     if now == before, !thenFocusPage { Log.io("app store: the page did not change"); return }
-                    if (title != early || early.isEmpty), title != announced { Speech.speakMessage(title.isEmpty ? "page" : title) }
+                    if (title != early || early.isEmpty), title != announced { Speech.speakMessage(title.isEmpty ? Role.page.displayString : title) }
                     if !page.isEmpty, !flatDrives { speak(pageIndex, crossing: true) }
                 }
             }

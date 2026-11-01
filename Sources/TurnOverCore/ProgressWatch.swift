@@ -25,8 +25,8 @@ enum ProgressWatch {
     private static func tick() {
         guard let e = watched, Date().timeIntervalSince(since) < 1800, let p = percent(of: e) else { stop(); return }
         guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid, Core.active else { return }
-        if p >= 100, lastSaid < 100 { lastSaid = 100; Speech.speakMessage("100 percent"); stop(); return }
-        if p / 10 != lastSaid / 10 { lastSaid = p; Speech.speakMessage("\(p) percent") }
+        if p >= 100, lastSaid < 100 { lastSaid = 100; Speech.speakMessage(String(localized: "100 percent", comment: "Spoken message")); stop(); return }
+        if p / 10 != lastSaid / 10 { lastSaid = p; Speech.speakMessage(Phrases.percent(p)) }
     }
 
     private static func stop() { timer?.invalidate(); timer = nil; watched = nil }

@@ -17,10 +17,10 @@ final class RemindersAppModule: AppModule {
 
     required init(pid: pid_t, bundleIdentifier: String, appName: String) {
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
-        script("reminders_toReminders", "From the lists to the reminders", gestures: ["kb:tab"], category: "Reminders") { [weak self] _ in
+        script("reminders_toReminders", String(localized: "From the lists to the reminders", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:tab"], category: "Reminders") { [weak self] _ in
             self?.focus(outline: self?.remindersOutline(), name: "reminders")
         }.isAvailable = { [weak self] in self?.inOutline(sidebar: true) == true }
-        script("reminders_toLists", "From the reminders to the lists", gestures: ["kb:shift+tab"], category: "Reminders") { [weak self] _ in
+        script("reminders_toLists", String(localized: "From the reminders to the lists", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+tab"], category: "Reminders") { [weak self] _ in
             self?.focus(outline: self?.sidebarOutline(), name: "lists")
         }.isAvailable = { [weak self] in self?.inOutline(sidebar: false) == true }
     }

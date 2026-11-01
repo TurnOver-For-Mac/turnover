@@ -78,7 +78,7 @@ public enum NotificationCentrePanel {
             Log.io("notification centre: closed before it was entered")
             opening = false
             generation += 1
-            Speech.speakMessage("Notification Centre closed")
+            Speech.speakMessage(String(localized: "Notification Centre closed", comment: "Spoken message"))
         }
         cursorBackIfStranded()
     }
@@ -97,7 +97,7 @@ public enum NotificationCentrePanel {
             AXHandler.shared.notificationCentrePid = pid   // the handler's copy is taken once; a relaunch changes it
             AXHandler.shared.observe(pid)
         }
-        let pressed = VoiceOverKeysPlugin.pressMenuExtra("com.apple.menuextra.clock", "Notification Centre")
+        let pressed = VoiceOverKeysPlugin.pressMenuExtra("com.apple.menuextra.clock", String(localized: "Notification Centre", comment: "The Mac's Notification Centre"))
         guard pressed else { return }
         opening = true
         let activePid = AXHandler.shared.activePid
@@ -106,7 +106,7 @@ public enum NotificationCentrePanel {
 
     /// Closes the panel with the clock, and the review cursor goes back to the keyboard focus.
     static func close() {
-        let pressed = VoiceOverKeysPlugin.pressMenuExtra("com.apple.menuextra.clock", "Notification Centre")
+        let pressed = VoiceOverKeysPlugin.pressMenuExtra("com.apple.menuextra.clock", String(localized: "Notification Centre", comment: "The Mac's Notification Centre"))
         if pressed {
             Log.io("notification centre: closed by the key")
         }
@@ -136,7 +136,7 @@ public enum NotificationCentrePanel {
             // flag said closed) and this press closed it: the next press opens it either way.
             opening = false
             Log.io("notification centre: no foreground change within \(openTries) tenths of a second; press again")
-            Speech.speakMessage("Notification Centre did not open; press again")
+            Speech.speakMessage(String(localized: "Notification Centre did not open; press again", comment: "Spoken message"))
             return
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -147,7 +147,7 @@ public enum NotificationCentrePanel {
     private static func enter(_ list: AXUIElement) {
         let alerts = list.elements(kAXChildrenAttribute).filter { $0.string(kAXSubroleAttribute) == alertSubrole }
         Log.io("notification centre: open, \(alerts.count) notifications")
-        Speech.speakMessage(alerts.isEmpty ? "Notification Centre, no notifications" : "Notification Centre")
+        Speech.speakMessage(alerts.isEmpty ? String(localized: "Notification Centre, no notifications", comment: "Spoken message") : String(localized: "Notification Centre", comment: "Spoken message"))
         ObjectNavigator.shared.moveTo(alerts.first ?? list)
     }
 

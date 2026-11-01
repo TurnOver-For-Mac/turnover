@@ -24,23 +24,23 @@ final class MenuNavigationPlugin: GlobalPlugin {
         super.init()
         let cat = "Menus"
         for key in ["upArrow", "downArrow", "leftArrow", "rightArrow", "home", "end", "pageUp", "pageDown"] {
-            script("menu_\(key)", "Moves in the open menu and reads the item", gestures: ["kb:\(key)"], category: cat) { [weak self] g in self?.move(g) }
+            script("menu_\(key)", String(localized: "Moves in the open menu and reads the item", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:\(key)"], category: cat) { [weak self] g in self?.move(g) }
         }
         for letter in "abcdefghijklmnopqrstuvwxyz" {
-            script("menu_type_\(letter)", "Jumps to the item starting with the letter", gestures: ["kb:\(letter)"], category: cat) { [weak self] g in self?.move(g) }
+            script("menu_type_\(letter)", String(localized: "Jumps to the item starting with the letter", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:\(letter)"], category: cat) { [weak self] g in self?.move(g) }
         }
         for key in ["upArrow", "downArrow", "home", "end", "rightArrow", "enter", "space"] {
-            script("webMenu_\(key)", "In a page's own menu: moves through its items or presses one", gestures: [], category: cat) { [weak self] g in self?.webMenu(g) }
+            script("webMenu_\(key)", String(localized: "In a page's own menu: moves through its items or presses one", comment: "A command, as the key list and keyboard help say it"), gestures: [], category: cat) { [weak self] g in self?.webMenu(g) }
         }
         // The menu bar as VoiceOver has it (Mac style, 8 Oct 2026): VO M lands on the Apple menu's title, Left
         // and Right go along the bar, Down (or VO Space, Return) opens the menu, Escape leaves. The Windows style
         // opens the Apple menu straight away, and Up and Down move through it as a list, as NVDA.
         for key in ["leftArrow", "rightArrow", "turnover+leftArrow", "turnover+rightArrow", "home", "end", "downArrow", "turnover+space", "enter", "space", "escape", "turnover+downArrow"] {
-            script("menuBar_\(key)", "On the menu bar: Left and Right move along it, Down opens the menu, Escape leaves", gestures: ["kb:\(key)"], category: cat) { g in
+            script("menuBar_\(key)", String(localized: "On the menu bar: Left and Right move along it, Down opens the menu, Escape leaves", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:\(key)"], category: cat) { g in
                 Self.barKey(g)
             }.isAvailable = { Self.heldBar != nil }
         }
-        script("menuBar_activate", "Opens the application's menus", gestures: ["kb:control+f2", "kb:control+function+f2"], category: cat) { [weak self] g in self?.openMenuBar(g) }
+        script("menuBar_activate", String(localized: "Opens the application's menus", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:control+f2", "kb:control+function+f2"], category: cat) { [weak self] g in self?.openMenuBar(g) }
         InputManager.onPassThrough = { [weak self] g in self?.passedThrough(g) }
     }
 
@@ -121,8 +121,8 @@ final class MenuNavigationPlugin: GlobalPlugin {
         API.setFocusObject(obj, ancestors: API.focusAncestors)
         lastSpoken = (item, Date())
         // Its place among all the items: the groups made every item "1 of 1".
-        var parts = Speech.objectPropertiesSpeech(obj, reason: .focus).filter { $0.range(of: #"^\d+ of \d+$"#, options: .regularExpression) == nil }
-        parts.append("\(webIndex + 1) of \(n)")
+        var parts = Speech.objectPropertiesSpeech(obj, reason: .focus).filter { !Phrases.isPosition($0) }
+        parts.append(Phrases.position(webIndex + 1, of: n))
         Speech.cancel()
         Speech.speakMessage(Speech.joined(parts))
     }
@@ -177,9 +177,9 @@ final class MenuNavigationPlugin: GlobalPlugin {
         let me = getpid()
         heldBar = (pid, extras.map(\.element) + [AXUIElementCreateApplication(me)], 0)
         heldStatus = (extras.map(\.name) + ["TurnOver"], extras.map(\.pid) + [me])
-        Speech.speakMessage("status menus, \(extras.count + 1)")
+        Speech.speakMessage(String(localized: "status menus, \(String(extras.count + 1))", comment: "The status menus list opened: how many"))
         sayBarTitle()
-        Hints.schedule("Left and Right move along the status menus. Down opens one; Escape leaves.")
+        Hints.schedule(String(localized: "Left and Right move along the status menus. Down opens one; Escape leaves.", comment: "Spoken message"))
     }
 
     static func holdMenuBar() {
@@ -187,9 +187,9 @@ final class MenuNavigationPlugin: GlobalPlugin {
         let titles = bar.elements(kAXChildrenAttribute)
         guard !titles.isEmpty else { Tones.edge(); return }
         heldBar = (pid, titles, 0)
-        Speech.speakMessage("menu bar")
+        Speech.speakMessage(String(localized: "menu bar", comment: "Spoken message"))
         sayBarTitle()
-        Hints.schedule("Left and Right move along the menu bar. Down opens the menu; Escape leaves.")
+        Hints.schedule(String(localized: "Left and Right move along the menu bar. Down opens the menu; Escape leaves.", comment: "Spoken message"))
     }
 
     static func releaseBar() { heldBar = nil; heldStatus = nil }
@@ -197,19 +197,19 @@ final class MenuNavigationPlugin: GlobalPlugin {
     /// Leaving the bar: where the keyboard still is, said (refocus alone was silent when nothing had changed, 8 Oct 2026).
     static func backFromBar(pid: pid_t) {
         if let f = API.focusObject, f.pid == pid, !f.name.isEmpty { Speech.speakObject(f, reason: .focus) }
-        else if let w = API.foregroundObject, !w.name.isEmpty { Speech.speakMessage(w.name + ", window") }
+        else if let w = API.foregroundObject, !w.name.isEmpty { Speech.speakMessage(w.name + ", " + Role.window.displayString) }
         else { AXHandler.shared.refocus(pid: pid) }
     }
 
     private static func sayBarTitle() {
         guard let h = heldBar else { return }
         if let st = heldStatus, st.names.indices.contains(h.index) {
-            Speech.speakItem("\(st.names[h.index]), \(h.index + 1) of \(h.titles.count)")
+            Speech.speakItem("\(st.names[h.index]), \(Phrases.position(h.index + 1, of: h.titles.count))")
             return
         }
         let t = h.titles[h.index]
-        let name = t.string(kAXTitleAttribute).flatMap { $0.isEmpty ? nil : $0 } ?? (h.index == 0 ? "Apple" : "menu")
-        Speech.speakItem("\(name) menu, \(h.index + 1) of \(h.titles.count)")
+        let name = t.string(kAXTitleAttribute).flatMap { $0.isEmpty ? nil : $0 } ?? (h.index == 0 ? "Apple" : Role.menu.displayString)
+        Speech.speakItem(String(localized: "\(name) menu", comment: "A menu bar item: %@ is its name (View menu)") + ", " + Phrases.position(h.index + 1, of: h.titles.count))
     }
 
     private static func barKey(_ g: KeyboardGesture) {
@@ -234,7 +234,7 @@ final class MenuNavigationPlugin: GlobalPlugin {
                 StatusMenus.lastOpened = (name, Date())
                 let r = AXUIElementPerformAction(title, kAXPressAction as CFString)
                 Log.io("status menus: press \"\(Log.words(name))\" → \(r.rawValue)")
-                if r != .success { DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { if !AXHandler.shared.isMenuOpen { Speech.speakMessage("could not open \(name)") } } }
+                if r != .success { DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { if !AXHandler.shared.isMenuOpen { Speech.speakMessage(String(localized: "could not open \(name)", comment: "A menu could not be opened: %@ is its name")) } } }
                 return
             }
             heldBar = nil
@@ -297,7 +297,7 @@ final class MenuNavigationPlugin: GlobalPlugin {
             let text = box.string(kAXValueAttribute) ?? ""
             let left = menu.elements(kAXChildrenAttribute).filter { $0.role == "AXMenuItem" && !($0.string(kAXTitleAttribute) ?? "").isEmpty && Self.isShowing($0) }
             // (The count isn't reliable while the menu filters; only "nothing left" is worth saying.)
-            Speech.speakMessage(text.isEmpty ? "search" : (left.count <= 1 ? "\(text), no matches" : text))
+            Speech.speakMessage(text.isEmpty ? Role.searchField.displayString : (left.count <= 1 ? String(localized: "\(text), no matches", comment: "Typing in a menu found nothing: %@ is what was typed") : text))
             if left.count <= 1 { Tones.edge() }
             return
         }
@@ -339,7 +339,7 @@ final class MenuNavigationPlugin: GlobalPlugin {
                     lastItem = i; lastSpoken = (i, Date())
                     let obj = ObjectFactory.make(i)
                     API.setFocusObject(obj, ancestors: API.focusAncestors)
-                    Speech.speakMessage("\(b.string(kAXTitleAttribute) ?? "") submenu")
+                    Speech.speakMessage(String(localized: "\(b.string(kAXTitleAttribute) ?? "") submenu", comment: "A submenu opened: its name"))
                     speak(i, obj)
                     return
                 }
@@ -383,7 +383,7 @@ final class MenuNavigationPlugin: GlobalPlugin {
         // Sometimes the highlight lands on a heading itself (Mail's, opened from the keyboard): say it as one, once.
         if Self.isHeading(item) {
             lastHeading = item.string(kAXTitleAttribute)
-            Speech.speakMessage("\(lastHeading ?? ""), heading")
+            Speech.speakMessage("\(lastHeading ?? ""), \(Role.heading.displayString)")
             return
         }
         let heading = Self.heading(of: item)

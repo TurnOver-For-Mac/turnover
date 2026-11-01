@@ -17,11 +17,11 @@ final class MapsAppModule: AppModule {
         WebBuffer.iosSkippedSubroles.insert("AXMapArea")
         // Command F: Maps puts the keyboard in its search field at once; TurnOver goes to typing with it, or the first
         // letters were taken as quick navigation keys ("c" a check box, "f" a field: driver, 18 Oct 2026).
-        script("maps_search", "Search Maps; typing goes into the search field", gestures: ["kb:command+f"], category: "Maps") { [weak self] g in
+        script("maps_search", String(localized: "Search Maps; typing goes into the search field", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+f"], category: "Maps") { [weak self] g in
             g.send()
             guard let self, let doc = API.focusTreeInterceptor, doc.webArea.pid == self.pid else { return }
             doc.setPassThrough(true, announce: false)
-            Speech.speakMessage("search")
+            Speech.speakMessage(String(localized: "search", comment: "Spoken message"))
         }
     }
 

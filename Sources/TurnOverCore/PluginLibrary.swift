@@ -170,23 +170,23 @@ public enum PluginLibrary {
         guard !gone.isEmpty else { return }
         ProfileStore.shared.reload(force: true)
         Log.warning("plugin library: withdrawn and switched off: \(gone.joined(separator: ", "))")
-        Speech.speakMessage("Withdrawn from the plugin library and switched off: \(gone.joined(separator: ", ")).")
+        Speech.speakMessage(String(localized: "Withdrawn from the plugin library and switched off: \(gone.joined(separator: ", ")).", comment: "Plugins withdrawn: %@ lists them"))
     }
 
     // MARK: The menu
 
     /// The TurnOver menu's Plugin library: the list, each with its level, then its consent summary and Install.
     public static func open() {
-        Speech.speakMessage("Plugin library")
+        Speech.speakMessage(String(localized: "Plugin library", comment: "Spoken message"))
         refresh { result in
             switch result {
-            case .failure(let e): Speech.speakMessage("The plugin library: \(e.localizedDescription).")
+            case .failure(let e): Speech.speakMessage(String(localized: "The plugin library: \(e.localizedDescription).", comment: "The plugin library failed: %@ is why"))
             case .success(let entries):
                 // Last in the list: ask for a plugin for the app in front when the library has none for it (the
                 // request is the app's shape, never its contents: AppRequest; 14 Oct 2026).
                 var ask: [MenuItem] = []
                 if let app = AppRequest.frontApp, let b = app.bundleIdentifier, !entries.contains(where: { ($0.apps ?? []).contains(b) }) {
-                    ask = [MenuItem("No plugin for \(app.localizedName ?? "this app") yet: make one, or ask", .action { AppRequest.request() },
+                    ask = [MenuItem("No plugin for \(app.localizedName ?? String(localized: "this app", comment: "An application with no name")) yet: make one, or ask", .action { AppRequest.request() },
                                     hint: "Finds what the app is built with. If TurnOver has the parts for it, make its plugin or post it as wanted; if not, ask for the parts")]
                 }
                 if entries.isEmpty { TurnOverMenu.shared.openList("Plugin library", items: ask); return }
@@ -194,7 +194,7 @@ public enum PluginLibrary {
                 func onMac(_ e: Entry) -> Bool { (e.apps ?? [String]()).contains { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) != nil } }
                 let sorted = entries.sorted { (onMac($0) ? 0 : 1, $0.name.lowercased()) < (onMac($1) ? 0 : 1, $1.name.lowercased()) }
                 let items = sorted.map { e -> MenuItem in
-                    MenuItem("\(e.name), \(e.level)\(state(of: e)). \(e.summary ?? "")", .action { DispatchQueue.main.async { details(e) } })
+                    MenuItem(verbatim: "\(e.name), \(e.level)\(state(of: e)). \(e.summary ?? "")", .action { DispatchQueue.main.async { details(e) } })
                 }
                 TurnOverMenu.shared.openList("Plugin library", items: items + ask)
             }
@@ -204,8 +204,8 @@ public enum PluginLibrary {
     /// ", installed", ", update available", ", you have your own plugin with this name", or nothing.
     static func state(of e: Entry) -> String {
         guard let p = ProfileStore.shared.plugins.first(where: { $0.manifest?.id == e.id }) else { return "" }
-        guard let r = receipt(p.folder) else { return ", you have your own plugin with this name" }
-        return PluginFormat.compare(e.version, r.version) == .orderedDescending ? ", update available" : ", installed"
+        guard let r = receipt(p.folder) else { return ", " + String(localized: "you have your own plugin with this name", comment: "A library plugin's state") }
+        return ", " + (PluginFormat.compare(e.version, r.version) == .orderedDescending ? String(localized: "update available", comment: "A library plugin's state") : String(localized: "installed", comment: "A library plugin's state"))
     }
 
     /// What it is and what it can do, read out, with Install.
@@ -217,7 +217,7 @@ public enum PluginLibrary {
         if let sites = e.sites, !sites.isEmpty { lines.append("Works on \(sites.joined(separator: ", "))") }
         if !can.isEmpty { lines.append("It can " + can.joined(separator: ", ")) }
         if let p = e.privacy { lines.append(p) }
-        TurnOverMenu.shared.openList(lines.joined(separator: ". "), items: [
+        TurnOverMenu.shared.openList(verbatim: lines.joined(separator: ". "), items: [
             MenuItem("Install \(e.name)", .action { DispatchQueue.main.async { install(e) } }),
             MenuItem("Back to the library", .action { DispatchQueue.main.async { open() } }),
         ])
@@ -240,10 +240,10 @@ public enum PluginLibrary {
     /// update asks for more.
     static func install(_ e: Entry) {
         if let own = ProfileStore.shared.plugins.first(where: { $0.manifest?.id == e.id }), receipt(own.folder) == nil {
-            Speech.speakMessage("You have your own plugin with the name \(e.id). The library's can't replace it; nothing was changed.")
+            Speech.speakMessage(String(localized: "You have your own plugin with the name \(e.id). The library's can't replace it; nothing was changed.", comment: "A library plugin clashes with yours: %@ is its name"))
             return
         }
-        Speech.speakMessage("Getting \(e.name)")
+        Speech.speakMessage(String(localized: "Getting \(e.name)", comment: "A library plugin being downloaded"))
         Task { @MainActor in
             let got: (folder: URL, tmp: URL)
             do { got = try await Task.detached { try await download(e) }.value }
@@ -253,7 +253,7 @@ public enum PluginLibrary {
             let plugin = ProfileStore.load(folder: got.folder)
             guard let m = plugin.manifest, m.id == e.id, m.version == e.version else {
                 cleanUp()
-                Speech.speakMessage(plugin.error.map { "\(e.name): \($0)" } ?? "\(e.name) isn't what the library's list says; nothing was installed.")
+                Speech.speakMessage(plugin.error.map { "\(e.name): \($0)" } ?? String(localized: "\(e.name) isn't what the library's list says; nothing was installed.", comment: "A library plugin failed its check"))
                 return
             }
             let installed = ProfileStore.shared.plugins.first { $0.manifest?.id == e.id }
@@ -265,9 +265,9 @@ public enum PluginLibrary {
             // reopening the library and choosing Install again within 20 seconds).
             var why = "\(e.name) acts in its app: " + warnings.lines.joined(separator: "; ") + "."
             if asksMore { why += " This version asks for more: \(more.compactMap { PluginListing.abilities[$0] }.joined(separator: ", "))." }
-            TurnOverMenu.shared.openList(why, items: [
+            TurnOverMenu.shared.openList(verbatim: why, items: [
                 MenuItem("Install anyway", .action { DispatchQueue.main.async { finish(plugin, e, cleanUp) } }),
-                MenuItem("Cancel", .action { cleanUp(); Speech.speakMessage("Not installed") }),
+                MenuItem("Cancel", .action { cleanUp(); Speech.speakMessage(String(localized: "Not installed", comment: "Spoken message")) }),
             ])
         }
     }
@@ -278,9 +278,9 @@ public enum PluginLibrary {
             let dest = try PluginChecker.install(plugin)
             let r = Receipt(id: e.id, version: e.version, sha256: e.sha256, level: e.level, installed: ISO8601DateFormatter().string(from: Date()), author: e.author)
             try JSONEncoder().encode(r).write(to: dest.appendingPathComponent(receiptName), options: .atomic)
-        } catch { Speech.speakMessage("Could not install: \(error.localizedDescription)"); return }
+        } catch { Speech.speakMessage(String(localized: "Could not install: \(error.localizedDescription)", comment: "A plugin not installed: %@ is why")); return }
         ProfileStore.shared.reload(force: true)
         Log.info("plugin library: installed \(e.id) \(e.version) (\(e.level))")
-        Speech.speakMessage("\(e.name) installed.")
+        Speech.speakMessage(String(localized: "\(e.name) installed.", comment: "A library plugin installed"))
     }
 }

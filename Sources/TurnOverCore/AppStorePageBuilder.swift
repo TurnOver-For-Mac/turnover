@@ -379,7 +379,7 @@ nonisolated final class AppStorePageBuilder {
                 for row in children(c) where row.role == "AXRow" {
                     guard let cell = children(row).first, let d = cell.string(kAXDescriptionAttribute) else { continue }
                     let selected = (row.attr(kAXSelectedAttribute) as? Bool) == true
-                    sidebar.append(Entry(label: d + (selected ? ", selected" : ""), element: cell, kind: .tab, shelf: 0))
+                    sidebar.append(Entry(label: d + (selected ? AppStoreView.selectedSuffix : ""), element: cell, kind: .tab, shelf: 0))
                 }
             } else if (c.string(kAXIdentifierAttribute) ?? "") == "AppStore.accountButton", let t = c.string(kAXTitleAttribute) {
                 sidebar.append(Entry(label: "Account, \(t)", element: c, kind: .account, shelf: 0))

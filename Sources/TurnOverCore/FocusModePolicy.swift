@@ -32,7 +32,7 @@ extension BrowseModeDocument {
         guard announce else { return }
         // NVDA: with its audio indication on, a sound says it and the words are left out.
         if config.general.navigationSounds { on ? Tones.focusMode() : Tones.browseMode() }
-        else { Speech.speakMessage(on ? "focus mode" : "browse mode") }
+        else { Speech.speakMessage(on ? String(localized: "focus mode", comment: "Spoken message") : String(localized: "browse mode", comment: "Spoken message")) }
     }
 
     /// NVDA: shouldPassThrough — an editable or otherwise interactive focus means focus mode.

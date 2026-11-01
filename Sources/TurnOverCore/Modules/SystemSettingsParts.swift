@@ -5,7 +5,7 @@ import TurnOverAX
 
 nonisolated package enum SystemSettingsPart: Int, CaseIterable, Sendable {
     case sidebar, pane, search
-    package var name: String { switch self { case .sidebar: "sidebar"; case .pane: "settings pane"; case .search: "search" } }
+    package var name: String { switch self { case .sidebar: String(localized: "sidebar", comment: "A part of the System Settings window"); case .pane: String(localized: "settings pane", comment: "A part of the System Settings window"); case .search: String(localized: "search", comment: "A part of the System Settings window") } }
 }
 
 nonisolated package struct SystemSettingsPartRequest: Sendable {

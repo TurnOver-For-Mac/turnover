@@ -18,6 +18,14 @@
 // turnover-probe    measurement probes, run by hand
 import PackageDescription
 
+// The words a person hears or reads, listed by the compiler for the translations (Resources/Localizable.xcstrings,
+// make-strings.py). build.sh sets TURNOVER_STRINGS; a folder per target, because the compiler names each list after its
+// source file and the programs' main.swift lists overwrote one another in a shared folder (23 Oct 2026).
+func translatable(_ target: String) -> [SwiftSetting] {
+    guard let folder = Context.environment["TURNOVER_STRINGS"] else { return [] }
+    return [.unsafeFlags(["-emit-localized-strings", "-emit-localized-strings-path", folder + "/" + target])]
+}
+
 let package = Package(
     name: "TurnOver",
     platforms: [.macOS(.v14)],
@@ -70,7 +78,7 @@ let package = Package(
             name: "TurnOverCore",
             dependencies: ["TurnOverAX", "TurnOverSpeech", "TurnOverBraille", "TurnOverControl"],
             path: "Sources/TurnOverCore",
-            swiftSettings: [.defaultIsolation(MainActor.self)],
+            swiftSettings: [.defaultIsolation(MainActor.self)] + translatable("TurnOverCore"),
             linkerSettings: [
                 .linkedFramework("ApplicationServices"),
                 .linkedFramework("AppKit"),
@@ -84,7 +92,7 @@ let package = Package(
             name: "TurnOver",
             dependencies: ["TurnOverCore", "TurnOverControl", .product(name: "Sparkle", package: "Sparkle")],
             path: "Sources/TurnOver",
-            swiftSettings: [.defaultIsolation(MainActor.self)],
+            swiftSettings: [.defaultIsolation(MainActor.self)] + translatable("TurnOver"),
             linkerSettings: [
                 .linkedFramework("ApplicationServices"),
                 .linkedFramework("AppKit"),
@@ -124,6 +132,7 @@ let package = Package(
             name: "TurnOverSettings",
             dependencies: ["TurnOverControl"],
             path: "Sources/TurnOverSettings",
+            swiftSettings: translatable("TurnOverSettings"),
             linkerSettings: [.linkedFramework("SwiftUI"), .linkedFramework("AppKit"), .linkedFramework("AVFoundation")]
         ),
         // Command+Control+T starts and quits TurnOver: a tiny login-item helper inside TurnOver.app.
@@ -131,7 +140,7 @@ let package = Package(
             name: "TurnOverKey",
             dependencies: ["TurnOverControl", "TurnOverObjC"],
             path: "Sources/TurnOverKey",
-            swiftSettings: [.defaultIsolation(MainActor.self)],
+            swiftSettings: [.defaultIsolation(MainActor.self)] + translatable("TurnOverKey"),
             linkerSettings: [.linkedFramework("AppKit"), .linkedFramework("Carbon"), .linkedFramework("AVFoundation")]
         ),
         // The plugin maker's tool: brief, snapshot, check, install (PLUGIN-GUIDE.md). Ships inside TurnOver.app.

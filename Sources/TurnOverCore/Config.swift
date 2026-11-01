@@ -7,17 +7,32 @@ import AVFoundation
 
 public enum SymbolLevel: Int, Codable, CaseIterable {
     case none = 0, some, most, all
-    public var name: String { ["none", "some", "most", "all"][rawValue] }
+    /// As spoken and shown.
+    public var name: String {
+        [String(localized: "none", comment: "A punctuation level"), String(localized: "some", comment: "A punctuation level"),
+         String(localized: "most", comment: "A punctuation level"), String(localized: "all", comment: "A punctuation level")][rawValue]
+    }
 }
 
 public enum ElementReport: String, Codable, CaseIterable {
     case speech, tone, off
-    public var name: String { rawValue }
+    /// As spoken and shown.
+    public var name: String {
+        switch self {
+        case .speech: return String(localized: "speech", comment: "How an element is reported: in words")
+        case .tone: return String(localized: "tone", comment: "How an element is reported: a sound")
+        case .off: return State.off.displayString
+        }
+    }
 }
 
 public enum TypingEcho: Int, Codable, CaseIterable {
     case off = 0, editControls, always
-    public var name: String { ["off", "in edit controls", "always"][rawValue] }
+    /// As spoken and shown.
+    public var name: String {
+        [State.off.displayString, String(localized: "in edit controls", comment: "When typed characters or words are spoken"),
+         String(localized: "always", comment: "When typed characters or words are spoken")][rawValue]
+    }
 }
 
 public struct Config: Codable {
@@ -114,7 +129,10 @@ public struct Config: Codable {
             try c.encode(screenCurtain, forKey: .screenCurtain); try c.encode(sounds, forKey: .sounds)
         }
         /// How the TurnOver key is spoken in help and the shortcuts list.
-        public var turnOverKeyName: String { turnOverKey == "controlOption" ? "V O" : "caps" }
+        public var turnOverKeyName: String {
+            turnOverKey == "controlOption" ? String(localized: "V O", comment: "The VO key (Control and Option), as spoken")
+                : String(localized: "caps", comment: "Caps Lock as the TurnOver key, as spoken before another key")
+        }
         public var capsIsTurnOver: Bool { turnOverKey != "controlOption" }
         public var controlOptionIsTurnOver: Bool { turnOverKey != "caps" }
     }
@@ -367,7 +385,8 @@ public struct Config: Codable {
             }
         }
         public static func leadModeName(_ m: String) -> String {
-            m == "everywhere" ? "TurnOver everywhere" : m == "voiceover" ? "VoiceOver everywhere" : "TurnOver in its apps"
+            m == "everywhere" ? String(localized: "TurnOver everywhere", comment: "Who reads: a mode")
+                : m == "voiceover" ? String(localized: "VoiceOver everywhere", comment: "Who reads: a mode") : String(localized: "TurnOver in its apps", comment: "Who reads: a mode")
         }
         enum Keys: String, CodingKey { case leadBundles, leadEverywhereElse, automaticHandOver, leadMode, voiceOverBundles, directApps, perAppReaders, swapWithVoiceOver }
         // Each field falls back on its own: a new field must never wipe the list of apps TurnOver leads in (8 Oct 2026).
@@ -401,10 +420,13 @@ public struct Config: Codable {
     public struct Verbosity: Codable, Equatable, Sendable {
         public static let pieces = ["name", "role", "value", "state", "description", "shortcut", "position", "level"]
         /// What each piece is, for the Settings window.
-        public static let titles: [String: String] = [
-            "name": "Name", "role": "Kind, such as button or link", "value": "Value", "state": "State, such as checked or expanded",
-            "description": "Help text", "shortcut": "Keyboard shortcut", "position": "Position, such as 3 of 10", "level": "Level, in a tree or outline",
-        ]
+        /// As the reading-order menu names the pieces (the Settings window's list has the same words).
+        public static var titles: [String: String] {
+            ["name": String(localized: "Name", comment: "A piece of an item's announcement, in the reading order"), "role": String(localized: "Kind, such as button or link", comment: "A piece of an item's announcement, in the reading order"),
+                    "value": String(localized: "Value", comment: "A piece of an item's announcement, in the reading order"), "state": String(localized: "State, such as checked or expanded", comment: "A piece of an item's announcement, in the reading order"),
+                    "description": String(localized: "Help text", comment: "A piece of an item's announcement, in the reading order"), "shortcut": String(localized: "Keyboard shortcut", comment: "A piece of an item's announcement, in the reading order"),
+                    "position": String(localized: "Position, such as 3 of 10", comment: "A piece of an item's announcement, in the reading order"), "level": String(localized: "Level, in a tree or outline", comment: "A piece of an item's announcement, in the reading order")]
+        }
         public var order: [String] = pieces
         public var off: [String] = []
         public init() {}
@@ -717,10 +739,10 @@ nonisolated public enum KeyboardStyle: String, CaseIterable, Sendable {
     /// What TurnOver says for it.
     public var spokenName: String {
         switch self {
-        case .voiceOver: return "VoiceOver keys"
-        case .nvda: return "NVDA keys"
-        case .narrator: return "Narrator keys"
-        case .jaws: return "JAWS keys"
+        case .voiceOver: return String(localized: "VoiceOver keys", comment: "A keyboard style")
+        case .nvda: return String(localized: "NVDA keys", comment: "A keyboard style")
+        case .narrator: return String(localized: "Narrator keys", comment: "A keyboard style")
+        case .jaws: return String(localized: "JAWS keys", comment: "A keyboard style")
         }
     }
 }

@@ -33,7 +33,7 @@ public final class SystemPrompts {
             guard !r.isEmpty, r != "?" else { Log.io("protected prompt: the press of \(Log.words(name)) was taken"); return }
             _ = button.set(kAXFocusedAttribute, kCFBooleanTrue)
             Log.io("protected prompt: macOS refused TurnOver's press of \(Log.words(name)); focus put back on it, Space asked for")
-            Speech.speakMessage("macOS only takes a real key here. \(name) has the focus: press Space.")
+            Speech.speakMessage(String(localized: "macOS only takes a real key here. \(name) has the focus: press Space.", comment: "A protected macOS prompt: %@ is the button"))
         }
     }
     private var timer: Timer?
@@ -58,9 +58,9 @@ public final class SystemPrompts {
     public func remindIfWaiting(activated pid: pid_t) {
         guard let p = waiting.first, p.pid != pid, Date().timeIntervalSince(lastReminder) > 5 else { return }
         lastReminder = Date()
-        let key = config.general.windowsKeys ? "Option Tab" : "VO-F1 twice"
+        let key = config.general.windowsKeys ? String(localized: "Option Tab", comment: "Keys to reach a waiting system dialog") : String(localized: "VO-F1 twice", comment: "Keys to reach a waiting system dialog")
         Log.io("system prompt still open (pid \(p.pid)); reminded")
-        Speech.speakMessage("system dialog waiting: \(p.text). \(key) to go to it")
+        Speech.speakMessage(String(localized: "system dialog waiting: \(p.text). \(key) to go to it", comment: "A system dialog waiting: its words, then the keys to reach it"))
     }
 
     func start() {
@@ -129,7 +129,7 @@ public final class SystemPrompts {
         summaries.removeAll { $0.window.isSame(window) }
         summaries.append((window, pid, texts.first.map { String($0.prefix(120)) } ?? "untitled"))
         Speech.cancel()
-        Speech.speakMessage(([Self.isProtected(pid) ? "system dialog" : "dialog"] + texts).joined(separator: ", "))
+        Speech.speakMessage(([Self.isProtected(pid) ? String(localized: "system dialog", comment: "A role: a macOS system dialog") : Role.dialog.displayString] + texts).joined(separator: ", "))
         let ax = AXUIElementCreateApplication(pid)
         if let f = ax.element(kAXFocusedUIElementAttribute) {
             giveKeyboard(to: f)
@@ -138,8 +138,8 @@ public final class SystemPrompts {
         // After the button's own hint: what to do with the prompt as a whole.
         let all = texts.joined(separator: " ").lowercased()
         DispatchQueue.main.async {
-            Hints.schedule(all.contains("touch id") ? "Touch the Touch ID sensor, or Tab to Enter Password or Cancel."
-                           : Self.isProtected(pid) ? "Tab moves between the choices; Space presses the one you are on." : "Tab moves between the choices; Return presses.")
+            Hints.schedule(all.contains("touch id") ? String(localized: "Touch the Touch ID sensor, or Tab to Enter Password or Cancel.", comment: "A hint in a system dialog")
+                           : Self.isProtected(pid) ? String(localized: "Tab moves between the choices; Space presses the one you are on.", comment: "A hint in a system dialog") : String(localized: "Tab moves between the choices; Return presses.", comment: "A hint in a system dialog"))
         }
     }
 

@@ -105,10 +105,9 @@ nonisolated public struct KeyboardGesture: CustomStringConvertible, Sendable {
     @MainActor public var displayName: String {
         var parts: [String] = []
         if modifiers.contains(.turnover) { parts.append(config.general.turnOverKeyName) }
-        if modifiers.contains(.control) { parts.append("control") }
-        if modifiers.contains(.option) { parts.append("option") }
-        if modifiers.contains(.command) { parts.append("command") }
-        if modifiers.contains(.shift) { parts.append("shift") }
+        for (m, name) in [(Modifiers.control, "control"), (.option, "option"), (.command, "command"), (.shift, "shift")] where modifiers.contains(m) {
+            parts.append(KeyNames.spokenNames[name] ?? name)
+        }
         parts.append(KeyNames.spoken(for: keyCode, characters: characters))
         return parts.joined(separator: " ")
     }
@@ -179,11 +178,34 @@ nonisolated public enum KeyNames {
     ]
     static let codes: [String: Int64] = { var d: [String: Int64] = [:]; for (k, v) in table { d[v.lowercased()] = k }; return d }()
     static let special: Set<Int64> = [36, 48, 51, 52, 53, 63, 64, 71, 72, 73, 74, 76, 79, 80, 90, 96, 97, 98, 99, 100, 101, 103, 105, 106, 107, 109, 111, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126]
-    static let spokenNames: [String: String] = [
-        "enter": "enter", "tab": "tab", "space": "space", "backspace": "backspace", "escape": "escape", "delete": "delete", "home": "home", "end": "end",
-        "pageUp": "page up", "pageDown": "page down", "leftArrow": "left arrow", "rightArrow": "right arrow", "upArrow": "up arrow", "downArrow": "down arrow",
-        "numpadEnter": "numpad enter", "capsLock": "caps lock", "function": "fn", "help": "help", "section": "section",
-    ]
+    /// The slash key's name in the TurnOver layer's list.
+    public static var slashName: String { String(localized: "Slash", comment: "The / key") }
+    /// The keys as they are spoken, in the reader's language (as the Mac's own keyboard names them, in Turkish).
+    static var spokenNames: [String: String] { [
+        "enter": String(localized: "key.enter", defaultValue: "enter", comment: "A key's name"),
+        "tab": String(localized: "key.tab", defaultValue: "tab", comment: "A key's name"),
+        "space": String(localized: "key.space", defaultValue: "space", comment: "A key's name"),
+        "backspace": String(localized: "key.backspace", defaultValue: "backspace", comment: "A key's name"),
+        "escape": String(localized: "key.escape", defaultValue: "escape", comment: "A key's name"),
+        "delete": String(localized: "key.delete", defaultValue: "delete", comment: "A key's name (forward delete)"),
+        "home": String(localized: "key.home", defaultValue: "home", comment: "A key's name"),
+        "end": String(localized: "key.end", defaultValue: "end", comment: "A key's name"),
+        "pageUp": String(localized: "key.pageUp", defaultValue: "page up", comment: "A key's name"),
+        "pageDown": String(localized: "key.pageDown", defaultValue: "page down", comment: "A key's name"),
+        "leftArrow": String(localized: "key.leftArrow", defaultValue: "left arrow", comment: "A key's name"),
+        "rightArrow": String(localized: "key.rightArrow", defaultValue: "right arrow", comment: "A key's name"),
+        "upArrow": String(localized: "key.upArrow", defaultValue: "up arrow", comment: "A key's name"),
+        "downArrow": String(localized: "key.downArrow", defaultValue: "down arrow", comment: "A key's name"),
+        "numpadEnter": String(localized: "key.numpadEnter", defaultValue: "numpad enter", comment: "A key's name"),
+        "capsLock": String(localized: "key.capsLock", defaultValue: "caps lock", comment: "A key's name"),
+        "function": String(localized: "key.function", defaultValue: "fn", comment: "A key's name"),
+        "help": String(localized: "key.help", defaultValue: "help", comment: "A key's name"),
+        "section": String(localized: "key.section", defaultValue: "section", comment: "A key's name (§, beside 1 on some keyboards)"),
+        "command": String(localized: "key.command", defaultValue: "command", comment: "A modifier key's name"),
+        "control": String(localized: "key.control", defaultValue: "control", comment: "A modifier key's name"),
+        "option": String(localized: "key.option", defaultValue: "option", comment: "A modifier key's name"),
+        "shift": String(localized: "key.shift", defaultValue: "shift", comment: "A modifier key's name"),
+    ] }
 
     public static func name(for keyCode: Int64) -> String { table[keyCode] ?? "key\(keyCode)" }
     public static func code(for name: String) -> Int64? { codes[name.lowercased()] }

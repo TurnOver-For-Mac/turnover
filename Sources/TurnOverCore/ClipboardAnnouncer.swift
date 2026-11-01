@@ -24,21 +24,31 @@ public enum ClipboardAnnouncer {
         let before = NSPasteboard.general.changeCount
         DispatchQueue.main.asyncAfter(deadline: .now() + (kind == "pasted" ? 0.15 : 0.3)) {
             if kind != "pasted", NSPasteboard.general.changeCount == before { return }   // nothing was copied
-            guard kind == "pasted" else { Speech.speakMessage(kind, remember: false); return }
+            guard kind == "pasted" else { Speech.speakMessage(spoken(kind), remember: false); return }
             Speech.asPrivate { Speech.speakMessage(pastedSpeech(), remember: false) }   // a pasted token or password never reaches the history (code review, 16 Oct 2026)
         }
     }
 
     /// "pasted, " and the text (VoiceOver reads it; it was silent in Safari's fields, 3 Oct 2026). Terminal echoes a
     /// paste as output, which its module reads, so there it stays "pasted". A password field: the count only.
+    /// The kind ("copied", "cut", "copied path") as said: the kind itself stays English, as it is compared.
+    static func spoken(_ kind: String) -> String {
+        switch kind {
+        case "copied": return String(localized: "copied", comment: "Command C pressed")
+        case "cut": return String(localized: "cut", comment: "Command X pressed")
+        case "copied path": return String(localized: "copied path", comment: "Command Option C pressed in Finder")
+        default: return String(localized: "pasted", comment: "Command V pressed")
+        }
+    }
+
     static func pastedSpeech() -> String {
         if let f = API.focusObject, f.role == .passwordEdit {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { Speech.speakMessage(Speech.secureCount(f), remember: false) }
-            return "pasted"
+            return spoken("pasted")
         }
-        if NSWorkspace.shared.frontmostApplication?.bundleIdentifier == "com.apple.Terminal" { return "pasted" }
-        guard let text = NSPasteboard.general.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return "pasted" }
-        if text.count <= 400 { return "pasted, " + text }
-        return "pasted, " + String(text.prefix(200)) + ", and \(text.count - 200) more characters"
+        if NSWorkspace.shared.frontmostApplication?.bundleIdentifier == "com.apple.Terminal" { return spoken("pasted") }
+        guard let text = NSPasteboard.general.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return spoken("pasted") }
+        if text.count <= 400 { return String(localized: "pasted, \(text)", comment: "Pasted text: the text") }
+        return String(localized: "pasted, \(String(text.prefix(200))), and \(String(text.count - 200)) more characters", comment: "Pasted text: its start, then how many characters more")
     }
 }

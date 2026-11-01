@@ -88,12 +88,16 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
     private var lastModifierNamed: (code: Int64, at: Date) = (0, .distantPast)
     private func announceModifier(code: Int64, flags: CGEventFlags, capsIsTurnOver: Bool) {
         let names: [Int64: (String, CGEventFlags?)] = [
-            55: ("command", .maskCommand), 54: ("right command", .maskCommand),
-            56: ("shift", .maskShift), 60: ("right shift", .maskShift),
-            58: ("option", .maskAlternate), 61: ("right option", .maskAlternate),
-            59: ("control", .maskControl), 62: ("right control", .maskControl),
-            63: ("function", .maskSecondaryFn),
-            57: (capsIsTurnOver ? "caps lock, the TurnOver key" : "caps lock", nil),
+            55: (String(localized: "key.command", defaultValue: "command", comment: "A modifier key's name"), .maskCommand),
+            54: (String(localized: "right command", comment: "A modifier key's name"), .maskCommand),
+            56: (String(localized: "key.shift", defaultValue: "shift", comment: "A modifier key's name"), .maskShift),
+            60: (String(localized: "right shift", comment: "A modifier key's name"), .maskShift),
+            58: (String(localized: "key.option", defaultValue: "option", comment: "A modifier key's name"), .maskAlternate),
+            61: (String(localized: "right option", comment: "A modifier key's name"), .maskAlternate),
+            59: (String(localized: "key.control", defaultValue: "control", comment: "A modifier key's name"), .maskControl),
+            62: (String(localized: "right control", comment: "A modifier key's name"), .maskControl),
+            63: (String(localized: "function", comment: "The Fn key's name, as keyboard help says it"), .maskSecondaryFn),
+            57: (capsIsTurnOver ? String(localized: "caps lock, the TurnOver key", comment: "Keyboard help: Caps Lock as the TurnOver key") : String(localized: "key.capsLock", defaultValue: "caps lock", comment: "A key's name"), nil),
         ]
         guard let (name, mask) = names[code] else { return }
         if let mask, !flags.contains(mask) { return }   // the key going up
@@ -390,7 +394,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
             disabledAt = disabledAt.filter { now.timeIntervalSince($0) < 10 } + [now]
             if disabledAt.count >= 3, now.timeIntervalSince(lastDisableSpoken) > 60 {
                 lastDisableSpoken = now
-                onMain { Speech.speakMessage("The system keeps switching TurnOver's keyboard off; TurnOver turns it back on each time. If keys are being missed, quit and start TurnOver again.") }
+                onMain { Speech.speakMessage(String(localized: "The system keeps switching TurnOver's keyboard off; TurnOver turns it back on each time. If keys are being missed, quit and start TurnOver again.", comment: "Spoken message")) }
             }
             return Unmanaged.passUnretained(event)
         }

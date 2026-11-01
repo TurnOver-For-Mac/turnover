@@ -57,7 +57,7 @@ public enum VoiceOverCommands {
             try? list.run(); list.waitUntilExit()
             let text = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
             guard let line = text.split(separator: "\n").first(where: { $0.contains(id) }), let open = line.lastIndex(of: "(") else {
-                onMain { Speech.speakMessage("That shortcut isn't on this Mac") }; return
+                onMain { Speech.speakMessage(String(localized: "That shortcut isn't on this Mac", comment: "Spoken message")) }; return
             }
             let name = line[..<open].trimmingCharacters(in: .whitespaces)
             Log.info("user keys: running the shortcut \"\(name)\"")
@@ -78,19 +78,20 @@ public enum VoiceOverCommands {
     public static func runScriptFile(_ path: String) {
         let full = (path as NSString).expandingTildeInPath
         let name = (path as NSString).lastPathComponent
-        guard FileManager.default.fileExists(atPath: full), let data = FileManager.default.contents(atPath: full) else { Speech.speakMessage("The script \(name) isn't there"); return }
+        guard FileManager.default.fileExists(atPath: full), let data = FileManager.default.contents(atPath: full) else { Speech.speakMessage(String(localized: "The script \(name) isn't there", comment: "A script file of your own is missing")); return }
         let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
         var approved = UserDefaults.standard.dictionary(forKey: "approvedScripts") as? [String: String] ?? [:]
         guard approved[full] == digest else {
             let changed = approved[full] != nil
             Log.info("user keys: the script \(full) needs a yes first (\(changed ? "changed" : "new"))")
-            TurnOverMenu.shared.openList("\(changed ? "The script \(name) has changed since you allowed it" : "Run the script \(name)?"). It runs with TurnOver's permissions", items: [
+            TurnOverMenu.shared.openList(verbatim: changed ? String(localized: "The script \(name) has changed since you allowed it. It runs with TurnOver's permissions", comment: "A script file of your own changed")
+                : String(localized: "Run the script \(name)?. It runs with TurnOver's permissions", comment: "A script file of your own, run for the first time"), items: [
                 MenuItem("Run it, and allow it from now on", .action {
                     approved[full] = digest
                     UserDefaults.standard.set(approved, forKey: "approvedScripts")
                     VoiceOverCommands.startScript(full)
                 }),
-                MenuItem("Don't run it", .action { Speech.speakMessage("not run") }),
+                MenuItem("Don't run it", .action { Speech.speakMessage(String(localized: "not run", comment: "Spoken message")) }),
             ])
             return
         }

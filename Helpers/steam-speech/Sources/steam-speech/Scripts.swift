@@ -179,11 +179,11 @@ enum Scripts {
       const say = it => { window.__steamSpeak(JSON.stringify({ name: it.text, role: roleOf(it), state: stateOf(it) })); };
       const move = (step, controlsOnly, edge) => {
         const list = controlsOnly ? items().filter(i => i.control) : items();
-        if (!list.length) { window.__steamSpeak(JSON.stringify({ name: 'nothing to read here', role: '', state: '' })); return; }
+        if (!list.length) { window.__steamSpeak(JSON.stringify({ name: 'nothing to read here', role: '', state: '', own: true })); return; }
         let i = cursor ? list.findIndex(x => x.el === cursor) : -1;
         if (edge === 'first') i = 0; else if (edge === 'last') i = list.length - 1;
         else if (i < 0) i = step > 0 ? 0 : list.length - 1;
-        else { i += step; if (i < 0 || i >= list.length) { window.__steamSpeak(JSON.stringify({ name: (i < 0 ? 'top' : 'bottom'), role: '', state: '' })); i = Math.max(0, Math.min(list.length - 1, i)); } }
+        else { i += step; if (i < 0 || i >= list.length) { window.__steamSpeak(JSON.stringify({ name: (i < 0 ? 'top' : 'bottom'), role: '', state: '', own: true })); i = Math.max(0, Math.min(list.length - 1, i)); } }
         cursor = list[i].el; cursorBox = list[i].box || null;
         try { cursor.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e) {}
         say(list[i]);
@@ -236,7 +236,7 @@ enum Scripts {
           if (!word) continue;
           const now = Date.now(); if (word === lastStateWord && now - lastStateAt < 300) continue;
           lastStateWord = word; lastStateAt = now;
-          window.__steamSpeak(JSON.stringify({ name: word, role: '', state: '' }));
+          window.__steamSpeak(JSON.stringify({ name: word, role: '', state: '', own: true }));
         }
       });
       stateObserver.observe(document.documentElement, { attributes: true, attributeOldValue: true, attributeFilter: ['aria-checked', 'aria-pressed'], subtree: true });

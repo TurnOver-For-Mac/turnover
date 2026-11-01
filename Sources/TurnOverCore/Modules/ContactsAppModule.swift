@@ -16,11 +16,11 @@ final class ContactsAppModule: AppModule {
 
     required init(pid: pid_t, bundleIdentifier: String, appName: String) {
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
-        script("contacts_toCard", "From the list to the person's card, read as a page", gestures: ["kb:tab"], category: "Contacts") { [weak self] _ in
+        script("contacts_toCard", String(localized: "From the list to the person's card, read as a page", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:tab"], category: "Contacts") { [weak self] _ in
             guard let self, let card = self.card() else { Tones.edge(); return }
             AXHandler.shared.focusChanged(card, pid: self.pid)
         }.isAvailable = { [weak self] in self?.inList() == true }
-        script("contacts_toList", "From the card back to the list", gestures: ["kb:shift+tab"], category: "Contacts") { [weak self] _ in
+        script("contacts_toList", String(localized: "From the card back to the list", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+tab"], category: "Contacts") { [weak self] _ in
             guard let self, let list = self.list() else { return }
             _ = list.set(kAXFocusedAttribute, kCFBooleanTrue)
             AXHandler.shared.focusChanged(list, pid: self.pid)

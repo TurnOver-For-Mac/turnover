@@ -61,7 +61,7 @@ extension AXHandler {
             Log.io("notification banner: \(text.count) characters")   // never its words: two-factor codes come this way
             NotificationHistory.add(text)
             VoiceOverSounds.play("Announcement.aiff")
-            Speech.asPrivate { Speech.speakNews("notification, " + text) }
+            Speech.asPrivate { Speech.speakNews(String(localized: "notification, \(text)", comment: "A notification banner: its words")) }
         }
     }
 }

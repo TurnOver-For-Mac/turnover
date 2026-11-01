@@ -33,7 +33,7 @@ enum FormatSearch {
         guard let kind = kinds[searchKey], let obj = API.focusObject as? EditableText,
               let info = try? obj.makeTextInfo(.caret) as? AXTextInfo else { return false }
         let n = info.storyLength(), caret = info.start
-        guard n > 0 else { Tones.edge(); Speech.speakMessage(forward ? "no next \(spoken)" : "no previous \(spoken)"); return true }
+        guard n > 0 else { Tones.edge(); Speech.speakMessage(Phrases.noNext(spoken, forward: forward)); return true }
         let lo = forward ? min(caret, n - 1) : max(0, caret - window), hi = forward ? min(n, caret + window) : min(n, caret + 1)
         guard hi > lo, let a = info.textElement.param(kAXAttributedStringForRangeParameterizedAttribute, axRangeValue(lo, hi - lo)) as? NSAttributedString,
               a.length > 0 else { return false }
@@ -52,14 +52,14 @@ enum FormatSearch {
             // Before the run the caret is in; the window's first run counts only if it starts the text.
             target = runs.indices.last { $0 < here && kind.wanted(runs[$0].key) && ($0 > 0 || runs[$0].start == 0) }
         }
-        guard let t = target else { Tones.edge(); Speech.speakMessage(forward ? "no next \(spoken)" : "no previous \(spoken)"); return true }
+        guard let t = target else { Tones.edge(); Speech.speakMessage(Phrases.noNext(spoken, forward: forward)); return true }
         let run = runs[t]
         info.setCaretOffset(run.start)
         obj.initAutoSelectDetection()
         var text = (a.string as NSString).substring(with: NSRange(location: run.start - lo, length: min(run.end - run.start, 200)))
         if let nl = text.firstIndex(where: \.isNewline) { text = String(text[..<nl]) }
         text = text.trimmingCharacters(in: .whitespaces)
-        let said = [text.isEmpty ? "blank" : text, kind.detail(run.format)].compactMap { $0 }.joined(separator: ", ")
+        let said = [text.isEmpty ? Phrases.blank : text, kind.detail(run.format)].compactMap { $0 }.joined(separator: ", ")
         Speech.speakMessage(said)
         return true
     }
