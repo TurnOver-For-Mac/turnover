@@ -73,6 +73,8 @@ These five decide whether anyone is speaking. Each has a named rule, and since 1
 | Kokoro, ducking, tones | `KokoroVoice.swift`, `Ducking.swift`, `Tones.swift` | `PureTests` (pipe cuts) |
 | Braille | `Core/Braille/*` (output, input with contracted words, the display's keys, history with its private flag); `TurnOverBraille/TOAppleBraille.m` drives USB, HID and Bluetooth on the braille thread, one driver call at a time. Its additive asynchronous close distinguishes pending, released and failed; production callers still wait synchronously (issue 160). Failed unloads retain ownership without retrying. | `PureTests` (short forms); `Tools/tests/braille-thread-test.sh` (nested callbacks, latest frame, gated poll/write/blank/unload, release states and failure retention) |
 
+Formatting shortcut feedback lives in `Core/Text/FormattingFeedback.swift`: unhandled native Command-B/I keep their normal delivery, then a bounded worker asks a verified app provider for the resulting state. `FormattingQuery.swift` owns bounded AX reads; TextEdit's provider uses native menu state, Ulysses' provider checks Markdown XL and a complete bounded paragraph. Unknown states stay silent. Replies expire after one second and are invalidated by keys, mouse clicks, focus/window changes and deactivation. Word's existing scripts remain the owner of its feedback. `FormattingFeedbackTests`, `TextEditFormattingTests`, `UlyssesFormattingTests` and `UlyssesFormattingProviderTests` cover delivery, stale replies and provider limits.
+
 ## Reading
 
 | Part | Files | Rule | Test |
