@@ -4,13 +4,13 @@
 as base64 text in a Swift source, so the app bundle carries no loose JSON. The JSON files under Resources/ are the
 source; EmbeddedResources.swift is generated from them and is never edited by hand.
 
-    python3 make-embedded.py            writes Sources/TurnOverCore/EmbeddedResources.swift
+    python3 make-embedded.py            writes Sources/Core/EmbeddedResources.swift
 """
 import base64, glob, os, zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 KEY = b"TurnOver/embedded/2026"
-OUT = os.path.join(HERE, "Sources", "TurnOverCore", "EmbeddedResources.swift")
+OUT = os.path.join(HERE, "Sources", "Core", "EmbeddedResources.swift")
 
 
 def pack(path):

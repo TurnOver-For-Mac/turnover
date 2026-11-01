@@ -1,0 +1,14 @@
+# Day 2 (10 Oct 2026): Preview with the test PDF. Item keys only.
+app: Preview
+open: ~/Library/Developer/TurnOver/scenarios/files/harbour.pdf
+mask: 0
+press: clearmods control+option+right
+expect: \w
+press: clearmods control+option+right
+expect: \w
+press: clearmods control+option+right
+expect: \w
+press: clearmods control+option+left
+expect: \w
+press: down
+wait: 0.5

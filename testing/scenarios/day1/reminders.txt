@@ -1,0 +1,8 @@
+# Day 1 (10 Oct 2026): Reminders. The item keys only (Tab types into an app's text boxes: a contact's note and Shortcuts' prompt got tabs, 10 Oct 2026). Nothing in the app changes.
+app: Reminders
+press: clearmods control+option+right
+expect: \w
+press: clearmods control+option+right
+expect: \w
+press: clearmods control+option+left
+expect: \w

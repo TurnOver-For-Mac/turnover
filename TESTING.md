@@ -1,5 +1,21 @@
 # Testing TurnOver
 
+## Source membership and app records
+
+`build.sh` runs `python3 Tools/check-migration.py --membership-only` and
+`python3 Tools/build-app-index.py --check`. Shared Core source files are discovered from their folder; app Swift files
+are individually listed in `Package.swift`. The checker rejects missing or duplicate sources, wrong-target membership
+and compiled app Tests, Fixtures or Experiments. Other target roots and the custom test runner are unchanged.
+
+`python3 Tools/check-migration.py --self-test` checks these rejection paths and automatic discovery of new Core files.
+Direct checker calls select full Xcode when the default command line tools cannot evaluate the manifest. The index
+check validates record categories, links and generated output. See [app folders](docs/APP-FOLDERS.md).
+
+For a pure file move, compare source bytes and modes, resolved memberships and named test results; no listening trial
+is needed. Keep batch inventories and logs with the review material, rather than adding frozen snapshots to main.
+For behavior changes, retain the installed-app and listening checks described below. Verbose test names come from
+`turnover-tests -v`, not from the build summary alone.
+
 ## Unit tests (every build)
 
 `turnover-tests` (Sources/TurnOverTests) is a plain executable: no XCTest, so it runs with the command line tools alone.
@@ -158,12 +174,12 @@ Guides/03 and 04.
 
 ## Driving the real thing
 
-> The key driver, the scenario files (testing/) and the regression pass described below are the maintainer's and
-> aren't in the public repository yet: they drive a real Mac and assume one person's setup. The unit tests and
-> fixtures above are complete.
+> The scenarios and the regression pass described below drive a real Mac with your own apps. Read
+> [testing/scenarios/README.md](testing/scenarios/README.md) before running them. The unit tests and fixtures above
+> need none of this.
 
-The key driver and probes run from ~/Library/Developer/TurnOver/tools (sources: Tools/drivers; t.sh, bt.sh, axshape and the rest); notes from
-each day's stress test are in testing/. Browsers are never driven: checklists instead (testing/chrome-signoff-checklist.md).
+The key driver and probes run from ~/Library/Developer/TurnOver/tools (sources: Tools/drivers; t.sh, bt.sh, axshape and
+the rest). Browsers are never driven: they're checked by hand.
 
 ## The regression pass (before every release)
 
@@ -183,17 +199,17 @@ What a stop means (scenario.py's exit codes): 3, the owner is at the keyboard (a
 test's own keys or TurnOver's logged hand-over); 4, the app under test is not in front (a cold start over 16 s, a
 dialog); 5, a style switch failed; 6, a key was passed through. The log names the part; run that part again.
 
-Every miss is read in TurnOver's log before it is called a regression: most are the test or the app. The known ones
-(Xcode's and Script Editor's last row, Excel's cold-start first key) are listed in the day's testing notes.
+Every miss is read in TurnOver's log before it is called a regression: most are the test or the app. The known ones:
+Xcode's and Script Editor's last row, and Excel's cold-start first key.
 
 ## Scenarios (the daily pass as files)
 
-`testing/scenarios/*.txt` (live copy `~/Library/Developer/TurnOver/scenarios`) describe a run of keys in an app and what TurnOver must say or which
-script must run; `tools/scenario.py <file>` runs one with the key driver and reports each expectation (spoken words
-masked). The format is at the top of scenario.py. They refuse to run while the user is at the keyboard.
+`testing/scenarios/<part>/*.txt` (live copy `~/Library/Developer/TurnOver/scenarios`) describe a run of keys in an app
+and what TurnOver must say or which script must run; `tools/scenario.py <file>` runs one with the key driver and
+reports each expectation (spoken words masked). The format is at the top of scenario.py. They refuse to run while the
+user is at the keyboard.
 
-`scenarios/run-all.sh mac` runs every scenario (the smoke pass before a build goes out; `windows` is the parked
-style); `tools/privacy-check.sh <feedback.zip> <words>` looks for private words in a feedback report.
+`tools/privacy-check.sh <feedback.zip> <words>` looks for private words in a feedback report.
 
 ## Keyboard readiness and activation
 

@@ -1,0 +1,10 @@
+# Day 5 (11 Oct 2026): QuickTime Player. Item keys only; masked.
+app: QuickTime Player
+press: clearmods control+option+right
+expect: \w|(edge)
+press: clearmods control+option+right
+expect: \w|(edge)
+press: clearmods control+option+right
+expect: \w|(edge)
+press: clearmods control+option+left
+expect: \w|(edge)

@@ -1,0 +1,13 @@
+# App Store: Down, End off the main thread, Return, Escape, quit.
+app: App Store
+wait: 4
+press: down
+expect-script: appStore_next
+press: down
+expect-script: appStore_next
+press: end
+expect-script: appStore_last
+wait: 7
+press: up
+expect-script: appStore_previous
+press: clearmods command+q

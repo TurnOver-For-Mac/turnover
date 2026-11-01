@@ -1,0 +1,24 @@
+# Keypad, Windows style (12 Oct 2026): NVDA's desktop keypad keys, in my own file. Clear switches to numbers and back.
+app: TextEdit
+open: ~/Library/Developer/TurnOver/scenarios/files/parity.txt
+style: windows
+mask: 0
+press: command+up
+wait: 0.5
+press: kp8
+expect: harbour
+press: kp9
+expect: blank|High
+press: kp3
+expect: \w
+press: shift+kp7
+expect: harbour
+press: kp0hold:kp5
+expect: \w
+press: kpclear
+expect: keypad numbers
+press: kp5
+expect-log: input \(a typed key\)
+press: command+z
+press: kpclear
+expect: keypad commands

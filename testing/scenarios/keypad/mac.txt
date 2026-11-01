@@ -1,0 +1,29 @@
+# Keypad, Mac style (12 Oct 2026): VoiceOver's NumPad Commander, in my own file. Off at first: keypad 5 types.
+app: TextEdit
+open: ~/Library/Developer/TurnOver/scenarios/files/parity.txt
+style: mac
+mask: 0
+press: command+up
+wait: 0.5
+press: kp5
+expect-log: input \(a typed key\)
+press: command+z
+press: clearmods control+option+kpclear
+expect: NumPad Commander on
+press: kp2
+expect: \w
+press: kp8
+expect: \w
+press: kp0hold:kp5
+expect: (?i)heading
+press: shift+kp5
+expect: (?i)table
+press: command+kp5
+expect: \w
+press: option+kp5
+expect: \w
+press: clearmods control+option+kpclear
+expect: NumPad Commander off
+press: kp5
+expect-log: input \(a typed key\)
+press: command+z

@@ -1,0 +1,26 @@
+# The plugin maker on its new keys (12 Oct 2026): what is this, label, undo, in my own file.
+app: TextEdit
+open: ~/Library/Developer/TurnOver/scenarios/files/parity.txt
+style: mac
+mask: 0
+press: command+up
+wait: 0.5
+press: clearmods control+option+/
+expect: What is this
+press: return
+expect: \w
+press: clearmods control+option+/
+expect: What is this
+press: down
+expect: Label
+press: return
+expect: Name for this
+press: type:tide
+press: return
+expect: Labelled tide
+# The layer's M is the TurnOver menu (seven lines since 21 Oct 2026, NVDA's shape); the plugin maker's undo moved
+# with the plugin items under Tools, Plugins, and is not walked here (the plugins part is parked).
+press: clearmods control+command+, m
+expect: TurnOver menu
+press: escape
+expect: closed

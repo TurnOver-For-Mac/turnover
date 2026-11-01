@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-29",
+  "app": "com.apple.TextEdit",
+  "appVersion": "1.21",
+  "appBuild": "419",
+  "macOS": "27.2",
+  "macOSBuild": "26B118",
+  "readerBaseCommit": "280d7bf",
+  "keyboardStyle": "mac",
+  "macVoiceOver": false,
+  "source": "sanitised selection of existing reader log events; no raw speech content copied",
+  "fileMenu": {
+    "pressResult": "success",
+    "subsequentDownCommands": [
+      "list_downArrow",
+      "caret_moveByLine"
+    ],
+    "menuFocusObserved": true,
+    "normalMenuOpeningTracked": false
+  },
+  "editMenu": {
+    "pressResult": "success",
+    "normalMenuOpeningTracked": true,
+    "subsequentDownCommand": "menu_downArrow",
+    "selectionEventsObserved": true
+  },
+  "limits": [
+    "Observed session only; no patched build trial yet.",
+    "AXPress success alone does not prove a visible menu opened."
+  ]
+}

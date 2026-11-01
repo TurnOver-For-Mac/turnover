@@ -9,7 +9,7 @@ sends the key on itself and waits for the application to report the change, then
 
 ## 1. The tap sees the key
 
-[KeyboardHandler.swift](Sources/TurnOver/KeyboardHandler.swift) installs an event tap at the HID level, on a thread
+[KeyboardHandler.swift](../Sources/TurnOver/KeyboardHandler.swift) installs an event tap at the HID level, on a thread
 of its own with its own run loop, so a busy main thread can never delay a keystroke or get the tap disabled. The
 method tapEvent is called for every key down, key up and modifier change on the Mac. In order, it:
 
@@ -43,12 +43,12 @@ method tapEvent is called for every key down, key up and modifier change on the 
 ## 2. The main thread decides
 
 The tap cannot read the object model (that lives on the main thread), so it asks. The askMain method in
-[ScriptHandler.swift](Sources/TurnOverCore/ScriptHandler.swift) hands the gesture to the main thread and waits up
+[ScriptHandler.swift](../Sources/Core/Keys/ScriptHandler.swift) hands the gesture to the main thread and waits up
 to the lookupLimit, 0.15 s. Normal answers take microseconds. If the main thread is late, the key is swallowed now
 (deferred) and when the answer comes the script runs or the key is re-posted, with a warning line saying how late.
 Only a main thread that has stopped beating altogether (the watchdog's view) lets keys straight through.
 
-On the main thread, handleKeyDown in [InputManager.swift](Sources/TurnOverCore/InputManager.swift) runs. In order:
+On the main thread, handleKeyDown in [InputManager.swift](../Sources/Core/Keys/InputManager.swift) runs. In order:
 
 - **A capture** (the keyboard commands editor waiting for a key) takes the key outright.
 - **Pass next key** (the command that lets one key through untouched) lets it go and logs passed through.
@@ -71,12 +71,12 @@ findScript in ScriptHandler.swift asks, in this order, and the first answer wins
 1. **The user's own keys** (UserGestures): a key the user gave to a command, or took away.
 2. **The style's table** (StyleKeymap): Narrator and JAWS keys mapped onto TurnOver's commands.
 3. **Global plugins**: VoiceOver's keys and NVDA's keys live here.
-4. **The app module** for the focused process (FinderAppModule and the rest, under Sources/TurnOverCore/Modules).
+4. **The app module** for the focused process (FinderAppModule and the rest, under Sources/Apps).
 5. **The document**, when browse mode or a text document is intercepting (the focusTreeInterceptor).
 6. **The focus object** itself, then its ancestors for scripts marked canPropagate.
 7. **The global commands** (GlobalCommands.swift): everything that works everywhere.
 
-A Script, defined in [Scripts.swift](Sources/TurnOverCore/Scripts.swift), is a name, a description for keyboard
+A Script, defined in [Scripts.swift](../Sources/Core/Keys/Scripts.swift), is a name, a description for keyboard
 help, a category, the handler to run and an optional isAvailable check. Several scripts may share a key, each with
 its own availability; the first available one runs. An availability check that talks to the application and takes
 more than 15 ms is logged by name, so slow checks are found rather than guessed.
@@ -88,7 +88,7 @@ with the number of accessibility calls it made and how long they took.
 ## 4. A script that moves something
 
 Most scripts do not do the work themselves; they let the application do it and then read the result. The list
-arrows are the example. SelectableList in [SelectableList.swift](Sources/TurnOverCore/SelectableList.swift) is the class for a
+arrows are the example. SelectableList in [SelectableList.swift](../Sources/Core/Objects/SelectableList.swift) is the class for a
 list, table or outline that moves its own selection. Its initOverlay declares a script per key (list_downArrow,
 list_upArrow, list_home and so on). The moveSelection method:
 
@@ -101,12 +101,12 @@ list_upArrow, list_home and so on). The moveSelection method:
 - with nothing selected yet it selects the first row itself through accessibility; at the top or bottom it sends
   the key and does not wait; in a list that ignores the arrows it walks the rows itself; in an empty one it says so.
 
-The same shape is everywhere: EditableText in [EditableText.swift](Sources/TurnOverCore/EditableText.swift) sends a caret key on and waits for the
+The same shape is everywhere: EditableText in [EditableText.swift](../Sources/Core/Text/EditableText.swift) sends a caret key on and waits for the
 caret to move before speaking the line, word or character at the new place.
 
 ## 5. Speech
 
-[Speech.swift](Sources/TurnOverCore/Speech.swift) is the one door to the voice:
+[Speech.swift](../Sources/Core/Speech/Speech.swift) is the one door to the voice:
 
 - **speakMessage** says TurnOver's own words (a message; it reaches braille as a message too).
 - **speakObject** says an object as the focus: objectPropertiesSpeech builds the pieces (name, role, value, states,
@@ -116,7 +116,7 @@ caret to move before speaking the line, word or character at the new place.
 - **enqueue** is where every line ends up. It splits text by language, hands the cleaned text to the sink (the
   tests listen here), then stops if the speech mode is off or beeps, or if VoiceOver is talking and TurnOver is not
   coexisting. What remains is logged as say: and queued on the SpeechPlayer in
-  [SpeechPlayer.swift](Sources/TurnOverSpeech/SpeechPlayer.swift), which runs the voice on its own thread.
+  [SpeechPlayer.swift](../Sources/TurnOverSpeech/SpeechPlayer.swift), which runs the voice on its own thread.
 
 ## 6. The worked example
 

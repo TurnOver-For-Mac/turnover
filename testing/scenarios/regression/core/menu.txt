@@ -1,0 +1,15 @@
+# The TurnOver menu through the layer key, and the keyboard style switched there and back (12 Oct 2026: Command Control
+# Comma, then N and K; Command Control N and VO-Shift-K are no longer TurnOver's).
+app: TextEdit
+open: ~/Library/Developer/TurnOver/scenarios/scratch.rtf
+press: clearmods control+command+, n
+expect: 1 of \d+
+press: clearmods down
+expect: 2 of \d+
+press: escape
+# K says the style it switched to: NVDA keys, JAWS keys, VoiceOver keys (three styles since build 22, 25 Oct 2026).
+press: clearmods control+command+, k
+expect: (NVDA|JAWS|VoiceOver) keys
+press: clearmods control+command+, k
+expect: (NVDA|JAWS|VoiceOver) keys
+press: clearmods command+w

@@ -259,9 +259,9 @@ func focusRuleTests() {
         return f
     }
     func focusIs(_ id: Int) -> Bool { API.focusObject.map { AXReplay.id(of: $0.element) == id } ?? false }
-    /// The replayed application is the one in front.
-    func playing(_ body: () -> Void) {
-        AXReplay.load(tree()); AXHandler.shared.activePid = 900_009
+    /// The replayed application (the tree above, or another) is the one in front.
+    func playing(_ fixture: AXFixture? = nil, _ body: () -> Void) {
+        AXReplay.load(fixture ?? tree()); AXHandler.shared.activePid = 900_009
         defer { AXReplay.unload(); AXHandler.shared.activePid = 0; API.setFocusObject(nil, ancestors: []) }
         API.setFocusObject(nil, ancestors: [])
         body()
@@ -307,6 +307,61 @@ func focusRuleTests() {
         }
     }
 
+    /// System Settings on macOS 27: the search field (22) has a stand-in (21) in the same place that answers nothing
+    /// about its text (no value, no caret). SwiftUI reports the stand-in focused first and the field straight after,
+    /// and the application gives the field as its focus. A switch (23) has a second reference (24); both answer. A
+    /// long document (25) is an ordinary text area.
+    /// Numbers of its own (the application stays 9, the pid the rules are given): the focus a test just before
+    /// presented counts as reported twice for half a second, and the replay's element 1 is the same in every tree.
+    func standIn() -> AXFixture {
+        var f = AXFixture(app: "Settings", bundle: "s", recorded: "", root: 20, application: 9, focus: 22, nodes: [])
+        func placed(_ attrs: [String: AXFixture.Value], _ x: Double, _ y: Double, _ w: Double, _ h: Double) -> [String: AXFixture.Value] {
+            attrs.merging(["AXPosition": .point(x, y), "AXSize": .size(w, h), "AXParent": .element(20), "AXWindow": .element(20)]) { a, _ in a }
+        }
+        f.nodes = [
+            .init(id: 20, attrs: ["AXRole": .string("AXWindow"), "AXSubrole": .string("AXStandardWindow"), "AXTitle": .string("About"), "AXParent": .element(9),
+                                  "AXChildren": .elements([22, 23, 25]), "AXFocused": .bool(false)]),
+            .init(id: 21, attrs: placed(["AXRole": .string("AXTextField"), "AXSubrole": .string("AXSearchField"), "AXFocused": .bool(true)], 10, 60, 232, 28)),
+            .init(id: 22, attrs: placed(["AXRole": .string("AXTextField"), "AXSubrole": .string("AXSearchField"), "AXFocused": .bool(true), "AXValue": .string(""),
+                                         "AXPlaceholderValue": .string("Search"), "AXSelectedTextRange": .range(0, 0), "AXNumberOfCharacters": .number(0)], 10, 60, 232, 28)),
+            .init(id: 23, attrs: placed(["AXRole": .string("AXCheckBox"), "AXSubrole": .string("AXSwitch"), "AXTitle": .string("Wi-Fi"), "AXValue": .number(1)], 300, 120, 40, 22)),
+            .init(id: 24, attrs: placed(["AXRole": .string("AXCheckBox"), "AXSubrole": .string("AXSwitch"), "AXTitle": .string("Wi-Fi"), "AXValue": .number(1)], 300, 120, 40, 22)),
+            .init(id: 25, attrs: placed(["AXRole": .string("AXTextArea"), "AXFocused": .bool(true), "AXValue": .string(String(repeating: "A long document. ", count: 2000)),
+                                         "AXSelectedTextRange": .range(0, 0), "AXNumberOfCharacters": .number(34_000)], 300, 200, 400, 300)),
+            .init(id: 9, attrs: ["AXRole": .string("AXApplication"), "AXTitle": .string("Settings"), "AXChildren": .elements([20]), "AXWindows": .elements([20]),
+                                  "AXFocusedWindow": .element(20), "AXMainWindow": .element(20), "AXFocusedUIElement": .element(22)]),
+        ]
+        return f
+    }
+    test("focus rules: a text field's stand-in gives way to the field the application has focused") {
+        playing(standIn()) {
+            AXHandler.shared.focusChanged(AXReplay.element(21), pid: 900_009)
+            check(focusIs(22), "the field itself is the focus, not its stand-in")
+            check((try? API.focusObject?.makeTextInfo(.caret)) != nil, "the focus gives its caret, so the review keys have text to move in")
+            AXHandler.shared.focusChanged(AXReplay.element(22), pid: 900_009)
+            check(focusIs(22), "the field, reported after its stand-in, is still the focus")
+        }
+    }
+    test("focus rules: two references to a switch are one control, the first kept") {
+        playing(standIn()) {
+            AXHandler.shared.focusChanged(AXReplay.element(23), pid: 900_009)
+            AXHandler.shared.focusChanged(AXReplay.element(24), pid: 900_009)
+            check(focusIs(23), "the second reference to the switch is not a new focus")
+        }
+    }
+    test("focus rules: a text area reported again is set aside without its whole text read") {
+        playing(standIn()) {
+            AXHandler.shared.focusChanged(AXReplay.element(25), pid: 900_009)
+            check(focusIs(25), "the long document is the focus")
+            AXReplay.reads = []
+            defer { AXReplay.reads = nil }
+            AXHandler.shared.focusChanged(AXReplay.element(25), pid: 900_009)
+            let valueReads = (AXReplay.reads ?? []).filter { $0.id == 25 && $0.attribute == kAXValueAttribute }.count
+            expect(valueReads, 0, "the same text area reported again: its value (34,000 characters) was not read")
+            check(focusIs(25), "and it is still the focus")
+        }
+    }
+
     /// A Pages document: a window (0) in the application (9), its page layout (2) holding two pages (3, 5), each
     /// with its copy of the body text (4, 6). Both copies give the caret, or (a document just opened) neither does.
     func pages(caret: Bool) -> AXFixture {
@@ -348,6 +403,81 @@ func focusRuleTests() {
         guard let module = pagesModule() else { return Harness.fail("Pages' module is registered") }
         expect(module.redirectFocus(AXReplay.element(2)).flatMap { AXReplay.id(of: $0) }, 4, "the first page's body text is the focus")
         check(AXReplay.sets.isEmpty, "nothing set in Pages (set: \(setsSaid()))")
+    }
+
+    /// A conversation page (60) in a window (59) of the application (9), as the Claude app's: two lines of a reply (62,
+    /// 64), its Copy button (65) and the prompt (66).
+    func conversation() -> AXFixture {
+        var f = AXFixture(app: "T", bundle: "t", recorded: "", root: 59, application: 9, focus: 65, nodes: [])
+        f.nodes = [
+            .init(id: 59, attrs: ["AXRole": .string("AXWindow"), "AXSubrole": .string("AXStandardWindow"), "AXTitle": .string("Chat"), "AXParent": .element(9),
+                                  "AXChildren": .elements([60])]),
+            .init(id: 60, attrs: ["AXRole": .string("AXWebArea"), "AXURL": .url("https://example.com/chat"), "AXParent": .element(59), "AXWindow": .element(59),
+                                  "AXChildren": .elements([61, 63, 65, 66])]),
+            .init(id: 61, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(60), "AXWindow": .element(59), "AXChildren": .elements([62])]),
+            .init(id: 62, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("The reply starts here."), "AXParent": .element(61), "AXWindow": .element(59)]),
+            .init(id: 63, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(60), "AXWindow": .element(59), "AXChildren": .elements([64])]),
+            .init(id: 64, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("The reading stopped on this line."), "AXParent": .element(63), "AXWindow": .element(59)]),
+            .init(id: 65, attrs: ["AXRole": .string("AXButton"), "AXTitle": .string("Copy"), "AXParent": .element(60), "AXWindow": .element(59)]),
+            .init(id: 66, attrs: ["AXRole": .string("AXTextArea"), "AXDescription": .string("Prompt"), "AXValue": .string(""), "AXParent": .element(60), "AXWindow": .element(59)]),
+            .init(id: 9, attrs: ["AXRole": .string("AXApplication"), "AXTitle": .string("T"), "AXChildren": .elements([59]), "AXWindows": .elements([59]),
+                                 "AXFocusedWindow": .element(59), "AXMainWindow": .element(59), "AXFocusedUIElement": .element(65)]),
+        ]
+        return f
+    }
+
+    // Command-Tab away and back: the Claude app and Safari give the focus back to the control that had it, and the
+    // reading position went there too, into focus mode on the prompt (28 and 29 Oct 2026). NVDA leaves the reading
+    // position and the mode as they were, and reads the line there.
+    test("browse mode: back from another app onto the control that had the focus, the reading position and the mode stay") {
+        AXReplay.load(conversation())
+        let saved = config, keep = Speech.sink
+        var said = ""
+        Speech.sink = { said += $0 + " " }
+        defer { AXReplay.unload(); API.setFocusObject(nil, ancestors: []); BrowseModeHandler.shared.forget(pid: 900_060); config = saved; Speech.sink = keep }
+        config.virtualBuffers.autoFocusMode = true
+        Speech.testResetFocusTiming()
+        let page = BrowseModeHandler.shared.document(root: AXReplay.element(60))
+        /// The focus on `id`, given to the page as AXHandler.present() and the event chain give it, from outside the page
+        /// or from inside it. (Replayed, present() can't find the page from its focus: every replayed attribute is
+        /// settable, so the web area reads as an editable one.) True when the page passes the event on to the control, as
+        /// for a focus it follows.
+        @MainActor func focus(_ id: Int, fromOutside: Bool) -> Bool {
+            let f = ObjectFactory.make(AXReplay.element(id))
+            API.setFocusObject(f, ancestors: f.ancestors, interceptor: page)
+            page.focusFromOutside = fromOutside
+            said = ""
+            var passed = false
+            page.handleEvent(Event(.gainFocus, f)) { passed = true }
+            return passed
+        }
+        let stopped = page.buffer.text.range(of: "The reading stopped").location
+        check(stopped != NSNotFound, "the reply is on the page")
+
+        // Browse mode with the focus on Copy; the reading went on to the reply's second line; another app; back.
+        check(focus(65, fromOutside: true), "the first focus on Copy is followed")
+        page.position = stopped
+        check(!focus(65, fromOutside: true), "back onto Copy, it is not read itself")
+        expect(page.position, stopped, "the reading position stays where the reading stopped")
+        check(said.contains("The reading stopped on this line"), "the line there is read: \(said)")
+
+        // The prompt: focus mode as it takes the focus, Escape for browse mode, the reading went on, another app, back.
+        check(focus(66, fromOutside: false), "into the prompt from inside the page, the focus is followed")
+        check(page.passThrough && page.position != stopped, "focus mode on the prompt, the reading position on it")
+        page.setPassThrough(false, announce: false)
+        page.position = stopped
+        check(!focus(66, fromOutside: true), "back onto the prompt, it is not read itself")
+        check(!page.passThrough, "browse mode stays, though the prompt has the focus")
+        expect(page.position, stopped, "the reading position stays where the reading stopped")
+
+        // Back onto another control than the one that had the focus: followed, as NVDA does.
+        check(focus(65, fromOutside: true), "back onto Copy while the prompt had the focus, it is followed")
+        check(page.position != stopped, "the reading position went to Copy")
+
+        // Typing in the prompt (focus mode), another app, back: typing still.
+        check(focus(66, fromOutside: false) && page.passThrough, "into the prompt, focus mode")
+        check(focus(66, fromOutside: true), "back into the prompt in focus mode, the focus is followed as before")
+        check(page.passThrough, "focus mode stays")
     }
 }
 
