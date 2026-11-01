@@ -23,7 +23,7 @@ Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
   sender while everything else stays as it was. The three old switches (help text, shortcut, position) are rows of the
   list now; a settings file from before keeps their values.
 
-## 2.0, build 22.5 (unreleased)
+## 2.0, build 22.5
 
 ### Fixed
 
