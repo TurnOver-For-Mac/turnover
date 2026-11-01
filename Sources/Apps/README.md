@@ -63,7 +63,7 @@ Run `python3 Tools/build-app-index.py` after editing app records or documentatio
 - [Steam](Steam/STATUS.md) — Effort: Module; being worked on: Unclaimed.
 - [System Settings](SystemSettings/STATUS.md) — Effort: Module; being worked on: Unclaimed.
 - [TextEdit](TextEdit/STATUS.md) — Effort: Module; being worked on: Codex for Oliver, issue 212 (local trial pending).
-- [Ulysses](Ulysses/STATUS.md) — Effort: Module; being worked on: Codex for Oliver, issue 212 (local trial pending).
+- [Ulysses](Ulysses/STATUS.md) — Effort: Module; being worked on: Codex for Oliver, issue 212 (Ulysses listening trial passed; review pending).
 - [Voice Memos](VoiceMemos/STATUS.md) — Effort: None; being worked on: Unclaimed.
 - [WhatsApp](WhatsApp/STATUS.md) — Effort: Module; being worked on: Unclaimed.
 - [Xcode](Xcode/STATUS.md) — Effort: None; being worked on: Unclaimed.
