@@ -4,6 +4,7 @@
 # Ash: the startup hand-over, Word's spelling policy, the AI guidance.
 /Sources/TurnOver/LeadWatcher.swift  @Doll-Eye @ashleycox
 /Sources/TurnOver/TurnOverApp.swift  @Doll-Eye @ashleycox
+# Historical rule retained: ReaderSelection.swift is absent from this baseline; do not guess a new owner path.
 /Sources/TurnOverCore/ReaderSelection.swift  @Doll-Eye @ashleycox
 /Sources/Apps/Word/WordAppModule.swift  @Doll-Eye @ashleycox
 /AGENTS.md  @Doll-Eye @ashleycox

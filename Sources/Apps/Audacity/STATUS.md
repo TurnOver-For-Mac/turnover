@@ -14,4 +14,4 @@ Current-build task coverage remains unassessed. Next: Confirm startup prompts, w
 
 ## Evidence
 
-[Dated observations and limits](Experiments/2026-10-historical-checks.md). [Observer recovery](../../TurnOverCore/AXHandlerApplications.swift) · [Window-child filtering](../../TurnOverAX/AX.swift)
+[Dated observations and limits](Experiments/2026-10-historical-checks.md). [Observer recovery](../../Core/Accessibility/AXHandlerApplications.swift) · [Window-child filtering](../../TurnOverAX/AX.swift)

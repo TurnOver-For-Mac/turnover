@@ -14,4 +14,4 @@ Current-build task coverage remains unassessed. Next: With a public sample PDF, 
 
 ## Evidence
 
-[Dated observations and limits](Experiments/2026-10-historical-checks.md). [Shared enabled-state speech](../../TurnOverCore/TurnOverObject.swift)
+[Dated observations and limits](Experiments/2026-10-historical-checks.md). [Shared enabled-state speech](../../Core/Objects/TurnOverObject.swift)

@@ -14,6 +14,6 @@ Support is Not assessed for the current build. The historical results below rema
 
 ## Evidence
 
-[Historical checks and limits](Experiments/2026-10-historical-checks.md). [Shared navigation](../../TurnOverCore/ObjectNavigation.swift). [Retained masked library fixture](../../../Tests/Fixtures/ulysses-library.json).
+[Historical checks and limits](Experiments/2026-10-historical-checks.md). [Shared navigation](../../Core/Objects/ObjectNavigation.swift). [Retained masked library fixture](../../../Tests/Fixtures/ulysses-library.json).
 
 Retained fixtures are historical evidence; no direct current-harness references were found, so automated execution of these files is not claimed.

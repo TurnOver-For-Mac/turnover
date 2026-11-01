@@ -20,8 +20,9 @@ mostly about not wasting your time or mine.
 - [docs/HOW-A-KEY-BECOMES-SPEECH.md](docs/HOW-A-KEY-BECOMES-SPEECH.md) and
   [docs/HOW-FOCUS-BECOMES-AN-OBJECT.md](docs/HOW-FOCUS-BECOMES-AN-OBJECT.md): the two paths through the code, step by step.
 - [docs/DECISIONS.md](docs/DECISIONS.md): why things are the way they are, dated.
+- [Sources/README.md](Sources/README.md): the source map, including shared Core responsibilities, reusable Views and excluded investigation records. Existing Swift targets and ownership rules still apply.
 - [Sources/Apps/README.md](Sources/Apps/README.md): the app record index and fixed support/effort categories. App implementations live beside their records; shared registration, app wake helpers and Mac shell interactions live in `Sources/System/`, within the same TurnOverCore target. App quirks belong in their app implementation.
-- App implementations compile in TurnOverCore. New shared Core and System files are discovered from their folders; list new app Swift files in `coreSources` in `Package.swift`. Keep app Tests, Fixtures and Experiments out. Run `python3 Tools/build-app-index.py` after changing a status record. `build.sh` checks membership and index freshness.
+- App implementations compile in TurnOverCore. New shared Core, Views and System files are discovered from their folders; list new app Swift files in `coreSources` in `Package.swift`. Keep app Tests, Fixtures and Experiments out. Run `python3 Tools/build-app-index.py` after changing a status record. `build.sh` checks membership and index freshness.
 - The log (`~/Library/Application Support/TurnOver/logs`): what TurnOver saw and said. Most questions are answered
   there before the code.
 - If you think the code is untidy, the **Code health** milestone on GitHub is the list of what to tidy. Each item

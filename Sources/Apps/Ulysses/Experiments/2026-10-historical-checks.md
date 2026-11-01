@@ -25,7 +25,7 @@ Recovered from the retained local checkout’s historical testing notes, plus th
 
 ## Retained repository evidence
 
-- [Shared navigation](../../../TurnOverCore/ObjectNavigation.swift).
+- [Shared navigation](../../../Core/Objects/ObjectNavigation.swift).
 - [Retained masked library fixture](../../../../Tests/Fixtures/ulysses-library.json).
 
 The fixture/sample remains in the repository for reference. No direct references from the current test harness were found; this record does not claim the harness exercises it.

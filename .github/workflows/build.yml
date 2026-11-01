@@ -24,4 +24,4 @@ jobs:
           TURNOVER_BUILD: ${{ runner.temp }}/turnover-build
           TURNOVER_IDENTITY: "-"
       - name: Generated files are up to date
-        run: git diff --exit-code -- Sources/TurnOverCore/EmbeddedResources.swift "Resources/TurnOver Guide.txt"
+        run: git diff --exit-code -- Sources/Core/EmbeddedResources.swift "Resources/TurnOver Guide.txt"

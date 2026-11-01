@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Check ongoing SwiftPM source membership without a frozen migration snapshot.
 
-TurnOverCore discovers its shared Core and System folders; app files are explicit.
-Tests, Experiments and Fixtures remain outside the reader's build.
+TurnOverCore discovers its shared Core, Views and System folders; app files are explicit.
+Tests and Fixtures remain outside the reader's build; shared Experiments stay outside every default target.
 """
 import argparse
 import copy
@@ -15,7 +15,7 @@ import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-SHARED_FOLDERS = {"TurnOverCore", "System"}
+SHARED_FOLDERS = {"Core", "Views", "System"}
 NONPRODUCTION = {"Tests", "Experiments", "Fixtures"}
 SOURCE_SUFFIXES = {".swift", ".m", ".c", ".mm", ".cpp"}
 
@@ -102,7 +102,7 @@ def source_membership(root, resolved, manifest):
             require(len(normal) == len(set(normal)), f"duplicate source entries in {name}")
             require(all((name == "TurnOverCore" and p in SHARED_FOLDERS) or
                         PurePosixPath(p).suffix in SOURCE_SUFFIXES for p in normal),
-                    f"only Core's TurnOverCore and System entries may name source folders: {name}")
+                    f"only TurnOverCore's shared folder entries may name source folders: {name}")
     apps = {"Sources/" + p for p in core_entries if p not in SHARED_FOLDERS}
     require(all(app_production(p) and PurePosixPath(p).suffix == ".swift" for p in apps),
             "Core entries outside its shared folders must be production Apps Swift files")
@@ -120,6 +120,8 @@ def source_membership(root, resolved, manifest):
             require(canonical not in owners, f"source compiled more than once: {path}")
             owners[canonical] = name
             parts = PurePosixPath(path).parts
+            require(parts[:2] != ("Sources", "Experiments"),
+                    f"shared experiment compiled into default target {name}: {path}")
             if parts[:2] == ("Sources", "Apps"):
                 require(app_production(path), f"app test/experiment/fixture compiled into {name}: {path}")
                 require(name == "TurnOverCore", f"app production source belongs to wrong target: {path}")
@@ -144,19 +146,22 @@ def self_test():
             p = root / "Sources" / path
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text("// public sample\n")
-        originals = ["TurnOverCore/A.swift", "System/C.swift", "Apps/Calculator/B.swift"]
+        originals = [f"{folder}/Original.swift" for folder in sorted(SHARED_FOLDERS)]
+        originals.append("Apps/Calculator/B.swift")
+        expected_count = len(originals)
         for path in originals:
             add(path)
         manifest = {"targets": [{"name": "TurnOverCore", "path": "Sources",
-                                 "sources": ["TurnOverCore", "System", "Apps/Calculator/B.swift"]}]}
+                                 "sources": sorted(SHARED_FOLDERS) + ["Apps/Calculator/B.swift"]}]}
         resolved = copy.deepcopy(manifest)
         resolved["targets"][0]["sources"] = list(originals)
-        require(source_membership(root, resolved, manifest) == 3, "valid shared folders and app file rejected")
+        require(source_membership(root, resolved, manifest) == expected_count, "valid shared folders and app file rejected")
         for folder in sorted(SHARED_FOLDERS):
             path = f"{folder}/New.swift"
             add(path)
             resolved["targets"][0]["sources"].append(path)
-        require(source_membership(root, resolved, manifest) == 5, "shared folder growth should need no manifest edit")
+        expected_count += len(SHARED_FOLDERS)
+        require(source_membership(root, resolved, manifest) == expected_count, "shared folder growth should need no manifest edit")
         failures = []
         def refuses(label, current, declaration):
             try:
@@ -165,8 +170,12 @@ def self_test():
                 failures.append(label)
             else:
                 raise AssertionError(f"invalid source membership accepted: {label}")
-        for entry in ("./TurnOverCore", "./System", "./Apps/Calculator/B.swift", "Apps/Calculator",
-                      "Sources", "System/Subfolder", "System/New.swift", "../Outside.swift", "/Outside.swift"):
+        invalid_entries = [f"./{folder}" for folder in sorted(SHARED_FOLDERS)]
+        invalid_entries += [f"{folder}/Subfolder" for folder in sorted(SHARED_FOLDERS)]
+        invalid_entries += [f"{folder}/New.swift" for folder in sorted(SHARED_FOLDERS)]
+        invalid_entries += ["./Apps/Calculator/B.swift", "Apps/Calculator", "TurnOverCore",
+                            "Sources", "../Outside.swift", "/Outside.swift"]
+        for entry in invalid_entries:
             bad = copy.deepcopy(manifest); bad["targets"][0]["sources"].append(entry)
             refuses(f"invalid manifest entry {entry}", resolved, bad)
         for folder in sorted(SHARED_FOLDERS):
@@ -177,12 +186,12 @@ def self_test():
         for source in originals:
             missing = copy.deepcopy(resolved); missing["targets"][0]["sources"].remove(source)
             refuses(f"source omitted from resolved target: {source}", missing, manifest)
-        for parent in ("TurnOverCore", "System", "Apps/Calculator"):
+        for parent in sorted(SHARED_FOLDERS) + ["Apps/Calculator"]:
             for folder in sorted(NONPRODUCTION):
                 path = f"{parent}/{folder}/Sample.swift"
                 add(path)
                 # Samples remain excluded even when a recursive shared folder discovers its neighbours.
-                require(source_membership(root, resolved, manifest) == 5, f"excluded {path} affected production")
+                require(source_membership(root, resolved, manifest) == expected_count, f"excluded {path} affected production")
                 compiled = copy.deepcopy(resolved); compiled["targets"][0]["sources"].append(path)
                 bad = copy.deepcopy(manifest)
                 if parent.startswith("Apps/"):
@@ -201,11 +210,26 @@ def self_test():
             wrong["targets"].append({"name": "Other", "path": "Sources", "sources": [source]})
             wrong_manifest = copy.deepcopy(manifest); wrong_manifest["targets"].append(wrong["targets"][-1])
             refuses(f"wrong target for source: {source}", wrong, wrong_manifest)
+        experiment = "Experiments/Sample.swift"
+        add(experiment)
+        require(source_membership(root, resolved, manifest) == expected_count,
+                "excluded shared experiment affected production")
+        for name in ("TurnOverCore", "Other"):
+            compiled = copy.deepcopy(resolved)
+            declaration = copy.deepcopy(manifest)
+            if name == "TurnOverCore":
+                compiled["targets"][0]["sources"].append(experiment)
+            else:
+                target = {"name": name, "path": "Sources", "sources": [experiment]}
+                compiled["targets"].append(target)
+                declaration["targets"].append(copy.deepcopy(target))
+            refuses(f"shared experiment compiled into {name}", compiled, declaration)
         add("Apps/Calculator/New.swift")
         refuses("new app file must be listed explicitly", resolved, manifest)
         manifest["targets"][0]["sources"].append("Apps/Calculator/New.swift")
         resolved["targets"][0]["sources"].append("Apps/Calculator/New.swift")
-        require(source_membership(root, resolved, manifest) == 6, "explicit new app file rejected")
+        expected_count += 1
+        require(source_membership(root, resolved, manifest) == expected_count, "explicit new app file rejected")
         print(f"membership self-test: {len(failures)} invalid changes rejected; shared folder growth, explicit app files and excluded samples accepted")
 
 
@@ -220,7 +244,7 @@ def main():
         self_test(); return
     env = toolchain_environment() if not (args.package_json and args.dump_json) else os.environ.copy()
     count = source_membership(ROOT, metadata("resolved", args.package_json, env), metadata("manifest", args.dump_json, env))
-    print(f"source membership: {count} Core files, no omissions, duplicates or compiled tests/experiments/fixtures")
+    print(f"source membership: {count} TurnOverCore files, no omissions, duplicates or compiled tests/experiments/fixtures")
 
 
 if __name__ == "__main__":

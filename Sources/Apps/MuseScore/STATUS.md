@@ -14,4 +14,4 @@ Current-build task coverage remains unassessed. Next: Use a public sample score 
 
 ## Evidence
 
-[Dated observations and limits](Experiments/2026-10-historical-checks.md). [Focus-sensitive state announcements](../../TurnOverCore/TurnOverObject.swift)
+[Dated observations and limits](Experiments/2026-10-historical-checks.md). [Focus-sensitive state announcements](../../Core/Objects/TurnOverObject.swift)

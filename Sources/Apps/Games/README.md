@@ -6,7 +6,7 @@
 
 The bundled [steam-speech helper](../../../Helpers/steam-speech) reads Steam Big Picture and supported Electron games. Games starts the helper, accepts its speech and forwards the menu keys when Steam owns the frontmost window. Big Picture reading requires the user's existing opt-in. The helper remains a separate Swift package, installed in the app's Contents/Helpers directory by build.sh.
 
-The shared [SpeechPort](../../TurnOverCore/SpeechPort.swift) remains in Core. Games.swift also currently defines HelperLines, used by [HelperProgram](../../TurnOverCore/HelperProgram.swift), and DataBox, used by SpeechPort. These existing cross-area dependencies are retained; separating them requires a reviewed code change.
+The shared [SpeechPort](../../Core/Speech/SpeechPort.swift) remains in Core. Games.swift also currently defines HelperLines, used by [HelperProgram](../../Core/Support/HelperProgram.swift), and DataBox, used by SpeechPort. These existing cross-area dependencies are retained; separating them requires a reviewed code change.
 
 ## Checks
 

@@ -14,4 +14,4 @@ Current-build task coverage remains unassessed. Next: Confirm the app identity a
 
 ## Evidence
 
-[Dated observations and limits](Experiments/2026-10-historical-checks.md). [Shared parts inventory](../../TurnOverCore/TurnOverParts.swift) · [Profile implementation](../../TurnOverCore/Profiles.swift) · [Existing format tests](../../TurnOverTests/PureTests.swift)
+[Dated observations and limits](Experiments/2026-10-historical-checks.md). [Shared parts inventory](../../Core/Plugins/TurnOverParts.swift) · [Profile implementation](../../Core/Plugins/Profiles.swift) · [Existing format tests](../../TurnOverTests/PureTests.swift)

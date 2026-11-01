@@ -28,7 +28,7 @@ BRLTTY is LGPL. Use it to learn the protocol facts (ids, report layout, commands
 those facts, as with the NVDA rewrites (ESCALATIONS E13).
 
 ## Built so far (6 Oct 2026, before the display was charged)
-- `Sources/TurnOverCore/Braille/`: `BrailleTable` (8-dot computer braille, accented letters as the plain letter plus
+- `Sources/TurnOverCore/Braille/` (now [Sources/Core/Braille](../Sources/Core/Braille/)): `BrailleTable` (8-dot computer braille, accented letters as the plain letter plus
   dot 8), `Braille` (what is shown: the caret line in browse mode and editable text, else the focus object;
   messages for 4 s; panning on to the next and previous line; routing moves the caret, and in browse mode activates
   a link or button; an object's routing key presses it), `BaumHID` (finds BAUM displays while TurnOver leads,
