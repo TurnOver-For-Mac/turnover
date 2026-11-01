@@ -221,25 +221,27 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // its state be
     ]
     /// A JAWS or Narrator table's own commands and VoiceOver's key for each. A key that names a command, rather than
     /// standing for an NVDA key, has no twin to take, so where VoiceOver reads it was swallowed (the maintainer, 29 Oct
-    /// 2026). A command not listed here still has no key there.
+    /// 2026). A command not listed here, other than the reading keys (StyleKeymap.voiceOverStandIns), still has no
+    /// key there.
     static let commandTable: [(String, String, Int)] = [
         // JAWS's lists of one kind: VoiceOver's rotor, as NVDA+F7's list.
         ("jaws_linksList", "vo+u", 1), ("jaws_headingsList", "vo+u", 1), ("jaws_formFieldsList", "vo+u", 1),
     ]
     /// A JAWS or Narrator table's keys that stand for an NVDA key ("=kb:turnover+…"), given that key's VoiceOver twin,
-    /// and its keys that name a command of commandTable, given that command's; built on the main thread as the layer
-    /// starts (28 Oct 2026: JAWS keys where VoiceOver reads too).
+    /// its reading keys, given their arrows (both from StyleKeymap.voiceOverStandIns), and its keys that name a command
+    /// of commandTable, given that command's; built on the main thread as the layer starts (28 Oct 2026: JAWS keys
+    /// where VoiceOver reads too).
     nonisolated static let styleChords = Locked<[Chord: Target]>([:])
     @MainActor static func buildStyleChords() {
         var d: [Chord: Target] = [:]
         let style = config.general.style
         if style == .jaws || style == .narrator {
+            // The layer's names: canonical "delete" is forward delete, "backspace" the key this layer calls delete.
+            let names = ["leftArrow": "left", "rightArrow": "right", "upArrow": "up", "downArrow": "down", "enter": "return", "backspace": "delete", "delete": "forwardDelete"]
             func parse(_ id: String) -> Chord? {
                 var p = normalizeGestureIdentifier(id)
                 guard p.hasPrefix("kb:turnover+") else { return nil }
                 p = String(p.dropFirst("kb:turnover+".count))
-                // The layer's names: canonical "delete" is forward delete, "backspace" the key this layer calls delete.
-                let names = ["leftArrow": "left", "rightArrow": "right", "upArrow": "up", "downArrow": "down", "enter": "return", "backspace": "delete", "delete": "forwardDelete"]
                 let parts = p.split(separator: "+").map { names[String($0)] ?? String($0) }
                 // Only Shift and Control are chord modifiers here: an alias with Command or Option would collapse onto
                 // another chord (JAWS Shift Page Up, a review, 28 Oct 2026).
@@ -248,10 +250,16 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // its state be
             }
             var commands: [String: Target] = [:]
             for (name, v, times) in commandTable { if let t = target(v, times: times) { commands[name] = t } }
+            let standIns = StyleKeymap.voiceOverStandIns(for: style)
             for (k, v) in StyleKeymap.keys(for: style) {
                 guard let from = parse(k) else { continue }
-                if v.hasPrefix("=") { if let to = parse(String(v.dropFirst())), let t = chords[to] { d[from] = t } }
-                else if let t = commands[v] { d[from] = t }
+                if let s = standIns[k] {
+                    if s.hasPrefix("kb:turnover+") {
+                        if let to = parse(s), let t = chords[to] { d[from] = t }   // an NVDA key: its VoiceOver twin
+                    } else if let t = target(s.dropFirst("kb:".count).split(separator: "+").map({ names[String($0)] ?? String($0) }).joined(separator: "+")) {
+                        d[from] = t   // a plain key, a reading key's arrow: posted as it is, and VoiceOver reads where the caret lands
+                    }
+                } else if let t = commands[v] { d[from] = t }   // a command of commandTable: VoiceOver's key for it
             }
         }
         styleChords.value = d

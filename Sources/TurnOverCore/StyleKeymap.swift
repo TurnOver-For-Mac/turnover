@@ -54,6 +54,20 @@ public enum StyleKeymap {
         return nil
     }
 
+    /// Where VoiceOver reads, the key layer (WindowsKeyLayer) answers the style's keys with VoiceOver's: the key each one
+    /// stands for there. An alias ("=kb:turnover+…") stands for its NVDA key, whose VoiceOver twin it takes; a reading key
+    /// (Caps Lock U, O, J, L, M and Period) for the arrow it presses instead (GlobalCommands.pressInstead), posted as it
+    /// is, so VoiceOver reads where the caret lands. Only the aliases had one, and the six went quiet or ran NVDA's
+    /// meaning of the letter (the review of pull request 144, 29 Oct 2026).
+    public static func voiceOverStandIns(for style: KeyboardStyle) -> [String: String] {
+        var out: [String: String] = [:]
+        for (key, value) in keys(for: style) {
+            if value.hasPrefix("=") { out[key] = normalizeGestureIdentifier(String(value.dropFirst())) }
+            else if let r = GlobalCommands.readingKeys.first(where: { $0.name == value }) { out[key] = normalizeGestureIdentifier("kb:" + r.key) }
+        }
+        return out
+    }
+
     /// A command by name, or what another key does ("=kb:…"), looked up without the style's table.
     static func resolve(_ value: String) -> Script? {
         if value.hasPrefix("=") {
