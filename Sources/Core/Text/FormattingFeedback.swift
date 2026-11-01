@@ -88,8 +88,9 @@ package final class FormattingFeedback {
     package func keyWillPassThrough(_ gesture: KeyboardGesture) {
         guard let provider, !gesture.isRepeat, !gesture.isTurnOverModifier, gesture.modifiers == [.command],
               let kind = ["b": Kind.bold, "i": Kind.italic][gesture.keyName],
-              let focus = API.focusObject as? EditableText, focus.role != .passwordEdit,
-              isCurrent(focus.pid) else { return }
+              let focus = API.focusObject as? EditableText, focus.role != .passwordEdit else { return }
+        // Menu validation can query the app. Keep it in canReply after native key delivery, not this decision path
+        // (review, 1 Nov 2026). Capture the original focus now so delayed validation cannot retarget the shortcut.
         let bundle = focus.appModule.bundleIdentifier
         // Word owns these scripts and queries its selection through its existing automation bridge.
         guard bundle != "com.microsoft.Word" else { return }
