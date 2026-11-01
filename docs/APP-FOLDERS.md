@@ -21,7 +21,12 @@ Use a short STATUS.md with the fixed fields and Findings/Evidence headings shown
 what is missing, the relevant issue and how another person can check it. Keep dated experiment observations separate
 from current status. Build installation paths, migration inventories and rollback history belong with review material.
 Shared implementations such as Media, Chat, Panes and Games have a README; Music, Podcasts and TV retain individual records.
-Unknown work stays Unclaimed and unknown support stays Not assessed. AI help does not assign permanent ownership.
+Unknown work stays Unclaimed and unknown support stays Not assessed. If historical evidence lacks a verified bundle
+identifier, write `Bundle id: Not recorded` until it is checked; do not invent one. AI help does not assign permanent ownership.
+
+The inventory includes apps handled by shared code, recipes and plugins, as well as named app modules. Recover dated
+findings from earlier test runs even when no dedicated implementation exists. Keep planned tasks, snapshots, driver
+checks and user listening results distinct; see [the evidence guide](APP-TEST-HISTORY.md).
 
 Run `python3 Tools/build-app-index.py` after editing statuses. `--check` checks categories, local links and stale output.
 Use relative links and public sample content. Preserve experiment outcomes, limitations and licences when filing them.

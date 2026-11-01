@@ -4,7 +4,7 @@
 
 ## App records and recipes
 
-[Messages](../../../Resources/recipes/com.apple.MobileSMS.json), [Discord](../../../Resources/recipes/com.hnc.Discord.json) and [WhatsApp](../../../Resources/recipes/net.whatsapp.WhatsApp.json).
+[Messages record](../Messages/STATUS.md), [Discord record](../Discord/STATUS.md) and [WhatsApp record](../WhatsApp/STATUS.md). Their bundled recipes remain [Messages](../../../Resources/recipes/com.apple.MobileSMS.json), [Discord](../../../Resources/recipes/com.hnc.Discord.json) and [WhatsApp](../../../Resources/recipes/net.whatsapp.WhatsApp.json).
 
 ## Checks
 

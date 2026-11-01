@@ -8,7 +8,7 @@
 
 ## Findings
 
-The module handles new terminal output and scrollback reading. It is also registered for iTerm2. Run a harmless command with fixed sample output, then check output announcements, arrow navigation and scrollback.
+The module handles new terminal output and scrollback reading. It is also registered for [iTerm2](../iTerm2/STATUS.md), whose dated checks are recorded separately. Run a harmless command with fixed sample output, then check output announcements, arrow navigation and scrollback.
 
 ## Evidence
 
