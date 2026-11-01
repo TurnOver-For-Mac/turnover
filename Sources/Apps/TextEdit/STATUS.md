@@ -4,11 +4,11 @@
 - Support: Partial
 - Effort: Module
 - Being worked on: Codex for Oliver, issue 212 (local trial pending)
-- Checked: 29–30 October 2026; native-menu investigation and 22.4 developer-build regression. Setups are recorded separately in the evidence.
+- Checked: 1 November 2026; local formatting candidate 829eb8e, macOS 27.2, Mac keys, VoiceOver off. Live metadata and automated wording checks; listening trial pending. Earlier navigation checks retain their dates and limits in the evidence.
 
 ## Findings
 
-A local formatting-shortcut candidate is being tested for Command-B and Command-I. [Probe findings and trial limits](Experiments/2026-11-01-formatting-feedback.md). This does not change the existing support grade.
+A local formatting-shortcut candidate for Command-B and Command-I is installed. Automated wording and live metadata checks passed; Oliver’s listening trial is pending. [Probe findings and trial limits](Experiments/2026-11-01-formatting-feedback.md). This does not change the existing support grade.
 
 Review navigation and caret-by-character dispatch passed; after opening and dismissing the spelling menu, Down produced speech. These checks do not exercise File-menu entry. The 29–30 October failure with plain Down and Control–Option–Down remains the known gap; do not infer its repair from the regression pass.
 
