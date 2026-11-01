@@ -1,0 +1,12 @@
+# Day 4 (11 Oct 2026): BambuStudio. Item keys only; everything masked (the tester's servers, printers, files).
+app: BambuStudio
+press: clearmods control+option+right
+expect: \w|(edge)
+press: clearmods control+option+right
+expect: \w|(edge)
+press: clearmods control+option+right
+expect: \w|(edge)
+press: clearmods control+option+right
+expect: \w|(edge)
+press: clearmods control+option+left
+expect: \w|(edge)

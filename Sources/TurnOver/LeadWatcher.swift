@@ -74,11 +74,82 @@ final class LeadWatcher {
     private var lockTurnedVoiceOverOn = false
     /// Each lock starts a new cycle; a wait from an earlier unlock stands down when it sees a newer one.
     private var lockCycle = 0
-    /// TurnOver turned VoiceOver on for this lock or sleep, while TurnOver itself was speaking: after the unlock it turns
-    /// VoiceOver off again, whatever the swap setting. The swap-off rule that TurnOver never turns VoiceOver off is
-    /// about a VoiceOver the user chose; this one was TurnOver's own, and it stayed on after every wake until it was
-    /// turned off by hand (Oliver, 29 Oct 2026). Cleared when VoiceOver goes off by any means.
-    private var restoreAfterUnlock = false
+    // #204: ownership survives a failed off request. Only observed success or a new reader choice clears it.
+    private var wakeRestoration = WakeRestoration()
+    private var wakeHandoverGeneration: Int?
+    private var wakeWatchGeneration: Int?
+
+    private func retireWakeHandover() {
+        if wakeHandoverGeneration == handOverGeneration { handOverGeneration &+= 1 }
+        wakeHandoverGeneration = nil
+    }
+
+    private func cancelWakeRestoration() {
+        retireWakeHandover()
+        wakeWatchGeneration = nil
+        wakeRestoration.cancel()
+    }
+
+    private var wakeReadiness: WakeRestoration.Readiness {
+        .init(locked: locked || Self.screenIsLocked, secureInput: IsSecureEventInputEnabled(),
+              ordinaryForeground: NSWorkspace.shared.frontmostApplication?.activationPolicy == .regular,
+              suspended: suspended, inputGranted: InputAccess.granted, coexisting: Coexist.on,
+              automaticAppSwitching: config.applications.switchesAsAppsChange, voiceOverReady: HandOver.voiceOverReading)
+    }
+
+    /// Returns true while this owned restoration, rather than ordinary app-switch policy, decides the reader.
+    private func restoreAfterWakeIfNeeded() -> Bool {
+        guard wakeRestoration.pending else { return false }
+        if suspended || Coexist.on || config.applications.switchesAsAppsChange {
+            cancelWakeRestoration()
+            return false
+        }
+        watchWakeRestoration()   // a later activation can restart readiness polling after the earlier window
+        if !NSWorkspace.shared.isVoiceOverEnabled {
+            // The lock may have issued an asynchronous VoiceOver start that has not arrived yet. A still-off
+            // snapshot cannot complete that ownership; a later on notification resumes the bounded watch.
+            guard wakeRestoration.voiceOverWasObservedOn else { return true }
+            cancelWakeRestoration()   // an owned lock-on fallback must not turn it back on later
+            initialTakeOverPending = false
+            return false
+        }
+        wakeRestoration.observedVoiceOverOn()
+        guard let attempt = wakeRestoration.beginAttempt(readiness: wakeReadiness, now: ProcessInfo.processInfo.systemUptime) else { return true }
+        Log.info("lead watcher: restoring TurnOver after the lock, attempt \(attempt.number)")
+        handOver(voiceOverOn: false, preservingWakeIntent: true, whileAllowed: { [weak self] in
+            guard let self else { return false }
+            return self.wakeRestoration.isCurrent(attempt) && self.wakeReadiness.canRestore
+        }, completion: { [weak self] observedOff in
+            guard let self, self.wakeRestoration.isCurrent(attempt) else { return }
+            self.wakeRestoration.finishAttempt(attempt, succeeded: observedOff, now: ProcessInfo.processInfo.systemUptime)
+            self.wakeHandoverGeneration = nil
+            if observedOff { self.initialTakeOverPending = false }
+        })
+        return true
+    }
+
+    /// A finite polling window covers secure input, delayed foreground readiness and transient handover failure.
+    /// After it ends, ownership remains available to a later app activation, within the same three-attempt cap.
+    private func watchWakeRestoration() {
+        guard wakeRestoration.pending, wakeRestoration.attempts < 3, !locked else { return }
+        let generation = wakeRestoration.generation
+        guard wakeWatchGeneration != generation else { return }
+        wakeWatchGeneration = generation
+        let deadline = ProcessInfo.processInfo.systemUptime + 30
+        func check() {
+            guard self.wakeWatchGeneration == generation, self.wakeRestoration.generation == generation else { return }
+            guard self.wakeRestoration.pending, !self.locked else { self.wakeWatchGeneration = nil; return }
+            _ = self.restoreAfterWakeIfNeeded()
+            guard self.wakeWatchGeneration == generation, self.wakeRestoration.generation == generation else { return }
+            guard self.wakeRestoration.pending, self.wakeRestoration.attempts < 3,
+                  ProcessInfo.processInfo.systemUptime < deadline else {
+                self.wakeWatchGeneration = nil
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { check() }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { check() }
+    }
 
     /// The "VoiceOver is on" notice just came: was it the lock's own? Taken once.
     func takeLockVoiceOverOn() -> Bool {
@@ -90,13 +161,15 @@ final class LeadWatcher {
     private func goingAway(_ why: String) {
         locked = true
         lockCycle += 1
+        // Retire a pending off-toggle even if VoiceOver is already on and the early return below is taken.
+        retireWakeHandover()
+        wakeWatchGeneration = nil
+        wakeRestoration.lock(readerWasActive: turnOverActive(), voiceOverAlreadyOn: NSWorkspace.shared.isVoiceOverEnabled, suspended: suspended)
         Watchdog.shared.noteAsleepOrLocked()
         guard !NSWorkspace.shared.isVoiceOverEnabled else { Log.info("lead watcher: \(why); VoiceOver already on"); return }
         Log.info("lead watcher: \(why); VoiceOver on for the lock screen")
         lockTurnedVoiceOverOn = true
-        // (Sleep, display sleep and the lock can each come within a tenth of a second: a later one never clears it.)
-        restoreAfterUnlock = restoreAfterUnlock || (turnOverActive() && !suspended)   // not when TurnOver was off by its own key
-        handOver(voiceOverOn: true)
+        handOver(voiceOverOn: true, preservingWakeIntent: true)
     }
 
     private func back(_ why: String) {
@@ -110,6 +183,11 @@ final class LeadWatcher {
         // The flag itself stays until the notice comes (it can come after this unlock, too).
         if lockTurnedVoiceOverOn { yieldedToVoiceOverByHand = false }
         Log.info("lead watcher: \(why); the app in front decides again once secure input is off")
+        if wakeRestoration.pending, !Coexist.on, !config.applications.switchesAsAppsChange {
+            watchWakeRestoration()
+            return
+        }
+        cancelWakeRestoration()   // automatic app switching owns the remaining path
         let cycle = lockCycle
         // The lock screen's password field turns on secure input, and it stays on for a few seconds after the unlock.
         // While it is on, TurnOver's key tap gets only the modifiers, never a key: handed over at once, TurnOver said
@@ -117,6 +195,7 @@ final class LeadWatcher {
         // hears them, so it keeps the Mac until secure input is off (up to 15 s), then the app in front decides.
         let started = Date()
         func decideWhenFree() {
+            guard cycle == self.lockCycle, !self.locked else { return }
             let secure = IsSecureEventInputEnabled()
             if secure, Date().timeIntervalSince(started) < 15 {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { decideWhenFree() }
@@ -131,22 +210,13 @@ final class LeadWatcher {
             func decide() {
                 guard cycle == self.lockCycle, !self.locked, !IsSecureEventInputEnabled() else { return }
                 let front = NSWorkspace.shared.frontmostApplication
-                if front == nil || front?.activationPolicy != .regular, Date().timeIntervalSince(looking) < 10 {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { decide() }
-                    return
-                }
-                // The lock's own VoiceOver, put back as it was: TurnOver read before the lock, so it reads again.
-                // Readers per app with the switch on decide by the app in front instead, as below.
-                if self.restoreAfterUnlock {
-                    self.restoreAfterUnlock = false
-                    if NSWorkspace.shared.isVoiceOverEnabled, !Coexist.on, !self.suspended, !config.applications.switchesAsAppsChange {
-                        Log.info("lead watcher: VoiceOver was on only for the lock screen; turning it off again")
-                        self.initialTakeOverPending = false
-                        self.handOver(voiceOverOn: false)
-                        return
+                guard let front, front.activationPolicy == .regular else {
+                    if Date().timeIntervalSince(looking) < 10 {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { decide() }
                     }
+                    return   // a deadline is never evidence that an ordinary app is ready
                 }
-                if let front { self.appActivated(front) }
+                self.appActivated(front)
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { decide() }
         }
@@ -162,10 +232,14 @@ final class LeadWatcher {
 
     /// Does TurnOver lead in this application?
     /// TurnOver off by Command Control Period while coexisting: still running, VoiceOver has every app.
-    var suspended = false
+    var suspended = false {
+        didSet { if suspended { cancelWakeRestoration() } }
+    }
     /// VoiceOver turned on by hand while TurnOver read (not coexisting): TurnOver stepped back by the swap setting and
     /// does not take the next app by itself. Cleared when VoiceOver goes off or TurnOver is turned on by its key.
-    var yieldedToVoiceOverByHand = false
+    var yieldedToVoiceOverByHand = false {
+        didSet { if yieldedToVoiceOverByHand { cancelWakeRestoration() } }
+    }
     /// Without readers per app, TurnOver takes the app in front once: at launch, and again once Input Monitoring is
     /// granted. After that an app change changes nothing; a hand-over to VoiceOver by its command stands.
     var initialTakeOverPending = true
@@ -236,6 +310,8 @@ final class LeadWatcher {
         let direct = app.activationPolicy == .regular && config.applications.directApps.contains(directKey)
         InputManager.directPid = direct && !suspended ? app.processIdentifier : nil
         if direct { Log.info("lead watcher: \(app.localizedName ?? directKey) is direct: its keys go straight to it") }
+        // Update input routing even while a pending wake restoration owns the reader decision.
+        if !locked, restoreAfterWakeIfNeeded() { return }
         // A Wine program has no bundle at all (CrossOver runs it through a bare loader stub); game speech gives it a key.
         // A direct program without one (a Godot game run from Terminal) is known by its name.
         // Without readers per app TurnOver reads everywhere, so the first take-over (at launch, or once Input Monitoring
@@ -287,7 +363,17 @@ final class LeadWatcher {
     var onCoexistLead: ((Bool) -> Void)?
     /// A reader choice for an app was saved: coexisting, the Activity's app list follows it (the app).
     var onChoiceSaved: (() -> Void)?
-    func handOver(voiceOverOn: Bool) {
+    func handOver(voiceOverOn: Bool, preservingWakeIntent: Bool = false,
+                  whileAllowed callerAllows: @escaping () -> Bool = { true }, completion: ((Bool) -> Void)? = nil) {
+        // An ordinary handover can also be waiting when a new lock arrives. Its old off request stays retired
+        // even if a quick lock and unlock both finish before its next callback.
+        let cycle = lockCycle
+        let whileAllowed = { [weak self] in
+            guard let self else { return false }
+            return callerAllows() && (voiceOverOn || (cycle == self.lockCycle && !self.locked && !Self.screenIsLocked))
+        }
+        guard whileAllowed() else { completion?(false); return }
+        if !preservingWakeIntent { cancelWakeRestoration() }
         if Coexist.on {
             lastHandOverAt = Date()
             // The Steam exception (16 Oct 2026, late: Finder kept coming forward under VoiceOver in Big
@@ -302,7 +388,7 @@ final class LeadWatcher {
             Log.info("coexist: the game exception: VoiceOver \(voiceOverOn ? "back on" : "off for the game")")
         }
         Log.info("hand-over: asked for VoiceOver \(voiceOverOn ? "on" : "off")")
-        if Uninstaller.running && !voiceOverOn { return }   // uninstalling: VoiceOver stays on
+        if Uninstaller.running && !voiceOverOn { completion?(false); return }   // uninstalling: VoiceOver stays on
         if !voiceOverOn { ScreenCurtain.noteVoiceOverCurtain() }   // before VoiceOver goes, and its curtain with it
         lastHandOverAt = Date()
         ourChangeUntil = Date().addingTimeInterval(3)
@@ -311,6 +397,7 @@ final class LeadWatcher {
         handOverGeneration += 1
         HandOver.newChoice()   // a recovery's late fallback stands down
         let generation = handOverGeneration
+        if preservingWakeIntent { wakeHandoverGeneration = generation }
         let t0 = Date()
         let isOn = { NSWorkspace.shared.isVoiceOverEnabled }
         let running = { HandOver.voiceOverRunning }
@@ -322,25 +409,28 @@ final class LeadWatcher {
             return
         }
         // 1. VoiceOver wholly on or wholly off before the toggle (toggling mid-change could leave it off).
-        poll(generation, every: 0.05, upTo: 2, until: { isOn() == running() }) { [weak self] settled in
+        poll(generation, every: 0.05, upTo: 2, whileAllowed: whileAllowed, until: { isOn() == running() }) { [weak self] settled in
             guard let self else { return }
-            if isOn() == voiceOverOn { Log.info("hand-over: VoiceOver already \(voiceOverOn ? "on" : "off")"); return }
+            guard whileAllowed() else { completion?(false); return }
+            if isOn() == voiceOverOn { Log.info("hand-over: VoiceOver already \(voiceOverOn ? "on" : "off")"); completion?(true); return }
             // Toggled mid-change, VoiceOver can end up off for good: left for the next activation to try again.
-            guard settled else { Log.warning("hand-over: VoiceOver still changing after 2 s; not toggled (next activation tries again)"); return }
+            guard settled else { Log.warning("hand-over: VoiceOver still changing after 2 s; not toggled"); completion?(false); return }
             self.ourChangeUntil = Date().addingTimeInterval(3)   // the change about to come is ours, not a pin by hand
             // The shortcut both ways: it flips the flag in about 100 ms. VoiceOver.app is the fallback for on, for when
             // the shortcut doesn't reach macOS (25 Oct 2026); opened first, it took ten seconds to bring VoiceOver
             // (27 Oct 2026, "incredibly slow").
             HandOver.postToggle()
             // 2. The flag flips.
-            self.poll(generation, every: 0.05, upTo: voiceOverOn ? 1.2 : 2, until: { isOn() == voiceOverOn }) { [weak self] flipped in
+            self.poll(generation, every: 0.05, upTo: voiceOverOn ? 1.2 : 2, whileAllowed: whileAllowed, until: { isOn() == voiceOverOn }) { [weak self] flipped in
                 guard let self else { return }
+                guard whileAllowed() else { completion?(false); return }
                 let flagMs = Int(Date().timeIntervalSince(t0) * 1000)
                 if !flipped, voiceOverOn, !isOn(), !running() {
                     Log.info("hand-over: the shortcut did not turn VoiceOver on in \(flagMs) ms; opening VoiceOver.app")
                     self.ourChangeUntil = Date().addingTimeInterval(15)   // a slow start is still ours, not a choice by hand
                     HandOver.openVoiceOver("hand-over")
-                    self.poll(generation, every: 0.1, upTo: 12, until: { isOn() && running() }) { came in
+                    self.poll(generation, every: 0.1, upTo: 12, whileAllowed: whileAllowed, until: { isOn() && running() }) { came in
+                        completion?(came)
                         Log.info("hand-over timing: VoiceOver on by VoiceOver.app: \(came ? "reading after \(Int(Date().timeIntervalSince(t0) * 1000)) ms" : "not reading within 12 s")")
                     }
                     return
@@ -349,17 +439,20 @@ final class LeadWatcher {
                     // Ignored: VoiceOver was still shutting down (or starting) from the last switch, and a toggle then
                     // is swallowed; VoiceOver stayed off in Claude for 6 s (4 Oct 2026). Let it finish, then once more.
                     Log.info("hand-over: VoiceOver did not go \(voiceOverOn ? "on" : "off"); waiting for it to settle, then again")
-                    self.poll(generation, every: 0.1, upTo: 6, until: { isOn() == running() }) { settled in
-                        guard isOn() != voiceOverOn else { return }
-                        guard settled else { Log.warning("hand-over: VoiceOver still changing after 6 s more; not toggled again"); return }
+                    self.poll(generation, every: 0.1, upTo: 6, whileAllowed: whileAllowed, until: { isOn() == running() }) { settled in
+                        guard whileAllowed() else { completion?(false); return }
+                        guard isOn() != voiceOverOn else { completion?(true); return }
+                        guard settled else { Log.warning("hand-over: VoiceOver still changing after 6 s more; not toggled again"); completion?(false); return }
                         self.ourChangeUntil = Date().addingTimeInterval(3)   // (a late second toggle was read as the user's choice and pinned the app, 8 Oct 2026)
                         if voiceOverOn { HandOver.openVoiceOver("hand-over, again") } else { HandOver.postToggle() }
-                        self.poll(generation, every: 0.05, upTo: 2, until: { isOn() == voiceOverOn }) { again in
+                        self.poll(generation, every: 0.05, upTo: 2, whileAllowed: whileAllowed, until: { isOn() == voiceOverOn }) { again in
+                            completion?(again)
                             Log.info("hand-over: second toggle \(again ? "worked" : "did not work either"): VoiceOver \(isOn() ? "on" : "off")")
                         }
                     }
                     return
                 }
+                completion?(true)   // the requested flag state was observed, not merely requested
                 // 3. VoiceOver's process appears or goes (timing only).
                 self.poll(generation, every: 0.05, upTo: 6, until: { running() == voiceOverOn }) { seen in
                     let processMs = Int(Date().timeIntervalSince(t0) * 1000)
@@ -372,10 +465,13 @@ final class LeadWatcher {
 
     /// Check `condition` every `interval` on the main queue, up to `limit` seconds, then call `done` with whether it
     /// came true; nothing if a newer hand-over has started meanwhile.
-    private func poll(_ generation: Int, every interval: Double, upTo limit: Double, until condition: @escaping () -> Bool, then done: @escaping (Bool) -> Void) {
+    private func poll(_ generation: Int, every interval: Double, upTo limit: Double,
+                      whileAllowed: @escaping () -> Bool = { true },
+                      until condition: @escaping () -> Bool, then done: @escaping (Bool) -> Void) {
         let end = Date().addingTimeInterval(limit)
         func check() {
             guard generation == handOverGeneration else { return }
+            guard whileAllowed() else { done(false); return }
             if condition() { done(true); return }
             if Date() >= end { done(false); return }
             DispatchQueue.main.asyncAfter(deadline: .now() + interval) { check() }
@@ -386,7 +482,9 @@ final class LeadWatcher {
     /// Each change of reader by hand (a mode, Switch reader): a hand-over or word queued for later is dropped when a
     /// newer change has come since (code review, 13 Oct: A pressed twice, or Command Tab within the second, turned
     /// VoiceOver on over TurnOver).
-    private var choiceGeneration = 0
+    private var choiceGeneration = 0 {
+        didSet { cancelWakeRestoration() }
+    }
 
     /// Said by whichever reader is talking: TurnOver's speech is muted while VoiceOver is on, so then it goes through
     /// VoiceOver as an accessibility announcement (the new mode was silent when VoiceOver kept reading).
@@ -567,7 +665,17 @@ final class LeadWatcher {
     /// `byLock`: the lock's own VoiceOver, noticed late; no pin and no choice of the user's.
     /// `byInputRecovery`: one matching notification owned by the permission fallback, not a manual reader pin.
     func voiceOverChanged(on: Bool, byLock: Bool = false, byInputRecovery: Bool = false) {
-        if !on { lockTurnedVoiceOverOn = false; restoreAfterUnlock = false }   // whatever turned it on, it is off: nothing pending
+        if !on {
+            lockTurnedVoiceOverOn = false
+            if wakeRestoration.pending { initialTakeOverPending = false }
+            cancelWakeRestoration()
+        }
+        // This must precede the per-app/swap guards: manual VoiceOver also wins with automatic switching off.
+        if on, !byLock, !byInputRecovery, !locked, !isOurChange { cancelWakeRestoration() }
+        if on {
+            wakeRestoration.observedVoiceOverOn()
+            if !locked { watchWakeRestoration() }
+        }
         guard !byLock, !byInputRecovery, !locked else { return }
         guard Date().timeIntervalSince(startedAt) > 3 else { return }
         if let t = Watchdog.shared.lastTrip, Date().timeIntervalSince(t) < 30 { return }

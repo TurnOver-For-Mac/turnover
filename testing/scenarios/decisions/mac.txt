@@ -1,0 +1,41 @@
+# The parity decisions, Mac style (12 Oct 2026): VoiceOver's keys and TurnOver's Command Control keys, in my own file.
+app: TextEdit
+open: ~/Library/Developer/TurnOver/scenarios/files/parity.txt
+style: mac
+mask: 0
+press: command+up
+wait: 0.5
+press: clearmods control+option+shift+pagedown
+expect: High water
+press: clearmods control+option+v
+expect: Verbosity
+press: escape
+# (VO-N, notifications: the key went back to the apps in the user's own keys, kb:turnover+n none; 19 Oct 2026.)
+press: clearmods control+option+shift+1
+expect: hot spot 1 set
+press: clearmods control+option+command+1
+expect: \w
+press: clearmods control+option+1
+expect: \w
+press: clearmods control+option+shift+1
+expect: hot spot 1 removed
+press: clearmods control+option+1
+expect: no hot spot 1
+press: clearmods control+option+command+c
+expect: style change
+press: clearmods control+option+shift+k
+expect: commander off
+press: clearmods control+option+shift+k
+expect: commander on
+# VO-X is Activities since build 19 (VoiceOverDecisions): TurnOver's Profiles list opens; Escape closes it.
+press: clearmods control+option+x
+expect: Profiles
+press: escape
+# (VO-F8 opens VoiceOver Utility since 18 Oct 2026, the maintainer's decision: another app in front, so not pressed here.)
+press: clearmods control+command+, /
+expect: Shortcuts
+press: escape
+# Command Control Comma, S opens the Settings window (an app of its own) since 18 Oct 2026: M, the spoken menu, instead.
+press: clearmods control+command+, m
+expect: TurnOver menu
+press: escape

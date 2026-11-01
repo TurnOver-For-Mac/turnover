@@ -1,0 +1,11 @@
+# Terminal: a new window, a command, its output read.
+app: Terminal
+press: command+n clearmods
+wait: 1.5
+press: type:ls
+press: return
+wait: 1.5
+press: control+option+up clearmods
+expect-script: (vo_up|terminal_reviewPrevious)
+expect: \S
+press: clearmods command+w

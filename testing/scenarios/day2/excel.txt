@@ -1,0 +1,18 @@
+# Day 2: Excel (read-only: no licence) with the test workbook. Arrows and Control Home only; nothing can be typed.
+app: Microsoft Excel
+open: ~/Library/Developer/TurnOver/scenarios/files/harbour.xlsx
+mask: 0
+press: control+home
+expect: ^Day, A1
+press: down
+expect: ^Monday, A2
+press: right
+expect: ^1.2, B2
+press: right
+expect: ^4.8, C2
+press: down
+expect: ^5.1, C3
+press: right
+expect: D3
+press: up
+expect: ^4.8, C2|D2

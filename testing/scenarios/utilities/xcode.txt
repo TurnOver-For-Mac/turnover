@@ -1,0 +1,16 @@
+# Utilities (12 Oct 2026): Xcode. Moving keys only; masked.
+app: Xcode
+press: down
+expect: \w|(edge)
+press: clearmods control+option+right
+expect: \w|(edge)
+press: clearmods control+option+right
+expect: \w|(edge)
+press: clearmods control+option+right
+expect: \w|(edge)
+press: clearmods control+option+left
+expect: \w|(edge)
+press: tab
+expect: \w|(edge)
+press: shift+tab
+expect: \w|(edge)

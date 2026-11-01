@@ -1,0 +1,10 @@
+# Music: the first keys after launch (the model built in the background), then quit.
+app: Music
+wait: 3
+press: down
+expect-script: media_next
+press: down
+expect-script: media_next
+press: up
+expect-script: media_previous
+press: clearmods command+q

@@ -1,0 +1,12 @@
+# Day 2: Byword with the test Markdown file. Caret keys only (no typing keys); the file is checked after.
+app: Byword
+open: ~/Library/Developer/TurnOver/scenarios/files/harbour.md
+mask: 0
+press: down
+expect: \w|(edge)|blank
+press: down
+expect: \w|blank
+press: down
+expect: \w|blank
+press: up
+expect: \w|blank

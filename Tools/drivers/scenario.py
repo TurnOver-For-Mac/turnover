@@ -6,7 +6,7 @@ r"""Run a key-driver scenario and check what TurnOver said (SHAKE-OUT-PLAN.md, 8
 
 A scenario file:
   app: Mail                      the app that must be in front (opened with `open -a` if not running)
-  open: /path/or/arg             optional: what to open with the app (a scratch file)
+  open: ~/path/or/arg            optional: what to open with the app (a scratch file; ~ is the home folder)
   style: windows                 optional: run in this keyboard style (switched with Command Control Comma, then K, and back after)
   press: down down               keys for the drive tool, as its arguments
   wait: 1.5                      seconds
@@ -65,7 +65,7 @@ for raw in open(path):
     k, _, v = line.partition(":")
     k = k.strip(); v = v.strip()
     if k == "app": app = v
-    elif k == "open": opener = v
+    elif k == "open": opener = os.path.expanduser(v)   # ~ is the home folder, so a scenario runs on any Mac
     elif k == "mask": mask = v      # mask: 0 for the test's own files (Day 2, 10 Oct 2026); the default masks
     elif k == "launch": launcher = v  # launch: what `open -a` needs when the process name differs (UlyssesMac.app → Ulysses)
     elif k == "style": style = v   # mac or windows: switched with Command Control Comma, then K before the run, and back after

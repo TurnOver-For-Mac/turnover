@@ -1,0 +1,18 @@
+# TextEdit: a scratch file; the VO cursor (object navigation in the Windows style), caret moves, Arabic characters.
+app: TextEdit
+open: ~/Library/Developer/TurnOver/scenarios/scratch.rtf
+press: command+up clearmods
+press: control+option+right clearmods
+expect-script: (vo_next|reviewNext|nvda_reviewNextCharacter)
+press: command+up clearmods
+press: down down clearmods
+press: right clearmods
+expect-script: caret_moveByCharacter
+# The spelling menu on a word, closed with Escape: the text area is the focus again and the arrows read (14 Oct 2026).
+press: clearmods control+option+shift+m
+wait: 1.5
+press: escape
+wait: 1.5
+press: down
+expect: \w
+press: clearmods command+w

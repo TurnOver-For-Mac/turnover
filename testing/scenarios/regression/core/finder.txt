@@ -1,0 +1,16 @@
+# Finder: a window on a folder of mine; list, tabs, the VO cursor, Command Up (Stuart, F-051).
+app: Finder
+open: ~/Library/Developer/TurnOver
+press: down
+expect-script: list_downArrow
+expect: \d+ of \d+
+press: down
+expect: \d+ of \d+
+press: control+option+right
+expect-script: (vo_next|reviewNext)
+press: control+option+left
+expect-script: (vo_previous|reviewPrevious)
+press: clearmods command+up
+expect-not: VoiceOver
+wait: 2
+press: clearmods command+w

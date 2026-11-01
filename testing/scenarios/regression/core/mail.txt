@@ -1,0 +1,10 @@
+# Mail: the list, the parts, VO M (Chelsea, F-050).
+app: Mail
+press: down
+expect-script: list_downArrow
+press: up
+expect-script: list_upArrow
+press: shift+tab
+expect-script: mail_toMailboxes
+press: clearmods tab
+expect-script: mail_toMessages

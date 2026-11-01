@@ -1,0 +1,31 @@
+# The parity decisions, Windows style (12 Oct 2026): NVDA's keys (Control Option as the NVDA key), in my own file.
+app: TextEdit
+open: ~/Library/Developer/TurnOver/scenarios/files/parity.txt
+style: windows
+mask: 0
+press: command+up
+wait: 0.5
+press: clearmods control+option+down
+expect: blank|High
+press: clearmods control+option+down
+expect: High water
+press: clearmods control+option+right
+expect: \w
+press: clearmods control+option+x
+expect: \w
+press: clearmods control+option+v
+expect: screen layout
+press: clearmods control+option+v
+expect: screen layout
+press: clearmods control+option+shift+z
+expect: Sleep mode on
+press: command+down
+expect-not: \w
+press: clearmods control+option+shift+z
+expect: Sleep mode off
+press: clearmods control+option+shift+d
+expect: (?i)duck
+press: clearmods control+option+shift+d
+expect: Always duck
+press: clearmods control+option+shift+d
+expect: No ducking

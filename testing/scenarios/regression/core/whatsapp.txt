@@ -1,0 +1,12 @@
+# WhatsApp: Shift Tab up to the messages (the screen's order, 13 Oct 2026), arrows, Shift Tab to the chats, the box.
+app: WhatsApp
+press: shift+tab
+expect-script: chat_(toConversations|noChatToSections)
+press: up
+expect-script: chat_previous
+press: shift+tab
+expect-script: chat_previousPart
+press: clearmods down
+expect-script: chat_next
+press: escape
+expect-script: chat_toBox
