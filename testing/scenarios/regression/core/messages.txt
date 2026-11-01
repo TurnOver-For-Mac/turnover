@@ -1,0 +1,10 @@
+# Messages: Shift Tab up to the messages (the screen's order, 13 Oct 2026), arrows, Tab back down to the box.
+app: Messages
+press: shift+tab
+expect-script: chat_toConversations
+expect: \d+ of \d+
+press: up
+expect-script: chat_previous
+press: tab
+expect-script: chat_nextPart
+press: clearmods escape

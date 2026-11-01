@@ -1,0 +1,18 @@
+# Word: a new document, typing, character and line moves, VO Left, close without saving, quit.
+app: Microsoft Word
+wait: 8
+press: command+n clearmods
+wait: 4
+press: type:Hello
+wait: 1
+press: left clearmods
+expect-script: caret_moveByCharacter
+press: control+option+left clearmods
+expect-script: (vo_previous|reviewPrevious|nvda_reviewPreviousCharacter)
+press: command+left clearmods
+expect-script: caret_moveByCharacter
+press: clearmods command+w clearmods
+wait: 1.5
+press: command+backspace clearmods
+wait: 1.5
+press: clearmods command+q clearmods

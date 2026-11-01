@@ -1,0 +1,10 @@
+# Day 2: Ulysses, the tester's own library: item keys only, everything masked.
+app: UlyssesMac
+press: clearmods control+option+right
+expect: \w|(edge)
+press: clearmods control+option+right
+expect: \w|(edge)
+press: clearmods control+option+right
+expect: \w|(edge)
+press: clearmods control+option+left
+expect: \w|(edge)
