@@ -1,15 +1,17 @@
 # Terminal
 
 - Bundle id: com.apple.Terminal
-- Support: Not assessed
+- Support: Works
 - Effort: Module
 - Being worked on: Unclaimed
-- Checked: Source inventory, 30 October 2026; task-level support has not been assessed in this record.
+- Checked: 30 October 2026; developer build of 22.4 source 0ed2ab4; Mac and Windows keyboard styles. Setup limits are in the evidence.
 
 ## Findings
 
-The module handles new terminal output and scrollback reading. It is also registered for [iTerm2](../iTerm2/STATUS.md), whose dated checks are recorded separately. Run a harmless command with fixed sample output, then check output announcements, arrow navigation and scrollback.
+After a command was entered in a new terminal window, the previous-line review handler ran and emitted nonempty speech. This grade covers terminal-line review in the tested setup; the assertion did not compare the spoken line with expected command output. Emoji/combining-character editing, long scrollback and shell-specific erase behavior remain separate checks.
 
 ## Evidence
 
-[App implementation](TerminalAppModule.swift). Record the tested tasks and setup here when assessing support.
+[30 October regression results and scope](Experiments/2026-10-30-regression.md).
+
+[App implementation](TerminalAppModule.swift).

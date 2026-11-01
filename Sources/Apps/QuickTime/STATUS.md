@@ -1,19 +1,17 @@
 # QuickTime Player
 
 - Bundle id: com.apple.QuickTimePlayerX
-- Support: Not assessed
+- Support: Partial
 - Effort: None
 - Being worked on: Unclaimed
-- Checked: Historical evidence recovered 1 November 2026; recorded checks from 11–12 October 2026. Current build not tested.
+- Checked: 30 October 2026; developer build of 22.4 source 0ed2ab4; Mac and Windows keyboard styles. Setup limits are in the evidence.
 
 ## Findings
 
-Historical passes: 4/4 item-navigation checks in each keyboard style on 11 October using an authored public spoken-audio sample. Controls, timeline and volume were named. This does not establish the complete playback or editing workflow.
-
-Support is Not assessed for the current build. The historical results below remain evidence for their stated tasks and setup, not a fresh app-wide assessment.
+Four review-item movements produced speech or boundary responses in each style. The earlier audio-sample check found named controls, a timeline in seconds and volume in percent. Playback toggling, timeline changes, recording, trimming and export remain outside the recorded checks.
 
 ## Evidence
 
-[Historical checks and limits](Experiments/2026-10-historical-checks.md). [Retained audio-window fixture](../../../Tests/Fixtures/quicktime-audio.json).
+[30 October regression results and scope](Experiments/2026-10-30-regression.md).
 
-Retained fixtures are historical evidence; no direct current-harness references were found, so automated execution of these files is not claimed.
+[Historical checks and limits](Experiments/2026-10-historical-checks.md). [Retained audio-window fixture](../../../Tests/Fixtures/quicktime-audio.json).

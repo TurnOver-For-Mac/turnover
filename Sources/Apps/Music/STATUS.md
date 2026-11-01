@@ -4,12 +4,14 @@
 - Support: Not assessed
 - Effort: Module
 - Being worked on: Unclaimed
-- Checked: Source inventory, 30 October 2026; task-level support has not been assessed in this record.
+- Checked: 30 October 2026; developer build of 22.4 source 0ed2ab4; Mac and Windows keyboard styles. Setup limits are in the evidence.
 
 ## Findings
 
-Music uses the shared Media implementation. To assess it, move between sidebar categories, shelves and items; check a public item’s details. Check playback controls separately and record loading delays with the observed result.
+The first Down, Down and Up keys after launch reached the expected next/previous Media handlers. These three assertions check command dispatch. The scenario does not assert speech, shelf content or playback. The 29 October foreground probe exposed a clipped Browse sample, which does not establish a reading task.
 
 ## Evidence
+
+[30 October regression results and scope](Experiments/2026-10-30-regression.md).
 
 [Shared implementation](../Media/MediaAppModule.swift) · [App recipe](../../../Resources/recipes/com.apple.Music.json) · [Shared check notes](../Media/README.md).

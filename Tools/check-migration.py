@@ -3,7 +3,8 @@
 """Check ongoing SwiftPM source membership without a frozen migration snapshot.
 
 TurnOverCore discovers its shared Core, Views and System folders; app files are explicit.
-Tests and Fixtures remain outside the reader's build; shared Experiments stay outside every default target.
+Every Swift source under Sources needs one target or an explicitly excluded sample folder.
+Shared Experiments stay outside every default target.
 """
 import argparse
 import copy
@@ -85,6 +86,16 @@ def shared_production(path):
             and not (set(parts[2:-1]) & NONPRODUCTION))
 
 
+def is_excluded(path, exclusions):
+    return any(PurePosixPath(path).is_relative_to(folder) for folder in exclusions)
+
+
+def shared_note_message(path):
+    entry = PurePosixPath(path).relative_to("Sources").as_posix()
+    return (f"non-code file in shared source folder: {path}; add {entry!r} to TurnOverCore's "
+            "excludes in Package.swift or move the note to docs")
+
+
 def source_membership(root, resolved, manifest):
     actual, declared = targets(resolved), targets(manifest)
     require(set(actual) == set(declared), "resolved and declared target names differ")
@@ -110,7 +121,23 @@ def source_membership(root, resolved, manifest):
                      if app_production(p.relative_to(root).as_posix())}
     require(apps == expected_apps,
             f"app source list differs: missing={sorted(expected_apps-apps)}, extra={sorted(apps-expected_apps)}")
+    exclusions = {
+        name: [PurePosixPath(relative(actual[name]["path"])) / relative(path)
+               for path in item.get("exclude", [])]
+        for name, item in declared.items()
+    }
+    for folder in sorted(SHARED_FOLDERS):
+        for file in sorted((root / "Sources" / folder).rglob("*")):
+            if not file.is_file() or file.suffix in SOURCE_SUFFIXES | {".h", ".hpp"}:
+                continue
+            path = file.relative_to(root).as_posix()
+            # SwiftPM ignores hidden metadata such as Finder's .DS_Store and hidden note folders.
+            # This exception is only for non-code; the Swift inventory below still checks hidden sources.
+            if any(part.startswith(".") for part in PurePosixPath(path).parts):
+                continue
+            require(is_excluded(path, exclusions["TurnOverCore"]), shared_note_message(path))
     owners = {}
+    compiled_paths = set()
     for name, item in actual.items():
         for path in source_paths(item):
             file = root / path
@@ -119,7 +146,10 @@ def source_membership(root, resolved, manifest):
             require(canonical.is_relative_to(root.resolve()), f"resolved source escapes the repository: {path}")
             require(canonical not in owners, f"source compiled more than once: {path}")
             owners[canonical] = name
+            compiled_paths.add(path)
             parts = PurePosixPath(path).parts
+            if len(parts) >= 2 and parts[0] == "Sources" and parts[1] in SHARED_FOLDERS:
+                require(file.suffix in SOURCE_SUFFIXES | {".h", ".hpp"}, shared_note_message(path))
             require(parts[:2] != ("Sources", "Experiments"),
                     f"shared experiment compiled into default target {name}: {path}")
             if parts[:2] == ("Sources", "Apps"):
@@ -128,6 +158,18 @@ def source_membership(root, resolved, manifest):
             elif len(parts) >= 2 and parts[0] == "Sources" and parts[1] in SHARED_FOLDERS:
                 require(shared_production(path), f"shared test/experiment/fixture compiled into {name}: {path}")
                 require(name == "TurnOverCore", f"shared production source belongs to wrong target: {path}")
+    # Another target's whole-root exclusion (for example TurnOverTests in Core) does not
+    # intentionally exclude a sample from its own target. Name the sample folder explicitly.
+    sample_exclusions = [path for paths in exclusions.values() for path in paths
+                         if set(path.parts[1:]) & NONPRODUCTION]
+    for file in sorted((root / "Sources").rglob("*.swift")):
+        if not file.is_file():
+            continue
+        path = file.relative_to(root).as_posix()
+        sample = bool(set(PurePosixPath(path).parts[1:-1]) & NONPRODUCTION)
+        require(path in compiled_paths or (sample and is_excluded(path, sample_exclusions)),
+                f"Swift source has no target: {path}; add it to its intended target in Package.swift "
+                "or move the sample to an excluded Tests, Experiments or Fixtures folder")
     expected_shared = {p.relative_to(root).as_posix()
                        for folder in SHARED_FOLDERS
                        for p in (root / "Sources" / folder).rglob("*.swift")
@@ -163,10 +205,12 @@ def self_test():
         expected_count += len(SHARED_FOLDERS)
         require(source_membership(root, resolved, manifest) == expected_count, "shared folder growth should need no manifest edit")
         failures = []
-        def refuses(label, current, declaration):
+        def refuses(label, current, declaration, message=None):
             try:
                 source_membership(root, current, declaration)
-            except ValueError:
+            except ValueError as error:
+                if message is not None:
+                    require(message in str(error), f"{label}: unexpected diagnostic: {error}")
                 failures.append(label)
             else:
                 raise AssertionError(f"invalid source membership accepted: {label}")
@@ -190,6 +234,7 @@ def self_test():
             for folder in sorted(NONPRODUCTION):
                 path = f"{parent}/{folder}/Sample.swift"
                 add(path)
+                manifest["targets"][0].setdefault("exclude", []).append(f"{parent}/{folder}")
                 # Samples remain excluded even when a recursive shared folder discovers its neighbours.
                 require(source_membership(root, resolved, manifest) == expected_count, f"excluded {path} affected production")
                 compiled = copy.deepcopy(resolved); compiled["targets"][0]["sources"].append(path)
@@ -199,6 +244,7 @@ def self_test():
                 refuses(f"compiled nonproduction source {path}", compiled, bad)
             path = f"{parent}/README.md"
             add(path)
+            manifest["targets"][0].setdefault("exclude", []).append(path)
             compiled = copy.deepcopy(resolved); compiled["targets"][0]["sources"].append(path)
             refuses(f"compiled documentation {path}", compiled, manifest)
         for source in originals:
@@ -212,6 +258,7 @@ def self_test():
             refuses(f"wrong target for source: {source}", wrong, wrong_manifest)
         experiment = "Experiments/Sample.swift"
         add(experiment)
+        manifest["targets"][0].setdefault("exclude", []).append("Experiments")
         require(source_membership(root, resolved, manifest) == expected_count,
                 "excluded shared experiment affected production")
         for name in ("TurnOverCore", "Other"):
@@ -224,6 +271,53 @@ def self_test():
                 compiled["targets"].append(target)
                 declaration["targets"].append(copy.deepcopy(target))
             refuses(f"shared experiment compiled into {name}", compiled, declaration)
+        for path in ("TurnOverCore/Phrases.swift", "Unlisted/Feature.swift", "Root.swift",
+                     "TurnOverProbe/NewGate.swift", "Core/.drafts/Hidden.swift"):
+            add(path)
+            refuses(f"orphan Swift source {path}", resolved, manifest,
+                    f"Swift source has no target: Sources/{path}")
+            excluded = copy.deepcopy(manifest)
+            excluded["targets"][0].setdefault("exclude", []).append(path)
+            refuses(f"production exclusion cannot hide orphan {path}", resolved, excluded,
+                    f"Swift source has no target: Sources/{path}")
+            (root / "Sources" / path).unlink()
+        for folder in sorted(NONPRODUCTION):
+            parent = f"Unlisted/{folder}"
+            path = f"{parent}/Sample.swift"
+            add(path)
+            refuses(f"sample folder needs exclusion {path}", resolved, manifest,
+                    f"Swift source has no target: Sources/{path}")
+            broad_exclusion = copy.deepcopy(manifest)
+            broad_exclusion["targets"][0].setdefault("exclude", []).append("Unlisted")
+            refuses(f"whole-root exclusion cannot hide sample {path}", resolved, broad_exclusion,
+                    f"Swift source has no target: Sources/{path}")
+            manifest["targets"][0].setdefault("exclude", []).append(parent)
+            require(source_membership(root, resolved, manifest) == expected_count,
+                    f"intentional excluded sample rejected: {path}")
+        for folder in sorted(SHARED_FOLDERS):
+            for hidden in (".DS_Store", "Keys/.notes/draft.md"):
+                path = f"{folder}/{hidden}"
+                add(path)
+                require(source_membership(root, resolved, manifest) == expected_count,
+                        f"SwiftPM-ignored metadata rejected: {path}")
+            path = f"{folder}/Keys/NOTES.md"
+            add(path)
+            diagnostic = "excludes in Package.swift or move the note to docs"
+            refuses(f"unhandled shared note {path}", resolved, manifest, diagnostic)
+            compiled = copy.deepcopy(resolved); compiled["targets"][0]["sources"].append(path)
+            refuses(f"resolved shared note {path}", compiled, manifest, diagnostic)
+            manifest["targets"][0].setdefault("exclude", []).append(path)
+            require(source_membership(root, resolved, manifest) == expected_count,
+                    f"excluded shared note rejected: {path}")
+        # Real test and probe targets keep their sources; a folder's name is not a frozen target inventory.
+        for name in ("TurnOverTests", "TurnOverProbe", "NewDiagnostic"):
+            path = f"{name}/Check.swift"
+            add(path)
+            target = {"name": name, "path": f"Sources/{name}", "sources": ["Check.swift"]}
+            resolved["targets"].append(copy.deepcopy(target))
+            manifest["targets"].append(copy.deepcopy(target))
+            require(source_membership(root, resolved, manifest) == expected_count,
+                    f"registered diagnostic target rejected: {name}")
         add("Apps/Calculator/New.swift")
         refuses("new app file must be listed explicitly", resolved, manifest)
         manifest["targets"][0]["sources"].append("Apps/Calculator/New.swift")

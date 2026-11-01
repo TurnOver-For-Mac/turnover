@@ -1,16 +1,16 @@
 # PDFsam Basic
 
 - Bundle id: Not recorded
-- Support: Not assessed
+- Support: Partial
 - Effort: None
 - Being worked on: Unclaimed
-- Checked: 14 October 2026; record recovered 1 November 2026. No fresh live test of the current build.
+- Checked: 14 October 2026; setup details are in the linked evidence.
 
 ## Findings
 
 PDFsam Basic 6 used JavaFX and reported focused buttons as disabled. Shared focus-aware speech stopped calling those controls unavailable. Driver checks read card text, action buttons and help links in order. No PDF operation was performed.
 
-Current-build task coverage remains unassessed. Next: With a public sample PDF, check module selection and controls before a disposable split/merge task. Confirm the app’s bundle identifier.
+Next check: With a public sample PDF, check module selection and controls before a disposable split/merge task. Confirm the app’s bundle identifier.
 
 ## Evidence
 

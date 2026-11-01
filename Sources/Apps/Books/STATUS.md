@@ -1,15 +1,17 @@
 # Books
 
 - Bundle id: com.apple.iBooksX
-- Support: Not assessed
+- Support: Partial
 - Effort: Module
 - Being worked on: Unclaimed
-- Checked: Source inventory, 30 October 2026; task-level support has not been assessed in this record.
+- Checked: 30 October 2026; developer build of 22.4 source 0ed2ab4; Mac and Windows keyboard styles. Setup limits are in the evidence.
 
 ## Findings
 
-The module reads the library and store as a page and names shelf navigation buttons. Read a library list and move between shelf headings and book controls.
+Four review-item movements produced speech or boundary responses in each style. The log does not identify a book or a reading location. Library/store control navigation does not establish book-text reading or purchase actions.
 
 ## Evidence
 
-[App implementation](BooksAppModule.swift). Record the tested tasks and setup here when assessing support.
+[30 October regression results and scope](Experiments/2026-10-30-regression.md).
+
+[App implementation](BooksAppModule.swift).

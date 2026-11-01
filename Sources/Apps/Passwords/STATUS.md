@@ -1,17 +1,17 @@
 # Passwords
 
 - Bundle id: com.apple.Passwords
-- Support: Not assessed
+- Support: Partial
 - Effort: None
 - Being worked on: Unclaimed
-- Checked: Historical evidence recovered 1 November 2026; recorded checks from 12 October 2026. Current build not tested.
+- Checked: 30 October 2026; developer build of 22.4 source 0ed2ab4; Mac and Windows keyboard styles. Setup limits are in the evidence.
 
 ## Findings
 
-Historical check: masked movement-key navigation on 12 October covered the locked screen only. The six-app utility suite reported 42/44 Mac and 39/44 Windows; these are aggregate counts, not this app’s score. Tab in both styles landed on an unnamed SwiftUI hosting group that TurnOver intentionally kept silent; Shift-Tab read the password-unlock control. A VoiceOver comparison was left open.
-
-Support is Not assessed for the current build. The historical results below remain evidence for their stated tasks and setup, not a fresh app-wide assessment.
+Five of six navigation checks passed in each style; the first item key produced no accepted response. Earlier checks covered the locked screen. The release handoff also identifies a silent first key. Vault access, secret fields and editing are not assessed.
 
 ## Evidence
+
+[30 October regression results and scope](Experiments/2026-10-30-regression.md).
 
 [Historical checks and limits](Experiments/2026-10-historical-checks.md).

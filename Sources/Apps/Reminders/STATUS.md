@@ -1,15 +1,17 @@
 # Reminders
 
 - Bundle id: com.apple.reminders
-- Support: Not assessed
+- Support: Partial
 - Effort: Module
 - Being worked on: Unclaimed
-- Checked: Source inventory, 30 October 2026; task-level support has not been assessed in this record.
+- Checked: 30 October 2026; developer build of 22.4 source 0ed2ab4; Mac and Windows keyboard styles. Setup limits are in the evidence.
 
 ## Findings
 
-The module handles list and reminder navigation and their spoken labels. Use a sample list to move between lists and reminders and check completed-state announcements.
+Three review-item movements produced nonempty speech in the opened window. The run did not check reminder text, completion states or creation. This grade covers basic control reading only.
 
 ## Evidence
 
-[App implementation](RemindersAppModule.swift). Record the tested tasks and setup here when assessing support.
+[30 October regression results and scope](Experiments/2026-10-30-regression.md).
+
+[App implementation](RemindersAppModule.swift).

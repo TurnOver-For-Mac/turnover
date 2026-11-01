@@ -4,12 +4,14 @@
 - Support: Not assessed
 - Effort: Module
 - Being worked on: Unclaimed
-- Checked: Source inventory, 30 October 2026; task-level support has not been assessed in this record.
+- Checked: 30 October 2026; developer build of 22.4 source 0ed2ab4; Mac and Windows keyboard styles. Setup limits are in the evidence.
 
 ## Findings
 
-The module handles mailbox and message navigation, search and compose feedback. Use sample messages to check list navigation, reading and returning to the list. Assess composing and sending separately.
+Down/Up and movement to the mailbox and message lists reached the expected Mail handlers. All four assertions are command-dispatch checks. Message text, useful spoken list output and composing were not asserted by this scenario. The 29 October public-message probe established provider structure, not a listening result.
 
 ## Evidence
 
-[App implementation](MailAppModule.swift). Record the tested tasks and setup here when assessing support.
+[30 October regression results and scope](Experiments/2026-10-30-regression.md).
+
+[App implementation](MailAppModule.swift).

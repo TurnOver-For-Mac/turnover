@@ -9,7 +9,7 @@ TurnOver is a Swift 6 macOS screen reader that works alongside VoiceOver. `Packa
 - `Sources/Views/`: reusable window and document reading models. Core and Views still compile in TurnOverCore.
 - `Sources/Experiments/`: shared investigation index and records, excluded from default builds. See `Sources/README.md` for the source map.
 - `Sources/System/`: shared Mac menus, prompts, notifications, application chooser and built-in app registration. These files still compile in TurnOverCore.
-- `Sources/Apps/`: app implementations and records. Implementations still belong to TurnOverCore: `Package.swift` discovers the `Core`, `Views` and `System` folders and explicitly lists app Swift files. Add new app files to that list; new shared Core, Views or System files are discovered automatically. App records, tests, fixtures and experiments are excluded. See `Sources/Apps/README.md`.
+- `Sources/Apps/`: app implementations and records. Implementations still belong to TurnOverCore: `Package.swift` discovers the `Core`, `Views` and `System` folders and explicitly lists app Swift files. Add new app files to that list; new shared Core, Views or System files are discovered automatically. Run `python3 Tools/build-app-index.py` after app-record or documentation changes; it generates the app index and the Apps exclusions in `Package.swift`. App tests, fixtures and experiments are excluded. See `Sources/Apps/README.md`.
 - `Sources/TurnOverAX/`, `TurnOverSpeech/`, `TurnOverBraille/`, and `TurnOverControl/`: accessibility, audio, braille, and local communication.
 - `Sources/TurnOverTests/`: test executable; `Tests/Fixtures/` and `Tests/Plugins/`: recorded windows and plugin samples.
 - `Resources/`: bundle configuration, sounds, recipes, and keymaps. `Helpers/` contains separate Swift packages; `Tools/` contains development utilities.
@@ -23,7 +23,7 @@ Use a Mac with full Xcode 27 and the macOS 27 SDK; the app targets macOS 14 onwa
 - `./build.sh`: additionally replace `/Applications/TurnOver.app` and restart it.
 - `~/Library/Developer/TurnOver/build/release/turnover-tests -v`: rerun tests verbosely; add a name substring to filter.
 
-Both build commands check source membership and the generated app index, then compile and run tests; `./build.sh` is not an install-only step. Allow a minute or two, with longer builds possible after larger changes. The last displayed product name can remain unchanged while compilation continues; check compiler activity before treating it as a hang. Running `turnover-tests` directly only reruns tests and does not build anything.
+Both build commands check source membership, the generated app index and app-record exclusions, then compile and run tests; `./build.sh` is not an install-only step. Allow a minute or two, with longer builds possible after larger changes. The last displayed product name can remain unchanged while compilation continues; check compiler activity before treating it as a hang. Running `turnover-tests` directly only reruns tests and does not build anything.
 
 For a byte-identical folder move, verify file hashes/modes, target membership, build and tests; no reinstall or listening trial is required. Behavior changes still require the installed-app loop and Oliver's trial.
 

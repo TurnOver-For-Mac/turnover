@@ -1,15 +1,17 @@
 # Calendar
 
 - Bundle id: com.apple.iCal
-- Support: Not assessed
+- Support: Partial
 - Effort: Module
 - Being worked on: Unclaimed
-- Checked: Source inventory, 30 October 2026; task-level support has not been assessed in this record.
+- Checked: 30 October 2026; developer build of 22.4 source 0ed2ab4; Mac and Windows keyboard styles. Setup limits are in the evidence.
 
 ## Findings
 
-The module adds day and event navigation. Use a sample calendar to move by day and week, read an event and return to the calendar.
+Three review-item movements produced nonempty speech in the opened window. The run did not check event details, day/week movement or event creation. This grade covers basic control reading only.
 
 ## Evidence
 
-[App implementation](CalendarAppModule.swift). Record the tested tasks and setup here when assessing support.
+[30 October regression results and scope](Experiments/2026-10-30-regression.md).
+
+[App implementation](CalendarAppModule.swift).
