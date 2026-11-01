@@ -98,6 +98,21 @@ private func ulyssesFormattingCollectorTests() {
               "the provider requests a bounded string range, never the whole-sheet value")
         check(AXReplay.actions.isEmpty && AXReplay.sets.isEmpty, "collector never opens menus or edits text")
     }
+    test("Ulysses collector: text and final validation use worker-owned focus references") {
+        AXReplay.load(fixture())
+        defer { AXReplay.unload() }
+        let original = context()
+        let identities = [ObjectIdentifier(original.focus), ObjectIdentifier(original.foreground!)]
+        var configured: [ObjectIdentifier] = []
+        let result = UlyssesFormatting.collect(original, .italic, AXWalkBudget(request: AXWalkRequest())) { element in
+            let identity = ObjectIdentifier(element)
+            check(!identities.contains(identity), "text reads never configure the captured focus or foreground handle")
+            configured.append(identity)
+            return .success
+        }
+        expect(result, .on, "fresh focus references preserve complete-paragraph state and final validation")
+        check(!configured.isEmpty, "the collector prepares its own AX references")
+    }
     test("Ulysses collector: unverified schemes disabled commands and remapped shortcuts stay unknown") {
         for variant in 0..<7 {
             var sample = fixture()

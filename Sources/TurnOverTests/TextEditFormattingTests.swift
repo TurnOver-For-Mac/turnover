@@ -51,6 +51,27 @@ func textEditFormattingTests() {
               "typing mode never comes from a neighbour character or private text")
         check(AXReplay.actions.isEmpty && AXReplay.sets.isEmpty, "reading the closed menu neither opens it nor modifies the document")
     }
+    test("TextEdit formatting: captured reader handles stay identity-only while worker copies are queried") {
+        AXReplay.load(fixture())
+        defer { AXReplay.unload() }
+        let original = context()
+        let identities = [ObjectIdentifier(original.focus), ObjectIdentifier(original.foreground!)]
+        var configured: [ObjectIdentifier] = []
+        let state = TextEditFormatting.collect(original, .bold, AXWalkBudget(request: AXWalkRequest())) { element in
+            let identity = ObjectIdentifier(element)
+            check(!identities.contains(identity), "collector never changes a captured reader handle's timeout")
+            configured.append(identity)
+            return .success
+        }
+        expect(state, .on, "fresh worker references still read the verified state")
+        check(!configured.isEmpty, "worker-owned handles were prepared")
+        var attempted = 0
+        let query = FormattingQuery(context: original, budget: AXWalkBudget(request: AXWalkRequest())) { _ in
+            attempted += 1; return .success
+        }
+        check(!query.prepare(original.focus) && !query.prepare(original.foreground!), "defensive guard refuses shared reader references")
+        expect(attempted, 0, "the timeout setter is never called for either captured reference")
+    }
     test("TextEdit formatting: only the observed check mark and actual noValue have boolean meaning") {
         func result(_ value: CFTypeRef?, _ status: AXQueryStatus) -> AXQueryResult<CFTypeRef> {
             .init(value: value, status: status, elapsedNanoseconds: 0, wasAttempted: true)

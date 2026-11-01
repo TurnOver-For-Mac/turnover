@@ -18,12 +18,12 @@ nonisolated package enum UlyssesFormatting {
         guard context.bundleIdentifier == "com.ulyssesapp.mac", context.foreground != nil else { return .unknown }
         let query = FormattingQuery(context: context, budget: budget, setTimeout: setTimeout)
         let app = AXUIElementCreateApplication(context.pid)
-        guard query.focusIsCurrent(app),
+        guard query.focusIsCurrent(app), let focus = query.workerFocus,
               let bar = axElement(query.attribute(app, kAXMenuBarAttribute)?.value),
               isMarkdownXL(bar, query: query), shortcutMatches(bar, kind: kind, query: query),
-              let count = number(query.attribute(context.focus, kAXNumberOfCharactersAttribute)?.value),
+              let count = number(query.attribute(focus, kAXNumberOfCharactersAttribute)?.value),
               count >= 0, count <= 1_000_000_000,
-              let range = cfRange(query.attribute(context.focus, kAXSelectedTextRangeAttribute)?.value),
+              let range = cfRange(query.attribute(focus, kAXSelectedTextRangeAttribute)?.value),
               range.location >= 0, range.location <= count, range.length >= 0,
               range.length <= count - range.location, range.length <= 4096 else { return .unknown }
         let start = max(0, range.location - 4096)
@@ -32,7 +32,7 @@ nonisolated package enum UlyssesFormatting {
         let text: String
         if length == 0 { text = "" }
         else {
-            guard let raw = query.parameterized(context.focus, kAXStringForRangeParameterizedAttribute,
+            guard let raw = query.parameterized(focus, kAXStringForRangeParameterizedAttribute,
                                                 axRangeValue(start, length))?.value,
                   CFGetTypeID(raw) == CFStringGetTypeID(), CFStringGetLength(raw as! CFString) == length else { return .unknown }
             text = raw as! String
@@ -41,9 +41,9 @@ nonisolated package enum UlyssesFormatting {
                                     selection: NSRange(location: range.location, length: range.length)) else { return .unknown }
         let state = UlyssesFormattingSyntax.state(in: slice.text, selection: slice.selection, kind: kind, isCompleteParagraph: true)
         // Reading the menu and text crosses provider calls; refuse a result if selection, count or real focus changed.
-        guard query.focusIsCurrent(app),
-              number(query.attribute(context.focus, kAXNumberOfCharactersAttribute)?.value) == count,
-              let after = cfRange(query.attribute(context.focus, kAXSelectedTextRangeAttribute)?.value),
+        guard query.focusIsCurrent(app), let currentFocus = query.workerFocus,
+              number(query.attribute(currentFocus, kAXNumberOfCharactersAttribute)?.value) == count,
+              let after = cfRange(query.attribute(currentFocus, kAXSelectedTextRangeAttribute)?.value),
               after.location == range.location, after.length == range.length, budget.check() else { return .unknown }
         return state
     }

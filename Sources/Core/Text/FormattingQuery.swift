@@ -8,6 +8,7 @@ import TurnOverAX
 nonisolated package final class FormattingQuery {
     package let context: FormattingFeedback.Context
     package let budget: AXWalkBudget
+    package private(set) var workerFocus: AXUIElement?
     private let setTimeout: (AXUIElement) -> AXError
     private var prepared: [ObjectIdentifier: AXUIElement] = [:]
 
@@ -17,7 +18,12 @@ nonisolated package final class FormattingQuery {
     }
 
     package func prepare(_ element: AXUIElement) -> Bool {
-        guard budget.check() else { return false }
+        // Captured reader handles are identity witnesses only. Their timeout persists on that exact object;
+        // configuring one here would silently change later navigation on main (ownership review, 1 Nov 2026).
+        let identity = ObjectIdentifier(element)
+        guard identity != ObjectIdentifier(context.focus),
+              context.foreground.map({ identity != ObjectIdentifier($0) }) ?? true,
+              budget.check() else { return false }
         if prepared[ObjectIdentifier(element)] != nil { return true }
         guard let error = budget.query({ setTimeout(element) }), error == .success, budget.visit() else { return false }
         prepared[ObjectIdentifier(element)] = element
@@ -85,11 +91,13 @@ nonisolated package final class FormattingQuery {
     }
 
     package func focusIsCurrent(_ app: AXUIElement) -> Bool {
+        workerFocus = nil
         guard let focus = axElement(attribute(app, kAXFocusedUIElementAttribute)?.value), CFEqual(focus, context.focus),
               let foreground = context.foreground,
               let window = axElement(attribute(app, kAXFocusedWindowAttribute)?.value), CFEqual(window, foreground),
-              let focusWindow = axElement(attribute(context.focus, kAXWindowAttribute)?.value), CFEqual(focusWindow, window),
-              string(attribute(context.focus, kAXRoleAttribute)) == "AXTextArea", budget.check() else { return false }
+              let focusWindow = axElement(attribute(focus, kAXWindowAttribute)?.value), CFEqual(focusWindow, window),
+              string(attribute(focus, kAXRoleAttribute)) == "AXTextArea", budget.check() else { return false }
+        workerFocus = focus   // reacquired on this worker; never substitute the captured identity reference
         return true
     }
 
