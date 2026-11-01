@@ -23,6 +23,14 @@ Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
   sender while everything else stays as it was. The three old switches (help text, shortcut, position) are rows of the
   list now; a settings file from before keeps their values.
 
+## 2.0, build 22.5 (unreleased)
+
+### Fixed
+
+- After unlocking, VoiceOver stays available until an ordinary app and keyboard input are ready. A failed return
+  to TurnOver retains a bounded retry; another lock or a deliberate reader choice cancels stale restoration.
+  VoiceOver already on before sleep remains on. Issue 204.
+
 ## 2.0, build 22.4
 
 ### Fixed
