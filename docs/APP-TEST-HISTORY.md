@@ -30,9 +30,9 @@ counted a text boundary sound that the earlier runner overlooked. Keep that dist
 Dated Experiments summaries record setup, method, result and limits. STATUS.md summarizes the strongest relevant
 results and links to those records. Preserve conflicting or unsuccessful observations when they explain a limit.
 
-Earlier source records include `testing/APP-TEST-LIST.md`, the 10–12 October notes, `testing/2026-10-14-parts-sweep.md`
-and `Application library.txt` dated 29 October. These local records contain historical environment and personal-session
-context. Summarize the relevant result; do not copy them wholesale into the source tree.
+Earlier app-test lists, the 10–12 October notes, the 14 October parts-sweep notes and the 29 October application-library
+notes are retained privately on Oliver’s Mac. They are not files in this repository. These records contain historical
+environment and personal-session context. Summarize the relevant result; do not copy them wholesale into the source tree.
 
 A fixture records a sampled window. Link a named test when claiming that the harness exercises it. Use public sample
 content, excluding personal text, titles, accounts, connected servers and credentials from fixtures and summaries.
