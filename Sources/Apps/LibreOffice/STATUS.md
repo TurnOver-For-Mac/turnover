@@ -14,4 +14,4 @@ Current-build task coverage remains unassessed. Next: Verify Writer across parag
 
 ## Evidence
 
-[Dated observations and limits](Experiments/2026-10-historical-checks.md). [Shared editable-text behavior](../../TurnOverCore/EditableText.swift) · [Shared object announcements](../../TurnOverCore/TurnOverObject.swift)
+[Dated observations and limits](Experiments/2026-10-historical-checks.md). [Shared editable-text behavior](../../Core/Text/EditableText.swift) · [Shared object announcements](../../Core/Objects/TurnOverObject.swift)

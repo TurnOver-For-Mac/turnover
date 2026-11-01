@@ -14,6 +14,6 @@ Support is Not assessed for the current build. The historical results below rema
 
 ## Evidence
 
-[Historical checks and limits](Experiments/2026-10-historical-checks.md). [Shared object naming](../../TurnOverCore/TurnOverObject.swift). [Retained masked browser fixture](../../../Tests/Fixtures/cyberduck-browser.json).
+[Historical checks and limits](Experiments/2026-10-historical-checks.md). [Shared object naming](../../Core/Objects/TurnOverObject.swift). [Retained masked browser fixture](../../../Tests/Fixtures/cyberduck-browser.json).
 
 Retained fixtures are historical evidence; no direct current-harness references were found, so automated execution of these files is not claimed.

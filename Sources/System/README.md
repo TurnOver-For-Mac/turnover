@@ -16,6 +16,6 @@ The [Dock module](../Apps/Dock/DockAppModule.swift) includes the native Command-
 
 ## Build boundaries
 
-[Package.swift](../../Package.swift) discovers production Swift files in this folder and `TurnOverCore`, while listing app files explicitly. New production Swift files here do not need individual manifest entries. Documentation, `Tests`, `Experiments` and `Fixtures` must remain excluded from the reader target; update the manifest exclusions before adding such directories. [The membership check](../../Tools/check-migration.py) rejects omitted or duplicated sources, wrong-target membership and compiled samples.
+[Package.swift](../../Package.swift) discovers production Swift files in this folder, `Core` and `Views`, while listing app files explicitly. New production Swift files here do not need individual manifest entries. Documentation, `Tests`, `Experiments` and `Fixtures` must remain excluded from the reader target; update the manifest exclusions before adding such directories. [The membership check](../../Tools/check-migration.py) rejects omitted or duplicated sources, wrong-target membership and compiled samples.
 
 The app lifecycle, keyboard tap and VoiceOver coordination remain in the separate [TurnOver executable](../TurnOver/). Accessibility, speech, braille and local control retain their existing targets. [Helpers](../../Helpers/) retain their separate packages; resources, bundles and signing paths are unchanged. Filing a shared source here does not permit changing its actor isolation, runtime owner or helper boundary.

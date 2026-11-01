@@ -26,11 +26,12 @@ func translatable(_ target: String) -> [SwiftSetting] {
     return [.unsafeFlags(["-emit-localized-strings", "-emit-localized-strings-path", folder + "/" + target])]
 }
 
-// Shared Core and Mac system integration use folder entries, so their new files are discovered automatically.
+// Shared Core, Views and Mac system integration use folder entries; new files there are discovered automatically.
 // App implementations are listed individually; records, tests and experiments are excluded from production membership.
 // Tools/check-migration.py validates this boundary without fixing it to one historical checkout.
 let coreSources: [String] = [
-    "TurnOverCore",
+    "Core",
+    "Views",
     "System",
     "Apps/AppStore/AppStoreAppModule.swift",
     "Apps/AppStore/AppStoreFlat.swift",
@@ -41,9 +42,11 @@ let coreSources: [String] = [
     "Apps/Books/BooksAppModule.swift",
     "Apps/Calculator/CalculatorAppModule.swift",
     "Apps/Calendar/CalendarAppModule.swift",
+    "Apps/Catalog/Catalog.swift",
     "Apps/Chat/ChatAppModule.swift",
     "Apps/Chat/ChatView.swift",
     "Apps/Claude/ClaudeAppModule.swift",
+    "Apps/Claude/ClaudeTranscript.swift",
     "Apps/Contacts/ContactsAppModule.swift",
     "Apps/Dock/DockAppModule.swift",
     "Apps/Excel/ExcelAppModule.swift",
@@ -52,6 +55,7 @@ let coreSources: [String] = [
     "Apps/Finder/FinderAppModule.swift",
     "Apps/Freeform/FreeformAppModule.swift",
     "Apps/Games/Games.swift",
+    "Apps/GoogleDocs/GoogleDocs.swift",
     "Apps/Keynote/KeynoteAppModule.swift",
     "Apps/Kindle/KindleAppModule.swift",
     "Apps/Mail/MailAppModule.swift",
@@ -64,7 +68,6 @@ let coreSources: [String] = [
     "Apps/Numbers/NumbersAppModule.swift",
     "Apps/Pages/PagesAppModule.swift",
     "Apps/Panes/PanesAppModule.swift",
-    "Apps/Panes/PanesView.swift",
     "Apps/Photos/PhotosAppModule.swift",
     "Apps/Preview/PreviewAppModule.swift",
     "Apps/Reminders/RemindersAppModule.swift",
@@ -148,6 +151,10 @@ let package = Package(
                 "TurnOverSettings",
                 "TurnOverSpeech",
                 "TurnOverTests",
+                "README.md",
+                "Core/README.md",
+                "Views/README.md",
+                "Experiments",
                 "System/README.md",
                 "Apps/README.md",
                 "Apps/ActivityMonitor/Experiments",
@@ -168,6 +175,7 @@ let package = Package(
                 "Apps/Byword/STATUS.md",
                 "Apps/Calculator/STATUS.md",
                 "Apps/Calendar/STATUS.md",
+                "Apps/Catalog/README.md",
                 "Apps/Chat/README.md",
                 "Apps/Chrome/Experiments",
                 "Apps/Chrome/STATUS.md",
@@ -195,6 +203,7 @@ let package = Package(
                 "Apps/Firefox/STATUS.md",
                 "Apps/Freeform/STATUS.md",
                 "Apps/Games/README.md",
+                "Apps/GoogleDocs/README.md",
                 "Apps/GarageBand/Experiments",
                 "Apps/GarageBand/STATUS.md",
                 "Apps/Home/Experiments",

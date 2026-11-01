@@ -101,6 +101,7 @@ The plans in docs/ say which decisions are settled and which are open; docs/DECI
 
 ## Finding your way around the code
 
+The [source map](Sources/README.md) groups shared Core code, reusable Views, Apps, System integration and investigation records.
 The [app index](Sources/Apps/README.md) links app implementations and their support records. App modules live under
 `Sources/Apps` and still compile in TurnOverCore. See [working with app folders](docs/APP-FOLDERS.md) for source,
 record and test boundaries.

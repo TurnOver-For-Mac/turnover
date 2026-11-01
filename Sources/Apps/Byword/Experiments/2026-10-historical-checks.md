@@ -26,7 +26,7 @@ Recovered from the retained local checkout’s historical testing notes, plus th
 
 ## Retained repository evidence
 
-- [Shared symbol handling](../../../TurnOverCore/Symbols.swift).
+- [Shared symbol handling](../../../Core/Speech/Symbols.swift).
 - [Retained Markdown fixture](../../../../Tests/Fixtures/byword-markdown.json).
 
 The fixture/sample remains in the repository for reference. No direct references from the current test harness were found; this record does not claim the harness exercises it.

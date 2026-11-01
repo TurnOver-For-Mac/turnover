@@ -12,4 +12,4 @@ Use sample content to check movement between the folder list, item list and docu
 
 ## Reading model
 
-[PanesView.swift](PanesView.swift) builds the named parts and navigation used by panes recipes.
+[PanesView.swift](../../Views/PanesView.swift) builds the named parts and navigation used by panes recipes.

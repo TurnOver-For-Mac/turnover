@@ -23,7 +23,7 @@ Recovered from the retained local checkout’s historical testing notes, plus th
 
 ## Retained repository evidence
 
-- [Shared object naming](../../../TurnOverCore/TurnOverObject.swift).
+- [Shared object naming](../../../Core/Objects/TurnOverObject.swift).
 - [Retained masked browser fixture](../../../../Tests/Fixtures/cyberduck-browser.json).
 
 The fixture/sample remains in the repository for reference. No direct references from the current test harness were found; this record does not claim the harness exercises it.
