@@ -641,4 +641,8 @@ public final class BrowseModeDocument: ScriptableObject {
     public internal(set) var selectionAnchor: Int?
     /// Where the virtual caret was when the focus last moved (followed or set). Tab from there is the browser's own.
     var positionAtFocus = -1
+    /// The control the virtual caret last followed the focus to, and whether the focus now arriving comes from outside
+    /// the document (set as the focus is presented): back from outside onto that control, the reading position stays.
+    var lastFocusElement: AXUIElement?
+    public var focusFromOutside = false
 }
