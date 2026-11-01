@@ -4,11 +4,11 @@
 - Support: Partial
 - Effort: Module
 - Being worked on: Codex for Oliver, issue 212 (local trial pending)
-- Checked: 1 November 2026; local formatting candidate 829eb8e, macOS 27.2, Mac keys, VoiceOver off. Live metadata and automated wording checks; listening trial pending. Earlier navigation checks retain their dates and limits in the evidence.
+- Checked: 1 November 2026; installed formatting runtime 8514e13, macOS 27.2, Mac keys, VoiceOver off. Both full build gates passed 463 tests, braille checks and all three helper self-tests; 27 combined TextEdit/Ulysses live metadata checks passed. Audio was not independently heard; Oliver’s listening trial remains pending. Earlier navigation checks retain their dates and limits in the evidence.
 
 ## Findings
 
-A local formatting-shortcut candidate for Command-B and Command-I is installed. Automated wording and live metadata checks passed; Oliver’s listening trial is pending. [Probe findings and trial limits](Experiments/2026-11-01-formatting-feedback.md). This does not change the existing support grade.
+Command-B/Command-I feedback is installed in local candidate `8514e13`. Its formatting worker uses separate AX references so its short timeouts cannot change the reader’s captured handles. Build and live metadata checks passed; Oliver’s listening trial remains pending. [Probe findings and trial limits](Experiments/2026-11-01-formatting-feedback.md). This does not change the existing support grade.
 
 Review navigation and caret-by-character dispatch passed; after opening and dismissing the spelling menu, Down produced speech. These checks do not exercise File-menu entry. The 29–30 October failure with plain Down and Control–Option–Down remains the known gap; do not infer its repair from the regression pass.
 

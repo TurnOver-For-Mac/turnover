@@ -2,7 +2,7 @@
 
 ## Result and scope
 
-Oliver reports silent Command-B/Command-I in Ulysses; he confirms Word already announces them. This request concerns toggling formatting, not increased verbosity while reading. The local candidate uses shared delayed feedback with a Ulysses-specific adapter. The candidate is installed; live metadata checks passed. Oliver's listening trial is pending.
+Oliver reports silent Command-B/Command-I in Ulysses; he confirms Word already announces them. This request concerns toggling formatting, not increased verbosity while reading. The local candidate uses shared delayed feedback with a Ulysses-specific adapter. Local runtime candidate `8514e13` is installed and launched; both full build gates and the repeated live metadata checks passed. Oliver's listening trial remains pending.
 
 ## Live evidence
 
@@ -34,8 +34,10 @@ Sanitized probe summaries are held in the local developer records and shared rev
 
 ## Local candidate validation
 
-Both required build commands completed: 461 unit tests, braille thread checks and all three helper self-tests passed. The optional real VoiceOver preferences export was skipped because TURNOVER_VOPREFS was not set. Runtime source is local commit `829eb8e` on `codex/format-shortcut-feedback`; the installed bundle and built bundle match and strict signing verification passes. A verified rollback of the previous 22.5 app is retained. No runtime code has been pushed.
+Runtime source is local commit `8514e13` on `codex/format-shortcut-feedback`. Both `./build.sh --no-install` and `./build.sh` passed 463 unit tests, braille thread checks and all three helper self-tests. The corrected app is installed and launched. Strict deep signing verification passed; installed executable and core-library hashes match the build. A verified rollback of the previous 22.5 app is retained. No runtime code has been pushed.
 
-Seventeen initial installed cases covered Ulysses end-caret, selected and nested states plus TextEdit empty rich-text on/off. Ten final Ulysses checks covered empty text, a tag before a space, and turning styles off after typing trailing spaces. Subsequent typed characters were plain after the closing tag. The final probe returned the disposable sample to plain text.
+Captured focus and foreground AX references are used only for identity checks. The worker reacquires matching references and applies its 50 ms timeout only to its own objects, including Ulysses text reads and final revalidation. Both app collectors have regression cases proving the original handles never reach the timeout setter while verified states still succeed. This prevents persistent AX timeouts from changing later reader navigation.
 
-Live verification combines public-sample AX state with privacy-masked speech lengths; exact wording and once-only response ownership are checked by the regression tests. Audio was not independently heard. Existing Ulysses selection announcements can precede formatting feedback, and those were retained in the evidence rather than counted as duplicate state responses. Oliver's listening trial remains the publication gate.
+All 27 existing live cases passed again on `8514e13`: 17 covered Ulysses end-caret, selected and nested states plus TextEdit empty rich-text on/off; 10 covered Ulysses empty text, a tag before a space, and turning styles off after typing trailing spaces. Subsequent typed characters were plain after the closing tag. The disposable sample was restored to plain text and Ulysses left focused.
+
+Live verification combines public-sample AX state with privacy-masked speech lengths; regression tests check exact wording and once-only response ownership. Audio was not independently heard. Existing Ulysses selection announcements can precede formatting feedback and are not counted as duplicate state responses. Oliver's listening trial remains the publication gate.
