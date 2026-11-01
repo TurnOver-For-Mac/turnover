@@ -4,7 +4,7 @@
 
 ## App records and recipes
 
-[Notes recipe](../../../Resources/recipes/com.apple.Notes.json).
+[Notes record](../Notes/STATUS.md) and [Notes recipe](../../../Resources/recipes/com.apple.Notes.json).
 
 ## Checks
 

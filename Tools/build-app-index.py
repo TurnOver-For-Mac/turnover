@@ -12,6 +12,7 @@ DESTINATION = APPS / 'README.md'
 SUPPORT = ('Works', 'Partial', 'Blocked', 'Not assessed')
 EFFORT = ('None', 'Settings or plugin', 'Module', 'Workaround', 'No route known')
 FIELDS = ('Bundle id', 'Support', 'Effort', 'Being worked on', 'Checked')
+UNKNOWN_BUNDLE = 'Not recorded'
 
 
 def records():
@@ -38,9 +39,12 @@ def records():
             raise ValueError(f'{path.relative_to(ROOT)}: invalid Support or Effort category')
         if any(not fields[key] for key in FIELDS if key != 'Effort'):
             raise ValueError(f'{path.relative_to(ROOT)}: only Effort may be blank; use Unclaimed for unassigned work')
-        if fields['Bundle id'] in bundles:
-            raise ValueError(f'{path.relative_to(ROOT)}: duplicate bundle id')
-        bundles.add(fields['Bundle id'])
+        # An old observation may lack identity metadata. Keep that uncertainty explicit;
+        # known identifiers must still be unique so two records cannot silently diverge.
+        if fields['Bundle id'] != UNKNOWN_BUNDLE:
+            if fields['Bundle id'] in bundles:
+                raise ValueError(f'{path.relative_to(ROOT)}: duplicate bundle id')
+            bundles.add(fields['Bundle id'])
         result.append((titles[0], quote(path.relative_to(APPS).as_posix(), safe='/'), fields))
     if not result:
         raise ValueError('No app records found')
@@ -65,9 +69,10 @@ def index(entries):
     out = ['# App records', '',
            'Generated from each app’s STATUS.md. Only the recorded tasks and setups are assessed; the presence of a folder is not evidence of support.', '',
            '## Reading the records', '',
-           '**Support:** Works means the named tasks worked in the recorded setup; Partial means useful tasks have known gaps; Blocked means the stated task has no usable tested route; Not assessed means no relevant assessment is recorded. Blocked is not proof of impossibility.', '',
+           '**Support:** Works means the named tasks worked in the recorded setup; Partial means useful tasks have known gaps; Blocked means the stated task has no usable tested route; Not assessed means the stated scope or current build has not been assessed; dated earlier results may still be recorded. Blocked is not proof of impossibility.', '',
            '**Effort:** None means no app-specific adaptation; Settings or plugin means configuration is sufficient; Module means app-specific code; Workaround means an indirect route; No route known means no usable approach has been demonstrated. Blank effort remains unassessed. These are categories, not time estimates.', '',
            '**Being worked on** records a current person and issue, or Unclaimed; it creates no permanent ownership. AI assistance and historical work are described in the evidence. VoiceOver on/off is a test condition, not a limit on TurnOver’s intended support.', '',
+           'Records include dedicated modules, shared-code support and earlier app investigations. A recovered result keeps its original date and limits; a planned task is not a completed test. See [the evidence guide](../../docs/APP-TEST-HISTORY.md). Bundle id may be Not recorded until verified; never guess an identifier from an app name.', '',
            'Assess support by checking the named tasks and recording the app/macOS versions, reader build, keyboard style and VoiceOver state. Use public sample content for saved evidence.', '',
            'Shared implementations: [Media](Media/README.md), [Chat](Chat/README.md), [Panes](Panes/README.md), [Games](Games/README.md). They are not separate app support grades.', '',
            'Regenerate with `python3 Tools/build-app-index.py` from the repository root; check records, local links and stale output with `--check`.', '']
