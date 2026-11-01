@@ -17854,7 +17854,7 @@
       }
     },
     "bold %@" : {
-      "comment" : "Bold turned on or off in Word",
+      "comment" : "Bold turned on or off in Word, TextEdit or Ulysses",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -17863,6 +17863,9 @@
           }
         }
       }
+    },
+    "bold mixed" : {
+      "comment" : "After a formatting shortcut, the selection contains both bold and non-bold text"
     },
     "bold text" : {
       "comment" : "A kind of thing to find, after next or previous",
@@ -20029,7 +20032,7 @@
       }
     },
     "italic %@" : {
-      "comment" : "Italic turned on or off in Word",
+      "comment" : "Italic turned on or off in Word, TextEdit or Ulysses",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -20038,6 +20041,9 @@
           }
         }
       }
+    },
+    "italic mixed" : {
+      "comment" : "After a formatting shortcut, the selection contains both italic and non-italic text"
     },
     "italic text" : {
       "comment" : "A kind of thing to find, after next or previous",

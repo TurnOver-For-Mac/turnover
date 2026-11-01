@@ -15,6 +15,7 @@ private final class FormattingHeldReplies {
     var replies: [@MainActor (FormattingFeedback.State) -> Void] = []
     var contexts: [FormattingFeedback.Context] = []
     var current = true
+    var currentChecks = 0
     let keys = Locked(0)
     let now = Locked<UInt64>(0)
     let mouse = Locked(FormattingFeedback.MouseClicks(left: 0, right: 0, other: 0))
@@ -53,7 +54,7 @@ func formattingFeedbackTests() {
         InputManager.passNextKey = false; InputManager.isInputHelpActive = false; InputManager.captureNext = nil
         InputManager.passThroughWatchers = []; InputManager.onPassThrough = nil
         FormattingFeedback.shared = FormattingFeedback(provider: { _, _, _ in .unknown },
-            isCurrent: { _ in held.current }, keyCount: { keys.value }, now: { clock.value }, mouseClicks: { clicks.value },
+            isCurrent: { _ in held.currentChecks += 1; return held.current }, keyCount: { keys.value }, now: { clock.value }, mouseClicks: { clicks.value },
             after: { held.delayed.append($0) }, read: { context, _, _, reply in
                 held.contexts.append(context); held.replies.append(reply)
             })
@@ -193,19 +194,31 @@ func formattingFeedbackTests() {
             check(held.contexts.last?.focus.isSame(focus.element) == true, "provider receives the original keyboard target")
         }
     }
-    test("formatting feedback: noneditable secure Word and unavailable contexts never request state") {
-        for kind in 0..<4 {
+    test("formatting feedback: noneditable secure and Word contexts never request state") {
+        for kind in 0..<3 {
             withFeedback { focus, held, _, key in
                 switch kind {
                 case 0: API.setFocusObject(TurnOverObject(element: AXReplay.element(4)), ancestors: [])
                 case 1: API.setFocusObject(FormattingTestText(element: AXReplay.element(5)), ancestors: [])
-                case 2: focus.testBundle = "com.microsoft.Word"
-                default: held.current = false
+                default: focus.testBundle = "com.microsoft.Word"
                 }
                 _ = key("kb:command+b")
                 expect(held.delayed.count, 0)
                 expect(held.delivered.value, 1, "eligibility cannot swallow the app shortcut")
             }
+        }
+    }
+    test("formatting feedback: native delivery precedes current-context validation") {
+        withFeedback { _, held, said, key in
+            check(!key("kb:command+b"), "the shortcut remains native")
+            expect(held.delivered.value, 1, "the native key is delivered before validation")
+            expect(held.currentChecks, 0, "menu validation cannot query the app inside the keyboard decision")
+            expect(held.delayed.count, 1)
+            held.current = false
+            held.delayed.first?()
+            expect(held.currentChecks, 1, "the original context is validated after the native key")
+            expect(held.replies.count, 0, "an unavailable context cannot start a provider read")
+            expect(said(), [])
         }
     }
     test("formatting feedback: exact modifiers repeats and pass-next retain native behavior") {

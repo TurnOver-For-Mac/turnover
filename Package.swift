@@ -80,9 +80,9 @@ let coreSources: [String] = [
     "Apps/SystemSettings/SystemSettingsParts.swift",
     "Apps/Terminal/TerminalAppModule.swift",
     "Apps/TextEdit/TextEditFormatting.swift",
+    "Apps/TurnOverSettings/TurnOverSettingsAppModule.swift",
     "Apps/Ulysses/UlyssesFormatting.swift",
     "Apps/Ulysses/UlyssesFormattingSyntax.swift",
-    "Apps/TurnOverSettings/TurnOverSettingsAppModule.swift",
     "Apps/Word/WordAppModule.swift",
 ]
 

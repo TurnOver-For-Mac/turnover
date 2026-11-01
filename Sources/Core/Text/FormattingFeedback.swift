@@ -88,8 +88,9 @@ package final class FormattingFeedback {
     package func keyWillPassThrough(_ gesture: KeyboardGesture) {
         guard let provider, !gesture.isRepeat, !gesture.isTurnOverModifier, gesture.modifiers == [.command],
               let kind = ["b": Kind.bold, "i": Kind.italic][gesture.keyName],
-              let focus = API.focusObject as? EditableText, focus.role != .passwordEdit,
-              isCurrent(focus.pid) else { return }
+              let focus = API.focusObject as? EditableText, focus.role != .passwordEdit else { return }
+        // Menu validation can query the app. Keep it in canReply after native key delivery, not this decision path
+        // (review, 1 Nov 2026). Capture the original focus now so delayed validation cannot retarget the shortcut.
         let bundle = focus.appModule.bundleIdentifier
         // Word owns these scripts and queries its selection through its existing automation bridge.
         guard bundle != "com.microsoft.Word" else { return }
@@ -106,12 +107,12 @@ package final class FormattingFeedback {
                 guard let self, self.canReply(id, context, freshness) else { return }
                 self.pending = nil   // even an accidentally repeated completion can speak only once
                 switch (kind, state) {
-                case (.bold, .on): Speech.speakMessage(String(localized: "bold on"))
-                case (.bold, .off): Speech.speakMessage(String(localized: "bold off"))
-                case (.bold, .mixed): Speech.speakMessage(String(localized: "bold mixed"))
-                case (.italic, .on): Speech.speakMessage(String(localized: "italic on"))
-                case (.italic, .off): Speech.speakMessage(String(localized: "italic off"))
-                case (.italic, .mixed): Speech.speakMessage(String(localized: "italic mixed"))
+                case (.bold, .on): Speech.speakMessage(Phrases.bold(true))
+                case (.bold, .off): Speech.speakMessage(Phrases.bold(false))
+                case (.bold, .mixed): Speech.speakMessage(Phrases.boldMixed)
+                case (.italic, .on): Speech.speakMessage(Phrases.italic(true))
+                case (.italic, .off): Speech.speakMessage(Phrases.italic(false))
+                case (.italic, .mixed): Speech.speakMessage(Phrases.italicMixed)
                 case (_, .unknown): break
                 }
             }
