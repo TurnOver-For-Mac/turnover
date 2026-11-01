@@ -27,6 +27,8 @@ Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
 
 ### Fixed
 
+- Command-B and Command-I report bold and italic on/off in TextEdit rich text and Ulysses with Markdown XL,
+  where those shortcuts were silent. Requires the apps’ English menus. Reported by the maintainer. Issue 212.
 - After unlocking, VoiceOver stays available until an ordinary app and keyboard input are ready. A failed return
   to TurnOver retains a bounded retry; another lock or a deliberate reader choice cancels stale restoration.
   VoiceOver already on before sleep remains on. Issue 204.
