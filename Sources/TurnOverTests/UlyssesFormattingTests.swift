@@ -28,6 +28,20 @@ func ulyssesFormattingTests() {
         expect(state("word_inside_word", NSRange(location: 5, length: 6), .italic), .on)
         expect(caret("word_inside_word", .italic), .off)
     }
+    test("Ulysses formatting: native markers style spaces and a caret can exit an existing closer") {
+        let italic = "TurnOver_ formatting sample"
+        expect(state(italic, NSRange(location: 8, length: 0), .italic), .off)
+        expect(state(italic, NSRange(location: 9, length: 0), .italic), .on, "opening before a space styles that space")
+        expect(state(italic, NSRange(location: 9, length: 1), .italic), .on)
+        let bold = "TurnOver formatting sample** sample **"
+        expect(state(bold, NSRange(location: 28, length: 0)), .on, "leading space follows the opening marker")
+        expect(state(bold, NSRange(location: 28, length: 8)), .on, "both surrounding spaces remain styled")
+        expect(state(bold, NSRange(location: 36, length: 0)), .on, "caret before the existing closing marker")
+        expect(state(bold, NSRange(location: 38, length: 0)), .off, "shortcut moved the caret beyond the closer")
+        expect(caret(bold + "x"), .off, "typing after the closing marker stays plain")
+        expect(caret("** spaced**"), .off)
+        expect(caret("**space **"), .off)
+    }
     test("Ulysses formatting: selected interior and closed delimiters have distinct states") {
         expect(state("**sample**", NSRange(location: 2, length: 6)), .on)
         expect(state("_sample_", NSRange(location: 1, length: 6), .italic), .on)
@@ -68,7 +82,7 @@ func ulyssesFormattingTests() {
     }
     test("Ulysses formatting: ambiguous and unsupported markup never becomes off") {
         for text in ["*alternate*", "__alternate__", "***combined***",
-                     "**cross _spans**_", "** spaced**", "**space **", "`**code**`", "[link](target)",
+                     "**cross _spans**_", "`**code**`", "[link](target)",
                      "++comment++", "%%comment%%", "~~deleted~~", "    **code**", "sample\\"] {
             expect(caret(text), .unknown, text)
         }

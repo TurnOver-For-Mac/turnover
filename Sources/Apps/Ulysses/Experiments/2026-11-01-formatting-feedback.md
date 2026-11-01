@@ -9,6 +9,7 @@ Oliver reports silent Command-B/Command-I in Ulysses; he confirms Word already a
 Ulysses 42 (84473), macOS 27.2 (26B118), existing installed TurnOver 22.5, Mac keys, VoiceOver off. A disposable public sheet was supplied by Oliver and normalized to `TurnOver formatting sample`. The signed metadata-only `format-state` probe and existing HID test driver were used. No personal writing was recorded.
 
 - At an end caret, Command-I inserts `_`; Command-B inserts `**`. Repeating removes the marker. Marker font attributes remain plain, so they do not establish pending typing style.
+- At a word boundary before a space, an opening tag also enables the style. Ulysses can auto-insert a closing tag while typing; the formatting shortcut then moves the caret past it to turn the style off. Spaces adjacent to tags are valid here, unlike assumptions borrowed from some Markdown parsers.
 - At a midpoint inside a word, the same opening markers continue their style through the remaining text. The following character's font reflects the style.
 - Selected text is wrapped in `_..._` or `**...**`; removing the outer matching style restores plain text.
 - Nested selection `**_..._**` remains bold when Command-B is pressed inside the emphasis span: the app leaves it unchanged. Feedback must report the resulting state, not flip a remembered boolean.
@@ -17,7 +18,7 @@ Ulysses 42 (84473), macOS 27.2 (26B118), existing installed TurnOver 22.5, Mac k
 
 ## Implementation limits
 
-Read a complete paragraph, at most 8,192 UTF-16 units, through bounded public AX range queries off the main thread. Recognize the observed `**` and `_` rules, escaping and nesting. Custom markup, alternative/unverified delimiters, complex markup, ambiguous whitespace, cross-paragraph selections, incomplete ranges and provider failures remain unknown and silent. Do not infer semantic markup solely from rendered fonts.
+Read a complete paragraph, at most 8,192 UTF-16 units, through bounded public AX range queries off the main thread. Recognize the observed `**` and `_` rules, escaping and nesting. Custom markup, alternative/unverified delimiters, complex markup, cross-paragraph selections, incomplete ranges and provider failures remain unknown and silent. Do not infer semantic markup solely from rendered fonts.
 
 Every new key, focus/window change or reader deactivation retires pending feedback. Native shortcuts keep their normal delivery. Word retains its own handlers. The probe is separate from production behavior.
 
