@@ -1,19 +1,17 @@
 # Voice Memos
 
 - Bundle id: com.apple.VoiceMemos
-- Support: Not assessed
+- Support: Partial
 - Effort: None
 - Being worked on: Unclaimed
-- Checked: Historical evidence recovered 1 November 2026; recorded checks from 11–14 October 2026. Current build not tested.
+- Checked: 30 October 2026; developer build of 22.4 source 0ed2ab4; Mac and Windows keyboard styles. Setup limits are in the evidence.
 
 ## Findings
 
-Historical passes: empty-app item navigation passed 4/4 in each keyboard style on 11 October. On 14 October driver checks confirmed a window-button naming fix, but an unnamed blank field remained. No recording workflow was verified.
-
-Support is Not assessed for the current build. The historical results below remain evidence for their stated tasks and setup, not a fresh app-wide assessment.
+Four review-item movements produced speech or boundary responses in each style. The earlier check covered an empty window and found an unnamed blank field after the window-button fix. Recording and playback workflows were not verified.
 
 ## Evidence
 
-[Historical checks and limits](Experiments/2026-10-historical-checks.md). [Retained masked empty-window fixture](../../../Tests/Fixtures/voicememos-empty.json).
+[30 October regression results and scope](Experiments/2026-10-30-regression.md).
 
-Retained fixtures are historical evidence; no direct current-harness references were found, so automated execution of these files is not claimed.
+[Historical checks and limits](Experiments/2026-10-historical-checks.md). [Retained masked empty-window fixture](../../../Tests/Fixtures/voicememos-empty.json).

@@ -1,19 +1,17 @@
 # Audible
 
 - Bundle id: com.audible.iphone
-- Support: Not assessed
+- Support: Partial
 - Effort: None
 - Being worked on: Unclaimed
-- Checked: Historical evidence recovered 1 November 2026; recorded checks from 11–12 October 2026. Current build not tested.
+- Checked: 30 October 2026; developer build of 22.4 source 0ed2ab4; Mac and Windows keyboard styles. Setup limits are in the evidence.
 
 ## Findings
 
-Historical passes: 4/4 item-navigation checks in each keyboard style on 11 October, limited to the opening marketing offer. The offer was left untouched. Library, playback, chapters and sleep-timer use were not tested.
-
-Support is Not assessed for the current build. The historical results below remain evidence for their stated tasks and setup, not a fresh app-wide assessment.
+Four review-item movements produced speech or boundary responses in each style. The earlier dated check identifies the opening marketing offer. The 30 October log does not identify a new app surface. No library, playback, chapter or sleep-timer task is established.
 
 ## Evidence
 
-[Historical checks and limits](Experiments/2026-10-historical-checks.md). [Retained masked offer fixture](../../../Tests/Fixtures/audible-offer.json).
+[30 October regression results and scope](Experiments/2026-10-30-regression.md).
 
-Retained fixtures are historical evidence; no direct current-harness references were found, so automated execution of these files is not claimed.
+[Historical checks and limits](Experiments/2026-10-historical-checks.md). [Retained masked offer fixture](../../../Tests/Fixtures/audible-offer.json).

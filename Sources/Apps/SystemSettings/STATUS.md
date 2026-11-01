@@ -1,15 +1,17 @@
 # System Settings
 
 - Bundle id: com.apple.systempreferences
-- Support: Not assessed
+- Support: Partial
 - Effort: Module
 - Being worked on: Unclaimed
-- Checked: Source inventory, 30 October 2026; task-level support has not been assessed in this record.
+- Checked: 30 October 2026; developer build of 22.4 source 0ed2ab4; Mac and Windows keyboard styles. Setup limits are in the evidence.
 
 ## Findings
 
-The module adds part-navigation commands and labels for Settings controls. Check movement between the sidebar, search results and pane controls without changing settings.
+Three review-item movements produced nonempty speech in the opened window. The 29 October probe identified sidebar/search/detail structure and General-button labels. Neither that probe nor this scenario establishes native focus writes, every pane or changing a setting.
 
 ## Evidence
 
-[App implementation](SystemSettingsAppModule.swift). Record the tested tasks and setup here when assessing support.
+[30 October regression results and scope](Experiments/2026-10-30-regression.md).
+
+[App implementation](SystemSettingsAppModule.swift).

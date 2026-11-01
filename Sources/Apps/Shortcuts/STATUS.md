@@ -1,15 +1,17 @@
 # Shortcuts
 
 - Bundle id: com.apple.shortcuts
-- Support: Not assessed
+- Support: Partial
 - Effort: Module
 - Being worked on: Unclaimed
-- Checked: Source inventory, 30 October 2026; task-level support has not been assessed in this record.
+- Checked: 30 October 2026; developer build of 22.4 source 0ed2ab4; Mac and Windows keyboard styles. Setup limits are in the evidence.
 
 ## Findings
 
-The module allows page reading of folders and shortcut controls outside the describe field. Navigate folders and sample shortcut controls, then return to text entry; test execution separately.
+Three review-item movements produced nonempty speech in the opened window. The run did not check shortcut editing or execution. This grade covers basic control reading only.
 
 ## Evidence
 
-[App implementation](ShortcutsAppModule.swift). Record the tested tasks and setup here when assessing support.
+[30 October regression results and scope](Experiments/2026-10-30-regression.md).
+
+[App implementation](ShortcutsAppModule.swift).

@@ -1,15 +1,17 @@
 # Contacts
 
 - Bundle id: com.apple.AddressBook
-- Support: Not assessed
+- Support: Partial
 - Effort: Module
 - Being worked on: Unclaimed
-- Checked: Source inventory, 30 October 2026; task-level support has not been assessed in this record.
+- Checked: 30 October 2026; developer build of 22.4 source 0ed2ab4; Mac and Windows keyboard styles. Setup limits are in the evidence.
 
 ## Findings
 
-The module handles movement between the people list and a contact card. Use a sample contact to check search, card details and return to the list.
+Three review-item movements produced nonempty speech in the opened window. The run did not assert card details, searching or editing a contact. This grade covers basic control reading only.
 
 ## Evidence
 
-[App implementation](ContactsAppModule.swift). Record the tested tasks and setup here when assessing support.
+[30 October regression results and scope](Experiments/2026-10-30-regression.md).
+
+[App implementation](ContactsAppModule.swift).

@@ -4,13 +4,13 @@
 - Support: Not assessed
 - Effort:
 - Being worked on: Unclaimed
-- Checked: 14–15 October 2026; record recovered 1 November 2026. No fresh live test of the current build.
+- Checked: 14–15 October 2026; setup details are in the linked evidence.
 
 ## Findings
 
 Firefox was listed for the sweep, but browser interaction was deferred to Oliver’s checklist. No live browser workflow pass is recorded in this source. Recognition of its identifier in keyboard handling is not proof of web-reading support.
 
-Current-build task coverage remains unassessed. Next: Use a public page to check reading, quick navigation, forms and focus-mode transitions; record browser and macOS versions.
+Next check: Use a public page to check reading, quick navigation, forms and focus-mode transitions; record browser and macOS versions.
 
 ## Evidence
 

@@ -1,16 +1,18 @@
 # AppFlowy
 
 - Bundle id: Not recorded
-- Support: Not assessed
+- Support: Blocked
 - Effort:
 - Being worked on: Unclaimed
-- Checked: 14 October 2026; record recovered 1 November 2026. No fresh live test of the current build.
+- Checked: 14 October 2026; setup details are in the linked evidence.
 
 ## Findings
 
+Blocked scope: reading the sampled AppFlowy 0.14 window through its exposed accessibility tree. This does not establish that all app versions or activation routes are inaccessible.
+
 AppFlowy 0.14 exposed only its window and an app group in the captured surface. Asking for enhanced accessibility did not expand the tree; the recorded VoiceOver-on snapshot had the same seven elements. The note proposed investigating Flutter’s accessibility activation. This records an unresolved surface, not proof that every version is inaccessible.
 
-Current-build task coverage remains unassessed. Next: Verify bundle identity and retest the same surface on the current app version before investigating Flutter activation. Preserve the distinction between an empty sampled tree and impossibility.
+Next check: Verify bundle identity and retest the same surface on the current app version before investigating Flutter activation. Preserve the distinction between an empty sampled tree and impossibility.
 
 ## Evidence
 

@@ -1,39 +1,54 @@
-# Earlier app checks and the application library
+# App evidence and support grades
 
-App folders include apps served by generic reading, shared implementations, recipes and plugins. A dedicated Swift file is not a requirement for a record. Ulysses, for example, had masked navigation checks and a shared unnamed-column fix before it had a folder here.
+App records cover generic reading, shared implementations, recipes, plugins and dedicated modules. Each record tells
+contributors which tasks work, where help is needed and what evidence supports the grade.
 
-## Reading recovered evidence
+## Grading a recorded task
 
-The records recovered on 1 November 2026 preserve observations from the 10–15 October app passes and the 29 October capability work. They are dated history, not fresh tests of the current build. Each app has a short current STATUS.md and a dated Experiments summary stating the surface tried, result, gaps and next useful check. Missing version, reader-mode and keyboard details remain unknown.
+Use the best available evidence for the named scope. Works means those tasks worked in the recorded setup; Partial
+means useful tasks have known gaps; Blocked means the task has no usable tested route. Use Not assessed when the
+evidence is insufficient to establish a task result. Blocked does not prove that every possible route is impossible.
 
-For recovered records, Not assessed describes current-build task coverage. It does not erase a historical pass or mean there is no implementation. Do not give an app a Works grade merely because its welcome page or a few item keys spoke. A recorded driver pass establishes the stated script result; it does not establish how every utterance sounded to a listener.
+Checked carries the actual test date and build, including older results. A new build does not automatically erase a
+grade. Update it when a further check or regression changes what is known. State missing setup details as unknown.
+Do not extrapolate a welcome-page check or a few successful keys to the whole app.
 
-Separate these levels of evidence:
+## Evidence types
 
-- Source inventory or a format test: implementation exists, without a live task claim.
-- Snapshot or bounded capability probe: the sampled structure was exposed, without proof of complete coverage or action success.
-- Driver interaction: the named commands produced the recorded responses, with keyboard style and scope where known.
-- User trial: the user heard or completed the named task.
-- Planned or unfinished check: no successful task result should be inferred.
+- Source inventory or a format test establishes that an implementation exists.
+- A snapshot or bounded probe establishes which structure was exposed in the sample.
+- A driver interaction establishes the named commands and recorded responses, with its keyboard style and scope.
+- A user trial records what the user heard or completed.
+- A planned or unfinished check has no completed task result.
 
-A corrected test expectation can explain a failure without fixing app code. Ulysses' 12 October rerun counted the text boundary sound that the earlier runner overlooked. Keep that distinction in its record.
+A driver pass can support a grade for the task it exercises; it does not establish how every utterance sounded.
+A corrected test expectation can explain a failure without fixing app code. Ulysses' 12 October rerun, for example,
+counted a text boundary sound that the earlier runner overlooked. Keep that distinction in the record.
 
-## Source records and privacy
+## Dates, source records and privacy
 
-The recovered summaries cite the original project filenames: `testing/APP-TEST-LIST.md`, `testing/2026-10-10-notes.md`, `testing/2026-10-11-notes.md`, `testing/2026-10-12-notes.md`, `testing/2026-10-14-parts-sweep.md` and the separate `Application library.txt` dated 29 October. The original working records remain in the retained local project records. They contain historical environment and personal-session context, so this recovery does not copy them wholesale into the source tree.
+Dated Experiments summaries record setup, method, result and limits. STATUS.md summarizes the strongest relevant
+results and links to those records. Preserve conflicting or unsuccessful observations when they explain a limit.
 
-The existing Ulysses, Byword, Audible, Bambu Studio, Cyberduck, QuickTime and Voice Memos fixtures remain where they were. Their presence is evidence of a recording, not proof that today's test harness executes each fixture. Public sample content may be retained; never add personal text, titles, accounts, connected servers or credentials to a fixture or summary.
+Earlier source records include `testing/APP-TEST-LIST.md`, the 10–12 October notes, `testing/2026-10-14-parts-sweep.md`
+and `Application library.txt` dated 29 October. These local records contain historical environment and personal-session
+context. Summarize the relevant result; do not copy them wholesale into the source tree.
 
-A verified app bundle identifier comes from app metadata, an existing registration or retained recording metadata. If that evidence is missing, use Not recorded until verified. Do not substitute a guessed identifier, an installer name, or a fictitious identifier found in a format-test example.
+A fixture records a sampled window. Link a named test when claiming that the harness exercises it. Use public sample
+content, excluding personal text, titles, accounts, connected servers and credentials from fixtures and summaries.
 
-## Coverage of the recovered passes
-
-The five-day plan spans Apple apps, writing apps, browsers, cross-platform apps, media and utilities. The later sweep adds toolkit comparisons and partial first-launch investigations. Existing app records remain in the index; missing records now retain both results and unfinished checks. GarageBand, Zoom and Outlook were planned in that source set, without a recovered completed task result.
-
-Google Docs, Sheets, Slides and Drive are browser-hosted tasks. The 10 October browser work used a synthetic local page with Docs/Sheets/Drive patterns; the stress-test document listed proposed live checks. These are not measured real-site passes and do not justify inventing native app bundle identifiers. Keep their task coverage with the browser evidence until a separate website-record convention is needed.
+Verify bundle identifiers from app metadata, module registration or recording metadata. Otherwise use Not recorded.
+A format-test example or app name is not a reliable identifier source.
 
 ## Keeping the library complete
 
-When updating the inventory, compare app module registration, recipes, generic/shared-code adaptations, existing fixtures and earlier test records. Keep a separate record for each app sharing an implementation, such as iTerm2 with Terminal, Messages/WhatsApp/Discord with Chat, and Notes with Panes. Add only the needed implementation; a documentation folder should not create an empty wrapper module.
+Compare module registration, recipes, generic/shared-code adaptations, fixtures and earlier test records. Give each
+app its own record even when it shares implementation, such as iTerm2 with Terminal, Messages/WhatsApp/Discord with
+Chat, and Notes with Panes. A record needs no empty wrapper module.
 
-For a new live check, use a public or disposable sample and record app/macOS versions, reader build, keyboard style, reader mode and VoiceOver state. Record what happened, including incomplete or failed paths. Promote a support grade only for an adequately specified, checked scope.
+Google Docs, Sheets, Slides and Drive are browser-hosted tasks. The 10 October synthetic page used Docs/Sheets/Drive
+patterns; it was not a live-site task check. Keep that evidence distinct from checks of the actual websites and
+record their coverage with the browser used.
+
+For a new check, use a public or disposable sample. Record app/macOS versions, reader build, keyboard style, reader
+mode and VoiceOver state. Include incomplete or failed paths, and change the grade only within the checked scope.

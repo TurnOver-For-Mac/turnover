@@ -4,7 +4,7 @@
 - Support: Not assessed
 - Effort: Module
 - Being worked on: Unclaimed
-- Checked: Source inventory, 30 October 2026; task-level support has not been assessed in this record.
+- Checked: 30 October 2026; source inventory only; no recorded task assessment.
 
 ## Findings
 
