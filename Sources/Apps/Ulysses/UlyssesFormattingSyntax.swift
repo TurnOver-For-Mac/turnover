@@ -4,7 +4,8 @@ import Foundation
 /// The small, verified subset of Ulysses' built-in Markdown XL used by its formatting shortcuts.
 /// On 1 Nov 2026, Strong wrapped selections in ** and Emphasis in _; at an empty/end caret each
 /// inserted an opening marker, and a second shortcut removed it. The same markers also opened a span
-/// inside a word through the rest of the paragraph. This is not a general Markdown parser.
+/// inside a word through the rest of the paragraph. Ulysses 42 (84473), macOS 27.2 also styled
+/// following spaces and accepted a closing marker after trailing spaces. This is not a general Markdown parser.
 /// The provider must verify the active markup and supply the entire paragraph without its terminator.
 /// Unsupported/ambiguous syntax stays unknown rather than reporting an invented off state.
 nonisolated package enum UlyssesFormattingSyntax {
@@ -25,9 +26,6 @@ nonisolated package enum UlyssesFormattingSyntax {
         var content = [Int?](repeating: nil, count: n)
         var stack: [Int] = [], active = 0, i = 0
         positions[0] = 0
-        func whitespace(_ unit: UInt16) -> Bool {
-            UnicodeScalar(unit).map { CharacterSet.whitespacesAndNewlines.contains($0) } ?? false
-        }
         func splitsSurrogate(_ offset: Int) -> Bool {
             offset > 0 && offset < n && (0xD800...0xDBFF).contains(text[offset - 1])
                 && (0xDC00...0xDFFF).contains(text[offset])
@@ -56,13 +54,11 @@ nonisolated package enum UlyssesFormattingSyntax {
                 guard (unit == 42 && count == 2) || (unit == 95 && count == 1) else { return .unknown }
                 let bit = unit == 42 ? 1 : 2
                 if stack.last == bit {
-                    guard i > 0, !whitespace(text[i - 1]) else { return .unknown }
                     stack.removeLast(); active &= ~bit
                 } else {
                     // Crossing spans are ambiguous. The live midpoint shortcut check established
                     // intraword markers in Ulysses (1 Nov 2026).
-                    guard active & bit == 0, limit == n || !whitespace(text[limit])
-                    else { return .unknown }
+                    guard active & bit == 0 else { return .unknown }
                     stack.append(bit); active |= bit
                 }
                 i = limit; positions[i] = active
