@@ -28,6 +28,7 @@ public enum API {
     }
 
     public static func setFocusObject(_ obj: TurnOverObject?, ancestors: [TurnOverObject], interceptor: BrowseModeDocument? = nil) {
+        FormattingFeedback.shared.cancel()
         let pid = obj?.pid ?? 0
         lock.lock(); _focus = obj; _ancestors = ancestors; _interceptor = interceptor; lock.unlock()
         focusedPidValue.value = pid
@@ -37,6 +38,7 @@ public enum API {
     /// have the focus in a process of their own while another app stays in front.
     nonisolated public static var focusedPid: pid_t { focusedPidValue.value }
     public static func setForegroundObject(_ obj: TurnOverObject?) {
+        FormattingFeedback.shared.cancel()
         lock.lock(); _foreground = obj; lock.unlock()
     }
 

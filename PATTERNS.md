@@ -65,6 +65,8 @@ misbehaves, check this list first.
 
 ## Editing text
 
+- **Formatting shortcuts can change typing style without changing a character.** TextEdit's closed native Font menu exposes the current state, including in an empty rich-text editor. Ulysses' Strong/Emphasis menu and toolbar do not; its built-in Markdown XL opening tags determine pending style, while the tag characters themselves have plain fonts. Use the app-specific verified provider, keep unknown distinct from off, and retire delayed feedback on keys, mouse clicks, focus/window changes, reader handover or expiry. `FormattingFeedback`, `TextEditFormatting`, `UlyssesFormatting` (issue 212, 1 Nov 2026; macOS 27.2, TextEdit 1.21, Ulysses 42).
+
 - **WebKit puts an editing caret at the end of a line on the line break itself.** Read as the start of the next
   line, Down read the empty line below and skipped lines after a deletion (Mail's compose window). In editable web
   text, a caret on a break after text is at the end of that line. `WebTextInfo.lineOffsets`.

@@ -2,13 +2,21 @@
 
 - Bundle id: com.ulyssesapp.mac
 - Support: Partial
-- Effort: None
-- Being worked on: Unclaimed
-- Checked: 30 October 2026; developer build of 22.4 source 0ed2ab4; Mac and Windows keyboard styles. Setup limits are in the evidence.
+- Effort: Module
+- Being worked on: Codex for Oliver, issue 212
+- Checked: 1 November 2026; TurnOver 22.5, combined runtime ddc21cf, Ulysses 42 (84473), macOS 27.2, Mac keys, VoiceOver off. Oliver confirmed bold/italic feedback at the typing cursor and with text selected, then confirmed the combined build’s shortcuts and normal reading/navigation work as expected. Earlier navigation checks retain their dates and limits in the evidence.
 
 ## Findings
 
+Command-B and Command-I announce the resulting bold or italic state in Markdown XL. Native shortcuts retain their normal delivery; unknown states stay silent. Formatting reads use bounded worker queries and separate AX references so their timeouts do not alter normal reader navigation.
+
+The adapter requires English menu titles and the built-in Markdown XL scheme. Other markup, custom schemes, unsupported syntax, cross-paragraph selections and incomplete provider results stay silent. This does not change the existing support grade. [Observed behavior and limits](Experiments/2026-11-01-formatting-feedback.md).
+
 Library/sheet-list review navigation passed four checks in each style, accepting speech or the expected text boundary sound. This repeats the corrected 12 October 8/8 result. Sheets below the fold previously exposed a loading placeholder until scrolled. Whole-sheet reading, Say All, typing and editing have not been established by these item-key checks.
+
+### How to check
+
+Use the four regression groups: [FormattingFeedbackTests](../../TurnOverTests/FormattingFeedbackTests.swift), [TextEditFormattingTests](../../TurnOverTests/TextEditFormattingTests.swift), [UlyssesFormattingTests](../../TurnOverTests/UlyssesFormattingTests.swift) and [UlyssesFormattingProviderTests](../../TurnOverTests/UlyssesFormattingProviderTests.swift). Repeat the [disposable-sheet trial](Experiments/2026-11-01-formatting-feedback.md#repeatable-trial) to assess actual speech.
 
 ## Evidence
 

@@ -94,6 +94,7 @@ public enum InputManager {
     public static func handleKeyDown(_ gesture: KeyboardGesture) -> Bool {
         Hints.cancel()
         ObjectNavigator.shared.cancelWindowSearch()
+        FormattingFeedback.shared.cancel()
         lastKeyDownAt = Date()
         // The keyboard commands editor is waiting for a key: this one is it (Escape cancels). Nothing else runs.
         if let capture = captureNext, !gesture.isRepeat {
@@ -200,6 +201,7 @@ public enum InputManager {
         }
         // A clipboard key going to the application: say what it did (TurnOver's own copy speaks for itself).
         ClipboardAnnouncer.keyDown(gesture)
+        FormattingFeedback.shared.keyWillPassThrough(gesture)
         DispatchQueue.main.async {
             ScriptHandler.clearLastScript()
             onPassThrough?(gesture)

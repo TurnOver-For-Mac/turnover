@@ -12,6 +12,14 @@ func localizationTests() {
         expect(Bundle.main.preferredLocalizations.first, "en", "the tests' language")
         expect(String(localized: "3 of 9, a test string never translated"), "3 of 9, a test string never translated", "an untranslated string")
     }
+    test("localization: shared formatting phrases preserve on off and mixed states") {
+        expect(Phrases.bold(true), "bold on", "Word and native-editor feedback share the bold-on phrase")
+        expect(Phrases.bold(false), "bold off", "bold off must remain distinct from mixed")
+        expect(Phrases.italic(true), "italic on", "Word and native-editor feedback share the italic-on phrase")
+        expect(Phrases.italic(false), "italic off", "italic off must remain distinct from mixed")
+        expect(Phrases.boldMixed, "bold mixed", "a mixed selection is not reduced to an on/off state")
+        expect(Phrases.italicMixed, "italic mixed", "a mixed selection keeps its formatting kind")
+    }
     test("localization: letters are lowered and raised by the language's rules (Turkish I is ı, İ is i, i is İ)") {
         let tr = Locale(identifier: "tr"), en = Locale(identifier: "en")
         expect(Symbols.lowered("I", locale: tr), "ı", "Turkish I")

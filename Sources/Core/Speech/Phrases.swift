@@ -76,6 +76,20 @@ nonisolated public enum Phrases {
     /// "on" or "off", as a setting is.
     public static func onOff(_ on: Bool) -> String { on ? State.on.displayString : State.off.displayString }
 
+    /// Formatting shortcut feedback shares the same words and translations across editors (#212).
+    public static func bold(_ on: Bool) -> String {
+        String(localized: "bold \(onOff(on))", comment: "Bold turned on or off in Word, TextEdit or Ulysses")
+    }
+    public static func italic(_ on: Bool) -> String {
+        String(localized: "italic \(onOff(on))", comment: "Italic turned on or off in Word, TextEdit or Ulysses")
+    }
+    public static var boldMixed: String {
+        String(localized: "bold mixed", comment: "After a formatting shortcut, the selection contains both bold and non-bold text")
+    }
+    public static var italicMixed: String {
+        String(localized: "italic mixed", comment: "After a formatting shortcut, the selection contains both italic and non-italic text")
+    }
+
     /// "rate 55": the speech rate, as a percentage.
     public static func rate(_ percent: Int) -> String {
         String(localized: "rate \(String(percent))", comment: "The speech rate changed: %@ is the new rate, out of 100")
