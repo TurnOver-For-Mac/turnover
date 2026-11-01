@@ -4,7 +4,7 @@
 - Support: Partial
 - Effort: Module
 - Being worked on: Codex for Oliver, issue 212
-- Checked: 1 November 2026; TurnOver 22.5, runtime 8514e13, Ulysses 42 (84473), macOS 27.2, Mac keys, VoiceOver off. Oliver confirmed bold and italic shortcut feedback by ear at the typing cursor and with text selected. Earlier navigation checks retain their dates and limits in the evidence.
+- Checked: 1 November 2026; TurnOver 22.5, combined runtime ddc21cf, Ulysses 42 (84473), macOS 27.2, Mac keys, VoiceOver off. Oliver confirmed bold/italic feedback at the typing cursor and with text selected, then confirmed the combined build’s shortcuts and normal reading/navigation work as expected. Earlier navigation checks retain their dates and limits in the evidence.
 
 ## Findings
 
