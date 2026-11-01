@@ -2,7 +2,7 @@
 
 ## Result and scope
 
-Oliver reports silent Command-B/Command-I in Ulysses; he confirms Word already announces them. This request concerns toggling formatting, not increased verbosity while reading. The local candidate uses shared delayed feedback with a Ulysses-specific adapter. Local runtime candidate `8514e13` is installed and launched; both full build gates and the repeated live metadata checks passed. Oliver's listening trial remains pending.
+Oliver reports silent Command-B/Command-I in Ulysses; he confirms Word already announces them. This request concerns toggling formatting, not increased verbosity while reading. The local candidate uses shared delayed feedback with a Ulysses-specific adapter. Local runtime candidate `8514e13` is installed and launched; both full build gates and the repeated live metadata checks passed. Oliver confirmed both shortcuts work in his listening trial on 1 November 2026.
 
 ## Live evidence
 
@@ -40,4 +40,4 @@ Captured focus and foreground AX references are used only for identity checks. T
 
 All 27 existing live cases passed again on `8514e13`: 17 covered Ulysses end-caret, selected and nested states plus TextEdit empty rich-text on/off; 10 covered Ulysses empty text, a tag before a space, and turning styles off after typing trailing spaces. Subsequent typed characters were plain after the closing tag. The disposable sample was restored to plain text and Ulysses left focused.
 
-Live verification combines public-sample AX state with privacy-masked speech lengths; regression tests check exact wording and once-only response ownership. Audio was not independently heard. Existing Ulysses selection announcements can precede formatting feedback and are not counted as duplicate state responses. Oliver's listening trial remains the publication gate.
+Live verification combines public-sample AX state with privacy-masked speech lengths; regression tests check exact wording and once-only response ownership. Audio was not independently heard. Existing Ulysses selection announcements can precede formatting feedback and are not counted as duplicate state responses. On 1 November 2026, Oliver answered the trial question covering Command-B and Command-I at the typing cursor and with text selected: ‘Both are working’. This confirms the Ulysses listening trial; it does not establish TextEdit listening results. Claude review and integration onto the refreshed migration/localization base remain before publication, with required checks and a local trial of the combined build.
