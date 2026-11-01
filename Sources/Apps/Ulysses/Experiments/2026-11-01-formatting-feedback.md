@@ -2,7 +2,7 @@
 
 ## Result and scope
 
-Oliver reports silent Command-B/Command-I in Ulysses; he confirms Word already announces them. This request concerns toggling formatting, not increased verbosity while reading. The local candidate uses shared delayed feedback with a Ulysses-specific adapter. Installed-build checks and Oliver's trial are pending.
+Oliver reports silent Command-B/Command-I in Ulysses; he confirms Word already announces them. This request concerns toggling formatting, not increased verbosity while reading. The local candidate uses shared delayed feedback with a Ulysses-specific adapter. The candidate is installed; live metadata checks passed. Oliver's listening trial is pending.
 
 ## Live evidence
 
@@ -31,3 +31,11 @@ In a disposable Markdown XL sheet, test empty and end carets, a midpoint, select
 ## Local records
 
 Sanitized probe summaries are held in the local developer records and shared review packet. Logs are local, not required to understand the results above. Issue: [212](https://github.com/TurnOver-For-Mac/turnover/issues/212). No runtime code has been pushed.
+
+## Local candidate validation
+
+Both required build commands completed: 461 unit tests, braille thread checks and all three helper self-tests passed. The optional real VoiceOver preferences export was skipped because TURNOVER_VOPREFS was not set. Runtime source is local commit `829eb8e` on `codex/format-shortcut-feedback`; the installed bundle and built bundle match and strict signing verification passes. A verified rollback of the previous 22.5 app is retained. No runtime code has been pushed.
+
+Seventeen initial installed cases covered Ulysses end-caret, selected and nested states plus TextEdit empty rich-text on/off. Ten final Ulysses checks covered empty text, a tag before a space, and turning styles off after typing trailing spaces. Subsequent typed characters were plain after the closing tag. The final probe returned the disposable sample to plain text.
+
+Live verification combines public-sample AX state with privacy-masked speech lengths; exact wording and once-only response ownership are checked by the regression tests. Audio was not independently heard. Existing Ulysses selection announcements can precede formatting feedback, and those were retained in the evidence rather than counted as duplicate state responses. Oliver's listening trial remains the publication gate.
