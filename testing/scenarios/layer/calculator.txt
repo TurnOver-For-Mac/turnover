@@ -1,0 +1,9 @@
+# The layer key where VoiceOver leads (12 Oct 2026): TurnOver steps in for Settings and hands back on Escape.
+app: Calculator
+# (S opens the Settings window since 18 Oct 2026; M is the spoken menu, stepped in for the same way.)
+press: clearmods control+command+, m
+wait: 2
+expect: TurnOver menu
+press: escape
+wait: 3
+expect: closed

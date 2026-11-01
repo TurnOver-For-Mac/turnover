@@ -1,0 +1,24 @@
+# Word, Windows style (12 Oct 2026): Alt Up and Down (Command, by position) by sentence, NVDA+Alt+C the comment. A new
+# document, closed without saving.
+app: Microsoft Word
+style: windows
+wait: 8
+press: command+n clearmods
+wait: 4
+press: type:One. space type:Two. space type:Three.
+wait: 1
+press: command+up clearmods
+expect-script: windows_previousSentence
+expect: \w
+press: command+up clearmods
+expect-script: windows_previousSentence
+expect: \w
+press: command+down clearmods
+expect-script: windows_nextSentence
+press: clearmods control+option+command+c
+expect: comment
+press: clearmods command+w clearmods
+wait: 1.5
+press: command+backspace clearmods
+wait: 1.5
+press: clearmods command+q clearmods

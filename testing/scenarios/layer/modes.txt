@@ -1,0 +1,7 @@
+# Command Control Comma, A: the reading modes. Since build 22 (on or off, and that is all; readers per app
+# experimental and off for a new install, 22 Oct 2026) A says so instead of cycling. In TextEdit, which TurnOver
+# reads. (The three-mode cycle of 13 Oct 2026 only runs with readers per app on.)
+app: TextEdit
+press: clearmods control+command+, a
+wait: 3
+expect: Readers per app are off

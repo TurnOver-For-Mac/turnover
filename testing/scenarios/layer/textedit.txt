@@ -1,0 +1,28 @@
+# The layer key (12 Oct 2026): Command Control Comma, then a letter. My own file; no typing keys reach it.
+app: TextEdit
+open: ~/Library/Developer/TurnOver/scenarios/files/parity.txt
+style: mac
+mask: 0
+press: command+up
+wait: 0.5
+press: clearmods control+command+, n
+expect: TurnOver menu
+press: escape
+expect: closed
+press: clearmods control+command+,
+wait: 3.5
+expect: cancelled
+press: clearmods control+command+, q
+expect: N menu
+press: escape
+expect: cancelled
+press: clearmods control+command+, m
+expect: TurnOver menu
+press: escape
+press: clearmods control+command+, /
+expect: Shortcuts
+press: escape
+press: clearmods control+command+, k
+expect: Windows keyboard style
+press: clearmods control+command+, k
+expect: Mac keyboard style

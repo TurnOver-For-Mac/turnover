@@ -1,0 +1,9 @@
+# Command Control 1 and 2 (12 Oct 2026): the newest messages, read only; masked.
+app: Messages
+wait: 2
+press: clearmods control+command+1
+expect-script: chat_latest1
+expect: \w
+press: clearmods control+command+2
+expect-script: chat_latest2
+expect: \w
