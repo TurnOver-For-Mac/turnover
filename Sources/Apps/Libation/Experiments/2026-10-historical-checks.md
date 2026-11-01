@@ -4,7 +4,7 @@ Observation date: 14 October 2026 source observations; identity checked 1 Novemb
 
 ## Provenance
 
-Source: `Sources/TurnOverCore/TurnOverParts.swift and Sources/TurnOverTests/PureTests.swift` in the retained project records. This summary preserves the outcome without copying personal screen contents. See [how recovered app evidence is recorded](../../../../docs/APP-TEST-HISTORY.md).
+Source: historical shared-parts source comments and pure-test inventory retained on Oliver’s Mac; these historical records are not repository paths. This summary preserves the outcome without copying personal screen contents. See [how recovered app evidence is recorded](../../../../docs/APP-TEST-HISTORY.md).
 
 App version is given below only where the source states it. Other missing app/macOS/build/VoiceOver or keyboard-style details are unknown; they must not be filled from today’s installed versions.
 
