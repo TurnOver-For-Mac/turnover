@@ -1,0 +1,78 @@
+{
+  "processExitCode": 1,
+  "result": {
+    "AXRequestsAttempted": 0,
+    "AXServiceAdvertised": false,
+    "RSDConnectionsClosed": 0,
+    "RSDConnectionsOpened": 0,
+    "RSDHandshakeComplete": false,
+    "XPCConnectionsCancelled": 2,
+    "XPCConnectionsReleased": 2,
+    "actionsAttempted": 0,
+    "assertionAcquired": true,
+    "assertionCreationUncertain": false,
+    "assertionInfoShape": {
+      "fields": {
+        "rsdDeviceInfo": {
+          "fields": {
+            "name": {
+              "type": "string"
+            },
+            "uuid": {
+              "type": "uuid"
+            }
+          },
+          "omittedKeyCount": 0,
+          "type": "dictionary"
+        },
+        "tunnelIPAddress": {
+          "type": "string"
+        }
+      },
+      "omittedKeyCount": 0,
+      "type": "dictionary"
+    },
+    "assertionReleaseAttempted": true,
+    "assertionReleaseErrorPresent": false,
+    "assertionReleaseReplyReceived": true,
+    "assertionRequested": true,
+    "cleanupConfirmed": true,
+    "clientEntitlementsModified": false,
+    "dependencyVersion": "11.10.2",
+    "deviceIdentifiersLogged": false,
+    "dispatchQueueReleased": true,
+    "elapsedMilliseconds": 645,
+    "eligiblePhoneCount": 1,
+    "endpointAddressesLogged": false,
+    "method": "native-existing-paired-AX-service-socket-metadata",
+    "nativeAXServiceFound": false,
+    "nativeDeviceConnected": true,
+    "nativeDeviceFound": true,
+    "nativeDevicePropertiesDictionary": true,
+    "nativeDeviceUUIDMatches": true,
+    "nativeEndpointMatched": true,
+    "nativeObjectCleanupConfirmed": true,
+    "nativePhysicalIdentityFieldPresent": true,
+    "nativePhysicalIdentityMatches": true,
+    "nativeRSDUUIDPresent": true,
+    "nativeWorkerCompleted": true,
+    "nativeWorkerExitCode": 0,
+    "nativeWorkerForcedStop": false,
+    "nativeWorkerStarted": true,
+    "pairingAttempted": false,
+    "phoneTextLogged": false,
+    "processExitMethod": "explicit-after-owned-resource-cleanup",
+    "schemaVersion": 1,
+    "selectedNativeTransport": "network",
+    "selectedPhoneIdentityConfirmed": false,
+    "serviceFDClosed": false,
+    "serviceFDReturned": false,
+    "serviceSocketAttempted": false,
+    "socketPayloadBytesRead": 0,
+    "socketPayloadBytesSent": 0,
+    "status": "native-AX-service-not-found",
+    "systemCLIAdditionalEntitlements": true,
+    "uidRetargeted": false
+  },
+  "stderrBytes": 0
+}

@@ -1,5 +1,21 @@
 # Testing TurnOver
 
+## Source membership and app records
+
+`build.sh` runs `python3 Tools/check-migration.py --membership-only` and
+`python3 Tools/build-app-index.py --check`. Shared Core source files are discovered from their folder; app Swift files
+are individually listed in `Package.swift`. The checker rejects missing or duplicate sources, wrong-target membership
+and compiled app Tests, Fixtures or Experiments. Other target roots and the custom test runner are unchanged.
+
+`python3 Tools/check-migration.py --self-test` checks these rejection paths and automatic discovery of new Core files.
+Direct checker calls select full Xcode when the default command line tools cannot evaluate the manifest. The index
+check validates record categories, links and generated output. See [app folders](docs/APP-FOLDERS.md).
+
+For a pure file move, compare source bytes and modes, resolved memberships and named test results; no listening trial
+is needed. Keep batch inventories and logs with the review material, rather than adding frozen snapshots to main.
+For behavior changes, retain the installed-app and listening checks described below. Verbose test names come from
+`turnover-tests -v`, not from the build summary alone.
+
 ## Unit tests (every build)
 
 `turnover-tests` (Sources/TurnOverTests) is a plain executable: no XCTest, so it runs with the command line tools alone.

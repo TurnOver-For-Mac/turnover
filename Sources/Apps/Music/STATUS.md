@@ -1,0 +1,17 @@
+# Music
+
+- Bundle id: com.apple.Music
+- Support: Not assessed
+- Effort: Module
+- Being worked on: Unclaimed
+- Checked: 30 October 2026; developer build of 22.4 source 0ed2ab4; Mac and Windows keyboard styles. Setup limits are in the evidence.
+
+## Findings
+
+The first Down, Down and Up keys after launch reached the expected next/previous Media handlers. These three assertions check command dispatch. The scenario does not assert speech, shelf content or playback. The 29 October foreground probe exposed a clipped Browse sample, which does not establish a reading task.
+
+## Evidence
+
+[30 October regression results and scope](Experiments/2026-10-30-regression.md).
+
+[Shared implementation](../Media/MediaAppModule.swift) · [App recipe](../../../Resources/recipes/com.apple.Music.json) · [Shared check notes](../Media/README.md).

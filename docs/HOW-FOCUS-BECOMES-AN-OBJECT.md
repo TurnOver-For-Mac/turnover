@@ -9,14 +9,14 @@ object's class decides what is said.
 
 ## 1. Watching an application
 
-[AXHandler.swift](Sources/TurnOverCore/AXHandler.swift) is the handler for the accessibility API. When an app comes
-forward, the observe method in [AXHandlerApplications.swift](Sources/TurnOverCore/AXHandlerApplications.swift)
+[AXHandler.swift](../Sources/Core/Accessibility/AXHandler.swift) is the handler for the accessibility API. When an app comes
+forward, the observe method in [AXHandlerApplications.swift](../Sources/Core/Accessibility/AXHandlerApplications.swift)
 creates an AXObserver for its process, sets the messaging timeout to one second so a hung app cannot hold TurnOver,
 switches on the enhanced interface that makes WebKit and Chromium build their accessibility trees, and signs up for
 the handler's list of notifications. An app still starting refuses them all, so the sign-up is retried as it
 settles; a slow app is signed up off the main thread. The log says observing pid N.
 
-The notification method in [AXHandlerNotifications.swift](Sources/TurnOverCore/AXHandlerNotifications.swift) is
+The notification method in [AXHandlerNotifications.swift](../Sources/Core/Accessibility/AXHandlerNotifications.swift) is
 where each notification is sorted. The ones that matter most:
 
 - **focused element changed**: the focus rules (section 2), then the event.
@@ -31,29 +31,29 @@ None of this speaks. The handler decides what the event is; the objects decide w
 ## 2. Which element is the focus
 
 Applications report the wrong focus often enough that there is a file for it:
-[FocusChanges.swift](Sources/TurnOverCore/FocusChanges.swift). Each special case is a named rule, tried in order,
+[FocusChanges.swift](../Sources/Core/Accessibility/FocusChanges.swift). Each special case is a named rule, tried in order,
 with a verdict: ignore (not the focus; say nothing), follow (the focus is really this other element; start the
 rules again with it), go (this element, on to the next rule) or done (the rule has handled it). The present method
 at the end makes the objects for the focus and its ancestors and queues the gainFocus event, with focusEntered events
 for ancestors that are new (a window, a group, a table the focus just entered).
 
-The result is kept in [API.swift](Sources/TurnOverCore/API.swift): focusObject is the current focus, focusAncestors
+The result is kept in [API.swift](../Sources/Core/API.swift): focusObject is the current focus, focusAncestors
 its chain up to the window, caretObject the object whose text the caret is in, focusPid the process it belongs to.
 Scripts ask API for these; nothing else reaches into the handler.
 
 ## 3. From element to object
 
-ObjectFactory.make, at the bottom of [TurnOverObject.swift](Sources/TurnOverCore/TurnOverObject.swift), turns a raw
+ObjectFactory.make, at the bottom of [TurnOverObject.swift](../Sources/Core/Objects/TurnOverObject.swift), turns a raw
 accessibility element into a TurnOverObject:
 
 - **The role** comes from the AX role and subrole through the from method in
-  [ControlTypes.swift](Sources/TurnOverCore/ControlTypes.swift): AXOutline is a treeView, AXTable a table, AXTextArea
+  [ControlTypes.swift](../Sources/Core/Objects/ControlTypes.swift): AXOutline is a treeView, AXTable a table, AXTextArea
   editableText, and so on. Speech names roles from this one list, so an app's oddity is corrected here or in its
   module, never by special-casing the spoken word.
 - **The class** is chosen by the app module first (objectClass, section 4), then by role and subrole: an editable
-  text field becomes EditableText ([EditableText.swift](Sources/TurnOverCore/EditableText.swift)), a list or table a
-  SelectableList ([SelectableList.swift](Sources/TurnOverCore/SelectableList.swift)), a dialog a Dialog
-  ([Dialog.swift](Sources/TurnOverCore/Dialog.swift)). The class carries the scripts and the event handlers.
+  text field becomes EditableText ([EditableText.swift](../Sources/Core/Text/EditableText.swift)), a list or table a
+  SelectableList ([SelectableList.swift](../Sources/Core/Objects/SelectableList.swift)), a dialog a Dialog
+  ([Dialog.swift](../Sources/Core/Objects/Dialog.swift)). The class carries the scripts and the event handlers.
 - **The name** is computed once (computedName): the title, then the description, then the label the app points to,
   a neighbouring label, a button's tooltip; a row or cell with no name is the text it holds (contentText), and so is
   a nameless menu item, button or link, as in Electron apps. rawName is the element's own name before any of that,
@@ -64,23 +64,23 @@ Objects are cheap and short-lived: one is made per event, and the focus and its 
 
 ## 4. App modules
 
-[AppModule.swift](Sources/TurnOverCore/AppModule.swift) is one object per running application, found by bundle
+[AppModule.swift](../Sources/Core/AppModule.swift) is one object per running application, found by bundle
 identifier through AppModuleHandler.appModule(for:), made on first use. An app without a module gets the base class.
 A module can:
 
 - **choose object classes** for the app's controls (objectClass): TurnOverSettingsAppModule in
-  [TurnOverSettingsAppModule.swift](Sources/TurnOverCore/Modules/TurnOverSettingsAppModule.swift) gives every control
+  [TurnOverSettingsAppModule.swift](../Sources/Apps/TurnOverSettings/TurnOverSettingsAppModule.swift) gives every control
   a class that looks harder for a label, because the Settings app hands over labels late;
 - **redirect a misreported focus** and **handle the app's events** before the objects do;
 - **carry scripts** that work anywhere in the app: Finder's module declares what Command Down says with nothing
   selected, and the Windows-style Return and F2.
 
 The modules TurnOver ships are registered in one place,
-[BuiltInModules.swift](Sources/TurnOverCore/Modules/BuiltInModules.swift); plugins register theirs the same way.
+[BuiltInModules.swift](../Sources/System/BuiltInModules.swift); plugins register theirs the same way.
 
 ## 5. Events reaching the object
 
-[Events.swift](Sources/TurnOverCore/Events.swift) holds the queue. Each event runs the chain: global plugins, the app
+[Events.swift](../Sources/Core/Accessibility/Events.swift) holds the queue. Each event runs the chain: global plugins, the app
 module, then the object's own handler (event_gainFocus, event_selection, event_caret and the rest). A handler that
 does not pass the event on stops it. Events are queued while a script runs and drained when it finishes; a script
 waiting for the application pumps the run loop so the events keep arriving and can see one is pending.
@@ -91,7 +91,7 @@ selected or unselected text, and speaks nothing for a caret move its own script 
 
 ## 6. Speaking the object
 
-Speech.speakObject in [Speech.swift](Sources/TurnOverCore/Speech.swift) builds the announcement from
+Speech.speakObject in [Speech.swift](../Sources/Core/Speech/Speech.swift) builds the announcement from
 objectPropertiesSpeech (name, role, value, states, description, shortcut, position) and adds, for a list or table
 taking focus, its selected row, or, with nothing selected, its count: N items, nothing selected, or empty. A table or
 outline with no rows is empty even though its children are columns and a header. For a text field it adds the

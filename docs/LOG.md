@@ -14,7 +14,7 @@ ls -t ~/Library/Application\ Support/TurnOver/logs/*.log | head -1
 ```
 
 Each line starts with the seconds since TurnOver launched, in brackets, then a tag: IO for keys, events and speech,
-WARN and ERROR for what went wrong, nothing for ordinary information. [Log.swift](Sources/TurnOverCore/Log.swift)
+WARN and ERROR for what went wrong, nothing for ordinary information. [Log.swift](../Sources/Core/Support/Log.swift)
 writes them.
 
 ## What is private by design
@@ -62,7 +62,7 @@ always a length.
 [  520.001] IO event caret: AXTextArea ""
 ```
 
-The kinds are in [Events.swift](Sources/TurnOverCore/Events.swift): gainFocus and loseFocus, focusEntered and
+The kinds are in [Events.swift](../Sources/Core/Accessibility/Events.swift): gainFocus and loseFocus, focusEntered and
 focusExited for ancestors, foreground, valueChange, nameChange, stateChange, caret, selection, textChange, alert,
 menuStart and menuEnd, typedCharacter, liveRegionChange.
 

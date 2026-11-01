@@ -63,7 +63,7 @@ Recipes: 2–3 days. Explorer: 1 day. Generic-reading comparison: half a day. Pl
   `roles` and `any`. TurnOver's own recipes stay as files in Resources/recipes (bundle, name, view). The user
   recipes folder and recipe.json are gone before anyone learnt them. The installer says what a plugin's keys can
   do to the app and asks again for one that can quit, delete or send. The app modules moved into TurnOverCore
-  (Sources/TurnOverCore/Modules), so turnover-coretest and the tests see them. Plugins in the beta are one switch,
+  (then Sources/TurnOverCore/Modules; since 30 October 2026, Sources/Apps with registration in Sources/System/BuiltInModules.swift), so turnover-coretest and the tests see them. Plugins in the beta are one switch,
   Edition.pluginsInBeta, still off.
 - 8 Oct 2026: the third shape, `panes` (PanesView): named parts with a match each, Tab and Shift Tab round
   them, TurnOver 1 to 9 to one, TurnOver Shift W says where. Notes is the built-in example. This is the shape

@@ -1,8 +1,17 @@
-# The plans
+# Developer documents
 
 Read first, if you are new: [HOW-A-KEY-BECOMES-SPEECH.md](HOW-A-KEY-BECOMES-SPEECH.md), then
 [HOW-FOCUS-BECOMES-AN-OBJECT.md](HOW-FOCUS-BECOMES-AN-OBJECT.md), then [LOG.md](LOG.md) for reading a session.
-[DECISIONS.md](DECISIONS.md) says what is settled, parked and open. The rest of this folder is the plans.
+[DECISIONS.md](DECISIONS.md) says what is settled, parked and open.
+
+## Finding code and evidence
+
+- [Source map](../Sources/README.md): Core responsibilities, reusable Views, Apps, System and the existing targets.
+- [App records](../Sources/Apps/README.md) and [app folder rules](APP-FOLDERS.md): support status, current work and implementation homes.
+- [App test history](APP-TEST-HISTORY.md): how to interpret historical findings and current validation.
+- [Investigation index](../Sources/Experiments/README.md) and [experiment template](EXPERIMENT-TEMPLATE.md): shared and app-specific research without treating proposals as completed features.
+
+## Dated design plans
 
 The design documents behind the code: each was written before its feature was built and says why it is the way it
 is. The code's comments point here ("docs/MENU-PLAN.md"). The files at the root (README, ARCHITECTURE, TESTING,

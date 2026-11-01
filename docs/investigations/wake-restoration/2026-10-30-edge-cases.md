@@ -27,7 +27,7 @@ The inherited `lockTurnedVoiceOverOn` attribution remains one-shot: if a request
 ## Implementation map
 
 - `Sources/TurnOver/LeadWatcher.swift`: native sleep/lock notifications, bounded readiness watch and handover callback eligibility.
-- `Sources/TurnOverCore/WakeRestoration.swift`: ownership, attempt generations, readiness and retry allowance.
+- `Sources/Core/Lifecycle/WakeRestoration.swift`: ownership, attempt generations, readiness and retry allowance.
 - `Sources/TurnOverTests/WakeRestorationTests.swift`: 12 named deterministic regression cases; registered in the existing test runner.
 - `Resources/Info.plist`: local bug-fix candidate 22.5; changelog and architecture updated. No dependency or private API added.
 
