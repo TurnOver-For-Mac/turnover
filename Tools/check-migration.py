@@ -120,7 +120,8 @@ def source_membership(root, resolved, manifest):
     expected_apps = {p.relative_to(root).as_posix() for p in (root / "Sources/Apps").rglob("*.swift")
                      if app_production(p.relative_to(root).as_posix())}
     require(apps == expected_apps,
-            f"app source list differs: missing={sorted(expected_apps-apps)}, extra={sorted(apps-expected_apps)}")
+            f"app source list differs: missing={sorted(expected_apps-apps)}, extra={sorted(apps-expected_apps)}; "
+            "add missing app paths to coreSources in Package.swift and remove stale entries")
     exclusions = {
         name: [PurePosixPath(relative(actual[name]["path"])) / relative(path)
                for path in item.get("exclude", [])]

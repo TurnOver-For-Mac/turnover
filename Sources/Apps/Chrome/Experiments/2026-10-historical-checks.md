@@ -20,7 +20,7 @@ Recovered from the retained local checkout’s historical testing notes, plus th
 - `testing/2026-10-10-notes.md — “Day 3: Chrome, Google’s apps, Edge (reading only)”`.
 - `testing/STRESS-TEST.md — Chrome and Google-app checklists`.
 - `testing/chrome-signoff-checklist.md — referenced sign-off checklist`.
-- `TurnOver Notes/Application library.txt — “CHROME” and “CONTEXT”, 29 October 2026`.
+- [Local application-library note](../../../../docs/APP-TEST-HISTORY.md#local-application-library-notes), Chrome and setup observations, 29 October 2026; its relevant measurements are summarized above.
 
 ## Retained repository evidence
 

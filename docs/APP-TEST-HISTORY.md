@@ -40,6 +40,34 @@ content, excluding personal text, titles, accounts, connected servers and creden
 Verify bundle identifiers from app metadata, module registration or recording metadata. Otherwise use Not recorded.
 A format-test example or app name is not a reliable identifier source.
 
+## 30 October 2026 regression run
+
+The 32 dated app records summarize a developer build of TurnOver 22.4 source `0ed2ab4`, tested with Mac and Windows
+keyboard styles on macOS. These are keyboard styles, not different operating systems. App/macOS versions and
+VoiceOver state were not recorded per case. Each record names the actions and assertions, their result and limits.
+
+The [published scenarios](../testing/scenarios/README.md) drive installed apps and check TurnOver's log. They are
+separate from the unit-test executable. Follow that README's setup and privacy instructions before running them;
+they operate the Mac's real apps. The scripts were cleaned for publication in PR211 after the run; the dated results
+are historical evidence, not a claim that the published copies have since been rerun.
+
+Counts establish the stated assertions. A dispatch assertion checks which TurnOver command ran; a nonempty-speech
+assertion checks emitted text, not a listening review or exact wording. Some scenarios also accept a boundary sound.
+The local release handoff reports 327 passed and 23 missed across the suite; these totals are not any one app's score.
+
+The original `release-logs/22.4-regression-dev.log` and release handoff are retained locally on the test Mac because
+logs may hold personal screen content. They are not repository files or prerequisites for understanding the summaries.
+The tables' local log line numbers preserve a route back to those originals for the maintainer. Filenames such as
+`day-ulysses.txt` are the runner's labels; each record links to the corresponding published scenario.
+
+## Local application-library notes
+
+The 29 October `Application library.txt` is a private working note retained locally, not a repository document.
+The linked app records contain its relevant setup, method, measured result and remaining limits in words. They
+separate structural provider probes, automated checks and Oliver's observations; none implies an unrecorded live
+trial. The source note identifies installed local build `280d7bf` at that checkpoint, but does not identify every
+earlier user trial's binary separately. Personal content and session details remain in the local source.
+
 ## Keeping the library complete
 
 Compare module registration, recipes, generic/shared-code adaptations, fixtures and earlier test records. Give each

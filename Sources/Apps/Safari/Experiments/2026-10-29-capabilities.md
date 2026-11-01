@@ -2,7 +2,7 @@
 
 ## Setup and provenance
 
-Source: `TurnOver Notes/Application library.txt`, dated 29 October 2026. Setup: Safari 27.2 (22625.2.8.11.9), macOS 27.2 (26B118). The note identifies local build `280d7bf` as installed at that checkpoint. It distinguishes provider probes, automated checks and user trials; an earlier user trial's exact binary is not separately identified. Keyboard style is not recorded for this app's observation.
+Source: [local application-library note](../../../../docs/APP-TEST-HISTORY.md#local-application-library-notes), dated 29 October 2026; the relevant result is summarized below. Setup: Safari 27.2 (22625.2.8.11.9), macOS 27.2 (26B118). The note identifies local build `280d7bf` as installed at that checkpoint. It distinguishes provider probes, automated checks and user trials; an earlier user trial's exact binary is not separately identified. Keyboard style is not recorded for this app's observation.
 
 ## Recorded outcome
 
