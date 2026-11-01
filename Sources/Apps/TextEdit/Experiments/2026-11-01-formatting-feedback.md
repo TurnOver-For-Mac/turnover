@@ -19,3 +19,7 @@ The 1 November installed-app checks exercised bold and italic on/off in an empty
 Captured focus and foreground AX references serve only as identity checks. The worker reacquires matching references and applies its 50 ms timeout only to its own objects. Both app collectors have regression cases proving the original handles never reach the timeout setter while verified states still succeed. This prevents persistent AX timeouts from changing later reader navigation.
 
 Sanitized summaries are sufficient to understand these results; private logs retained on Oliver’s Mac are not repository prerequisites.
+
+## Combined-build listening check
+
+On 1 November 2026, Oliver was asked to try Command-B and Command-I in Ulysses and TextEdit, plus normal reading and navigation, in combined build `ddc21cf`. He replied “Working as expected”. This confirms his trial of the combined migration, localization and formatting changes; it does not extend the adapter’s documented language or markup scope.
