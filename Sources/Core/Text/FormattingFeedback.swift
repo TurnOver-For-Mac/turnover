@@ -105,11 +105,14 @@ package final class FormattingFeedback {
             let reply: @MainActor (State) -> Void = { [weak self] state in
                 guard let self, self.canReply(id, context, freshness) else { return }
                 self.pending = nil   // even an accidentally repeated completion can speak only once
-                switch state {
-                case .on: Speech.speakMessage("\(kind.rawValue) on")
-                case .off: Speech.speakMessage("\(kind.rawValue) off")
-                case .mixed: Speech.speakMessage("\(kind.rawValue) mixed")
-                case .unknown: break
+                switch (kind, state) {
+                case (.bold, .on): Speech.speakMessage(String(localized: "bold on"))
+                case (.bold, .off): Speech.speakMessage(String(localized: "bold off"))
+                case (.bold, .mixed): Speech.speakMessage(String(localized: "bold mixed"))
+                case (.italic, .on): Speech.speakMessage(String(localized: "italic on"))
+                case (.italic, .off): Speech.speakMessage(String(localized: "italic off"))
+                case (.italic, .mixed): Speech.speakMessage(String(localized: "italic mixed"))
+                case (_, .unknown): break
                 }
             }
             if let read = self.read { read(context, kind, provider, reply) }
