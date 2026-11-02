@@ -39,6 +39,13 @@ func wordCaretBoundaryTests() {
                                  "AXParent": .element(22), "AXChildren": .elements([20])]),
             .init(id: 22, attrs: ["AXRole": .string("AXRow"), "AXParent": .element(23), "AXChildren": .elements([21])]),
             .init(id: 23, attrs: ["AXRole": .string("AXTable"), "AXParent": .element(1), "AXRows": .elements([22]), "AXChildren": .elements([22])]),
+            .init(id: 30, attrs: ["AXRole": .string("AXTextArea"), "AXValue": .string(sample), "AXNumberOfCharacters": .number(Double(sample.utf16.count)),
+                                 "AXSelectedTextRange": .range(0, 0), "AXParent": .element(31), "AXWindow": .element(1)]),
+            .init(id: 31, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(32)]),
+            .init(id: 32, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(33)]),
+            .init(id: 33, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(34)]),
+            .init(id: 34, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(35)]),
+            .init(id: 35, attrs: ["AXRole": .string("AXCell"), "AXParent": .element(22)]),
         ]))
         let savedConfig = config, savedPoster = KeyboardGesture.poster, savedSound = Tones.edgeSound
         let savedHaptic = Tones.onEdge, savedSink = Speech.sink
@@ -91,6 +98,24 @@ func wordCaretBoundaryTests() {
             expect(output.posted.value, 1)
             expect(output.sounds, [], "Word/macOS supplies this native boundary sound")
             expect(output.haptics, 1, "sound-only suppression preserves the trackpad edge")
+        }
+    }
+    test("Word boundary: deep cell ancestry waits for the native row move without an early edge") {
+        withField(caret: 0) { _, module, output in
+            let element = AXReplay.element(30)
+            let field = WordBoundaryField(element: element, module: module)
+            API.setFocusObject(field, ancestors: [])
+            check(module.isTableCellText(element), "Word recognizes a cell beyond the shared four-parent walk")
+            check(!module.isTableCellText(AXReplay.element(10)), "a document page is not a cell")
+            let posted = output.posted
+            KeyboardGesture.poster = { _ in
+                posted.value += 1
+                _ = AXUIElementSetAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, axRangeValue(Int.max, 0))
+            }
+            invoke(field, "caret_moveByLine", "kb:upArrow")
+            expect(output.posted.value, 1)
+            expect(output.sounds, [])
+            expect(output.haptics, 0, "leaving a cell is not a document boundary")
         }
     }
     test("Word boundary: same-line retry preserves both native keys without an extra boundary sound") {

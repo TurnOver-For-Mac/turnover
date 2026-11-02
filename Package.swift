@@ -84,6 +84,14 @@ let coreSources: [String] = [
     "Apps/Ulysses/UlyssesFormatting.swift",
     "Apps/Ulysses/UlyssesFormattingSyntax.swift",
     "Apps/Word/WordAppModule.swift",
+    "Apps/Word/WordDocument.swift",
+    "Apps/Word/WordHeaderFooter.swift",
+    "Apps/Word/WordScripting.swift",
+    "Apps/Word/WordSpelling.swift",
+    "Apps/Word/WordTableCell.swift",
+    "Apps/Word/WordTableNavigation.swift",
+    "Apps/Word/WordTextArea.swift",
+    "Apps/Word/WordTextInfo.swift",
 ]
 
 let package = Package(

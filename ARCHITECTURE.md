@@ -75,6 +75,11 @@ These five decide whether anyone is speaking. Each has a named rule, and since 1
 
 Formatting shortcut feedback lives in `Core/Text/FormattingFeedback.swift`: unhandled native Command-B/I keep their normal delivery, then a bounded worker asks a verified app provider for the resulting state. `FormattingQuery.swift` owns bounded AX reads; TextEdit's provider uses native menu state, Ulysses' provider checks Markdown XL and a complete bounded paragraph. Unknown states stay silent. Replies expire after one second and are invalidated by keys, mouse clicks, focus/window changes and deactivation. Word's existing scripts remain the owner of its feedback. `FormattingFeedbackTests`, `TextEditFormattingTests`, `UlyssesFormattingTests` and `UlyssesFormattingProviderTests` cover delivery, stale replies and provider limits.
 
+`AppModule` owns native spelling-menu policy, formatting-shortcut ownership, native-announcement suppression, app
+hints, unusual table-cell ancestry and supplemental paragraph formatting. Word implements these hooks in its app
+folder; shared Core/Views code does not refer to Word types or select Word behavior by bundle identifier.
+See [Word module ownership](docs/WORD-MODULE-ISOLATION.md) for the file split and checks.
+
 ## Reading
 
 | Part | Files | Rule | Test |
@@ -85,7 +90,7 @@ Formatting shortcut feedback lives in `Core/Text/FormattingFeedback.swift`: unha
 | Reusable reading models | `Views/FlatView.swift`, `Views/FlatScreen.swift`, `Views/WebBuffer.swift`, `Views/PanesView.swift` | existing types and developer switches retained; see [Views](Sources/Views/README.md) | existing pure and fixture tests; no new live result from filing |
 | App views (data over a window) | `Apps/Chat/ChatView.swift` (Messages, WhatsApp, Discord: the transcript, loading more at both ends), `Apps/Media/MediaView.swift` (Music, Podcasts, TV), `Apps/AppStore/AppStoreView.swift`, `Views/PanesView.swift`; `Recipes.swift` and `Resources/recipes/*.json` describe each app; `TurnOverParts.swift` names the parts a plugin can ask for | a recipe gone unregisters its module | `PureTests` (recipes), `FixtureTests` (panes on a big window) |
 | App Store model | `Apps/AppStore/AppStoreModel.swift`, `Apps/AppStore/AppStorePageBuilder.swift`, `Apps/AppStore/AppStorePurchaseConfirmation.swift` | Main owns the complete committed model and command order. One serial worker builds a local copy; session/request/revision checks reject retired results. A confirmation resolves the captured identity; only its live element patches the current entry. | `AppStoreModelTests` (controlled replies, command ordering, recorded carousel); `AppStorePurchaseConfirmationTests` |
-| App modules | `Apps/*` (Word 1,465 lines, the Code health milestone's first split, Excel, Mail, Finder, Terminal, Safari, Claude, Dock, the recipe-driven Chat, Media, Panes, App Store) | narrow exceptions per app, never a shared-rule change (the project's working rules; "keep what works") | scenarios (live) |
+| App modules | `Apps/*` (Word policy, document, tables, spelling, text ranges and scripting in separate files; Excel, Mail, Finder, Terminal, Safari, Claude, Dock, the recipe-driven Chat, Media, Panes, App Store) | narrow exceptions per app, never a shared-rule change (the project's working rules; "keep what works") | Word module/page/caret tests; scenarios (live) |
 | Settings parts | `Apps/SystemSettings/SystemSettingsAppModule.swift`, `SystemSettingsParts.swift`, `SystemSettingsLabels.swift` | explicit part commands use a bounded worker; fresh window/focus/dialog checks precede writes and delivery; only verified native focus is reported as such. Optional attributed button labels are confined to Settings. | `SystemSettingsModuleTests` |
 | Media work ownership | `Apps/Media/MediaWorkOwner.swift`, `Apps/Media/MediaView.swift` | one serial collection lane; immutable snapshots carry actual native window identity. New intent, handover or another window retires reads, publications and actions. | `MediaWorkTests` |
 | TV sidebar selection | `Apps/Media/MediaSidebarSelection.swift`, selected by `Apps/Media/MediaAppModule.swift` | the worker validates captured row/outline/cell/label, writes one selected row and verifies membership under a 500 ms cooperative limit. All snapshot publication rejects unchanged/empty body during the transition; a sidebar-derived title is insufficient. | `MediaWorkTests` TV sidebar cases |
@@ -123,8 +128,9 @@ Formatting shortcut feedback lives in `Core/Text/FormattingFeedback.swift`: unha
 
 ## Where to start tidying
 
-The Code health milestone on GitHub lists the seams: the four biggest files (Word's module, MediaView, AppStoreView,
-ObjectNavigation) split along their MARKs; every app quirk out of shared code into its module (issue 2); every
+The Code health milestone on GitHub lists the seams: MediaView, AppStoreView and ObjectNavigation split by
+responsibility; Word's module is split and its shared-code decisions use app hooks (issue 116). Other work includes
+every app quirk out of shared code into its module (issue 2); every
 accessibility walk on the main thread given a deadline (the audit issue); the reader's state made testable (issue 3).
 None of it changes behaviour, one item or a few related ones make a pull request, and each is the best first contribution for anyone who finds
 the code untidy: the tidying is the help.

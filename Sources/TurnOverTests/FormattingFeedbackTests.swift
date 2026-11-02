@@ -7,7 +7,8 @@ import AXFixtures
 
 private final class FormattingTestText: EditableText {
     var testBundle = "org.turnover.public-formatting-sample"
-    override var appModule: AppModule { AppModule(pid: pid, bundleIdentifier: testBundle, appName: "Public formatting sample") }
+    var owner: AppModule?
+    override var appModule: AppModule { owner ?? AppModule(pid: pid, bundleIdentifier: testBundle, appName: "Public formatting sample") }
 }
 
 private final class FormattingHeldReplies {
@@ -200,12 +201,32 @@ func formattingFeedbackTests() {
                 switch kind {
                 case 0: API.setFocusObject(TurnOverObject(element: AXReplay.element(4)), ancestors: [])
                 case 1: API.setFocusObject(FormattingTestText(element: AXReplay.element(5)), ancestors: [])
-                default: focus.testBundle = "com.microsoft.Word"
+                default:
+                    BuiltInModules.register()
+                    guard let type = AppModuleHandler.shared.moduleType(for: "com.microsoft.Word") else { return Harness.fail("Word module") }
+                    focus.owner = type.init(pid: focus.pid, bundleIdentifier: "com.microsoft.Word", appName: "Word")
                 }
                 _ = key("kb:command+b")
                 expect(held.delayed.count, 0)
                 expect(held.delivered.value, 1, "eligibility cannot swallow the app shortcut")
             }
+        }
+    }
+    test("formatting feedback: module policy owns shortcuts without matching a bundle name") {
+        final class OwnFormattingModule: AppModule {
+            override var handlesNativeFormattingShortcuts: Bool { true }
+        }
+        withFeedback { focus, held, _, key in
+            focus.owner = OwnFormattingModule(pid: focus.pid, bundleIdentifier: "test.own-formatting", appName: "Public editor")
+            _ = key("kb:command+b")
+            expect(held.delayed.count, 0, "an app that owns feedback cannot get a second provider query")
+            expect(held.delivered.value, 1, "the app still receives its shortcut")
+        }
+        withFeedback { focus, held, _, key in
+            focus.testBundle = "com.microsoft.Word"
+            _ = key("kb:command+b")
+            expect(held.delayed.count, 1, "a bundle name alone does not select the policy")
+            expect(held.delivered.value, 1)
         }
     }
     test("formatting feedback: native delivery precedes current-context validation") {

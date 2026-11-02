@@ -28,6 +28,25 @@ open class AppModule: ScriptableObject {
     /// already sound that boundary can opt out; TurnOver-owned review and structural navigation keep theirs.
     open var playsNativeCaretBoundarySound: Bool { true }
 
+    /// The app supplies its own spelling corrections and dictionary through its native context menu.
+    open var usesNativeSpellingMenu: Bool { false }
+
+    /// The app owns formatting-shortcut feedback, including when a shortcut passes through without a script.
+    open var handlesNativeFormattingShortcuts: Bool { false }
+
+    /// Text in a cell whose app-specific ancestry is not covered by the ordinary table/row walk.
+    open func isTableCellText(_ element: AXUIElement) -> Bool { false }
+
+    /// Suppress native news already reported by the module. The key and elapsed time are captured at arrival.
+    open func ignoresAnnouncement(_ text: String, after key: String, elapsed: TimeInterval) -> Bool { false }
+
+    /// An app-specific hint, or nil to use the ordinary control hint. An empty string suppresses the hint.
+    open func hint(for object: TurnOverObject) -> String? { nil }
+
+    /// Supplement a detailed format report when accessibility supplies no paragraph alignment.
+    /// Implementations return on main; an app with no additional information returns an empty string.
+    open func paragraphFormatting(_ completion: @escaping @MainActor (String) -> Void) { completion("") }
+
     /// A grid's selection changed while the focus is in it (AXSelectedCellsChanged; `count` cells now selected). True
     /// if the module has said what is needed; false for TurnOver's own handling (one cell selected: it is the focus).
     open func gridSelectionChanged(_ table: AXUIElement, count: Int) -> Bool { false }

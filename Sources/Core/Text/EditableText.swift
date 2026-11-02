@@ -279,7 +279,7 @@ open class EditableText: TurnOverObject {
         var inCell = element.role == "AXCell"
         var up: AXUIElement? = element.element(kAXParentAttribute)
         for _ in 0..<4 { guard let e = up, !inCell else { break }; if ["AXCell", "AXRow", "AXTable"].contains(e.role) { inCell = true }; up = e.element(kAXParentAttribute) }
-        if !inCell, WordTableCell.cell(of: element) != nil { inCell = true }   // Word's cells hang off the page, not a row
+        if !inCell, appModule.isTableCellText(element) { inCell = true }
         let noRoom = collapsed && !inCell && !gesture.modifiers.contains(.shift) && unit == .line
             && ((backwards && oldLine.start <= 0 && info.start <= 0) || (forwards && length > 0 && oldLine.end >= length && info.start >= length))
         if noRoom {

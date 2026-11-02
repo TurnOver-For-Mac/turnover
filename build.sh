@@ -57,6 +57,7 @@ done
 python3 make-embedded.py || { echo "STOP: make-embedded.py failed"; exit 1; }
 # Filing app implementations must not change source membership or compile records/experiments (issue 205).
 TURNOVER_BUILD="$BUILD" python3 Tools/check-migration.py --membership-only
+python3 Tools/check-app-boundaries.py
 python3 Tools/build-app-index.py --check
 # The compiler's own exit status decides, not only whether the files exist: a build that failed after a product was
 # written went on to install (the same audit).

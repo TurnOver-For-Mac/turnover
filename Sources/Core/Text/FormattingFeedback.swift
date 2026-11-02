@@ -92,8 +92,7 @@ package final class FormattingFeedback {
         // Menu validation can query the app. Keep it in canReply after native key delivery, not this decision path
         // (review, 1 Nov 2026). Capture the original focus now so delayed validation cannot retarget the shortcut.
         let bundle = focus.appModule.bundleIdentifier
-        // Word owns these scripts and queries its selection through its existing automation bridge.
-        guard bundle != "com.microsoft.Word" else { return }
+        guard !focus.appModule.handlesNativeFormattingShortcuts else { return }
         let context = Context(focus: focus.element, foreground: API.foregroundObject?.element,
                               pid: focus.pid, bundleIdentifier: bundle, keys: keyCount())
         let id = UUID()

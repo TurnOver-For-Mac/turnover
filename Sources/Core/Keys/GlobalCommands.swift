@@ -338,9 +338,8 @@ public final class GlobalCommands: ScriptableObject {
             let detail = ScriptHandler.lastScriptRepeatCount > 0
             let formatting = detail ? f.detailedDescription : f.fullDescription
             Speech.speakMessage(selection.map { !$0.isCollapsed } ?? false ? String(localized: "selected, \(formatting)", comment: "The selection's formatting: %@ is the formatting") : formatting)
-            // Word: the paragraph's alignment and spacing too, from Word itself ().
-            if detail, f.alignment == nil, let word = obj.appModule as? WordAppModule {
-                word.script.paragraphFormat { words in if !words.isEmpty { Speech.speakMessage(words) } }
+            if detail, f.alignment == nil {
+                obj.appModule.paragraphFormatting { words in if !words.isEmpty { Speech.speakMessage(words) } }
             }
         }
         script("reportCaretLocation", String(localized: "Reports where the caret is: the page and line where the application knows them", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+delete", "kb:turnover+shift+l"], category: text) { _ in
