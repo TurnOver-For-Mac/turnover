@@ -59,6 +59,8 @@ public final class ScreenRecognition {
 
     /// TurnOver+R: recognise the front window. While the result is open: recognise again, keeping the place.
     public func recognize() {
+        // Controls too, when chosen (Settings, Screen recognition): every way in to recognition reads them then.
+        if config.recognition.controls, #available(macOS 26.0, *) { recognizeInterface(); return }
         guard !working else { Speech.speakMessage(String(localized: "still recognising", comment: "Spoken message")); return }
         guard ScreenCapturePermission.ensure() else { finished(); return }
         let reopen = isOpen
@@ -87,14 +89,18 @@ public final class ScreenRecognition {
         }
     }
 
-    /// The layer's E (developer switch `flatView`): the window's controls from its pixels (ScreenInterface), opened as
-    /// a recognition result whose rows are the controls: "Save, button". Return clicks the control.
+    /// The window's controls from its pixels (ScreenInterface), opened as a recognition result whose rows are the
+    /// controls: "Save, button". Return clicks the control. With the Screen recognition setting on, all recognition;
+    /// otherwise only the layer's E in a developer build with the switch `flatView`.
     public func recognizeInterface() {
-        guard Edition.devDefault("flatView") else { recognize(); return }
+        guard config.recognition.controls || Edition.devDefault("flatView") else { recognize(); return }
         guard #available(macOS 26.0, *) else { Speech.speakMessage(String(localized: "the screen interface needs macOS 26 or later", comment: "Spoken message")); return }
         guard !working else { Speech.speakMessage(String(localized: "still recognising", comment: "Spoken message")); return }
         guard ScreenCapturePermission.ensure() else { finished(); return }
         guard let target = Self.target() else { Speech.speakMessage(String(localized: "no window to recognise", comment: "Spoken message")); finished(); return }
+        // Again while a result is open: the place is kept and nothing is closed if nothing is found, as for text.
+        let reopen = isOpen
+        let keepRow = reopen ? currentRowText() : nil
         working = true
         let started = Date()
         Speech.speakMessage(String(localized: "reading the screen's controls", comment: "Spoken message"))
@@ -111,32 +117,35 @@ public final class ScreenRecognition {
                 Log.io("screen interface: \(d.elements.count) elements in \(Int(Date().timeIntervalSince(started) * 1000)) ms (\(d.note))")
                 for e in d.elements.prefix(60) { Log.io("screen interface:   \(e.kind.rawValue) \"\(Log.words(e.label.prefix(40).description))\" at \(Int(e.rect.midX)),\(Int(e.rect.midY)) (\(e.from))") }
                 self.showingInterface = true
-                self.show(r, reopen: false, keepRow: nil)
+                self.show(r, reopen: reopen, keepRow: keepRow)
             }
         }
     }
 
     /// The controls as rows: one each, "label, kind", the whole row clickable at the control's centre.
+    /// Each row ends where its words do, the line break between rows, as text results' rows are: a row that took in
+    /// its line break ended where the next began, and Down stayed on the first row (Oliver, 2 Nov 2026).
     @available(macOS 26.0, *)
-    nonisolated static func interfaceResult(_ elements: [ScreenInterface.Element], title: String, pid: pid_t, window: CGRect) -> Result {
+    package nonisolated static func interfaceResult(_ elements: [ScreenInterface.Element], title: String, pid: pid_t, window: CGRect) -> Result {
         let text = NSMutableString()
         var rows: [Row] = []
         for e in elements {
-            let label = e.label.isEmpty ? (e.kind == .icon ? "icon" : e.kind.rawValue) : e.label
+            let label = e.label.isEmpty ? e.kind.spoken : e.label
             let spoken = e.kind.spoken.isEmpty || e.label.isEmpty ? label : "\(label), \(e.kind.spoken)"
+            if text.length > 0 { text.append("\n") }
             let start = text.length
-            text.append(spoken); text.append("\n")
+            text.append(spoken)
             let labelRange = NSRange(location: start, length: (label as NSString).length)
             let word = Word(range: labelRange, rect: e.rect)
             let item = Item(range: NSRange(location: start, length: (spoken as NSString).length), rect: e.rect, words: [word])
-            rows.append(Row(range: NSRange(location: start, length: (spoken as NSString).length + 1), items: [item], block: 0))
+            rows.append(Row(range: NSRange(location: start, length: (spoken as NSString).length), items: [item], block: 0))
         }
         return Result(text: text, rows: rows, title: title, pid: pid, window: window)
     }
 
     private func show(_ r: Result, reopen: Bool, keepRow: String?) {
         guard r.text.length > 0 else {
-            if !reopen { Speech.speakMessage(String(localized: "no text found", comment: "Spoken message")); finished() } else { Speech.speakMessage(String(localized: "no text now", comment: "Spoken message")) }
+            if !reopen { Speech.speakMessage(showingInterface ? String(localized: "nothing found", comment: "Screen recognition found no controls or text") : String(localized: "no text found", comment: "Spoken message")); finished() } else { Speech.speakMessage(String(localized: "no text now", comment: "Spoken message")) }
             return
         }
         result = r
@@ -148,7 +157,8 @@ public final class ScreenRecognition {
             caret = 0
             let rows = r.rows.count
             let count = rows == 1 ? String(localized: "1 row", comment: "A table's size") : String(localized: "\(String(rows)) rows", comment: "A table's size")
-            Speech.speakMessage(reopen ? String(localized: "recognised again, \(count)", comment: "Screen recognition again: how many rows") : "\(r.title.isEmpty ? "" : r.title + ", ")" + String(localized: "recognised text, \(count)", comment: "Screen recognition: how many rows"))
+            let found = showingInterface ? String(localized: "recognised controls, \(count)", comment: "Screen recognition of controls: how many rows") : String(localized: "recognised text, \(count)", comment: "Screen recognition: how many rows")
+            Speech.speakMessage(reopen ? String(localized: "recognised again, \(count)", comment: "Screen recognition again: how many rows") : "\(r.title.isEmpty ? "" : r.title + ", ")" + found)
         }
         if config.recognition.autoSayAll, keepRow == nil { sayAll() } else { speakRow() }
         Braille.modalLine = { [weak self] in self?.brailleLine() }
@@ -293,7 +303,9 @@ public final class ScreenRecognition {
         let words = allWords()
         if let w = words.first(where: { NSLocationInRange(caret, $0.range) }) { return w.rect }
         if let it = r.items.first(where: { NSLocationInRange(caret, $0.range) }) { return it.rect }
-        return words.min { abs($0.range.location - caret) < abs($1.range.location - caret) }?.rect
+        // At a row's end (its line break) the nearest word was the next row's, one character on: this row's instead.
+        let near = rowIndex(caret).map { r.rows[$0].items.flatMap(\.words) } ?? []
+        return (near.isEmpty ? words : near).min { abs($0.range.location - caret) < abs($1.range.location - caret) }?.rect
     }
 
     private func click(_ kind: Click) {
@@ -341,7 +353,8 @@ public final class ScreenRecognition {
 
     private func startRefreshing() {
         refreshTimer?.invalidate(); refreshTimer = nil
-        guard config.recognition.autoRefresh else { return }
+        // Not over a controls result: the refresh reads text, and turned the controls into lines (a review, 2 Nov 2026).
+        guard config.recognition.autoRefresh, !showingInterface else { return }
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.refreshQuietly() } }
     }
 

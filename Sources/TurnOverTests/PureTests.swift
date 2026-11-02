@@ -1087,6 +1087,18 @@ func browseTextNavTests() {
         let odd = try? JSONDecoder().decode(Config.self, from: Data(#"{"general": {"keyboardStyle": "orca"}}"#.utf8))
         expect(odd?.general.keyboardStyle, "mac", "an unknown style falls back to VoiceOver keys")
     }
+    test("screen recognition: a controls result's rows don't run into each other, so Down moves on") {
+        guard #available(macOS 26.0, *) else { return }
+        let elements = [ScreenInterface.Element(kind: .menu, label: "File", rect: CGRect(x: 10, y: 10, width: 30, height: 16), from: "model"),
+                        ScreenInterface.Element(kind: .button, label: "Next", rect: CGRect(x: 10, y: 40, width: 50, height: 20), from: "box"),
+                        ScreenInterface.Element(kind: .text, label: "Welcome", rect: CGRect(x: 10, y: 70, width: 80, height: 16), from: "document")]
+        let r = ScreenRecognition.interfaceResult(elements, title: "Sample", pid: 0, window: CGRect(x: 0, y: 0, width: 400, height: 300))
+        expect(r.rows.count, 3)
+        for i in 1..<r.rows.count {
+            check(NSMaxRange(r.rows[i - 1].range) < r.rows[i].range.location, "row \(i - 1) ends before row \(i) begins")
+        }
+        expect(r.text.substring(with: r.rows[1].range), "Next, button")
+    }
     test("keyboard styles: the pieces of an announcement, commas in the Mac family, spaces in the Windows family") {
         let saved = config
         defer { config = saved }

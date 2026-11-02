@@ -520,6 +520,14 @@ struct RecognitionView: View {
         Form {
             Toggle("Read new text as it appears, while a result is open", isOn: model.bool("recognition", "autoRefresh"))
             Toggle("Read the whole result as it opens", isOn: model.bool("recognition", "autoSayAll"))
+            // Named outright, as Steam's switch is: SwiftUI gave this one no name, so it was read as a bare check box
+            // (Oliver, 2 Nov 2026).
+            // macOS 26 and later only: earlier, recognition reads text alone (ScreenInterface needs Vision's newer readers).
+            if #available(macOS 26.0, *) {
+                Toggle("Find buttons, fields and icons too, not only text (experimental)", isOn: model.bool("recognition", "controls"))
+                    .accessibilityLabel("Find buttons, fields and icons too, not only text (experimental)")
+                Text("Each row is a control, such as \"Save, button\", and Return clicks it. Pictures of icons are described by the Mac's own model, with Apple Intelligence on. Nothing leaves the Mac.").font(.caption)
+            }
             // A feature for a whole build: shown in developer builds only (29 Oct 2026).
             if readerIsDevBuild {
                 Toggle("After Return clicks something, recognise again", isOn: model.bool("recognition", "refreshAfterClick"))

@@ -4823,6 +4823,9 @@
         }
       }
     },
+    "Each row is a control, such as \"Save, button\", and Return clicks it. Pictures of icons are described by the Mac's own model, with Apple Intelligence on. Nothing leaves the Mac." : {
+
+    },
     "Elements" : {
       "localizations" : {
         "tr" : {
@@ -5055,6 +5058,9 @@
           }
         }
       }
+    },
+    "Find buttons, fields and icons too, not only text (experimental)" : {
+
     },
     "Find commands" : {
       "localizations" : {
@@ -19984,6 +19990,9 @@
     "iPhone or iPad app" : {
       "comment" : "An app in the catalog made for iPhone or iPad"
     },
+    "icon" : {
+      "comment" : "A kind of control screen recognition finds: a picture with no text"
+    },
     "ignored" : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -22717,6 +22726,9 @@
         }
       }
     },
+    "nothing found" : {
+      "comment" : "Screen recognition found no controls or text"
+    },
     "nothing here" : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -23825,6 +23837,9 @@
           }
         }
       }
+    },
+    "recognised controls, %@" : {
+      "comment" : "Screen recognition of controls: how many rows"
     },
     "recognised text, %@" : {
       "comment" : "Screen recognition: how many rows",

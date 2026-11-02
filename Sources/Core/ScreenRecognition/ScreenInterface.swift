@@ -20,8 +20,26 @@ import FoundationModels
 public enum ScreenInterface {
     nonisolated public enum Kind: String, Sendable {
         case heading, text, listItem = "list item", cell, button, link, field = "text field", checkbox = "check box", toggle = "switch", tab, menu, slider, icon, image
-        /// Said after the label; plain text says nothing.
-        var spoken: String { self == .text ? "" : rawValue }
+        /// Said after the label, in TurnOver's language, with the same words as a role read anywhere else; plain text
+        /// says nothing. (The English names were said to everyone once the setting was in Settings: a review, 2 Nov 2026.)
+        var spoken: String {
+            switch self {
+            case .text: return ""
+            case .heading: return String(localized: "heading", comment: "A role, spoken after an item's name")
+            case .listItem: return String(localized: "list item", comment: "A role, spoken after an item's name")
+            case .cell: return String(localized: "cell", comment: "A role, spoken after an item's name")
+            case .button: return String(localized: "button", comment: "A role, spoken after an item's name")
+            case .link: return String(localized: "link", comment: "A role, spoken after an item's name")
+            case .field: return String(localized: "edit", comment: "A role, spoken after an item's name")
+            case .checkbox: return String(localized: "check box", comment: "A role, spoken after an item's name")
+            case .toggle: return String(localized: "switch", comment: "A role, spoken after an item's name")
+            case .tab: return String(localized: "tab", comment: "A role, spoken after an item's name")
+            case .menu: return String(localized: "menu", comment: "A role, spoken after an item's name")
+            case .slider: return String(localized: "slider", comment: "A role, spoken after an item's name")
+            case .icon: return String(localized: "icon", comment: "A kind of control screen recognition finds: a picture with no text")
+            case .image: return String(localized: "image", comment: "A role, spoken after an item's name")
+            }
+        }
         /// How sure a kind is: the model's kinds for controls beat the geometry's guess, which beats plain text.
         var rank: Int {
             switch self { case .text: return 0; case .heading, .listItem, .cell: return 1; default: return 2 }
@@ -34,6 +52,7 @@ public enum ScreenInterface {
         /// In screen points (top left origin).
         public var rect: CGRect
         public var from: String   // "document", "box", "model": for the log
+        package init(kind: Kind, label: String, rect: CGRect, from: String) { self.kind = kind; self.label = label; self.rect = rect; self.from = from }
     }
 
     nonisolated public struct Detection: Sendable {
