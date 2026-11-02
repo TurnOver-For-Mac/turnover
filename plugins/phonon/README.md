@@ -17,7 +17,7 @@ rm -f ~/Library/Developer/TurnOver/kokoro/phonon-helper && cp .build/release/pho
 ```
 
 TurnOver then offers Phonon's voices where the `kokoro` default is set: in Settings, Speech, Voice (one chosen speaks
-everything, with the rate, volume and EQ above it, kept for each voice), in Voices in the rotor, and in Natural voice
+everything, with the rate, volume and EQ above it, kept for each voice), in the rotor (In the rotor under Voice, or the list of voices below it), and in Natural voice
 for say all only.
 
 The first start downloads the voice (172 MB, FluidAudio's cache in `~/.cache/fluidaudio`); after that nothing leaves

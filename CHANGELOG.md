@@ -28,6 +28,10 @@ Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
 - Settings has a Sounds section: whose sounds, the sounds as you move and press, what you hear as TurnOver takes over,
   progress bars, and lowering other sounds while TurnOver speaks (from General and Speech). With NVDA keys,
   NVDA+Control+U opens it, as it opens NVDA's Audio settings.
+- Settings, Speech: "In the rotor", under Voice, puts the voice chosen there among the voices VO-Command-Shift steps
+  through, or takes it out, without going through every voice's switch below.
+- In a menu, a letter that leaves the same item highlighted (r, then u, for Russell) says that item again, where it
+  said nothing.
 - The speech settings ring ends at punctuation: its last stop, sync with VoiceOver, has gone. VoiceOver's settings
   are copied from the TurnOver menu, Copy VoiceOver settings.
 - The Games item has gone from the TurnOver menu's Tools: game reading is always on, and Steam's Big Picture switch and

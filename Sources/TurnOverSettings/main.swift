@@ -214,6 +214,24 @@ struct SpeechView: View {
             }))
         .accessibilityLabel(name)
     }
+    /// The voice chosen above, in the rotor or not, without Tabbing through every voice's switch (Oliver, 2 Nov 2026:
+    /// "the menu and selection isn't great"). None ticked is every voice: so switching one off when none or only it is
+    /// ticked ticks all the others, and all of them ticked is none.
+    private func inRotor(_ id: String) -> some View {
+        let title = String(localized: "In the rotor", comment: "A switch in Speech settings, under Voice: the voice chosen there is one VO-Command-Shift steps through")
+        return Toggle(title, isOn: Binding(
+            get: { rotorChosen.isEmpty || rotorChosen.contains(id) },
+            set: { on in
+                let all = rotorAll
+                var list = rotorChosen.isEmpty ? all : rotorChosen
+                list.removeAll { $0 == id }
+                if on { list.append(id) }
+                if list.isEmpty { list = all.filter { $0 != id } }
+                if !all.isEmpty, Set(all).isSubset(of: list) { list = [] }
+                model.set("speech", "rotorVoices", list)
+            }))
+        .accessibilityLabel(title)
+    }
     /// The natural voices as entries of the Voice list and the rotor ("external:…"), named by TurnOver.
     private var naturalEntries: [(id: String, name: String)] {
         ((model.special("_naturalVoiceEntries") as? [[String: Any]]) ?? []).compactMap { d in
@@ -230,6 +248,8 @@ struct SpeechView: View {
     }
     private var rotorChosen: [String] { (model.state["speech"] as? [String: Any])?["rotorVoices"] as? [String] ?? [] }
     private var rotorCandidates: [AVSpeechSynthesisVoice] { voiceLists.rotorCandidates }
+    /// Every voice the rotor's list offers, the natural ones first.
+    private var rotorAll: [String] { naturalEntries.map(\.id) + rotorCandidates.map(\.identifier) }
     private var outputDevices: [(uid: String, name: String)] {
         ((model.special("_outputDevices") as? [[String: Any]]) ?? []).compactMap { d in
             guard let uid = d["uid"] as? String, let name = d["name"] as? String else { return nil }
@@ -261,6 +281,9 @@ struct SpeechView: View {
                 }
                 Section("Mac voices") { ForEach(voices, id: \.identifier) { v in Text(voiceLists.label(for: v)).tag(v.identifier) } }
             }
+            let chosenVoice = model.special("_speechVoice") as? String ?? (model.get("speech", "voice") as? String ?? "")
+            // Not for a voice the list doesn't offer (another language's): it couldn't be switched off.
+            if rotorAll.contains(chosenVoice) { inRotor(chosenVoice) }
             Slider(value: model.percent("speech", "rate"), in: 10...100, step: 5) { Text("Rate") }
                 .accessibilityValue("\(Int(model.percent("speech", "rate").wrappedValue)) percent")
             Slider(value: model.percent("speech", "pitch"), in: 0...100, step: 5) { Text("Pitch") }
