@@ -16,12 +16,15 @@ latest messages from anywhere, 1 the newest. New messages are read as they arriv
 ## Music, Podcasts and TV
 
 Up and Down move through the page, shelf by shelf; Left and Right jump between shelves; Return plays; Space pauses
-and says which.
+and says which. In Music and Podcasts, Return in the search field gives the results as a plain list from Apple's
+catalog, as in the App Store; TV reads its own results page.
 
 ## The App Store
 
 Up and Down move through every app and button; Left and Right between shelves. Return opens an app's page; Space
-presses its own button (Get, Open, Update). Command F searches.
+presses its own button (Get, Open, Update). Command F searches: type, press Return, and the results are a plain list
+from Apple's catalog while the search field keeps the focus. Up and Down move through it, Return opens one, Escape
+leaves the list.
 
 ## Microsoft Word and Excel
 

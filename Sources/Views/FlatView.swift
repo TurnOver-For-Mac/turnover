@@ -4,7 +4,8 @@
 // same evening: the rows' structure (which rows, in what order) answers reliably; a row's name answers in bursts,
 // blank most of the time while the app loads, on screen or not. So: positions from the structure, names asked for
 // patiently around where the person is and kept once answered, and acting in one breath: walk to the position,
-// wait for the name, confirm it, scroll into view, hit test, click. Behind the developer switch `flatView`.
+// wait for the name, confirm it, scroll into view, hit test, click. On for everyone from build 23, under the App
+// Store's catalog (the developer switch `flatView` until then).
 import Foundation
 import AppKit
 import ApplicationServices

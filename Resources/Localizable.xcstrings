@@ -96,6 +96,12 @@
         }
       }
     },
+    "%@ and a half stars" : {
+      "comment" : "An app's rating in the catalog: %@ is the whole number of stars, in words"
+    },
+    "%@ and a quarter stars" : {
+      "comment" : "An app's rating in the catalog: %@ is the whole number of stars, in words"
+    },
     "%@ and others" : {
       "comment" : "Some of many keys: %@ is the first eight",
       "localizations" : {
@@ -106,6 +112,9 @@
           }
         }
       }
+    },
+    "%@ and three quarter stars" : {
+      "comment" : "An app's rating in the catalog: %@ is the whole number of stars, in words"
     },
     "%@ app connections, %@ lines heard." : {
       "comment" : "The speech port's status",
@@ -1093,6 +1102,9 @@
         }
       }
     },
+    "%@ stars" : {
+      "comment" : "An app's rating in the catalog: %@ is the number of stars, in words"
+    },
     "%@ submenu" : {
       "comment" : "A submenu opened: its name",
       "localizations" : {
@@ -1325,6 +1337,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@, yüzde %2$@"
+          }
+        }
+      }
+    },
+    "%@, %@ ratings" : {
+      "comment" : "An app's rating in the catalog: %1$@ the stars, %2$@ how many ratings",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@ ratings"
           }
         }
       }
@@ -17531,6 +17554,9 @@
         }
       }
     },
+    "album by %@" : {
+      "comment" : "A Music catalog result: %@ is the artist"
+    },
     "alert" : {
       "comment" : "A role: an alert",
       "localizations" : {
@@ -17761,6 +17787,9 @@
           }
         }
       }
+    },
+    "artist" : {
+      "comment" : "A kind of result in Music's catalog"
     },
     "asking the catalog; a moment" : {
       "comment" : "Spoken message",
@@ -18133,6 +18162,9 @@
           }
         }
       }
+    },
+    "by %@" : {
+      "comment" : "A Podcasts catalog result: %@ is who makes the show"
     },
     "by keyboard style" : {
       "comment" : "A choice in the TurnOver menu",
@@ -19681,6 +19713,9 @@
         }
       }
     },
+    "free" : {
+      "comment" : "An app's price in the catalog"
+    },
     "function" : {
       "comment" : "The Fn key's name, as keyboard help says it",
       "localizations" : {
@@ -19945,6 +19980,9 @@
           }
         }
       }
+    },
+    "iPhone or iPad app" : {
+      "comment" : "An app in the catalog made for iPhone or iPad"
     },
     "ignored" : {
       "comment" : "Spoken message",
@@ -22988,7 +23026,7 @@
       }
     },
     "on %@" : {
-      "comment" : "The colour behind the text: %@ is the colour (on yellow)",
+      "comment" : "A Music catalog song: %@ is its album\nThe colour behind the text: %@ is the colour (on yellow)",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -23019,6 +23057,9 @@
           }
         }
       }
+    },
+    "one star" : {
+      "comment" : "An app's rating in the catalog"
     },
     "only %@ messages" : {
       "comment" : "Fewer messages than asked for: how many there are",
@@ -24653,6 +24694,9 @@
           }
         }
       }
+    },
+    "song by %@" : {
+      "comment" : "A Music catalog result: %@ is the artist"
     },
     "sorted" : {
       "comment" : "A state, spoken after an item's role",
@@ -26315,6 +26359,9 @@
         }
       }
     },
+    "the catalog answered %@" : {
+      "comment" : "Why the catalog gave no results: %@ is an HTTP status"
+    },
     "the catalog did not answer" : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -26325,6 +26372,9 @@
           }
         }
       }
+    },
+    "the catalog's answer could not be read" : {
+      "comment" : "Why the catalog gave no results"
     },
     "the default order" : {
       "comment" : "Spoken message: an app's reading order back to the default",

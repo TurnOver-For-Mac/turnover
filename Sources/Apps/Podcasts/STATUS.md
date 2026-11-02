@@ -8,6 +8,8 @@
 
 ## Findings
 
+Search answers from Apple's catalog ([Catalog](../Catalog/README.md)): Return in the search field gives a plain list, Return on one opens its page. On for everyone from build 23, after Oliver used it from 27 October to 2 November 2026 with the developer switch on.
+
 The 29 October probe reached a clipped public Browse sample after bringing the app forward; an initial background request could not complete. No catalogue-navigation, spoken-reading or playback result was recorded.
 
 Use a public catalogue to check sidebar and show/episode navigation, then switch away and back and check that speech describes the current page.

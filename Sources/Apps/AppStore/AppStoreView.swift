@@ -125,13 +125,14 @@ public final class AppStoreView {
     /// The page, shelf by shelf, a little at a time: the heading's area above the collection (Updates: "Update
     /// All"), then the shelves reached by AXNextContentSibling, until there are enough to start with. The rest is read
     /// as the arrows reach it (reading all 529 items of Discover at once took 5 s and froze TurnOver, 6 Oct 2026).
-    // MARK: The flat view (developer switch `flatView`; docs/FLAT-VIEW-PLAN.md)
+    // MARK: The catalog and the flat view (docs/FLAT-VIEW-PLAN.md)
+    // Behind the developer switch `flatView` from 27 Oct 2026; on for everyone from build 23, after Oliver's trial
+    // ("I think we got the catalogue apps all working quite well so switch those on", 2 Nov 2026).
 
     /// The results page's host while a search results page is up; the old page machinery stands down meanwhile.
     private var results: AppStoreResults?
     private var resultsKey = ""
     private var flatDrives: Bool { results != nil || catalogDrives }
-    private var flatOn: Bool { Edition.devDefault("flatView") }
 
     /// The catalog's answers for the latest search (AppStoreCatalog.swift): the results page's host while the
     /// Store shows that search's results, instead of the page's own rows.
@@ -142,7 +143,6 @@ public final class AppStoreView {
 
     /// A search is going out: the catalog is asked at the same time, and answers the results page.
     private func catalogSearch(term raw: String) {
-        guard flatOn else { return }
         let term = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !term.isEmpty else { Log.io("app store catalog: no term to search for"); return }
         catalog?.cancel()
@@ -195,10 +195,10 @@ public final class AppStoreView {
     }
 
     public func buildPage(then: @escaping @MainActor @Sendable () -> Void = {}) {
-        modelOwner.read(.page(skipFlatResults: flatOn)) { [weak self] _ in
+        modelOwner.read(.page(skipFlatResults: true)) { [weak self] _ in
             guard let self, canUseResult else { return }
             checkedAt = Date()
-            if flatOn, modelOwner.model.rootIdentifier == "AppStore.search.result" {
+            if modelOwner.model.rootIdentifier == "AppStore.search.result" {
                 if let c = catalog, c.failed == nil { catalogDrives = true; resultsEnd() }
                 else { resultsBegin() }
             } else {

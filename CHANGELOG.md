@@ -8,6 +8,10 @@ Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
 
 ### Added
 
+- Searching in the App Store, Music and Podcasts: Return in the search field reads the results as a plain list, from
+  Apple's public catalog, and Return on one opens its page. The App Store's own results page couldn't be read reliably
+  on macOS 27.2. When the catalog can't answer, the page is read instead. TV keeps its own page, as Apple TV+ isn't in
+  the catalog.
 - Progress bars can beep as they move, as in NVDA: a short beep for each percent, rising in pitch from low at 0 to high
   at 100. Choose Beep, Speak the percentage (as before), Beep and speak, or Off in Settings, Sounds, or in the
   Verbosity list (VO-V). With NVDA keys, NVDA+U goes through them. A bar's beeps keep up with it as it moves, rather

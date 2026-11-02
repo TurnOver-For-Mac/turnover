@@ -19,8 +19,13 @@ TurnOver does not ask for Full Disk Access.
 
 ## What leaves your Mac
 
-TurnOver connects to one place by itself: **its update site**, `doll-eye.github.io/turnover-updates`, to check for a
-new build. Nothing about you or what you do is sent: it only fetches that file.
+TurnOver connects to two places by itself:
+
+- **Its update site**, `doll-eye.github.io/turnover-updates`, to check for a new build. Nothing about you or what you
+  do is sent: it only fetches that file.
+- **Apple's public catalog search**, `itunes.apple.com`, when you search in the App Store, Music or Podcasts. The
+  words you searched for and your Mac's region go to Apple, as the app sends them to Apple anyway; TurnOver reads the
+  answers as a plain list.
 
 Everything else happens on your Mac:
 
