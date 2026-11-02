@@ -83,7 +83,7 @@ final class Model: ObservableObject {
 
 enum Pane: String, CaseIterable, Identifiable {
     // NVDA's order, with TurnOver's own at the end: every setting the menu offered lives here since 21 Oct 2026.
-    case general = "General", speech = "Speech", braille = "Braille", keyboard = "Keyboard", items = "Item details", webPages = "Web pages", documents = "Documents",
+    case general = "General", speech = "Speech", sounds = "Sounds", braille = "Braille", keyboard = "Keyboard", items = "Item details", webPages = "Web pages", documents = "Documents",
          recognition = "Screen recognition", otherApps = "Other apps' speech", readers = "Screen reader behaviour"
     var id: String { rawValue }
     /// As the sidebar shows it. (The raw value stays English: TurnOver asks for a section by it.)
@@ -91,6 +91,7 @@ enum Pane: String, CaseIterable, Identifiable {
         switch self {
         case .general: return String(localized: "General", comment: "A section of the Settings window")
         case .speech: return String(localized: "Speech", comment: "A section of the Settings window")
+        case .sounds: return String(localized: "Sounds", comment: "A section of the Settings window")
         case .braille: return String(localized: "Braille", comment: "A section of the Settings window")
         case .keyboard: return String(localized: "Keyboard", comment: "A section of the Settings window")
         case .items: return String(localized: "Item details", comment: "A section of the Settings window")
@@ -118,6 +119,7 @@ struct ContentView: View {
                 switch section ?? .general {
                 case .general: GeneralView()
                 case .speech: SpeechView()
+                case .sounds: SoundsView()
                 case .braille: BrailleView()
                 case .keyboard: KeyboardView()
                 case .items: ItemsView()
@@ -238,9 +240,6 @@ struct SpeechView: View {
                 Text("None").tag(0); Text("Some").tag(1); Text("Most").tag(2); Text("All").tag(3)
             }
             Toggle("Switch language when text says it is in another", isOn: model.bool("speech", "autoLanguageSwitching"))
-            Picker("Lower other sounds while TurnOver speaks", selection: model.string("speech", "ducking", "off")) {
-                Text("No").tag("off"); Text("While speaking").tag("speech"); Text("Always").tag("always")
-            }
             Picker("Where speech plays", selection: model.string("speech", "outputDevice", "")) {
                 Text("The Mac's default output").tag("")
                 ForEach(outputDevices, id: \.uid) { d in Text(d.name).tag(d.uid) }
@@ -565,6 +564,27 @@ struct OtherAppsView: View {
 
 struct GeneralView: View {
     @EnvironmentObject var model: Model
+    var body: some View {
+        Form {
+            Section("Starting") {
+                Toggle("Open TurnOver at login", isOn: model.bool("general", "openAtLogin"))
+                Toggle("Show TurnOver in the menu bar", isOn: model.bool("general", "showInMenuBar"))
+            }
+            Section("Alerts") {
+                Toggle("Read notifications from other apps", isOn: model.bool("presentation", "reportNotifications"))
+                Toggle("Read changes on screen as they happen", isOn: model.bool("presentation", "reportDynamicContentChanges"))
+            }
+            Picker("Screen Curtain while TurnOver reads", selection: model.string("general", "screenCurtain", "follow")) {
+                Text("The same as VoiceOver's").tag("follow"); Text("Always on").tag("on"); Text("Off").tag("off")
+            }
+        }.formStyle(.grouped).navigationTitle("General")
+    }
+}
+
+/// Everything TurnOver plays, in one place (Oliver, 2 Nov 2026), as NVDA's Audio panel: whose sounds, the hand-over,
+/// progress bars, and other apps' sound lowered while TurnOver speaks. Audio graphs will join them.
+struct SoundsView: View {
+    @EnvironmentObject var model: Model
     /// What you hear as TurnOver takes over and hands back: two flags in the file, one choice here.
     private var handOver: Binding<String> {
         Binding(get: {
@@ -576,32 +596,31 @@ struct GeneralView: View {
             model.set("general", "handOverChimes", v == "sound")
         })
     }
+    /// Whose sounds: the file keeps "" until one is chosen, which is VoiceOver's unless the old experimental mode chose
+    /// TurnOver's (Config.General.effectiveSounds), so the pop-up showed nothing chosen (a review, 2 Nov 2026).
+    private var whose: Binding<String> {
+        Binding(get: {
+            let s = model.get("general", "sounds") as? String ?? ""
+            if !s.isEmpty { return s }
+            return model.get("general", "edition") as? String == "experimental" ? "turnover" : "voiceover"
+        }, set: { model.set("general", "sounds", $0) })
+    }
     var body: some View {
         Form {
-            Section("Starting") {
-                Toggle("Open TurnOver at login", isOn: model.bool("general", "openAtLogin"))
-                Toggle("Show TurnOver in the menu bar", isOn: model.bool("general", "showInMenuBar"))
+            Picker("Whose sounds", selection: whose) {
+                Text("VoiceOver's").tag("voiceover"); Text("TurnOver's").tag("turnover")
             }
-            Section("Sounds") {
-                Picker("Sounds", selection: model.string("general", "sounds", "turnover")) {
-                    Text("VoiceOver's").tag("voiceover"); Text("TurnOver's").tag("turnover")
-                }
-                Toggle("Sounds as I move and press", isOn: model.bool("general", "navigationSounds"))
-                Picker("When TurnOver takes over from VoiceOver", selection: handOver) {
-                    Text("Words").tag("words"); Text("A sound").tag("sound"); Text("Nothing").tag("nothing")
-                }
+            Toggle("Sounds as I move and press", isOn: model.bool("general", "navigationSounds"))
+            Picker("When TurnOver takes over from VoiceOver", selection: handOver) {
+                Text("Words").tag("words"); Text("A sound").tag("sound"); Text("Nothing").tag("nothing")
             }
-            Section("Alerts") {
-                Toggle("Read notifications from other apps", isOn: model.bool("presentation", "reportNotifications"))
-                Toggle("Read changes on screen as they happen", isOn: model.bool("presentation", "reportDynamicContentChanges"))
-                Picker("Progress bars", selection: model.string("presentation", "progressBars", "speak")) {
-                    Text("Beep").tag("beep"); Text("Speak the percentage").tag("speak"); Text("Beep and speak").tag("both"); Text("Off").tag("off")
-                }
+            Picker("Progress bars", selection: model.string("presentation", "progressBars", "speak")) {
+                Text("Beep").tag("beep"); Text("Speak the percentage").tag("speak"); Text("Beep and speak").tag("both"); Text("Off").tag("off")
             }
-            Picker("Screen Curtain while TurnOver reads", selection: model.string("general", "screenCurtain", "follow")) {
-                Text("The same as VoiceOver's").tag("follow"); Text("Always on").tag("on"); Text("Off").tag("off")
+            Picker("Lower other sounds while TurnOver speaks", selection: model.string("speech", "ducking", "off")) {
+                Text("No").tag("off"); Text("While speaking").tag("speech"); Text("Always").tag("always")
             }
-        }.formStyle(.grouped).navigationTitle("General")
+        }.formStyle(.grouped).navigationTitle("Sounds")
     }
 }
 

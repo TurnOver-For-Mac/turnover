@@ -13234,6 +13234,7 @@
       }
     },
     "Sounds" : {
+      "comment" : "A section of the Settings window",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -17278,6 +17279,9 @@
           }
         }
       }
+    },
+    "Whose sounds" : {
+
     },
     "Windows" : {
       "localizations" : {

@@ -293,7 +293,7 @@ extension GlobalCommands {
 
         // MARK: Settings (NVDA's dialogs: the TurnOver menu's sections)
         for (key, section, nvda) in [("g", nil, "General"), ("v", "Speech", "Speech"), ("a", "Braille", "Select Braille Display"),
-                                     ("u", "Speech", "Audio"), ("s", "Speech", "Select Synthesizer"), ("k", "Keyboard", "Keyboard"), ("m", nil, "Mouse"),
+                                     ("u", "Sounds", "Audio"), ("s", "Speech", "Select Synthesizer"), ("k", "Keyboard", "Keyboard"), ("m", nil, "Mouse"),
                                      ("o", "Item details", "Object Presentation"), ("b", "Web pages", "Browse Mode"),
                                      ("d", "Documents", "Document Formatting")] as [(String, String?, String)] {
             let where_ = section.map(SettingsBridge.sectionName) ?? String(localized: "Settings", comment: "TurnOver's Settings window")

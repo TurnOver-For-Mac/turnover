@@ -56,7 +56,7 @@ Switch styles with Command Control Comma, then K. TurnOver's own commands behind
 | TurnOver Control S | Opens TurnOver's Speech (NVDA+Control+S: Select Synthesizer settings) |
 | TurnOver Control Space | Back to the page; from something inside a page, back to the page in browse mode (NVDA+Control+Space) |
 | TurnOver Control T | Cycles what braille follows: automatically, the focus, or the review cursor (NVDA+Control+T) |
-| TurnOver Control U | Opens TurnOver's Speech (NVDA+Control+U: Audio settings) |
+| TurnOver Control U | Opens TurnOver's Sounds (NVDA+Control+U: Audio settings) |
 | TurnOver Control V | Opens TurnOver's Speech (NVDA+Control+V: Speech settings) |
 | TurnOver Down arrow | Moves the review cursor to the next line (NVDA+Down Arrow, laptop) |
 | TurnOver Left bracket | Clicks the left mouse button where the pointer is (NVDA+Left Bracket) |

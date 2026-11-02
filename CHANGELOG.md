@@ -9,7 +9,7 @@ Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
 ### Added
 
 - Progress bars can beep as they move, as in NVDA: a short beep for each percent, rising in pitch from low at 0 to high
-  at 100. Choose Beep, Speak the percentage (as before), Beep and speak, or Off in Settings, General, or in the
+  at 100. Choose Beep, Speak the percentage (as before), Beep and speak, or Off in Settings, Sounds, or in the
   Verbosity list (VO-V). With NVDA keys, NVDA+U goes through them. A bar's beeps keep up with it as it moves, rather
   than once a second. App Store downloads follow the same choice: beeps, or the app's name and percentage every 10
   percent while the App Store is in front (it was every quarter, wherever you were), and "installed" at the end, as
@@ -18,6 +18,9 @@ Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
 
 ### Changed
 
+- Settings has a Sounds section: whose sounds, the sounds as you move and press, what you hear as TurnOver takes over,
+  progress bars, and lowering other sounds while TurnOver speaks (from General and Speech). With NVDA keys,
+  NVDA+Control+U opens it, as it opens NVDA's Audio settings.
 - The Games item has gone from the TurnOver menu's Tools: game reading is always on, and Steam's Big Picture switch and
   Restart Steam are in Settings, Other apps' speech.
 - Braille: panning to another line moves the caret there, so the arrows carry on from the line read. The Braille section of Settings offers Line by line (the default), To the text shown, or Off. Tethered to review, panning moves only the review cursor.

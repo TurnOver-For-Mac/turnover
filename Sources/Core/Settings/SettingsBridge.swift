@@ -19,6 +19,7 @@ public enum SettingsBridge {
     nonisolated public static func sectionName(_ section: String) -> String {
         switch section {
         case "Speech": return String(localized: "Speech", comment: "A section of the Settings window")
+        case "Sounds": return String(localized: "Sounds", comment: "A section of the Settings window")
         case "Keyboard": return String(localized: "Keyboard", comment: "A section of the Settings window")
         case "Item details": return String(localized: "Item details", comment: "A section of the Settings window")
         case "Web pages": return String(localized: "Web pages", comment: "A section of the Settings window")
