@@ -431,15 +431,32 @@ public final class ScreenRecognition {
         let app = AXUIElementCreateApplication(pid)
         guard let w = app.element(kAXFocusedWindowAttribute) ?? app.element(kAXMainWindowAttribute), let f = TurnOverObject.frame(w),
               f.width > 20, f.height > 20 else {
-            // No window (a full-screen game): the main display.
-            return Target(pid: pid, frame: CGDisplayBounds(CGMainDisplayID()), title: NSRunningApplication(processIdentifier: pid)?.localizedName ?? "")
+            // No window accessibility reports: the app's own largest window on screen (Parallels Desktop's virtual
+            // machine has one; the whole display was read instead, with the windows behind it, 2 Nov 2026), else the
+            // main display (a full-screen game).
+            return Target(pid: pid, frame: shownWindowFrame(pid: pid) ?? CGDisplayBounds(CGMainDisplayID()), title: NSRunningApplication(processIdentifier: pid)?.localizedName ?? "")
         }
         return Target(pid: pid, frame: f, title: w.string(kAXTitleAttribute) ?? "")
     }
 
+    /// The app's front ordinary window on screen, from the window server, for an app whose windows accessibility
+    /// doesn't report: the list runs front to back, and see-through windows (an overlay) are passed over. Owner, layer,
+    /// alpha and bounds only, which need no Screen Recording.
+    nonisolated static func shownWindowFrame(pid: pid_t) -> CGRect? {
+        guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else { return nil }
+        for w in list {
+            guard (w[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == pid, (w[kCGWindowLayer as String] as? NSNumber)?.intValue == 0,
+                  ((w[kCGWindowAlpha as String] as? NSNumber)?.doubleValue ?? 1) > 0,
+                  let b = w[kCGWindowBounds as String] as? NSDictionary, let r = CGRect(dictionaryRepresentation: b), r.width > 100, r.height > 100 else { continue }
+            return r
+        }
+        return nil
+    }
+
     static func windowFrame(pid: pid_t) -> CGRect? {
         let app = AXUIElementCreateApplication(pid)
-        return (app.element(kAXFocusedWindowAttribute) ?? app.element(kAXMainWindowAttribute)).flatMap { TurnOverObject.frame($0) }
+        // The window server's, for an app with no window accessibility can see, so a click still checks it hasn't moved.
+        return (app.element(kAXFocusedWindowAttribute) ?? app.element(kAXMainWindowAttribute)).flatMap { TurnOverObject.frame($0) } ?? shownWindowFrame(pid: pid)
     }
 
     public enum Outcome { case success(Result), failure(String) }
