@@ -53,6 +53,8 @@ public final class AppStoreView {
     private var pageKey: String { modelOwner.model.key }
     private var purchaseConfirmation = AppStorePurchaseConfirmation()
     private var lastOpen: (String, Date)?
+    /// The apps whose downloads are being followed (watchDownload).
+    private var downloadsWatched: Set<String> = []
 
     nonisolated static func isDownloading(_ title: String) -> Bool {
         title.contains("%") || ["Loading", "Waiting", "Installing", "Preparing"].contains(where: { title.hasPrefix($0) })
@@ -914,11 +916,19 @@ public final class AppStoreView {
         }
     }
 
-    /// A download, followed from its button: each quarter as it passes, and the end ("WhatsApp Messenger
-    /// installed"), wherever the user is.
-    private func watchDownload(_ button: AXUIElement, name: String, lastQuarter: Int = 0, polls: Int = 0) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
-            guard let self, polls < 1800 else { return }
+    /// A download, followed from its button: heard as the Progress bars setting says (ProgressOutput: beeps, or the
+    /// percentage each ten with the app's name) while the Store is in front, and the end ("WhatsApp Messenger
+    /// installed") wherever the user is.
+    /// The quarters it said before were its own; downloads were silent with beeps chosen (Oliver, 2 Nov 2026). A look
+    /// each half second while it beeps with its row on screen and the Store in front, so the beeps keep up; otherwise
+    /// every two, as before (finding the row again walks the list); for up to an hour. One watch per app: Get and
+    /// then Install each started one, and everything was said twice (a review, 2 Nov 2026).
+    private func watchDownload(_ button: AXUIElement, name: String, progress: ProgressOutput? = nil, since: Date = Date(), after delay: Double = 2) {
+        if progress == nil { guard downloadsWatched.insert(name).inserted else { return } }
+        let progress = progress ?? ProgressOutput(at: 0, name: name)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self else { return }
+            guard Date().timeIntervalSince(since) < 3600 else { downloadsWatched.remove(name); return }
             // Rows are reused as the list scrolls: the button counts only while its row still shows this app;
             // otherwise the app's row is looked for on screen.
             func shows(_ b: AXUIElement) -> Bool { b.element(kAXParentAttribute).map { Self.identity(of: $0).hasPrefix(name) } ?? false }
@@ -926,7 +936,7 @@ public final class AppStoreView {
             if !shows(o) {
                 guard let list = self.pageRoot()?.list, let row = Self.first(in: list, depth: 6, where: { Self.isItem($0) && Self.identity(of: $0).hasPrefix(name) }),
                       let b = Self.first(in: row, depth: 5, where: { ($0.string(kAXIdentifierAttribute) ?? "").contains("offerButton") }) else {
-                    self.watchDownload(button, name: name, lastQuarter: lastQuarter, polls: polls + 1); return
+                    self.watchDownload(button, name: name, progress: progress, since: since); return
                 }
                 o = b
             }
@@ -934,18 +944,23 @@ public final class AppStoreView {
             if t.hasPrefix("Open") {
                 Tones.beep(880, 80); Speech.speakMessage(String(localized: "\(name) installed", comment: "An app finished installing"))
                 Log.io("app store: \(Log.words(name)) installed")
+                downloadsWatched.remove(name)
                 return
             }
             if t.hasPrefix("Get") || t.hasPrefix("Re-download") || t.hasPrefix("Update") {
-                if polls > 2 { Speech.speakMessage(String(localized: "\(name): download stopped", comment: "An app's download stopped")) }
+                // By the time, not by the looks, which come faster while beeping: still Get at the first looks is a
+                // press that started nothing (said nothing, as before); later, the download stopped.
+                if Date().timeIntervalSince(since) > 6 { Speech.speakMessage(String(localized: "\(name): download stopped", comment: "An app's download stopped")) }
+                downloadsWatched.remove(name)
                 return
             }
-            var quarter = lastQuarter
-            if let r = t.range(of: #"^[\d.]+"#, options: .regularExpression), let pct = Double(t[r]) {
-                let q = Int(pct / 25)
-                if q > lastQuarter, q < 4 { quarter = q; Speech.speakMessage(String(localized: "\(name), \(String(q * 25)) percent", comment: "A download's progress: the app, then the percentage")) }
-            }
-            self.watchDownload(o, name: name, lastQuarter: quarter, polls: polls + 1)
+            var progress = progress
+            // "2.1% loaded": 100 never shows (the button goes on to Installing, then Open), so "installed" ends it.
+            // Heard only with the Store in front, as NVDA keeps other apps' bars quiet: a beep a percent while typing
+            // elsewhere was too much. "Installed" is said wherever the person is.
+            let front = NSWorkspace.shared.frontmostApplication?.processIdentifier == self.pid
+            if front, let r = t.range(of: #"^[\d.]+"#, options: .regularExpression), let pct = Double(t[r]), pct.isFinite { progress.update(min(99, Int(pct))) }
+            self.watchDownload(o, name: name, progress: progress, since: since, after: front && ProgressOutput.beeps ? 0.5 : 2)
         }
     }
 

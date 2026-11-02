@@ -593,6 +593,9 @@ struct GeneralView: View {
             Section("Alerts") {
                 Toggle("Read notifications from other apps", isOn: model.bool("presentation", "reportNotifications"))
                 Toggle("Read changes on screen as they happen", isOn: model.bool("presentation", "reportDynamicContentChanges"))
+                Picker("Progress bars", selection: model.string("presentation", "progressBars", "speak")) {
+                    Text("Beep").tag("beep"); Text("Speak the percentage").tag("speak"); Text("Beep and speak").tag("both"); Text("Off").tag("off")
+                }
             }
             Picker("Screen Curtain while TurnOver reads", selection: model.string("general", "screenCurtain", "follow")) {
                 Text("The same as VoiceOver's").tag("follow"); Text("Always on").tag("on"); Text("Off").tag("off")

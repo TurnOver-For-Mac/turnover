@@ -57,11 +57,20 @@ revert the settings (NVDA+Control+C, R), the log (NVDA+F1), the app module (NVDA
 9. **Alt+Up and Down Arrow** (NVDA in Word: previous and next sentence). On a Mac keyboard Alt is Command, and Command
    Up and Down go to the top and bottom. Recommended: the sentence in Word only, as NVDA.
 
-## To build (build 23)
+## Built for build 23
 
-- NVDA+U progress bar output, NVDA's way: a beep whose pitch rises with the percentage as a progress bar moves (a
-  download in the App Store, a copy in Finder), with the spoken percentage as the other setting. Asked for by Oliver on
-  27 Oct 2026: "that's a good thing to have".
+- NVDA+U progress bar output, NVDA's way (asked for by Oliver on 27 Oct 2026: "that's a good thing to have"; built 2
+  Nov 2026, ProgressOutput.swift). Beep, Speak, Both or Off, cycled in NVDA's order with NVDA's words. A beep for each
+  percent, 40 ms, from 110 Hz at 0 to 1760 Hz at 100; the percentage each 10 percent. The default stays Speak until
+  Oliver has heard the beeps (NVDA's is Beep). The Mac style has no key (VO-U is the rotor): Progress bars is in the
+  Verbosity list (VO-V) and in Settings, General.
+- A watched bar's own value changes are looked at as they come (at most every 50 ms) while it beeps, so the beeps keep
+  up with it; Speak alone keeps to one look a second, as in 22.5. With VoiceOver running alongside and VoiceOver's
+  sounds chosen, TurnOver's tones are off (Tones.own), so Beep is silent there.
+- Not yet as NVDA: a bar is followed once TurnOver has read it (the focus, or the cursor moving to it), not as soon as
+  any bar in the front window moves. A Finder copy window's bar is heard after moving to it. Following unread bars
+  needs a cheap way to find them: the value-changed path is kept almost free because Safari sends a thousand a second
+  while a page loads.
 
 ## Not built (no Mac form, or to decide)
 

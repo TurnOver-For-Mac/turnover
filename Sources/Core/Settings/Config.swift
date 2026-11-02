@@ -468,8 +468,11 @@ public struct Config: Codable {
         public var reportNotifications = true
         /// "Bambu Studio, with the Bambu Studio plugin" as an app with a plugin comes to the front (the plugin design notes 13).
         public var announcePlugins = true
+        /// A progress bar as it moves (ProgressOutput, NVDA+U): "beep", "speak", "both" or "off". NVDA beeps by
+        /// default; TurnOver keeps the spoken percentage until Oliver has heard the beeps (2 Nov 2026).
+        public var progressBars = "speak"
         public init() {}
-        enum Keys: String, CodingKey { case verbosity, verbosityByApp, reportObjectDescriptions, reportKeyboardShortcuts, reportObjectPositionInformation, reportDynamicContentChanges, speakHints, reportNotifications, announcePlugins }
+        enum Keys: String, CodingKey { case verbosity, verbosityByApp, reportObjectDescriptions, reportKeyboardShortcuts, reportObjectPositionInformation, reportDynamicContentChanges, speakHints, reportNotifications, announcePlugins, progressBars }
         // Each setting falls back on its own: a settings file from before speakHints keeps the others.
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: Keys.self)
@@ -485,6 +488,7 @@ public struct Config: Codable {
             speakHints = (try? c.decodeIfPresent(Bool.self, forKey: .speakHints)) ?? true
             reportNotifications = (try? c.decodeIfPresent(Bool.self, forKey: .reportNotifications)) ?? true
             announcePlugins = (try? c.decodeIfPresent(Bool.self, forKey: .announcePlugins)) ?? true
+            progressBars = (try? c.decodeIfPresent(String.self, forKey: .progressBars)).flatMap { ProgressOutput.modes.contains($0) ? $0 : nil } ?? "speak"
         }
         public func encode(to encoder: Encoder) throws {
             var c = encoder.container(keyedBy: Keys.self)
@@ -492,7 +496,7 @@ public struct Config: Codable {
             try c.encode(reportObjectDescriptions, forKey: .reportObjectDescriptions); try c.encode(reportKeyboardShortcuts, forKey: .reportKeyboardShortcuts)
             try c.encode(reportObjectPositionInformation, forKey: .reportObjectPositionInformation); try c.encode(reportDynamicContentChanges, forKey: .reportDynamicContentChanges)
             try c.encode(speakHints, forKey: .speakHints); try c.encode(reportNotifications, forKey: .reportNotifications)
-            try c.encode(announcePlugins, forKey: .announcePlugins)
+            try c.encode(announcePlugins, forKey: .announcePlugins); try c.encode(progressBars, forKey: .progressBars)
         }
     }
     public struct DocumentFormatting: Codable {

@@ -3046,6 +3046,21 @@
         }
       }
     },
+    "Beep" : {
+
+    },
+    "Beep and speak" : {
+
+    },
+    "Beep and speak progress bar updates" : {
+      "comment" : "The progress bar setting (NVDA+U): beeps and the percentage"
+    },
+    "Beep for progress bar updates" : {
+      "comment" : "The progress bar setting (NVDA+U): beeps that rise in pitch"
+    },
+    "Beeps that rise in pitch as a progress bar moves, the percentage spoken, both, or nothing" : {
+
+    },
     "Before the words, as NVDA" : {
       "localizations" : {
         "tr" : {
@@ -8882,6 +8897,9 @@
         }
       }
     },
+    "No progress bar updates" : {
+      "comment" : "The progress bar setting (NVDA+U): nothing"
+    },
     "No starter folder found. Choose Write a plugin yourself, or Make a plugin, first." : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -10347,6 +10365,12 @@
           }
         }
       }
+    },
+    "Progress bars" : {
+
+    },
+    "Progress bars: beeps that rise in pitch, the percentage spoken, both, or nothing (NVDA+U)" : {
+      "comment" : "A command, as the key list and keyboard help say it"
     },
     "Punctuation" : {
       "localizations" : {
@@ -13356,6 +13380,12 @@
           }
         }
       }
+    },
+    "Speak progress bar updates" : {
+      "comment" : "The progress bar setting (NVDA+U): the percentage spoken"
+    },
+    "Speak the percentage" : {
+
     },
     "Speaks faster" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -17764,6 +17794,12 @@
           }
         }
       }
+    },
+    "beep" : {
+      "comment" : "A choice in the TurnOver menu"
+    },
+    "beep and speak" : {
+      "comment" : "A choice in the TurnOver menu"
     },
     "before the words, as NVDA" : {
       "comment" : "A choice in the TurnOver menu",
@@ -24628,6 +24664,9 @@
           }
         }
       }
+    },
+    "speak the percentage" : {
+      "comment" : "A choice in the TurnOver menu"
     },
     "speak typed characters %@" : {
       "comment" : "Typing echo changed: %@ is off, in edit controls or always",

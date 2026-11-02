@@ -6,6 +6,16 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
 
+### Added
+
+- Progress bars can beep as they move, as in NVDA: a short beep for each percent, rising in pitch from low at 0 to high
+  at 100. Choose Beep, Speak the percentage (as before), Beep and speak, or Off in Settings, General, or in the
+  Verbosity list (VO-V). With NVDA keys, NVDA+U goes through them. A bar's beeps keep up with it as it moves, rather
+  than once a second. App Store downloads follow the same choice: beeps, or the app's name and percentage every 10
+  percent while the App Store is in front (it was every quarter, wherever you were), and "installed" at the end, as
+  before. A page's progress bar is now a line in browse
+  mode, so it can be read and followed.
+
 ### Changed
 
 - Braille: panning to another line moves the caret there, so the arrows carry on from the line read. The Braille section of Settings offers Line by line (the default), To the text shown, or Off. Tethered to review, panning moves only the review cursor.

@@ -142,6 +142,9 @@ extension GlobalCommands {
             if let d = API.focusTreeInterceptor { d.buffer.isDirty = true; d.buffer.build() }
             Speech.speakMessage(config.virtualBuffers.screenLayout ? String(localized: "Use screen layout on", comment: "Spoken message") : String(localized: "Use screen layout off", comment: "Spoken message"))
         }
+        add("progressBarOutput", String(localized: "Progress bars: beeps that rise in pitch, the percentage spoken, both, or nothing (NVDA+U)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+u"]) { _ in
+            ProgressOutput.cycleMode()
+        }
         add("audioDucking", String(localized: "Audio ducking: no ducking, duck when outputting speech, always duck (NVDA+Shift+D)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+shift+d"]) { _ in
             Ducking.cycle()
         }
