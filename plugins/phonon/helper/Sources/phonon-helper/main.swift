@@ -58,19 +58,31 @@ Thread.detachNewThread {
 /// 2 Nov 2026): cut to 25 ms before the first sound and 60 ms after the last. A quiet stretch inside the speech is
 /// held back until sound follows it, so pauses between words stay. The threshold is low, as Kokoro's helper's is, so a
 /// soft first sound (the s of "Send") isn't cut.
+/// A single character ends at its first pause of 180 ms once 100 ms of it has been heard: Phonon often says a lone
+/// letter or digit again, or adds a stray sound, after 160 ms to 1.9 s of quiet (Oliver, 2 Nov 2026: "when I type a it
+/// says aa", "fragments of sound"; 22 of 132 letters and digits came in pieces, none of 240 words and numbers).
+/// Measured the same day in all 25 English voices: a letter's own pause is up to 131 ms (the k of x, the middle of
+/// three takes), and none of 750 takes of the letters and digits with one was cut at it; a faint f or th can leave up
+/// to 159 ms of quiet after its first 0 to 50 ms (four, five), which the 100 ms keeps whole.
 struct Trim {
     let threshold: Float = 0.004
-    var started = false
+    var endAfterQuiet: Int? = nil   // samples of quiet that end a single character
+    var started = false, ended = false
+    var heard = 0               // samples from the first sound to the last
     var lead: [Float] = []      // before the first sound: the last 25 ms are kept
     var quiet: [Float] = []     // since the last sound
     mutating func add(_ s: [Float]) -> [Float] {
         var out: [Float] = []
-        for x in s {
+        for x in s where !ended {
             if abs(x) > threshold {
                 if !started { started = true; out += lead.suffix(rate * 25 / 1000); lead = [] }
+                heard += quiet.count + 1
                 out += quiet; quiet = []
                 out.append(x)
-            } else if started { quiet.append(x) } else { lead.append(x) }
+            } else if started {
+                quiet.append(x)
+                if let n = endAfterQuiet, quiet.count >= n, heard >= rate / 10 { ended = true }
+            } else { lead.append(x) }
         }
         return out
     }
@@ -184,7 +196,7 @@ struct Voicing {
 /// 2 Nov 2026, "the volume of the voices you've added are slightly lower than system voices").
 let level: Float = 2.0
 
-/// Short things said again and again (menu items, "button", a letter) come from here, at once.
+/// Short things said again and again (menu items, "button") come from here, at once.
 var cache: [String: [Float]] = [:], cacheOrder: [String] = []
 @MainActor func remember(_ key: String, _ s: [Float]) {
     cache[key] = s; cacheOrder.append(key)
@@ -210,7 +222,8 @@ for await r in requests {
         log("\(r.id) first audio \(Int(Date().timeIntervalSince(t) * 1000)) ms, \(r.voice), remembered")
         send(r.id, []); cancelled.done(r.id); continue
     }
-    var trim = Trim(), stretch = Stretch(speed: r.speed), voicing = Voicing(), all: [Float] = [], first = true
+    let single = r.text.trimmingCharacters(in: .whitespacesAndNewlines).count == 1
+    var trim = Trim(endAfterQuiet: single ? rate * 180 / 1000 : nil), stretch = Stretch(speed: r.speed), voicing = Voicing(), all: [Float] = [], first = true
     func out(_ raw: [Float]) {
         guard !raw.isEmpty else { return }
         let s = voicing.run(raw)
@@ -224,11 +237,13 @@ for await r in requests {
         for try await frame in session.frames {
             if cancelled.has(r.id) { await session.cancel(); break }
             out(stretch.add(trim.add(frame.samples)))
+            if trim.ended { await session.cancel(); break }
         }
         if !cancelled.has(r.id) {
             out(stretch.add(trim.finish()))
             out(stretch.finish())
-            if r.text.count <= 60, !all.isEmpty { remember(key, all) }
+            // Not a single character: a rare take said twice would then be said twice all session.
+            if !single, r.text.count <= 60, !all.isEmpty { remember(key, all) }
         }
     } catch { log("error \(r.id): \(error)") }
     send(r.id, [])
