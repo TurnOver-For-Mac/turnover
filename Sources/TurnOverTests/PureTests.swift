@@ -342,6 +342,56 @@ func pureTests() {
         expect(o.script(for: g)?.name, nil)
         expect(o.script(named: "first")?.name, "first")
     }
+    test("voices: each keeps its own rate, volume and EQ, and a new one starts from the voice before") {
+        var s = Config.Speech()
+        s.rate = 0.7; s.volume = 100; s.bass = 0
+        s.switchTuning(from: "alex", to: "external:en_gb_Maeve")
+        expect(s.rate, 0.7, "a voice with nothing of its own starts from the one before")
+        s.rate = 0.6; s.volume = 140; s.bass = 4
+        s.switchTuning(from: "external:en_gb_Maeve", to: "alex")
+        expect(s.rate, 0.7); expect(s.volume, 100); expect(s.bass, 0)
+        s.switchTuning(from: "alex", to: "external:en_gb_Maeve")
+        expect(s.rate, 0.6); expect(s.volume, 140); expect(s.bass, 4)
+        s.switchTuning(from: "external:en_gb_Maeve", to: "external:en_gb_Maeve")
+        expect(s.volume, 140, "the same voice again changes nothing")
+        let back = try? JSONDecoder().decode(Config.Speech.self, from: JSONEncoder().encode(s))
+        expect(back?.voiceTunings["alex"]?.rate, 0.7, "kept in the settings file")
+    }
+    test("voices: a natural voice's speed follows the speech rate, as the Mac voices' does") {
+        expect(KokoroVoice.speed(forRate: 0.5), 1.0, "0.5 is the voice's own pace")
+        check(KokoroVoice.speed(forRate: 0.7) > 1.5 && KokoroVoice.speed(forRate: 0.7) < 1.6, "70 percent about one and a half times")
+        expect(KokoroVoice.speed(forRate: 1.0), 3.0, "kept to three times at the fastest")
+        expect(KokoroVoice.speed(forRate: 0.1), 0.5, "and half at the slowest")
+    }
+    test("voices: the EQ leaves a flat voice alone and lifts the bass of a low tone") {
+        let format = AVAudioFormat(standardFormatWithSampleRate: 24000, channels: 1)!
+        func tone(_ hz: Double) -> AVAudioPCMBuffer {
+            let b = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4800)!
+            b.frameLength = 4800
+            for i in 0..<4800 { b.floatChannelData![0][i] = Float(0.1 * sin(2 * Double.pi * hz * Double(i) / 24000)) }
+            return b
+        }
+        func peak(_ b: AVAudioPCMBuffer) -> Float { (2400..<4800).map { abs(b.floatChannelData![0][$0]) }.max() ?? 0 }
+        var flat = SpeechEQ([0, 0, 0], sampleRate: 24000)
+        check(flat.isFlat, "nothing to do")
+        let low = tone(60); flat.run(low)
+        check(abs(peak(low) - 0.1) < 0.001, "untouched (\(peak(low)))")
+        var bass = SpeechEQ([6, 0, 0], sampleRate: 24000)
+        let boosted = tone(60); bass.run(boosted)
+        // +6 dB of bass, less the 6 dB of headroom taken first: about as loud as before at 60 Hz, and quieter at 3 kHz.
+        check(abs(peak(boosted) - 0.1) < 0.02, "the low tone keeps its level (\(peak(boosted)))")
+        var bass2 = SpeechEQ([6, 0, 0], sampleRate: 24000)
+        let high = tone(3000); bass2.run(high)
+        check(peak(high) < 0.06, "a high tone is lowered by the headroom (\(peak(high)))")
+    }
+    test("natural voices: Phonon's and Kokoro's voices by name and accent") {
+        expect(KokoroVoice.displayName("en_gb_Maeve"), "Maeve, British")
+        expect(KokoroVoice.displayName("en_us_Zoey"), "Zoey, American")
+        expect(KokoroVoice.displayName("en_gb_Elodie-Rose"), "Elodie Rose, British")
+        expect(KokoroVoice.displayName("bf_emma"), "Emma, British")
+        expect(KokoroVoice.displayName("am_adam"), "Adam, American")
+        check(KokoroVoice.phononVoices.allSatisfy { $0.hasPrefix("en_gb_") || $0.hasPrefix("en_us_") }, "every Phonon voice is British or American English")
+    }
     test("kokoro: audio frames split anywhere by the pipe come out whole") {
         let r = KokoroVoice.selfTest()
         check(r.samples == 440 && r.ended, "got \(r.samples) samples, ended \(r.ended)")

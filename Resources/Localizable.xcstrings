@@ -57,6 +57,17 @@
         }
       }
     },
+    "%@ %@. The harbour opens at nine." : {
+      "comment" : "The EQ changed: %1$@ is bass, middle or treble, %2$@ the decibels",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@. The harbour opens at nine."
+          }
+        }
+      }
+    },
     "%@ Report the problem at github.com/TurnOver-For-Mac/turnover/issues." : {
       "comment" : "Feedback: %@ says where the report is",
       "localizations" : {
@@ -321,6 +332,9 @@
           }
         }
       }
+    },
+    "%@ decibels" : {
+      "comment" : "An EQ slider's value"
     },
     "%@ dialog" : {
       "comment" : "A dialog in front: %@ is its app (Windows style)",
@@ -1632,6 +1646,7 @@
       }
     },
     "%@, natural" : {
+      "comment" : "A natural voice in the voice list: its name and accent",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -6765,6 +6780,7 @@
     },
     "Kokoro speed" : {
       "comment" : "A speech setting in the speech settings ring",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -6776,6 +6792,7 @@
     },
     "Kokoro speed %@." : {
       "comment" : "Kokoro's speed changed: %@ is the speed",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -8493,7 +8510,11 @@
         }
       }
     },
+    "Natural voice" : {
+
+    },
     "Natural voice speed" : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -12428,6 +12449,7 @@
       }
     },
     "Say all" : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -12438,6 +12460,7 @@
       }
     },
     "Say all reads ahead in the natural voice; moving around and typing stay in your speech voice." : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -15176,6 +15199,9 @@
           }
         }
       }
+    },
+    "The voice above is a natural voice, so it speaks everything, with the rate, volume and EQ above. Other languages and raised capitals keep the Mac voice chosen before it, which also steps in if the natural voice is slow." : {
+
     },
     "The welcome pages" : {
       "localizations" : {

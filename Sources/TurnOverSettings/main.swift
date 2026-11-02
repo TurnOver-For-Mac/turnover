@@ -198,9 +198,20 @@ struct SpeechView: View {
         let extra = voiceLists.all.filter { $0.identifier == current }
         return voiceLists.offered + extra
     }
-    private let natural = ["af_alloy", "af_aoede", "af_bella", "af_heart", "af_jessica", "af_kore", "af_nicole", "af_nova", "af_river",
-                           "af_sarah", "af_sky", "am_adam", "am_echo", "am_eric", "am_fenrir", "am_liam", "am_michael", "am_onyx",
-                           "am_puck", "am_santa", "bf_alice", "bf_emma", "bf_isabella", "bf_lily", "bm_daniel", "bm_fable", "bm_george", "bm_lewis"]
+    /// The natural voices as entries of the Voice list and the rotor ("external:…"), named by TurnOver.
+    private var naturalEntries: [(id: String, name: String)] {
+        ((model.special("_naturalVoiceEntries") as? [[String: Any]]) ?? []).compactMap { d in
+            guard let id = d["id"] as? String, let name = d["name"] as? String else { return nil }
+            return (id, name)
+        }
+    }
+    /// The natural voices this Mac has (Phonon's, or Kokoro's without Phonon's helper), named by TurnOver.
+    private var natural: [(id: String, name: String)] {
+        ((model.special("_kokoroVoices") as? [[String: Any]]) ?? []).compactMap { d in
+            guard let id = d["id"] as? String, let name = d["name"] as? String else { return nil }
+            return (id, name)
+        }
+    }
     private var rotorChosen: [String] { (model.state["speech"] as? [String: Any])?["rotorVoices"] as? [String] ?? [] }
     private var rotorCandidates: [AVSpeechSynthesisVoice] { voiceLists.rotorCandidates }
     private var outputDevices: [(uid: String, name: String)] {
@@ -221,14 +232,15 @@ struct SpeechView: View {
             return OtherLanguage(code: code, name: name, voices: voices)
         }
     }
-    private func naturalName(_ v: String) -> String {
-        v.hasPrefix("b") ? String(localized: "\(v.dropFirst(3).capitalized), British", comment: "A natural voice: its name and accent")
-            : String(localized: "\(v.dropFirst(3).capitalized), American", comment: "A natural voice: its name and accent")
-    }
     var body: some View {
         Form {
-            Picker("Voice", selection: model.string("speech", "voice", "")) {
+            // The natural voices are in the same list (2 Nov 2026): one chosen speaks everything, and the Mac voice
+            // chosen before it stays underneath for other languages and raised capitals.
+            Picker("Voice", selection: Binding(
+                get: { model.special("_speechVoice") as? String ?? (model.get("speech", "voice") as? String ?? "") },
+                set: { v in model.setSpecial("_speechVoice", v) })) {
                 ForEach(voices, id: \.identifier) { v in Text(voiceLists.label(for: v)).tag(v.identifier) }
+                ForEach(naturalEntries, id: \.id) { Text($0.name).tag($0.id) }
             }
             Slider(value: model.percent("speech", "rate"), in: 10...100, step: 5) { Text("Rate") }
                 .accessibilityValue("\(Int(model.percent("speech", "rate").wrappedValue)) percent")
@@ -236,6 +248,12 @@ struct SpeechView: View {
                 .accessibilityValue("\(Int(model.percent("speech", "pitch").wrappedValue)) percent")
             Slider(value: model.number("speech", "volume"), in: 10...200, step: 10) { Text("Volume") }
                 .accessibilityValue("\(Int(model.number("speech", "volume").wrappedValue)) percent")
+            // The EQ, for every voice (2 Nov 2026); each voice keeps its own, with its rate and volume.
+            ForEach([("Bass", "bass"), ("Middle", "middle"), ("Treble", "treble")], id: \.1) { name, key in
+                let db = model.number("speech", key).wrappedValue
+                Slider(value: model.number("speech", key), in: -12...12, step: 1) { Text(name) }
+                    .accessibilityValue(db == 0 ? "0" : String(localized: "\(String(format: "%+.0f", db)) decibels", comment: "An EQ slider's value"))
+            }
             Picker("Punctuation", selection: model.int("speech", "symbolLevel")) {
                 Text("None").tag(0); Text("Some").tag(1); Text("Most").tag(2); Text("All").tag(3)
             }
@@ -267,6 +285,16 @@ struct SpeechView: View {
                             : String(localized: "Voices in the rotor: \(String(rotorChosen.count)) chosen", comment: "A group in Speech settings")) {
                 Text(rotorChosen.isEmpty ? String(localized: "Every voice: tick the ones you want VO-Command-Shift to step through.", comment: "Speech settings")
                      : String(localized: "\(String(rotorChosen.count)) chosen for VO-Command-Shift.", comment: "Speech settings")).font(.caption)
+                // The natural voices first: after every Mac voice they were easy to miss (2 Nov 2026).
+                ForEach(naturalEntries, id: \.id) { v in
+                    Toggle(v.name, isOn: Binding(
+                        get: { rotorChosen.contains(v.id) },
+                        set: { on in
+                            var list = rotorChosen.filter { $0 != v.id }
+                            if on { list.append(v.id) }
+                            model.set("speech", "rotorVoices", list)
+                        }))
+                }
                 ForEach(rotorCandidates, id: \.identifier) { v in
                     Toggle("\(v.name), \(Locale.current.localizedString(forIdentifier: v.language) ?? v.language)", isOn: Binding(
                         get: { rotorChosen.contains(v.identifier) },
@@ -277,16 +305,21 @@ struct SpeechView: View {
                         }))
                 }
             }
+            // The natural voice (2 Nov 2026): chosen in Voice above for all speech, or here for say all only; its speed
+            // and EQ.
             if model.special("_kokoroAvailable") as? Bool == true {
-                Section("Say all") {
-                    Picker("Say all voice", selection: Binding(
-                        get: { (model.special("_kokoroMode") as? String) == "off" ? "same" : (model.special("_kokoroVoice") as? String ?? "bf_emma") },
-                        set: { v in if v == "same" { model.setSpecial("_kokoroMode", "off") } else { model.setSpecial("_kokoroVoice", v); model.setSpecial("_kokoroMode", "reading") } })) {
-                        Text("Same as speech").tag("same")
-                        ForEach(natural, id: \.self) { Text("\(naturalName($0)), natural").tag($0) }
+                let mode = model.special("_kokoroMode") as? String ?? "off"
+                Section("Natural voice") {
+                    if mode == "everything" {
+                        Text("The voice above is a natural voice, so it speaks everything, with the rate, volume and EQ above. Other languages and raised capitals keep the Mac voice chosen before it, which also steps in if the natural voice is slow.").font(.caption)
+                    } else {
+                        Picker("Say all voice", selection: Binding(
+                            get: { mode == "reading" ? (model.special("_kokoroVoice") as? String ?? "") : "same" },
+                            set: { v in if v == "same" { model.setSpecial("_kokoroMode", "off") } else { model.setSpecial("_kokoroVoice", v); model.setSpecial("_kokoroMode", "reading") } })) {
+                            Text("Same as speech").tag("same")
+                            ForEach(natural, id: \.id) { Text($0.name).tag($0.id) }
+                        }
                     }
-                    Slider(value: Binding(get: { model.special("_kokoroSpeed") as? Double ?? 1.1 }, set: { model.setSpecial("_kokoroSpeed", ($0 * 10).rounded() / 10) }), in: 0.6...2.0, step: 0.1) { Text("Natural voice speed") }
-                    Text("Say all reads ahead in the natural voice; moving around and typing stay in your speech voice.").font(.caption)
                 }
             }
         }.formStyle(.grouped).navigationTitle("Speech")

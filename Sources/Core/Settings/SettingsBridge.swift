@@ -95,7 +95,9 @@ public enum SettingsBridge {
         dict["_kokoroAvailable"] = KokoroVoice.available
         dict["_kokoroMode"] = KokoroVoice.mode
         dict["_kokoroVoice"] = KokoroVoice.voice
-        dict["_kokoroSpeed"] = KokoroVoice.speed
+        dict["_kokoroVoices"] = KokoroVoice.voices.map { ["id": $0, "name": KokoroVoice.displayName($0)] }
+        dict["_speechVoice"] = KokoroVoice.speechVoiceID
+        dict["_naturalVoiceEntries"] = KokoroVoice.voiceEntries.map { ["id": $0.id, "name": $0.name] }
         dict["_coexist"] = Coexist.wouldBeOn
         dict["_outputDevices"] = SpeechPlayer.outputDevices().map { ["uid": $0.uid, "name": $0.name] }
         dict["_speechPortApps"] = SpeechPort.shared.appDecisions.map { ["id": $0.id, "name": $0.name, "allowed": $0.allowed] }
@@ -106,12 +108,29 @@ public enum SettingsBridge {
         if let reply { reply(["op": "state", "json": s]) } else { ControlServer.shared.broadcast(["op": "state", "json": s]) }
     }
 
+    /// A sample once a slider has stopped: one at each step of a drag was a run of cut-off pieces (a review, 2 Nov 2026).
+    private static var previewGeneration = 0
+    private static func previewSoon(_ text: String) {
+        previewGeneration += 1
+        let g = previewGeneration
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { if g == previewGeneration { Speech.speakMessage(text) } }
+    }
+
     static func apply(_ json: String) {
         guard let data = json.data(using: .utf8), let patch = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
         // Outside the file.
-        if let m = patch["_kokoroMode"] as? String { KokoroVoice.mode = m == "off" ? "off" : "reading" }
-        if let v = patch["_kokoroVoice"] as? String, KokoroVoice.englishVoices.contains(v) { KokoroVoice.voice = v; KokoroVoice.mode = "reading"; KokoroVoice.preview(v) }
-        if let s = patch["_kokoroSpeed"] as? Double { KokoroVoice.speed = min(2, max(0.6, s)) }
+        if let m = patch["_kokoroMode"] as? String { KokoroVoice.mode = ["off", "everything"].contains(m) ? m : "reading" }
+        // The Voice list, Mac voices and natural ones alike: each voice with its own rate, volume and EQ.
+        if let v = patch["_speechVoice"] as? String {
+            VoiceTunings.switchTo(v)
+            if v.hasPrefix("external:") { KokoroVoice.preview(KokoroVoice.voice) }
+        }
+        if let v = patch["_kokoroVoice"] as? String, KokoroVoice.voices.contains(v) {
+            KokoroVoice.voice = v
+            if KokoroVoice.mode == "off" { KokoroVoice.mode = "reading" }
+            KokoroVoice.preview(v)
+        }
+
         if patch["_restartSteam"] as? Bool == true { Games.restartSteam() }
         if let a = patch["_speechPortAllowed"] as? [String: Any], let id = a["id"] as? String, let on = a["allowed"] as? Bool { SpeechPort.shared.setAllowed(id, on) }
         if let on = patch["_coexist"] as? Bool, on != Coexist.wouldBeOn {
@@ -154,6 +173,10 @@ public enum SettingsBridge {
             if before.applications.swapWithVoiceOver != next.applications.swapWithVoiceOver { onSwapChanged?(next.applications.swapWithVoiceOver) }
             // Steam's switches from the window do what the menu's do.
             if before.games.readBigPicture != next.games.readBigPicture { Games.restartBigPicture() }
+            // The EQ heard as it is set: a short sample once the slider stops.
+            for (name, was, now) in [("Bass", before.speech.bass, next.speech.bass), ("Middle", before.speech.middle, next.speech.middle), ("Treble", before.speech.treble, next.speech.treble)] where was != now {
+                previewSoon(String(localized: "\(name) \(String(Int(now))). The harbour opens at nine.", comment: "The EQ changed: %1$@ is bass, middle or treble, %2$@ the decibels"))
+            }
             let voiceChanged = before.speech.voice != next.speech.voice
             let languageVoicesChanged = before.speech.languageVoices != next.speech.languageVoices
             if voiceChanged || languageVoicesChanged { Languages.forget(); languagesState = nil }

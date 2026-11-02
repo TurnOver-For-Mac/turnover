@@ -71,6 +71,7 @@ public enum Core {
         startStep = "the voice"
         Speech.player.volume = Float(config.speech.volume) / 100
         Speech.player.pitch = config.speech.pitchMultiplier
+        Speech.player.eq = config.speech.eq
         Speech.player.onOutputChange = { line in Log.io(line) }
         if !config.speech.outputDevice.isEmpty {
             Log.info("speech: output chosen in settings: \(config.speech.outputDevice)")

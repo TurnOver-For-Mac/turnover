@@ -467,16 +467,17 @@ enum SynthRing {
     /// The last stop, "sync with VoiceOver" (16 Oct 2026): Up or Down there copies VoiceOver's settings.
     /// VoiceOver's order, as far as it is known (volume, rate, pitch, voice; 17 Oct 2026, to confirm by ear), then
     /// punctuation and the sync.
-    static var settings: [String] { ["volume", "rate", "pitch", "voice", "punctuation"] + (KokoroVoice.available && KokoroVoice.mode != "off" ? ["Kokoro speed"] : []) + ["sync with VoiceOver"] }
+    static var settings: [String] { ["volume", "rate", "pitch", "voice", "punctuation", "sync with VoiceOver"] }
     nonisolated(unsafe) static var index = 1
 
     static func value(_ s: String) -> String {
         switch s {
-        case "voice": return AVSpeechSynthesisVoice(identifier: config.speech.voice)?.name ?? config.speech.voice
+        case "voice":
+            let id = KokoroVoice.speechVoiceID
+            return KokoroVoice.voiceEntries.first { $0.id == id }?.name ?? AVSpeechSynthesisVoice(identifier: id)?.name ?? id
         case "rate": return "\(Int((config.speech.rate * 100).rounded()))"
         case "pitch": return "\(Int((config.speech.pitch * 100).rounded()))"
         case "volume": return "\(config.speech.volume)"
-        case "Kokoro speed": return String(format: "%.1f", KokoroVoice.speed)
         case "sync with VoiceOver": return String(localized: "up or down copies VoiceOver's voice, rate, pitch and volume", comment: "The speech settings ring's last stop")
         default: return config.speech.symbolLevel.name
         }
@@ -495,19 +496,21 @@ enum SynthRing {
         case "pitch": return String(localized: "pitch", comment: "A speech setting in the speech settings ring")
         case "voice": return String(localized: "voice", comment: "A speech setting in the speech settings ring")
         case "punctuation": return String(localized: "punctuation", comment: "A speech setting in the speech settings ring")
-        case "Kokoro speed": return String(localized: "Kokoro speed", comment: "A speech setting in the speech settings ring")
         case "sync with VoiceOver": return String(localized: "sync with VoiceOver", comment: "A speech setting in the speech settings ring")
         default: return s
         }
     }
 
-    static func voices() -> [AVSpeechSynthesisVoice] {
+    /// The Mac's voices in your languages and the natural ones (2 Nov 2026), as identifier and name.
+    static func voices() -> [(id: String, name: String)] {
         let wanted = Set(Locale.preferredLanguages.map { String($0.prefix(2)) } + ["en"])
-        let all = AVSpeechSynthesisVoice.speechVoices().filter { wanted.contains(String($0.language.prefix(2))) }.sorted { $0.name < $1.name }
+        let mac = AVSpeechSynthesisVoice.speechVoices().filter { wanted.contains(String($0.language.prefix(2))) }.sorted { $0.name < $1.name }
+        let all = mac.map { (id: $0.identifier, name: $0.name) } + KokoroVoice.voiceEntries
         // Your own short list (Settings, Speech, Voices in the rotor), with the voice in use always among them.
         let chosen = Set(config.speech.rotorVoices)
         guard !chosen.isEmpty else { return all }
-        let mine = all.filter { chosen.contains($0.identifier) || $0.identifier == config.speech.voice }
+        let current = KokoroVoice.speechVoiceID
+        let mine = all.filter { chosen.contains($0.id) || $0.id == current }
         return mine.isEmpty ? all : mine
     }
 
@@ -544,11 +547,9 @@ enum SynthRing {
         case "voice":
             let all = voices()
             guard !all.isEmpty else { return }
-            let i = all.firstIndex { $0.identifier == config.speech.voice } ?? 0
-            let v = all[(i + by * (large ? 5 : 1) + all.count * 5) % all.count]
-            config.speech.voice = v.identifier
-            Speech.player.voiceIdentifier = v.identifier
-            Languages.forget()
+            let current = KokoroVoice.speechVoiceID
+            let i = all.firstIndex { $0.id == current } ?? 0
+            VoiceTunings.switchTo(all[(i + by * (large ? 5 : 1) + all.count * 5) % all.count].id)
         case "rate":
             config.speech.rate = min(1.0, max(0.1, config.speech.rate + Float(by) * (large ? 0.2 : 0.05)))
             Speech.player.rate = config.speech.rate
@@ -560,10 +561,6 @@ enum SynthRing {
             Speech.player.volume = Float(config.speech.volume) / 100
         case "sync with VoiceOver":
             VoiceOverSettings.startFlow()
-            return
-        case "Kokoro speed":
-            KokoroVoice.speed = min(2.0, max(0.6, ((KokoroVoice.speed + Double(by) * (large ? 0.3 : 0.1)) * 10).rounded() / 10))
-            KokoroVoice.preview(KokoroVoice.voice, text: String(localized: "Kokoro speed \(String(format: "%.1f", KokoroVoice.speed)).", comment: "Kokoro's speed changed: %@ is the speed"))
             return
         default:
             let all = SymbolLevel.allCases

@@ -171,9 +171,26 @@ public struct Config: Codable {
         /// The voices the speech rotor (VO-Command-Shift, voice) steps through, by identifier; empty, every voice of the
         /// Mac's languages (18 Oct 2026: "just Alex and Eddy… rather than wading through all the novelty ones").
         public var rotorVoices: [String] = []
+        /// Bass, middle and treble in decibels, -12 to 12, for the voice in use (SpeechEQ; 2 Nov 2026).
+        public var bass = 0.0, middle = 0.0, treble = 0.0
+        /// Each voice's own rate, volume and EQ, by voice (a Mac voice's identifier, or "external:" and a natural
+        /// voice): kept as the voice is left and put back as it is chosen again (Oliver, 2 Nov 2026: "rate, volume,
+        /// and the eq should be specific to each voice"). `rate`, `volume` and the EQ above are the voice in use's.
+        public var voiceTunings: [String: VoiceTuning] = [:]
+        public struct VoiceTuning: Codable, Equatable {
+            public var rate: Float, volume: Int, bass: Double, middle: Double, treble: Double
+        }
+        /// Leaving one voice for another: the one left keeps what it has now; the one chosen gets back its own, or
+        /// starts from these if it has none yet.
+        public mutating func switchTuning(from old: String, to new: String) {
+            guard old != new else { return }
+            voiceTunings[old] = VoiceTuning(rate: rate, volume: volume, bass: bass, middle: middle, treble: treble)
+            guard let t = voiceTunings[new] else { return }
+            rate = t.rate; volume = t.volume; bass = t.bass; middle = t.middle; treble = t.treble
+        }
         public init() {}
         // Each field falls back to its default, so a setting added later never resets the voice and rate.
-        enum Keys: String, CodingKey { case voice, rate, symbolLevel, sayCapForCapitals, volume, autoLanguageSwitching, languageVoices, languageRates, outputDevice, capitalPitch, ducking, pitch, rotorVoices }
+        enum Keys: String, CodingKey { case voice, rate, symbolLevel, sayCapForCapitals, volume, autoLanguageSwitching, languageVoices, languageRates, outputDevice, capitalPitch, ducking, pitch, rotorVoices, bass, middle, treble, voiceTunings }
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: Keys.self)
             voice = (try? c.decodeIfPresent(String.self, forKey: .voice)) ?? voice
@@ -189,6 +206,10 @@ public struct Config: Codable {
             pitch = (try? c.decodeIfPresent(Float.self, forKey: .pitch)) ?? pitch
             ducking = (try? c.decodeIfPresent(String.self, forKey: .ducking)) ?? ducking
             rotorVoices = (try? c.decodeIfPresent([String].self, forKey: .rotorVoices)) ?? rotorVoices
+            bass = (try? c.decodeIfPresent(Double.self, forKey: .bass)) ?? bass
+            middle = (try? c.decodeIfPresent(Double.self, forKey: .middle)) ?? middle
+            treble = (try? c.decodeIfPresent(Double.self, forKey: .treble)) ?? treble
+            voiceTunings = (try? c.decodeIfPresent([String: VoiceTuning].self, forKey: .voiceTunings)) ?? voiceTunings
         }
         public func encode(to encoder: Encoder) throws {
             var c = encoder.container(keyedBy: Keys.self)
@@ -198,7 +219,11 @@ public struct Config: Codable {
             try c.encode(languageRates, forKey: .languageRates); try c.encode(outputDevice, forKey: .outputDevice)
             try c.encode(capitalPitch, forKey: .capitalPitch); try c.encode(ducking, forKey: .ducking); try c.encode(pitch, forKey: .pitch)
             try c.encode(rotorVoices, forKey: .rotorVoices)
+            try c.encode(bass, forKey: .bass); try c.encode(middle, forKey: .middle); try c.encode(treble, forKey: .treble)
+            try c.encode(voiceTunings, forKey: .voiceTunings)
         }
+        /// The EQ as the speech player takes it.
+        public var eq: [Float] { [Float(bass), Float(middle), Float(treble)] }
     }
     public struct Keyboard: Codable {
         public var speakTypedCharacters: TypingEcho = .editControls
