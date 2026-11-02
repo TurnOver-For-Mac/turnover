@@ -35,12 +35,18 @@ Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
   display does not hold up speech. Reads and writes cannot enter each other while a driver waits, the latest
   pending frame is kept, and handing back to VoiceOver waits for the driver to unload.
 
+- VoiceOver keys: VO-Shift-L only describes: the picture under the cursor, or anywhere else what the window looks
+  like. VO-Shift-Y, a key of TurnOver's own (VoiceOver has none for it), recognises the window's text to read and
+  click, which VO-Shift-L used to do away from a picture. The notice for a window with nothing to read names both.
+  Describing a window needs the Mac's on-device model (Apple Intelligence on). Where VoiceOver reads an app,
+  VO-Shift-Y is VoiceOver's; the TurnOver layer's R (Command Control Comma, then R) recognises there.
 - An app whose window accessibility doesn't report at all (Parallels Desktop's virtual machine) is treated as a window
   with nothing to read: TurnOver says so and names the screen recognition key, and screen recognition reads that
   app's window, not the whole screen with the windows behind it.
 - A window with nothing TurnOver can read (a custom-drawn or OpenGL window: Parallels' installation assistant, Bambu
   Studio's plate) says so a moment after it comes to the front, and names the key for screen recognition in the
-  keyboard style in use: VO-Shift-L with VoiceOver keys, the TurnOver key with R with NVDA or JAWS keys. It said
+  keyboard style in use: VO-Shift-Y with VoiceOver keys (and VO-Shift-L to describe it), the TurnOver key with R with
+  NVDA or JAWS keys. It said
   "window" and then nothing. Issue 74.
 - The verbosity manager: Settings, Item details now lists what is said about an item, in the order it is said (name,
   kind, value, state, help text, keyboard shortcut, position, level), each on or off, moved up or down with a button.

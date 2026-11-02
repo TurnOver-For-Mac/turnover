@@ -4426,6 +4426,7 @@
     },
     "Describes the image or photo (VO-Shift-L)" : {
       "comment" : "A command, as the key list and keyboard help say it",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -4434,6 +4435,9 @@
           }
         }
       }
+    },
+    "Describes the image or photo; anywhere else, what the window looks like (VO-Shift-L)" : {
+      "comment" : "A command, as the key list and keyboard help say it"
     },
     "Describes the item with keyboard focus; twice, more about it (in text, where the insertion point is) (VO-F4, VO-F4-F4)" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -4448,6 +4452,7 @@
     },
     "Describes the picture under TurnOver's cursor: what it shows and any text in it" : {
       "comment" : "A command, as the key list and keyboard help say it",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -4456,6 +4461,12 @@
           }
         }
       }
+    },
+    "Describes the picture under TurnOver's cursor: what it shows and any text in it; anywhere else, what the window looks like" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
+    "Describing a window needs the Mac's own model, with Apple Intelligence on. %@ reads its text." : {
+      "comment" : "Spoken message: %@ is the key for screen recognition"
     },
     "Desktop, the number pad has its NVDA keys" : {
       "localizations" : {
@@ -9146,6 +9157,17 @@
         }
       }
     },
+    "Nothing in this window can be read. Press %@ to recognise its text, or %@ to describe it." : {
+      "comment" : "Spoken message: %1$@ is the key that recognises the text, %2$@ the key that describes the window",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nothing in this window can be read. Press %1$@ to recognise its text, or %2$@ to describe it."
+          }
+        }
+      }
+    },
     "Nothing in this window can be read. Press %@ to recognise the screen." : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -11301,6 +11323,9 @@
           }
         }
       }
+    },
+    "Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return (VO-Shift-Y, TurnOver's own)" : {
+      "comment" : "A command, as the key list and keyboard help say it"
     },
     "Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return. Pressed again in the result, recognises again" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -19136,6 +19161,9 @@
         }
       }
     },
+    "describing the window" : {
+      "comment" : "Spoken message"
+    },
     "deselected, %@ selected" : {
       "comment" : "An item taken out of the selection; how many are selected",
       "localizations" : {
@@ -26456,6 +26484,9 @@
           }
         }
       }
+    },
+    "the window could not be captured. TurnOver needs Screen Recording, in System Settings, Privacy and Security" : {
+      "comment" : "Spoken message"
     },
     "the window has moved; recognising again" : {
       "comment" : "Spoken message",

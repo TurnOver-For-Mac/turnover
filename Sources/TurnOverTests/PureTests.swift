@@ -1099,6 +1099,16 @@ func browseTextNavTests() {
         }
         expect(r.text.substring(with: r.rows[1].range), "Next, button")
     }
+    test("VoiceOver keys: VO-Shift-L describes, VO-Shift-Y recognises the screen's text") {
+        let saved = config
+        defer { config = saved }
+        config.general.keyboardStyle = "mac"
+        let vo = VoiceOverKeysPlugin()
+        expect(vo.script(for: KeyboardGesture(identifier: "kb:turnover+shift+l")!)?.name, "vo_describeImage")
+        expect(vo.script(for: KeyboardGesture(identifier: "kb:turnover+shift+y")!)?.name, "vo_recognizeScreen")
+        config.general.keyboardStyle = "windows"
+        expect(ScriptHandler.findScript(for: KeyboardGesture(identifier: "kb:turnover+r")!)?.name, "recognizeScreen", "NVDA keys keep TurnOver R")
+    }
     test("keyboard styles: the pieces of an announcement, commas in the Mac family, spaces in the Windows family") {
         let saved = config
         defer { config = saved }

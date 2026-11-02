@@ -478,7 +478,7 @@ could expose what a person reads or types is best reported privately, through th
 
 VOICEOVER KEYS: EVERY KEY
 
-This page is made from TurnOver's own command tables (`turnover-coretest --keys-reference`, 29 Oct 2026), so it matches the build it came with. Don't edit it by hand.
+This page is made from TurnOver's own command tables (`turnover-coretest --keys-reference`, 2 Nov 2026), so it matches the build it came with. Don't edit it by hand.
 
 The VoiceOver keys style (the Mac style): VoiceOver's own keys, doing what they do in VoiceOver. TurnOver in a key means the TurnOver key: Control and Option together (VO), or Caps Lock. Keys VoiceOver has that aren't listed here go to VoiceOver as usual where VoiceOver reads, and do nothing special where TurnOver reads. Keyboard help (the TurnOver menu, Keys) says what any key does without doing it; Command Control Comma, then Slash, lists the keys that work where you are.
 
@@ -628,7 +628,7 @@ VoiceOver keys
   TurnOver Shift Home: In text, the first word in view; elsewhere the first item in the group (VO-Shift-Home)
   TurnOver Shift J: Jumps to the input method or autocorrect panel (VO-Shift-J)
   TurnOver Shift K: Option key Commander on or off: right Option with a letter runs a command (VO-Shift-K)
-  TurnOver Shift L: Describes the image or photo (VO-Shift-L)
+  TurnOver Shift L: Describes the image or photo; anywhere else, what the window looks like (VO-Shift-L)
   TurnOver Shift M: The shortcut menu for the item (VO-Shift-M)
   TurnOver Shift N: Reads the hint for the item (VO-Shift-N)
   TurnOver Shift O: Opens or closes Control Centre (VO-Shift-O)
@@ -640,6 +640,7 @@ VoiceOver keys
   TurnOver Shift U: Reads a link's address (VO-Shift-U)
   TurnOver Shift W: Reads everything in the window (VO-Shift-W)
   TurnOver Shift X: The hot spot chooser (VO-Shift-X)
+  TurnOver Shift Y: Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return (VO-Shift-Y, TurnOver's own)
   TurnOver Shift Z: Save the last phrase to the Desktop; saves the last spoken phrase, with TurnOver's log, to a file on the Desktop (VO-Shift-Z)
   TurnOver Up arrow: Previous line in text; elsewhere the item above (VO-Up)
   TurnOver Command Down arrow: The next item of the rotor's kind (VO-Command-Down)
