@@ -28,6 +28,8 @@ Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
 - Settings has a Sounds section: whose sounds, the sounds as you move and press, what you hear as TurnOver takes over,
   progress bars, and lowering other sounds while TurnOver speaks (from General and Speech). With NVDA keys,
   NVDA+Control+U opens it, as it opens NVDA's Audio settings.
+- The speech settings ring ends at punctuation: its last stop, sync with VoiceOver, has gone. VoiceOver's settings
+  are copied from the TurnOver menu, Copy VoiceOver settings.
 - The Games item has gone from the TurnOver menu's Tools: game reading is always on, and Steam's Big Picture switch and
   Restart Steam are in Settings, Other apps' speech.
 - Braille: panning to another line moves the caret there, so the arrows carry on from the line read. The Braille section of Settings offers Line by line (the default), To the text shown, or Off. Tethered to review, panning moves only the review cursor.

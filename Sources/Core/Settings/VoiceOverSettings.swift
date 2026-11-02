@@ -305,7 +305,7 @@ extension VoiceOverSettings {
         config.save()
         Log.info("VoiceOver settings copied (archive version \(c.archiveVersion)): \(said.joined(separator: ", "))")
         let copied = String(localized: "VoiceOver settings copied: \(said.joined(separator: ", ")).", comment: "The VoiceOver settings copy done: %@ lists what was copied")
-        let again = String(localized: "Run it again whenever you change VoiceOver's settings: the TurnOver menu, or the speech settings' last stop, sync with VoiceOver.", comment: "The VoiceOver settings copy done")
+        let again = String(localized: "Run it again whenever you change VoiceOver's settings: the TurnOver menu, Copy VoiceOver settings.", comment: "The VoiceOver settings copy done")
         return [copied, voiceNote, again].filter { !$0.isEmpty }.joined(separator: " ")
     }
 

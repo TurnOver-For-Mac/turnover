@@ -12286,8 +12286,12 @@
         }
       }
     },
+    "Run it again whenever you change VoiceOver's settings: the TurnOver menu, Copy VoiceOver settings." : {
+      "comment" : "The VoiceOver settings copy done"
+    },
     "Run it again whenever you change VoiceOver's settings: the TurnOver menu, or the speech settings' last stop, sync with VoiceOver." : {
       "comment" : "The VoiceOver settings copy done",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -26169,6 +26173,7 @@
     },
     "sync with VoiceOver" : {
       "comment" : "A speech setting in the speech settings ring",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -27053,6 +27058,7 @@
     },
     "up or down copies VoiceOver's voice, rate, pitch and volume" : {
       "comment" : "The speech settings ring's last stop",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {

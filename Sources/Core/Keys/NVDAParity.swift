@@ -462,12 +462,13 @@ enum NVDAMouse {
 // MARK: - The synth settings ring
 
 enum SynthRing {
-    /// With Kokoro reading say all (the maintainer's Mac), its speed joins the ring.
+    /// A natural voice's speed is the rate, as a Mac voice's is; its voices are in the voice stop.
     /// VoiceOver's ring (16 Oct 2026: the chord and what it turns must feel the same): pitch is in it.
-    /// The last stop, "sync with VoiceOver" (16 Oct 2026): Up or Down there copies VoiceOver's settings.
+    /// (Its last stop was "sync with VoiceOver", 16 Oct 2026, until 2 Nov 2026: Oliver, "I don't think it fits there
+    /// really, it's already in the TurnOver menu".)
     /// VoiceOver's order, as far as it is known (volume, rate, pitch, voice; 17 Oct 2026, to confirm by ear), then
-    /// punctuation and the sync.
-    static var settings: [String] { ["volume", "rate", "pitch", "voice", "punctuation", "sync with VoiceOver"] }
+    /// punctuation.
+    static var settings: [String] { ["volume", "rate", "pitch", "voice", "punctuation"] }
     nonisolated(unsafe) static var index = 1
 
     static func value(_ s: String) -> String {
@@ -478,7 +479,6 @@ enum SynthRing {
         case "rate": return "\(Int((config.speech.rate * 100).rounded()))"
         case "pitch": return "\(Int((config.speech.pitch * 100).rounded()))"
         case "volume": return "\(config.speech.volume)"
-        case "sync with VoiceOver": return String(localized: "up or down copies VoiceOver's voice, rate, pitch and volume", comment: "The speech settings ring's last stop")
         default: return config.speech.symbolLevel.name
         }
     }
@@ -496,7 +496,6 @@ enum SynthRing {
         case "pitch": return String(localized: "pitch", comment: "A speech setting in the speech settings ring")
         case "voice": return String(localized: "voice", comment: "A speech setting in the speech settings ring")
         case "punctuation": return String(localized: "punctuation", comment: "A speech setting in the speech settings ring")
-        case "sync with VoiceOver": return String(localized: "sync with VoiceOver", comment: "A speech setting in the speech settings ring")
         default: return s
         }
     }
@@ -561,9 +560,6 @@ enum SynthRing {
         case "volume":
             config.speech.volume = min(200, max(10, config.speech.volume + by * (large ? 30 : 10)))
             Speech.player.volume = Float(config.speech.volume) / 100
-        case "sync with VoiceOver":
-            VoiceOverSettings.startFlow()
-            return
         default:
             let all = SymbolLevel.allCases
             let i = all.firstIndex(of: config.speech.symbolLevel) ?? 0

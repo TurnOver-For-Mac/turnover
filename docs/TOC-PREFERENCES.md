@@ -1,9 +1,9 @@
 # TurnOver: every setting comes from VoiceOver
 
 The rule (15 Oct 2026): in TurnOver there are no independent choices. VoiceOver Utility is where people set things;
-TurnOver copies VoiceOver's export (the TurnOver menu, Copy my VoiceOver settings; or the speech settings' last stop,
-sync with VoiceOver) and every VoiceOver setting that TurnOver has a capability for is applied one to one. Where
-TurnOver lacks the capability, that is work to do, listed here.
+TurnOver copies VoiceOver's export (the TurnOver menu, Copy VoiceOver settings) and every VoiceOver setting that
+TurnOver has a capability for is applied one to one. Where TurnOver lacks the capability, that is work to do, listed
+here.
 
 The export is "VoiceOver Archive.voprefs" (VoiceOver Utility, File, Export Preferences…), a plain plist; its
 `default` section holds the settings below (112 keys on one Mac). Names are VoiceOver's own, shortened.
