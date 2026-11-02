@@ -167,8 +167,11 @@ final class VoiceLists: ObservableObject {
         let wanted = Set(mine + ["en"])
         let voices = AVSpeechSynthesisVoice.speechVoices()
         all = voices
+        // Not Apple's novelty voices (Bells, Bubbles, Zarvox and the rest, 15 of them: Oliver, 2 Nov 2026, "a big list of
+        // shit nonsense voices that apple like to ship"). A novelty voice already chosen stays selectable (voices).
+        let real = voices.filter { !$0.voiceTraits.contains(.isNoveltyVoice) }
         // English and the Mac's own languages, the Mac's languages first and Eloquence before the rest.
-        offered = voices.filter { wanted.contains(String($0.language.prefix(2))) }.sorted { a, b in
+        offered = real.filter { wanted.contains(String($0.language.prefix(2))) }.sorted { a, b in
             let la = mine.firstIndex(of: String(a.language.prefix(2))) ?? 99, lb = mine.firstIndex(of: String(b.language.prefix(2))) ?? 99
             if la != lb { return la < lb }
             let ea = a.identifier.contains("eloquence"), eb = b.identifier.contains("eloquence")
@@ -176,7 +179,7 @@ final class VoiceLists: ObservableObject {
             return a.name < b.name
         }
         // The voices of the Mac's own languages and English, as the rotor offers them.
-        rotorCandidates = voices.filter { wanted.contains(String($0.language.prefix(2))) }
+        rotorCandidates = real.filter { wanted.contains(String($0.language.prefix(2))) }
             .sorted { $0.name == $1.name ? $0.language < $1.language : $0.name < $1.name }
         var made: [String: String] = [:]
         for v in voices {
@@ -197,6 +200,19 @@ struct SpeechView: View {
         if voiceLists.offered.contains(where: { $0.identifier == current }) || current.isEmpty { return voiceLists.offered }
         let extra = voiceLists.all.filter { $0.identifier == current }
         return voiceLists.offered + extra
+    }
+    @State private var showRotor = false
+    @State private var showLanguages = false
+    /// One voice's tick in the rotor's list, named outright: SwiftUI left such switches nameless here (2 Nov 2026).
+    private func rotorToggle(_ id: String, _ name: String) -> some View {
+        Toggle(name, isOn: Binding(
+            get: { rotorChosen.contains(id) },
+            set: { on in
+                var list = rotorChosen.filter { $0 != id }
+                if on { list.append(id) }
+                model.set("speech", "rotorVoices", list)
+            }))
+        .accessibilityLabel(name)
     }
     /// The natural voices as entries of the Voice list and the rotor ("external:…"), named by TurnOver.
     private var naturalEntries: [(id: String, name: String)] {
@@ -239,8 +255,11 @@ struct SpeechView: View {
             Picker("Voice", selection: Binding(
                 get: { model.special("_speechVoice") as? String ?? (model.get("speech", "voice") as? String ?? "") },
                 set: { v in model.setSpecial("_speechVoice", v) })) {
-                ForEach(voices, id: \.identifier) { v in Text(voiceLists.label(for: v)).tag(v.identifier) }
-                ForEach(naturalEntries, id: \.id) { Text($0.name).tag($0.id) }
+                // Natural voices and the Mac's apart (2 Nov 2026).
+                if !naturalEntries.isEmpty {
+                    Section("Natural voices") { ForEach(naturalEntries, id: \.id) { Text($0.name).tag($0.id) } }
+                }
+                Section("Mac voices") { ForEach(voices, id: \.identifier) { v in Text(voiceLists.label(for: v)).tag(v.identifier) } }
             }
             Slider(value: model.percent("speech", "rate"), in: 10...100, step: 5) { Text("Rate") }
                 .accessibilityValue("\(Int(model.percent("speech", "rate").wrappedValue)) percent")
@@ -262,15 +281,19 @@ struct SpeechView: View {
                 Text("The Mac's default output").tag("")
                 ForEach(outputDevices, id: \.uid) { d in Text(d.name).tag(d.uid) }
             }
-            DisclosureGroup("Capitals") {
+            // Sections and switches, not fold-outs: SwiftUI's DisclosureGroup offers accessibility no action to open it
+            // (measured 2 Nov 2026: pressed, it stayed shut), so its contents couldn't be reached by keyboard at all.
+            Section("Capitals") {
                 Toggle("Say cap before a capital", isOn: model.bool("speech", "sayCapForCapitals"))
+                    .accessibilityLabel("Say cap before a capital")
                 Slider(value: model.number("speech", "capitalPitch"), in: 0...100, step: 10) { Text("Raise the pitch for a capital") }
                     .accessibilityValue(model.number("speech", "capitalPitch").wrappedValue == 0 ? String(localized: "off", comment: "A setting that is off")
                         : String(localized: "\(String(Int(model.number("speech", "capitalPitch").wrappedValue))) percent", comment: "A slider's value"))
             }
             // The speech rotor's own short list (18 Oct 2026): none ticked, every voice.
             // Folded until opened: a picker per language is the costliest part of the pane to draw (23 Oct 2026).
-            DisclosureGroup("Voices for other languages") {
+            Toggle("Show voices for other languages", isOn: $showLanguages).accessibilityLabel("Show voices for other languages")
+            if showLanguages {
                 if otherLanguages.isEmpty {
                     Text("No voices for other languages are installed.").font(.caption)
                 } else {
@@ -281,28 +304,19 @@ struct SpeechView: View {
                 }
             }
             // Folded away: the list is long by nature (every voice the rotor could step through).
-            DisclosureGroup(rotorChosen.isEmpty ? String(localized: "Voices in the rotor: every voice", comment: "A group in Speech settings")
-                            : String(localized: "Voices in the rotor: \(String(rotorChosen.count)) chosen", comment: "A group in Speech settings")) {
-                Text(rotorChosen.isEmpty ? String(localized: "Every voice: tick the ones you want VO-Command-Shift to step through.", comment: "Speech settings")
-                     : String(localized: "\(String(rotorChosen.count)) chosen for VO-Command-Shift.", comment: "Speech settings")).font(.caption)
-                // The natural voices first: after every Mac voice they were easy to miss (2 Nov 2026).
-                ForEach(naturalEntries, id: \.id) { v in
-                    Toggle(v.name, isOn: Binding(
-                        get: { rotorChosen.contains(v.id) },
-                        set: { on in
-                            var list = rotorChosen.filter { $0 != v.id }
-                            if on { list.append(v.id) }
-                            model.set("speech", "rotorVoices", list)
-                        }))
+            let rotorTitle = rotorChosen.isEmpty ? String(localized: "Show the voices in the rotor: every voice", comment: "A switch in Speech settings")
+                : String(localized: "Show the voices in the rotor: \(String(rotorChosen.count)) chosen", comment: "A switch in Speech settings")
+            Toggle(rotorTitle, isOn: $showRotor).accessibilityLabel(rotorTitle)
+            if showRotor {
+                Section(String(localized: "Natural voices in the rotor", comment: "A group in Speech settings")) {
+                    Text(rotorChosen.isEmpty ? String(localized: "None ticked, VO-Command-Shift steps through every voice. Tick the ones you want.", comment: "Speech settings")
+                         : String(localized: "\(String(rotorChosen.count)) ticked for VO-Command-Shift.", comment: "Speech settings")).font(.caption)
+                    ForEach(naturalEntries, id: \.id) { v in rotorToggle(v.id, v.name) }
                 }
-                ForEach(rotorCandidates, id: \.identifier) { v in
-                    Toggle("\(v.name), \(Locale.current.localizedString(forIdentifier: v.language) ?? v.language)", isOn: Binding(
-                        get: { rotorChosen.contains(v.identifier) },
-                        set: { on in
-                            var list = rotorChosen.filter { $0 != v.identifier }
-                            if on { list.append(v.identifier) }
-                            model.set("speech", "rotorVoices", list)
-                        }))
+                Section(String(localized: "Mac voices in the rotor", comment: "A group in Speech settings")) {
+                    ForEach(rotorCandidates, id: \.identifier) { v in
+                        rotorToggle(v.identifier, "\(v.name), \(Locale.current.localizedString(forIdentifier: v.language) ?? v.language)")
+                    }
                 }
             }
             // The natural voice (2 Nov 2026): chosen in Voice above for all speech, or here for say all only; its speed

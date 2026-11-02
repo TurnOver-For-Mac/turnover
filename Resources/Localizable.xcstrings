@@ -285,6 +285,7 @@
     },
     "%@ chosen for VO-Command-Shift." : {
       "comment" : "Speech settings",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -1173,6 +1174,9 @@
           }
         }
       }
+    },
+    "%@ ticked for VO-Command-Shift." : {
+      "comment" : "Speech settings"
     },
     "%@ to %@" : {
       "comment" : "A run of letter keys: a to z",
@@ -4980,6 +4984,7 @@
     },
     "Every voice: tick the ones you want VO-Command-Shift to step through." : {
       "comment" : "Speech settings",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -7173,6 +7178,12 @@
         }
       }
     },
+    "Mac voices" : {
+
+    },
+    "Mac voices in the rotor" : {
+      "comment" : "A group in Speech settings"
+    },
     "Mail" : {
       "comment" : "A group of commands in the key list",
       "localizations" : {
@@ -8524,6 +8535,12 @@
         }
       }
     },
+    "Natural voices" : {
+
+    },
+    "Natural voices in the rotor" : {
+      "comment" : "A group in Speech settings"
+    },
     "Never" : {
       "localizations" : {
         "tr" : {
@@ -9004,6 +9021,9 @@
           }
         }
       }
+    },
+    "None ticked, VO-Command-Shift steps through every voice. Tick the ones you want." : {
+      "comment" : "Speech settings"
     },
     "None yet" : {
       "localizations" : {
@@ -13153,6 +13173,12 @@
         }
       }
     },
+    "Show the voices in the rotor: %@ chosen" : {
+      "comment" : "A switch in Speech settings"
+    },
+    "Show the voices in the rotor: every voice" : {
+      "comment" : "A switch in Speech settings"
+    },
     "Show the word at the cursor uncontracted" : {
       "localizations" : {
         "tr" : {
@@ -13162,6 +13188,9 @@
           }
         }
       }
+    },
+    "Show voices for other languages" : {
+
     },
     "Single-letter keys go round the page" : {
       "localizations" : {
@@ -17033,6 +17062,7 @@
       }
     },
     "Voices for other languages" : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -17044,6 +17074,7 @@
     },
     "Voices in the rotor: %@ chosen" : {
       "comment" : "A group in Speech settings",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -17055,6 +17086,7 @@
     },
     "Voices in the rotor: every voice" : {
       "comment" : "A group in Speech settings",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {

@@ -504,7 +504,9 @@ enum SynthRing {
     /// The Mac's voices in your languages and the natural ones (2 Nov 2026), as identifier and name.
     static func voices() -> [(id: String, name: String)] {
         let wanted = Set(Locale.preferredLanguages.map { String($0.prefix(2)) } + ["en"])
-        let mac = AVSpeechSynthesisVoice.speechVoices().filter { wanted.contains(String($0.language.prefix(2))) }.sorted { $0.name < $1.name }
+        // Not Apple's novelty voices (2 Nov 2026), as Settings leaves them out; the one in use stays.
+        let mac = AVSpeechSynthesisVoice.speechVoices().filter { wanted.contains(String($0.language.prefix(2))) && (!$0.voiceTraits.contains(.isNoveltyVoice) || $0.identifier == config.speech.voice) }
+            .sorted { $0.name < $1.name }
         let all = mac.map { (id: $0.identifier, name: $0.name) } + KokoroVoice.voiceEntries
         // Your own short list (Settings, Speech, Voices in the rotor), with the voice in use always among them.
         let chosen = Set(config.speech.rotorVoices)
