@@ -117,7 +117,7 @@ Switch styles with Command Control Comma, then K. TurnOver's own commands behind
 | TurnOver F12 | Reports the time. Pressed twice, reports the date |
 | TurnOver N | Opens the TurnOver menu: settings, keys, tools, help, quit |
 | TurnOver Q | Quits TurnOver |
-| TurnOver R | Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return. Pressed again in the result, recognises again |
+| TurnOver R | Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return. Pressed again in the result, recognises again. Pressed twice, its buttons, fields and icons instead, when chosen in Settings |
 | TurnOver Slash | Shortcuts list; lists the shortcuts that work here, the application's own first; Enter runs one |
 | TurnOver T | Reports the title of the current window. Pressed twice, spells it |
 | TurnOver Tab | Reports the object with focus |

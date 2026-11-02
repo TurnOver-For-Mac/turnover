@@ -53,27 +53,49 @@ public final class ScreenRecognition {
     private var result: Result?
     private var caret = 0
     private var working = false
+    private var pass = 0   // each recognition's number: a pass overtaken by a second press is not shown
     private var refreshTimer: Timer?
 
     // MARK: Opening
 
-    /// TurnOver+R: recognise the front window. While the result is open: recognise again, keeping the place.
-    public func recognize() {
-        // Controls too, when chosen (Settings, Screen recognition): every way in to recognition reads them then.
-        if config.recognition.controls, #available(macOS 26.0, *) { recognizeInterface(); return }
+    /// The recognition key (VO-Shift-Y, TurnOver R), from its commands or from inside a result: pressed twice within the
+    /// double-press time, the controls. Counted here, not by the script's repeat count: a text result opens within that
+    /// time and takes the keys, so the second press came to `handle` and was lost (a review, 2 Nov 2026). A third press
+    /// is left alone: the controls are on their way.
+    public func keyPressed() {
+        let now = Date()
+        keyCount = now.timeIntervalSince(keyAt) * 1000 <= Double(config.keyboard.multiPressTimeoutMs) ? keyCount + 1 : 0
+        keyAt = now
+        if keyCount < 2 { recognize(twice: keyCount == 1) }
+    }
+    private var keyAt = Date.distantPast, keyCount = 0
+
+    /// TurnOver+R: recognise the front window's text. While the result is open: recognise again, keeping the place.
+    /// Pressed twice, with controls chosen (Settings, Screen recognition): the window's controls instead, which takes
+    /// longer (Oliver, 2 Nov 2026: "the object ocr is a bit slow ... if I do shift vo y and hit y twice"); again in a
+    /// result of controls, its controls again.
+    public func recognize(twice: Bool = false) {
+        if config.recognition.controls, #available(macOS 26.0, *), twice || (isOpen && showingInterface) {
+            if twice { pass += 1; working = false }   // the first press's text is not shown
+            recognizeInterface(fresh: twice)
+            return
+        }
         guard !working else { Speech.speakMessage(String(localized: "still recognising", comment: "Spoken message")); return }
         guard ScreenCapturePermission.ensure() else { finished(); return }
         let reopen = isOpen
         let keepRow = reopen ? currentRowText() : nil
         guard let target = Self.target() else { Speech.speakMessage(String(localized: "no window to recognise", comment: "Spoken message")); finished(); return }
         working = true
+        pass += 1
+        let id = pass
         let started = Date()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-            if self?.working == true { Speech.speakMessage(String(localized: "recognising", comment: "Spoken message")) }
+            if self?.working == true, self?.pass == id { Speech.speakMessage(String(localized: "recognising", comment: "Spoken message")) }
         }
         Task.detached(priority: .userInitiated) {
             let outcome = await Self.run(target)
             await MainActor.run {
+                guard id == self.pass else { return }   // pressed again for the controls
                 self.working = false
                 switch outcome {
                 case .failure(let message):
@@ -81,43 +103,48 @@ public final class ScreenRecognition {
                     Speech.speakMessage(message)
                     if !self.isOpen { self.finished() }
                 case .success(let r):
-                    self.showingInterface = false
                     Log.io("screen recognition: \(r.rows.count) rows, \(r.items.count) pieces of text, \(r.text.length) characters in \(Int(Date().timeIntervalSince(started) * 1000)) ms")
-                    self.show(r, reopen: reopen, keepRow: keepRow)
+                    self.show(r, reopen: reopen, keepRow: keepRow, controls: false)
                 }
             }
         }
     }
 
     /// The window's controls from its pixels (ScreenInterface), opened as a recognition result whose rows are the
-    /// controls: "Save, button". Return clicks the control. With the Screen recognition setting on, all recognition;
-    /// otherwise only the layer's E in a developer build with the switch `flatView`.
-    public func recognizeInterface() {
+    /// controls: "Save, button". Return clicks the control. With the Screen recognition setting on, the key pressed
+    /// twice; otherwise only the layer's E in a developer build with the switch `flatView`. `fresh`: the result the
+    /// first press may have opened is replaced, not recognised again.
+    public func recognizeInterface(fresh: Bool = false) {
         guard config.recognition.controls || Edition.devDefault("flatView") else { recognize(); return }
         guard #available(macOS 26.0, *) else { Speech.speakMessage(String(localized: "the screen interface needs macOS 26 or later", comment: "Spoken message")); return }
         guard !working else { Speech.speakMessage(String(localized: "still recognising", comment: "Spoken message")); return }
         guard ScreenCapturePermission.ensure() else { finished(); return }
         guard let target = Self.target() else { Speech.speakMessage(String(localized: "no window to recognise", comment: "Spoken message")); finished(); return }
         // Again while a result is open: the place is kept and nothing is closed if nothing is found, as for text.
-        let reopen = isOpen
+        let reopen = isOpen && !fresh
         let keepRow = reopen ? currentRowText() : nil
         working = true
+        pass += 1
+        let id = pass
         let started = Date()
         Speech.speakMessage(String(localized: "reading the screen's controls", comment: "Spoken message"))
         Task.detached(priority: .userInitiated) {
             let image: CGImage
             do { image = try await Self.capture(target) } catch {
-                await MainActor.run { self.working = false; Speech.speakMessage(String(localized: "could not see the window", comment: "Spoken message")); if !self.isOpen { self.finished() } }
+                await MainActor.run {
+                    guard id == self.pass else { return }
+                    self.working = false; Speech.speakMessage(String(localized: "could not see the window", comment: "Spoken message")); if !self.isOpen { self.finished() }
+                }
                 return
             }
             let d = await ScreenInterface.detect(image, frame: target.frame)
             let r = Self.interfaceResult(d.elements, title: target.title, pid: target.pid, window: target.frame)
             await MainActor.run {
+                guard id == self.pass else { return }
                 self.working = false
                 Log.io("screen interface: \(d.elements.count) elements in \(Int(Date().timeIntervalSince(started) * 1000)) ms (\(d.note))")
                 for e in d.elements.prefix(60) { Log.io("screen interface:   \(e.kind.rawValue) \"\(Log.words(e.label.prefix(40).description))\" at \(Int(e.rect.midX)),\(Int(e.rect.midY)) (\(e.from))") }
-                self.showingInterface = true
-                self.show(r, reopen: reopen, keepRow: keepRow)
+                self.show(r, reopen: reopen, keepRow: keepRow, controls: true)
             }
         }
     }
@@ -143,13 +170,17 @@ public final class ScreenRecognition {
         return Result(text: text, rows: rows, title: title, pid: pid, window: window)
     }
 
-    private func show(_ r: Result, reopen: Bool, keepRow: String?) {
+    private func show(_ r: Result, reopen: Bool, keepRow: String?, controls: Bool) {
         guard r.text.length > 0 else {
-            if !reopen { Speech.speakMessage(showingInterface ? String(localized: "nothing found", comment: "Screen recognition found no controls or text") : String(localized: "no text found", comment: "Spoken message")); finished() } else { Speech.speakMessage(String(localized: "no text now", comment: "Spoken message")) }
+            if !reopen {
+                Speech.speakMessage(controls ? String(localized: "nothing found", comment: "Screen recognition found no controls or text") : String(localized: "no text found", comment: "Spoken message"))
+                if !isOpen { finished() }   // pressed twice over an open text result: that stays
+            } else { Speech.speakMessage(String(localized: "no text now", comment: "Spoken message")) }
             return
         }
         result = r
         isOpen = true
+        showingInterface = controls   // only once there is a result: nothing found keeps what was open as it was
         if let keepRow, let row = r.rows.first(where: { r.text.substring(with: $0.range) == keepRow }) {
             caret = row.range.location
             Speech.speakMessage(String(localized: "recognised again", comment: "Spoken message"))
@@ -223,8 +254,8 @@ public final class ScreenRecognition {
             click(.hover)
         case "a" where m.contains(.turnover), "downArrow" where m.contains(.turnover):
             sayAll()
-        case "r" where m.contains(.turnover):
-            recognize()
+        case "r" where m.contains(.turnover), "y" where m.contains(.turnover) && m.contains(.shift) && config.general.style == .voiceOver:
+            keyPressed()
         default:
             if m.contains(.turnover) { return }   // TurnOver's other keys: nothing here
             Tones.edge()
@@ -362,9 +393,11 @@ public final class ScreenRecognition {
     private func refreshQuietly() {
         guard isOpen, !working, let old = result, let target = Self.target(pid: old.pid) else { return }
         working = true
+        let id = pass
         Task.detached(priority: .utility) {
             let outcome = await Self.run(target)
             await MainActor.run {
+                guard id == self.pass else { return }   // pressed twice meanwhile: the controls have the result
                 self.working = false
                 guard self.isOpen, case .success(let r) = outcome, r.text.length > 0 else { return }
                 let before = Set(old.rows.map { old.text.substring(with: $0.range) })

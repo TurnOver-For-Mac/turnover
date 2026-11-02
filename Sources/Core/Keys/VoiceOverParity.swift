@@ -179,8 +179,8 @@ extension VoiceOverKeysPlugin {
         add("describeImage", String(localized: "Describes the image or photo; anywhere else, what the window looks like (VO-Shift-L)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+shift+l"]) { _ in ImageDescriber.describeCurrent() }
         // TurnOver's own: VoiceOver has no key that reads a window's text from the screen. VO-Shift-L did it off a
         // picture until Oliver chose VO-Shift-Y (2 Nov 2026: "describing an image is different to ocr").
-        add("recognizeScreen", String(localized: "Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return (VO-Shift-Y, TurnOver's own)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+shift+y"]) { _ in
-            DispatchQueue.main.async { ScreenRecognition.shared.recognize() }
+        add("recognizeScreen", String(localized: "Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return; pressed twice, its buttons, fields and icons instead, when chosen in Settings (VO-Shift-Y, TurnOver's own)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+shift+y"]) { _ in
+            DispatchQueue.main.async { ScreenRecognition.shared.keyPressed() }
         }
     }
 

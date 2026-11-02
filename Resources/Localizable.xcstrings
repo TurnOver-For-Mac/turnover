@@ -4853,9 +4853,6 @@
         }
       }
     },
-    "Each row is a control, such as \"Save, button\", and Return clicks it. Pictures of icons are described by the Mac's own model, with Apple Intelligence on. Nothing leaves the Mac." : {
-
-    },
     "Elements" : {
       "localizations" : {
         "tr" : {
@@ -5089,9 +5086,6 @@
           }
         }
       }
-    },
-    "Find buttons, fields and icons too, not only text (experimental)" : {
-
     },
     "Find commands" : {
       "localizations" : {
@@ -10229,6 +10223,12 @@
         }
       }
     },
+    "Press the screen recognition key twice (VO-Shift-Y, or TurnOver R) for the window's controls: each row is one, such as \"Save, button\", and Return clicks it. Pressed once, it reads the text, which is quicker. Pictures of icons are described by the Mac's own model, with Apple Intelligence on. Nothing leaves the Mac." : {
+
+    },
+    "Pressed twice, find buttons, fields and icons (experimental)" : {
+
+    },
     "Presses the dialog's choice" : {
       "comment" : "A command, as the key list and keyboard help say it",
       "localizations" : {
@@ -11368,11 +11368,9 @@
         }
       }
     },
-    "Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return (VO-Shift-Y, TurnOver's own)" : {
-      "comment" : "A command, as the key list and keyboard help say it"
-    },
     "Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return. Pressed again in the result, recognises again" : {
       "comment" : "A command, as the key list and keyboard help say it",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -11381,6 +11379,12 @@
           }
         }
       }
+    },
+    "Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return. Pressed again in the result, recognises again. Pressed twice, its buttons, fields and icons instead, when chosen in Settings" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
+    "Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return; pressed twice, its buttons, fields and icons instead, when chosen in Settings (VO-Shift-Y, TurnOver's own)" : {
+      "comment" : "A command, as the key list and keyboard help say it"
     },
     "Reload plugins" : {
       "localizations" : {

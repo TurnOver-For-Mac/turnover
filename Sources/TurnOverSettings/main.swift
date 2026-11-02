@@ -594,9 +594,9 @@ struct RecognitionView: View {
             // (Oliver, 2 Nov 2026).
             // macOS 26 and later only: earlier, recognition reads text alone (ScreenInterface needs Vision's newer readers).
             if #available(macOS 26.0, *) {
-                Toggle("Find buttons, fields and icons too, not only text (experimental)", isOn: model.bool("recognition", "controls"))
-                    .accessibilityLabel("Find buttons, fields and icons too, not only text (experimental)")
-                Text("Each row is a control, such as \"Save, button\", and Return clicks it. Pictures of icons are described by the Mac's own model, with Apple Intelligence on. Nothing leaves the Mac.").font(.caption)
+                Toggle("Pressed twice, find buttons, fields and icons (experimental)", isOn: model.bool("recognition", "controls"))
+                    .accessibilityLabel("Pressed twice, find buttons, fields and icons (experimental)")
+                Text("Press the screen recognition key twice (VO-Shift-Y, or TurnOver R) for the window's controls: each row is one, such as \"Save, button\", and Return clicks it. Pressed once, it reads the text, which is quicker. Pictures of icons are described by the Mac's own model, with Apple Intelligence on. Nothing leaves the Mac.").font(.caption)
             }
             // A feature for a whole build: shown in developer builds only (29 Oct 2026).
             if readerIsDevBuild {
