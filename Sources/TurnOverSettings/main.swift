@@ -540,9 +540,10 @@ struct OtherAppsView: View {
     }
     var body: some View {
         Form {
-            // Steam's switch, here as well as under Games in the TurnOver menu: every setting has a place in this
-            // window (21 Oct 2026), and Big Picture reading, off since it became a choice on 21 Oct, couldn't be found
-            // (the maintainer, 25 Oct 2026). Saved in the settings file, so they hold across restarts.
+            // Steam's switch: every setting has a place in this window (21 Oct 2026), and Big Picture reading, off
+            // since it became a choice on 21 Oct, couldn't be found (the maintainer, 25 Oct 2026). Its Games item in the
+            // TurnOver menu's Tools went on 2 Nov 2026: game reading is always on. Saved in the settings file, so it
+            // holds across restarts.
             Section("Steam") {
                 Toggle("Read Steam's Big Picture", isOn: model.bool("games", "readBigPictureChosen"))
                     .accessibilityLabel("Read Steam's Big Picture")

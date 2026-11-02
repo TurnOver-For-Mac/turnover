@@ -18,6 +18,8 @@ Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
 
 ### Changed
 
+- The Games item has gone from the TurnOver menu's Tools: game reading is always on, and Steam's Big Picture switch and
+  Restart Steam are in Settings, Other apps' speech.
 - Braille: panning to another line moves the caret there, so the arrows carry on from the line read. The Braille section of Settings offers Line by line (the default), To the text shown, or Off. Tethered to review, panning moves only the review cursor.
 - Braille: Apple USB and HID drivers are polled and written on the braille thread, as Bluetooth drivers are, so a
   display does not hold up speech. Reads and writes cannot enter each other while a driver waits, the latest

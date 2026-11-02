@@ -492,7 +492,6 @@ public final class TurnOverMenu {
         if Trackpad.available {
             items.append(MenuItem("Gesture control", .toggle(get: { Trackpad.controlOn }, set: { Trackpad.set($0) }), hint: "The trackpad's gestures: VoiceOver's, or NVDA's in the Windows style. Also Command Control Comma, G"))
         }
-        if Games.available { items.append(MenuItem("Games", .submenu { Games.menuItems() }, hint: "Steam and Windows games speaking through TurnOver")) }
         // Until the Settings window has a Braille section (a contributor's, 21 Oct 2026), braille stays here.
         items.append(MenuItem("Braille", .submenu { self.brailleItems() }, hint: "Until braille has its section in Settings"))
         return items

@@ -5480,6 +5480,7 @@
     },
     "Game speech is off." : {
       "comment" : "Spoken message",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -5502,6 +5503,7 @@
     },
     "Games are not set up on this Mac." : {
       "comment" : "Spoken message",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -7193,6 +7195,7 @@
       }
     },
     "Makes Steam open a debugging port on this Mac while it runs, which other programs here could use too. Off removes it" : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -11834,6 +11837,7 @@
       }
     },
     "Restart Steam so Big Picture can be read" : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -13614,6 +13618,7 @@
       }
     },
     "Steam and Windows games speaking through TurnOver" : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -13634,8 +13639,12 @@
         }
       }
     },
+    "Steam is running without its port; restart Steam from TurnOver's Settings, Other apps' speech." : {
+      "comment" : "The Steam program's status"
+    },
     "Steam is running without its port; restart Steam from the Games menu." : {
       "comment" : "The Steam program's status",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -13656,8 +13665,12 @@
         }
       }
     },
+    "Steam needs restarting before Big Picture can be read. Restart Steam is in TurnOver's Settings, Other apps' speech." : {
+      "comment" : "Steam speech"
+    },
     "Steam needs restarting before Big Picture can be read. Restart Steam is in the Games menu." : {
       "comment" : "Steam speech",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -13669,6 +13682,7 @@
     },
     "Steam reading is off." : {
       "comment" : "Spoken message",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -14121,6 +14135,7 @@
     },
     "The Steam program did not answer." : {
       "comment" : "Game speech status",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -14132,6 +14147,7 @@
     },
     "The Steam program is not running." : {
       "comment" : "Game speech status",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -14143,6 +14159,7 @@
     },
     "The Steam program stopped." : {
       "comment" : "Game speech status",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -17084,6 +17101,7 @@
       }
     },
     "What the game reader is doing" : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
