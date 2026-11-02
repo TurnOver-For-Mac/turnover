@@ -41,8 +41,8 @@ Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
   "window" and then nothing. Issue 74.
 - The verbosity manager: Settings, Item details now lists what is said about an item, in the order it is said (name,
   kind, value, state, help text, keyboard shortcut, position, level), each on or off, moved up or down with a button.
-  "For" chooses the list for everywhere or for the app last in front, so Mail can say a message's subject before its
-  sender while everything else stays as it was. The three old switches (help text, shortcut, position) are rows of the
+  "For" chooses the list for everywhere or for the app last in front. (It orders an item's pieces; a Mail message's
+  sender, subject and time come as one name, so their order isn't changed by it.) The three old switches (help text, shortcut, position) are rows of the
   list now; a settings file from before keeps their values.
 
 ## 2.0, build 22.5
