@@ -1183,7 +1183,7 @@ func browseTextNavTests() {
         expect(rows(grid), (0..<5).map { r in (0..<3).map { "g\(r)\($0)" }.joined(separator: "  ") })
     }
     test("screen recognition: recognise again after a click is on unless switched off in build 23 or later") {
-        func on(_ json: String) -> Bool? { (try? JSONDecoder().decode(Config.Recognition.self, from: Data(json.utf8)))?.refreshAfterClick }
+        @MainActor func on(_ json: String) -> Bool? { (try? JSONDecoder().decode(Config.Recognition.self, from: Data(json.utf8)))?.refreshAfterClick }
         expect(on("{}"), true)
         expect(on(#"{"refreshAfterClick": false}"#), true, "22.x saved the old key as off for everyone, so it's ignored")
         expect(on(#"{"recogniseAgainAfterClick": false}"#), false)
