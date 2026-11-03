@@ -1179,6 +1179,12 @@ func browseTextNavTests() {
         let table = (0..<3).flatMap { r in (0..<4).map { c in line("r\(r)c\(c)", 20 + CGFloat(c) * 150, 20 + CGFloat(r) * 20, 60) } }
         expect(rows(table), ["r0c0  r0c1  r0c2  r0c3", "r1c0  r1c1  r1c2  r1c3", "r2c0  r2c1  r2c2  r2c3"])
     }
+    test("screen recognition: recognise again after a click is on unless switched off in build 23 or later") {
+        func on(_ json: String) -> Bool? { (try? JSONDecoder().decode(Config.Recognition.self, from: Data(json.utf8)))?.refreshAfterClick }
+        expect(on("{}"), true)
+        expect(on(#"{"refreshAfterClick": false}"#), true, "22.x saved the old key as off for everyone, so it's ignored")
+        expect(on(#"{"recogniseAgainAfterClick": false}"#), false)
+    }
     test("screen recognition: two small pictures differ only when a visible part has changed") {
         func picture(_ draw: (CGContext) -> Void) -> CGImage {
             let ctx = CGContext(data: nil, width: 160, height: 100, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!

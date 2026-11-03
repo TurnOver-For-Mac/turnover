@@ -333,10 +333,10 @@ public struct Config: Codable {
         /// After Return clicks something in the result, recognise again instead of closing (Oliver, 28 Oct 2026: a
         /// dialog's OK, then the screen that follows, without pressing the key again). A feature for a whole build:
         /// hidden in 22.x (Oliver, 29 Oct 2026: "that's not a bug fix, it's a feature"), on for everyone from build 23
-        /// (3 Nov 2026).
+        /// (3 Nov 2026). Stored under a new name: 22.x wrote the old one as off in every settings file (a review).
         public var refreshAfterClick = true
         public init() {}
-        enum Keys: String, CodingKey { case autoRefresh, autoSayAll, refreshAfterClick }
+        enum Keys: String, CodingKey { case autoRefresh, autoSayAll, refreshAfterClick = "recogniseAgainAfterClick" }
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: Keys.self)
             autoRefresh = (try? c.decodeIfPresent(Bool.self, forKey: .autoRefresh)) ?? false
