@@ -333,23 +333,18 @@ public struct Config: Codable {
         /// hidden in 22.x (Oliver, 29 Oct 2026: "that's not a bug fix, it's a feature"), on for everyone from build 23
         /// (3 Nov 2026).
         public var refreshAfterClick = true
-        /// Screen recognition reads the window as controls too ("Save, button": ScreenInterface), not only lines of
-        /// text. Experimental and off by default: behind the developer switch `flatView` until Oliver asked for a
-        /// switch to try it (2 Nov 2026), after VO-Shift-L read Parallels inaccurately.
-        public var controls = false
         public init() {}
-        enum Keys: String, CodingKey { case autoRefresh, autoSayAll, refreshAfterClick, controls }
+        enum Keys: String, CodingKey { case autoRefresh, autoSayAll, refreshAfterClick }
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: Keys.self)
             autoRefresh = (try? c.decodeIfPresent(Bool.self, forKey: .autoRefresh)) ?? false
             autoSayAll = (try? c.decodeIfPresent(Bool.self, forKey: .autoSayAll)) ?? false
             refreshAfterClick = (try? c.decodeIfPresent(Bool.self, forKey: .refreshAfterClick)) ?? true
-            controls = (try? c.decodeIfPresent(Bool.self, forKey: .controls)) ?? false
         }
         public func encode(to encoder: Encoder) throws {
             var c = encoder.container(keyedBy: Keys.self)
             try c.encode(autoRefresh, forKey: .autoRefresh); try c.encode(autoSayAll, forKey: .autoSayAll)
-            try c.encode(refreshAfterClick, forKey: .refreshAfterClick); try c.encode(controls, forKey: .controls)
+            try c.encode(refreshAfterClick, forKey: .refreshAfterClick)
         }
     }
     /// The rising tide: which applications TurnOver leads in; VoiceOver has the rest (NVDA: sleep mode, inverted).

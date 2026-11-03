@@ -1,6 +1,6 @@
 # VoiceOver keys: every key
 
-This page is made from TurnOver's own command tables (`turnover-coretest --keys-reference`, 2 Nov 2026), so it matches the build it came with. Don't edit it by hand.
+This page is made from TurnOver's own command tables (`turnover-coretest --keys-reference`, 3 Nov 2026), so it matches the build it came with. Don't edit it by hand.
 
 The VoiceOver keys style (the Mac style): VoiceOver's own keys, doing what they do in VoiceOver. **TurnOver** in a key means the TurnOver key: Control and Option together (VO), or Caps Lock. Keys VoiceOver has that aren't listed here go to VoiceOver as usual where VoiceOver reads, and do nothing special where TurnOver reads. Keyboard help (the TurnOver menu, Keys) says what any key does without doing it; Command Control Comma, then Slash, lists the keys that work where you are.
 
@@ -164,7 +164,7 @@ Switch styles with Command Control Comma, then K. TurnOver's own commands behind
 | TurnOver Shift U | Reads a link's address (VO-Shift-U) |
 | TurnOver Shift W | Reads everything in the window (VO-Shift-W) |
 | TurnOver Shift X | The hot spot chooser (VO-Shift-X) |
-| TurnOver Shift Y | Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return; pressed twice, its buttons, fields and icons instead, when chosen in Settings (VO-Shift-Y, TurnOver's own) |
+| TurnOver Shift Y | Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return; pressed twice, its buttons, fields and icons instead (VO-Shift-Y, TurnOver's own) |
 | TurnOver Shift Z | Save the last phrase to the Desktop; saves the last spoken phrase, with TurnOver's log, to a file on the Desktop (VO-Shift-Z) |
 | TurnOver Up arrow | Previous line in text; elsewhere the item above (VO-Up) |
 | TurnOver Command Down arrow | The next item of the rotor's kind (VO-Command-Down) |

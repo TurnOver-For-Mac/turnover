@@ -12,10 +12,10 @@ Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
   Apple's public catalog, and Return on one opens its page. The App Store's own results page couldn't be read reliably
   on macOS 27.2. When the catalog can't answer, the page is read instead. TV keeps its own page, as Apple TV+ isn't in
   the catalog.
-- Screen recognition can find a window's controls as well as its text (experimental, off by default): with Settings,
-  Screen recognition, "Pressed twice, find buttons, fields and icons" on, the recognition key pressed twice
-  (VO-Shift-Y, or TurnOver R) finds them; pressed once, it reads the text, which is quicker. Each row is a control
-  ("Save, button") and Return clicks it. It uses Apple's on-device recognition and, with Apple Intelligence on, the Mac's own model; nothing leaves the Mac.
+- Screen recognition finds a window's controls as well as its text: the recognition key pressed twice (VO-Shift-Y,
+  or TurnOver R) finds them, in under a second; pressed once, it reads the text. Each row is a control ("Save,
+  button") and Return clicks it. It uses Apple's on-device recognition and, with Apple Intelligence on, the Mac's own
+  model, which is given a few seconds to add what it sees; nothing leaves the Mac. macOS 26 or later.
 - After Return clicks something in a screen recognition result, the screen is recognised again a moment later, so a
   dialog's OK is followed by the screen that comes after it without pressing the key again. Settings, Screen
   recognition, "After Return clicks something, recognise again" turns it off, and the result closes after a click

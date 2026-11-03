@@ -71,11 +71,10 @@ public final class ScreenRecognition {
     private var keyAt = Date.distantPast, keyCount = 0
 
     /// TurnOver+R: recognise the front window's text. While the result is open: recognise again, keeping the place.
-    /// Pressed twice, with controls chosen (Settings, Screen recognition): the window's controls instead, which takes
-    /// longer (Oliver, 2 Nov 2026: "the object ocr is a bit slow ... if I do shift vo y and hit y twice"); again in a
-    /// result of controls, its controls again.
+    /// Pressed twice: the window's controls instead (Oliver, 2 Nov 2026: "if I do shift vo y and hit y twice"); again
+    /// in a result of controls, its controls again. On macOS 26 and later, which their recognition needs.
     public func recognize(twice: Bool = false) {
-        if config.recognition.controls, #available(macOS 26.0, *), twice || (isOpen && showingInterface) {
+        if #available(macOS 26.0, *), twice || (isOpen && showingInterface) {
             if twice { pass += 1; working = false }   // the first press's text is not shown
             recognizeInterface(fresh: twice)
             return
@@ -111,11 +110,9 @@ public final class ScreenRecognition {
     }
 
     /// The window's controls from its pixels (ScreenInterface), opened as a recognition result whose rows are the
-    /// controls: "Save, button". Return clicks the control. With the Screen recognition setting on, the key pressed
-    /// twice; otherwise only the layer's E in a developer build with the switch `flatView`. `fresh`: the result the
-    /// first press may have opened is replaced, not recognised again.
+    /// controls: "Save, button". Return clicks the control. The key pressed twice. `fresh`: the result the first press
+    /// may have opened is replaced, not recognised again.
     public func recognizeInterface(fresh: Bool = false) {
-        guard config.recognition.controls || Edition.devDefault("flatView") else { recognize(); return }
         guard #available(macOS 26.0, *) else { Speech.speakMessage(String(localized: "the screen interface needs macOS 26 or later", comment: "Spoken message")); return }
         guard !working else { Speech.speakMessage(String(localized: "still recognising", comment: "Spoken message")); return }
         guard ScreenCapturePermission.ensure() else { finished(); return }

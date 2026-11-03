@@ -582,13 +582,9 @@ struct RecognitionView: View {
         Form {
             Toggle("Read new text as it appears, while a result is open", isOn: model.bool("recognition", "autoRefresh"))
             Toggle("Read the whole result as it opens", isOn: model.bool("recognition", "autoSayAll"))
-            // Named outright, as Steam's switch is: SwiftUI gave this one no name, so it was read as a bare check box
-            // (Oliver, 2 Nov 2026).
             // macOS 26 and later only: earlier, recognition reads text alone (ScreenInterface needs Vision's newer readers).
             if #available(macOS 26.0, *) {
-                Toggle("Pressed twice, find buttons, fields and icons (experimental)", isOn: model.bool("recognition", "controls"))
-                    .accessibilityLabel("Pressed twice, find buttons, fields and icons (experimental)")
-                Text("Press the screen recognition key twice (VO-Shift-Y, or TurnOver R) for the window's controls: each row is one, such as \"Save, button\", and Return clicks it. Pressed once, it reads the text, which is quicker. Pictures of icons are described by the Mac's own model, with Apple Intelligence on. Nothing leaves the Mac.").font(.caption)
+                Text("Press the screen recognition key twice (VO-Shift-Y, or TurnOver R) for the window's controls: each row is one, such as \"Save, button\", and Return clicks it. Pressed once, it reads the text.").font(.caption)
             }
             Toggle("After Return clicks something, recognise again", isOn: model.bool("recognition", "refreshAfterClick"))
             Text("The screen that follows a click is read without pressing the key again; off, the result closes after the click.").font(.caption)
