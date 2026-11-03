@@ -16137,6 +16137,9 @@
         }
       }
     },
+    "TurnOver turned this window away: it was probably updated while the window was open. Quit Settings and open it again from the TurnOver menu." : {
+
+    },
     "TurnOver will read %@ when it changes. Saved" : {
       "comment" : "An item watched for changes: %@ is its name",
       "localizations" : {

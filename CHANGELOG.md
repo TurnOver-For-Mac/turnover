@@ -75,6 +75,17 @@ Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
   sender, subject and time come as one name, so their order isn't changed by it.) The three old switches (help text, shortcut, position) are rows of the
   list now; a settings file from before keeps their values.
 
+### Fixed
+
+- An app allowed to speak through TurnOver could speak once after you'd switched away: the line that asked is now said
+  only with the app still in front. Issue 56.
+- A web page cut short at the reader's size limit said nothing and was taken as complete; it now says "page read in
+  part", as a page cut at the time limit does. Issue 58.
+- Notification banners went unread after Notification Centre restarted, until VO-O was pressed. Issue 80.
+- A Settings window left open across an install knocked on the new TurnOver every two seconds; it now stops and says to
+  open Settings again. Issue 77.
+- With NVDA or JAWS keys where VoiceOver reads, a style change could leave the key layer without its tap. Issue 53.
+
 ## 2.0, build 22.5
 
 ### Fixed
