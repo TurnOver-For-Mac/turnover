@@ -98,6 +98,7 @@ public final class ScreenRecognition {
             await MainActor.run {
                 guard id == self.pass else { return }   // pressed again for the controls
                 self.working = false
+                guard self.stillInFront(target) else { return }
                 switch outcome {
                 case .failure(let message):
                     Log.error("screen recognition: \(message)")
@@ -141,6 +142,7 @@ public final class ScreenRecognition {
             await MainActor.run {
                 guard id == self.pass else { return }
                 self.working = false
+                guard self.stillInFront(target) else { return }
                 Log.io("screen interface: \(d.elements.count) elements in \(Int(Date().timeIntervalSince(started) * 1000)) ms (\(d.note))")
                 for e in d.elements.prefix(60) { Log.io("screen interface:   \(e.kind.rawValue) \"\(Log.words(e.label.prefix(40).description))\" at \(Int(e.rect.midX)),\(Int(e.rect.midY)) (\(e.from))") }
                 self.show(r, reopen: reopen, keepRow: keepRow, controls: true)
@@ -149,7 +151,7 @@ public final class ScreenRecognition {
             // result waited for them); not after another press, or once the result has closed.
             let refined = await ScreenInterface.refine(d.elements, image: image, frame: target.frame, within: 3)
             await MainActor.run {
-                guard id == self.pass, self.isOpen, self.showingInterface, let old = self.result else { return }
+                guard id == self.pass, self.isOpen, self.showingInterface, let old = self.result, self.stillInFront(target) else { return }
                 Log.io("screen interface: \(refined.note)")
                 guard refined.elements != d.elements else { return }
                 for e in refined.elements where e.from == "model" { Log.io("screen interface:   \(e.kind.rawValue) \"\(Log.words(e.label.prefix(40).description))\" at \(Int(e.rect.midX)),\(Int(e.rect.midY)) (model)") }
@@ -177,6 +179,17 @@ public final class ScreenRecognition {
             rows.append(Row(range: NSRange(location: start, length: (spoken as NSString).length), items: [item], block: 0))
         }
         return Result(text: text, rows: rows, title: title, pid: pid, window: window)
+    }
+
+    /// A result that comes back once another app is in front is dropped: it opened over the wrong window (3 Nov 2026,
+    /// 46 s after the key, over a different app).
+    private func stillInFront(_ t: Target) -> Bool {
+        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == t.pid else {
+            Log.info("screen recognition: pid \(t.pid) is no longer in front; its result is dropped")
+            if !isOpen { finished() }
+            return false
+        }
+        return true
     }
 
     private func show(_ r: Result, reopen: Bool, keepRow: String?, controls: Bool) {
