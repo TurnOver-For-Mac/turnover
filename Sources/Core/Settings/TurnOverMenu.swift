@@ -845,7 +845,7 @@ public final class TurnOverMenu {
             MenuItem("Position, such as 3 of 10", .toggle(get: { config.presentation.reportObjectPositionInformation }, set: { config.presentation.reportObjectPositionInformation = $0 })),
             MenuItem("Hints after a pause", .toggle(get: { config.presentation.speakHints }, set: { config.presentation.speakHints = $0 }), hint: "What you can do with an item"),
             MenuItem("Progress bars", .cycle(options: [String(localized: "beep", comment: "A choice in the TurnOver menu"), String(localized: "speak the percentage", comment: "A choice in the TurnOver menu"), String(localized: "beep and speak", comment: "A choice in the TurnOver menu"), String(localized: "off", comment: "A choice in the TurnOver menu")],
-                get: { ProgressOutput.modes.firstIndex(of: config.presentation.progressBars) ?? 1 },
+                get: { ProgressOutput.modes.firstIndex(of: config.presentation.progressBars) ?? 0 },
                 set: { config.presentation.progressBars = ProgressOutput.modes[$0] }), hint: "Beeps that rise in pitch as a progress bar moves, the percentage spoken, both, or nothing"),
             // A tester T, 7 Oct 2026: "AppleVis, heading level 1", as VoiceOver, rather than NVDA's "heading level 1, AppleVis".
             MenuItem("Heading, link and button: when to say them", .cycle(options: [String(localized: "by keyboard style", comment: "A choice in the TurnOver menu"), String(localized: "before the words, as NVDA", comment: "A choice in the TurnOver menu"), String(localized: "after the words, as VoiceOver", comment: "A choice in the TurnOver menu")],

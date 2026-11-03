@@ -498,9 +498,9 @@ public struct Config: Codable {
         public var reportNotifications = true
         /// "Bambu Studio, with the Bambu Studio plugin" as an app with a plugin comes to the front (the plugin design notes 13).
         public var announcePlugins = true
-        /// A progress bar as it moves (ProgressOutput, NVDA+U): "beep", "speak", "both" or "off". NVDA beeps by
-        /// default; TurnOver keeps the spoken percentage until Oliver has heard the beeps (2 Nov 2026).
-        public var progressBars = "speak"
+        /// A progress bar as it moves (ProgressOutput, NVDA+U): "beep", "speak", "both" or "off". Beeps by
+        /// default, as NVDA does (Oliver, having heard them, 3 Nov 2026: "put the progress bar stuff in there").
+        public var progressBars = "beep"
         public init() {}
         enum Keys: String, CodingKey { case verbosity, verbosityByApp, reportObjectDescriptions, reportKeyboardShortcuts, reportObjectPositionInformation, reportDynamicContentChanges, speakHints, reportNotifications, announcePlugins, progressBars }
         // Each setting falls back on its own: a settings file from before speakHints keeps the others.
@@ -518,7 +518,7 @@ public struct Config: Codable {
             speakHints = (try? c.decodeIfPresent(Bool.self, forKey: .speakHints)) ?? true
             reportNotifications = (try? c.decodeIfPresent(Bool.self, forKey: .reportNotifications)) ?? true
             announcePlugins = (try? c.decodeIfPresent(Bool.self, forKey: .announcePlugins)) ?? true
-            progressBars = (try? c.decodeIfPresent(String.self, forKey: .progressBars)).flatMap { ProgressOutput.modes.contains($0) ? $0 : nil } ?? "speak"
+            progressBars = (try? c.decodeIfPresent(String.self, forKey: .progressBars)).flatMap { ProgressOutput.modes.contains($0) ? $0 : nil } ?? "beep"
         }
         public func encode(to encoder: Encoder) throws {
             var c = encoder.container(keyedBy: Keys.self)

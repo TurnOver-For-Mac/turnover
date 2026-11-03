@@ -692,7 +692,7 @@ struct SoundsView: View {
             Picker("When TurnOver takes over from VoiceOver", selection: handOver) {
                 Text("Words").tag("words"); Text("A sound").tag("sound"); Text("Nothing").tag("nothing")
             }
-            Picker("Progress bars", selection: model.string("presentation", "progressBars", "speak")) {
+            Picker("Progress bars", selection: model.string("presentation", "progressBars", "beep")) {
                 Text("Beep").tag("beep"); Text("Speak the percentage").tag("speak"); Text("Beep and speak").tag("both"); Text("Off").tag("off")
             }
             Picker("Lower other sounds while TurnOver speaks", selection: model.string("speech", "ducking", "off")) {

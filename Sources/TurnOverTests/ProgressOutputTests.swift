@@ -112,13 +112,13 @@ func progressOutputTests() {
         expect(line?.fields ?? [], ["progress bar", "40 percent"])
     }
 
-    test("progress output: the setting reads speak when missing or unknown") {
+    test("progress output: the setting reads beep when missing or unknown") {
         @MainActor func mode(_ json: String) -> String? {
             (try? JSONDecoder().decode(Config.Presentation.self, from: Data(json.utf8)))?.progressBars
         }
-        expect(mode("{}"), "speak")
-        expect(mode(#"{"progressBars": "beep"}"#), "beep")
-        expect(mode(#"{"progressBars": "loud"}"#), "speak")
-        expect(Config.Presentation().progressBars, "speak")
+        expect(mode("{}"), "beep")
+        expect(mode(#"{"progressBars": "speak"}"#), "speak")
+        expect(mode(#"{"progressBars": "loud"}"#), "beep")
+        expect(Config.Presentation().progressBars, "beep")
     }
 }
