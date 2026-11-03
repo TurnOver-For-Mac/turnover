@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// The Mac-side presence: a "TurnOver" item in the menu bar while TurnOver runs, and the
+// The Mac-side presence: TurnOver's icon in the menu bar while TurnOver runs, and the
 // login item (SMAppService). Both follow the General preferences. Opening TurnOver
 // from Applications while it is running speaks a word and opens the TurnOver menu.
 import AppKit
@@ -18,7 +18,16 @@ final class StatusItem: NSObject, NSMenuDelegate {
     private func show() {
         guard item == nil else { return }
         let it = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        it.button?.title = "TurnOver"
+        if let image = NSImage(named: "MenuBar") {
+            // A flat template lets AppKit keep the mark legible on light, dark and selected menu bars.
+            image.isTemplate = true
+            image.size = NSSize(width: 18, height: 18)
+            it.button?.image = image
+            it.button?.imagePosition = .imageOnly
+        } else {
+            it.button?.title = "TurnOver"
+        }
+        it.button?.toolTip = "TurnOver"
         it.button?.setAccessibilityLabel("TurnOver")
         let menu = NSMenu(title: "TurnOver")
         menu.addItem(withTitle: "TurnOver menu: Command Control Comma, from anywhere", action: #selector(openMenu), keyEquivalent: "").target = self
