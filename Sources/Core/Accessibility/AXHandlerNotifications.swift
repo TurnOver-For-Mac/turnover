@@ -213,12 +213,9 @@ extension AXHandler {
                 // iTerm2 announces each piece of new output itself; TurnOver's terminal reads it already (it was heard
                 // twice, parts sweep 15 Oct 2026).
                 if API.focusObject is TerminalText, API.focusObject?.pid == pid { Log.io("terminal's own announcement; TurnOver reads the output itself"); break }
-                // Word says "Bold" or "Plain" for Command B, I and U; TurnOver's Word module says which ("bold off"):
-                // both were heard, and flashed on the display one after the other (7 Oct 2026).
-                if NSRunningApplication(processIdentifier: pid)?.bundleIdentifier == "com.microsoft.Word",
-                   Date().timeIntervalSince(InputManager.lastKeyDownAt) < 0.8,
-                   ["kb:command+b", "kb:command+i", "kb:command+u"].contains(InputManager.lastKeyIdentifier) {
-                    Log.io("Word's own formatting announcement; TurnOver says it: \(Log.words(text))"); break
+                if AppModuleHandler.shared.appModule(for: pid).ignoresAnnouncement(text, after: InputManager.lastKeyIdentifier,
+                        elapsed: Date().timeIntervalSince(InputManager.lastKeyDownAt)) {
+                    Log.io("app module suppressed a native announcement: \(Log.words(text))"); break
                 }
                 lastAnnouncement = (text, Date())
                 Speech.speakMessage(text)

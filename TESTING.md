@@ -309,6 +309,18 @@ An earlier VoiceOver-on inspection also lacked phone controls. These are sampled
 of every possible Mirroring state or a working adapter. Separate paired-device developer diagnostics are not
 part of this command, and a readable tree alone would not establish successful activation or audible reading.
 
+## Word module ownership
+
+`WordModuleIsolationTests` exercises registered Word policies, announcement timing, hint precedence, native
+spelling-menu delegation and the actual repeated formatting-report command with another app's provider.
+`FormattingFeedbackTests` checks that shortcut ownership follows the module, not a bundle-name comparison.
+The existing page-reading tests remain registered; the caret-boundary tests below are also registered in main.swift.
+
+`python3 Tools/check-app-boundaries.py` runs in every build and rejects Word implementation dependencies and
+bundle-based behavior selection in Core/Views. `--self-test` checks rejected dependencies, allowed inventory and
+hook calls, and comments/string handling. This supplements Swift's checks while Apps still share TurnOverCore.
+See [Word module ownership](docs/WORD-MODULE-ISOLATION.md) for the installed-app listening checklist.
+
 ## Word native boundaries (29 Oct 2026)
 
 `WordCaretBoundaryTests` intercepts keys/audio and exercises the actual inherited caret paths and registered

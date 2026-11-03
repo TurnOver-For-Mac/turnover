@@ -10,12 +10,10 @@ import AppKit
 import ApplicationServices
 
 public enum SpellingCorrections {
-    static let ownMenuApps: Set<String> = ["com.microsoft.Word"]
-
     /// True when the caret is on a misspelled word and the list was offered.
     public static func offer() -> Bool {
         guard let f = API.focusObject, let info = try? f.makeTextInfo(.caret) else { return false }
-        if let bundle = NSRunningApplication(processIdentifier: f.pid)?.bundleIdentifier, ownMenuApps.contains(bundle) { return false }
+        if f.appModule.usesNativeSpellingMenu { return false }
         // A word selected (Command Semicolon selects the next misspelling): the word at the selection's start; the caret
         // is at its end, after it.
         let selection = try? f.makeTextInfo(.selection)

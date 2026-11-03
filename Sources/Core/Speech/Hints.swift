@@ -33,6 +33,7 @@ public enum Hints {
     /// what that place is for.
     public static func forObject(_ obj: TurnOverObject) -> String {
         if obj.states.contains(.unavailable) { return "" }
+        if let hint = obj.appModule.hint(for: obj) { return hint }
         if let b = NSRunningApplication(processIdentifier: obj.pid)?.bundleIdentifier, let h = forApp(b, obj) { return h }
         switch obj.role {
         case .button, .toggleButton: return String(localized: "Space presses it.", comment: "A hint, said after a pause on an item")
@@ -63,9 +64,6 @@ public enum Hints {
             if role == .searchField || role == .comboBox || (role == .editableText && obj.name.lowercased().contains("address")) { return "" }
         case "com.apple.Terminal", "com.googlecode.iterm2":
             if role == .terminal || role == .editableText { return String(localized: "New output is read as it comes. Up and Down go back through earlier commands.", comment: "A hint, said after a pause on an item") }
-        case "com.microsoft.Word":
-            // (Not a dialog's text box: Insert Table's column width got this hint.)
-            if (role == .document || role == .editableText) && !AXHandler.modalInFront(pid: obj.pid) { return String(localized: "TurnOver Down reads from here; TurnOver H moves by heading.", comment: "A hint, said after a pause on an item") }
         case "com.apple.finder":
             if [.outline, .list, .table, .browser].contains(role) {
                 return (windows ? String(localized: "Return opens the item, F2 renames it.", comment: "A hint, said after a pause on an item") : String(localized: "Command Down opens the item, Return renames it.", comment: "A hint, said after a pause on an item")) + " " + String(localized: "Space shows a preview; Command Up goes to the folder above.", comment: "A hint in Finder")

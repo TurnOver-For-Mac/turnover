@@ -15,3 +15,7 @@ The scenario sent sample typing keys in a scratch document, then verified charac
 [30 October regression results and scope](Experiments/2026-10-30-regression.md).
 
 [App implementation](WordAppModule.swift).
+
+[Module responsibilities and verification](../../../docs/WORD-MODULE-ISOLATION.md). The module, document,
+spelling, tables, text ranges and scripting bridge have separate source files; this does not change the dated
+support evidence above.
