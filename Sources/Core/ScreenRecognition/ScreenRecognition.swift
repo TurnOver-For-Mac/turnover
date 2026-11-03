@@ -431,14 +431,15 @@ public final class ScreenRecognition {
         }
     }
 
-    /// Whether two small pictures of the window differ: more than one part in a hundred by a visible amount.
+    /// Whether two small pictures of the window differ: more than one part in five hundred by a visible amount. One
+    /// new line of text in a big window is about one in three hundred; a caret or a clock's seconds far less.
     package nonisolated static func differs(_ a: CGImage, _ b: CGImage) -> Bool {
         guard a.width == b.width, a.height == b.height, let x = a.dataProvider?.data, let y = b.dataProvider?.data,
               CFDataGetLength(x) == CFDataGetLength(y), let px = CFDataGetBytePtr(x), let py = CFDataGetBytePtr(y) else { return true }
         let n = CFDataGetLength(x)
         var changed = 0
         for i in 0..<n where abs(Int(px[i]) - Int(py[i])) > 40 { changed += 1 }
-        return changed * 100 > n
+        return changed * 500 > n
     }
 
     /// Recognise again without a word; speak only the rows that are new. A controls result gives its controls again.
