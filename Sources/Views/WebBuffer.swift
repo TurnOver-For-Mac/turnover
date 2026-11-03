@@ -85,7 +85,7 @@ public final class WebBuffer {
     private var visited = 0
     static let maxElements = 6000
     private var buildDeadline = Date.distantFuture
-    /// The last read stopped at its time limit: the end of a very long page is missing.
+    /// The last read stopped at its time or element limit: the end of a very long page is missing.
     public private(set) var isPartial = false
     private var saidPartial = false
     private var loggedPartial = false
@@ -126,11 +126,11 @@ public final class WebBuffer {
         elementCount = visited
         builtAt = Date()
         isDirty = false
-        isPartial = Date() >= buildDeadline
+        isPartial = Date() >= buildDeadline || visited >= Self.maxElements   // either limit (issue 58: only the time was counted)
         // Said once per page: nothing read the flag, so K said "no next link" and "bottom" mid-page without a word
         // (a code review, 14 Oct 2026).
         if isPartial, !saidPartial { saidPartial = true; DispatchQueue.main.async { MainActor.assumeIsolated { Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")) } } }
-        if isPartial, !loggedPartial { loggedPartial = true; Log.error("virtual buffer: stopped at 2 s after \(visited) elements; the page is read only in part") }
+        if isPartial, !loggedPartial { loggedPartial = true; Log.error("virtual buffer: stopped at \(visited >= Self.maxElements ? "\(Self.maxElements) elements" : "2 s, \(visited) elements"); the page is read only in part") }
         lastBuildMs = Int(Date().timeIntervalSince(t0) * 1000)
         Log.info("virtual buffer: \(lines.count) lines, \(text.length) characters from \(visited) elements in \(Int(Date().timeIntervalSince(t0) * 1000)) ms")
     }
