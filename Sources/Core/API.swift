@@ -32,6 +32,7 @@ public enum API {
         let pid = obj?.pid ?? 0
         lock.lock(); _focus = obj; _ancestors = ancestors; _interceptor = interceptor; lock.unlock()
         focusedPidValue.value = pid
+        DocumentAdapters.shared.focusChanged(obj, ancestors: ancestors, document: interceptor)
     }
     nonisolated private static let focusedPidValue = Locked<pid_t>(0)
     /// The focused element's process, for the keyboard thread (0: none known). The Dock, a status menu or Spotlight
@@ -39,7 +40,12 @@ public enum API {
     nonisolated public static var focusedPid: pid_t { focusedPidValue.value }
     public static func setForegroundObject(_ obj: TurnOverObject?) {
         FormattingFeedback.shared.cancel()
-        lock.lock(); _foreground = obj; lock.unlock()
+        lock.lock()
+        let previous = _foreground
+        _foreground = obj
+        lock.unlock()
+        let same = previous.flatMap { old in obj.map { old.isSameElement(as: $0) } } ?? false
+        if !same { DocumentAdapters.shared.leave() }
     }
 
     /// The pid whose app module answers scripts: the focus's, else the frontmost app's.

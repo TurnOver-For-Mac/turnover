@@ -334,3 +334,14 @@ The registered overnight suites exercise real owners/providers through public or
 (serial ownership, unique selection and actual native windows), and `SystemSettingsModuleTests` (part resolution,
 fresh focus/dialog guards, verified fallback and typed bounded labels). These do not establish audible speech
 quality, physical keyboard delivery, every live app page or VoiceOver-on parity. Record those checks separately.
+
+## Google browser editor document adapters
+
+`GoogleDocsTests` uses synthetic public Docs/Sheets/browser trees to check URL selection, nested editor frames,
+native caret/selection/deletion/Return key delivery, document and cached-region identity, query/time/visit caps,
+private announcements, first-key feedback, poll coalescing, stale replies and support-hint retirement.
+Run `turnover-tests "Google" -v` and `turnover-tests "document adapters" -v` for these groups after building.
+The full build also checks that shared Core/Views code cannot refer to Google editor implementation types.
+
+Browser editor listening checks remain separate from fixtures. Follow [document adapters](docs/DOCUMENT-ADAPTERS.md)
+and record browser/version, editor, screen reader support setting, macOS, keyboard style and reader mode.

@@ -9,6 +9,7 @@ Read first, if you are new: [HOW-A-KEY-BECOMES-SPEECH.md](HOW-A-KEY-BECOMES-SPEE
 - [Source map](../Sources/README.md): Core responsibilities, reusable Views, Apps, System and the existing targets.
 - [App records](../Sources/Apps/README.md) and [app folder rules](APP-FOLDERS.md): support status, current work and implementation homes.
 - [App test history](APP-TEST-HISTORY.md): how to interpret historical findings and current validation.
+- [Document adapters](DOCUMENT-ADAPTERS.md): website ownership, bounded reads and browser-editor checks.
 - [Word module ownership](WORD-MODULE-ISOLATION.md): app hooks, source responsibilities and refactor checks.
 - [Investigation index](../Sources/Experiments/README.md) and [experiment template](EXPERIMENT-TEMPLATE.md): shared and app-specific research without treating proposals as completed features.
 

@@ -238,7 +238,7 @@ open class EditableText: TurnOverObject {
     /// Shift with a movement key: the key goes on, and the selection is read the moment it differs (polled, as the
     /// caret is for a plain arrow); if it hasn't changed within the caret's patience, the app's own notice reads it.
     func selectionScript(_ gesture: KeyboardGesture) {
-        if GoogleDocs.isEditor(element) { gesture.send(); return }
+        if DocumentAdapters.shared.usesNativeTextFeedback(for: element) { gesture.send(); return }
         guard autoSelectDetection, let old = try? makeTextInfo(.selection) else { gesture.send(); return }
         gesture.send()
         let began = Date()
@@ -258,8 +258,8 @@ open class EditableText: TurnOverObject {
     }
 
     func caretMovement(_ gesture: KeyboardGesture, _ unit: TextUnit) {
-        // Google Docs, Sheets, Slides: the text box is a hidden typing target; Google says the move itself.
-        if GoogleDocs.isEditor(element) { gesture.send(); return }
+        // A document adapter may own feedback instead of this field's accessibility caret.
+        if DocumentAdapters.shared.usesNativeTextFeedback(for: element) { gesture.send(); return }
         guard let info = try? makeTextInfo(.caret) else { gesture.send(); return }
         let boundarySound = appModule.playsNativeCaretBoundarySound
         let bookmark = info.bookmark
@@ -398,6 +398,7 @@ open class EditableText: TurnOverObject {
 
     /// Enter: read what is on the new line before the caret (auto numbering, a bullet), or just note the move.
     func newLineScript(_ gesture: KeyboardGesture) {
+        if DocumentAdapters.shared.usesNativeTextFeedback(for: element) { gesture.send(); return }
         // A one-line field has no new line: Return in Safari's address field said "new line" as the page was opening
         // (12 Oct 2026), after a 100 ms wait for a caret that never moves there.
         if axRole == "AXTextField" { gesture.send(); return }
@@ -420,7 +421,7 @@ open class EditableText: TurnOverObject {
     }
 
     func backspaceScript(_ gesture: KeyboardGesture, _ unit: TextUnit) {
-        if GoogleDocs.isEditor(element) { gesture.send(); return }   // Google says what was deleted
+        if DocumentAdapters.shared.usesNativeTextFeedback(for: element) { gesture.send(); return }
         if role == .passwordEdit { gesture.send(); return }   // SecureEcho hears the field get shorter
         guard let old = try? makeTextInfo(.caret) else { gesture.send(); return }
         let bookmark = old.bookmark
@@ -471,6 +472,7 @@ open class EditableText: TurnOverObject {
     }
 
     func deleteScript(_ gesture: KeyboardGesture, _ unit: TextUnit) {
+        if DocumentAdapters.shared.usesNativeTextFeedback(for: element) { gesture.send(); return }
         if role == .passwordEdit { gesture.send(); return }   // SecureEcho hears the field get shorter
         guard let info = try? makeTextInfo(.caret) else { gesture.send(); return }
         let bookmark = info.bookmark

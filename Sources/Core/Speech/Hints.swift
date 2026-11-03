@@ -9,7 +9,7 @@ public enum Hints {
     public static var delay: Double = 1.2
 
     /// Say the hint after the pause, unless a key comes first or hints are off.
-    public static func schedule(_ text: String) {
+    public static func schedule(_ text: String, while isCurrent: @escaping @MainActor () -> Bool = { true }) {
         guard config.presentation.speakHints, !text.isEmpty else { return }
         generation += 1
         let g = generation
@@ -17,7 +17,7 @@ public enum Hints {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             // Never over reading (a say all), and only for where the focus still is: a hint for the message list was
             // said as a message window came up (7 Oct 2026).
-            guard g == generation, config.presentation.speakHints, !SayAll.isRunning else { return }
+            guard g == generation, config.presentation.speakHints, !SayAll.isRunning, isCurrent() else { return }
             if let a = focusAt, let b = API.focusObject?.element, !CFEqual(a, b) { return }
             Speech.speakText(text)
         }

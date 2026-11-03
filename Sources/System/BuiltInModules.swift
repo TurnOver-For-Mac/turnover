@@ -5,6 +5,7 @@ import Foundation
 
 public enum BuiltInModules {
     public static func register() {
+        DocumentAdapters.shared.register("google-editors", matches: GoogleDocs.isGoogleEditor) { GoogleDocsSession(context: $0) }
         let h = AppModuleHandler.shared
         h.register(WordAppModule.self, for: WordAppModule.bundleID)
         h.register(DockAppModule.self, for: "com.apple.dock")

@@ -56,6 +56,8 @@ let coreSources: [String] = [
     "Apps/Freeform/FreeformAppModule.swift",
     "Apps/Games/Games.swift",
     "Apps/GoogleDocs/GoogleDocs.swift",
+    "Apps/GoogleDocs/GoogleDocsQuery.swift",
+    "Apps/GoogleDocs/GoogleDocsSession.swift",
     "Apps/Keynote/KeynoteAppModule.swift",
     "Apps/Kindle/KindleAppModule.swift",
     "Apps/Mail/MailAppModule.swift",
