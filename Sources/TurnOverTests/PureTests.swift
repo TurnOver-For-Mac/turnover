@@ -384,12 +384,10 @@ func pureTests() {
         let high = tone(3000); bass2.run(high)
         check(peak(high) < 0.06, "a high tone is lowered by the headroom (\(peak(high)))")
     }
-    test("natural voices: Phonon's and Kokoro's voices by name and accent") {
+    test("natural voices: Phonon's voices by name and accent") {
         expect(KokoroVoice.displayName("en_gb_Maeve"), "Maeve, British")
         expect(KokoroVoice.displayName("en_us_Zoey"), "Zoey, American")
         expect(KokoroVoice.displayName("en_gb_Elodie-Rose"), "Elodie Rose, British")
-        expect(KokoroVoice.displayName("bf_emma"), "Emma, British")
-        expect(KokoroVoice.displayName("am_adam"), "Adam, American")
         check(KokoroVoice.phononVoices.allSatisfy { $0.hasPrefix("en_gb_") || $0.hasPrefix("en_us_") }, "every Phonon voice is British or American English")
     }
     test("kokoro: audio frames split anywhere by the pipe come out whole") {

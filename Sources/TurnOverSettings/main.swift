@@ -239,7 +239,7 @@ struct SpeechView: View {
             return (id, name)
         }
     }
-    /// The natural voices this Mac has (Phonon's, or Kokoro's without Phonon's helper), named by TurnOver.
+    /// The natural voices this Mac has (Phonon's), named by TurnOver.
     private var natural: [(id: String, name: String)] {
         ((model.special("_kokoroVoices") as? [[String: Any]]) ?? []).compactMap { d in
             guard let id = d["id"] as? String, let name = d["name"] as? String else { return nil }

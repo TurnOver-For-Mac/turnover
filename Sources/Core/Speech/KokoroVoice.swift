@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Kokoro, natural voices made on this Mac (12 Oct 2026: "something super good like the Microsoft ones").
-// Personal, like Games: only on a Mac with the "kokoro" default set and the helper present in
-// ~/Library/Developer/TurnOver/kokoro: kokoro-helper, the Swift one (plugins/kokoro/helper: FluidAudio, Core ML;
-// about 0.1 s for a short phrase), or else server.py (Python, MLX; 0.12 to 0.24 s). Nothing is sent anywhere: the
-// model runs here, on Apple silicon.
+// Natural voices made on this Mac (12 Oct 2026: "something super good like the Microsoft ones"): Phonon 31m, through
+// its helper (plugins/phonon/helper: FluidAudio; speech ready in 9 to 25 ms). Personal, like Games: only on a Mac with
+// the "kokoro" default set and the helper present in ~/Library/Developer/TurnOver/kokoro. Nothing is sent anywhere:
+// the model runs here, on Apple silicon. (Kokoro's own helper and voices, the first natural voices, went on 3 Nov 2026,
+// Oliver: "the kokoro voices can probably go"; the names here stay, as his Mac's defaults carry them.)
 //
 // TurnOver starts the helper and talks to it through pipes: a JSON line per utterance in; frames of id, sample count and
 // float32 samples (24 kHz mono) out, a count of 0 ending each. The speech player asks for "external:<voice>" voices
@@ -19,14 +19,9 @@ public enum KokoroVoice {
     /// This Mac has it: the default set and a helper there. Not a developer build's switch since 2 Nov 2026 (the
     /// maintainer runs release builds), but outside one a helper is started only if it is signed as TurnOver is
     /// (trusted), so a program that sets the default and leaves its own helper there hears nothing.
-    public static var available: Bool {
-        UserDefaults.standard.bool(forKey: "kokoro") && (hasPhonon || FileManager.default.fileExists(atPath: swiftHelper.path)
-            || FileManager.default.fileExists(atPath: folder.appendingPathComponent("server.py").path))
-    }
-    static var swiftHelper: URL { folder.appendingPathComponent("kokoro-helper") }
+    public static var available: Bool { UserDefaults.standard.bool(forKey: "kokoro") && hasPhonon }
     /// Phonon's helper (plugins/phonon/helper, 2 Nov 2026): heard as quickly as the Mac voice, so it can be the voice
-    /// for everything (Oliver: "I want to be able to use these voices instead of alex"). Where it is, its voices are
-    /// the ones offered; Kokoro's helper stays for a Mac without it.
+    /// for everything (Oliver: "I want to be able to use these voices instead of alex").
     static var phononHelper: URL { folder.appendingPathComponent("phonon-helper") }
     static var hasPhonon: Bool { FileManager.default.isExecutableFile(atPath: phononHelper.path) }
 
@@ -45,28 +40,15 @@ public enum KokoroVoice {
             Speech.player.speak(text ?? "This is \(displayName(v).components(separatedBy: ",")[0]). The harbour opens at nine.", interrupt: true, voice: "external:" + v)
         }
     }
-    /// A Kokoro voice chosen before is Phonon's Maeve where Phonon's helper is (Kokoro's voices can go: Oliver).
+    /// A Kokoro voice chosen before Kokoro's went is Maeve.
     public static var voice: String {
-        get {
-            let v = UserDefaults.standard.string(forKey: "kokoroVoice") ?? "bf_emma"
-            // Both ways: a Phonon voice kept after Phonon's helper went is Kokoro's Emma (a review, 2 Nov 2026).
-            if hasPhonon { return phononVoices.contains(v) ? v : "en_gb_Maeve" }
-            return phononVoices.contains(v) ? "bf_emma" : v
-        }
+        get { let v = UserDefaults.standard.string(forKey: "kokoroVoice") ?? ""; return phononVoices.contains(v) ? v : "en_gb_Maeve" }
         set { UserDefaults.standard.set(newValue, forKey: "kokoroVoice") }
     }
     /// A natural voice's speed from the speech rate, as the Mac voices take it (0.1 to 1, 0.5 their own pace): the same
     /// slider and keys for both (Oliver, 2 Nov 2026: "all the same settings whereever the voice comes from"). Doubled
     /// each 0.31 above 0.5 and halved each 0.31 below, kept from 0.5 to 3 times the voice's own pace.
     nonisolated package static func speed(forRate rate: Float) -> Double { min(3, max(0.5, pow(2, (Double(rate) - 0.5) * 3.2))) }
-
-    /// The English voices (US and UK): Kokoro v1.0's, which both helpers have.
-    public static let englishVoices = [
-        "af_alloy", "af_aoede", "af_bella", "af_heart", "af_jessica", "af_kore", "af_nicole", "af_nova", "af_river",
-        "af_sarah", "af_sky", "am_adam", "am_echo", "am_eric", "am_fenrir", "am_liam", "am_michael", "am_onyx",
-        "am_puck", "am_santa", "bf_alice", "bf_emma", "bf_isabella", "bf_lily", "bm_daniel", "bm_fable", "bm_george",
-        "bm_lewis",
-    ]
 
     /// Phonon 31m's English voices, as its helper listed them (2 Nov 2026).
     public static let phononVoices = [
@@ -75,8 +57,7 @@ public enum KokoroVoice {
         "en_us_Easton", "en_us_Everly", "en_us_Hadley", "en_us_Harper", "en_us_Juniper", "en_us_Micah", "en_us_Miles",
         "en_us_Preston", "en_us_Russell", "en_us_Trevor", "en_us_Zoey",
     ]
-    /// The voices this Mac offers: Phonon's where its helper is, otherwise Kokoro's.
-    public static var voices: [String] { hasPhonon ? phononVoices : englishVoices }
+    public static var voices: [String] { phononVoices }
 
     /// The speech voice as the Voice list and the speech settings ring show it: the natural voice ("external:…") while it
     /// speaks everything, otherwise the Mac voice. Underneath, the Mac voice stays the speech voice: other languages,
@@ -103,11 +84,10 @@ public enum KokoroVoice {
         }
     }
 
-    /// "bf_emma" → "Emma, British"; "en_gb_Maeve" → "Maeve, British"
+    /// "en_gb_Maeve" → "Maeve, British"; "en_us_Zoey" → "Zoey, American"
     public static func displayName(_ v: String) -> String {
-        let phonon = v.hasPrefix("en_")
-        let name = phonon ? String(v.dropFirst(6)).replacingOccurrences(of: "-", with: " ") : v.dropFirst(3).capitalized
-        return (phonon ? v.hasPrefix("en_gb") : v.hasPrefix("b"))
+        let name = String(v.dropFirst(6)).replacingOccurrences(of: "-", with: " ")
+        return v.hasPrefix("en_gb")
             ? String(localized: "\(name), British", comment: "A natural voice: its name and accent")
             : String(localized: "\(name), American", comment: "A natural voice: its name and accent")
     }
@@ -134,23 +114,12 @@ public enum KokoroVoice {
     /// Start the helper (once), and give the speech player the way to it.
     public static func start() {
         guard available, mode != "off", process == nil else { return }
-        let path: String, args: [String]
-        let helper = hasPhonon && voice.hasPrefix("en_") ? phononHelper : swiftHelper
-        let signed = trusted(helper)
+        let signed = trusted(phononHelper)
         helperTrusted.value = signed
         guard Edition.isDevBuild || signed else {
-            Log.warning("kokoro: \(helper.lastPathComponent) isn't signed by TurnOver's developer; not started"); return
+            Log.warning("kokoro: \(phononHelper.lastPathComponent) isn't signed by TurnOver's developer; not started"); return
         }
-        if hasPhonon, voice.hasPrefix("en_") {
-            path = phononHelper.path
-            args = [voice]
-        } else if FileManager.default.isExecutableFile(atPath: swiftHelper.path) {
-            path = swiftHelper.path
-            args = [voice]   // loaded before "ready", so the first words in it don't wait
-        } else {
-            path = folder.appendingPathComponent("venv312/bin/python").path
-            args = [folder.appendingPathComponent("server.py").path]
-        }
+        let path = phononHelper.path, args = [voice]   // the voice loaded before "ready", so the first words in it don't wait
         // Started so it doesn't inherit TurnOver's Accessibility and Input Monitoring (it did, with Process: probed
         // 13 Oct 2026; the plugin design notes 12). It needs neither: it only turns text into sound.
         let started = Locked<DisclaimedSpawn.Child?>(nil)   // for `ended`, which is made before the child is

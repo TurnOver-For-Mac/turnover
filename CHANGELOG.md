@@ -28,6 +28,8 @@ Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
   top to bottom, and Tab moves between them. The controls result reads in the same order as text: a sidebar before
   the pane beside it.
 - A screen recognition result that comes back after you've moved to another app no longer opens over it.
+- The natural voices are Phonon's alone. Kokoro's voices, the first natural voices (build 20), are gone, along with their
+  helper; a Kokoro voice chosen before becomes Maeve.
 - Progress bars beep as they move, as in NVDA: a short beep for each percent, rising in pitch from low at 0 to high
   at 100. To hear the percentage instead (as before), both, or nothing, choose in Settings, Sounds, or in the
   Verbosity list (VO-V). With NVDA keys, NVDA+U goes through them. A bar's beeps keep up with it as it moves, rather
