@@ -55,6 +55,8 @@ public final class ScreenRecognition {
     private var working = false
     private var pass = 0   // each recognition's number: a pass overtaken by a second press is not shown
     private var refreshTimer: Timer?
+    /// The last small picture of the window, while the result is open: the next is compared with it.
+    private var glance: CGImage?
 
     // MARK: Opening
 
@@ -187,6 +189,7 @@ public final class ScreenRecognition {
         }
         result = r
         isOpen = true
+        glance = nil
         showingInterface = controls   // only once there is a result: nothing found keeps what was open as it was
         if let keepRow, let row = r.rows.first(where: { r.text.substring(with: $0.range) == keepRow }) {
             caret = row.range.location
@@ -209,6 +212,7 @@ public final class ScreenRecognition {
         guard isOpen else { return }
         isOpen = false
         refreshTimer?.invalidate(); refreshTimer = nil
+        glance = nil
         Braille.modalLine = nil; Braille.modalKey = nil
         Braille.refreshSoon()
         if !silently { Speech.speakMessage(String(localized: "closed recognition", comment: "Spoken message")) }
@@ -387,20 +391,54 @@ public final class ScreenRecognition {
 
     // MARK: Refreshing while open (NVDA: "periodically refresh recognized content")
 
+    /// Each second while the result is open: a small picture of the window, compared with the last. Recognised again
+    /// only when the window has changed (the old way read it again every 1.5 s, changed or not, and only for text).
     private func startRefreshing() {
         refreshTimer?.invalidate(); refreshTimer = nil
-        // Not over a controls result: the refresh reads text, and turned the controls into lines (a review, 2 Nov 2026).
-        guard config.recognition.autoRefresh, !showingInterface else { return }
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.refreshQuietly() } }
+        guard config.recognition.autoRefresh else { return }
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.glanceForChange() } }
     }
 
-    /// Recognise again without a word; speak only the rows that are new.
+    private func glanceForChange() {
+        guard isOpen, !working, let old = result, NSWorkspace.shared.frontmostApplication?.processIdentifier == old.pid, let target = Self.target(pid: old.pid) else { return }
+        let last = glance
+        Task.detached(priority: .utility) {
+            guard let small = try? await Self.capture(target, width: 160) else { return }
+            let changed = last.map { Self.differs($0, small) } ?? false
+            await MainActor.run {
+                guard self.isOpen, !self.working else { return }
+                self.glance = small
+                if changed { self.refreshQuietly() }
+            }
+        }
+    }
+
+    /// Whether two small pictures of the window differ: more than one part in a hundred by a visible amount.
+    nonisolated static func differs(_ a: CGImage, _ b: CGImage) -> Bool {
+        guard a.width == b.width, a.height == b.height, let x = a.dataProvider?.data, let y = b.dataProvider?.data,
+              CFDataGetLength(x) == CFDataGetLength(y), let px = CFDataGetBytePtr(x), let py = CFDataGetBytePtr(y) else { return true }
+        let n = CFDataGetLength(x)
+        var changed = 0
+        for i in 0..<n where abs(Int(px[i]) - Int(py[i])) > 40 { changed += 1 }
+        return changed * 100 > n
+    }
+
+    /// Recognise again without a word; speak only the rows that are new. A controls result gives its controls again.
     private func refreshQuietly() {
         guard isOpen, !working, let old = result, let target = Self.target(pid: old.pid) else { return }
         working = true
         let id = pass
+        let controls = showingInterface
         Task.detached(priority: .utility) {
-            let outcome = await Self.run(target)
+            var outcome = await Outcome.failure("")
+            if controls, #available(macOS 26.0, *) {
+                if let image = try? await Self.capture(target) {
+                    let d = await ScreenInterface.detect(image, frame: target.frame)
+                    outcome = .success(Self.interfaceResult(d.elements, title: target.title, pid: target.pid, window: target.frame))
+                }
+            } else {
+                outcome = await Self.run(target)
+            }
             await MainActor.run {
                 guard id == self.pass else { return }   // pressed twice meanwhile: the controls have the result
                 self.working = false
@@ -532,16 +570,21 @@ public final class ScreenRecognition {
 
     /// The window's pixels at the screen's full resolution, through ScreenCaptureKit (the only way left on macOS 15
     /// and later). The window is found by its owner and frame; failing that, the region of the display it is on.
-    static func capture(_ t: Target) async throws -> CGImage {
+    /// `width`: a small picture instead, this many pixels wide (to see whether the window has changed).
+    static func capture(_ t: Target, width: Int? = nil) async throws -> CGImage {
         let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true)
         let scale = NSScreen.screens.first { $0.frame.intersects(Self.appKitRect(t.frame)) }?.backingScaleFactor ?? 2
         let config = SCStreamConfiguration()
         config.showsCursor = false
         config.captureResolution = .best
         config.ignoreShadowsSingleWindow = true
+        func size(_ s: CGSize) {
+            let k = width.map { CGFloat($0) / (s.width * scale) } ?? 1
+            config.width = max(1, Int(s.width * scale * k)); config.height = max(1, Int(s.height * scale * k))
+        }
         let windows = content.windows.filter { $0.owningApplication?.processID == t.pid && $0.isOnScreen && $0.windowLayer == 0 }
         if let w = windows.min(by: { distance($0.frame, t.frame) < distance($1.frame, t.frame) }), distance(w.frame, t.frame) < 40 {
-            config.width = Int(w.frame.width * scale); config.height = Int(w.frame.height * scale)
+            size(w.frame.size)
             return try await SCScreenshotManager.captureImage(contentFilter: SCContentFilter(desktopIndependentWindow: w), configuration: config)
         }
         // A window ScreenCaptureKit does not list on its own (a game's full-screen surface): that part of the display.
@@ -550,7 +593,7 @@ public final class ScreenRecognition {
         }
         let local = t.frame.offsetBy(dx: -display.frame.minX, dy: -display.frame.minY).intersection(CGRect(x: 0, y: 0, width: display.frame.width, height: display.frame.height))
         config.sourceRect = local
-        config.width = Int(local.width * scale); config.height = Int(local.height * scale)
+        size(local.size)
         // TurnOver's own windows (an alert, the update window) are left out of the picture.
         let own = content.applications.filter { $0.processID == ProcessInfo.processInfo.processIdentifier }
         return try await SCScreenshotManager.captureImage(contentFilter: SCContentFilter(display: display, excludingApplications: own, exceptingWindows: []), configuration: config)

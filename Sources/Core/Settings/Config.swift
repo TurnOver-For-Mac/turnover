@@ -323,8 +323,10 @@ public struct Config: Codable {
     }
     /// Screen recognition (NVDA: the Windows OCR settings).
     public struct Recognition: Codable {
-        /// NVDA's "Periodically refresh recognized content": read again every 1.5 s while the result is open, saying
-        /// new rows as they appear. Off by default, as in NVDA.
+        /// NVDA's "Periodically refresh recognized content", by change rather than by the clock: while the result is
+        /// open, a small picture of the window is taken each second, and when it differs the window is recognised
+        /// again, the new rows said (Oliver, 3 Nov 2026: "or even if something on the screen changes"). Off by default,
+        /// as in NVDA.
         public var autoRefresh = false
         /// NVDA's "Automatically say all on result".
         public var autoSayAll = false

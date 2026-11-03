@@ -580,7 +580,8 @@ struct RecognitionView: View {
     @EnvironmentObject var model: Model
     var body: some View {
         Form {
-            Toggle("Read new text as it appears, while a result is open", isOn: model.bool("recognition", "autoRefresh"))
+            Toggle("Recognise again when the screen changes, while a result is open", isOn: model.bool("recognition", "autoRefresh"))
+            Text("The window is looked at each second; when it has changed, what is new is read.").font(.caption)
             Toggle("Read the whole result as it opens", isOn: model.bool("recognition", "autoSayAll"))
             // macOS 26 and later only: earlier, recognition reads text alone (ScreenInterface needs Vision's newer readers).
             if #available(macOS 26.0, *) {
