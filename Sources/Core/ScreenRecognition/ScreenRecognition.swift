@@ -146,6 +146,16 @@ public final class ScreenRecognition {
                 for e in d.elements.prefix(60) { Log.io("screen interface:   \(e.kind.rawValue) \"\(Log.words(e.label.prefix(40).description))\" at \(Int(e.rect.midX)),\(Int(e.rect.midY)) (\(e.from))") }
                 self.show(r, reopen: reopen, keepRow: keepRow, controls: true)
             }
+            // The model's kinds and icons, merged in quietly once they come (46 s and nothing on 3 Nov 2026, when the
+            // result waited for them); not after another press, or once the result has closed.
+            let refined = await ScreenInterface.refine(d.elements, image: image, frame: target.frame, within: 3)
+            await MainActor.run {
+                guard id == self.pass, self.isOpen, self.showingInterface, let old = self.result else { return }
+                Log.io("screen interface: \(refined.note)")
+                guard refined.elements != d.elements else { return }
+                for e in refined.elements where e.from == "model" { Log.io("screen interface:   \(e.kind.rawValue) \"\(Log.words(e.label.prefix(40).description))\" at \(Int(e.rect.midX)),\(Int(e.rect.midY)) (model)") }
+                self.replaceQuietly(Self.interfaceResult(refined.elements, title: target.title, pid: target.pid, window: target.frame), old: old)
+            }
         }
     }
 
@@ -398,19 +408,24 @@ public final class ScreenRecognition {
                 guard id == self.pass else { return }   // pressed twice meanwhile: the controls have the result
                 self.working = false
                 guard self.isOpen, case .success(let r) = outcome, r.text.length > 0 else { return }
-                let before = Set(old.rows.map { old.text.substring(with: $0.range) })
-                // NVDA's live text: new rows only, and not a row that changed by one character (a clock's seconds).
-                let fresh = r.rows.map { r.text.substring(with: $0.range) }.filter { row in
-                    !before.contains(row) && !row.trimmingCharacters(in: .whitespaces).isEmpty && !before.contains { Self.oneCharacterApart($0, row) }
-                }
-                let keep = self.currentRowText()
-                self.result = r
-                if let keep, let row = r.rows.first(where: { r.text.substring(with: $0.range) == keep }) { self.caret = row.range.location }
-                else { self.caret = min(self.caret, max(0, r.text.length - 1)) }
-                if !fresh.isEmpty, fresh.count <= 6 { Speech.speakNews(fresh.joined(separator: "\n")) }
-                Braille.refreshSoon()
+                self.replaceQuietly(r, old: old)
             }
         }
+    }
+
+    /// A newer result in place of the one open, the place kept; only the rows that are new are said.
+    private func replaceQuietly(_ r: Result, old: Result) {
+        let before = Set(old.rows.map { old.text.substring(with: $0.range) })
+        // NVDA's live text: new rows only, and not a row that changed by one character (a clock's seconds).
+        let fresh = r.rows.map { r.text.substring(with: $0.range) }.filter { row in
+            !before.contains(row) && !row.trimmingCharacters(in: .whitespaces).isEmpty && !before.contains { Self.oneCharacterApart($0, row) }
+        }
+        let keep = currentRowText()
+        result = r
+        if let keep, let row = r.rows.first(where: { r.text.substring(with: $0.range) == keep }) { caret = row.range.location }
+        else { caret = min(caret, max(0, r.text.length - 1)) }
+        if !fresh.isEmpty, fresh.count <= 6 { Speech.speakNews(fresh.joined(separator: "\n")) }
+        Braille.refreshSoon()
     }
 
     static func oneCharacterApart(_ a: String, _ b: String) -> Bool {
