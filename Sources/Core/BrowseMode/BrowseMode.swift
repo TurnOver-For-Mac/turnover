@@ -201,7 +201,7 @@ public final class BrowseModeDocument: ScriptableObject {
         guard !buffer.lines.isEmpty else { return false }
         let saved = BrowseModeHandler.cameBackByHistory ? BrowseModeHandler.shared.savedPosition(for: url) : nil
         position = resumeOffset(saved)
-        VoiceOverSounds.play("WebPageLoaded.aiff")
+        VoiceOverSounds.play("WebAreaLoaded.aiff")   // VoiceOver's "web area loaded", the sound its list has for a page
         Log.io("browse mode: page arrived — resuming at \(position)\(saved == nil ? "" : " (saved \(saved!.offset))")")
         if announce, url != announcedURL { announcePage() }
         return true

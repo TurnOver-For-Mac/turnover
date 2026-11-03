@@ -4,17 +4,18 @@
 import Foundation
 
 public enum Tones {
-    /// Whose sounds (Settings, Sounds; 17 Oct 2026): "TurnOver's" is TurnOver's own set (TurnOverSounds) for everything.
-    /// "VoiceOver's" is VoiceOver's files (VoiceOverSounds) where VoiceOver has a sound, and where it has none, the
-    /// plain tones from before the set while VoiceOver is off; coexisting, VoiceOver is on and plays its own, so
-    /// TurnOver's tones and bells are off ("turn off TurnOver's sounds"). The set used to be TurnOver's whenever
-    /// VoiceOver was off, whatever was chosen (3 Nov 2026, Oliver: switched to VoiceOver's and "they don't change").
+    /// Whose sounds (Settings, Sounds; 17 Oct 2026): "VoiceOver's" is VoiceOver's own files (VoiceOverSounds) for the
+    /// events VoiceOver marks with a sound, and TurnOver's own set (TurnOverSounds) for the rest, which VoiceOver says
+    /// or passes over (headings, lists, moving and pressing, the modes, taking over). "TurnOver's" is the set
+    /// throughout. Coexisting, VoiceOver is on and plays its own, so TurnOver's own are off ("turn off TurnOver's
+    /// sounds"). The plain tones from before the set play where a file is missing. (3 Nov 2026: with VoiceOver's chosen
+    /// and VoiceOver off, what VoiceOver hasn't fell to the plain tones, "they don't sound quite right".)
     static var chosen: Bool { config.general.effectiveSounds == "turnover" }
-    /// A tone of TurnOver's own may play: its set is chosen, or VoiceOver is off.
+    /// A sound of TurnOver's own may play: its set is chosen, or VoiceOver is off.
     static var own: Bool { chosen || !Coexist.on }
-    /// One of TurnOver's own set, where that is chosen: false leaves VoiceOver's file or the old tone to play.
+    /// One of TurnOver's own set, where TurnOver's own may play: false leaves the old tone to play.
     private static func fresh(_ name: String) -> Bool {
-        guard chosen else { return false }
+        guard own else { return false }
         return Thread.isMainThread ? MainActor.assumeIsolated { TurnOverSounds.play(name) } : false
     }
     public static func beep(_ frequency: Double, _ ms: Int, volume: Float = 0.25) {
@@ -23,15 +24,16 @@ public enum Tones {
     }
     /// Headings: higher for level 1, descending by level.
     public static func heading(level: Int) { if fresh("heading\(min(6, max(1, level)))") { return }; beep(level <= 0 ? 700 : max(440, 1000 - Double(level - 1) * 110), 60) }
-    /// VoiceOver's own sounds where it has one (17 Oct 2026); TurnOver's tone where it hasn't, or off the Mac.
+    /// VoiceOver's own sound where it has one (17 Oct 2026), or the set's with TurnOver's chosen; false off the main
+    /// thread or with neither file, so the old tone plays.
     private static func voiceOver(_ name: String) -> Bool { Thread.isMainThread ? MainActor.assumeIsolated { VoiceOverSounds.play(name) } : false }
-    public static func link() { if fresh("link") { return }; if !voiceOver("LinkBegin.aiff") { beep(1400, 25, volume: 0.18) } }
+    public static func link() { if !voiceOver("LinkBegin.aiff") { beep(1400, 25, volume: 0.18) } }
     public static func list() { if fresh("list") { return }; beep(520, 40) }
     public static func landmark() { if fresh("landmark") { return }; beep(620, 40); DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { beep(780, 40) } }
     public static func table() { if fresh("table") { return }; beep(400, 50) }
     public static func graphic() { if fresh("graphic") { return }; beep(1100, 35, volume: 0.18) }
     public static func blockQuote() { if fresh("blockquote") { return }; beep(560, 45) }
-    public static func spellingError() { if fresh("spelling") { return }; if !voiceOver("Misspelled.aiff") { beep(300, 70) } }
+    public static func spellingError() { if !voiceOver("Misspelled.aiff") { beep(300, 70) } }
     /// The caret could not leave the line or the document (NVDA re-reads the line; a bump is kinder).
     /// Also felt on the trackpad while trackpad control is on (Trackpad sets it).
     nonisolated(unsafe) public static var onEdge: (@MainActor () -> Void)?
@@ -48,9 +50,11 @@ public enum Tones {
     // A narrow playback seam lets regression tests observe the real edge request without starting audio.
     // The production function retains the existing sound-set and coexist decisions.
     package static var edgeSound: @MainActor (Bool) -> Void = playEdgeSound
+    /// VoiceOver's "Boundary reached" (its Sounds Help menu) is WrapBoundary.aiff; ElementBorderHit.aiff is one of its
+    /// trackpad sounds, with ElementHit and EmptyHit, "touched an element" and "touched empty space" (3 Nov 2026).
     private static func playEdgeSound(keySent: Bool) {
         if Coexist.on, keySent { return }   // VoiceOver sees the key and plays its own boundary sound
-        if !fresh("edge"), !voiceOver("WrapBoundary.aiff") { beep(220, 50, volume: 0.2) }
+        if !voiceOver("WrapBoundary.aiff") { beep(220, 50, volume: 0.2) }
     }
     /// Taking over from VoiceOver: two bell notes a fifth apart, rising (G5, D6). Handing back: the same falling.
     /// Short and soft, as it is heard every time an application changes hands.
@@ -58,9 +62,9 @@ public enum Tones {
     /// there (NVDA's start-up sound; a tester, 9 Oct 2026). Speech would be silent with VoiceOver on; a tone is not.
     public static func startup() { if !own { return }; if fresh("startup") { return }; Speech.player?.playBell(frequencies: [659, 880], spacingMs: 90, ringMs: 160, volume: 0.18) }
     public static func takeOver() { if !own { return }; if fresh("take_over") { return }; Speech.player?.playBell(frequencies: [784, 1175], spacingMs: 70, ringMs: 150) }
-    /// A braille display connected (three notes up) and gone (three down), as VoiceOver gives a sound for it.
-    public static func brailleConnected() { if !own { return }; if fresh("braille_on") { return }; Speech.player?.playBell(frequencies: [523, 659, 784], spacingMs: 80, ringMs: 220, volume: 0.22) }
-    public static func brailleDisconnected() { if !own { return }; if fresh("braille_off") { return }; Speech.player?.playBell(frequencies: [784, 659, 523], spacingMs: 80, ringMs: 220, volume: 0.22) }
+    /// A braille display connected and gone: VoiceOver's sounds for them, or three notes up and three down.
+    public static func brailleConnected() { if !own { return }; if !voiceOver("BrailleDisplayConnected.aiff") { Speech.player?.playBell(frequencies: [523, 659, 784], spacingMs: 80, ringMs: 220, volume: 0.22) } }
+    public static func brailleDisconnected() { if !own { return }; if !voiceOver("BrailleDisplayDisconnected.aiff") { Speech.player?.playBell(frequencies: [784, 659, 523], spacingMs: 80, ringMs: 220, volume: 0.22) } }
     public static func handBack() { if !own { return }; if fresh("hand_back") { return }; Speech.player?.playBell(frequencies: [1175, 784], spacingMs: 70, ringMs: 150) }
     /// The focus moved (Tab, a new control): VoiceOver's little tick. Very short, high and quiet.
     public static func focusTick() {

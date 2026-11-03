@@ -167,7 +167,7 @@ public final class GlobalCommands: ScriptableObject {
             // Only ever marks: a second press no longer sends a report (it carries recent speech, and a key pressed
             // twice by accident, in an app that uses it too, would have sent one; the code review, 12 Oct 2026).
             Feedback.mark()
-            if !(Tones.chosen && TurnOverSounds.play("marked")) { Tones.beep(660, 60, volume: 0.2) }
+            if !(Tones.own && TurnOverSounds.play("marked")) { Tones.beep(660, 60, volume: 0.2) }
             let hinted = UserDefaults.standard.bool(forKey: "markHintGiven")
             UserDefaults.standard.set(true, forKey: "markHintGiven")
             // Just "marked": the count climbing with each press read as something going wrong (two testers, 13 Oct

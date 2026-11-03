@@ -89,12 +89,13 @@ public struct Config: Codable {
         public var navigationSounds = true
         /// Screen Curtain while TurnOver leads: "follow" VoiceOver's, "on" or "off".
         public var screenCurtain = "follow"
-        /// "voiceover" (VoiceOver's sound files for links, misspellings, edges, the rotor, the trackpad) or
-        /// "turnover" (TurnOver's own set); "" until one is chosen (effectiveSounds says what plays then).
+        /// "voiceover" (VoiceOver's sound files where VoiceOver has a sound: links, misspellings, edges, the rotor, the
+        /// trackpad; TurnOver's own set for the rest) or "turnover" (TurnOver's own set throughout); "" until one is
+        /// chosen (effectiveSounds says what plays then).
         public var sounds = ""
-        /// Whose sounds play ("voiceover" or "turnover"): the choice, or until one is made what always played, TurnOver's
-        /// own set where VoiceOver is off and VoiceOver's files while coexisting (Tones).
-        public var effectiveSounds: String { sounds.isEmpty ? (Coexist.on && edition != "experimental" ? "voiceover" : "turnover") : sounds }
+        /// Whose sounds play ("voiceover" or "turnover"): the choice, or until one is made what always played, VoiceOver's
+        /// unless the settings file says "experimental" (Tones).
+        public var effectiveSounds: String { sounds.isEmpty ? (edition != "experimental" ? "voiceover" : "turnover") : sounds }
         public init() {}
         enum Keys: String, CodingKey { case openAtLogin, showInMenuBar, windowsKeys, keyboardStyle, keysWhereVoiceOverReads, navigateByGroups, groupsInWindowsStyle, focusFollowsCursor, turnOverKey = "bosunKey", handOverChimes, navigationSounds, screenCurtain, edition, handOverNothing, sounds }
         public init(from decoder: Decoder) throws {

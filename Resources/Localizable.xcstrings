@@ -17079,6 +17079,9 @@
         }
       }
     },
+    "VoiceOver's: VoiceOver's own sounds where it has one, such as links and boundaries, and TurnOver's set for the rest. TurnOver's: its set throughout." : {
+
+    },
     "Voices for other languages" : {
       "extractionState" : "stale",
       "localizations" : {

@@ -677,7 +677,7 @@ struct SoundsView: View {
     private var whose: Binding<String> {
         Binding(get: {
             let s = model.get("general", "sounds") as? String ?? ""
-            return s.isEmpty ? model.special("_effectiveSounds") as? String ?? "turnover" : s
+            return s.isEmpty ? model.special("_effectiveSounds") as? String ?? "voiceover" : s
         }, set: { model.set("general", "sounds", $0) })
     }
     var body: some View {
@@ -685,6 +685,7 @@ struct SoundsView: View {
             Picker("Whose sounds", selection: whose) {
                 Text("VoiceOver's").tag("voiceover"); Text("TurnOver's").tag("turnover")
             }
+            Text("VoiceOver's: VoiceOver's own sounds where it has one, such as links and boundaries, and TurnOver's set for the rest. TurnOver's: its set throughout.").font(.caption)
             Toggle("Sounds as I move and press", isOn: model.bool("general", "navigationSounds"))
             Picker("When TurnOver takes over from VoiceOver", selection: handOver) {
                 Text("Words").tag("words"); Text("A sound").tag("sound"); Text("Nothing").tag("nothing")

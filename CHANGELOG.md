@@ -85,10 +85,13 @@ Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
 - A Settings window left open across an install knocked on the new TurnOver every two seconds; it now stops and says to
   open Settings again. Issue 77.
 - With NVDA or JAWS keys where VoiceOver reads, a style change could leave the key layer without its tap. Issue 53.
-- Settings, Sounds, "Whose sounds" now takes effect for everyone: it only counted while coexisting with VoiceOver, so
-  choosing VoiceOver's changed nothing. VoiceOver's gives its sounds for links, misspellings, boundaries, pop-ups and the
-  rest it has, and plain tones for what it hasn't (headings as tones, moving and pressing); TurnOver's is TurnOver's own
-  set throughout. Nothing changes until you choose.
+- Settings, Sounds, "Whose sounds" counted only in part with VoiceOver off: choosing VoiceOver's left the boundary,
+  headings, moving and pressing on TurnOver's set. VoiceOver's now plays VoiceOver's own sounds for links, misspellings,
+  boundaries, pop-ups, a braille display and the rest it has, and TurnOver's set for what VoiceOver says instead
+  (headings, lists, moving and pressing, the modes); TurnOver's is the set throughout. Until you choose, VoiceOver's, as
+  before; with VoiceOver off that now means its boundary and braille display sounds too.
+- VoiceOver's sounds were quieter than TurnOver's own, by 5 to 10 dB for most, so a link's blip all but vanished: each
+  now plays at the set's loudness. A page loaded plays VoiceOver's "web area loaded" sound, the one in its own list.
 
 ## 2.0, build 22.5
 
