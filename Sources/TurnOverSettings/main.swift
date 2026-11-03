@@ -11,6 +11,11 @@ import TurnOverControl
 final class Model: ObservableObject {
     @Published var state: [String: Any] = [:]
     @Published var connected = false
+    /// TurnOver closed the connection at once, five times running: this window is an old build's, left open across an
+    /// install, and TurnOver turns it away (issue 77: it knocked every two seconds until it was quit by hand).
+    @Published var turnedAway = false
+    private var refusals = 0
+    private var opened = Date()
     /// A section TurnOver asked the window to show (a settings key pressed): with the first state, or on its own
     /// while the window is open. The sidebar follows it and then clears it.
     @Published var requestedSection: Pane?
@@ -23,7 +28,9 @@ final class Model: ObservableObject {
     /// Connected to TurnOver and listening for its settings; tried again every two seconds until TurnOver is there,
     /// and again if TurnOver restarts.
     private func connect() {
+        opened = Date()
         connection = ControlClient.Connection(received: { [weak self] message in
+            self?.refusals = 0
             if message["op"] as? String == "show", let name = message["section"] as? String {
                 self?.requestedSection = Pane(rawValue: name)
                 return
@@ -33,13 +40,16 @@ final class Model: ObservableObject {
             self?.state = dict; self?.connected = true
             if let name = dict["_showSection"] as? String { self?.requestedSection = Pane(rawValue: name) }
         }, ended: { [weak self] in
-            self?.connected = false; self?.connection = nil
-            self?.retry()
+            guard let self else { return }
+            if !connected, Date().timeIntervalSince(opened) < 1 { refusals += 1 }
+            connected = false; connection = nil
+            retry()
         })
         if let connection { connection.send(["op": "subscribe"]) } else { retry() }
     }
 
     private func retry() {
+        guard refusals < 5 else { turnedAway = true; return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
             guard let self, self.connection == nil else { return }
             self.connect()
@@ -113,7 +123,9 @@ struct ContentView: View {
                 .navigationSplitViewColumnWidth(190)
                 .accessibilityLabel("Settings sections")
         } detail: {
-            if !model.connected {
+            if model.turnedAway {
+                Text("TurnOver turned this window away: it was probably updated while the window was open. Quit Settings and open it again from the TurnOver menu.").padding()
+            } else if !model.connected {
                 Text("Waiting for TurnOver. Start it with Command Control Period.").padding()
             } else {
                 switch section ?? .general {
