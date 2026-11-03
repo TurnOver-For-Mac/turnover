@@ -85,6 +85,10 @@ Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
 - A Settings window left open across an install knocked on the new TurnOver every two seconds; it now stops and says to
   open Settings again. Issue 77.
 - With NVDA or JAWS keys where VoiceOver reads, a style change could leave the key layer without its tap. Issue 53.
+- Settings, Sounds, "Whose sounds" now takes effect for everyone: it only counted while coexisting with VoiceOver, so
+  choosing VoiceOver's changed nothing. VoiceOver's gives its sounds for links, misspellings, boundaries, pop-ups and the
+  rest it has, and plain tones for what it hasn't (headings as tones, moving and pressing); TurnOver's is TurnOver's own
+  set throughout. Nothing changes until you choose.
 
 ## 2.0, build 22.5
 

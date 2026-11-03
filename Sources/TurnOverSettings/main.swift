@@ -672,13 +672,12 @@ struct SoundsView: View {
             model.set("general", "handOverChimes", v == "sound")
         })
     }
-    /// Whose sounds: the file keeps "" until one is chosen, which is VoiceOver's unless the old experimental mode chose
-    /// TurnOver's (Config.General.effectiveSounds), so the pop-up showed nothing chosen (a review, 2 Nov 2026).
+    /// Whose sounds: the file keeps "" until one is chosen, so the pop-up shows what plays meanwhile, as TurnOver works it
+    /// out (Config.General.effectiveSounds; it showed nothing chosen, a review, 2 Nov 2026).
     private var whose: Binding<String> {
         Binding(get: {
             let s = model.get("general", "sounds") as? String ?? ""
-            if !s.isEmpty { return s }
-            return model.get("general", "edition") as? String == "experimental" ? "turnover" : "voiceover"
+            return s.isEmpty ? model.special("_effectiveSounds") as? String ?? "turnover" : s
         }, set: { model.set("general", "sounds", $0) })
     }
     var body: some View {

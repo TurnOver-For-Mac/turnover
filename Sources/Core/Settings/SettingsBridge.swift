@@ -92,6 +92,7 @@ public enum SettingsBridge {
             dict["_showSection"] = section
             pendingSection = nil
         }
+        dict["_effectiveSounds"] = config.general.effectiveSounds
         dict["_kokoroAvailable"] = KokoroVoice.available
         dict["_kokoroMode"] = KokoroVoice.mode
         dict["_kokoroVoice"] = KokoroVoice.voice

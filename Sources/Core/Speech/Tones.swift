@@ -4,15 +4,17 @@
 import Foundation
 
 public enum Tones {
-    /// Coexisting, TurnOver's own tones and bells are off: VoiceOver's sounds (its own, and its files played by
-    /// TurnOver) are the sounds (17 Oct 2026: "turn off TurnOver's sounds").
-    /// The sounds setting (17 Oct 2026): TurnOver's own tones when "TurnOver's" is chosen; otherwise VoiceOver's
-    /// files (VoiceOverSounds), and TurnOver's tones only where VoiceOver has no sound and VoiceOver is off.
-    static var own: Bool { config.general.effectiveSounds == "turnover" || !Coexist.on }
-    /// One of TurnOver's own sounds (TurnOverSounds) where TurnOver plays its own: false leaves the old tone to play.
-    /// `ifChosen`: VoiceOver has its own sound for this, so only when TurnOver's sounds are chosen.
-    private static func fresh(_ name: String, ifChosen: Bool = false) -> Bool {
-        guard ifChosen ? config.general.effectiveSounds == "turnover" : own else { return false }
+    /// Whose sounds (Settings, Sounds; 17 Oct 2026): "TurnOver's" is TurnOver's own set (TurnOverSounds) for everything.
+    /// "VoiceOver's" is VoiceOver's files (VoiceOverSounds) where VoiceOver has a sound, and where it has none, the
+    /// plain tones from before the set while VoiceOver is off; coexisting, VoiceOver is on and plays its own, so
+    /// TurnOver's tones and bells are off ("turn off TurnOver's sounds"). The set used to be TurnOver's whenever
+    /// VoiceOver was off, whatever was chosen (3 Nov 2026, Oliver: switched to VoiceOver's and "they don't change").
+    static var chosen: Bool { config.general.effectiveSounds == "turnover" }
+    /// A tone of TurnOver's own may play: its set is chosen, or VoiceOver is off.
+    static var own: Bool { chosen || !Coexist.on }
+    /// One of TurnOver's own set, where that is chosen: false leaves VoiceOver's file or the old tone to play.
+    private static func fresh(_ name: String) -> Bool {
+        guard chosen else { return false }
         return Thread.isMainThread ? MainActor.assumeIsolated { TurnOverSounds.play(name) } : false
     }
     public static func beep(_ frequency: Double, _ ms: Int, volume: Float = 0.25) {
@@ -23,13 +25,13 @@ public enum Tones {
     public static func heading(level: Int) { if fresh("heading\(min(6, max(1, level)))") { return }; beep(level <= 0 ? 700 : max(440, 1000 - Double(level - 1) * 110), 60) }
     /// VoiceOver's own sounds where it has one (17 Oct 2026); TurnOver's tone where it hasn't, or off the Mac.
     private static func voiceOver(_ name: String) -> Bool { Thread.isMainThread ? MainActor.assumeIsolated { VoiceOverSounds.play(name) } : false }
-    public static func link() { if fresh("link", ifChosen: true) { return }; if !voiceOver("LinkBegin.aiff") { beep(1400, 25, volume: 0.18) } }
+    public static func link() { if fresh("link") { return }; if !voiceOver("LinkBegin.aiff") { beep(1400, 25, volume: 0.18) } }
     public static func list() { if fresh("list") { return }; beep(520, 40) }
     public static func landmark() { if fresh("landmark") { return }; beep(620, 40); DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { beep(780, 40) } }
     public static func table() { if fresh("table") { return }; beep(400, 50) }
     public static func graphic() { if fresh("graphic") { return }; beep(1100, 35, volume: 0.18) }
     public static func blockQuote() { if fresh("blockquote") { return }; beep(560, 45) }
-    public static func spellingError() { if fresh("spelling", ifChosen: true) { return }; if !voiceOver("Misspelled.aiff") { beep(300, 70) } }
+    public static func spellingError() { if fresh("spelling") { return }; if !voiceOver("Misspelled.aiff") { beep(300, 70) } }
     /// The caret could not leave the line or the document (NVDA re-reads the line; a bump is kinder).
     /// Also felt on the trackpad while trackpad control is on (Trackpad sets it).
     nonisolated(unsafe) public static var onEdge: (@MainActor () -> Void)?
@@ -47,8 +49,8 @@ public enum Tones {
     // The production function retains the existing sound-set and coexist decisions.
     package static var edgeSound: @MainActor (Bool) -> Void = playEdgeSound
     private static func playEdgeSound(keySent: Bool) {
-        if !Coexist.on { if !fresh("edge") { beep(220, 50, volume: 0.2) } }
-        else if !keySent { _ = voiceOver("WrapBoundary.aiff") }
+        if Coexist.on, keySent { return }   // VoiceOver sees the key and plays its own boundary sound
+        if !fresh("edge"), !voiceOver("WrapBoundary.aiff") { beep(220, 50, volume: 0.2) }
     }
     /// Taking over from VoiceOver: two bell notes a fifth apart, rising (G5, D6). Handing back: the same falling.
     /// Short and soft, as it is heard every time an application changes hands.
