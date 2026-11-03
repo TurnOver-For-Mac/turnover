@@ -109,9 +109,23 @@ public struct AXAttributeBatchResult {
 
 public extension AXUIElement {
     func attributeResult(_ name: String, policy: AXQueryPolicy = .respectBackoff) -> AXQueryResult<CFTypeRef> {
+        if let snapshot = AXSnapshot.current {
+            let value = snapshot.attribute(name, of: self)
+            return AXQueryResult(value: value, status: .returned(value == nil ? .noValue : .success), elapsedNanoseconds: 0, wasAttempted: false)
+        }
         var value: CFTypeRef?
         let execution = AXHealth.query(self, policy: policy) { AXUIElementCopyAttributeValue(self, name as CFString, &value) }
         return execution.result(value)
+    }
+
+    func attributeSettableResult(_ name: String, policy: AXQueryPolicy = .respectBackoff) -> AXQueryResult<Bool> {
+        if let snapshot = AXSnapshot.current {
+            let value = snapshot.nodes[ElementKey(self)]?.settable[name]
+            return AXQueryResult(value: value, status: .returned(value == nil ? .attributeUnsupported : .success), elapsedNanoseconds: 0, wasAttempted: false)
+        }
+        var settable: DarwinBoolean = false
+        let execution = AXHealth.query(self, policy: policy) { AXUIElementIsAttributeSettable(self, name as CFString, &settable) }
+        return execution.result(settable.boolValue)
     }
 
     func parameterizedResult(_ name: String, _ parameter: CFTypeRef, policy: AXQueryPolicy = .respectBackoff) -> AXQueryResult<CFTypeRef> {
@@ -121,6 +135,10 @@ public extension AXUIElement {
     }
 
     func attributeValueCountResult(_ name: String, policy: AXQueryPolicy = .respectBackoff) -> AXQueryResult<Int> {
+        if let snapshot = AXSnapshot.current {
+            let value = (snapshot.attribute(name, of: self) as? [AnyObject])?.count
+            return AXQueryResult(value: value, status: .returned(value == nil ? .noValue : .success), elapsedNanoseconds: 0, wasAttempted: false)
+        }
         var count: CFIndex = 0
         let execution = AXHealth.query(self, policy: policy) { AXUIElementGetAttributeValueCount(self, name as CFString, &count) }
         return execution.result(count)
@@ -128,12 +146,21 @@ public extension AXUIElement {
 
     /// Requests only the specified slice, unlike attr/elements which copy the entire attribute value.
     func attributeValuesResult(_ name: String, index: Int, maxValues: Int, policy: AXQueryPolicy = .respectBackoff) -> AXQueryResult<CFArray> {
+        if let snapshot = AXSnapshot.current {
+            let all = snapshot.attribute(name, of: self) as? [AnyObject]
+            let values = all.map { Array($0.dropFirst(max(0, index)).prefix(max(0, maxValues))) as CFArray }
+            return AXQueryResult(value: values, status: .returned(all == nil ? .noValue : .success), elapsedNanoseconds: 0, wasAttempted: false)
+        }
         var values: CFArray?
         let execution = AXHealth.query(self, policy: policy) { AXUIElementCopyAttributeValues(self, name as CFString, index, maxValues, &values) }
         return execution.result(values)
     }
 
     func attributeNamesResult(policy: AXQueryPolicy = .respectBackoff) -> AXQueryResult<CFArray> {
+        if let snapshot = AXSnapshot.current {
+            let names = snapshot.nodes[ElementKey(self)].map { Array($0.attributes.keys) as CFArray }
+            return AXQueryResult(value: names, status: .returned(names == nil ? .noValue : .success), elapsedNanoseconds: 0, wasAttempted: false)
+        }
         var names: CFArray?
         let execution = AXHealth.query(self, policy: policy) { AXUIElementCopyAttributeNames(self, &names) }
         return execution.result(names)
@@ -146,12 +173,17 @@ public extension AXUIElement {
     }
 
     func actionNamesResult(policy: AXQueryPolicy = .respectBackoff) -> AXQueryResult<CFArray> {
+        if let snapshot = AXSnapshot.current { return AXQueryResult(value: (snapshot.nodes[ElementKey(self)]?.actions ?? []) as CFArray, status: .returned(.success), elapsedNanoseconds: 0, wasAttempted: false) }
         var names: CFArray?
         let execution = AXHealth.query(self, policy: policy) { AXUIElementCopyActionNames(self, &names) }
         return execution.result(names)
     }
 
     func attributesResult(_ names: [String], policy: AXQueryPolicy = .respectBackoff) -> AXAttributeBatchResult {
+        if let snapshot = AXSnapshot.current {
+            let values = names.map { snapshot.attribute($0, of: self) ?? kCFNull! } as CFArray
+            return AXAttributeBatchResult(query: AXQueryResult(value: values, status: .returned(.success), elapsedNanoseconds: 0, wasAttempted: false), names: names)
+        }
         var values: CFArray?
         let execution = AXHealth.query(self, policy: policy) {
             AXUIElementCopyMultipleAttributeValues(self, names as CFArray, AXCopyMultipleAttributeOptions(rawValue: 0), &values)

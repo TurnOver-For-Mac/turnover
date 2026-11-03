@@ -4,7 +4,9 @@ Views turns windows and documents into models the reader can navigate. Its sourc
 
 - [FlatView.swift](FlatView.swift): a flat reading model for a window area.
 - [FlatScreen.swift](FlatScreen.swift): a screen model discovered through accessibility hit tests.
-- [WebBuffer.swift](WebBuffer.swift): the accessibility-derived virtual document used by browse mode.
+- [WebBuffer.swift](WebBuffer.swift): the virtual document and immutable reading publications used by browse mode.
+- [BufferTextInfo.swift](BufferTextInfo.swift): reading ranges pinned to one document publication.
+- [WebBufferCollection.swift](WebBufferCollection.swift): bounded accessibility collection on the document worker. Existing object and speech rules interpret the captured data on main; see [document snapshots](../../docs/DOCUMENT-SNAPSHOTS.md).
 - [PanesView.swift](PanesView.swift): named parts and navigation for panes recipes, used by the [Panes app module](../Apps/Panes/README.md).
 
 FlatView and FlatScreen use the `flatView` developer switch. The [flat-view plan](../../docs/FLAT-VIEW-PLAN.md) records their design rationale.

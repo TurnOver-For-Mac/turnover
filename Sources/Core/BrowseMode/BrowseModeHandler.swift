@@ -148,7 +148,16 @@ public final class BrowseModeHandler {
         }
     }
 
+    public func cancelBufferBuilds() {
+        lock.lock(); let current = documents; lock.unlock()
+        for document in current { document.cancelBuffer() }
+    }
+
     public func forget(pid: pid_t) {
-        lock.lock(); documents.removeAll { $0.webArea.pid == pid }; lock.unlock()
+        lock.lock()
+        let removed = documents.filter { $0.webArea.pid == pid }
+        documents.removeAll { $0.webArea.pid == pid }
+        lock.unlock()
+        for document in removed { document.cancelBuffer() }
     }
 }

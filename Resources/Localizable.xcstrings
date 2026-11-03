@@ -19392,6 +19392,9 @@
         }
       }
     },
+    "end of the available content; the page was read in part" : {
+      "comment" : "Spoken instead of a complete-page boundary when document collection was incomplete"
+    },
     "end of the book" : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -23116,6 +23119,12 @@
         }
       }
     },
+    "page content is unavailable; try refreshing" : {
+      "comment" : "Spoken when document collection failed before any content was available"
+    },
+    "page could not be fully refreshed" : {
+      "comment" : "Spoken when a manual document refresh failed or returned incomplete content"
+    },
     "page down" : {
       "comment" : "A braille chord's command, as braille help says it",
       "localizations" : {
@@ -23129,6 +23138,7 @@
     },
     "page read in part, it is very long" : {
       "comment" : "Spoken message",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -23137,6 +23147,9 @@
           }
         }
       }
+    },
+    "page read in part; more content may be missing" : {
+      "comment" : "Spoken when document collection stops before the entire page is available"
     },
     "page up" : {
       "comment" : "A braille chord's command, as braille help says it",

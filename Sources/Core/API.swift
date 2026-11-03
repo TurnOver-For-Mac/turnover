@@ -29,9 +29,12 @@ public enum API {
 
     public static func setFocusObject(_ obj: TurnOverObject?, ancestors: [TurnOverObject], interceptor: BrowseModeDocument? = nil) {
         FormattingFeedback.shared.cancel()
+        let previous = focusTreeInterceptor
+        if previous !== interceptor { previous?.cancelBuffer() }
         let pid = obj?.pid ?? 0
         lock.lock(); _focus = obj; _ancestors = ancestors; _interceptor = interceptor; lock.unlock()
         focusedPidValue.value = pid
+        if let interceptor, interceptor.buffer.status == .cancelled { interceptor.buffer.build() }
     }
     nonisolated private static let focusedPidValue = Locked<pid_t>(0)
     /// The focused element's process, for the keyboard thread (0: none known). The Dock, a status menu or Spotlight
