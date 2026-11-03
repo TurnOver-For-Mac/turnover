@@ -151,11 +151,12 @@ public final class ScreenRecognition {
             // result waited for them); not after another press, or once the result has closed.
             let refined = await ScreenInterface.refine(d.elements, image: image, frame: target.frame, within: 3)
             await MainActor.run {
-                guard id == self.pass, self.isOpen, self.showingInterface, let old = self.result, self.stillInFront(target) else { return }
+                // Not over a refresh that has shown a newer screen meanwhile (a review, 3 Nov 2026).
+                guard id == self.pass, self.isOpen, self.showingInterface, self.result?.text == r.text, self.stillInFront(target) else { return }
                 Log.io("screen interface: \(refined.note)")
                 guard refined.elements != d.elements else { return }
                 for e in refined.elements where e.from == "model" { Log.io("screen interface:   \(e.kind.rawValue) \"\(Log.words(e.label.prefix(40).description))\" at \(Int(e.rect.midX)),\(Int(e.rect.midY)) (model)") }
-                self.replaceQuietly(Self.interfaceResult(refined.elements, title: target.title, pid: target.pid, window: target.frame), old: old)
+                self.merge(Self.interfaceResult(refined.elements, title: target.title, pid: target.pid, window: target.frame))
             }
         }
     }
@@ -463,6 +464,16 @@ public final class ScreenRecognition {
                 self.replaceQuietly(r, old: old)
             }
         }
+    }
+
+    /// The model's view in place of Vision's, in silence: rows have their kinds now ("Save, button"), so the place is
+    /// kept by the control's box, not its words.
+    private func merge(_ r: Result) {
+        let here = result.flatMap { old in rowIndex(caret).map { old.rows[$0].items[0].rect } }
+        result = r
+        if let here, let row = r.rows.first(where: { $0.items.first?.rect == here }) { caret = row.range.location }
+        else { caret = min(caret, max(0, r.text.length - 1)) }
+        Braille.refreshSoon()
     }
 
     /// A newer result in place of the one open, the place kept; only the rows that are new are said.
