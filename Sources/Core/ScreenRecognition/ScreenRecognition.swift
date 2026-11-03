@@ -160,23 +160,27 @@ public final class ScreenRecognition {
         }
     }
 
-    /// The controls as rows: one each, "label, kind", the whole row clickable at the control's centre.
+    /// The controls as rows: one each, "label, kind", the whole row clickable at the control's centre, in the order
+    /// text is read (a sidebar before the pane beside it, cards as cards: `ordered`), each block Tab's stop.
     /// Each row ends where its words do, the line break between rows, as text results' rows are: a row that took in
     /// its line break ended where the next began, and Down stayed on the first row (Oliver, 2 Nov 2026).
     @available(macOS 26.0, *)
     package nonisolated static func interfaceResult(_ elements: [ScreenInterface.Element], title: String, pid: pid_t, window: CGRect) -> Result {
+        let lines: [Line] = elements.map { e in
+            let label = e.label.isEmpty ? e.kind.spoken : e.label
+            return (e.kind.spoken.isEmpty || e.label.isEmpty ? label : "\(label), \(e.kind.spoken)", e.rect, [(label, e.rect)])
+        }
         let text = NSMutableString()
         var rows: [Row] = []
-        for e in elements {
-            let label = e.label.isEmpty ? e.kind.spoken : e.label
-            let spoken = e.kind.spoken.isEmpty || e.label.isEmpty ? label : "\(label), \(e.kind.spoken)"
-            if text.length > 0 { text.append("\n") }
-            let start = text.length
-            text.append(spoken)
-            let labelRange = NSRange(location: start, length: (label as NSString).length)
-            let word = Word(range: labelRange, rect: e.rect)
-            let item = Item(range: NSRange(location: start, length: (spoken as NSString).length), rect: e.rect, words: [word])
-            rows.append(Row(range: NSRange(location: start, length: (spoken as NSString).length), items: [item], block: 0))
+        for (b, block) in ordered(lines).enumerated() {
+            for line in block.flatMap({ $0 }) {
+                if text.length > 0 { text.append("\n") }
+                let start = text.length
+                text.append(line.0)
+                let word = Word(range: NSRange(location: start, length: (line.2[0].0 as NSString).length), rect: line.1)
+                let item = Item(range: NSRange(location: start, length: (line.0 as NSString).length), rect: line.1, words: [word])
+                rows.append(Row(range: item.range, items: [item], block: b))
+            }
         }
         return Result(text: text, rows: rows, title: title, pid: pid, window: window)
     }
@@ -427,7 +431,7 @@ public final class ScreenRecognition {
     }
 
     /// Whether two small pictures of the window differ: more than one part in a hundred by a visible amount.
-    nonisolated static func differs(_ a: CGImage, _ b: CGImage) -> Bool {
+    package nonisolated static func differs(_ a: CGImage, _ b: CGImage) -> Bool {
         guard a.width == b.width, a.height == b.height, let x = a.dataProvider?.data, let y = b.dataProvider?.data,
               CFDataGetLength(x) == CFDataGetLength(y), let px = CFDataGetBytePtr(x), let py = CFDataGetBytePtr(y) else { return true }
         let n = CFDataGetLength(x)
@@ -578,7 +582,7 @@ public final class ScreenRecognition {
         let started = Date()
         do { lines = try recognizeLines(image, frame: t.frame) } catch { return .failure("recognition failed: \(error.localizedDescription)") }
         Log.io("screen recognition: Vision took \(Int(Date().timeIntervalSince(started) * 1000)) ms, main thread \(Thread.isMainThread ? "BLOCKED" : "free")")
-        return await .success(layout(lines, title: t.title, pid: t.pid, window: t.frame))
+        return .success(layout(lines, title: t.title, pid: t.pid, window: t.frame))
     }
 
     /// The window's pixels at the screen's full resolution, through ScreenCaptureKit (the only way left on macOS 15
@@ -670,8 +674,10 @@ public final class ScreenRecognition {
     /// bottom) or right down it (left to right), again and again (an XY cut). Side-by-side columns (a sidebar, a
     /// chat, a browser pane: VOCR's common complaint is these read as one line) become separate blocks, read one
     /// after the other. A cut down the middle of rows that line up (a list or table: sender and date) is not a column:
-    /// those stay rows, read left to right, the pieces two spaces apart.
-    public static func layout(_ lines: [Line], title: String, pid: pid_t, window: CGRect) -> Result {
+    /// those stay rows, read left to right, the pieces two spaces apart. Cards side by side (a name over a button,
+    /// four across) are each a block of one row, read top to bottom. The blocks, each its rows, each row's lines left
+    /// to right.
+    nonisolated public static func ordered(_ lines: [Line]) -> [[[Line]]] {
         let heights = lines.map { $0.1.height }.sorted()
         let unit = heights.isEmpty ? 10 : max(6, heights[heights.count / 2])
         var blocks: [[[Line]]] = []
@@ -686,9 +692,17 @@ public final class ScreenRecognition {
             var vCuts: [(Int, CGFloat)] = []; var right = byX[0].1.maxX
             for (i, l) in byX.enumerated().dropFirst() { if l.1.minX > right { vCuts.append((i, l.1.minX - right)) }; right = max(right, l.1.maxX) }
             let bestH = hCuts.map { $0.1 }.max() ?? 0, bestV = vCuts.map { $0.1 }.max() ?? 0
+            let cols = bestV >= gutter ? split(byX, at: vCuts.filter { $0.1 >= gutter }.map { $0.0 }) : [ls]
+            // Cards side by side (Parallels' installation assistant, issue 73: four systems, a Download button over
+            // each name, read "Download Download Download Download" then the names): three or more evenly spaced
+            // columns of short lines, two or three deep, the rows well apart (a picture between). Each card is one
+            // row, top to bottom, in a block of its own. A table's rows sit a line apart, and a form has two columns.
+            if cols.count >= 3, bestH >= unit * 1.5, isCards(cols) {
+                for col in cols { blocks.append([col.sorted { $0.1.minY < $1.1.minY }]) }
+                return
+            }
             // Columns first where a gutter runs the full height: a sidebar, the main text, a side pane.
             if bestV >= gutter, bestV >= bestH {
-                let cols = split(byX, at: vCuts.filter { $0.1 >= gutter }.map { $0.0 })
                 // Neighbouring columns whose rows line up are one table (Finder's name, date, size and kind); the
                 // others (its sidebar) are separate.
                 var groups: [[[Line]]] = []
@@ -701,12 +715,19 @@ public final class ScreenRecognition {
                 }
                 if cols.count > 1, bestH < unit * 0.9 { blocks.append(rows(ls)); return }   // a table: its rows
             }
-            // Then sections: a gap of a line or more across the region.
-            if bestH >= unit * 0.9 {
-                let parts = split(byY, at: hCuts.filter { $0.1 >= unit * 0.9 }.map { $0.0 })
-                if parts.count > 1 { parts.forEach(order); return }
+            // Then sections: cut at the widest gap across the region, a line or more, and look at each part again (one
+            // cut at a time, so cards under a title are still seen together).
+            if bestH >= unit * 0.9, let cut = hCuts.max(by: { $0.1 < $1.1 }) {
+                split(byY, at: [cut.0]).forEach(order); return
             }
             blocks.append(rows(ls))
+        }
+        func isCards(_ cols: [[Line]]) -> Bool {
+            let depth = rows(cols.flatMap { $0 }).count
+            guard (2...3).contains(depth), cols.allSatisfy({ $0.count == depth && $0.allSatisfy { $0.0.split(separator: " ").count <= 5 } }) else { return false }
+            let centres = cols.map { $0.reduce(CGRect.null) { $0.union($1.1) }.midX }
+            let pitches = zip(centres, centres.dropFirst()).map { $1 - $0 }
+            return (pitches.max() ?? 0) - (pitches.min() ?? 0) < (pitches.min() ?? 0) * 0.25
         }
         func split(_ sorted: [Line], at cuts: [Int]) -> [[Line]] {
             var out: [[Line]] = []; var from = 0
@@ -743,7 +764,12 @@ public final class ScreenRecognition {
             return out.map { $0.sorted { $0.1.minX < $1.1.minX } }
         }
         order(lines)
+        return blocks
+    }
 
+    /// The lines as a result: the blocks' rows in order, the pieces of a row two spaces apart, each word keeping its box.
+    nonisolated public static func layout(_ lines: [Line], title: String, pid: pid_t, window: CGRect) -> Result {
+        let blocks = ordered(lines)
         let text = NSMutableString()
         var outRows: [Row] = []
         for (b, block) in blocks.enumerated() {

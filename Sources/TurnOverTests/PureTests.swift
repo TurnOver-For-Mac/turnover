@@ -1149,6 +1149,48 @@ func browseTextNavTests() {
         }
         expect(r.text.substring(with: r.rows[1].range), "Next, button")
     }
+    test("screen recognition: a controls result reads a sidebar before the main pane, not band by band") {
+        guard #available(macOS 26.0, *) else { return }
+        func e(_ kind: ScreenInterface.Kind, _ label: String, _ x: CGFloat, _ y: CGFloat, _ w: CGFloat) -> ScreenInterface.Element {
+            ScreenInterface.Element(kind: kind, label: label, rect: CGRect(x: x, y: y, width: w, height: 16), from: "document")
+        }
+        let elements = [e(.text, "General", 10, 10, 60), e(.button, "Save", 300, 10, 50), e(.text, "Speech", 10, 40, 60),
+                        e(.button, "Cancel", 300, 40, 50), e(.text, "Braille", 10, 70, 60), e(.text, "Sounds", 10, 100, 60), e(.text, "Apps", 10, 130, 60)]
+        let r = ScreenRecognition.interfaceResult(elements, title: "", pid: 0, window: CGRect(x: 0, y: 0, width: 400, height: 300))
+        expect(r.rows.map { r.text.substring(with: $0.range) }, ["General", "Speech", "Braille", "Sounds", "Apps", "Save, button", "Cancel, button"])
+        expect(r.rows.map(\.block), [0, 0, 0, 0, 0, 1, 1], "the sidebar and the main pane are two blocks (Tab moves between them)")
+        expect(r.rows[5].items[0].words[0].rect.midX, 325, "the click lands on the button")
+    }
+    test("screen recognition: cards side by side read as cards, a form and a table stay rows") {
+        func line(_ s: String, _ x: CGFloat, _ y: CGFloat, _ w: CGFloat) -> ScreenRecognition.Line { (s, CGRect(x: x, y: y, width: w, height: 16), [(s, CGRect(x: x, y: y, width: w, height: 16))]) }
+        func rows(_ lines: [ScreenRecognition.Line]) -> [String] {
+            let r = ScreenRecognition.layout(lines, title: "", pid: 0, window: CGRect(x: 0, y: 0, width: 800, height: 600))
+            return r.rows.map { r.text.substring(with: $0.range) }
+        }
+        // Parallels' installation assistant (issue 73): four cards, a Download button over each name, far apart.
+        let cards = [line("Free Systems", 20, 20, 120)] + ["macOS", "Ubuntu Linux", "Fedora Linux", "Debian GNU/Linux"].enumerated().flatMap { i, name in
+            [line("Download", 40 + CGFloat(i) * 200, 200, 80), line(name, 40 + CGFloat(i) * 200, 260, 110)]
+        }
+        expect(rows(cards), ["Free Systems", "Download  macOS", "Download  Ubuntu Linux", "Download  Fedora Linux", "Download  Debian GNU/Linux"])
+        // A form: two columns, labels and values, rows well apart. Not cards: read across.
+        let form = [line("Name", 20, 20, 50), line("Oliver", 200, 20, 60), line("Email", 20, 60, 50), line("oliver@example.com", 200, 60, 150)]
+        expect(rows(form), ["Name  Oliver", "Email  oliver@example.com"])
+        // A table: four columns, rows a line apart. Not cards: read across.
+        let table = (0..<3).flatMap { r in (0..<4).map { c in line("r\(r)c\(c)", 20 + CGFloat(c) * 150, 20 + CGFloat(r) * 20, 60) } }
+        expect(rows(table), ["r0c0  r0c1  r0c2  r0c3", "r1c0  r1c1  r1c2  r1c3", "r2c0  r2c1  r2c2  r2c3"])
+    }
+    test("screen recognition: two small pictures differ only when a visible part has changed") {
+        func picture(_ draw: (CGContext) -> Void) -> CGImage {
+            let ctx = CGContext(data: nil, width: 160, height: 100, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+            ctx.setFillColor(CGColor(gray: 1, alpha: 1)); ctx.fill(CGRect(x: 0, y: 0, width: 160, height: 100))
+            ctx.setFillColor(CGColor(gray: 0, alpha: 1)); draw(ctx)
+            return ctx.makeImage()!
+        }
+        let blank = picture { _ in }, dialog = picture { $0.fill(CGRect(x: 40, y: 30, width: 60, height: 40)) }, speck = picture { $0.fill(CGRect(x: 10, y: 10, width: 1, height: 1)) }
+        check(!ScreenRecognition.differs(blank, picture { _ in }), "the same picture twice: no change")
+        check(ScreenRecognition.differs(blank, dialog), "a dialog's worth of pixels: a change")
+        check(!ScreenRecognition.differs(blank, speck), "one pixel (a cursor's blink): no change")
+    }
     test("VoiceOver keys: VO-Shift-L describes, VO-Shift-Y recognises the screen's text") {
         let saved = config
         defer { config = saved }
