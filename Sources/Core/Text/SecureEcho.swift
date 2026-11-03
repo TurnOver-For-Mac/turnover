@@ -61,15 +61,55 @@ public enum SecureEcho {
             Speech.speakMessage(lastSeen == 0 ? Phrases.blank : Phrases.characters(lastSeen), remember: false)
         }
     }
+
+    /// A password field the application in front shows from another of its processes. In System Settings' password
+    /// sheet (Users & Groups, Add User; macOS 27.2, 31 Oct 2026) the field is the pane's extension's, an XPC process:
+    /// FocusChanges sets its focus aside (not an application), and it tells TurnOver nothing as it is typed into, so not
+    /// a click was heard. Asked of the application, the focused element is that field, and its length goes 1, 2, 3, 4 as
+    /// it is typed into and back to 0 (measured).
+    public static func otherProcessField(of appPid: pid_t) -> AXUIElement? {
+        guard appPid > 0 else { return nil }
+        // Asked four times a second while secure input is on, and the field's length every 50 ms: the application and the
+        // field each get a short timeout of their own, as systemFocusIsPasswordField does, so an application that hangs
+        // while secure input is stuck on can't stall TurnOver for the system's six seconds at a time (a code review,
+        // 1 Nov 2026).
+        let app = AXUIElementCreateApplication(appPid)
+        AXUIElementSetMessagingTimeout(app, 0.25)
+        guard let f = app.element(kAXFocusedUIElementAttribute) else { return nil }
+        AXUIElementSetMessagingTimeout(f, 0.25)
+        guard f.pid != appPid,
+              Role.from(axRole: f.role, subrole: f.string(kAXSubroleAttribute)) == .passwordEdit else { return nil }
+        return f
+    }
+
+    private static var watched: AXUIElement?
+    private static var watchTimer: Timer?
+    /// Such a field's length looked at every 50 ms while it has the keys, as its caret events would be heard
+    /// (SecureInputWatch starts and stops it); nil stops. Its focus was set aside, so nothing said where the keys had
+    /// gone (only silence told it was the password field, 31 Oct 2026): it is spoken as a focus is, its name and role.
+    static func watch(_ e: AXUIElement?) {
+        if let e, let w = watched, w.isSame(e) { return }
+        watchTimer?.invalidate(); watchTimer = nil
+        watched = e
+        guard let e else { return }
+        focused(e)
+        Speech.cancel()
+        Speech.speakObject(ObjectFactory.make(e), reason: .focus)
+        watchTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { _ in MainActor.assumeIsolated { if let w = watched { changed(w) } } }
+    }
 }
 
 
 /// E17: Secure Input left on after a password field (Safari, 3 Oct 2026) hides every key from TurnOver, so its reading
-/// keys silently stop. Checked once a second while TurnOver leads: on, for two seconds running, with the focus not in
-/// a password field, TurnOver says so once and how to get the keys back, and logs which process holds it.
+/// keys silently stop. Checked four times a second while TurnOver leads: on, for ten seconds running, with the focus not
+/// in a password field, TurnOver says so once and how to get the keys back, and logs which process holds it. (Two seconds
+/// until 31 Oct 2026: Chrome keeps secure input on while the "Show password" box after its password field has the focus,
+/// and each Tab out of the field brought the warning.) A password field the application shows from another process
+/// (SecureEcho.otherProcessField) is one too: its length is looked at from the first quarter second, and it gives no
+/// warning (System Settings' password sheet said "Press Command Tab twice" three times while the password was typed).
 public enum SecureInputWatch {
     private static var timer: Timer?
-    private static var seconds = 0
+    private static var looks = 0
     private static var warned = false
     /// Secure input came on or went off while TurnOver leads (the app lifts VoiceOver's mute for a password field).
     public static var onChange: ((Bool) -> Void)?
@@ -77,17 +117,19 @@ public enum SecureInputWatch {
 
     public static func start() {
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in MainActor.assumeIsolated { check() } }
+        timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { _ in MainActor.assumeIsolated { check() } }
     }
-    public static func stop() { timer?.invalidate(); timer = nil; seconds = 0; warned = false }
+    public static func stop() { timer?.invalidate(); timer = nil; looks = 0; warned = false; SecureEcho.watch(nil) }
 
     private static func check() {
         let on = IsSecureEventInputEnabled()
         if on != wasOn { wasOn = on; onChange?(on) }
-        let inPassword = API.focusObject?.role == .passwordEdit
-        guard on, !inPassword else { seconds = 0; warned = false; return }
-        seconds += 1
-        guard seconds >= 2, !warned else { return }
+        let other = on ? SecureEcho.otherProcessField(of: AXHandler.shared.activePid) : nil
+        SecureEcho.watch(other)
+        let inPassword = API.focusObject?.role == .passwordEdit || other != nil
+        guard on, !inPassword else { looks = 0; warned = false; return }
+        looks += 1
+        guard looks >= 40, !warned else { return }
         warned = true
         let holder = (CGSessionCopyCurrentDictionary() as? [String: Any])?["kCGSSessionSecureInputPID"] as? Int
         let name = holder.flatMap { NSRunningApplication(processIdentifier: pid_t($0))?.localizedName } ?? holder.map { "pid \($0)" } ?? "an application"
