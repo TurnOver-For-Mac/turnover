@@ -174,7 +174,7 @@ beta's). **No VoiceOver setting** = the maintainer to decide: keep as TurnOver's
 | TurnOver item | VoiceOver | Standard |
 |---|---|---|
 | Sounds as I move and press | Sound: sounds on or off | from VoiceOver |
-| Read new text as it appears | Web: observe live regions; Verbosity: value updates | from VoiceOver |
+| Recognise again when the screen changes | Web: observe live regions; Verbosity: value updates | from VoiceOver |
 | Read the whole result as it opens | Verbosity: speak all static text in sheets | from VoiceOver |
 | Screen Curtain while TurnOver reads | VoiceOver's screen curtain | from VoiceOver |
 | Games; Gesture haptics; Screen recognition; Edition | none | beta only (Edition stays on a development Mac) |

@@ -20,6 +20,14 @@ Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
   dialog's OK is followed by the screen that comes after it without pressing the key again. Settings, Screen
   recognition, "After Return clicks something, recognise again" turns it off, and the result closes after a click
   as before.
+- Screen recognition can recognise again whenever the screen changes: Settings, Screen recognition, "Recognise again
+  when the screen changes" (it was "Read new text as it appears"). The window is looked at each second, and when it
+  has changed, the result is updated and what is new is read; for controls too. Off by default.
+- Screen recognition reads cards side by side as cards: a name over a button, four across, was "Download Download
+  Download Download" and then the four names (Parallels' installation assistant, issue 73); now each card is a row,
+  top to bottom, and Tab moves between them. The controls result reads in the same order as text: a sidebar before
+  the pane beside it.
+- A screen recognition result that comes back after you've moved to another app no longer opens over it.
 - Progress bars beep as they move, as in NVDA: a short beep for each percent, rising in pitch from low at 0 to high
   at 100. To hear the percentage instead (as before), both, or nothing, choose in Settings, Sounds, or in the
   Verbosity list (VO-V). With NVDA keys, NVDA+U goes through them. A bar's beeps keep up with it as it moves, rather
