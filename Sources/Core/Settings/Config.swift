@@ -329,10 +329,10 @@ public struct Config: Codable {
         /// NVDA's "Automatically say all on result".
         public var autoSayAll = false
         /// After Return clicks something in the result, recognise again instead of closing (Oliver, 28 Oct 2026: a
-        /// dialog's OK, then the screen that follows, without pressing the key again). A feature for a whole build,
-        /// so off by default and its toggle shown only in developer builds (Oliver, 29 Oct 2026: "that's not a bug fix,
-        /// it's a feature").
-        public var refreshAfterClick = false
+        /// dialog's OK, then the screen that follows, without pressing the key again). A feature for a whole build:
+        /// hidden in 22.x (Oliver, 29 Oct 2026: "that's not a bug fix, it's a feature"), on for everyone from build 23
+        /// (3 Nov 2026).
+        public var refreshAfterClick = true
         /// Screen recognition reads the window as controls too ("Save, button": ScreenInterface), not only lines of
         /// text. Experimental and off by default: behind the developer switch `flatView` until Oliver asked for a
         /// switch to try it (2 Nov 2026), after VO-Shift-L read Parallels inaccurately.
@@ -343,7 +343,7 @@ public struct Config: Codable {
             let c = try decoder.container(keyedBy: Keys.self)
             autoRefresh = (try? c.decodeIfPresent(Bool.self, forKey: .autoRefresh)) ?? false
             autoSayAll = (try? c.decodeIfPresent(Bool.self, forKey: .autoSayAll)) ?? false
-            refreshAfterClick = (try? c.decodeIfPresent(Bool.self, forKey: .refreshAfterClick)) ?? false
+            refreshAfterClick = (try? c.decodeIfPresent(Bool.self, forKey: .refreshAfterClick)) ?? true
             controls = (try? c.decodeIfPresent(Bool.self, forKey: .controls)) ?? false
         }
         public func encode(to encoder: Encoder) throws {

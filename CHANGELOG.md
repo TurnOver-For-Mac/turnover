@@ -16,6 +16,10 @@ Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
   Screen recognition, "Pressed twice, find buttons, fields and icons" on, the recognition key pressed twice
   (VO-Shift-Y, or TurnOver R) finds them; pressed once, it reads the text, which is quicker. Each row is a control
   ("Save, button") and Return clicks it. It uses Apple's on-device recognition and, with Apple Intelligence on, the Mac's own model; nothing leaves the Mac.
+- After Return clicks something in a screen recognition result, the screen is recognised again a moment later, so a
+  dialog's OK is followed by the screen that comes after it without pressing the key again. Settings, Screen
+  recognition, "After Return clicks something, recognise again" turns it off, and the result closes after a click
+  as before.
 - Progress bars beep as they move, as in NVDA: a short beep for each percent, rising in pitch from low at 0 to high
   at 100. To hear the percentage instead (as before), both, or nothing, choose in Settings, Sounds, or in the
   Verbosity list (VO-V). With NVDA keys, NVDA+U goes through them. A bar's beeps keep up with it as it moves, rather

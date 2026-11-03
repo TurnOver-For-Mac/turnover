@@ -576,14 +576,6 @@ struct WebPagesView: View {
     }
 }
 
-/// Whether the reader this window sits inside is a developer build: build.sh marks TurnOver's own Info.plist with
-/// TODevBuild, and release packaging leaves it out. This window lives in TurnOver.app/Contents/Applications.
-let readerIsDevBuild: Bool = {
-    let reader = Bundle.main.bundleURL.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-    let info = NSDictionary(contentsOf: reader.appendingPathComponent("Contents/Info.plist"))
-    return info?["TODevBuild"] as? Bool ?? false
-}()
-
 struct RecognitionView: View {
     @EnvironmentObject var model: Model
     var body: some View {
@@ -598,11 +590,8 @@ struct RecognitionView: View {
                     .accessibilityLabel("Pressed twice, find buttons, fields and icons (experimental)")
                 Text("Press the screen recognition key twice (VO-Shift-Y, or TurnOver R) for the window's controls: each row is one, such as \"Save, button\", and Return clicks it. Pressed once, it reads the text, which is quicker. Pictures of icons are described by the Mac's own model, with Apple Intelligence on. Nothing leaves the Mac.").font(.caption)
             }
-            // A feature for a whole build: shown in developer builds only (29 Oct 2026).
-            if readerIsDevBuild {
-                Toggle("After Return clicks something, recognise again", isOn: model.bool("recognition", "refreshAfterClick"))
-                Text("The screen that follows a click is read without pressing the key again; off, the result closes after the click.").font(.caption)
-            }
+            Toggle("After Return clicks something, recognise again", isOn: model.bool("recognition", "refreshAfterClick"))
+            Text("The screen that follows a click is read without pressing the key again; off, the result closes after the click.").font(.caption)
         }.formStyle(.grouped).navigationTitle("Screen recognition")
     }
 }
