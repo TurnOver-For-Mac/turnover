@@ -10223,10 +10223,7 @@
         }
       }
     },
-    "Press the screen recognition key twice (VO-Shift-Y, or TurnOver R) for the window's controls: each row is one, such as \"Save, button\", and Return clicks it. Pressed once, it reads the text, which is quicker. Pictures of icons are described by the Mac's own model, with Apple Intelligence on. Nothing leaves the Mac." : {
-
-    },
-    "Pressed twice, find buttons, fields and icons (experimental)" : {
+    "Press the screen recognition key twice (VO-Shift-Y, or TurnOver R) for the window's controls: each row is one, such as \"Save, button\", and Return clicks it. Pressed once, it reads the text." : {
 
     },
     "Presses the dialog's choice" : {
@@ -10819,6 +10816,7 @@
       }
     },
     "Read new text as it appears, while a result is open" : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -11368,6 +11366,9 @@
         }
       }
     },
+    "Recognise again when the screen changes, while a result is open" : {
+
+    },
     "Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return. Pressed again in the result, recognises again" : {
       "comment" : "A command, as the key list and keyboard help say it",
       "extractionState" : "stale",
@@ -11380,10 +11381,10 @@
         }
       }
     },
-    "Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return. Pressed again in the result, recognises again. Pressed twice, its buttons, fields and icons instead, when chosen in Settings" : {
+    "Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return. Pressed again in the result, recognises again. Pressed twice, its buttons, fields and icons instead" : {
       "comment" : "A command, as the key list and keyboard help say it"
     },
-    "Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return; pressed twice, its buttons, fields and icons instead, when chosen in Settings (VO-Shift-Y, TurnOver's own)" : {
+    "Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return; pressed twice, its buttons, fields and icons instead (VO-Shift-Y, TurnOver's own)" : {
       "comment" : "A command, as the key list and keyboard help say it"
     },
     "Reload plugins" : {
@@ -15263,6 +15264,9 @@
           }
         }
       }
+    },
+    "The window is looked at each second; when it has changed, what is new is read." : {
+
     },
     "The window's size and where it is on the screen (VO-Command-F2)" : {
       "comment" : "A command, as the key list and keyboard help say it",
