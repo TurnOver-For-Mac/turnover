@@ -1178,6 +1178,9 @@ func browseTextNavTests() {
         // A table: four columns, rows a line apart. Not cards: read across.
         let table = (0..<3).flatMap { r in (0..<4).map { c in line("r\(r)c\(c)", 20 + CGFloat(c) * 150, 20 + CGFloat(r) * 20, 60) } }
         expect(rows(table), ["r0c0  r0c1  r0c2  r0c3", "r1c0  r1c1  r1c2  r1c3", "r2c0  r2c1  r2c2  r2c3"])
+        // A grid of equal gaps, rows well apart (a calendar, a level select): rows all the way down, not cards at the end.
+        let grid = (0..<5).flatMap { r in (0..<3).map { c in line("g\(r)\(c)", 20 + CGFloat(c) * 150, 20 + CGFloat(r) * 50, 60) } }
+        expect(rows(grid), (0..<5).map { r in (0..<3).map { "g\(r)\($0)" }.joined(separator: "  ") })
     }
     test("screen recognition: recognise again after a click is on unless switched off in build 23 or later") {
         func on(_ json: String) -> Bool? { (try? JSONDecoder().decode(Config.Recognition.self, from: Data(json.utf8)))?.refreshAfterClick }

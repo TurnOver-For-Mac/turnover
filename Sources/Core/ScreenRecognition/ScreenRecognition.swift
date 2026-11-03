@@ -726,10 +726,11 @@ public final class ScreenRecognition {
                 }
                 if cols.count > 1, bestH < unit * 0.9 { blocks.append(rows(ls)); return }   // a table: its rows
             }
-            // Then sections: cut at the widest gap across the region, a line or more, and look at each part again (one
-            // cut at a time, so cards under a title are still seen together).
-            if bestH >= unit * 0.9, let cut = hCuts.max(by: { $0.1 < $1.1 }) {
-                split(byY, at: [cut.0]).forEach(order); return
+            // Then sections: cut at the widest gap across the region, and at every gap near it, a line or more, and look
+            // at each part again. Not every gap at once, so cards under a title are still seen together; not the widest
+            // alone, or a grid of equal gaps would be peeled a row at a time until its last rows passed as cards.
+            if bestH >= unit * 0.9 {
+                split(byY, at: hCuts.filter { $0.1 >= bestH * 0.8 }.map { $0.0 }).forEach(order); return
             }
             blocks.append(rows(ls))
         }
