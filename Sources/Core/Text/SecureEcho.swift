@@ -68,7 +68,16 @@ public enum SecureEcho {
     /// a click was heard. Asked of the application, the focused element is that field, and its length goes 1, 2, 3, 4 as
     /// it is typed into and back to 0 (measured).
     public static func otherProcessField(of appPid: pid_t) -> AXUIElement? {
-        guard appPid > 0, let f = AXUIElementCreateApplication(appPid).element(kAXFocusedUIElementAttribute), f.pid != appPid,
+        guard appPid > 0 else { return nil }
+        // Asked four times a second while secure input is on, and the field's length every 50 ms: the application and the
+        // field each get a short timeout of their own, as systemFocusIsPasswordField does, so an application that hangs
+        // while secure input is stuck on can't stall TurnOver for the system's six seconds at a time (a code review,
+        // 1 Nov 2026).
+        let app = AXUIElementCreateApplication(appPid)
+        AXUIElementSetMessagingTimeout(app, 0.25)
+        guard let f = app.element(kAXFocusedUIElementAttribute) else { return nil }
+        AXUIElementSetMessagingTimeout(f, 0.25)
+        guard f.pid != appPid,
               Role.from(axRole: f.role, subrole: f.string(kAXSubroleAttribute)) == .passwordEdit else { return nil }
         return f
     }
