@@ -5,6 +5,10 @@ what to call a button the app leaves unnamed, what to say when a key changes som
 guide takes you from choosing an app to a pull request. It is written for people and for the AI assistants many of
 them work with; `AGENTS.md` has the house rules both follow.
 
+**Working with an AI assistant?** You don't need to read on. Give your assistant this, with the app's name:
+"Read https://github.com/TurnOver-For-Mac/turnover/blob/main/AI-CONTRIBUTOR.md and help me make TurnOver work better
+with APP NAME." [AI-CONTRIBUTOR.md](AI-CONTRIBUTOR.md) walks it through every step, and it asks you when it needs you.
+
 You need a Mac with Xcode 27, a clone of this repository, and an hour or two with the app. You don't need to know
 TurnOver's whole codebase: a module talks to TurnOver through one class, `AppModule` (`Sources/Core/AppModule.swift`).
 
