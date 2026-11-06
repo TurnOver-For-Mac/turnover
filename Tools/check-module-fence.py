@@ -51,5 +51,6 @@ if not core:
 print("Outside the fence (TurnOver's core):\n  " + "\n  ".join(core))
 if outside:
     print("\nThis pull request changes TurnOver's core, so a maintainer looks at it before it can merge. If a module "
-          "needs something from the core, the A building block issue form asks for it (docs/BUILDING-BLOCKS.md).")
+          "needs something from the core, the A building block issue form asks for it (docs/BUILDING-BLOCKS.md). A "
+          "maintainer who has reviewed the change approves it with the label core approved.")
     sys.exit(1)

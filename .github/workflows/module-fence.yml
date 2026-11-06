@@ -4,11 +4,14 @@ name: Module fence
 # (6 Nov 2026). This check fails when a pull request from outside the project touches anything but app-module work,
 # so it can't merge until a maintainer has looked. Tools/check-module-fence.py says what is inside the fence.
 #
+# A maintainer who has reviewed a core change from outside adds the label "core approved": the check then passes.
+# Only people with triage rights or more can add labels, so a contributor can't approve their own change.
+#
 # pull_request_target runs this file and the check as they are on main, never the pull request's own copies, so a
 # pull request can't change the fence to pass it. The pull request's code is only compared, never run, here.
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 
 permissions:
   contents: read
@@ -27,10 +30,16 @@ jobs:
       - name: Check the fence
         env:
           ASSOCIATION: ${{ github.event.pull_request.author_association }}
+          APPROVED: ${{ contains(github.event.pull_request.labels.*.name, 'core approved') }}
           BASE: ${{ github.event.pull_request.base.sha }}
         run: |
           cp Tools/check-module-fence.py "$RUNNER_TEMP/fence.py"
           git -c advice.detachedHead=false checkout -q pr-head
+          if [ "$APPROVED" = true ]; then
+            python3 -I "$RUNNER_TEMP/fence.py" "$BASE"
+            echo "A maintainer has approved this pull request's changes to the core (label: core approved)."
+            exit 0
+          fi
           case "$ASSOCIATION" in
             OWNER|MEMBER|COLLABORATOR) python3 -I "$RUNNER_TEMP/fence.py" "$BASE" ;;
             *) python3 -I "$RUNNER_TEMP/fence.py" "$BASE" --outside ;;
