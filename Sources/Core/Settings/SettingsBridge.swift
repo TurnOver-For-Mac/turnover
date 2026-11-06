@@ -187,6 +187,7 @@ public enum SettingsBridge {
             if before.braille.bluetooth != next.braille.bluetooth, next.braille.bluetooth { BrailleDisplays.shared.lookNow() }
             if before.applications.perAppReaders != next.applications.perAppReaders { TurnOverMenu.shared.leadModeChanged?() }
             if before.applications.swapWithVoiceOver != next.applications.swapWithVoiceOver { onSwapChanged?(next.applications.swapWithVoiceOver) }
+            if before.presentation.mouseTracking != next.presentation.mouseTracking { MouseTracking.refresh() }
             // Steam's switches from the window do what the menu's do.
             if before.games.readBigPicture != next.games.readBigPicture { Games.restartBigPicture() }
             // The EQ heard as it is set: a short sample once the slider stops.
