@@ -92,6 +92,10 @@ Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
   before; with VoiceOver off that now means its boundary and braille display sounds too.
 - VoiceOver's sounds were quieter than TurnOver's own, by 5 to 10 dB for most, so a link's blip all but vanished: each
   now plays at the set's loudness. A page loaded plays VoiceOver's "web area loaded" sound, the one in its own list.
+- Copy VoiceOver settings copied nothing on macOS 27.2 when VoiceOver's export kept its voice in a new place; it now
+  finds the voice there and copies the rate, verbosity and typing echo with it. Issue 221. Reported by a tester.
+- Settings, Speech: the voices for other languages and the rotor's voices couldn't be reached from the keyboard. Each
+  list is now behind a switch that Tab stops on. Issue 225. Reported by a tester.
 
 ## 2.0, build 22.5
 
