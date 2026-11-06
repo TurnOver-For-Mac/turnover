@@ -189,6 +189,11 @@ final class VoiceLists: ObservableObject {
 struct SpeechView: View {
     @EnvironmentObject var model: Model
     @ObservedObject private var voiceLists = VoiceLists.shared
+    /// The two long lists are behind switches, not disclosure groups (issue 225, 6 Nov 2026): Tab never reached a
+    /// disclosure triangle, and one opened by its shortcut was read as collapsed and its voices weren't found. Not
+    /// saved: each opening of the window starts with them hidden, so it draws as fast as before.
+    @State private var showOtherLanguages = false
+    @State private var showRotorVoices = false
     /// The voices offered, listed once (VoiceLists); a voice set earlier from outside the list stays selectable.
     private var voices: [AVSpeechSynthesisVoice] {
         let current = model.get("speech", "voice") as? String ?? ""
@@ -245,37 +250,45 @@ struct SpeechView: View {
                 Text("The Mac's default output").tag("")
                 ForEach(outputDevices, id: \.uid) { d in Text(d.name).tag(d.uid) }
             }
-            DisclosureGroup("Capitals") {
+            // A plain section, not a disclosure group (issue 225, 6 Nov 2026; as the Experimental section, 28 Oct 2026):
+            // a triangle is not a stop for Tab in this window, so what it folded away could not be reached.
+            Section("Capitals") {
                 Toggle("Say cap before a capital", isOn: model.bool("speech", "sayCapForCapitals"))
                 Slider(value: model.number("speech", "capitalPitch"), in: 0...100, step: 10) { Text("Raise the pitch for a capital") }
                     .accessibilityValue(model.number("speech", "capitalPitch").wrappedValue == 0 ? String(localized: "off", comment: "A setting that is off")
                         : String(localized: "\(String(Int(model.number("speech", "capitalPitch").wrappedValue))) percent", comment: "A slider's value"))
             }
-            // The speech rotor's own short list (18 Oct 2026): none ticked, every voice.
-            // Folded until opened: a picker per language is the costliest part of the pane to draw (23 Oct 2026).
-            DisclosureGroup("Voices for other languages") {
-                if otherLanguages.isEmpty {
-                    Text("No voices for other languages are installed.").font(.caption)
-                } else {
-                    Text("Text marked as another language is read in that language's voice, when language switching is on.").font(.caption)
-                    ForEach(otherLanguages, id: \.code) { language in
-                        OtherLanguageRow(language: language)
+            // Hidden until asked for: a picker per language is the costliest part of the pane to draw (23 Oct 2026).
+            Section("Voices for other languages") {
+                Toggle("Show voices for other languages", isOn: $showOtherLanguages)
+                if showOtherLanguages {
+                    if otherLanguages.isEmpty {
+                        Text("No voices for other languages are installed.").font(.caption)
+                    } else {
+                        Text("Text marked as another language is read in that language's voice, when language switching is on.").font(.caption)
+                        ForEach(otherLanguages, id: \.code) { language in
+                            OtherLanguageRow(language: language)
+                        }
                     }
                 }
             }
-            // Folded away: the list is long by nature (every voice the rotor could step through).
-            DisclosureGroup(rotorChosen.isEmpty ? String(localized: "Voices in the rotor: every voice", comment: "A group in Speech settings")
-                            : String(localized: "Voices in the rotor: \(String(rotorChosen.count)) chosen", comment: "A group in Speech settings")) {
-                Text(rotorChosen.isEmpty ? String(localized: "Every voice: tick the ones you want VO-Command-Shift to step through.", comment: "Speech settings")
-                     : String(localized: "\(String(rotorChosen.count)) chosen for VO-Command-Shift.", comment: "Speech settings")).font(.caption)
-                ForEach(rotorCandidates, id: \.identifier) { v in
-                    Toggle("\(v.name), \(Locale.current.localizedString(forIdentifier: v.language) ?? v.language)", isOn: Binding(
-                        get: { rotorChosen.contains(v.identifier) },
-                        set: { on in
-                            var list = rotorChosen.filter { $0 != v.identifier }
-                            if on { list.append(v.identifier) }
-                            model.set("speech", "rotorVoices", list)
-                        }))
+            // The speech rotor's own short list (18 Oct 2026): none ticked, every voice. Hidden until asked for: the
+            // list is long by nature (every voice the rotor could step through).
+            Section(rotorChosen.isEmpty ? String(localized: "Voices in the rotor: every voice", comment: "A group in Speech settings")
+                    : String(localized: "Voices in the rotor: \(String(rotorChosen.count)) chosen", comment: "A group in Speech settings")) {
+                Toggle("Show the voices for the rotor", isOn: $showRotorVoices)
+                if showRotorVoices {
+                    Text(rotorChosen.isEmpty ? String(localized: "Every voice: tick the ones you want VO-Command-Shift to step through.", comment: "Speech settings")
+                         : String(localized: "\(String(rotorChosen.count)) chosen for VO-Command-Shift.", comment: "Speech settings")).font(.caption)
+                    ForEach(rotorCandidates, id: \.identifier) { v in
+                        Toggle("\(v.name), \(Locale.current.localizedString(forIdentifier: v.language) ?? v.language)", isOn: Binding(
+                            get: { rotorChosen.contains(v.identifier) },
+                            set: { on in
+                                var list = rotorChosen.filter { $0 != v.identifier }
+                                if on { list.append(v.identifier) }
+                                model.set("speech", "rotorVoices", list)
+                            }))
+                    }
                 }
             }
             if model.special("_kokoroAvailable") as? Bool == true {

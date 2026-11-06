@@ -13048,6 +13048,9 @@
         }
       }
     },
+    "Show the voices for the rotor" : {
+
+    },
     "Show the word at the cursor uncontracted" : {
       "localizations" : {
         "tr" : {
@@ -13057,6 +13060,9 @@
           }
         }
       }
+    },
+    "Show voices for other languages" : {
+
     },
     "Single-letter keys go round the page" : {
       "localizations" : {
