@@ -56,6 +56,9 @@ for title, body in sections(src):
     for l in body:
         if l.startswith("### "): flush(); parts.append(f"<h3>{html.escape(l[4:].strip())}</h3>")
         elif l.startswith("- "): items.append(l[2:].strip())
+        # A bullet's continuation lines, as "try" reads them: the page cut each item at its first line (staged by
+        # hand for 22.5 on 1 Nov 2026; made durable for build 23, 6 Nov 2026).
+        elif l.startswith("  ") and items: items[-1] += " " + l.strip()
     flush()
 page = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">

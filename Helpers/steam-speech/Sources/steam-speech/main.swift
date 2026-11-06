@@ -340,7 +340,7 @@ final class BigPictureReader {
 
     var status: String {
         guard let r = reader else { return String(localized: "Not reading Big Picture.", bundle: turnOverApp, comment: "The Steam program's status") }
-        if steamRunningWithoutPort { return String(localized: "Steam is running without its port; restart Steam from the Games menu.", bundle: turnOverApp, comment: "The Steam program's status") }
+        if steamRunningWithoutPort { return String(localized: "Steam is running without its port; restart Steam from TurnOver's Settings, Other apps' speech.", bundle: turnOverApp, comment: "The Steam program's status") }
         if r.portIsForeign { return String(localized: "Port 8080 is in use by something that is not Steam.", bundle: turnOverApp, comment: "The Steam program's status") }
         if !r.portIsUp { return String(localized: "Waiting for Steam.", bundle: turnOverApp, comment: "The Steam program's status") }
         if r.sessions.isEmpty { return String(localized: "Steam is up; waiting for Big Picture.", bundle: turnOverApp, comment: "The Steam program's status") }
@@ -414,7 +414,7 @@ final class BigPictureReader {
     }
 
     /// Steam is running and its port is not there: a Steam update replaced the client directory and the switch
-    /// file with it. Put the file back and say so once; TurnOver's Games menu has Restart Steam.
+    /// file with it. Put the file back and say so once; TurnOver's Settings, Other apps' speech, has Restart Steam.
     private func portDown() {
         if reader?.portIsUp == false, hadBigPicture { hadBigPicture = false }
         let steamRunning = NSWorkspace.shared.runningApplications.contains(where: SteamInstall.isSteamProcess)
@@ -429,7 +429,7 @@ final class BigPictureReader {
         guard !warnedPortDown else { return }
         warnedPortDown = true
         Out.log("Steam is running without its debugging port; it needs restarting before Big Picture can be read")
-        Out.say(String(localized: "Steam needs restarting before Big Picture can be read. Restart Steam is in the Games menu.", bundle: turnOverApp, comment: "Steam speech"))
+        Out.say(String(localized: "Steam needs restarting before Big Picture can be read. Restart Steam is in TurnOver's Settings, Other apps' speech.", bundle: turnOverApp, comment: "Steam speech"))
     }
 
     private func reconciled() {

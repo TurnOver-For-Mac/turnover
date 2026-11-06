@@ -448,6 +448,8 @@ open class TurnOverObject: ScriptableObject {
     open func event_foreground() { Speech.cancel() }
     open func event_valueChange() {
         guard API.focusObject?.isSameElement(as: self) == true else { return }
+        // A progress bar that beeps (ProgressWatch) isn't also read out at every percent, as NVDA's focus isn't.
+        if role == .progressBar, ["beep", "both"].contains(config.presentation.progressBars) { return }
         // A check box keeps its state in its value (a number): the news is "checked" / "not checked" (NVDA's state
         // change). Pressing the developer agreement's box said nothing, 3 Oct 2026.
         if [.checkBox, .radioButton, .toggleButton, .switchControl].contains(role) {

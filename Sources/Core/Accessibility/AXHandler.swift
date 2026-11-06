@@ -114,9 +114,12 @@ public final class AXHandler {
             guard let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
                   Self.systemUIAgents.contains(app.bundleIdentifier ?? "") else { return }
             // A moment for the new process to answer accessibility questions before its notifications are asked for.
-            let pid = app.processIdentifier
+            let pid = app.processIdentifier, bundle = app.bundleIdentifier
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
                 guard let self, self.running else { return }   // stopped meanwhile: no observer left behind
+                // Notification Centre relaunched: its banners come from the new process (issue 80: the old id was kept,
+                // so banners went unread until VO-O).
+                if bundle == "com.apple.notificationcenterui" { self.notificationCentrePid = pid }
                 self.observe(pid)
             }
         })

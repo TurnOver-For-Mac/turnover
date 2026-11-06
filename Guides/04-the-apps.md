@@ -16,12 +16,15 @@ latest messages from anywhere, 1 the newest. New messages are read as they arriv
 ## Music, Podcasts and TV
 
 Up and Down move through the page, shelf by shelf; Left and Right jump between shelves; Return plays; Space pauses
-and says which.
+and says which. In Music and Podcasts, Return in the search field gives the results as a plain list from Apple's
+catalog, as in the App Store; TV reads its own results page.
 
 ## The App Store
 
 Up and Down move through every app and button; Left and Right between shelves. Return opens an app's page; Space
-presses its own button (Get, Open, Update). Command F searches.
+presses its own button (Get, Open, Update). Command F searches: type, press Return, and the results are a plain list
+from Apple's catalog while the search field keeps the focus. Up and Down move through it, Return opens one, Escape
+leaves the list.
 
 ## Microsoft Word and Excel
 
@@ -50,7 +53,7 @@ New output is read as it arrives; your own typing isn't read twice. TurnOver Up 
 
 ## Steam
 
-Steam's Big Picture is read as you move, once you turn it on: Settings, Other apps' speech, Read Steam's Big Picture (or the TurnOver menu, Games), then Restart Steam there. It's
+Steam's Big Picture is read as you move, once you turn it on: Settings, Other apps' speech, Read Steam's Big Picture, then Restart Steam there. It's
 off to begin with because reading it makes Steam open a debugging port on your Mac while Steam runs, which other
 programs on the same Mac could use too; turning it off, or uninstalling TurnOver, removes that again. Games that
 support it speak through TurnOver without any of this.

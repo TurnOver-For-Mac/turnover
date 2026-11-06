@@ -126,6 +126,20 @@ for H in steam-speech trackpad-gestures voiceover-quiet; do
   fi
   HELPERBINS+=("$H:$BINH")
 done
+# The natural voices' helper (plugins/phonon/helper; in the app for everyone from build 23, 6 Nov 2026). Apple silicon
+# only: its model runs in Core ML and TurnOver offers it only there (KokoroVoice.supported), so a universal build
+# carries the arm64 helper alone. No self-test: its only check would download the 172 MB voice.
+PHONONSRC="$(cd "$(dirname "$0")" && pwd)/plugins/phonon/helper"
+if [ -f "$PHONONSRC/Package.swift" ]; then
+  PB="$BUILD-phonon-helper"
+  rm -f "$PB/release/phonon-helper"
+  swift build -c release --package-path "$PHONONSRC" --scratch-path "$PB" --triple arm64-apple-macosx15.0 2>&1 | grep -E "error:" || true
+  [ -x "$PB/release/phonon-helper" ] || { echo "build.sh: phonon-helper failed to build; not installing"; exit 1; }
+  HELPERBINS+=("phonon-helper:$PB/release/phonon-helper")
+else
+  [ "$TURNOVER_UNIVERSAL" = 1 ] && { echo "STOP: $PHONONSRC is missing: a build for testers needs it"; exit 1; }
+  echo "build.sh: WARNING: $PHONONSRC is missing; built without the natural voices"
+fi
 
 # New strings into Resources/Localizable.xcstrings, untranslated until someone translates them (make-strings.py):
 # TurnOver's own and its helpers' (Steam speech's words are said too), so after the helpers are built.
@@ -226,7 +240,7 @@ for f in "$SPK/XPCServices/Installer.xpc" "$SPK/XPCServices/Downloader.xpc" "$SP
 done
 sign --force --sign "$IDENTITY" --identifier com.turnover.core "$APP/Contents/Frameworks/libTurnOverCore.dylib"
 [ -f "$APP/Contents/MacOS/turnover-plugin" ] && sign --force --sign "$IDENTITY" --identifier com.turnover.plugin-tool "$APP/Contents/MacOS/turnover-plugin"
-for h in steam-speech trackpad-gestures voiceover-quiet; do [ -f "$APP/Contents/Helpers/$h" ] && sign --force --sign "$IDENTITY" --identifier "com.turnover.$h" "$APP/Contents/Helpers/$h"; done
+for h in steam-speech trackpad-gestures voiceover-quiet phonon-helper; do [ -f "$APP/Contents/Helpers/$h" ] && sign --force --sign "$IDENTITY" --identifier "com.turnover.$h" "$APP/Contents/Helpers/$h"; done
 sign --force --sign "$IDENTITY" --identifier "$BUNDLEID" "$APP"
 
 # Never install a TurnOver macOS will not trust: it would come up with no permissions and no speech.

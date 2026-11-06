@@ -11,6 +11,11 @@ import TurnOverControl
 final class Model: ObservableObject {
     @Published var state: [String: Any] = [:]
     @Published var connected = false
+    /// TurnOver closed the connection at once, five times running: this window is an old build's, left open across an
+    /// install, and TurnOver turns it away (issue 77: it knocked every two seconds until it was quit by hand).
+    @Published var turnedAway = false
+    private var refusals = 0
+    private var opened = Date()
     /// A section TurnOver asked the window to show (a settings key pressed): with the first state, or on its own
     /// while the window is open. The sidebar follows it and then clears it.
     @Published var requestedSection: Pane?
@@ -23,7 +28,9 @@ final class Model: ObservableObject {
     /// Connected to TurnOver and listening for its settings; tried again every two seconds until TurnOver is there,
     /// and again if TurnOver restarts.
     private func connect() {
+        opened = Date()
         connection = ControlClient.Connection(received: { [weak self] message in
+            self?.refusals = 0
             if message["op"] as? String == "show", let name = message["section"] as? String {
                 self?.requestedSection = Pane(rawValue: name)
                 return
@@ -33,13 +40,16 @@ final class Model: ObservableObject {
             self?.state = dict; self?.connected = true
             if let name = dict["_showSection"] as? String { self?.requestedSection = Pane(rawValue: name) }
         }, ended: { [weak self] in
-            self?.connected = false; self?.connection = nil
-            self?.retry()
+            guard let self else { return }
+            if !connected, Date().timeIntervalSince(opened) < 1 { refusals += 1 }
+            connected = false; connection = nil
+            retry()
         })
         if let connection { connection.send(["op": "subscribe"]) } else { retry() }
     }
 
     private func retry() {
+        guard refusals < 5 else { turnedAway = true; return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
             guard let self, self.connection == nil else { return }
             self.connect()
@@ -83,7 +93,7 @@ final class Model: ObservableObject {
 
 enum Pane: String, CaseIterable, Identifiable {
     // NVDA's order, with TurnOver's own at the end: every setting the menu offered lives here since 21 Oct 2026.
-    case general = "General", speech = "Speech", braille = "Braille", keyboard = "Keyboard", items = "Item details", webPages = "Web pages", documents = "Documents",
+    case general = "General", speech = "Speech", sounds = "Sounds", braille = "Braille", keyboard = "Keyboard", items = "Item details", webPages = "Web pages", documents = "Documents",
          recognition = "Screen recognition", otherApps = "Other apps' speech", readers = "Screen reader behaviour"
     var id: String { rawValue }
     /// As the sidebar shows it. (The raw value stays English: TurnOver asks for a section by it.)
@@ -91,6 +101,7 @@ enum Pane: String, CaseIterable, Identifiable {
         switch self {
         case .general: return String(localized: "General", comment: "A section of the Settings window")
         case .speech: return String(localized: "Speech", comment: "A section of the Settings window")
+        case .sounds: return String(localized: "Sounds", comment: "A section of the Settings window")
         case .braille: return String(localized: "Braille", comment: "A section of the Settings window")
         case .keyboard: return String(localized: "Keyboard", comment: "A section of the Settings window")
         case .items: return String(localized: "Item details", comment: "A section of the Settings window")
@@ -112,12 +123,15 @@ struct ContentView: View {
                 .navigationSplitViewColumnWidth(190)
                 .accessibilityLabel("Settings sections")
         } detail: {
-            if !model.connected {
+            if model.turnedAway {
+                Text("TurnOver turned this window away: it was probably updated while the window was open. Quit Settings and open it again from the TurnOver menu.").padding()
+            } else if !model.connected {
                 Text("Waiting for TurnOver. Start it with Command Control Period.").padding()
             } else {
                 switch section ?? .general {
                 case .general: GeneralView()
                 case .speech: SpeechView()
+                case .sounds: SoundsView()
                 case .braille: BrailleView()
                 case .keyboard: KeyboardView()
                 case .items: ItemsView()
@@ -165,8 +179,11 @@ final class VoiceLists: ObservableObject {
         let wanted = Set(mine + ["en"])
         let voices = AVSpeechSynthesisVoice.speechVoices()
         all = voices
+        // Not Apple's novelty voices (Bells, Bubbles, Zarvox and the rest, 15 of them: Oliver, 2 Nov 2026, "a big list of
+        // shit nonsense voices that apple like to ship"). A novelty voice already chosen stays selectable (voices).
+        let real = voices.filter { !$0.voiceTraits.contains(.isNoveltyVoice) }
         // English and the Mac's own languages, the Mac's languages first and Eloquence before the rest.
-        offered = voices.filter { wanted.contains(String($0.language.prefix(2))) }.sorted { a, b in
+        offered = real.filter { wanted.contains(String($0.language.prefix(2))) }.sorted { a, b in
             let la = mine.firstIndex(of: String(a.language.prefix(2))) ?? 99, lb = mine.firstIndex(of: String(b.language.prefix(2))) ?? 99
             if la != lb { return la < lb }
             let ea = a.identifier.contains("eloquence"), eb = b.identifier.contains("eloquence")
@@ -174,7 +191,7 @@ final class VoiceLists: ObservableObject {
             return a.name < b.name
         }
         // The voices of the Mac's own languages and English, as the rotor offers them.
-        rotorCandidates = voices.filter { wanted.contains(String($0.language.prefix(2))) }
+        rotorCandidates = real.filter { wanted.contains(String($0.language.prefix(2))) }
             .sorted { $0.name == $1.name ? $0.language < $1.language : $0.name < $1.name }
         var made: [String: String] = [:]
         for v in voices {
@@ -196,11 +213,55 @@ struct SpeechView: View {
         let extra = voiceLists.all.filter { $0.identifier == current }
         return voiceLists.offered + extra
     }
-    private let natural = ["af_alloy", "af_aoede", "af_bella", "af_heart", "af_jessica", "af_kore", "af_nicole", "af_nova", "af_river",
-                           "af_sarah", "af_sky", "am_adam", "am_echo", "am_eric", "am_fenrir", "am_liam", "am_michael", "am_onyx",
-                           "am_puck", "am_santa", "bf_alice", "bf_emma", "bf_isabella", "bf_lily", "bm_daniel", "bm_fable", "bm_george", "bm_lewis"]
+    @State private var showRotor = false
+    @State private var showLanguages = false
+    /// One voice's tick in the rotor's list, named outright: SwiftUI left such switches nameless here (2 Nov 2026).
+    private func rotorToggle(_ id: String, _ name: String) -> some View {
+        Toggle(name, isOn: Binding(
+            get: { rotorChosen.contains(id) },
+            set: { on in
+                var list = rotorChosen.filter { $0 != id }
+                if on { list.append(id) }
+                model.set("speech", "rotorVoices", list)
+            }))
+        .accessibilityLabel(name)
+    }
+    /// The voice chosen above, in the rotor or not, without Tabbing through every voice's switch (Oliver, 2 Nov 2026:
+    /// "the menu and selection isn't great"). None ticked is every voice: so switching one off when none or only it is
+    /// ticked ticks all the others, and all of them ticked is none.
+    private func inRotor(_ id: String) -> some View {
+        let title = String(localized: "In the rotor", comment: "A switch in Speech settings, under Voice: the voice chosen there is one VO-Command-Shift steps through")
+        return Toggle(title, isOn: Binding(
+            get: { rotorChosen.isEmpty || rotorChosen.contains(id) },
+            set: { on in
+                let all = rotorAll
+                var list = rotorChosen.isEmpty ? all : rotorChosen
+                list.removeAll { $0 == id }
+                if on { list.append(id) }
+                if list.isEmpty { list = all.filter { $0 != id } }
+                if !all.isEmpty, Set(all).isSubset(of: list) { list = [] }
+                model.set("speech", "rotorVoices", list)
+            }))
+        .accessibilityLabel(title)
+    }
+    /// The natural voices as entries of the Voice list and the rotor ("external:…"), named by TurnOver.
+    private var naturalEntries: [(id: String, name: String)] {
+        ((model.special("_naturalVoiceEntries") as? [[String: Any]]) ?? []).compactMap { d in
+            guard let id = d["id"] as? String, let name = d["name"] as? String else { return nil }
+            return (id, name)
+        }
+    }
+    /// The natural voices this Mac has (Phonon's), named by TurnOver.
+    private var natural: [(id: String, name: String)] {
+        ((model.special("_kokoroVoices") as? [[String: Any]]) ?? []).compactMap { d in
+            guard let id = d["id"] as? String, let name = d["name"] as? String else { return nil }
+            return (id, name)
+        }
+    }
     private var rotorChosen: [String] { (model.state["speech"] as? [String: Any])?["rotorVoices"] as? [String] ?? [] }
     private var rotorCandidates: [AVSpeechSynthesisVoice] { voiceLists.rotorCandidates }
+    /// Every voice the rotor's list offers, the natural ones first.
+    private var rotorAll: [String] { naturalEntries.map(\.id) + rotorCandidates.map(\.identifier) }
     private var outputDevices: [(uid: String, name: String)] {
         ((model.special("_outputDevices") as? [[String: Any]]) ?? []).compactMap { d in
             guard let uid = d["uid"] as? String, let name = d["name"] as? String else { return nil }
@@ -219,41 +280,71 @@ struct SpeechView: View {
             return OtherLanguage(code: code, name: name, voices: voices)
         }
     }
-    private func naturalName(_ v: String) -> String {
-        v.hasPrefix("b") ? String(localized: "\(v.dropFirst(3).capitalized), British", comment: "A natural voice: its name and accent")
-            : String(localized: "\(v.dropFirst(3).capitalized), American", comment: "A natural voice: its name and accent")
-    }
     var body: some View {
         Form {
-            Picker("Voice", selection: model.string("speech", "voice", "")) {
-                ForEach(voices, id: \.identifier) { v in Text(voiceLists.label(for: v)).tag(v.identifier) }
+            // The natural voices are in the same list (2 Nov 2026): one chosen speaks everything, and the Mac voice
+            // chosen before it stays underneath for other languages and raised capitals.
+            Picker("Voice", selection: Binding(
+                get: { model.special("_speechVoice") as? String ?? (model.get("speech", "voice") as? String ?? "") },
+                set: { v in model.setSpecial("_speechVoice", v) })) {
+                // Natural voices and the Mac's apart (2 Nov 2026).
+                if !naturalEntries.isEmpty {
+                    Section("Natural voices") { ForEach(naturalEntries, id: \.id) { Text($0.name).tag($0.id) } }
+                }
+                Section("Mac voices") { ForEach(voices, id: \.identifier) { v in Text(voiceLists.label(for: v)).tag(v.identifier) } }
             }
+            // Downloading and removing the natural voices, beside the Voice list they add to (Oliver, 6 Nov 2026: "an
+            // option, like in windows, to download natural voices"; "next to voice selection"; "a choice to remove").
+            // All 25 at once: the engine they share is most of the size.
+            if model.special("_kokoroAvailable") as? Bool == true {
+                if model.special("_naturalDownloaded") as? Bool == false {
+                    if model.special("_naturalDownloading") as? Bool == true {
+                        Text("Downloading the natural voices…")
+                    } else {
+                        Button("Download natural voices, about 170 MB") { model.setSpecial("_downloadNaturalVoices", true) }
+                            .accessibilityHint("25 English voices made on your Mac. They download once, from Hugging Face; nothing you read or type leaves your Mac.")
+                    }
+                } else if model.special("_naturalRemovable") as? Bool == true {
+                    Button("Remove natural voices") { model.setSpecial("_removeNaturalVoices", true) }
+                        .accessibilityHint("Deletes the downloaded natural voices, about 170 MB, and goes back to your Mac voice.")
+                }
+            }
+            let chosenVoice = model.special("_speechVoice") as? String ?? (model.get("speech", "voice") as? String ?? "")
+            // Not for a voice the list doesn't offer (another language's): it couldn't be switched off.
+            if rotorAll.contains(chosenVoice) { inRotor(chosenVoice) }
             Slider(value: model.percent("speech", "rate"), in: 10...100, step: 5) { Text("Rate") }
                 .accessibilityValue("\(Int(model.percent("speech", "rate").wrappedValue)) percent")
             Slider(value: model.percent("speech", "pitch"), in: 0...100, step: 5) { Text("Pitch") }
                 .accessibilityValue("\(Int(model.percent("speech", "pitch").wrappedValue)) percent")
             Slider(value: model.number("speech", "volume"), in: 10...200, step: 10) { Text("Volume") }
                 .accessibilityValue("\(Int(model.number("speech", "volume").wrappedValue)) percent")
+            // The EQ, for every voice (2 Nov 2026); each voice keeps its own, with its rate and volume.
+            ForEach([("Bass", "bass"), ("Middle", "middle"), ("Treble", "treble")], id: \.1) { name, key in
+                let db = model.number("speech", key).wrappedValue
+                Slider(value: model.number("speech", key), in: -12...12, step: 1) { Text(name) }
+                    .accessibilityValue(db == 0 ? "0" : String(localized: "\(String(format: "%+.0f", db)) decibels", comment: "An EQ slider's value"))
+            }
             Picker("Punctuation", selection: model.int("speech", "symbolLevel")) {
                 Text("None").tag(0); Text("Some").tag(1); Text("Most").tag(2); Text("All").tag(3)
             }
             Toggle("Switch language when text says it is in another", isOn: model.bool("speech", "autoLanguageSwitching"))
-            Picker("Lower other sounds while TurnOver speaks", selection: model.string("speech", "ducking", "off")) {
-                Text("No").tag("off"); Text("While speaking").tag("speech"); Text("Always").tag("always")
-            }
             Picker("Where speech plays", selection: model.string("speech", "outputDevice", "")) {
                 Text("The Mac's default output").tag("")
                 ForEach(outputDevices, id: \.uid) { d in Text(d.name).tag(d.uid) }
             }
-            DisclosureGroup("Capitals") {
+            // Sections and switches, not fold-outs: SwiftUI's DisclosureGroup offers accessibility no action to open it
+            // (measured 2 Nov 2026: pressed, it stayed shut), so its contents couldn't be reached by keyboard at all.
+            Section("Capitals") {
                 Toggle("Say cap before a capital", isOn: model.bool("speech", "sayCapForCapitals"))
+                    .accessibilityLabel("Say cap before a capital")
                 Slider(value: model.number("speech", "capitalPitch"), in: 0...100, step: 10) { Text("Raise the pitch for a capital") }
                     .accessibilityValue(model.number("speech", "capitalPitch").wrappedValue == 0 ? String(localized: "off", comment: "A setting that is off")
                         : String(localized: "\(String(Int(model.number("speech", "capitalPitch").wrappedValue))) percent", comment: "A slider's value"))
             }
             // The speech rotor's own short list (18 Oct 2026): none ticked, every voice.
             // Folded until opened: a picker per language is the costliest part of the pane to draw (23 Oct 2026).
-            DisclosureGroup("Voices for other languages") {
+            Toggle("Show voices for other languages", isOn: $showLanguages).accessibilityLabel("Show voices for other languages")
+            if showLanguages {
                 if otherLanguages.isEmpty {
                     Text("No voices for other languages are installed.").font(.caption)
                 } else {
@@ -264,30 +355,38 @@ struct SpeechView: View {
                 }
             }
             // Folded away: the list is long by nature (every voice the rotor could step through).
-            DisclosureGroup(rotorChosen.isEmpty ? String(localized: "Voices in the rotor: every voice", comment: "A group in Speech settings")
-                            : String(localized: "Voices in the rotor: \(String(rotorChosen.count)) chosen", comment: "A group in Speech settings")) {
-                Text(rotorChosen.isEmpty ? String(localized: "Every voice: tick the ones you want VO-Command-Shift to step through.", comment: "Speech settings")
-                     : String(localized: "\(String(rotorChosen.count)) chosen for VO-Command-Shift.", comment: "Speech settings")).font(.caption)
-                ForEach(rotorCandidates, id: \.identifier) { v in
-                    Toggle("\(v.name), \(Locale.current.localizedString(forIdentifier: v.language) ?? v.language)", isOn: Binding(
-                        get: { rotorChosen.contains(v.identifier) },
-                        set: { on in
-                            var list = rotorChosen.filter { $0 != v.identifier }
-                            if on { list.append(v.identifier) }
-                            model.set("speech", "rotorVoices", list)
-                        }))
+            let rotorTitle = rotorChosen.isEmpty ? String(localized: "Show the voices in the rotor: every voice", comment: "A switch in Speech settings")
+                : String(localized: "Show the voices in the rotor: \(String(rotorChosen.count)) chosen", comment: "A switch in Speech settings")
+            Toggle(rotorTitle, isOn: $showRotor).accessibilityLabel(rotorTitle)
+            if showRotor {
+                Section(String(localized: "Natural voices in the rotor", comment: "A group in Speech settings")) {
+                    Text(rotorChosen.isEmpty ? String(localized: "None ticked, VO-Command-Shift steps through every voice. Tick the ones you want.", comment: "Speech settings")
+                         : String(localized: "\(String(rotorChosen.count)) ticked for VO-Command-Shift.", comment: "Speech settings")).font(.caption)
+                    ForEach(naturalEntries, id: \.id) { v in rotorToggle(v.id, v.name) }
+                }
+                Section(String(localized: "Mac voices in the rotor", comment: "A group in Speech settings")) {
+                    ForEach(rotorCandidates, id: \.identifier) { v in
+                        rotorToggle(v.identifier, "\(v.name), \(Locale.current.localizedString(forIdentifier: v.language) ?? v.language)")
+                    }
                 }
             }
+            // The natural voice (2 Nov 2026): chosen in Voice above for all speech, or here for say all only; its speed
+            // and EQ.
             if model.special("_kokoroAvailable") as? Bool == true {
-                Section("Say all") {
-                    Picker("Say all voice", selection: Binding(
-                        get: { (model.special("_kokoroMode") as? String) == "off" ? "same" : (model.special("_kokoroVoice") as? String ?? "bf_emma") },
-                        set: { v in if v == "same" { model.setSpecial("_kokoroMode", "off") } else { model.setSpecial("_kokoroVoice", v); model.setSpecial("_kokoroMode", "reading") } })) {
-                        Text("Same as speech").tag("same")
-                        ForEach(natural, id: \.self) { Text("\(naturalName($0)), natural").tag($0) }
+                let mode = model.special("_kokoroMode") as? String ?? "off"
+                if model.special("_naturalDownloaded") as? Bool != false {
+                    Section("Natural voice") {
+                        if mode == "everything" {
+                            Text("The voice above is a natural voice, so it speaks everything, with the rate, volume and EQ above. Other languages and raised capitals keep the Mac voice chosen before it, which also steps in if the natural voice is slow.").font(.caption)
+                        } else {
+                            Picker("Say all voice", selection: Binding(
+                                get: { mode == "reading" ? (model.special("_kokoroVoice") as? String ?? "") : "same" },
+                                set: { v in if v == "same" { model.setSpecial("_kokoroMode", "off") } else { model.setSpecial("_kokoroVoice", v); model.setSpecial("_kokoroMode", "reading") } })) {
+                                Text("Same as speech").tag("same")
+                                ForEach(natural, id: \.id) { Text($0.name).tag($0.id) }
+                            }
+                        }
                     }
-                    Slider(value: Binding(get: { model.special("_kokoroSpeed") as? Double ?? 1.1 }, set: { model.setSpecial("_kokoroSpeed", ($0 * 10).rounded() / 10) }), in: 0.6...2.0, step: 0.1) { Text("Natural voice speed") }
-                    Text("Say all reads ahead in the natural voice; moving around and typing stay in your speech voice.").font(.caption)
                 }
             }
         }.formStyle(.grouped).navigationTitle("Speech")
@@ -507,25 +606,19 @@ struct WebPagesView: View {
     }
 }
 
-/// Whether the reader this window sits inside is a developer build: build.sh marks TurnOver's own Info.plist with
-/// TODevBuild, and release packaging leaves it out. This window lives in TurnOver.app/Contents/Applications.
-let readerIsDevBuild: Bool = {
-    let reader = Bundle.main.bundleURL.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-    let info = NSDictionary(contentsOf: reader.appendingPathComponent("Contents/Info.plist"))
-    return info?["TODevBuild"] as? Bool ?? false
-}()
-
 struct RecognitionView: View {
     @EnvironmentObject var model: Model
     var body: some View {
         Form {
-            Toggle("Read new text as it appears, while a result is open", isOn: model.bool("recognition", "autoRefresh"))
+            Toggle("Recognise again when the screen changes, while a result is open", isOn: model.bool("recognition", "autoRefresh"))
+            Text("The window is looked at each second; when it has changed, what is new is read.").font(.caption)
             Toggle("Read the whole result as it opens", isOn: model.bool("recognition", "autoSayAll"))
-            // A feature for a whole build: shown in developer builds only (29 Oct 2026).
-            if readerIsDevBuild {
-                Toggle("After Return clicks something, recognise again", isOn: model.bool("recognition", "refreshAfterClick"))
-                Text("The screen that follows a click is read without pressing the key again; off, the result closes after the click.").font(.caption)
+            // macOS 26 and later only: earlier, recognition reads text alone (ScreenInterface needs Vision's newer readers).
+            if #available(macOS 26.0, *) {
+                Text("Press the screen recognition key twice (VO-Shift-Y, or TurnOver R) for the window's controls: each row is one, such as \"Save, button\", and Return clicks it. Pressed once, it reads the text.").font(.caption)
             }
+            Toggle("After Return clicks something, recognise again", isOn: model.bool("recognition", "refreshAfterClick"))
+            Text("The screen that follows a click is read without pressing the key again; off, the result closes after the click.").font(.caption)
         }.formStyle(.grouped).navigationTitle("Screen recognition")
     }
 }
@@ -540,9 +633,10 @@ struct OtherAppsView: View {
     }
     var body: some View {
         Form {
-            // Steam's switch, here as well as under Games in the TurnOver menu: every setting has a place in this
-            // window (21 Oct 2026), and Big Picture reading, off since it became a choice on 21 Oct, couldn't be found
-            // (the maintainer, 25 Oct 2026). Saved in the settings file, so they hold across restarts.
+            // Steam's switch: every setting has a place in this window (21 Oct 2026), and Big Picture reading, off
+            // since it became a choice on 21 Oct, couldn't be found (the maintainer, 25 Oct 2026). Its Games item in the
+            // TurnOver menu's Tools went on 2 Nov 2026: game reading is always on. Saved in the settings file, so it
+            // holds across restarts.
             Section("Steam") {
                 Toggle("Read Steam's Big Picture", isOn: model.bool("games", "readBigPictureChosen"))
                     .accessibilityLabel("Read Steam's Big Picture")
@@ -564,6 +658,27 @@ struct OtherAppsView: View {
 
 struct GeneralView: View {
     @EnvironmentObject var model: Model
+    var body: some View {
+        Form {
+            Section("Starting") {
+                Toggle("Open TurnOver at login", isOn: model.bool("general", "openAtLogin"))
+                Toggle("Show TurnOver in the menu bar", isOn: model.bool("general", "showInMenuBar"))
+            }
+            Section("Alerts") {
+                Toggle("Read notifications from other apps", isOn: model.bool("presentation", "reportNotifications"))
+                Toggle("Read changes on screen as they happen", isOn: model.bool("presentation", "reportDynamicContentChanges"))
+            }
+            Picker("Screen Curtain while TurnOver reads", selection: model.string("general", "screenCurtain", "follow")) {
+                Text("The same as VoiceOver's").tag("follow"); Text("Always on").tag("on"); Text("Off").tag("off")
+            }
+        }.formStyle(.grouped).navigationTitle("General")
+    }
+}
+
+/// Everything TurnOver plays, in one place (Oliver, 2 Nov 2026), as NVDA's Audio panel: whose sounds, the hand-over,
+/// progress bars, and other apps' sound lowered while TurnOver speaks. Audio graphs will join them.
+struct SoundsView: View {
+    @EnvironmentObject var model: Model
     /// What you hear as TurnOver takes over and hands back: two flags in the file, one choice here.
     private var handOver: Binding<String> {
         Binding(get: {
@@ -575,29 +690,31 @@ struct GeneralView: View {
             model.set("general", "handOverChimes", v == "sound")
         })
     }
+    /// Whose sounds: the file keeps "" until one is chosen, so the pop-up shows what plays meanwhile, as TurnOver works it
+    /// out (Config.General.effectiveSounds; it showed nothing chosen, a review, 2 Nov 2026).
+    private var whose: Binding<String> {
+        Binding(get: {
+            let s = model.get("general", "sounds") as? String ?? ""
+            return s.isEmpty ? model.special("_effectiveSounds") as? String ?? "voiceover" : s
+        }, set: { model.set("general", "sounds", $0) })
+    }
     var body: some View {
         Form {
-            Section("Starting") {
-                Toggle("Open TurnOver at login", isOn: model.bool("general", "openAtLogin"))
-                Toggle("Show TurnOver in the menu bar", isOn: model.bool("general", "showInMenuBar"))
+            Picker("Whose sounds", selection: whose) {
+                Text("VoiceOver's").tag("voiceover"); Text("TurnOver's").tag("turnover")
             }
-            Section("Sounds") {
-                Picker("Sounds", selection: model.string("general", "sounds", "turnover")) {
-                    Text("VoiceOver's").tag("voiceover"); Text("TurnOver's").tag("turnover")
-                }
-                Toggle("Sounds as I move and press", isOn: model.bool("general", "navigationSounds"))
-                Picker("When TurnOver takes over from VoiceOver", selection: handOver) {
-                    Text("Words").tag("words"); Text("A sound").tag("sound"); Text("Nothing").tag("nothing")
-                }
+            Text("VoiceOver's: VoiceOver's own sounds where it has one, such as links and boundaries, and TurnOver's set for the rest. TurnOver's: its set throughout.").font(.caption)
+            Toggle("Sounds as I move and press", isOn: model.bool("general", "navigationSounds"))
+            Picker("When TurnOver takes over from VoiceOver", selection: handOver) {
+                Text("Words").tag("words"); Text("A sound").tag("sound"); Text("Nothing").tag("nothing")
             }
-            Section("Alerts") {
-                Toggle("Read notifications from other apps", isOn: model.bool("presentation", "reportNotifications"))
-                Toggle("Read changes on screen as they happen", isOn: model.bool("presentation", "reportDynamicContentChanges"))
+            Picker("Progress bars", selection: model.string("presentation", "progressBars", "beep")) {
+                Text("Beep").tag("beep"); Text("Speak the percentage").tag("speak"); Text("Beep and speak").tag("both"); Text("Off").tag("off")
             }
-            Picker("Screen Curtain while TurnOver reads", selection: model.string("general", "screenCurtain", "follow")) {
-                Text("The same as VoiceOver's").tag("follow"); Text("Always on").tag("on"); Text("Off").tag("off")
+            Picker("Lower other sounds while TurnOver speaks", selection: model.string("speech", "ducking", "off")) {
+                Text("No").tag("off"); Text("While speaking").tag("speech"); Text("Always").tag("always")
             }
-        }.formStyle(.grouped).navigationTitle("General")
+        }.formStyle(.grouped).navigationTitle("Sounds")
     }
 }
 

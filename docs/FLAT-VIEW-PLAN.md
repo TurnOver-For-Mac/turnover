@@ -307,3 +307,12 @@ while the search field keeps the focus (the letters stay the field's); Return on
 TV is left out: Apple TV+ shows are not in the public catalog ("severance" found nothing), and its page reads well
 enough. Music's own search page also reads well through MediaView ("Top Results, 6 items, Radiohead, Artist"), so
 there the catalog is a choice, not a rescue; Oliver is comparing.
+
+### On for everyone, 2 Nov 2026
+
+After a week with the switch on, Oliver: "I think we got the catalogue apps all working quite well so switch those on."
+From build 23 the catalog answers searches in the App Store, Music and Podcasts for everyone, and the flat view reads
+the App Store's results page when the catalog can't (no network, nothing found). The `flatView` switch now gates only
+screen recognition's interface reading (the layer's E). The notes above are the record of how it got here. Known
+limits: the region is the Mac's, not the Apple Account's storefront; the hand-made results reading in
+AppStorePageBuilder is no longer reached.

@@ -144,17 +144,16 @@ final class SpeechPort {
     private func handle(_ line: String, _ box: SpeakerBox) {
         lines += 1
         guard let speaker = box.speaker else { return }
-        let front = NSWorkspace.shared.frontmostApplication
-        let inFront = front?.processIdentifier == speaker.pid || (speaker.isWine && (front.map { Games.isGame($0) } ?? false))
+        let front = inFront(speaker)
         switch decisions[speaker.id]?.allowed {
         case false?:
             return
         case nil:
             // Asked only while the app is in front and TurnOver is reading, so the user knows which app it is.
-            if inFront, Core.active, case .speak = Games.bridgeCommand(line) { ask(speaker, then: line) }
+            if front, Core.active, case .speak = Games.bridgeCommand(line) { ask(speaker, then: line) }
             return
         case true?:
-            switch Games.bridgeAction(line, speakerInFront: inFront && Core.active) {
+            switch Games.bridgeAction(line, speakerInFront: front && Core.active) {
             case .stop: Speech.cancel()
             case .speak(let text): say(text, from: speaker)
             case .dropped:
@@ -163,6 +162,12 @@ final class SpeechPort {
             case .ignored: if !line.isEmpty { Log.io("speech port: a line that isn't S or X from \(speaker.name)") }
             }
         }
+    }
+
+    /// Whether the speaker is the app in front (a Wine game: any game is, as CrossOver's processes come and go).
+    private func inFront(_ speaker: Speaker) -> Bool {
+        let front = NSWorkspace.shared.frontmostApplication
+        return front?.processIdentifier == speaker.pid || (speaker.isWine && (front.map { Games.isGame($0) } ?? false))
     }
 
     private func say(_ text: String, from speaker: Speaker) {
@@ -194,8 +199,13 @@ final class SpeechPort {
             self.tellAll(speaker.id)
             Log.info("speech port: \(speaker.name) \(allowed ? "allowed" : "not allowed")")
             Speech.speakMessage(allowed ? String(localized: "\(speaker.name) can speak through TurnOver.", comment: "An app allowed to speak: its name") : String(localized: "\(speaker.name) won't be heard.", comment: "An app not allowed to speak: its name"))
+            // The line that asked, said after the answer: only if the app is still in front (issue 56: it could speak
+            // once after the user had switched away).
             if allowed, case .speak(let text) = Games.bridgeCommand(line) {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self.say(text, from: speaker) }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    guard Core.active, self.inFront(speaker) else { Log.io("speech port: \(speaker.name) isn't in front; its first line is not said"); return }
+                    self.say(text, from: speaker)
+                }
             }
         }
         TurnOverMenu.shared.onClose = { [weak self] in if self?.asking.contains(speaker.id) == true { self?.asking.remove(speaker.id); self?.tellAll(speaker.id) } }
