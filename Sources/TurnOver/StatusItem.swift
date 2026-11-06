@@ -27,7 +27,6 @@ final class StatusItem: NSObject, NSMenuDelegate {
         } else {
             it.button?.title = "TurnOver"
         }
-        it.button?.toolTip = "TurnOver"
         it.button?.setAccessibilityLabel("TurnOver")
         let menu = NSMenu(title: "TurnOver")
         menu.addItem(withTitle: "TurnOver menu: Command Control Comma, from anywhere", action: #selector(openMenu), keyEquivalent: "").target = self

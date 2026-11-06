@@ -25,7 +25,7 @@ when reduced to a monochrome menu-bar symbol and becomes a conventional chat bub
   included in the embedded TurnOver Settings app.
 - `Sources/TurnOver/StatusItem.swift` loads the MenuBar image, sets its size and template rendering, and keeps
   the TurnOver accessibility label and existing menu announcements. If the image cannot load, the item displays
-  the previous TurnOver text. Hovering over either version shows the TurnOver tooltip.
+  the previous TurnOver text. The item has no tooltip, so VoiceOver hints do not repeat its accessible name.
 
 To edit the app icon, open `Resources/TurnOver.icon` in Icon Composer and save it. Rebuild with
 `./build.sh --no-install`; generated app icons belong in the build folder, not in the source tree. If the mark's
@@ -42,7 +42,7 @@ The vector artwork is original and is covered by the repository's GPL licence.
 - The small monochrome mark replaces the TurnOver text in the menu bar when Show in the menu bar is enabled.
   Its accessible name remains TurnOver, and clicking it opens the existing menu.
 
-The Icon Composer export below is the default app appearance; the operating system renders the installed icon
-for the selected system appearance and size.
+The 512-pixel preview below is reduced from the default Icon Composer export; the operating system renders the
+installed icon for the selected system appearance and size.
 
 ![TurnOver app icon: white focus brackets and two text lines beside amber speech arcs on navy.](images/turnover-icon.png)
