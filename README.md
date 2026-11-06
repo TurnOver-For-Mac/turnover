@@ -115,6 +115,8 @@ record and test boundaries.
 - [ARCHITECTURE.md](ARCHITECTURE.md): the map from each mechanism to its files and tests.
 - [TESTING.md](TESTING.md): the unit tests, recorded windows (fixtures) and the key driver.
 - [PATTERNS.md](PATTERNS.md): how Mac apps misbehave for screen readers, and TurnOver's answers.
+- [MODULE-GUIDE.md](MODULE-GUIDE.md): writing an app module, from claiming the app to a pull request; and asking for a
+  building block when the module needs something from the core.
 - [PLUGIN-GUIDE.md](PLUGIN-GUIDE.md): plugins, the reading rules and keys for an app, written as data.
 
 The design borrows NVDA's object model (objects, text ranges, app modules, global plugins) and VoiceOver's keys. It
