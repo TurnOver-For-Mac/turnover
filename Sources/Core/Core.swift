@@ -129,7 +129,6 @@ public enum Core {
     public static func activate() {
         guard started, !active else { return }
         active = true
-        DocumentAdapters.shared.resume()
         // Speech switched off by the trackpad's three-finger double-tap ends with the app: nothing else resets it, and
         // coexisting that was both readers silent (a code review on 17 Oct 2026).
         if Speech.mode == .off { Speech.mode = .talk; Log.info("speech: on again (it was off by gesture)") }
@@ -148,7 +147,6 @@ public enum Core {
 
     /// The reader is quiet (VoiceOver has the keyboard).
     public static func deactivate() {
-        DocumentAdapters.shared.suspend()
         FormattingFeedback.shared.cancel()
         ObjectNavigator.shared.cancelWindowSearch()
         guard active else { return }

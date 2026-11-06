@@ -124,7 +124,6 @@ public final class BrowseModeDocument: ScriptableObject {
         guard now != lastURL else { return false }
         let first = lastURL.isEmpty
         lastURL = now
-        DocumentAdapters.shared.pageChanged(root: webArea, url: now)
         if !first {
             buffer.newPage()   // "page read in part" once per page, not per web area (Safari reuses one)
             buffer.build()
@@ -139,6 +138,7 @@ public final class BrowseModeDocument: ScriptableObject {
         position = at
         Log.io("browse mode: page \(Log.words(BrowseModeHandler.shortURL(now))) — resuming at \(position)\(saved == nil ? "" : " (saved \(saved!.offset))")")
         if announce, !buffer.lines.isEmpty { announcePage() }
+        DocumentAdapters.shared.checkSoon(self)
         if !first, buffer.lines.isEmpty, webArea.role != "AXWebArea" { followReplacedRoot(tries: 10) }
         return true
     }
