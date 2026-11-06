@@ -94,6 +94,9 @@ public enum SettingsBridge {
         }
         dict["_effectiveSounds"] = config.general.effectiveSounds
         dict["_kokoroAvailable"] = KokoroVoice.available
+        dict["_naturalDownloaded"] = KokoroVoice.downloaded
+        dict["_naturalDownloading"] = KokoroVoice.downloading
+        dict["_naturalRemovable"] = KokoroVoice.removable
         dict["_kokoroMode"] = KokoroVoice.mode
         dict["_kokoroVoice"] = KokoroVoice.voice
         dict["_kokoroVoices"] = KokoroVoice.voices.map { ["id": $0, "name": KokoroVoice.displayName($0)] }
@@ -132,6 +135,8 @@ public enum SettingsBridge {
             KokoroVoice.preview(v)
         }
 
+        if patch["_downloadNaturalVoices"] as? Bool == true { KokoroVoice.download(); sendState() }
+        if patch["_removeNaturalVoices"] as? Bool == true { KokoroVoice.remove() }
         if patch["_restartSteam"] as? Bool == true { Games.restartSteam() }
         if let a = patch["_speechPortAllowed"] as? [String: Any], let id = a["id"] as? String, let on = a["allowed"] as? Bool { SpeechPort.shared.setAllowed(id, on) }
         if let on = patch["_coexist"] as? Bool, on != Coexist.wouldBeOn {

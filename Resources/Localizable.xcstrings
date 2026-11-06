@@ -2391,6 +2391,9 @@
         }
       }
     },
+    "25 English voices, made on your Mac. They download once, about 170 MB, from Hugging Face; nothing you read or type leaves your Mac. Then choose one under Voice above, or for say all only here." : {
+
+    },
     "A TurnOver update has downloaded. It installs when TurnOver next quits, or now from the TurnOver menu, About and updates, Updates." : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -4755,6 +4758,15 @@
           }
         }
       }
+    },
+    "Download natural voices, about 170 MB" : {
+
+    },
+    "Downloading the natural voices, about 170 MB. TurnOver will say when they're ready." : {
+      "comment" : "Said when the natural voices start downloading"
+    },
+    "Downloading the natural voices…" : {
+
     },
     "Duck when outputting speech" : {
       "comment" : "An audio ducking mode",
@@ -14784,6 +14796,12 @@
           }
         }
       }
+    },
+    "The natural voices are ready. Choose one in Settings, Speech, Voice." : {
+      "comment" : "Said when the natural voices have finished downloading"
+    },
+    "The natural voices couldn't be downloaded. Check the connection, then try again in Settings, Speech." : {
+      "comment" : "Said when the natural voices fail to download"
     },
     "The next control: the sidebar, then the section's controls in order" : {
       "comment" : "A command, as the key list and keyboard help say it",
