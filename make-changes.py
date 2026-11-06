@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """CHANGELOG.md, the record of every published build, made into the site's "What's new" page and into one build's
 update notes for Sparkle. The release tooling runs it on publish.
-  make-changes.py page CHANGELOG.md changes.html
+  make-changes.py page CHANGELOG.md changes.html [build]   (with a build: nothing newer than it is shown)
   make-changes.py notes CHANGELOG.md <build> notes.md     (the section for that build; nothing if there is none)
   make-changes.py try CHANGELOG.md new-to-try.json        (each build's "### New to try" list, for the app)
 
@@ -45,10 +45,18 @@ if mode == "notes":
             open(dest, "w", encoding="utf-8").write(f"# TurnOver {title}\n\n" + "\n".join(body).strip() + "\n")
     sys.exit(0)
 
+# Only what has been published (6 Nov 2026; staged by hand for 22.5 on 1 Nov, when the changelog already held build
+# 23): given the build being published, a section for a newer build, or one marked "in progress", is left out.
+published = float(sys.argv[4]) if len(sys.argv) > 4 else None
+def released(title):
+    if "in progress" in title.lower(): return False
+    m = re.search(r"\bbuild (\d+(?:\.\d+)?)\b", title)
+    return published is None or not m or float(m.group(1)) <= published
 intro = src.split("## ", 1)[0].splitlines()
 intro = " ".join(l for l in intro if l and not l.startswith("#"))
 parts = [f"<h1>What's new in TurnOver</h1>", f"<p>{html.escape(intro)}</p>"]
 for title, body in sections(src):
+    if not released(title): continue
     parts.append(f"<h2>{html.escape(title)}</h2>")
     items = []
     def flush():
