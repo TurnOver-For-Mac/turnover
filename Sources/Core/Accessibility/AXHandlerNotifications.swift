@@ -64,6 +64,8 @@ extension AXHandler {
         case kAXValueChangedNotification:
             // Safari sends a thousand of these a second for dying elements while a page loads; only the focus's matter,
             // and elements a plugin watches (a status line, a progress bar) in the application in front.
+            // The progress bar being watched beeps as it moves (ProgressWatch); the event goes on as before.
+            ProgressWatch.valueChanged(element)
             if let f = API.focusObject, f.isSameElement(as: element) { EventHandler.queue(Event(.valueChange, f)); return }
             if pid == activePid, !ProfileStore.shared.profiles(for: ProfileStore.shared.bundle(of: pid)).isEmpty,
                ProfileStore.shared.watchRule(for: element, pid: pid) != nil {

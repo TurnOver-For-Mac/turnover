@@ -293,6 +293,17 @@ public final class WebBuffer {
             if current.count == before, let t = el.string(kAXTitleAttribute) ?? el.string(kAXDescriptionAttribute), !t.isEmpty { append(t, el) }
             linkDepth -= 1
             if ownLine { flush() }
+        case "AXProgressIndicator" where el.elements(kAXChildrenAttribute).isEmpty:
+            // A line of its own, read as a control is ("Test progress, progress bar, 40 percent"): it had no text, so a
+            // page's bar was missing from browse mode and could never be followed (2 Nov 2026). Not through
+            // objectPropertiesSpeech, which starts following a bar: making the page isn't reading it. (A bar with
+            // text inside, an ARIA one, is read by its text, as before.)
+            flush()
+            let obj = ObjectFactory.make(el)
+            let label = obj.name.isEmpty ? (obj.value ?? obj.role.displayString) : obj.name
+            currentElement = el
+            current.append((label, el, false))
+            flush(control: true, fields: [obj.role.displayString, obj.value].compactMap { $0 }.filter { $0 != label })
         case _ where Self.controlRoles.contains(role):
             flush()
             let obj = ObjectFactory.make(el)

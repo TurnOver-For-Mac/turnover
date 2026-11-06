@@ -89,10 +89,12 @@ public struct Config: Codable {
         public var navigationSounds = true
         /// Screen Curtain while TurnOver leads: "follow" VoiceOver's, "on" or "off".
         public var screenCurtain = "follow"
-        /// "voiceover" (VoiceOver's sound files for links, misspellings, edges, the rotor, the trackpad) or
-        /// "turnover" (TurnOver's own tones and bells); "" means by the old mode: VoiceOver's unless the settings file
-        /// says "experimental" (17 Oct 2026: "people seemed to like those").
+        /// "voiceover" (VoiceOver's sound files where VoiceOver has a sound: links, misspellings, edges, the rotor, the
+        /// trackpad; TurnOver's own set for the rest) or "turnover" (TurnOver's own set throughout); "" until one is
+        /// chosen (effectiveSounds says what plays then).
         public var sounds = ""
+        /// Whose sounds play ("voiceover" or "turnover"): the choice, or until one is made what always played, VoiceOver's
+        /// unless the settings file says "experimental" (Tones).
         public var effectiveSounds: String { sounds.isEmpty ? (edition != "experimental" ? "voiceover" : "turnover") : sounds }
         public init() {}
         enum Keys: String, CodingKey { case openAtLogin, showInMenuBar, windowsKeys, keyboardStyle, keysWhereVoiceOverReads, navigateByGroups, groupsInWindowsStyle, focusFollowsCursor, turnOverKey = "bosunKey", handOverChimes, navigationSounds, screenCurtain, edition, handOverNothing, sounds }
@@ -171,9 +173,26 @@ public struct Config: Codable {
         /// The voices the speech rotor (VO-Command-Shift, voice) steps through, by identifier; empty, every voice of the
         /// Mac's languages (18 Oct 2026: "just Alex and Eddy… rather than wading through all the novelty ones").
         public var rotorVoices: [String] = []
+        /// Bass, middle and treble in decibels, -12 to 12, for the voice in use (SpeechEQ; 2 Nov 2026).
+        public var bass = 0.0, middle = 0.0, treble = 0.0
+        /// Each voice's own rate, volume and EQ, by voice (a Mac voice's identifier, or "external:" and a natural
+        /// voice): kept as the voice is left and put back as it is chosen again (Oliver, 2 Nov 2026: "rate, volume,
+        /// and the eq should be specific to each voice"). `rate`, `volume` and the EQ above are the voice in use's.
+        public var voiceTunings: [String: VoiceTuning] = [:]
+        public struct VoiceTuning: Codable, Equatable {
+            public var rate: Float, volume: Int, bass: Double, middle: Double, treble: Double
+        }
+        /// Leaving one voice for another: the one left keeps what it has now; the one chosen gets back its own, or
+        /// starts from these if it has none yet.
+        public mutating func switchTuning(from old: String, to new: String) {
+            guard old != new else { return }
+            voiceTunings[old] = VoiceTuning(rate: rate, volume: volume, bass: bass, middle: middle, treble: treble)
+            guard let t = voiceTunings[new] else { return }
+            rate = t.rate; volume = t.volume; bass = t.bass; middle = t.middle; treble = t.treble
+        }
         public init() {}
         // Each field falls back to its default, so a setting added later never resets the voice and rate.
-        enum Keys: String, CodingKey { case voice, rate, symbolLevel, sayCapForCapitals, volume, autoLanguageSwitching, languageVoices, languageRates, outputDevice, capitalPitch, ducking, pitch, rotorVoices }
+        enum Keys: String, CodingKey { case voice, rate, symbolLevel, sayCapForCapitals, volume, autoLanguageSwitching, languageVoices, languageRates, outputDevice, capitalPitch, ducking, pitch, rotorVoices, bass, middle, treble, voiceTunings }
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: Keys.self)
             voice = (try? c.decodeIfPresent(String.self, forKey: .voice)) ?? voice
@@ -189,6 +208,10 @@ public struct Config: Codable {
             pitch = (try? c.decodeIfPresent(Float.self, forKey: .pitch)) ?? pitch
             ducking = (try? c.decodeIfPresent(String.self, forKey: .ducking)) ?? ducking
             rotorVoices = (try? c.decodeIfPresent([String].self, forKey: .rotorVoices)) ?? rotorVoices
+            bass = (try? c.decodeIfPresent(Double.self, forKey: .bass)) ?? bass
+            middle = (try? c.decodeIfPresent(Double.self, forKey: .middle)) ?? middle
+            treble = (try? c.decodeIfPresent(Double.self, forKey: .treble)) ?? treble
+            voiceTunings = (try? c.decodeIfPresent([String: VoiceTuning].self, forKey: .voiceTunings)) ?? voiceTunings
         }
         public func encode(to encoder: Encoder) throws {
             var c = encoder.container(keyedBy: Keys.self)
@@ -198,7 +221,11 @@ public struct Config: Codable {
             try c.encode(languageRates, forKey: .languageRates); try c.encode(outputDevice, forKey: .outputDevice)
             try c.encode(capitalPitch, forKey: .capitalPitch); try c.encode(ducking, forKey: .ducking); try c.encode(pitch, forKey: .pitch)
             try c.encode(rotorVoices, forKey: .rotorVoices)
+            try c.encode(bass, forKey: .bass); try c.encode(middle, forKey: .middle); try c.encode(treble, forKey: .treble)
+            try c.encode(voiceTunings, forKey: .voiceTunings)
         }
+        /// The EQ as the speech player takes it.
+        public var eq: [Float] { [Float(bass), Float(middle), Float(treble)] }
     }
     public struct Keyboard: Codable {
         public var speakTypedCharacters: TypingEcho = .editControls
@@ -298,23 +325,25 @@ public struct Config: Codable {
     }
     /// Screen recognition (NVDA: the Windows OCR settings).
     public struct Recognition: Codable {
-        /// NVDA's "Periodically refresh recognized content": read again every 1.5 s while the result is open, saying
-        /// new rows as they appear. Off by default, as in NVDA.
+        /// NVDA's "Periodically refresh recognized content", by change rather than by the clock: while the result is
+        /// open, a small picture of the window is taken each second, and when it differs the window is recognised
+        /// again, the new rows said (Oliver, 3 Nov 2026: "or even if something on the screen changes"). Off by default,
+        /// as in NVDA.
         public var autoRefresh = false
         /// NVDA's "Automatically say all on result".
         public var autoSayAll = false
         /// After Return clicks something in the result, recognise again instead of closing (Oliver, 28 Oct 2026: a
-        /// dialog's OK, then the screen that follows, without pressing the key again). A feature for a whole build,
-        /// so off by default and its toggle shown only in developer builds (Oliver, 29 Oct 2026: "that's not a bug fix,
-        /// it's a feature").
-        public var refreshAfterClick = false
+        /// dialog's OK, then the screen that follows, without pressing the key again). A feature for a whole build:
+        /// hidden in 22.x (Oliver, 29 Oct 2026: "that's not a bug fix, it's a feature"), on for everyone from build 23
+        /// (3 Nov 2026). Stored under a new name: 22.x wrote the old one as off in every settings file (a review).
+        public var refreshAfterClick = true
         public init() {}
-        enum Keys: String, CodingKey { case autoRefresh, autoSayAll, refreshAfterClick }
+        enum Keys: String, CodingKey { case autoRefresh, autoSayAll, refreshAfterClick = "recogniseAgainAfterClick" }
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: Keys.self)
             autoRefresh = (try? c.decodeIfPresent(Bool.self, forKey: .autoRefresh)) ?? false
             autoSayAll = (try? c.decodeIfPresent(Bool.self, forKey: .autoSayAll)) ?? false
-            refreshAfterClick = (try? c.decodeIfPresent(Bool.self, forKey: .refreshAfterClick)) ?? false
+            refreshAfterClick = (try? c.decodeIfPresent(Bool.self, forKey: .refreshAfterClick)) ?? true
         }
         public func encode(to encoder: Encoder) throws {
             var c = encoder.container(keyedBy: Keys.self)
@@ -468,8 +497,11 @@ public struct Config: Codable {
         public var reportNotifications = true
         /// "Bambu Studio, with the Bambu Studio plugin" as an app with a plugin comes to the front (the plugin design notes 13).
         public var announcePlugins = true
+        /// A progress bar as it moves (ProgressOutput, NVDA+U): "beep", "speak", "both" or "off". Beeps by
+        /// default, as NVDA does (Oliver, having heard them, 3 Nov 2026: "put the progress bar stuff in there").
+        public var progressBars = "beep"
         public init() {}
-        enum Keys: String, CodingKey { case verbosity, verbosityByApp, reportObjectDescriptions, reportKeyboardShortcuts, reportObjectPositionInformation, reportDynamicContentChanges, speakHints, reportNotifications, announcePlugins }
+        enum Keys: String, CodingKey { case verbosity, verbosityByApp, reportObjectDescriptions, reportKeyboardShortcuts, reportObjectPositionInformation, reportDynamicContentChanges, speakHints, reportNotifications, announcePlugins, progressBars }
         // Each setting falls back on its own: a settings file from before speakHints keeps the others.
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: Keys.self)
@@ -485,6 +517,7 @@ public struct Config: Codable {
             speakHints = (try? c.decodeIfPresent(Bool.self, forKey: .speakHints)) ?? true
             reportNotifications = (try? c.decodeIfPresent(Bool.self, forKey: .reportNotifications)) ?? true
             announcePlugins = (try? c.decodeIfPresent(Bool.self, forKey: .announcePlugins)) ?? true
+            progressBars = (try? c.decodeIfPresent(String.self, forKey: .progressBars)).flatMap { ProgressOutput.modes.contains($0) ? $0 : nil } ?? "beep"
         }
         public func encode(to encoder: Encoder) throws {
             var c = encoder.container(keyedBy: Keys.self)
@@ -492,7 +525,7 @@ public struct Config: Codable {
             try c.encode(reportObjectDescriptions, forKey: .reportObjectDescriptions); try c.encode(reportKeyboardShortcuts, forKey: .reportKeyboardShortcuts)
             try c.encode(reportObjectPositionInformation, forKey: .reportObjectPositionInformation); try c.encode(reportDynamicContentChanges, forKey: .reportDynamicContentChanges)
             try c.encode(speakHints, forKey: .speakHints); try c.encode(reportNotifications, forKey: .reportNotifications)
-            try c.encode(announcePlugins, forKey: .announcePlugins)
+            try c.encode(announcePlugins, forKey: .announcePlugins); try c.encode(progressBars, forKey: .progressBars)
         }
     }
     public struct DocumentFormatting: Codable {

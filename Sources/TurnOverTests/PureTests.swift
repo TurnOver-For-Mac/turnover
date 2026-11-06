@@ -342,6 +342,54 @@ func pureTests() {
         expect(o.script(for: g)?.name, nil)
         expect(o.script(named: "first")?.name, "first")
     }
+    test("voices: each keeps its own rate, volume and EQ, and a new one starts from the voice before") {
+        var s = Config.Speech()
+        s.rate = 0.7; s.volume = 100; s.bass = 0
+        s.switchTuning(from: "alex", to: "external:en_gb_Maeve")
+        expect(s.rate, 0.7, "a voice with nothing of its own starts from the one before")
+        s.rate = 0.6; s.volume = 140; s.bass = 4
+        s.switchTuning(from: "external:en_gb_Maeve", to: "alex")
+        expect(s.rate, 0.7); expect(s.volume, 100); expect(s.bass, 0)
+        s.switchTuning(from: "alex", to: "external:en_gb_Maeve")
+        expect(s.rate, 0.6); expect(s.volume, 140); expect(s.bass, 4)
+        s.switchTuning(from: "external:en_gb_Maeve", to: "external:en_gb_Maeve")
+        expect(s.volume, 140, "the same voice again changes nothing")
+        let back = try? JSONDecoder().decode(Config.Speech.self, from: JSONEncoder().encode(s))
+        expect(back?.voiceTunings["alex"]?.rate, 0.7, "kept in the settings file")
+    }
+    test("voices: a natural voice's speed follows the speech rate, as the Mac voices' does") {
+        expect(KokoroVoice.speed(forRate: 0.5), 1.0, "0.5 is the voice's own pace")
+        check(KokoroVoice.speed(forRate: 0.7) > 1.5 && KokoroVoice.speed(forRate: 0.7) < 1.6, "70 percent about one and a half times")
+        expect(KokoroVoice.speed(forRate: 1.0), 3.0, "kept to three times at the fastest")
+        expect(KokoroVoice.speed(forRate: 0.1), 0.5, "and half at the slowest")
+    }
+    test("voices: the EQ leaves a flat voice alone and lifts the bass of a low tone") {
+        let format = AVAudioFormat(standardFormatWithSampleRate: 24000, channels: 1)!
+        func tone(_ hz: Double) -> AVAudioPCMBuffer {
+            let b = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4800)!
+            b.frameLength = 4800
+            for i in 0..<4800 { b.floatChannelData![0][i] = Float(0.1 * sin(2 * Double.pi * hz * Double(i) / 24000)) }
+            return b
+        }
+        func peak(_ b: AVAudioPCMBuffer) -> Float { (2400..<4800).map { abs(b.floatChannelData![0][$0]) }.max() ?? 0 }
+        var flat = SpeechEQ([0, 0, 0], sampleRate: 24000)
+        check(flat.isFlat, "nothing to do")
+        let low = tone(60); flat.run(low)
+        check(abs(peak(low) - 0.1) < 0.001, "untouched (\(peak(low)))")
+        var bass = SpeechEQ([6, 0, 0], sampleRate: 24000)
+        let boosted = tone(60); bass.run(boosted)
+        // +6 dB of bass, less the 6 dB of headroom taken first: about as loud as before at 60 Hz, and quieter at 3 kHz.
+        check(abs(peak(boosted) - 0.1) < 0.02, "the low tone keeps its level (\(peak(boosted)))")
+        var bass2 = SpeechEQ([6, 0, 0], sampleRate: 24000)
+        let high = tone(3000); bass2.run(high)
+        check(peak(high) < 0.06, "a high tone is lowered by the headroom (\(peak(high)))")
+    }
+    test("natural voices: Phonon's voices by name and accent") {
+        expect(KokoroVoice.displayName("en_gb_Maeve"), "Maeve, British")
+        expect(KokoroVoice.displayName("en_us_Zoey"), "Zoey, American")
+        expect(KokoroVoice.displayName("en_gb_Elodie-Rose"), "Elodie Rose, British")
+        check(KokoroVoice.phononVoices.allSatisfy { $0.hasPrefix("en_gb_") || $0.hasPrefix("en_us_") }, "every Phonon voice is British or American English")
+    }
     test("kokoro: audio frames split anywhere by the pipe come out whole") {
         let r = KokoroVoice.selfTest()
         check(r.samples == 440 && r.ended, "got \(r.samples) samples, ended \(r.ended)")
@@ -662,6 +710,39 @@ func pureTests() {
             flatSpeech + "SCRVoiceIdentifier": "wrong.flat.voice", flatSpeech + "SCRRateAsPercent": 100.0
         ])
         expect(c.voiceId, "test.structured.voice"); expect(c.rate, 0.65)
+    }
+    func readVoiceOverExport(_ export: [String: Any]) throws -> VoiceOverSettings.Copied {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("voiceover-\(UUID().uuidString).voprefs")
+        let plist: [String: Any] = ["ArchiveVersionOS": 270200, "ArchiveVersionVO": 4, "export": export]
+        try PropertyListSerialization.data(fromPropertyList: plist, format: .binary, options: 0).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        return try VoiceOverSettings.read(url)
+    }
+    test("VoiceOver export: macOS 27.2's voice under com.apple.SpeakSelection is read with the other settings (issue 221)") {
+        // The reporter's export: the voice only under SpeakSelection; verbosity, typing echo and the rate percent
+        // still under default, with no SCRVoiceIdentifier.
+        let c = try readVoiceOverExport([
+            "default": [flatLanguage + "SCRRateAsPercent": 70.0,
+                        "SCRVerbosity_SCRVerbosityLevel": "SCRVerbosityLow", "SCRTypingEchoFeedback": "SCRTypingEchoWords"],
+            "com.apple.SpeakSelection": ["VoiceOverDefaultVoiceSelections": ["en", ["voiceId": "test.speakselection.voice", "rate": 0.7, "pitch": 0.45, "volume": 0.9]],
+                                         "VoiceOverVoiceRotors": []]
+        ])
+        expect(c.voiceId, "test.speakselection.voice"); expect(c.rate, 0.7); expect(c.pitch, 0.45); expect(c.volume, 0.9)
+        expect(c.verbosity, "SCRVerbosityLow"); expect(c.typingEcho, "SCRTypingEchoWords")
+    }
+    test("VoiceOver export: a voice under default keeps precedence over com.apple.SpeakSelection") {
+        let c = try readVoiceOverExport([
+            "default": ["VoiceOverDefaultVoiceSelections": ["en", ["voiceId": "test.default.voice", "rate": 0.65]]],
+            "com.apple.SpeakSelection": ["VoiceOverDefaultVoiceSelections": ["en", ["voiceId": "wrong.speakselection.voice", "rate": 0.7]]]
+        ])
+        expect(c.voiceId, "test.default.voice"); expect(c.rate, 0.65)
+    }
+    test("VoiceOver export: an empty voice under SpeakSelection still falls back to flattened settings") {
+        let c = try readVoiceOverExport([
+            "default": [flatSpeech + "SCRVoiceIdentifier": "test.flat.voice", flatSpeech + "SCRRateAsPercent": 75.0],
+            "com.apple.SpeakSelection": ["VoiceOverDefaultVoiceSelections": ["en", ["voiceId": ""]]]
+        ])
+        expect(c.voiceId, "test.flat.voice"); expect(c.rate, 0.75)
     }
     test("VoiceOver export: an empty structured voice falls back to flattened settings") {
         let c = try readVoiceOverDefault([
@@ -1086,6 +1167,79 @@ func browseTextNavTests() {
         expect(back?.general.keyboardStyle, "jaws", "a JAWS style survives a save")
         let odd = try? JSONDecoder().decode(Config.self, from: Data(#"{"general": {"keyboardStyle": "orca"}}"#.utf8))
         expect(odd?.general.keyboardStyle, "mac", "an unknown style falls back to VoiceOver keys")
+    }
+    test("screen recognition: a controls result's rows don't run into each other, so Down moves on") {
+        guard #available(macOS 26.0, *) else { return }
+        let elements = [ScreenInterface.Element(kind: .menu, label: "File", rect: CGRect(x: 10, y: 10, width: 30, height: 16), from: "model"),
+                        ScreenInterface.Element(kind: .button, label: "Next", rect: CGRect(x: 10, y: 40, width: 50, height: 20), from: "box"),
+                        ScreenInterface.Element(kind: .text, label: "Welcome", rect: CGRect(x: 10, y: 70, width: 80, height: 16), from: "document")]
+        let r = ScreenRecognition.interfaceResult(elements, title: "Sample", pid: 0, window: CGRect(x: 0, y: 0, width: 400, height: 300))
+        expect(r.rows.count, 3)
+        for i in 1..<r.rows.count {
+            check(NSMaxRange(r.rows[i - 1].range) < r.rows[i].range.location, "row \(i - 1) ends before row \(i) begins")
+        }
+        expect(r.text.substring(with: r.rows[1].range), "Next, button")
+    }
+    test("screen recognition: a controls result reads a sidebar before the main pane, not band by band") {
+        guard #available(macOS 26.0, *) else { return }
+        func e(_ kind: ScreenInterface.Kind, _ label: String, _ x: CGFloat, _ y: CGFloat, _ w: CGFloat) -> ScreenInterface.Element {
+            ScreenInterface.Element(kind: kind, label: label, rect: CGRect(x: x, y: y, width: w, height: 16), from: "document")
+        }
+        let elements = [e(.text, "General", 10, 10, 60), e(.button, "Save", 300, 10, 50), e(.text, "Speech", 10, 40, 60),
+                        e(.button, "Cancel", 300, 40, 50), e(.text, "Braille", 10, 70, 60), e(.text, "Sounds", 10, 100, 60), e(.text, "Apps", 10, 130, 60)]
+        let r = ScreenRecognition.interfaceResult(elements, title: "", pid: 0, window: CGRect(x: 0, y: 0, width: 400, height: 300))
+        expect(r.rows.map { r.text.substring(with: $0.range) }, ["General", "Speech", "Braille", "Sounds", "Apps", "Save, button", "Cancel, button"])
+        expect(r.rows.map(\.block), [0, 0, 0, 0, 0, 1, 1], "the sidebar and the main pane are two blocks (Tab moves between them)")
+        expect(r.rows[5].items[0].words[0].rect.midX, 325, "the click lands on the button")
+    }
+    test("screen recognition: cards side by side read as cards, a form and a table stay rows") {
+        func line(_ s: String, _ x: CGFloat, _ y: CGFloat, _ w: CGFloat) -> ScreenRecognition.Line { (s, CGRect(x: x, y: y, width: w, height: 16), [(s, CGRect(x: x, y: y, width: w, height: 16))]) }
+        func rows(_ lines: [ScreenRecognition.Line]) -> [String] {
+            let r = ScreenRecognition.layout(lines, title: "", pid: 0, window: CGRect(x: 0, y: 0, width: 800, height: 600))
+            return r.rows.map { r.text.substring(with: $0.range) }
+        }
+        // Parallels' installation assistant (issue 73): four cards, a Download button over each name, far apart.
+        let cards = [line("Free Systems", 20, 20, 120)] + ["macOS", "Ubuntu Linux", "Fedora Linux", "Debian GNU/Linux"].enumerated().flatMap { i, name in
+            [line("Download", 40 + CGFloat(i) * 200, 200, 80), line(name, 40 + CGFloat(i) * 200, 260, 110)]
+        }
+        expect(rows(cards), ["Free Systems", "Download  macOS", "Download  Ubuntu Linux", "Download  Fedora Linux", "Download  Debian GNU/Linux"])
+        // A form: two columns, labels and values, rows well apart. Not cards: read across.
+        let form = [line("Name", 20, 20, 50), line("Oliver", 200, 20, 60), line("Email", 20, 60, 50), line("oliver@example.com", 200, 60, 150)]
+        expect(rows(form), ["Name  Oliver", "Email  oliver@example.com"])
+        // A table: four columns, rows a line apart. Not cards: read across.
+        let table = (0..<3).flatMap { r in (0..<4).map { c in line("r\(r)c\(c)", 20 + CGFloat(c) * 150, 20 + CGFloat(r) * 20, 60) } }
+        expect(rows(table), ["r0c0  r0c1  r0c2  r0c3", "r1c0  r1c1  r1c2  r1c3", "r2c0  r2c1  r2c2  r2c3"])
+        // A grid of equal gaps, rows well apart (a calendar, a level select): rows all the way down, not cards at the end.
+        let grid = (0..<5).flatMap { r in (0..<3).map { c in line("g\(r)\(c)", 20 + CGFloat(c) * 150, 20 + CGFloat(r) * 50, 60) } }
+        expect(rows(grid), (0..<5).map { r in (0..<3).map { "g\(r)\($0)" }.joined(separator: "  ") })
+    }
+    test("screen recognition: recognise again after a click is on unless switched off in build 23 or later") {
+        @MainActor func on(_ json: String) -> Bool? { (try? JSONDecoder().decode(Config.Recognition.self, from: Data(json.utf8)))?.refreshAfterClick }
+        expect(on("{}"), true)
+        expect(on(#"{"refreshAfterClick": false}"#), true, "22.x saved the old key as off for everyone, so it's ignored")
+        expect(on(#"{"recogniseAgainAfterClick": false}"#), false)
+    }
+    test("screen recognition: two small pictures differ only when a visible part has changed") {
+        func picture(_ draw: (CGContext) -> Void) -> CGImage {
+            let ctx = CGContext(data: nil, width: 160, height: 100, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+            ctx.setFillColor(CGColor(gray: 1, alpha: 1)); ctx.fill(CGRect(x: 0, y: 0, width: 160, height: 100))
+            ctx.setFillColor(CGColor(gray: 0, alpha: 1)); draw(ctx)
+            return ctx.makeImage()!
+        }
+        let blank = picture { _ in }, dialog = picture { $0.fill(CGRect(x: 40, y: 30, width: 60, height: 40)) }, speck = picture { $0.fill(CGRect(x: 10, y: 10, width: 1, height: 1)) }
+        check(!ScreenRecognition.differs(blank, picture { _ in }), "the same picture twice: no change")
+        check(ScreenRecognition.differs(blank, dialog), "a dialog's worth of pixels: a change")
+        check(!ScreenRecognition.differs(blank, speck), "one pixel (a cursor's blink): no change")
+    }
+    test("VoiceOver keys: VO-Shift-L describes, VO-Shift-Y recognises the screen's text") {
+        let saved = config
+        defer { config = saved }
+        config.general.keyboardStyle = "mac"
+        let vo = VoiceOverKeysPlugin()
+        expect(vo.script(for: KeyboardGesture(identifier: "kb:turnover+shift+l")!)?.name, "vo_describeImage")
+        expect(vo.script(for: KeyboardGesture(identifier: "kb:turnover+shift+y")!)?.name, "vo_recognizeScreen")
+        config.general.keyboardStyle = "windows"
+        expect(ScriptHandler.findScript(for: KeyboardGesture(identifier: "kb:turnover+r")!)?.name, "recognizeScreen", "NVDA keys keep TurnOver R")
     }
     test("keyboard styles: the pieces of an announcement, commas in the Mac family, spaces in the Windows family") {
         let saved = config

@@ -151,7 +151,9 @@ public enum Speech {
         if let pitch { Log.io("say: (pitch raised to \(Int(pitch * 100)) percent)") }
         // Kokoro (the maintainer's Mac): say all, or everything, in a natural voice; another language keeps its own voice, and
         // a capital said higher keeps the Mac voice (Kokoro has no pitch).
-        let kokoro: String? = voice == nil && pitch == nil && KokoroVoice.wanted(reading: readingNow) ? "external:" + KokoroVoice.voice : nil
+        // Private speech (a copied password, a two-factor code, what is typed) only to a helper signed by TurnOver's own
+        // developer: otherwise the Mac's own voice says it.
+        let kokoro: String? = voice == nil && pitch == nil && (!privateNext || KokoroVoice.helperTrusted.value) && KokoroVoice.wanted(reading: readingNow) ? "external:" + KokoroVoice.voice : nil
         // No player (the plugin tool and the tests start no speech): nothing to say it with (a plugin list crashed
         // here, 13 Oct 2026).
         guard player != nil else { completion?(false); return }

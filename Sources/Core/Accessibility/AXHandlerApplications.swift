@@ -67,7 +67,7 @@ extension AXHandler {
     /// An application just launched (Safari restoring its windows) has no window yet and may say nothing when one
     /// appears: ask again until it has one, so Tab and the arrows have somewhere to go.
     func waitForFirstWindow(pid: pid_t, name: String?, tries: Int) {
-        guard tries > 0 else { Log.io("no window appeared in \(name ?? "pid \(pid)")"); return }
+        guard tries > 0 else { Log.io("no window appeared in \(name ?? "pid \(pid)")"); EmptyWindowNotice.checkNoWindow(pid: pid); return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
             guard let self, self.activePid == pid, API.focusObject?.pid != pid else { return }
             let appEl = AXUIElementCreateApplication(pid)

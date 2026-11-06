@@ -76,9 +76,10 @@ enum BrailleCommands {
         (dots("58"), String(localized: "fn lock", comment: "A braille chord's command, as braille help says it"), .run { Speech.speakMessage(String(localized: "Fn is not available from the display yet", comment: "Spoken message")) }),
         (dots("7"), String(localized: "delete", comment: "A braille chord's command, as braille help says it"), .key("backspace")),
         (dots("8"), String(localized: "return", comment: "A braille chord's command, as braille help says it"), .key("enter")),
-        // Rotor: TurnOver's rotor opens; Left and Right (or the joystick) change its kind.
-        (dots("23"), String(localized: "rotor", comment: "A braille chord's command, as braille help says it"), .key("turnover+u")),
-        (dots("56"), String(localized: "rotor", comment: "A braille chord's command, as braille help says it"), .key("turnover+u")),
+        // Rotor: TurnOver's rotor opens; Left and Right (or the joystick) change its kind. VO-U's script itself, in
+        // every keyboard style: TurnOver U is NVDA+U with NVDA keys, the progress bar setting (2 Nov 2026).
+        (dots("23"), String(localized: "rotor", comment: "A braille chord's command, as braille help says it"), .run { BrailleCommands.rotor() }),
+        (dots("56"), String(localized: "rotor", comment: "A braille chord's command, as braille help says it"), .run { BrailleCommands.rotor() }),
         // Volume
         (dots("345"), String(localized: "volume up", comment: "A braille chord's command, as braille help says it"), .run { BrailleCommands.volume(by: 10) }),
         (dots("126"), String(localized: "volume down", comment: "A braille chord's command, as braille help says it"), .run { BrailleCommands.volume(by: -10) }),
@@ -124,6 +125,12 @@ enum BrailleCommands {
             press(first ? "home" : "end"); return
         }
         press(first ? "command+upArrow" : "command+downArrow")
+    }
+
+    /// VO-U's rotor (the script, not the key), whatever the keyboard style, run as press runs a key's script.
+    static func rotor() {
+        guard let g = KeyboardGesture(identifier: "kb:turnover+u") else { return }
+        if let s = ScriptHandler.findScript(named: "vo_rotor") { ScriptHandler.executeScript(s, gesture: g) } else { Tones.edge() }
     }
 
     static func volume(by step: Int) {

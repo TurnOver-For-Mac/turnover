@@ -9,7 +9,7 @@ Views turns windows and documents into models the reader can navigate. Its sourc
 - [WebBufferCollection.swift](WebBufferCollection.swift): bounded accessibility collection on the document worker. Existing object and speech rules interpret the captured data on main; see [document snapshots](../../docs/DOCUMENT-SNAPSHOTS.md).
 - [PanesView.swift](PanesView.swift): named parts and navigation for panes recipes, used by the [Panes app module](../Apps/Panes/README.md).
 
-FlatView and FlatScreen use the `flatView` developer switch. The [flat-view plan](../../docs/FLAT-VIEW-PLAN.md) records their design rationale.
+FlatView and FlatScreen read the App Store's search results when Apple's catalog can't answer (Apps/Catalog). The [flat-view plan](../../docs/FLAT-VIEW-PLAN.md) records their design rationale.
 
 ## Related code
 

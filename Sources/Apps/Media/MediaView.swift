@@ -1390,7 +1390,7 @@ public final class MediaView {
         waitForNewPage(different: before, tries: Self.searchPageTries, focusPage: true)
     }
 
-    // MARK: The catalog (developer switch `flatView`; Catalog.swift)
+    // MARK: The catalog (Catalog.swift; on for everyone from build 23, the developer switch `flatView` until then)
 
     /// The catalog's answers for the latest search: the page's host while its results are up, instead of the
     /// app's own results page.
@@ -1404,7 +1404,7 @@ public final class MediaView {
     private var openingTitle = ""
 
     private func catalogSearch(term raw: String) {
-        guard Edition.devDefault("flatView"), let kind = Catalog.kind(for: NSRunningApplication(processIdentifier: pid)?.bundleIdentifier) else { return }
+        guard let kind = Catalog.kind(for: NSRunningApplication(processIdentifier: pid)?.bundleIdentifier) else { return }
         let term = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !term.isEmpty else { Log.io("catalog: no term to search for"); return }
         catalog?.cancel()

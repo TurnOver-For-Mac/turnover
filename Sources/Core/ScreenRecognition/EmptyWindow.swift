@@ -27,6 +27,7 @@ public enum EmptyWindowNotice {
     /// Windows already told about, so a window is told about once (the newest 12), and those being looked at.
     private static var told: [AXUIElement] = []
     private static var pending: [AXUIElement] = []
+    private static var toldApps: [pid_t] = []
 
     nonisolated enum Look: Equatable { case readable(String), empty, inconclusive }
 
@@ -49,6 +50,20 @@ public enum EmptyWindowNotice {
     }
 
     private static func forget(_ window: AXUIElement) { pending.removeAll { $0.isSame(window) } }
+
+    /// An app in front that shows a window accessibility doesn't report at all: Parallels Desktop's virtual machine
+    /// had no window, so no notice either (Oliver, 2 Nov 2026). Said once for the app, as for an empty window. Not for
+    /// an app still starting (a splash screen comes before the real window), and asked once more just before.
+    public static func checkNoWindow(pid: pid_t) {
+        guard !toldApps.contains(pid), let app = NSRunningApplication(processIdentifier: pid), NSWorkspace.shared.frontmostApplication == app,
+              app.launchDate.map({ Date().timeIntervalSince($0) > 15 }) ?? true, InputManager.directPid != pid, !InputManager.isAsleep(pid),
+              ScreenRecognition.shownWindowFrame(pid: pid) != nil else { return }
+        let ax = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(ax, 0.5)
+        guard ax.element(kAXFocusedWindowAttribute) == nil, ax.elements(kAXWindowsAttribute).isEmpty else { return }
+        toldApps.append(pid); if toldApps.count > 12 { toldApps.removeFirst() }
+        offer(pid: pid)
+    }
 
     /// What the window holds beyond its title-bar buttons, toolbar and title: readable (the first readable role),
     /// empty, or inconclusive (the walk ran out of budget or the app didn't answer; nothing is said then).
@@ -99,9 +114,19 @@ public enum EmptyWindowNotice {
               let front = AXUIElementCreateApplication(pid).element(kAXFocusedWindowAttribute), front.isSame(window),
               !AXHandler.modalInFront(pid: pid), InputManager.directPid != pid else { return }
         told.append(window); if told.count > 12 { told.removeFirst() }
-        // The key for screen recognition in this style: VO-Shift-L in the VoiceOver style (describeImage recognises
-        // the screen when the cursor isn't on a picture), the TurnOver key with R in the NVDA and JAWS styles.
-        let key = GlobalCommands.spoken(config.general.style == .voiceOver ? "kb:turnover+shift+l" : "kb:turnover+r")
+        offer(pid: pid)
+    }
+
+    private static func offer(pid: pid_t) {
+        // The keys in this style: with VoiceOver keys, VO-Shift-Y reads the text and VO-Shift-L describes the window
+        // (2 Nov 2026); with NVDA or JAWS keys, the TurnOver key with R reads the text.
+        if config.general.style == .voiceOver {
+            let text = GlobalCommands.spoken("kb:turnover+shift+y"), look = GlobalCommands.spoken("kb:turnover+shift+l")
+            Log.info("empty window: nothing readable in the front window of pid \(pid); screen recognition offered (\(text), \(look))")
+            Speech.speakMessage(String(localized: "Nothing in this window can be read. Press \(text) to recognise its text, or \(look) to describe it.", comment: "Spoken message: %1$@ is the key that recognises the text, %2$@ the key that describes the window"))
+            return
+        }
+        let key = GlobalCommands.spoken("kb:turnover+r")
         Log.info("empty window: nothing readable in the front window of pid \(pid); screen recognition offered (\(key))")
         Speech.speakMessage(String(localized: "Nothing in this window can be read. Press \(key) to recognise the screen.", comment: "Spoken message"))
     }

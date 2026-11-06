@@ -232,7 +232,18 @@ public final class BrowseModeDocument: ScriptableObject {
         if let b = info as? BufferTextInfo { b.previousChain = lastChain }
         Speech.speakTextInfo(info, unit: unit, reason: .caret)
         if let w = info as? WebTextInfo { lastChain = w.chain }
-        if let b = info as? BufferTextInfo { lastChain = b.chain }
+        if let b = info as? BufferTextInfo { lastChain = b.chain; followProgress(in: b) }
+    }
+
+    /// A progress bar read on the page is followed as it moves (ProgressWatch), as one the focus reads is. Known by its
+    /// line's role, so the lines read ask the page nothing. (Say all reads by its own path, so a bar it passes isn't.)
+    private func followProgress(in info: BufferTextInfo) {
+        guard var i = buffer.lineIndex(at: info.start) else { return }
+        while i < buffer.lines.count, buffer.lines[i].start < max(info.end, info.start + 1) {
+            let line = buffer.lines[i]
+            if line.isControl, line.fields.first == Role.progressBar.displayString, let e = line.element { ProgressWatch.watch(ObjectFactory.make(e)) }
+            i += 1
+        }
     }
 
     package init(webArea: AXUIElement, buffer suppliedBuffer: WebBuffer? = nil) {

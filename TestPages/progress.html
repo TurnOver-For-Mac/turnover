@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>TurnOver progress bar test</title></head>
+<body>
+<h1>TurnOver progress bar test</h1>
+<p>A progress bar that climbs from 0 to 100 percent, to hear how TurnOver reports one. Choose the setting first:
+NVDA+U in the NVDA keys, or Progress bars in the Verbosity list (VO-V) or in Settings.</p>
+<p>Press a button, then move down to the bar so TurnOver reads it, as you would a download or a copy. With Beep, each
+percent beeps, rising in pitch. With Speak, the percentage is said every 10 percent, and "100 percent" at the end.
+Beep and speak does both.</p>
+<button id="slow">Fill the bar over 20 seconds</button>
+<button id="fast">Fill the bar over 3 seconds</button>
+<p><label for="bar">Test progress</label> <progress id="bar" max="100" value="0"></progress></p>
+<p id="status">Not started.</p>
+<script>
+let timer = null;
+function fill(seconds) {
+  const bar = document.getElementById('bar'), status = document.getElementById('status');
+  clearInterval(timer);
+  bar.value = 0;
+  status.textContent = 'Filling.';
+  const start = Date.now();
+  timer = setInterval(() => {
+    const percent = Math.min(100, (Date.now() - start) / (seconds * 10));
+    bar.value = percent;
+    if (percent >= 100) { clearInterval(timer); status.textContent = 'Full.'; }
+  }, 50);
+}
+document.getElementById('slow').addEventListener('click', () => fill(20));
+document.getElementById('fast').addEventListener('click', () => fill(3));
+</script>
+</body>
+</html>

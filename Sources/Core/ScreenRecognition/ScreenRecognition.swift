@@ -53,94 +53,162 @@ public final class ScreenRecognition {
     private var result: Result?
     private var caret = 0
     private var working = false
+    private var pass = 0   // each recognition's number: a pass overtaken by a second press is not shown
     private var refreshTimer: Timer?
+    /// The last small picture of the window, while the result is open: the next is compared with it.
+    private var glance: CGImage?
 
     // MARK: Opening
 
-    /// TurnOver+R: recognise the front window. While the result is open: recognise again, keeping the place.
-    public func recognize() {
+    /// The recognition key (VO-Shift-Y, TurnOver R), from its commands or from inside a result: pressed twice within the
+    /// double-press time, the controls. Counted here, not by the script's repeat count: a text result opens within that
+    /// time and takes the keys, so the second press came to `handle` and was lost (a review, 2 Nov 2026). A third press
+    /// is left alone: the controls are on their way.
+    public func keyPressed() {
+        let now = Date()
+        keyCount = now.timeIntervalSince(keyAt) * 1000 <= Double(config.keyboard.multiPressTimeoutMs) ? keyCount + 1 : 0
+        keyAt = now
+        if keyCount < 2 { recognize(twice: keyCount == 1) }
+    }
+    private var keyAt = Date.distantPast, keyCount = 0
+
+    /// TurnOver+R: recognise the front window's text. While the result is open: recognise again, keeping the place.
+    /// Pressed twice: the window's controls instead (Oliver, 2 Nov 2026: "if I do shift vo y and hit y twice"); again
+    /// in a result of controls, its controls again. On macOS 26 and later, which their recognition needs.
+    public func recognize(twice: Bool = false) {
+        if #available(macOS 26.0, *), twice || (isOpen && showingInterface) {
+            if twice { pass += 1; working = false }   // the first press's text is not shown
+            recognizeInterface(fresh: twice)
+            return
+        }
         guard !working else { Speech.speakMessage(String(localized: "still recognising", comment: "Spoken message")); return }
         guard ScreenCapturePermission.ensure() else { finished(); return }
         let reopen = isOpen
         let keepRow = reopen ? currentRowText() : nil
         guard let target = Self.target() else { Speech.speakMessage(String(localized: "no window to recognise", comment: "Spoken message")); finished(); return }
         working = true
+        pass += 1
+        let id = pass
         let started = Date()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-            if self?.working == true { Speech.speakMessage(String(localized: "recognising", comment: "Spoken message")) }
+            if self?.working == true, self?.pass == id { Speech.speakMessage(String(localized: "recognising", comment: "Spoken message")) }
         }
         Task.detached(priority: .userInitiated) {
             let outcome = await Self.run(target)
             await MainActor.run {
+                guard id == self.pass else { return }   // pressed again for the controls
                 self.working = false
+                guard self.stillInFront(target) else { return }
                 switch outcome {
                 case .failure(let message):
                     Log.error("screen recognition: \(message)")
                     Speech.speakMessage(message)
                     if !self.isOpen { self.finished() }
                 case .success(let r):
-                    self.showingInterface = false
                     Log.io("screen recognition: \(r.rows.count) rows, \(r.items.count) pieces of text, \(r.text.length) characters in \(Int(Date().timeIntervalSince(started) * 1000)) ms")
-                    self.show(r, reopen: reopen, keepRow: keepRow)
+                    self.show(r, reopen: reopen, keepRow: keepRow, controls: false)
                 }
             }
         }
     }
 
-    /// The layer's E (developer switch `flatView`): the window's controls from its pixels (ScreenInterface), opened as
-    /// a recognition result whose rows are the controls: "Save, button". Return clicks the control.
-    public func recognizeInterface() {
-        guard Edition.devDefault("flatView") else { recognize(); return }
+    /// The window's controls from its pixels (ScreenInterface), opened as a recognition result whose rows are the
+    /// controls: "Save, button". Return clicks the control. The key pressed twice. `fresh`: the result the first press
+    /// may have opened is replaced, not recognised again.
+    public func recognizeInterface(fresh: Bool = false) {
         guard #available(macOS 26.0, *) else { Speech.speakMessage(String(localized: "the screen interface needs macOS 26 or later", comment: "Spoken message")); return }
         guard !working else { Speech.speakMessage(String(localized: "still recognising", comment: "Spoken message")); return }
         guard ScreenCapturePermission.ensure() else { finished(); return }
         guard let target = Self.target() else { Speech.speakMessage(String(localized: "no window to recognise", comment: "Spoken message")); finished(); return }
+        // Again while a result is open: the place is kept and nothing is closed if nothing is found, as for text.
+        let reopen = isOpen && !fresh
+        let keepRow = reopen ? currentRowText() : nil
         working = true
+        pass += 1
+        let id = pass
         let started = Date()
         Speech.speakMessage(String(localized: "reading the screen's controls", comment: "Spoken message"))
         Task.detached(priority: .userInitiated) {
             let image: CGImage
             do { image = try await Self.capture(target) } catch {
-                await MainActor.run { self.working = false; Speech.speakMessage(String(localized: "could not see the window", comment: "Spoken message")); if !self.isOpen { self.finished() } }
+                await MainActor.run {
+                    guard id == self.pass else { return }
+                    self.working = false; Speech.speakMessage(String(localized: "could not see the window", comment: "Spoken message")); if !self.isOpen { self.finished() }
+                }
                 return
             }
             let d = await ScreenInterface.detect(image, frame: target.frame)
             let r = Self.interfaceResult(d.elements, title: target.title, pid: target.pid, window: target.frame)
             await MainActor.run {
+                guard id == self.pass else { return }
                 self.working = false
+                guard self.stillInFront(target) else { return }
                 Log.io("screen interface: \(d.elements.count) elements in \(Int(Date().timeIntervalSince(started) * 1000)) ms (\(d.note))")
                 for e in d.elements.prefix(60) { Log.io("screen interface:   \(e.kind.rawValue) \"\(Log.words(e.label.prefix(40).description))\" at \(Int(e.rect.midX)),\(Int(e.rect.midY)) (\(e.from))") }
-                self.showingInterface = true
-                self.show(r, reopen: false, keepRow: nil)
+                self.show(r, reopen: reopen, keepRow: keepRow, controls: true)
+            }
+            // The model's kinds and icons, merged in quietly once they come (46 s and nothing on 3 Nov 2026, when the
+            // result waited for them); not after another press, or once the result has closed.
+            let refined = await ScreenInterface.refine(d.elements, image: image, frame: target.frame, within: 3)
+            await MainActor.run {
+                // Not over a refresh that has shown a newer screen meanwhile (a review, 3 Nov 2026).
+                guard id == self.pass, self.isOpen, self.showingInterface, self.result?.text == r.text, self.stillInFront(target) else { return }
+                Log.io("screen interface: \(refined.note)")
+                guard refined.elements != d.elements else { return }
+                for e in refined.elements where e.from == "model" { Log.io("screen interface:   \(e.kind.rawValue) \"\(Log.words(e.label.prefix(40).description))\" at \(Int(e.rect.midX)),\(Int(e.rect.midY)) (model)") }
+                self.merge(Self.interfaceResult(refined.elements, title: target.title, pid: target.pid, window: target.frame))
             }
         }
     }
 
-    /// The controls as rows: one each, "label, kind", the whole row clickable at the control's centre.
+    /// The controls as rows: one each, "label, kind", the whole row clickable at the control's centre, in the order
+    /// text is read (a sidebar before the pane beside it, cards as cards: `ordered`), each block Tab's stop.
+    /// Each row ends where its words do, the line break between rows, as text results' rows are: a row that took in
+    /// its line break ended where the next began, and Down stayed on the first row (Oliver, 2 Nov 2026).
     @available(macOS 26.0, *)
-    nonisolated static func interfaceResult(_ elements: [ScreenInterface.Element], title: String, pid: pid_t, window: CGRect) -> Result {
+    package nonisolated static func interfaceResult(_ elements: [ScreenInterface.Element], title: String, pid: pid_t, window: CGRect) -> Result {
+        let lines: [Line] = elements.map { e in
+            let label = e.label.isEmpty ? e.kind.spoken : e.label
+            return (e.kind.spoken.isEmpty || e.label.isEmpty ? label : "\(label), \(e.kind.spoken)", e.rect, [(label, e.rect)])
+        }
         let text = NSMutableString()
         var rows: [Row] = []
-        for e in elements {
-            let label = e.label.isEmpty ? (e.kind == .icon ? "icon" : e.kind.rawValue) : e.label
-            let spoken = e.kind.spoken.isEmpty || e.label.isEmpty ? label : "\(label), \(e.kind.spoken)"
-            let start = text.length
-            text.append(spoken); text.append("\n")
-            let labelRange = NSRange(location: start, length: (label as NSString).length)
-            let word = Word(range: labelRange, rect: e.rect)
-            let item = Item(range: NSRange(location: start, length: (spoken as NSString).length), rect: e.rect, words: [word])
-            rows.append(Row(range: NSRange(location: start, length: (spoken as NSString).length + 1), items: [item], block: 0))
+        for (b, block) in ordered(lines).enumerated() {
+            for line in block.flatMap({ $0 }) {
+                if text.length > 0 { text.append("\n") }
+                let start = text.length
+                text.append(line.0)
+                let word = Word(range: NSRange(location: start, length: (line.2[0].0 as NSString).length), rect: line.1)
+                let item = Item(range: NSRange(location: start, length: (line.0 as NSString).length), rect: line.1, words: [word])
+                rows.append(Row(range: item.range, items: [item], block: b))
+            }
         }
         return Result(text: text, rows: rows, title: title, pid: pid, window: window)
     }
 
-    private func show(_ r: Result, reopen: Bool, keepRow: String?) {
+    /// A result that comes back once another app is in front is dropped: it opened over the wrong window (3 Nov 2026,
+    /// 46 s after the key, over a different app).
+    private func stillInFront(_ t: Target) -> Bool {
+        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == t.pid else {
+            Log.info("screen recognition: pid \(t.pid) is no longer in front; its result is dropped")
+            if !isOpen { finished() }
+            return false
+        }
+        return true
+    }
+
+    private func show(_ r: Result, reopen: Bool, keepRow: String?, controls: Bool) {
         guard r.text.length > 0 else {
-            if !reopen { Speech.speakMessage(String(localized: "no text found", comment: "Spoken message")); finished() } else { Speech.speakMessage(String(localized: "no text now", comment: "Spoken message")) }
+            if !reopen {
+                Speech.speakMessage(controls ? String(localized: "nothing found", comment: "Screen recognition found no controls or text") : String(localized: "no text found", comment: "Spoken message"))
+                if !isOpen { finished() }   // pressed twice over an open text result: that stays
+            } else { Speech.speakMessage(String(localized: "no text now", comment: "Spoken message")) }
             return
         }
         result = r
         isOpen = true
+        glance = nil
+        showingInterface = controls   // only once there is a result: nothing found keeps what was open as it was
         if let keepRow, let row = r.rows.first(where: { r.text.substring(with: $0.range) == keepRow }) {
             caret = row.range.location
             Speech.speakMessage(String(localized: "recognised again", comment: "Spoken message"))
@@ -148,7 +216,8 @@ public final class ScreenRecognition {
             caret = 0
             let rows = r.rows.count
             let count = rows == 1 ? String(localized: "1 row", comment: "A table's size") : String(localized: "\(String(rows)) rows", comment: "A table's size")
-            Speech.speakMessage(reopen ? String(localized: "recognised again, \(count)", comment: "Screen recognition again: how many rows") : "\(r.title.isEmpty ? "" : r.title + ", ")" + String(localized: "recognised text, \(count)", comment: "Screen recognition: how many rows"))
+            let found = showingInterface ? String(localized: "recognised controls, \(count)", comment: "Screen recognition of controls: how many rows") : String(localized: "recognised text, \(count)", comment: "Screen recognition: how many rows")
+            Speech.speakMessage(reopen ? String(localized: "recognised again, \(count)", comment: "Screen recognition again: how many rows") : "\(r.title.isEmpty ? "" : r.title + ", ")" + found)
         }
         if config.recognition.autoSayAll, keepRow == nil { sayAll() } else { speakRow() }
         Braille.modalLine = { [weak self] in self?.brailleLine() }
@@ -161,6 +230,7 @@ public final class ScreenRecognition {
         guard isOpen else { return }
         isOpen = false
         refreshTimer?.invalidate(); refreshTimer = nil
+        glance = nil
         Braille.modalLine = nil; Braille.modalKey = nil
         Braille.refreshSoon()
         if !silently { Speech.speakMessage(String(localized: "closed recognition", comment: "Spoken message")) }
@@ -213,8 +283,8 @@ public final class ScreenRecognition {
             click(.hover)
         case "a" where m.contains(.turnover), "downArrow" where m.contains(.turnover):
             sayAll()
-        case "r" where m.contains(.turnover):
-            recognize()
+        case "r" where m.contains(.turnover), "y" where m.contains(.turnover) && m.contains(.shift) && config.general.style == .voiceOver:
+            keyPressed()
         default:
             if m.contains(.turnover) { return }   // TurnOver's other keys: nothing here
             Tones.edge()
@@ -293,7 +363,9 @@ public final class ScreenRecognition {
         let words = allWords()
         if let w = words.first(where: { NSLocationInRange(caret, $0.range) }) { return w.rect }
         if let it = r.items.first(where: { NSLocationInRange(caret, $0.range) }) { return it.rect }
-        return words.min { abs($0.range.location - caret) < abs($1.range.location - caret) }?.rect
+        // At a row's end (its line break) the nearest word was the next row's, one character on: this row's instead.
+        let near = rowIndex(caret).map { r.rows[$0].items.flatMap(\.words) } ?? []
+        return (near.isEmpty ? words : near).min { abs($0.range.location - caret) < abs($1.range.location - caret) }?.rect
     }
 
     private func click(_ kind: Click) {
@@ -321,9 +393,7 @@ public final class ScreenRecognition {
         Speech.speakMessage(kind == .right ? String(localized: "right clicked", comment: "Spoken message") : kind == .double ? String(localized: "double clicked", comment: "Spoken message") : String(localized: "clicked", comment: "Spoken message"))
         // The screen changes after a click: the result is out of date. Recognised again after a moment (the setting;
         // the screen interface again where that was open), else TurnOver follows the app's focus from here.
-        // (Developer builds only: a feature for a whole build. A setting saved as on by an earlier build is not
-        // honoured in a public one, where its toggle is hidden; a code review, 29 Oct 2026.)
-        if Edition.isDevBuild, config.recognition.refreshAfterClick, kind != .right {
+        if config.recognition.refreshAfterClick, kind != .right {
             let interface = showingInterface
             close(silently: true)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { [weak self] in
@@ -339,34 +409,87 @@ public final class ScreenRecognition {
 
     // MARK: Refreshing while open (NVDA: "periodically refresh recognized content")
 
+    /// Each second while the result is open: a small picture of the window, compared with the last. Recognised again
+    /// only when the window has changed (the old way read it again every 1.5 s, changed or not, and only for text).
     private func startRefreshing() {
         refreshTimer?.invalidate(); refreshTimer = nil
         guard config.recognition.autoRefresh else { return }
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.refreshQuietly() } }
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.glanceForChange() } }
     }
 
-    /// Recognise again without a word; speak only the rows that are new.
+    private func glanceForChange() {
+        guard isOpen, !working, let old = result, NSWorkspace.shared.frontmostApplication?.processIdentifier == old.pid, let target = Self.target(pid: old.pid) else { return }
+        let last = glance
+        Task.detached(priority: .utility) {
+            guard let small = try? await Self.capture(target, width: 160) else { return }
+            let changed = last.map { Self.differs($0, small) } ?? false
+            await MainActor.run {
+                guard self.isOpen, !self.working else { return }
+                self.glance = small
+                if changed { self.refreshQuietly() }
+            }
+        }
+    }
+
+    /// Whether two small pictures of the window differ: more than one part in five hundred by a visible amount. One
+    /// new line of text in a big window is about one in three hundred; a caret or a clock's seconds far less.
+    package nonisolated static func differs(_ a: CGImage, _ b: CGImage) -> Bool {
+        guard a.width == b.width, a.height == b.height, let x = a.dataProvider?.data, let y = b.dataProvider?.data,
+              CFDataGetLength(x) == CFDataGetLength(y), let px = CFDataGetBytePtr(x), let py = CFDataGetBytePtr(y) else { return true }
+        let n = CFDataGetLength(x)
+        var changed = 0
+        for i in 0..<n where abs(Int(px[i]) - Int(py[i])) > 40 { changed += 1 }
+        return changed * 500 > n
+    }
+
+    /// Recognise again without a word; speak only the rows that are new. A controls result gives its controls again.
     private func refreshQuietly() {
         guard isOpen, !working, let old = result, let target = Self.target(pid: old.pid) else { return }
         working = true
+        let id = pass
+        let controls = showingInterface
         Task.detached(priority: .utility) {
-            let outcome = await Self.run(target)
+            var outcome = await Outcome.failure("")
+            if controls, #available(macOS 26.0, *) {
+                if let image = try? await Self.capture(target) {
+                    let d = await ScreenInterface.detect(image, frame: target.frame)
+                    outcome = .success(Self.interfaceResult(d.elements, title: target.title, pid: target.pid, window: target.frame))
+                }
+            } else {
+                outcome = await Self.run(target)
+            }
             await MainActor.run {
+                guard id == self.pass else { return }   // pressed twice meanwhile: the controls have the result
                 self.working = false
                 guard self.isOpen, case .success(let r) = outcome, r.text.length > 0 else { return }
-                let before = Set(old.rows.map { old.text.substring(with: $0.range) })
-                // NVDA's live text: new rows only, and not a row that changed by one character (a clock's seconds).
-                let fresh = r.rows.map { r.text.substring(with: $0.range) }.filter { row in
-                    !before.contains(row) && !row.trimmingCharacters(in: .whitespaces).isEmpty && !before.contains { Self.oneCharacterApart($0, row) }
-                }
-                let keep = self.currentRowText()
-                self.result = r
-                if let keep, let row = r.rows.first(where: { r.text.substring(with: $0.range) == keep }) { self.caret = row.range.location }
-                else { self.caret = min(self.caret, max(0, r.text.length - 1)) }
-                if !fresh.isEmpty, fresh.count <= 6 { Speech.speakNews(fresh.joined(separator: "\n")) }
-                Braille.refreshSoon()
+                self.replaceQuietly(r, old: old)
             }
         }
+    }
+
+    /// The model's view in place of Vision's, in silence: rows have their kinds now ("Save, button"), so the place is
+    /// kept by the control's box, not its words.
+    private func merge(_ r: Result) {
+        let here = result.flatMap { old in rowIndex(caret).map { old.rows[$0].items[0].rect } }
+        result = r
+        if let here, let row = r.rows.first(where: { $0.items.first?.rect == here }) { caret = row.range.location }
+        else { caret = min(caret, max(0, r.text.length - 1)) }
+        Braille.refreshSoon()
+    }
+
+    /// A newer result in place of the one open, the place kept; only the rows that are new are said.
+    private func replaceQuietly(_ r: Result, old: Result) {
+        let before = Set(old.rows.map { old.text.substring(with: $0.range) })
+        // NVDA's live text: new rows only, and not a row that changed by one character (a clock's seconds).
+        let fresh = r.rows.map { r.text.substring(with: $0.range) }.filter { row in
+            !before.contains(row) && !row.trimmingCharacters(in: .whitespaces).isEmpty && !before.contains { Self.oneCharacterApart($0, row) }
+        }
+        let keep = currentRowText()
+        result = r
+        if let keep, let row = r.rows.first(where: { r.text.substring(with: $0.range) == keep }) { caret = row.range.location }
+        else { caret = min(caret, max(0, r.text.length - 1)) }
+        if !fresh.isEmpty, fresh.count <= 6 { Speech.speakNews(fresh.joined(separator: "\n")) }
+        Braille.refreshSoon()
     }
 
     static func oneCharacterApart(_ a: String, _ b: String) -> Bool {
@@ -431,15 +554,32 @@ public final class ScreenRecognition {
         let app = AXUIElementCreateApplication(pid)
         guard let w = app.element(kAXFocusedWindowAttribute) ?? app.element(kAXMainWindowAttribute), let f = TurnOverObject.frame(w),
               f.width > 20, f.height > 20 else {
-            // No window (a full-screen game): the main display.
-            return Target(pid: pid, frame: CGDisplayBounds(CGMainDisplayID()), title: NSRunningApplication(processIdentifier: pid)?.localizedName ?? "")
+            // No window accessibility reports: the app's own largest window on screen (Parallels Desktop's virtual
+            // machine has one; the whole display was read instead, with the windows behind it, 2 Nov 2026), else the
+            // main display (a full-screen game).
+            return Target(pid: pid, frame: shownWindowFrame(pid: pid) ?? CGDisplayBounds(CGMainDisplayID()), title: NSRunningApplication(processIdentifier: pid)?.localizedName ?? "")
         }
         return Target(pid: pid, frame: f, title: w.string(kAXTitleAttribute) ?? "")
     }
 
+    /// The app's front ordinary window on screen, from the window server, for an app whose windows accessibility
+    /// doesn't report: the list runs front to back, and see-through windows (an overlay) are passed over. Owner, layer,
+    /// alpha and bounds only, which need no Screen Recording.
+    nonisolated static func shownWindowFrame(pid: pid_t) -> CGRect? {
+        guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else { return nil }
+        for w in list {
+            guard (w[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == pid, (w[kCGWindowLayer as String] as? NSNumber)?.intValue == 0,
+                  ((w[kCGWindowAlpha as String] as? NSNumber)?.doubleValue ?? 1) > 0,
+                  let b = w[kCGWindowBounds as String] as? NSDictionary, let r = CGRect(dictionaryRepresentation: b), r.width > 100, r.height > 100 else { continue }
+            return r
+        }
+        return nil
+    }
+
     static func windowFrame(pid: pid_t) -> CGRect? {
         let app = AXUIElementCreateApplication(pid)
-        return (app.element(kAXFocusedWindowAttribute) ?? app.element(kAXMainWindowAttribute)).flatMap { TurnOverObject.frame($0) }
+        // The window server's, for an app with no window accessibility can see, so a click still checks it hasn't moved.
+        return (app.element(kAXFocusedWindowAttribute) ?? app.element(kAXMainWindowAttribute)).flatMap { TurnOverObject.frame($0) } ?? shownWindowFrame(pid: pid)
     }
 
     public enum Outcome { case success(Result), failure(String) }
@@ -454,21 +594,26 @@ public final class ScreenRecognition {
         let started = Date()
         do { lines = try recognizeLines(image, frame: t.frame) } catch { return .failure("recognition failed: \(error.localizedDescription)") }
         Log.io("screen recognition: Vision took \(Int(Date().timeIntervalSince(started) * 1000)) ms, main thread \(Thread.isMainThread ? "BLOCKED" : "free")")
-        return await .success(layout(lines, title: t.title, pid: t.pid, window: t.frame))
+        return .success(layout(lines, title: t.title, pid: t.pid, window: t.frame))
     }
 
     /// The window's pixels at the screen's full resolution, through ScreenCaptureKit (the only way left on macOS 15
     /// and later). The window is found by its owner and frame; failing that, the region of the display it is on.
-    static func capture(_ t: Target) async throws -> CGImage {
+    /// `width`: a small picture instead, this many pixels wide (to see whether the window has changed).
+    static func capture(_ t: Target, width: Int? = nil) async throws -> CGImage {
         let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true)
         let scale = NSScreen.screens.first { $0.frame.intersects(Self.appKitRect(t.frame)) }?.backingScaleFactor ?? 2
         let config = SCStreamConfiguration()
         config.showsCursor = false
         config.captureResolution = .best
         config.ignoreShadowsSingleWindow = true
+        func size(_ s: CGSize) {
+            let k = width.map { CGFloat($0) / (s.width * scale) } ?? 1
+            config.width = max(1, Int(s.width * scale * k)); config.height = max(1, Int(s.height * scale * k))
+        }
         let windows = content.windows.filter { $0.owningApplication?.processID == t.pid && $0.isOnScreen && $0.windowLayer == 0 }
         if let w = windows.min(by: { distance($0.frame, t.frame) < distance($1.frame, t.frame) }), distance(w.frame, t.frame) < 40 {
-            config.width = Int(w.frame.width * scale); config.height = Int(w.frame.height * scale)
+            size(w.frame.size)
             return try await SCScreenshotManager.captureImage(contentFilter: SCContentFilter(desktopIndependentWindow: w), configuration: config)
         }
         // A window ScreenCaptureKit does not list on its own (a game's full-screen surface): that part of the display.
@@ -477,7 +622,7 @@ public final class ScreenRecognition {
         }
         let local = t.frame.offsetBy(dx: -display.frame.minX, dy: -display.frame.minY).intersection(CGRect(x: 0, y: 0, width: display.frame.width, height: display.frame.height))
         config.sourceRect = local
-        config.width = Int(local.width * scale); config.height = Int(local.height * scale)
+        size(local.size)
         // TurnOver's own windows (an alert, the update window) are left out of the picture.
         let own = content.applications.filter { $0.processID == ProcessInfo.processInfo.processIdentifier }
         return try await SCScreenshotManager.captureImage(contentFilter: SCContentFilter(display: display, excludingApplications: own, exceptingWindows: []), configuration: config)
@@ -541,8 +686,10 @@ public final class ScreenRecognition {
     /// bottom) or right down it (left to right), again and again (an XY cut). Side-by-side columns (a sidebar, a
     /// chat, a browser pane: VOCR's common complaint is these read as one line) become separate blocks, read one
     /// after the other. A cut down the middle of rows that line up (a list or table: sender and date) is not a column:
-    /// those stay rows, read left to right, the pieces two spaces apart.
-    public static func layout(_ lines: [Line], title: String, pid: pid_t, window: CGRect) -> Result {
+    /// those stay rows, read left to right, the pieces two spaces apart. Cards side by side (a name over a button,
+    /// four across) are each a block of one row, read top to bottom. The blocks, each its rows, each row's lines left
+    /// to right.
+    nonisolated public static func ordered(_ lines: [Line]) -> [[[Line]]] {
         let heights = lines.map { $0.1.height }.sorted()
         let unit = heights.isEmpty ? 10 : max(6, heights[heights.count / 2])
         var blocks: [[[Line]]] = []
@@ -557,9 +704,17 @@ public final class ScreenRecognition {
             var vCuts: [(Int, CGFloat)] = []; var right = byX[0].1.maxX
             for (i, l) in byX.enumerated().dropFirst() { if l.1.minX > right { vCuts.append((i, l.1.minX - right)) }; right = max(right, l.1.maxX) }
             let bestH = hCuts.map { $0.1 }.max() ?? 0, bestV = vCuts.map { $0.1 }.max() ?? 0
+            let cols = bestV >= gutter ? split(byX, at: vCuts.filter { $0.1 >= gutter }.map { $0.0 }) : [ls]
+            // Cards side by side (Parallels' installation assistant, issue 73: four systems, a Download button over
+            // each name, read "Download Download Download Download" then the names): three or more evenly spaced
+            // columns of short lines, two or three deep, the rows well apart (a picture between). Each card is one
+            // row, top to bottom, in a block of its own. A table's rows sit a line apart, and a form has two columns.
+            if cols.count >= 3, bestH >= unit * 1.5, isCards(cols) {
+                for col in cols { blocks.append([col.sorted { $0.1.minY < $1.1.minY }]) }
+                return
+            }
             // Columns first where a gutter runs the full height: a sidebar, the main text, a side pane.
             if bestV >= gutter, bestV >= bestH {
-                let cols = split(byX, at: vCuts.filter { $0.1 >= gutter }.map { $0.0 })
                 // Neighbouring columns whose rows line up are one table (Finder's name, date, size and kind); the
                 // others (its sidebar) are separate.
                 var groups: [[[Line]]] = []
@@ -572,12 +727,20 @@ public final class ScreenRecognition {
                 }
                 if cols.count > 1, bestH < unit * 0.9 { blocks.append(rows(ls)); return }   // a table: its rows
             }
-            // Then sections: a gap of a line or more across the region.
+            // Then sections: cut at the widest gap across the region, and at every gap near it, a line or more, and look
+            // at each part again. Not every gap at once, so cards under a title are still seen together; not the widest
+            // alone, or a grid of equal gaps would be peeled a row at a time until its last rows passed as cards.
             if bestH >= unit * 0.9 {
-                let parts = split(byY, at: hCuts.filter { $0.1 >= unit * 0.9 }.map { $0.0 })
-                if parts.count > 1 { parts.forEach(order); return }
+                split(byY, at: hCuts.filter { $0.1 >= bestH * 0.8 }.map { $0.0 }).forEach(order); return
             }
             blocks.append(rows(ls))
+        }
+        func isCards(_ cols: [[Line]]) -> Bool {
+            let depth = rows(cols.flatMap { $0 }).count
+            guard (2...3).contains(depth), cols.allSatisfy({ $0.count == depth && $0.allSatisfy { $0.0.split(separator: " ").count <= 5 } }) else { return false }
+            let centres = cols.map { $0.reduce(CGRect.null) { $0.union($1.1) }.midX }
+            let pitches = zip(centres, centres.dropFirst()).map { $1 - $0 }
+            return (pitches.max() ?? 0) - (pitches.min() ?? 0) < (pitches.min() ?? 0) * 0.25
         }
         func split(_ sorted: [Line], at cuts: [Int]) -> [[Line]] {
             var out: [[Line]] = []; var from = 0
@@ -614,7 +777,12 @@ public final class ScreenRecognition {
             return out.map { $0.sorted { $0.1.minX < $1.1.minX } }
         }
         order(lines)
+        return blocks
+    }
 
+    /// The lines as a result: the blocks' rows in order, the pieces of a row two spaces apart, each word keeping its box.
+    nonisolated public static func layout(_ lines: [Line], title: String, pid: pid_t, window: CGRect) -> Result {
+        let blocks = ordered(lines)
         let text = NSMutableString()
         var outRows: [Row] = []
         for (b, block) in blocks.enumerated() {

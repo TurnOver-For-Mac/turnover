@@ -1,9 +1,9 @@
 # TurnOver: every setting comes from VoiceOver
 
 The rule (15 Oct 2026): in TurnOver there are no independent choices. VoiceOver Utility is where people set things;
-TurnOver copies VoiceOver's export (the TurnOver menu, Copy my VoiceOver settings; or the speech settings' last stop,
-sync with VoiceOver) and every VoiceOver setting that TurnOver has a capability for is applied one to one. Where
-TurnOver lacks the capability, that is work to do, listed here.
+TurnOver copies VoiceOver's export (the TurnOver menu, Copy VoiceOver settings) and every VoiceOver setting that
+TurnOver has a capability for is applied one to one. Where TurnOver lacks the capability, that is work to do, listed
+here.
 
 The export is "VoiceOver Archive.voprefs" (VoiceOver Utility, File, Export Preferences…), a plain plist; its
 `default` section holds the settings below (112 keys on one Mac). Names are VoiceOver's own, shortened.
@@ -174,7 +174,7 @@ beta's). **No VoiceOver setting** = the maintainer to decide: keep as TurnOver's
 | TurnOver item | VoiceOver | Standard |
 |---|---|---|
 | Sounds as I move and press | Sound: sounds on or off | from VoiceOver |
-| Read new text as it appears | Web: observe live regions; Verbosity: value updates | from VoiceOver |
+| Recognise again when the screen changes | Web: observe live regions; Verbosity: value updates | from VoiceOver |
 | Read the whole result as it opens | Verbosity: speak all static text in sheets | from VoiceOver |
 | Screen Curtain while TurnOver reads | VoiceOver's screen curtain | from VoiceOver |
 | Games; Gesture haptics; Screen recognition; Edition | none | beta only (Edition stays on a development Mac) |

@@ -21,6 +21,16 @@ Redistribution and use in source and binary forms, with or without modification,
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+The natural voices are optional and not part of TurnOver's download. Where a Mac has them, TurnOver talks to a helper
+built from source in this repository (plugins/kokoro/helper and plugins/phonon/helper), which uses FluidAudio
+(https://github.com/FluidInference/FluidAudio, Apache License 2.0, with its text processing, also Apache 2.0). The
+helper downloads the voices onto the Mac itself: Phonon 31m by Gradium (https://huggingface.co/gradium/phonon-31m-en,
+Apache License 2.0), in FluidInference's Core ML conversion (https://huggingface.co/FluidInference/pocket-tts-coreml,
+CC BY 4.0), and Kokoro-82M by hexgrad (https://huggingface.co/hexgrad/Kokoro-82M, Apache License 2.0). Our thanks to
+them all. A TurnOver download that included the helper or the voices would carry those licences' texts too. The EQ
+uses the biquad formulas of Robert Bristow-Johnson's Audio EQ Cookbook, and the speed control the published WSOLA
+method; neither includes anyone's code.
+
 Updates are delivered by Sparkle (https://sparkle-project.org), MIT licence. Its copyright notice and licence:
 
 Copyright (c) 2006-2013 Andy Matuschak.

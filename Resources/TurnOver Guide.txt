@@ -198,12 +198,15 @@ latest messages from anywhere, 1 the newest. New messages are read as they arriv
 Music, Podcasts and TV
 
 Up and Down move through the page, shelf by shelf; Left and Right jump between shelves; Return plays; Space pauses
-and says which.
+and says which. In Music and Podcasts, Return in the search field gives the results as a plain list from Apple's
+catalog, as in the App Store; TV reads its own results page.
 
 The App Store
 
 Up and Down move through every app and button; Left and Right between shelves. Return opens an app's page; Space
-presses its own button (Get, Open, Update). Command F searches.
+presses its own button (Get, Open, Update). Command F searches: type, press Return, and the results are a plain list
+from Apple's catalog while the search field keeps the focus. Up and Down move through it, Return opens one, Escape
+leaves the list.
 
 Microsoft Word and Excel
 
@@ -232,7 +235,7 @@ New output is read as it arrives; your own typing isn't read twice. TurnOver Up 
 
 Steam
 
-Steam's Big Picture is read as you move, once you turn it on: Settings, Other apps' speech, Read Steam's Big Picture (or the TurnOver menu, Games), then Restart Steam there. It's
+Steam's Big Picture is read as you move, once you turn it on: Settings, Other apps' speech, Read Steam's Big Picture, then Restart Steam there. It's
 off to begin with because reading it makes Steam open a debugging port on your Mac while Steam runs, which other
 programs on the same Mac could use too; turning it off, or uninstalling TurnOver, removes that again. Games that
 support it speak through TurnOver without any of this.
@@ -379,12 +382,20 @@ TurnOver does not ask for Full Disk Access.
 
 What leaves your Mac
 
-TurnOver connects to one place by itself: its update site, `doll-eye.github.io/turnover-updates`, to check for a
-new build. Nothing about you or what you do is sent: it only fetches that file.
+TurnOver connects to these places by itself:
+
+- Its update site, `doll-eye.github.io/turnover-updates`, to check for a new build. Nothing about you or what you
+  do is sent: it only fetches that file.
+- Apple's public catalog search, `itunes.apple.com`, when you search in the App Store, Music or Podcasts. The
+  words you searched for and your Mac's region go to Apple, as the app sends them to Apple anyway; TurnOver reads the
+  answers as a plain list.
+- Hugging Face, `huggingface.co`, once, the first time you choose a natural voice: TurnOver's voice helper
+  downloads the voice, about 170 MB, and keeps it on your Mac. Nothing you read or type is sent; after that the
+  natural voices need no connection.
 
 Everything else happens on your Mac:
 
-- Speech, including the natural say all voice, is made on your Mac.
+- Speech, including the natural voices, is made on your Mac.
 - Screen recognition and picture descriptions use Apple's on-device recognition and model.
 - Game speech listens only on this Mac (it accepts nothing from the network), and never speaks over Apple's apps or a
   browser. Reading Steam's Big Picture is off until you turn it on, because it makes Steam open a debugging port on
@@ -470,7 +481,7 @@ could expose what a person reads or types is best reported privately, through th
 
 VOICEOVER KEYS: EVERY KEY
 
-This page is made from TurnOver's own command tables (`turnover-coretest --keys-reference`, 29 Oct 2026), so it matches the build it came with. Don't edit it by hand.
+This page is made from TurnOver's own command tables (`turnover-coretest --keys-reference`, 3 Nov 2026), so it matches the build it came with. Don't edit it by hand.
 
 The VoiceOver keys style (the Mac style): VoiceOver's own keys, doing what they do in VoiceOver. TurnOver in a key means the TurnOver key: Control and Option together (VO), or Caps Lock. Keys VoiceOver has that aren't listed here go to VoiceOver as usual where VoiceOver reads, and do nothing special where TurnOver reads. Keyboard help (the TurnOver menu, Keys) says what any key does without doing it; Command Control Comma, then Slash, lists the keys that work where you are.
 
@@ -620,7 +631,7 @@ VoiceOver keys
   TurnOver Shift Home: In text, the first word in view; elsewhere the first item in the group (VO-Shift-Home)
   TurnOver Shift J: Jumps to the input method or autocorrect panel (VO-Shift-J)
   TurnOver Shift K: Option key Commander on or off: right Option with a letter runs a command (VO-Shift-K)
-  TurnOver Shift L: Describes the image or photo (VO-Shift-L)
+  TurnOver Shift L: Describes the image or photo; anywhere else, what the window looks like (VO-Shift-L)
   TurnOver Shift M: The shortcut menu for the item (VO-Shift-M)
   TurnOver Shift N: Reads the hint for the item (VO-Shift-N)
   TurnOver Shift O: Opens or closes Control Centre (VO-Shift-O)
@@ -632,6 +643,7 @@ VoiceOver keys
   TurnOver Shift U: Reads a link's address (VO-Shift-U)
   TurnOver Shift W: Reads everything in the window (VO-Shift-W)
   TurnOver Shift X: The hot spot chooser (VO-Shift-X)
+  TurnOver Shift Y: Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return; pressed twice, its buttons, fields and icons instead (VO-Shift-Y, TurnOver's own)
   TurnOver Shift Z: Save the last phrase to the Desktop; saves the last spoken phrase, with TurnOver's log, to a file on the Desktop (VO-Shift-Z)
   TurnOver Up arrow: Previous line in text; elsewhere the item above (VO-Up)
   TurnOver Command Down arrow: The next item of the rotor's kind (VO-Command-Down)
@@ -1180,7 +1192,7 @@ Word
 
 NVDA KEYS: EVERY KEY
 
-This page is made from TurnOver's own command tables (`turnover-coretest --keys-reference`, 29 Oct 2026), so it matches the build it came with. Don't edit it by hand.
+This page is made from TurnOver's own command tables (`turnover-coretest --keys-reference`, 3 Nov 2026), so it matches the build it came with. Don't edit it by hand.
 
 The NVDA keys style (the Windows style): NVDA's own keys, doing what they do in NVDA. TurnOver in a key means the NVDA key: Caps Lock, or Control and Option together. NVDA's Alt is the Mac's Command key, by position. Keyboard help (the TurnOver menu, Keys) says what any key does without doing it; Command Control Comma, then Slash, lists the keys that work where you are.
 
@@ -1207,6 +1219,7 @@ NVDA keys
   TurnOver Home: Moves the review cursor to the start of the line (NVDA+Home)
   TurnOver K: Reports where the link goes (NVDA+K)
   TurnOver Period: Reports the character at the review cursor; twice, spells it (NVDA+Period)
+  TurnOver U: Progress bars: beeps that rise in pitch, the percentage spoken, both, or nothing (NVDA+U)
   TurnOver V: Screen layout on or off in browse mode: things side by side on one line (NVDA+V)
   TurnOver X: Repeats the last thing spoken (NVDA+X)
   TurnOver Command End: Moves the review cursor to the end of the selection (NVDA+Alt+End)
@@ -1233,7 +1246,7 @@ NVDA keys
   TurnOver Control S: Opens TurnOver's Speech (NVDA+Control+S: Select Synthesizer settings)
   TurnOver Control Space: Back to the page; from something inside a page, back to the page in browse mode (NVDA+Control+Space)
   TurnOver Control T: Cycles what braille follows: automatically, the focus, or the review cursor (NVDA+Control+T)
-  TurnOver Control U: Opens TurnOver's Speech (NVDA+Control+U: Audio settings)
+  TurnOver Control U: Opens TurnOver's Sounds (NVDA+Control+U: Audio settings)
   TurnOver Control V: Opens TurnOver's Speech (NVDA+Control+V: Speech settings)
   TurnOver Down arrow: Moves the review cursor to the next line (NVDA+Down Arrow, laptop)
   TurnOver Left bracket: Clicks the left mouse button where the pointer is (NVDA+Left Bracket)
@@ -1292,7 +1305,7 @@ System
   TurnOver F12: Reports the time. Pressed twice, reports the date
   TurnOver N: Opens the TurnOver menu: settings, keys, tools, help, quit
   TurnOver Q: Quits TurnOver
-  TurnOver R: Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return. Pressed again in the result, recognises again
+  TurnOver R: Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return. Pressed again in the result, recognises again. Pressed twice, its buttons, fields and icons instead
   TurnOver Slash: Shortcuts list; lists the shortcuts that work here, the application's own first; Enter runs one
   TurnOver T: Reports the title of the current window. Pressed twice, spells it
   TurnOver Tab: Reports the object with focus
@@ -1813,7 +1826,7 @@ Word
 
 JAWS KEYS: EVERY KEY
 
-This page is made from TurnOver's own command tables (`turnover-coretest --keys-reference`, 29 Oct 2026), so it matches the build it came with. Don't edit it by hand.
+This page is made from TurnOver's own command tables (`turnover-coretest --keys-reference`, 3 Nov 2026), so it matches the build it came with. Don't edit it by hand.
 
 The JAWS keys style: JAWS's laptop layout. TurnOver in a key means the JAWS key: Caps Lock, or Control and Option together. Only the keys that differ from NVDA's are JAWS's own; every other key is NVDA's, so the NVDA keys page lists the rest. Keyboard help (the TurnOver menu, Keys) says what any key does without doing it; Command Control Comma, then Slash, lists the keys that work where you are.
 
@@ -1967,7 +1980,7 @@ System
   Key: What it does
   TurnOver 1: Turns input help on or off: every key says what it does
   TurnOver F12: Reports the time. Pressed twice, reports the date
-  TurnOver R: Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return. Pressed again in the result, recognises again
+  TurnOver R: Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return. Pressed again in the result, recognises again. Pressed twice, its buttons, fields and icons instead
   TurnOver Slash: Shortcuts list; lists the shortcuts that work here, the application's own first; Enter runs one
   TurnOver T: Reports the title of the current window. Pressed twice, spells it
   TurnOver Tab: Reports the object with focus

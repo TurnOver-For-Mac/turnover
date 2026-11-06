@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // The App Store's search results page on the flat view (docs/FLAT-VIEW-PLAN.md, step 3; 27 Oct 2026): the first
-// area to leave its hand-made reading behind. Behind the developer switch `flatView`; AppStoreView keeps its keys,
-// its waits and the rest of its pages.
+// area to leave its hand-made reading behind. It reads the page when the catalog can't answer (Catalog.swift); on
+// for everyone from build 23 (behind the developer switch `flatView` until then). AppStoreView keeps its keys, its
+// waits and the rest of its pages.
 import Foundation
 import AppKit
 import ApplicationServices
