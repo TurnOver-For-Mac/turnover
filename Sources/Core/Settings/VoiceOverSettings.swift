@@ -152,9 +152,17 @@ extension VoiceOverSettings {
         var c = Copied()
         c.archiveVersion = (top["ArchiveVersionVO"] as? NSNumber)?.intValue ?? 0
         // [language, {voiceId, rate, pitch, volume}, language, {…}]: the first selection is the main voice.
-        if let sel = d["VoiceOverDefaultVoiceSelections"] as? [Any],
-           let voice = sel.first(where: { $0 is [String: Any] }) as? [String: Any],
-           let id = voice["voiceId"] as? String, !id.isEmpty {
+        // Under "default" first, as before. Some macOS 27.2 exports (ArchiveVersionOS 270200, ArchiveVersionVO 4)
+        // keep the selections only under "com.apple.SpeakSelection", and the copy found no voice and copied nothing
+        // (issue 221, 4 Nov 2026). Exports on this Mac (27.2, 16 Oct 2026) have both, with the same voice.
+        func mainVoice(_ settings: [String: Any]?) -> [String: Any]? {
+            guard let sel = settings?["VoiceOverDefaultVoiceSelections"] as? [Any],
+                  let voice = sel.first(where: { $0 is [String: Any] }) as? [String: Any],
+                  let id = voice["voiceId"] as? String, !id.isEmpty else { return nil }
+            return voice
+        }
+        if let voice = mainVoice(d) ?? mainVoice(export["com.apple.SpeakSelection"] as? [String: Any]),
+           let id = voice["voiceId"] as? String {
             c.voiceId = id
             c.rate = (voice["rate"] as? NSNumber)?.floatValue ?? 0.5
             c.volume = (voice["volume"] as? NSNumber)?.floatValue ?? 1
@@ -305,7 +313,7 @@ extension VoiceOverSettings {
         config.save()
         Log.info("VoiceOver settings copied (archive version \(c.archiveVersion)): \(said.joined(separator: ", "))")
         let copied = String(localized: "VoiceOver settings copied: \(said.joined(separator: ", ")).", comment: "The VoiceOver settings copy done: %@ lists what was copied")
-        let again = String(localized: "Run it again whenever you change VoiceOver's settings: the TurnOver menu, or the speech settings' last stop, sync with VoiceOver.", comment: "The VoiceOver settings copy done")
+        let again = String(localized: "Run it again whenever you change VoiceOver's settings: the TurnOver menu, Copy VoiceOver settings.", comment: "The VoiceOver settings copy done")
         return [copied, voiceNote, again].filter { !$0.isEmpty }.joined(separator: " ")
     }
 

@@ -19,7 +19,9 @@ public enum Edition {
     public static let version = "2.0"   // 2.0 with build 17: Swift 6, the three sets of keys (the welcome shows again)
     /// A build made on a developer's own Mac (build.sh marks every build it doesn't strip for release). Only these
     /// honour the developer switches that would hand what TurnOver reads to any program on the Mac (logSpeech,
-    /// imageDescribeSaveCapture, kokoro, testSpeech): a code review on 20 Oct 2026. A published build ignores them.
+    /// imageDescribeSaveCapture, testSpeech): a code review on 20 Oct 2026. A published build ignores them. (The
+    /// natural voice's `kokoro` default works in any build since 2 Nov 2026, but only with a helper signed by
+    /// TurnOver's own developer: KokoroVoice.trusted.)
     nonisolated public static let isDevBuild: Bool = Bundle.main.object(forInfoDictionaryKey: "TODevBuild") as? Bool ?? false
     /// A developer switch, honoured only in a developer's build.
     nonisolated public static func devDefault(_ key: String) -> Bool { isDevBuild && UserDefaults.standard.bool(forKey: key) }

@@ -368,7 +368,7 @@ public final class ObjectNavigator {
             node = forward ? nextInOrder(after: n, root: root, enter: true) : previousInOrder(before: n, root: root)
         }
         Tones.edge()
-        if !VoiceOverSounds.play("WrapBoundary.aiff") { } ; Speech.speakMessage(forward ? String(localized: "bottom", comment: "Spoken message") : String(localized: "top", comment: "Spoken message"))
+        Speech.speakMessage(forward ? String(localized: "bottom", comment: "Spoken message") : String(localized: "top", comment: "Spoken message"))
     }
 
     public func parent() {

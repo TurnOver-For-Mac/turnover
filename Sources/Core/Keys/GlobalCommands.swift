@@ -65,7 +65,7 @@ public final class GlobalCommands: ScriptableObject {
             if ScriptHandler.lastScriptRepeatCount > 0 { f.dateStyle = .full; f.timeStyle = .none } else { f.dateStyle = .none; f.timeStyle = .short }
             Speech.speakMessage(f.string(from: Date()))
         }
-        script("describeImage", String(localized: "Describes the picture under TurnOver's cursor: what it shows and any text in it", comment: "A command, as the key list and keyboard help say it"), gestures: [], category: sys) { _ in
+        script("describeImage", String(localized: "Describes the picture under TurnOver's cursor: what it shows and any text in it; anywhere else, what the window looks like", comment: "A command, as the key list and keyboard help say it"), gestures: [], category: sys) { _ in
             ImageDescriber.describeCurrent()
         }
         // Windows style: Enter presses the focused button, as on a PC ("in windows mode enter should do things",
@@ -150,8 +150,8 @@ public final class GlobalCommands: ScriptableObject {
             KeyboardGesture(identifier: "kb:command+w")?.send()
         }.isAvailable = windowsOn
         // NVDA+R: the front window's text, read from the screen, as a result to move through and click in.
-        script("recognizeScreen", String(localized: "Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return. Pressed again in the result, recognises again", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+r"], category: sys) { _ in
-            DispatchQueue.main.async { ScreenRecognition.shared.recognize() }
+        script("recognizeScreen", String(localized: "Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return. Pressed again in the result, recognises again. Pressed twice, its buttons, fields and icons instead", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+r"], category: sys) { _ in
+            DispatchQueue.main.async { ScreenRecognition.shared.keyPressed() }
         }
         // Command Control M, one key for the menu in every style, as NVDA N is (Oliver, 21 Oct 2026); Command Control Comma
         // then M is still the layer's way.

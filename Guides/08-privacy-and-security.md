@@ -19,12 +19,20 @@ TurnOver does not ask for Full Disk Access.
 
 ## What leaves your Mac
 
-TurnOver connects to one place by itself: **its update site**, `doll-eye.github.io/turnover-updates`, to check for a
-new build. Nothing about you or what you do is sent: it only fetches that file.
+TurnOver connects to these places by itself:
+
+- **Its update site**, `doll-eye.github.io/turnover-updates`, to check for a new build. Nothing about you or what you
+  do is sent: it only fetches that file.
+- **Apple's public catalog search**, `itunes.apple.com`, when you search in the App Store, Music or Podcasts. The
+  words you searched for and your Mac's region go to Apple, as the app sends them to Apple anyway; TurnOver reads the
+  answers as a plain list.
+- **Hugging Face**, `huggingface.co`, once, the first time you choose a natural voice: TurnOver's voice helper
+  downloads the voice, about 170 MB, and keeps it on your Mac. Nothing you read or type is sent; after that the
+  natural voices need no connection.
 
 Everything else happens on your Mac:
 
-- Speech, including the natural say all voice, is made on your Mac.
+- Speech, including the natural voices, is made on your Mac.
 - Screen recognition and picture descriptions use Apple's on-device recognition and model.
 - Game speech listens only on this Mac (it accepts nothing from the network), and never speaks over Apple's apps or a
   browser. Reading Steam's Big Picture is off until you turn it on, because it makes Steam open a debugging port on

@@ -5,7 +5,8 @@
 // a row after a reflow, and the page keeps the last search's scroll offset. The system's hit test, though, names
 // what is really at a point, and a click at such a point opens the row. So the area is a run of screens: the visible
 // area is scanned with hit tests, the tiles found are the items in reading order, moving past the last tile scrolls
-// a screen and scans again, and opening clicks the point the scan found. Behind the developer switch `flatView`.
+// a screen and scans again, and opening clicks the point the scan found. Reads the App Store's results page when the
+// catalog can't answer (on for everyone from build 23; the developer switch `flatView` until then).
 import Foundation
 import AppKit
 import ApplicationServices

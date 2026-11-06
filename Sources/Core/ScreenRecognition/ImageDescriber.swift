@@ -22,12 +22,12 @@ public enum ImageDescriber {
         var element: AXUIElement?
         if let doc = API.focusTreeInterceptor, !doc.passThrough { element = doc.elementAtPosition() }
         element = element ?? ObjectNavigator.shared.element ?? API.focusObject?.element
-        // Not on a picture: the window's text from the screen instead, as the menu's screen recognition gives
-        // (VO-Shift-L is VoiceOver's Describe an image; Oliver, 23 Oct 2026, issue 94: a direct key for recognition
-        // in the VoiceOver style, without the TurnOver layer).
+        // Not on a picture: what the window looks like. Its text was read here instead (issue 94, 23 Oct 2026), until
+        // reading the text got its own key, VO-Shift-Y (TurnOver R with NVDA or JAWS keys): describing and reading
+        // the text are different jobs (Oliver, 2 Nov 2026).
         guard let element, element.role == "AXImage" else {
-            Log.io("describe: not on a picture; recognising the screen")
-            ScreenRecognition.shared.recognize()
+            Log.io("describe: not on a picture; describing the window")
+            describeWindow()
             return
         }
         guard let frame = TurnOverObject.frame(element), frame.width >= 8, frame.height >= 8 else { Speech.speakMessage(String(localized: "nothing to describe here", comment: "Spoken message")); return }
@@ -54,8 +54,35 @@ public enum ImageDescriber {
         }
     }
 
-    /// The model's description when the Mac has one that sees; Vision's labels and text otherwise.
-    nonisolated public static func describe(_ image: CGImage) async -> String {
+    /// The front window as a picture: what kind of screen it is and its main parts, not its text (screen
+    /// recognition reads that). The window as screen recognition finds it, so an app whose window accessibility doesn't
+    /// report (Parallels Desktop) is described too.
+    private static func describeWindow() {
+        guard ScreenCapturePermission.ensure() else { return }
+        guard let target = ScreenRecognition.target() else { Speech.speakMessage(String(localized: "nothing to describe here", comment: "Spoken message")); return }
+        busy = true
+        Speech.speakMessage(String(localized: "describing the window", comment: "Spoken message"))
+        Task { @MainActor in
+            defer { busy = false }
+            do {
+                let image = try await ScreenRecognition.capture(target)
+                let text = await describe(image, window: true)
+                Log.io("window description: \(text.count) characters")
+                if text.isEmpty {
+                    // Without the model there is no description of a window, only its text, which is recognition's.
+                    let key = GlobalCommands.spoken(config.general.style == .voiceOver ? "kb:turnover+shift+y" : "kb:turnover+r")
+                    Speech.speakMessage(String(localized: "Describing a window needs the Mac's own model, with Apple Intelligence on. \(key) reads its text.", comment: "Spoken message: %@ is the key for screen recognition"))
+                } else { Speech.speakMessage(text) }
+            } catch {
+                Log.warning("window description: capture failed: \(error.localizedDescription)")
+                Speech.speakMessage(String(localized: "the window could not be captured. TurnOver needs Screen Recording, in System Settings, Privacy and Security", comment: "Spoken message"))
+            }
+        }
+    }
+
+    /// The model's description when the Mac has one that sees; Vision's labels and text otherwise. `window`: a
+    /// screen's layout rather than a picture's subject, without the text Vision reads in it.
+    nonisolated public static func describe(_ image: CGImage, window: Bool = false) async -> String {
         #if canImport(FoundationModels)
         if #available(macOS 27.0, *) {
             let model = SystemLanguageModel.default
@@ -63,13 +90,16 @@ public enum ImageDescriber {
                 do {
                     // The text in the picture comes from Vision's reader, not the model: asked to quote text, the model
                     // invented some for a photo of a rose (10 Oct 2026).
-                    let session = LanguageModelSession(instructions: "You describe pictures for a blind person using a screen reader. One or two plain sentences about what the picture shows. Do not mention or quote any text in it. Do not guess who people are.")
+                    let session = LanguageModelSession(instructions: window
+                        ? "You describe a computer window for a blind person using a screen reader. One or two plain sentences: what kind of window or screen it is, and its main parts from the top. Do not quote its text. Do not guess who people are."
+                        : "You describe pictures for a blind person using a screen reader. One or two plain sentences about what the picture shows. Do not mention or quote any text in it. Do not guess who people are.")
                     let r = try await session.respond(to: Prompt {
-                        "Describe this picture."
+                        window ? "Describe this window." : "Describe this picture."
                         Attachment(image)
                     })
                     let t = r.content.trimmingCharacters(in: .whitespacesAndNewlines)
                     if !t.isEmpty {
+                        if window { return t }
                         let words = readText(image)
                         return words.isEmpty ? t : t + " " + String(localized: "Text: \(words)", comment: "A picture's description: the text in it")
                     }
@@ -79,7 +109,9 @@ public enum ImageDescriber {
             }
         }
         #endif
-        return visionDescription(image)
+        // Vision has no description of a window, only its text and a few labels ("screenshot"): nothing, so the
+        // person is told that recognition reads it (a review, 2 Nov 2026).
+        return window ? "" : visionDescription(image)
     }
 
     /// Vision's guesses (the top few labels it is reasonably sure of) and the text it can read.

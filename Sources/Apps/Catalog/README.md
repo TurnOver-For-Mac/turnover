@@ -1,6 +1,6 @@
 # Shared Apple catalog support
 
-[Catalog.swift](Catalog.swift) sends a search term to Apple's public catalog, reads the returned list and opens the selected entry through the app's URL scheme. It uses the `flatView` developer switch and falls back to reading the app's own page when the catalog cannot answer.
+[Catalog.swift](Catalog.swift) sends a search term to Apple's public catalog, reads the returned list and opens the selected entry through the app's URL scheme. It is on for everyone from build 23, and falls back to reading the app's own page when the catalog cannot answer.
 
 ## App records
 

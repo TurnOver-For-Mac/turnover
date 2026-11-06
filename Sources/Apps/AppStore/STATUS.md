@@ -8,6 +8,8 @@
 
 ## Findings
 
+Search answers from Apple's catalog ([Catalog](../Catalog/README.md)): Return in the search field gives a plain list, Return on one opens its page. On for everyone from build 23, after Oliver used it from 27 October to 2 November 2026 with the developer switch on.
+
 Down, End and Up reached the expected App Store navigation handlers. These four checks assert command dispatch, not the content spoken or a successful page opening. The 29 October application-library note records Oliver reporting App Store use with VoiceOver both on and off, and a successful download. Initial reading speed, More/End ordering and offer-action safety need separate checks.
 
 ## Evidence

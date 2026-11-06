@@ -1,6 +1,6 @@
 # NVDA keys: every key
 
-This page is made from TurnOver's own command tables (`turnover-coretest --keys-reference`, 29 Oct 2026), so it matches the build it came with. Don't edit it by hand.
+This page is made from TurnOver's own command tables (`turnover-coretest --keys-reference`, 3 Nov 2026), so it matches the build it came with. Don't edit it by hand.
 
 The NVDA keys style (the Windows style): NVDA's own keys, doing what they do in NVDA. **TurnOver** in a key means the NVDA key: Caps Lock, or Control and Option together. NVDA's Alt is the Mac's Command key, by position. Keyboard help (the TurnOver menu, Keys) says what any key does without doing it; Command Control Comma, then Slash, lists the keys that work where you are.
 
@@ -29,6 +29,7 @@ Switch styles with Command Control Comma, then K. TurnOver's own commands behind
 | TurnOver Home | Moves the review cursor to the start of the line (NVDA+Home) |
 | TurnOver K | Reports where the link goes (NVDA+K) |
 | TurnOver Period | Reports the character at the review cursor; twice, spells it (NVDA+Period) |
+| TurnOver U | Progress bars: beeps that rise in pitch, the percentage spoken, both, or nothing (NVDA+U) |
 | TurnOver V | Screen layout on or off in browse mode: things side by side on one line (NVDA+V) |
 | TurnOver X | Repeats the last thing spoken (NVDA+X) |
 | TurnOver Command End | Moves the review cursor to the end of the selection (NVDA+Alt+End) |
@@ -55,7 +56,7 @@ Switch styles with Command Control Comma, then K. TurnOver's own commands behind
 | TurnOver Control S | Opens TurnOver's Speech (NVDA+Control+S: Select Synthesizer settings) |
 | TurnOver Control Space | Back to the page; from something inside a page, back to the page in browse mode (NVDA+Control+Space) |
 | TurnOver Control T | Cycles what braille follows: automatically, the focus, or the review cursor (NVDA+Control+T) |
-| TurnOver Control U | Opens TurnOver's Speech (NVDA+Control+U: Audio settings) |
+| TurnOver Control U | Opens TurnOver's Sounds (NVDA+Control+U: Audio settings) |
 | TurnOver Control V | Opens TurnOver's Speech (NVDA+Control+V: Speech settings) |
 | TurnOver Down arrow | Moves the review cursor to the next line (NVDA+Down Arrow, laptop) |
 | TurnOver Left bracket | Clicks the left mouse button where the pointer is (NVDA+Left Bracket) |
@@ -116,7 +117,7 @@ Switch styles with Command Control Comma, then K. TurnOver's own commands behind
 | TurnOver F12 | Reports the time. Pressed twice, reports the date |
 | TurnOver N | Opens the TurnOver menu: settings, keys, tools, help, quit |
 | TurnOver Q | Quits TurnOver |
-| TurnOver R | Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return. Pressed again in the result, recognises again |
+| TurnOver R | Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return. Pressed again in the result, recognises again. Pressed twice, its buttons, fields and icons instead |
 | TurnOver Slash | Shortcuts list; lists the shortcuts that work here, the application's own first; Enter runs one |
 | TurnOver T | Reports the title of the current window. Pressed twice, spells it |
 | TurnOver Tab | Reports the object with focus |

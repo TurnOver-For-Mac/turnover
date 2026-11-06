@@ -6,9 +6,11 @@
 //   2. Vision's contours: boxes the size of a button, a field or a check box; text inside a box is a button.
 //   3. The Mac's own on-device language model (macOS 27, Apple Intelligence on): shown the picture, it lists the
 //      controls it sees with a kind, a label and a place; its kinds refine the first two passes, and controls with
-//      no text (icons) come from it alone. Nothing leaves the Mac.
+//      no text (icons) come from it alone. Nothing leaves the Mac. It is slow (46 s for a Settings window on 3 Nov
+//      2026, asked for every piece of text, and its answer ran past its limit and was lost), so the result opens on
+//      the first two passes, and the model is asked only for controls, given a few seconds, and merged in quietly.
 // The result opens as screen recognition's does (rows to arrow through, Return clicks), each row a control:
-// "Save, button". Behind the developer switch `flatView`; reached from the TurnOver layer with E.
+// "Save, button". The recognition key pressed twice.
 import Foundation
 import AppKit
 import Vision
@@ -20,20 +22,39 @@ import FoundationModels
 public enum ScreenInterface {
     nonisolated public enum Kind: String, Sendable {
         case heading, text, listItem = "list item", cell, button, link, field = "text field", checkbox = "check box", toggle = "switch", tab, menu, slider, icon, image
-        /// Said after the label; plain text says nothing.
-        var spoken: String { self == .text ? "" : rawValue }
+        /// Said after the label, in TurnOver's language, with the same words as a role read anywhere else; plain text
+        /// says nothing. (The English names were said to everyone once the setting was in Settings: a review, 2 Nov 2026.)
+        var spoken: String {
+            switch self {
+            case .text: return ""
+            case .heading: return String(localized: "heading", comment: "A role, spoken after an item's name")
+            case .listItem: return String(localized: "list item", comment: "A role, spoken after an item's name")
+            case .cell: return String(localized: "cell", comment: "A role, spoken after an item's name")
+            case .button: return String(localized: "button", comment: "A role, spoken after an item's name")
+            case .link: return String(localized: "link", comment: "A role, spoken after an item's name")
+            case .field: return String(localized: "edit", comment: "A role, spoken after an item's name")
+            case .checkbox: return String(localized: "check box", comment: "A role, spoken after an item's name")
+            case .toggle: return String(localized: "switch", comment: "A role, spoken after an item's name")
+            case .tab: return String(localized: "tab", comment: "A role, spoken after an item's name")
+            case .menu: return String(localized: "menu", comment: "A role, spoken after an item's name")
+            case .slider: return String(localized: "slider", comment: "A role, spoken after an item's name")
+            case .icon: return String(localized: "icon", comment: "A kind of control screen recognition finds: a picture with no text")
+            case .image: return String(localized: "image", comment: "A role, spoken after an item's name")
+            }
+        }
         /// How sure a kind is: the model's kinds for controls beat the geometry's guess, which beats plain text.
         var rank: Int {
             switch self { case .text: return 0; case .heading, .listItem, .cell: return 1; default: return 2 }
         }
     }
 
-    nonisolated public struct Element: Sendable {
+    nonisolated public struct Element: Sendable, Equatable {
         public var kind: Kind
         public var label: String
         /// In screen points (top left origin).
         public var rect: CGRect
         public var from: String   // "document", "box", "model": for the log
+        package init(kind: Kind, label: String, rect: CGRect, from: String) { self.kind = kind; self.label = label; self.rect = rect; self.from = from }
     }
 
     nonisolated public struct Detection: Sendable {
@@ -41,15 +62,19 @@ public enum ScreenInterface {
         public var note: String
     }
 
-    /// The controls on the picture, in reading order (top to bottom, left to right within a band of 24 points).
+    /// Image pixels (top left origin) to screen points.
+    nonisolated private static func toScreen(_ r: CGRect, _ image: CGImage, _ frame: CGRect) -> CGRect {
+        let sx = frame.width / CGFloat(image.width), sy = frame.height / CGFloat(image.height)
+        return CGRect(x: frame.minX + r.minX * sx, y: frame.minY + r.minY * sy, width: r.width * sx, height: r.height * sy)
+    }
+
+    /// The controls on the picture from Vision alone (passes 1 and 2, under half a second), in reading order (top to
+    /// bottom, left to right within a band of 24 points).
     @concurrent nonisolated public static func detect(_ image: CGImage, frame: CGRect) async -> Detection {
         let t0 = Date()
         var notes: [String] = []
         let size = CGSize(width: image.width, height: image.height)
-        func toScreen(_ r: CGRect) -> CGRect {   // image pixels (top left origin) to screen points
-            let sx = frame.width / size.width, sy = frame.height / size.height
-            return CGRect(x: frame.minX + r.minX * sx, y: frame.minY + r.minY * sy, width: r.width * sx, height: r.height * sy)
-        }
+        func toScreen(_ r: CGRect) -> CGRect { Self.toScreen(r, image, frame) }
 
         // 1. The document: text with structure.
         var elements: [Element] = []
@@ -133,7 +158,22 @@ public enum ScreenInterface {
             notes.append("contours failed: \(error.localizedDescription)")
         }
 
-        // 3. The model's view of the screen.
+        return Detection(elements: sorted(elements), note: notes.joined(separator: "; "))
+    }
+
+    /// Reading order: bands 24 points tall, left to right within a band.
+    nonisolated static func sorted(_ elements: [Element]) -> [Element] {
+        elements.sorted { a, b in
+            let ba = Int(a.rect.midY / 24), bb = Int(b.rect.midY / 24)
+            return ba != bb ? ba < bb : a.rect.minX < b.rect.minX
+        }
+    }
+
+    /// Pass 3, after the result is open: the model's view of the controls, merged into Vision's. Asked for controls
+    /// only, so its answer is short, and given `seconds`; past that, or without a model that sees, Vision's stand.
+    @concurrent nonisolated public static func refine(_ elements: [Element], image: CGImage, frame: CGRect, within seconds: Double) async -> Detection {
+        var elements = elements
+        var note = "no model that sees"
         let t2 = Date()
         #if canImport(FoundationModels)
         if #available(macOS 27.0, *) {
@@ -141,14 +181,22 @@ public enum ScreenInterface {
             if case .available = model.availability, model.capabilities.contains(.vision) {
                 do {
                     let session = LanguageModelSession(instructions: """
-                        You read the user interface in a screenshot of a Mac window for a blind person's screen reader. List every control and every piece of text you can see, top to bottom then left to right. \
-                        For each give its kind (one of: button, link, text field, check box, switch, tab, menu, slider, heading, text, list item, icon, image), its label exactly as written (an icon with no text: a short name for what it shows), \
+                        You read the user interface in a screenshot of a Mac window for a blind person's screen reader. List the controls you can see: buttons, links, text fields, check boxes, switches, tabs, menus, sliders, and icons or images with no text. Leave out plain text, headings and paragraphs. \
+                        For each give its kind (one of: button, link, text field, check box, switch, tab, menu, slider, icon, image), its label exactly as written (an icon with no text: a short name for what it shows), \
                         and the position of its centre as a percentage of the window's width (x) and height (y). Do not invent controls that are not there.
                         """)
-                    let r = try await session.respond(to: Prompt { "List the controls and text in this window."; Attachment(image) }, generating: Interface.self,
-                                                      options: GenerationOptions(maximumResponseTokens: 2000))
+                    let r = try await withThrowingTaskGroup(of: Interface.self) { group in
+                        group.addTask {
+                            try await session.respond(to: Prompt { "List the controls in this window."; Attachment(image) }, generating: Interface.self,
+                                                      options: GenerationOptions(maximumResponseTokens: 800)).content
+                        }
+                        group.addTask { try await Task.sleep(for: .seconds(seconds)); throw CancellationError() }
+                        let first = try await group.next()!
+                        group.cancelAll()
+                        return first
+                    }
                     var refined = 0, added = 0
-                    for g in r.content.elements {
+                    for g in r.elements {
                         let kind = Kind(rawValue: g.kind.lowercased()) ?? .text
                         let p = CGPoint(x: frame.minX + frame.width * CGFloat(min(100, max(0, g.x))) / 100, y: frame.minY + frame.height * CGFloat(min(100, max(0, g.y))) / 100)
                         let label = g.label.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -166,20 +214,16 @@ public enum ScreenInterface {
                             elements.append(Element(kind: kind, label: label, rect: CGRect(x: p.x - 12, y: p.y - 12, width: 24, height: 24), from: "model")); added += 1
                         }
                     }
-                    notes.append("model \(r.content.elements.count): \(refined) refined, \(added) added in \(ms(t2))")
+                    note = "model \(r.elements.count): \(refined) refined, \(added) added in \(ms(t2))"
+                } catch is CancellationError {
+                    note = "model gave no answer in \(ms(t2)); Vision's controls stand"
                 } catch {
-                    notes.append("model failed in \(ms(t2)): \(error.localizedDescription)")
+                    note = "model failed in \(ms(t2)): \(error.localizedDescription)"
                 }
-            } else { notes.append("no model that sees") }
+            }
         }
         #endif
-
-        // Reading order: bands 24 points tall, left to right within a band.
-        elements.sort { a, b in
-            let ba = Int(a.rect.midY / 24), bb = Int(b.rect.midY / 24)
-            return ba != bb ? ba < bb : a.rect.minX < b.rect.minX
-        }
-        return Detection(elements: elements, note: notes.joined(separator: "; "))
+        return Detection(elements: sorted(elements), note: note)
     }
 
     nonisolated private static func ms(_ since: Date) -> String { "\(Int(Date().timeIntervalSince(since) * 1000)) ms" }
@@ -194,9 +238,9 @@ public enum ScreenInterface {
 
     #if canImport(FoundationModels)
     @available(macOS 27.0, *)
-    @Generable(description: "The controls and text in a window, in reading order")
+    @Generable(description: "The controls in a window, in reading order")
     nonisolated struct Interface {
-        @Guide(description: "Every control and piece of text, top to bottom then left to right")
+        @Guide(description: "Every control, top to bottom then left to right; not plain text")
         var elements: [GeneratedElement]
     }
     @available(macOS 27.0, *)
