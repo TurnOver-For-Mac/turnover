@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Natural voices made on this Mac (12 Oct 2026: "something super good like the Microsoft ones"): Phonon 31m, through
-// its helper (plugins/phonon/helper: FluidAudio; speech ready in 9 to 25 ms). Personal, like Games: only on a Mac with
-// the "kokoro" default set and the helper present in ~/Library/Developer/TurnOver/kokoro. Nothing is sent anywhere:
+// its helper (plugins/phonon/helper: FluidAudio; speech ready in 9 to 25 ms). In the app for everyone from build 23 (Apple
+// silicon, macOS 15 or later), off until a natural voice is chosen; a developer's Mac can still use a helper in
+// ~/Library/Developer/TurnOver/kokoro with the "kokoro" default set. Nothing is sent anywhere:
 // the model runs here, on Apple silicon. (Kokoro's own helper and voices, the first natural voices, went on 3 Nov 2026,
 // Oliver: "the kokoro voices can probably go"; the names here stay, as his Mac's defaults carry them.)
 //
@@ -19,17 +20,78 @@ public enum KokoroVoice {
     /// This Mac has it: the default set and a helper there. Not a developer build's switch since 2 Nov 2026 (the
     /// maintainer runs release builds), but outside one a helper is started only if it is signed as TurnOver is
     /// (trusted), so a program that sets the default and leaves its own helper there hears nothing.
-    public static var available: Bool { UserDefaults.standard.bool(forKey: "kokoro") && hasPhonon }
+    public static var available: Bool {
+        // For everyone from build 23 (Oliver, 6 Nov 2026: "I also want to include the natural voices"): the helper is
+        // in the app, on Apple silicon with macOS 15 or later (Phonon's helper needs both). A developer's Mac keeps
+        // the helper in its folder, behind the default.
+        if bundledHelper != nil { return supported }
+        return UserDefaults.standard.bool(forKey: "kokoro") && hasPhonon
+    }
+    /// Phonon's helper runs on Apple silicon and macOS 15 or later (its Package.swift; the model runs in Core ML).
+    static var supported: Bool {
+        #if arch(arm64)
+        return ProcessInfo.processInfo.isOperatingSystemAtLeast(OperatingSystemVersion(majorVersion: 15, minorVersion: 0, patchVersion: 0))
+        #else
+        return false
+        #endif
+    }
+    /// The voices are on this Mac: FluidAudio keeps Phonon's model in its cache (measured 6 Nov 2026: 165 MB, about
+    /// 120 MB of it the engine every voice shares and about 3 MB each voice, so the download is all of them at once).
+    /// A developer's helper in its folder counts as having them.
+    public static var downloaded: Bool {
+        guard bundledHelper != nil else { return true }
+        return FileManager.default.fileExists(atPath: modelFolder.appendingPathComponent("pocket_state.mlmodelc").path)
+    }
+    /// Where FluidAudio keeps Phonon's model and voices (6 Nov 2026, FluidAudio e396cf7).
+    static var modelFolder: URL {
+        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".cache/fluidaudio/Models/pocket-tts/phonon/phonon-31m-en")
+    }
+    /// Settings, Speech offers Remove natural voices: the app's own download, on this Mac.
+    public static var removable: Bool { bundledHelper != nil && downloaded }
+    private static var removing = false
+    /// Settings, Speech, Remove natural voices (Oliver, 6 Nov 2026: "there should also be a choice to remove natural
+    /// voices"): back to the Mac voice chosen under the natural one, the helper stopped, the download deleted.
+    public static func remove() {
+        guard bundledHelper != nil else { return }
+        if mode == "everything" { VoiceTunings.switchTo(config.speech.voice) }
+        mode = "off"
+        downloading = false
+        if let p = process { removing = true; kill(p.pid, SIGTERM) }
+        try? FileManager.default.removeItem(at: modelFolder)
+        let mac = AVSpeechSynthesisVoice(identifier: config.speech.voice)?.name ?? String(localized: "its voice", comment: "TurnOver's voice, when it has no name")
+        Speech.speakMessage(String(localized: "Natural voices removed. TurnOver speaks with \(mac).", comment: "Said when the natural voices are removed: %@ is the Mac voice"))
+        SettingsBridge.sendState()
+    }
+    /// The download asked for in Settings, Speech is under way (the helper's first start fetches the model).
+    public private(set) static var downloading = false
+    /// Settings, Speech, Download natural voices (Oliver, 6 Nov 2026: "an option, like in windows, to download
+    /// natural voices"): starts the helper, whose first start downloads them; it says when they're ready.
+    public static func download() {
+        guard available, !downloaded, !downloading else { return }
+        downloading = true
+        Speech.speakMessage(String(localized: "Downloading the natural voices, about 170 MB. TurnOver will say when they're ready.", comment: "Said when the natural voices start downloading"))
+        start()
+    }
+    /// The helper inside TurnOver.app (Contents/Helpers, built by build.sh), when there is one.
+    static var bundledHelper: URL? {
+        let url = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/phonon-helper")
+        return FileManager.default.isExecutableFile(atPath: url.path) ? url : nil
+    }
     /// Phonon's helper (plugins/phonon/helper, 2 Nov 2026): heard as quickly as the Mac voice, so it can be the voice
     /// for everything (Oliver: "I want to be able to use these voices instead of alex").
-    static var phononHelper: URL { folder.appendingPathComponent("phonon-helper") }
+    static var phononHelper: URL { bundledHelper ?? folder.appendingPathComponent("phonon-helper") }
     static var hasPhonon: Bool { FileManager.default.isExecutableFile(atPath: phononHelper.path) }
 
     // Settings, kept in this Mac's defaults (personal): "off", "reading" (say all) or "everything". Everything was
     // tried twice with Kokoro and dropped twice (12 Oct 2026): even at 0.1 s a phrase, moving around wanted the Mac
     // voice's speed. Back with Phonon (2 Nov 2026), whose speech is ready in 9 to 25 ms, as the Mac voice's is.
     public static var mode: String {
-        get { ["off", "everything"].first { $0 == UserDefaults.standard.string(forKey: "kokoroMode") } ?? "reading" }
+        // Off until chosen, for everyone but a developer's Mac with the default (6 Nov 2026): "reading" as the default
+        // would have had say all start a 172 MB download for every tester on updating.
+        get {
+            ["off", "reading", "everything"].first { $0 == UserDefaults.standard.string(forKey: "kokoroMode") }
+                ?? (UserDefaults.standard.bool(forKey: "kokoro") ? "reading" : "off")
+        }
         set { UserDefaults.standard.set(newValue, forKey: "kokoroMode"); if newValue != "off" { start() } }
     }
 
@@ -66,7 +128,7 @@ public enum KokoroVoice {
     public static var speechVoiceID: String { available && mode == "everything" ? "external:" + voice : config.speech.voice }
     /// The natural voices as entries of the Voice list and the rotor.
     public static var voiceEntries: [(id: String, name: String)] {
-        available ? voices.map { ("external:" + $0, String(localized: "\(displayName($0)), natural", comment: "A natural voice in the voice list: its name and accent")) } : []
+        available && downloaded ? voices.map { ("external:" + $0, String(localized: "\(displayName($0)), natural", comment: "A natural voice in the voice list: its name and accent")) } : []
     }
     /// A voice chosen from the ring (or the Voice list): a natural one speaks everything; a Mac one is the speech voice,
     /// and the natural voice no longer speaks everything.
@@ -113,13 +175,19 @@ public enum KokoroVoice {
 
     /// Start the helper (once), and give the speech player the way to it.
     public static func start() {
-        guard available, mode != "off", process == nil else { return }
+        guard available, mode != "off" || downloading, process == nil else { return }
         let signed = trusted(phononHelper)
         helperTrusted.value = signed
         guard Edition.isDevBuild || signed else {
             Log.warning("kokoro: \(phononHelper.lastPathComponent) isn't signed by TurnOver's developer; not started"); return
         }
         let path = phononHelper.path, args = [voice]   // the voice loaded before "ready", so the first words in it don't wait
+        // A natural voice chosen with the voices not on this Mac (its cache cleared, or settings brought from another
+        // Mac): the start downloads them, so it is said, as the button says it.
+        if !downloaded && !downloading {
+            downloading = true
+            Speech.speakMessage(String(localized: "Downloading the natural voices, about 170 MB. TurnOver will say when they're ready.", comment: "Said when the natural voices start downloading"))
+        }
         // Started so it doesn't inherit TurnOver's Accessibility and Input Monitoring (it did, with Process: probed
         // 13 Oct 2026; the plugin design notes 12). It needs neither: it only turns text into sound.
         let started = Locked<DisclaimedSpawn.Child?>(nil)   // for `ended`, which is made before the child is
@@ -135,13 +203,23 @@ public enum KokoroVoice {
             DispatchQueue.main.async {
                 Log.warning("kokoro: the helper ended")
                 process = nil; input.value = nil
+                if removing { removing = false; return }   // stopped on purpose: not restarted
+                // Ended before the voices were in: most likely no connection. Said, and not retried.
+                if downloading {
+                    downloading = false
+                    Speech.speakMessage(String(localized: "The natural voices couldn't be downloaded. Check the connection, then try again in Settings, Speech.", comment: "Said when the natural voices fail to download"))
+                    SettingsBridge.sendState()
+                    return
+                }
                 // A rare crash after long use is known in the engine on macOS 27 (FluidAudio #889): a helper that ran
                 // a minute or more gets its restarts back; one that dies at once three times stays off.
                 if Date().timeIntervalSince(startedAt) > 60 { restarts = 0 }
                 if restarts < 3 { restarts += 1; DispatchQueue.main.asyncAfter(deadline: .now() + 2) { start() } }
             }
         }
-        guard let (child, disclaimed) = DisclaimedSpawn.run(path, arguments: args, directory: folder.path, exited: ended) else {
+        // The developer's folder exists only on a developer's Mac; the app's helper runs from TurnOver's own folder.
+        let directory = bundledHelper != nil ? AppPaths.support.path : folder.path
+        guard let (child, disclaimed) = DisclaimedSpawn.run(path, arguments: args, directory: directory, exited: ended) else {
             Log.warning("kokoro: couldn't start the helper"); return
         }
         started.value = child
@@ -155,6 +233,12 @@ public enum KokoroVoice {
             guard let s = String(data: d, encoding: .utf8) else { return }
             if s.contains("kokoro: ready") {
                 ready.value = true
+                DispatchQueue.main.async {
+                    guard downloading else { return }
+                    downloading = false
+                    Speech.speakMessage(String(localized: "The natural voices are ready. Choose one in Settings, Speech, Voice.", comment: "Said when the natural voices have finished downloading"))
+                    SettingsBridge.sendState()
+                }
                 let l = s.split(separator: "\n").first { $0.contains("kokoro: ready") }.map(String.init) ?? ""
                 DispatchQueue.main.async { Log.info("\(l) (\(voice), \(mode))") }
             }

@@ -293,6 +293,22 @@ struct SpeechView: View {
                 }
                 Section("Mac voices") { ForEach(voices, id: \.identifier) { v in Text(voiceLists.label(for: v)).tag(v.identifier) } }
             }
+            // Downloading and removing the natural voices, beside the Voice list they add to (Oliver, 6 Nov 2026: "an
+            // option, like in windows, to download natural voices"; "next to voice selection"; "a choice to remove").
+            // All 25 at once: the engine they share is most of the size.
+            if model.special("_kokoroAvailable") as? Bool == true {
+                if model.special("_naturalDownloaded") as? Bool == false {
+                    if model.special("_naturalDownloading") as? Bool == true {
+                        Text("Downloading the natural voices…")
+                    } else {
+                        Button("Download natural voices, about 170 MB") { model.setSpecial("_downloadNaturalVoices", true) }
+                            .accessibilityHint("25 English voices made on your Mac. They download once, from Hugging Face; nothing you read or type leaves your Mac.")
+                    }
+                } else if model.special("_naturalRemovable") as? Bool == true {
+                    Button("Remove natural voices") { model.setSpecial("_removeNaturalVoices", true) }
+                        .accessibilityHint("Deletes the downloaded natural voices, about 170 MB, and goes back to your Mac voice.")
+                }
+            }
             let chosenVoice = model.special("_speechVoice") as? String ?? (model.get("speech", "voice") as? String ?? "")
             // Not for a voice the list doesn't offer (another language's): it couldn't be switched off.
             if rotorAll.contains(chosenVoice) { inRotor(chosenVoice) }
@@ -358,15 +374,17 @@ struct SpeechView: View {
             // and EQ.
             if model.special("_kokoroAvailable") as? Bool == true {
                 let mode = model.special("_kokoroMode") as? String ?? "off"
-                Section("Natural voice") {
-                    if mode == "everything" {
-                        Text("The voice above is a natural voice, so it speaks everything, with the rate, volume and EQ above. Other languages and raised capitals keep the Mac voice chosen before it, which also steps in if the natural voice is slow.").font(.caption)
-                    } else {
-                        Picker("Say all voice", selection: Binding(
-                            get: { mode == "reading" ? (model.special("_kokoroVoice") as? String ?? "") : "same" },
-                            set: { v in if v == "same" { model.setSpecial("_kokoroMode", "off") } else { model.setSpecial("_kokoroVoice", v); model.setSpecial("_kokoroMode", "reading") } })) {
-                            Text("Same as speech").tag("same")
-                            ForEach(natural, id: \.id) { Text($0.name).tag($0.id) }
+                if model.special("_naturalDownloaded") as? Bool != false {
+                    Section("Natural voice") {
+                        if mode == "everything" {
+                            Text("The voice above is a natural voice, so it speaks everything, with the rate, volume and EQ above. Other languages and raised capitals keep the Mac voice chosen before it, which also steps in if the natural voice is slow.").font(.caption)
+                        } else {
+                            Picker("Say all voice", selection: Binding(
+                                get: { mode == "reading" ? (model.special("_kokoroVoice") as? String ?? "") : "same" },
+                                set: { v in if v == "same" { model.setSpecial("_kokoroMode", "off") } else { model.setSpecial("_kokoroVoice", v); model.setSpecial("_kokoroMode", "reading") } })) {
+                                Text("Same as speech").tag("same")
+                                ForEach(natural, id: \.id) { Text($0.name).tag($0.id) }
+                            }
                         }
                     }
                 }
