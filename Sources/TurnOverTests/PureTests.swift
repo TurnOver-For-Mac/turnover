@@ -663,6 +663,39 @@ func pureTests() {
         ])
         expect(c.voiceId, "test.structured.voice"); expect(c.rate, 0.65)
     }
+    func readVoiceOverExport(_ export: [String: Any]) throws -> VoiceOverSettings.Copied {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("voiceover-\(UUID().uuidString).voprefs")
+        let plist: [String: Any] = ["ArchiveVersionOS": 270200, "ArchiveVersionVO": 4, "export": export]
+        try PropertyListSerialization.data(fromPropertyList: plist, format: .binary, options: 0).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        return try VoiceOverSettings.read(url)
+    }
+    test("VoiceOver export: macOS 27.2's voice under com.apple.SpeakSelection is read with the other settings (issue 221)") {
+        // The reporter's export: the voice only under SpeakSelection; verbosity, typing echo and the rate percent
+        // still under default, with no SCRVoiceIdentifier.
+        let c = try readVoiceOverExport([
+            "default": [flatLanguage + "SCRRateAsPercent": 70.0,
+                        "SCRVerbosity_SCRVerbosityLevel": "SCRVerbosityLow", "SCRTypingEchoFeedback": "SCRTypingEchoWords"],
+            "com.apple.SpeakSelection": ["VoiceOverDefaultVoiceSelections": ["en", ["voiceId": "test.speakselection.voice", "rate": 0.7, "pitch": 0.45, "volume": 0.9]],
+                                         "VoiceOverVoiceRotors": []]
+        ])
+        expect(c.voiceId, "test.speakselection.voice"); expect(c.rate, 0.7); expect(c.pitch, 0.45); expect(c.volume, 0.9)
+        expect(c.verbosity, "SCRVerbosityLow"); expect(c.typingEcho, "SCRTypingEchoWords")
+    }
+    test("VoiceOver export: a voice under default keeps precedence over com.apple.SpeakSelection") {
+        let c = try readVoiceOverExport([
+            "default": ["VoiceOverDefaultVoiceSelections": ["en", ["voiceId": "test.default.voice", "rate": 0.65]]],
+            "com.apple.SpeakSelection": ["VoiceOverDefaultVoiceSelections": ["en", ["voiceId": "wrong.speakselection.voice", "rate": 0.7]]]
+        ])
+        expect(c.voiceId, "test.default.voice"); expect(c.rate, 0.65)
+    }
+    test("VoiceOver export: an empty voice under SpeakSelection still falls back to flattened settings") {
+        let c = try readVoiceOverExport([
+            "default": [flatSpeech + "SCRVoiceIdentifier": "test.flat.voice", flatSpeech + "SCRRateAsPercent": 75.0],
+            "com.apple.SpeakSelection": ["VoiceOverDefaultVoiceSelections": ["en", ["voiceId": ""]]]
+        ])
+        expect(c.voiceId, "test.flat.voice"); expect(c.rate, 0.75)
+    }
     test("VoiceOver export: an empty structured voice falls back to flattened settings") {
         let c = try readVoiceOverDefault([
             "VoiceOverDefaultVoiceSelections": ["en", ["voiceId": "", "rate": 0.2]],
