@@ -2391,7 +2391,7 @@
         }
       }
     },
-    "25 English voices, made on your Mac. They download once, about 170 MB, from Hugging Face; nothing you read or type leaves your Mac. Then choose one under Voice above, or for say all only here." : {
+    "25 English voices made on your Mac. They download once, from Hugging Face; nothing you read or type leaves your Mac." : {
 
     },
     "A TurnOver update has downloaded. It installs when TurnOver next quits, or now from the TurnOver menu, About and updates, Updates." : {
@@ -4363,6 +4363,9 @@
           }
         }
       }
+    },
+    "Deletes the downloaded natural voices, about 170 MB, and goes back to your Mac voice." : {
+
     },
     "Deletes the tab stop on a ruler (VO-Backspace)" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -8550,6 +8553,9 @@
     "Natural voices in the rotor" : {
       "comment" : "A group in Speech settings"
     },
+    "Natural voices removed. TurnOver speaks with %@." : {
+      "comment" : "Said when the natural voices are removed: %@ is the Mac voice"
+    },
     "Never" : {
       "localizations" : {
         "tr" : {
@@ -11461,6 +11467,9 @@
           }
         }
       }
+    },
+    "Remove natural voices" : {
+
     },
     "Remove the app" : {
       "localizations" : {
