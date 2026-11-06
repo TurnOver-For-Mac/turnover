@@ -1,7 +1,7 @@
 name: Module fence
 
 # Outside contributors (and their AIs) build app modules; TurnOver's core changes only through a maintainer
-# (6 Nov 2026). This check fails when a pull request from outside the project touches anything but app-module work,
+# (6 Nov 2026). This check fails when a pull request from anyone not in .github/fence-maintainers.txt touches anything but app-module work,
 # so it can't merge until a maintainer has looked. Tools/check-module-fence.py says what is inside the fence.
 #
 # A maintainer who has reviewed a core change from outside adds the label "core approved": the check then passes.
@@ -23,24 +23,27 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.event.repository.default_branch }}   # main as it is now: its fence, its maintainers
           fetch-depth: 0
       - name: Fetch the pull request's commits (not run)
         run: git fetch --no-tags origin "pull/${{ github.event.pull_request.number }}/head:pr-head"
       - name: Check the fence
         env:
-          ASSOCIATION: ${{ github.event.pull_request.author_association }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
           APPROVED: ${{ contains(github.event.pull_request.labels.*.name, 'core approved') }}
-          BASE: ${{ github.event.pull_request.base.sha }}
         run: |
           cp Tools/check-module-fence.py "$RUNNER_TEMP/fence.py"
+          BASE=$(git rev-parse HEAD)
+          MAINTAINER=no
+          grep -v '^#' .github/fence-maintainers.txt | grep -qxF "$AUTHOR" && MAINTAINER=yes
           git -c advice.detachedHead=false checkout -q pr-head
           if [ "$APPROVED" = true ]; then
             python3 -I "$RUNNER_TEMP/fence.py" "$BASE"
             echo "A maintainer has approved this pull request's changes to the core (label: core approved)."
             exit 0
           fi
-          case "$ASSOCIATION" in
-            OWNER|MEMBER|COLLABORATOR) python3 -I "$RUNNER_TEMP/fence.py" "$BASE" ;;
-            *) python3 -I "$RUNNER_TEMP/fence.py" "$BASE" --outside ;;
-          esac
+          if [ "$MAINTAINER" = yes ]; then
+            python3 -I "$RUNNER_TEMP/fence.py" "$BASE"
+          else
+            python3 -I "$RUNNER_TEMP/fence.py" "$BASE" --outside
+          fi
