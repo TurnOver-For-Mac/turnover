@@ -6,7 +6,7 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
 
-### Added
+### New to try
 
 - Searching in the App Store, Music and Podcasts: Return in the search field reads the results as a plain list, from
   Apple's public catalog, and Return on one opens its page. The App Store's own results page couldn't be read reliably
