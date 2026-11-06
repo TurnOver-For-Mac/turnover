@@ -57,6 +57,17 @@
         }
       }
     },
+    "%@ %@. The harbour opens at nine." : {
+      "comment" : "The EQ changed: %1$@ is bass, middle or treble, %2$@ the decibels",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@. The harbour opens at nine."
+          }
+        }
+      }
+    },
     "%@ Report the problem at github.com/TurnOver-For-Mac/turnover/issues." : {
       "comment" : "Feedback: %@ says where the report is",
       "localizations" : {
@@ -96,6 +107,12 @@
         }
       }
     },
+    "%@ and a half stars" : {
+      "comment" : "An app's rating in the catalog: %@ is the whole number of stars, in words"
+    },
+    "%@ and a quarter stars" : {
+      "comment" : "An app's rating in the catalog: %@ is the whole number of stars, in words"
+    },
     "%@ and others" : {
       "comment" : "Some of many keys: %@ is the first eight",
       "localizations" : {
@@ -106,6 +123,9 @@
           }
         }
       }
+    },
+    "%@ and three quarter stars" : {
+      "comment" : "An app's rating in the catalog: %@ is the whole number of stars, in words"
     },
     "%@ app connections, %@ lines heard." : {
       "comment" : "The speech port's status",
@@ -265,6 +285,7 @@
     },
     "%@ chosen for VO-Command-Shift." : {
       "comment" : "Speech settings",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -312,6 +333,9 @@
           }
         }
       }
+    },
+    "%@ decibels" : {
+      "comment" : "An EQ slider's value"
     },
     "%@ dialog" : {
       "comment" : "A dialog in front: %@ is its app (Windows style)",
@@ -1093,6 +1117,9 @@
         }
       }
     },
+    "%@ stars" : {
+      "comment" : "An app's rating in the catalog: %@ is the number of stars, in words"
+    },
     "%@ submenu" : {
       "comment" : "A submenu opened: its name",
       "localizations" : {
@@ -1147,6 +1174,9 @@
           }
         }
       }
+    },
+    "%@ ticked for VO-Command-Shift." : {
+      "comment" : "Speech settings"
     },
     "%@ to %@" : {
       "comment" : "A run of letter keys: a to z",
@@ -1325,6 +1355,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@, yüzde %2$@"
+          }
+        }
+      }
+    },
+    "%@, %@ ratings" : {
+      "comment" : "An app's rating in the catalog: %1$@ the stars, %2$@ how many ratings",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@ ratings"
           }
         }
       }
@@ -1609,6 +1650,7 @@
       }
     },
     "%@, natural" : {
+      "comment" : "A natural voice in the voice list: its name and accent",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -3046,6 +3088,21 @@
         }
       }
     },
+    "Beep" : {
+
+    },
+    "Beep and speak" : {
+
+    },
+    "Beep and speak progress bar updates" : {
+      "comment" : "The progress bar setting (NVDA+U): beeps and the percentage"
+    },
+    "Beep for progress bar updates" : {
+      "comment" : "The progress bar setting (NVDA+U): beeps that rise in pitch"
+    },
+    "Beeps that rise in pitch as a progress bar moves, the percentage spoken, both, or nothing" : {
+
+    },
     "Before the words, as NVDA" : {
       "localizations" : {
         "tr" : {
@@ -4388,6 +4445,7 @@
     },
     "Describes the image or photo (VO-Shift-L)" : {
       "comment" : "A command, as the key list and keyboard help say it",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -4396,6 +4454,9 @@
           }
         }
       }
+    },
+    "Describes the image or photo; anywhere else, what the window looks like (VO-Shift-L)" : {
+      "comment" : "A command, as the key list and keyboard help say it"
     },
     "Describes the item with keyboard focus; twice, more about it (in text, where the insertion point is) (VO-F4, VO-F4-F4)" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -4410,6 +4471,7 @@
     },
     "Describes the picture under TurnOver's cursor: what it shows and any text in it" : {
       "comment" : "A command, as the key list and keyboard help say it",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -4418,6 +4480,12 @@
           }
         }
       }
+    },
+    "Describes the picture under TurnOver's cursor: what it shows and any text in it; anywhere else, what the window looks like" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
+    "Describing a window needs the Mac's own model, with Apple Intelligence on. %@ reads its text." : {
+      "comment" : "Spoken message: %@ is the key for screen recognition"
     },
     "Desktop, the number pad has its NVDA keys" : {
       "localizations" : {
@@ -4913,6 +4981,7 @@
     },
     "Every voice: tick the ones you want VO-Command-Shift to step through." : {
       "comment" : "Speech settings",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -5465,6 +5534,7 @@
     },
     "Game speech is off." : {
       "comment" : "Spoken message",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -5487,6 +5557,7 @@
     },
     "Games are not set up on this Mac." : {
       "comment" : "Spoken message",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -6190,6 +6261,9 @@
         }
       }
     },
+    "In the rotor" : {
+      "comment" : "A switch in Speech settings, under Voice: the voice chosen there is one VO-Command-Shift steps through"
+    },
     "Input Monitoring is on. TurnOver is ready." : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -6708,6 +6782,7 @@
     },
     "Kokoro speed" : {
       "comment" : "A speech setting in the speech settings ring",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -6719,6 +6794,7 @@
     },
     "Kokoro speed %@." : {
       "comment" : "Kokoro's speed changed: %@ is the speed",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -7099,6 +7175,12 @@
         }
       }
     },
+    "Mac voices" : {
+
+    },
+    "Mac voices in the rotor" : {
+      "comment" : "A group in Speech settings"
+    },
     "Mail" : {
       "comment" : "A group of commands in the key list",
       "localizations" : {
@@ -7178,6 +7260,7 @@
       }
     },
     "Makes Steam open a debugging port on this Mac while it runs, which other programs here could use too. Off removes it" : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -8435,7 +8518,11 @@
         }
       }
     },
+    "Natural voice" : {
+
+    },
     "Natural voice speed" : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -8444,6 +8531,12 @@
           }
         }
       }
+    },
+    "Natural voices" : {
+
+    },
+    "Natural voices in the rotor" : {
+      "comment" : "A group in Speech settings"
     },
     "Never" : {
       "localizations" : {
@@ -8882,6 +8975,9 @@
         }
       }
     },
+    "No progress bar updates" : {
+      "comment" : "The progress bar setting (NVDA+U): nothing"
+    },
     "No starter folder found. Choose Write a plugin yourself, or Make a plugin, first." : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -8922,6 +9018,9 @@
           }
         }
       }
+    },
+    "None ticked, VO-Command-Shift steps through every voice. Tick the ones you want." : {
+      "comment" : "Speech settings"
     },
     "None yet" : {
       "localizations" : {
@@ -9092,6 +9191,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Hiçbir şey"
+          }
+        }
+      }
+    },
+    "Nothing in this window can be read. Press %@ to recognise its text, or %@ to describe it." : {
+      "comment" : "Spoken message: %1$@ is the key that recognises the text, %2$@ the key that describes the window",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nothing in this window can be read. Press %1$@ to recognise its text, or %2$@ to describe it."
           }
         }
       }
@@ -10113,6 +10223,9 @@
         }
       }
     },
+    "Press the screen recognition key twice (VO-Shift-Y, or TurnOver R) for the window's controls: each row is one, such as \"Save, button\", and Return clicks it. Pressed once, it reads the text." : {
+
+    },
     "Presses the dialog's choice" : {
       "comment" : "A command, as the key list and keyboard help say it",
       "localizations" : {
@@ -10347,6 +10460,12 @@
           }
         }
       }
+    },
+    "Progress bars" : {
+
+    },
+    "Progress bars: beeps that rise in pitch, the percentage spoken, both, or nothing (NVDA+U)" : {
+      "comment" : "A command, as the key list and keyboard help say it"
     },
     "Punctuation" : {
       "localizations" : {
@@ -10697,6 +10816,7 @@
       }
     },
     "Read new text as it appears, while a result is open" : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -11246,8 +11366,12 @@
         }
       }
     },
+    "Recognise again when the screen changes, while a result is open" : {
+
+    },
     "Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return. Pressed again in the result, recognises again" : {
       "comment" : "A command, as the key list and keyboard help say it",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -11256,6 +11380,12 @@
           }
         }
       }
+    },
+    "Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return. Pressed again in the result, recognises again. Pressed twice, its buttons, fields and icons instead" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
+    "Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return; pressed twice, its buttons, fields and icons instead (VO-Shift-Y, TurnOver's own)" : {
+      "comment" : "A command, as the key list and keyboard help say it"
     },
     "Reload plugins" : {
       "localizations" : {
@@ -11810,6 +11940,7 @@
       }
     },
     "Restart Steam so Big Picture can be read" : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -12163,8 +12294,12 @@
         }
       }
     },
+    "Run it again whenever you change VoiceOver's settings: the TurnOver menu, Copy VoiceOver settings." : {
+      "comment" : "The VoiceOver settings copy done"
+    },
     "Run it again whenever you change VoiceOver's settings: the TurnOver menu, or the speech settings' last stop, sync with VoiceOver." : {
       "comment" : "The VoiceOver settings copy done",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -12346,6 +12481,7 @@
       }
     },
     "Say all" : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -12356,6 +12492,7 @@
       }
     },
     "Say all reads ahead in the natural voice; moving around and typing stay in your speech voice." : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -13048,6 +13185,12 @@
         }
       }
     },
+    "Show the voices in the rotor: %@ chosen" : {
+      "comment" : "A switch in Speech settings"
+    },
+    "Show the voices in the rotor: every voice" : {
+      "comment" : "A switch in Speech settings"
+    },
     "Show the word at the cursor uncontracted" : {
       "localizations" : {
         "tr" : {
@@ -13057,6 +13200,9 @@
           }
         }
       }
+    },
+    "Show voices for other languages" : {
+
     },
     "Single-letter keys go round the page" : {
       "localizations" : {
@@ -13206,6 +13352,7 @@
       }
     },
     "Sounds" : {
+      "comment" : "A section of the Settings window",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -13356,6 +13503,12 @@
           }
         }
       }
+    },
+    "Speak progress bar updates" : {
+      "comment" : "The progress bar setting (NVDA+U): the percentage spoken"
+    },
+    "Speak the percentage" : {
+
     },
     "Speaks faster" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -13584,6 +13737,7 @@
       }
     },
     "Steam and Windows games speaking through TurnOver" : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -13604,8 +13758,12 @@
         }
       }
     },
+    "Steam is running without its port; restart Steam from TurnOver's Settings, Other apps' speech." : {
+      "comment" : "The Steam program's status"
+    },
     "Steam is running without its port; restart Steam from the Games menu." : {
       "comment" : "The Steam program's status",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -13626,8 +13784,12 @@
         }
       }
     },
+    "Steam needs restarting before Big Picture can be read. Restart Steam is in TurnOver's Settings, Other apps' speech." : {
+      "comment" : "Steam speech"
+    },
     "Steam needs restarting before Big Picture can be read. Restart Steam is in the Games menu." : {
       "comment" : "Steam speech",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -13639,6 +13801,7 @@
     },
     "Steam reading is off." : {
       "comment" : "Spoken message",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -14091,6 +14254,7 @@
     },
     "The Steam program did not answer." : {
       "comment" : "Game speech status",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -14102,6 +14266,7 @@
     },
     "The Steam program is not running." : {
       "comment" : "Game speech status",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -14113,6 +14278,7 @@
     },
     "The Steam program stopped." : {
       "comment" : "Game speech status",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -15075,6 +15241,9 @@
         }
       }
     },
+    "The voice above is a natural voice, so it speaks everything, with the rate, volume and EQ above. Other languages and raised capitals keep the Mac voice chosen before it, which also steps in if the natural voice is slow." : {
+
+    },
     "The welcome pages" : {
       "localizations" : {
         "tr" : {
@@ -15095,6 +15264,9 @@
           }
         }
       }
+    },
+    "The window is looked at each second; when it has changed, what is new is read." : {
+
     },
     "The window's size and where it is on the screen (VO-Command-F2)" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -15964,6 +16136,9 @@
           }
         }
       }
+    },
+    "TurnOver turned this window away: it was probably updated while the window was open. Quit Settings and open it again from the TurnOver menu." : {
+
     },
     "TurnOver will read %@ when it changes. Saved" : {
       "comment" : "An item watched for changes: %@ is its name",
@@ -16904,7 +17079,11 @@
         }
       }
     },
+    "VoiceOver's: VoiceOver's own sounds where it has one, such as links and boundaries, and TurnOver's set for the rest. TurnOver's: its set throughout." : {
+
+    },
     "Voices for other languages" : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -16916,6 +17095,7 @@
     },
     "Voices in the rotor: %@ chosen" : {
       "comment" : "A group in Speech settings",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -16927,6 +17107,7 @@
     },
     "Voices in the rotor: every voice" : {
       "comment" : "A group in Speech settings",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -17054,6 +17235,7 @@
       }
     },
     "What the game reader is doing" : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -17230,6 +17412,9 @@
           }
         }
       }
+    },
+    "Whose sounds" : {
+
     },
     "Windows" : {
       "localizations" : {
@@ -17479,6 +17664,9 @@
         }
       }
     },
+    "album by %@" : {
+      "comment" : "A Music catalog result: %@ is the artist"
+    },
     "alert" : {
       "comment" : "A role: an alert",
       "localizations" : {
@@ -17710,6 +17898,9 @@
         }
       }
     },
+    "artist" : {
+      "comment" : "A kind of result in Music's catalog"
+    },
     "asking the catalog; a moment" : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -17764,6 +17955,12 @@
           }
         }
       }
+    },
+    "beep" : {
+      "comment" : "A choice in the TurnOver menu"
+    },
+    "beep and speak" : {
+      "comment" : "A choice in the TurnOver menu"
     },
     "before the words, as NVDA" : {
       "comment" : "A choice in the TurnOver menu",
@@ -18075,6 +18272,9 @@
           }
         }
       }
+    },
+    "by %@" : {
+      "comment" : "A Podcasts catalog result: %@ is who makes the show"
     },
     "by keyboard style" : {
       "comment" : "A choice in the TurnOver menu",
@@ -19040,6 +19240,9 @@
         }
       }
     },
+    "describing the window" : {
+      "comment" : "Spoken message"
+    },
     "deselected, %@ selected" : {
       "comment" : "An item taken out of the selection; how many are selected",
       "localizations" : {
@@ -19623,6 +19826,9 @@
         }
       }
     },
+    "free" : {
+      "comment" : "An app's price in the catalog"
+    },
     "function" : {
       "comment" : "The Fn key's name, as keyboard help says it",
       "localizations" : {
@@ -19887,6 +20093,12 @@
           }
         }
       }
+    },
+    "iPhone or iPad app" : {
+      "comment" : "An app in the catalog made for iPhone or iPad"
+    },
+    "icon" : {
+      "comment" : "A kind of control screen recognition finds: a picture with no text"
     },
     "ignored" : {
       "comment" : "Spoken message",
@@ -22621,6 +22833,9 @@
         }
       }
     },
+    "nothing found" : {
+      "comment" : "Screen recognition found no controls or text"
+    },
     "nothing here" : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -22930,7 +23145,7 @@
       }
     },
     "on %@" : {
-      "comment" : "The colour behind the text: %@ is the colour (on yellow)",
+      "comment" : "A Music catalog song: %@ is its album\nThe colour behind the text: %@ is the colour (on yellow)",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -22961,6 +23176,9 @@
           }
         }
       }
+    },
+    "one star" : {
+      "comment" : "An app's rating in the catalog"
     },
     "only %@ messages" : {
       "comment" : "Fewer messages than asked for: how many there are",
@@ -23726,6 +23944,9 @@
           }
         }
       }
+    },
+    "recognised controls, %@" : {
+      "comment" : "Screen recognition of controls: how many rows"
     },
     "recognised text, %@" : {
       "comment" : "Screen recognition: how many rows",
@@ -24596,6 +24817,9 @@
         }
       }
     },
+    "song by %@" : {
+      "comment" : "A Music catalog result: %@ is the artist"
+    },
     "sorted" : {
       "comment" : "A state, spoken after an item's role",
       "localizations" : {
@@ -24628,6 +24852,9 @@
           }
         }
       }
+    },
+    "speak the percentage" : {
+      "comment" : "A choice in the TurnOver menu"
     },
     "speak typed characters %@" : {
       "comment" : "Typing echo changed: %@ is off, in edit controls or always",
@@ -25963,6 +26190,7 @@
     },
     "sync with VoiceOver" : {
       "comment" : "A speech setting in the speech settings ring",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -26254,6 +26482,9 @@
         }
       }
     },
+    "the catalog answered %@" : {
+      "comment" : "Why the catalog gave no results: %@ is an HTTP status"
+    },
     "the catalog did not answer" : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -26264,6 +26495,9 @@
           }
         }
       }
+    },
+    "the catalog's answer could not be read" : {
+      "comment" : "Why the catalog gave no results"
     },
     "the default order" : {
       "comment" : "Spoken message: an app's reading order back to the default",
@@ -26330,6 +26564,9 @@
           }
         }
       }
+    },
+    "the window could not be captured. TurnOver needs Screen Recording, in System Settings, Privacy and Security" : {
+      "comment" : "Spoken message"
     },
     "the window has moved; recognising again" : {
       "comment" : "Spoken message",
@@ -26838,6 +27075,7 @@
     },
     "up or down copies VoiceOver's voice, rate, pitch and volume" : {
       "comment" : "The speech settings ring's last stop",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {

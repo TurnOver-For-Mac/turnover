@@ -20,7 +20,7 @@ import Network
 
 extension Config {
     public struct Games: Codable {
-        /// The readers run whenever the Mac has the Games menu at all. A switch until 25 Oct 2026, when it went: Steam
+        /// The readers always run. A switch until 25 Oct 2026, when it went: Steam
         /// itself says when it is asked to open its port, so an off position only hid speech. Read from old files, unused.
         public var enabled = true
         /// Attach to Steam's debugging port and read Big Picture. Off until chosen: it makes Steam open a debugging port
@@ -114,15 +114,6 @@ public enum Games {
         steam = SteamHelper(); steam?.start(bigPicture: config.games.readBigPicture, webPort: config.games.webPort)
     }
 
-    /// Said from the menu: the bridge's state now, the Steam program's when it answers.
-    static func sayStatus() {
-        guard available else { Speech.speakMessage(String(localized: "Games are not set up on this Mac.", comment: "Spoken message")); return }
-        guard running else { Speech.speakMessage(ownSetup ? String(localized: "Game speech is off.", comment: "Spoken message") : String(localized: "Steam reading is off.", comment: "Spoken message")); return }
-        let bridgeStatus = SpeechPort.shared.status
-        guard let steam, steam.isRunning else { Speech.speakMessage([bridgeStatus, String(localized: "The Steam program is not running.", comment: "Game speech status")].filter { !$0.isEmpty }.joined(separator: " ")); return }
-        steam.askStatus { Speech.speakMessage([bridgeStatus, $0].filter { !$0.isEmpty }.joined(separator: " ")) }
-    }
-
     /// Steam's menu opened from the keyboard shows without the keyboard: no page in it hears the keys (recorded
     /// 14 Oct 2026; VoiceOver meets it too). The menu is drawn inside Big Picture's window, and Steam gives it the
     /// keys only when that window becomes active again: switching away and back fixed it; a Tab only put
@@ -175,15 +166,6 @@ public enum Games {
     static func restartSteam() {
         guard let steam, steam.isRunning else { Speech.speakMessage(String(localized: "Turn Steam reading on first: the Steam program restarts Steam.", comment: "Spoken message")); return }
         steam.send("restart-steam")
-    }
-
-    public static func menuItems() -> [MenuItem] {
-        [
-            MenuItem("Read Steam's Big Picture", .toggle(get: { config.games.readBigPicture }, set: { config.games.readBigPicture = $0; restartBigPicture() }),
-                     hint: "Makes Steam open a debugging port on this Mac while it runs, which other programs here could use too. Off removes it"),
-            MenuItem("What the game reader is doing", .action { sayStatus() }),
-            MenuItem("Restart Steam so Big Picture can be read", .action { restartSteam() }),
-        ]
     }
 
     // MARK: Which processes are games
@@ -308,7 +290,6 @@ final class SteamHelper {
     nonisolated(unsafe) private static var live: [pid_t: SteamHelper] = [:]   // main thread only
     private var child: DisclaimedSpawn.Child?
     private var lines = HelperLines()
-    private var statusWaiters: [(String) -> Void] = []
     private var stopping = false
     private var startedAt = Date()
     private var restarts = 0
@@ -357,8 +338,6 @@ final class SteamHelper {
     private static func ended(pid: pid_t, status: Int32) {
         guard let helper = live.removeValue(forKey: pid) else { return }
         helper.child = nil
-        for w in helper.statusWaiters { w(String(localized: "The Steam program stopped.", comment: "Game speech status")) }
-        helper.statusWaiters.removeAll()
         guard !helper.stopping else { return }
         Log.warning("games: the Steam program ended (status \(status))")
         if Date().timeIntervalSince(helper.startedAt) > 60 { helper.restarts = 0 }
@@ -384,9 +363,6 @@ final class SteamHelper {
             case "X": Speech.cancel()
             case "L": Log.info("steam speech: \(Log.words(String(text.prefix(300))))")
             case "R": Games.menuLostKeyboard()
-            case "T":
-                let waiting = statusWaiters; statusWaiters.removeAll()
-                for w in waiting { w(text) }
             default: if !line.isEmpty { Log.info("steam speech: a line it doesn't know: \(Log.words(String(line.prefix(80))))") }
             }
         }
@@ -395,16 +371,6 @@ final class SteamHelper {
     func send(_ command: String) {
         guard let child else { return }
         do { try child.stdin.write(contentsOf: Data((command + "\n").utf8)) } catch { Log.warning("games: couldn't reach the Steam program: \(Log.words(String(describing: error)))") }
-    }
-
-    func askStatus(_ answer: @escaping (String) -> Void) {
-        statusWaiters.append(answer)
-        send("status")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
-            guard let self, !self.statusWaiters.isEmpty else { return }
-            let waiting = self.statusWaiters; self.statusWaiters.removeAll()
-            for w in waiting { w(String(localized: "The Steam program did not answer.", comment: "Game speech status")) }
-        }
     }
 
     /// Its input closed, it quits by itself; if it hasn't a second later, it is told to.

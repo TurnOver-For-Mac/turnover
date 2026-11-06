@@ -90,6 +90,7 @@ public enum SettingsProfiles {
         Speech.player.rate = config.speech.rate
         Speech.player.volume = Float(config.speech.volume) / 100
         Speech.player.pitch = config.speech.pitchMultiplier
+        Speech.player.eq = config.speech.eq
         Speech.player.voiceIdentifier = config.speech.voice
         Ducking.apply()
         Braille.refreshSoon()

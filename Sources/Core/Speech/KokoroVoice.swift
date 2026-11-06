@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Kokoro, natural voices made on this Mac (12 Oct 2026: "something super good like the Microsoft ones").
-// Personal, like Games: only on a Mac with the "kokoro" default set and the helper present in
-// ~/Library/Developer/TurnOver/kokoro: kokoro-helper, the Swift one (plugins/kokoro/helper: FluidAudio, Core ML;
-// about 0.1 s for a short phrase), or else server.py (Python, MLX; 0.12 to 0.24 s). Nothing is sent anywhere: the
-// model runs here, on Apple silicon.
+// Natural voices made on this Mac (12 Oct 2026: "something super good like the Microsoft ones"): Phonon 31m, through
+// its helper (plugins/phonon/helper: FluidAudio; speech ready in 9 to 25 ms). Personal, like Games: only on a Mac with
+// the "kokoro" default set and the helper present in ~/Library/Developer/TurnOver/kokoro. Nothing is sent anywhere:
+// the model runs here, on Apple silicon. (Kokoro's own helper and voices, the first natural voices, went on 3 Nov 2026,
+// Oliver: "the kokoro voices can probably go"; the names here stay, as his Mac's defaults carry them.)
 //
 // TurnOver starts the helper and talks to it through pipes: a JSON line per utterance in; frames of id, sample count and
 // float32 samples (24 kHz mono) out, a count of 0 ending each. The speech player asks for "external:<voice>" voices
@@ -11,22 +11,25 @@
 // The helper ends by itself when TurnOver goes (its input closes).
 import Foundation
 import AVFoundation
+import Security
 
 public enum KokoroVoice {
     static let folder = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Developer/TurnOver/kokoro")
 
-    /// This Mac has it: the default set and the helper there.
-    public static var available: Bool {
-        Edition.devDefault("kokoro") && (FileManager.default.fileExists(atPath: swiftHelper.path)
-            || FileManager.default.fileExists(atPath: folder.appendingPathComponent("server.py").path))
-    }
-    static var swiftHelper: URL { folder.appendingPathComponent("kokoro-helper") }
+    /// This Mac has it: the default set and a helper there. Not a developer build's switch since 2 Nov 2026 (the
+    /// maintainer runs release builds), but outside one a helper is started only if it is signed as TurnOver is
+    /// (trusted), so a program that sets the default and leaves its own helper there hears nothing.
+    public static var available: Bool { UserDefaults.standard.bool(forKey: "kokoro") && hasPhonon }
+    /// Phonon's helper (plugins/phonon/helper, 2 Nov 2026): heard as quickly as the Mac voice, so it can be the voice
+    /// for everything (Oliver: "I want to be able to use these voices instead of alex").
+    static var phononHelper: URL { folder.appendingPathComponent("phonon-helper") }
+    static var hasPhonon: Bool { FileManager.default.isExecutableFile(atPath: phononHelper.path) }
 
-    // Settings, kept in this Mac's defaults (personal): "off" or "reading" (say all). "Everything" was tried twice
-    // and dropped twice (12 Oct 2026): even at 0.1 s a phrase, moving around wants the Mac voice's speed, and
-    // making the next items in advance was "a bit messy". "just the speak all will have to be the only option".
+    // Settings, kept in this Mac's defaults (personal): "off", "reading" (say all) or "everything". Everything was
+    // tried twice with Kokoro and dropped twice (12 Oct 2026): even at 0.1 s a phrase, moving around wanted the Mac
+    // voice's speed. Back with Phonon (2 Nov 2026), whose speech is ready in 9 to 25 ms, as the Mac voice's is.
     public static var mode: String {
-        get { UserDefaults.standard.string(forKey: "kokoroMode") == "off" ? "off" : "reading" }
+        get { ["off", "everything"].first { $0 == UserDefaults.standard.string(forKey: "kokoroMode") } ?? "reading" }
         set { UserDefaults.standard.set(newValue, forKey: "kokoroMode"); if newValue != "off" { start() } }
     }
 
@@ -37,34 +40,62 @@ public enum KokoroVoice {
             Speech.player.speak(text ?? "This is \(displayName(v).components(separatedBy: ",")[0]). The harbour opens at nine.", interrupt: true, voice: "external:" + v)
         }
     }
+    /// A Kokoro voice chosen before Kokoro's went is Maeve.
     public static var voice: String {
-        get { UserDefaults.standard.string(forKey: "kokoroVoice") ?? "bf_emma" }
+        get { let v = UserDefaults.standard.string(forKey: "kokoroVoice") ?? ""; return phononVoices.contains(v) ? v : "en_gb_Maeve" }
         set { UserDefaults.standard.set(newValue, forKey: "kokoroVoice") }
     }
-    public static var speed: Double {
-        get { let s = UserDefaults.standard.double(forKey: "kokoroSpeed"); return s > 0 ? s : 1.1 }
-        set { UserDefaults.standard.set(newValue, forKey: "kokoroSpeed") }
-    }
+    /// A natural voice's speed from the speech rate, as the Mac voices take it (0.1 to 1, 0.5 their own pace): the same
+    /// slider and keys for both (Oliver, 2 Nov 2026: "all the same settings whereever the voice comes from"). Doubled
+    /// each 0.31 above 0.5 and halved each 0.31 below, kept from 0.5 to 3 times the voice's own pace.
+    nonisolated package static func speed(forRate rate: Float) -> Double { min(3, max(0.5, pow(2, (Double(rate) - 0.5) * 3.2))) }
 
-    /// The English voices (US and UK): Kokoro v1.0's, which both helpers have.
-    public static let englishVoices = [
-        "af_alloy", "af_aoede", "af_bella", "af_heart", "af_jessica", "af_kore", "af_nicole", "af_nova", "af_river",
-        "af_sarah", "af_sky", "am_adam", "am_echo", "am_eric", "am_fenrir", "am_liam", "am_michael", "am_onyx",
-        "am_puck", "am_santa", "bf_alice", "bf_emma", "bf_isabella", "bf_lily", "bm_daniel", "bm_fable", "bm_george",
-        "bm_lewis",
+    /// Phonon 31m's English voices, as its helper listed them (2 Nov 2026).
+    public static let phononVoices = [
+        "en_gb_Alfie", "en_gb_Bryony", "en_gb_Edwin", "en_gb_Elodie-Rose", "en_gb_Freya", "en_gb_Hugh", "en_gb_Imogen",
+        "en_gb_Lottie", "en_gb_Maeve", "en_gb_Pippa", "en_gb_Spencer", "en_gb_Teddy", "en_gb_Toby", "en_us_Delia",
+        "en_us_Easton", "en_us_Everly", "en_us_Hadley", "en_us_Harper", "en_us_Juniper", "en_us_Micah", "en_us_Miles",
+        "en_us_Preston", "en_us_Russell", "en_us_Trevor", "en_us_Zoey",
     ]
+    public static var voices: [String] { phononVoices }
 
-    /// "bf_emma" → "Emma, British"
-    public static func displayName(_ v: String) -> String {
-        let name = v.dropFirst(3).capitalized
-        let accent = v.hasPrefix("b") ? "British" : "American"
-        return "\(name), \(accent)"
+    /// The speech voice as the Voice list and the speech settings ring show it: the natural voice ("external:…") while it
+    /// speaks everything, otherwise the Mac voice. Underneath, the Mac voice stays the speech voice: other languages,
+    /// raised capitals and a slow moment are said with it (Oliver, 2 Nov 2026: natural voices chosen "in the same way
+    /// I do with the normal voices", and ticked for the rotor).
+    public static var speechVoiceID: String { available && mode == "everything" ? "external:" + voice : config.speech.voice }
+    /// The natural voices as entries of the Voice list and the rotor.
+    public static var voiceEntries: [(id: String, name: String)] {
+        available ? voices.map { ("external:" + $0, String(localized: "\(displayName($0)), natural", comment: "A natural voice in the voice list: its name and accent")) } : []
+    }
+    /// A voice chosen from the ring (or the Voice list): a natural one speaks everything; a Mac one is the speech voice,
+    /// and the natural voice no longer speaks everything.
+    public static func choose(_ id: String) {
+        if id.hasPrefix("external:") {
+            let v = String(id.dropFirst("external:".count))
+            guard voices.contains(v) else { return }
+            voice = v; mode = "everything"
+        } else {
+            config.speech.voice = id
+            Speech.player.voiceIdentifier = id
+            Speech.player.fallbackVoiceIdentifier = id
+            Languages.forget()
+            if mode == "everything" { mode = "off" }
+        }
     }
 
-    /// Whether this utterance goes to Kokoro: on, and say all.
+    /// "en_gb_Maeve" → "Maeve, British"; "en_us_Zoey" → "Zoey, American"
+    public static func displayName(_ v: String) -> String {
+        let name = String(v.dropFirst(6)).replacingOccurrences(of: "-", with: " ")
+        return v.hasPrefix("en_gb")
+            ? String(localized: "\(name), British", comment: "A natural voice: its name and accent")
+            : String(localized: "\(name), American", comment: "A natural voice: its name and accent")
+    }
+
+    /// Whether this utterance goes to the natural voice: on, and everything or say all.
     static func wanted(reading: Bool) -> Bool {
         guard available, ready.value else { return false }
-        return mode == "reading" && reading
+        return mode == "everything" || (mode == "reading" && reading)
     }
 
     // MARK: The helper
@@ -83,14 +114,12 @@ public enum KokoroVoice {
     /// Start the helper (once), and give the speech player the way to it.
     public static func start() {
         guard available, mode != "off", process == nil else { return }
-        let path: String, args: [String]
-        if FileManager.default.isExecutableFile(atPath: swiftHelper.path) {
-            path = swiftHelper.path
-            args = [voice]   // loaded before "ready", so the first words in it don't wait
-        } else {
-            path = folder.appendingPathComponent("venv312/bin/python").path
-            args = [folder.appendingPathComponent("server.py").path]
+        let signed = trusted(phononHelper)
+        helperTrusted.value = signed
+        guard Edition.isDevBuild || signed else {
+            Log.warning("kokoro: \(phononHelper.lastPathComponent) isn't signed by TurnOver's developer; not started"); return
         }
+        let path = phononHelper.path, args = [voice]   // the voice loaded before "ready", so the first words in it don't wait
         // Started so it doesn't inherit TurnOver's Accessibility and Input Monitoring (it did, with Process: probed
         // 13 Oct 2026; the plugin design notes 12). It needs neither: it only turns text into sound.
         let started = Locked<DisclaimedSpawn.Child?>(nil)   // for `ended`, which is made before the child is
@@ -137,17 +166,53 @@ public enum KokoroVoice {
         input.value = child.stdin
         Log.info("kokoro: helper starting (pid \(child.pid)\(disclaimed ? ", without TurnOver's permissions" : "; WARNING: it may have TurnOver's permissions"))")
         Speech.player.fallbackVoiceIdentifier = config.speech.voice
-        Speech.player.externalRenderer = { text, voice, deliver in render(text, voice: voice, deliver: deliver) }
+        Speech.player.externalRenderer = { text, voice, rate, deliver in render(text, voice: voice, rate: rate, deliver: deliver) }
+        Speech.player.onExternalFallback = { fellBack() }
+    }
+
+    /// The helper running is signed by TurnOver's own developer, so private speech may go to it as to the Mac's voices.
+    /// (Private speech is also everything typed, kept out of the log: with it kept from the helper too, typing was in
+    /// the Mac voice while everything else was natural, Oliver, 2 Nov 2026.)
+    nonisolated static let helperTrusted = Locked(false)
+
+    /// Whether a helper is signed by the developer team that signed this TurnOver: Developer ID, the same team (a
+    /// review, 2 Nov 2026: with the default alone, a planted helper would have been handed everything TurnOver says,
+    /// two-factor codes and copied passwords included). A TurnOver signed ad hoc trusts no helper this way.
+    static func trusted(_ helper: URL) -> Bool {
+        var me: SecCode?, mine: SecStaticCode?, info: CFDictionary?
+        guard SecCodeCopySelf([], &me) == errSecSuccess, let me, SecCodeCopyStaticCode(me, [], &mine) == errSecSuccess, let mine,
+              SecCodeCopySigningInformation(mine, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess,
+              let team = (info as? [String: Any])?[kSecCodeInfoTeamIdentifier as String] as? String else { return false }
+        var code: SecStaticCode?, requirement: SecRequirement?
+        guard SecStaticCodeCreateWithPath(helper as CFURL, [], &code) == errSecSuccess, let code,
+              SecRequirementCreateWithString("anchor apple generic and certificate leaf[subject.OU] = \"\(team)\"" as CFString, [], &requirement) == errSecSuccess
+        else { return false }
+        return SecStaticCodeCheckValidity(code, SecCSFlags(rawValue: kSecCSCheckAllArchitectures), requirement) == errSecSuccess
+    }
+
+    /// The helper gave nothing in time twice running: it is stuck, not just slow, so it is started again (a review,
+    /// 2 Nov 2026: with everything in the natural voice, every key would otherwise wait a second for the Mac voice).
+    nonisolated private static let fallbacks = Locked(0)
+    nonisolated static func fellBack() {
+        let n: Int = { fallbacks.lock.lock(); defer { fallbacks.lock.unlock() }; fallbacks.unsafeValue += 1; return fallbacks.unsafeValue }()
+        guard n >= 2 else { return }
+        fallbacks.value = 0
+        DispatchQueue.main.async {
+            guard let p = process else { return }
+            Log.warning("kokoro: the helper gave nothing twice running; starting it again")
+            ready.value = false
+            kill(p.pid, SIGTERM)   // `ended` starts it again
+        }
     }
 
     /// One utterance to the helper (any thread). Nil when it isn't ready: the speech player uses the Mac voice.
     nonisolated static let writer = DispatchQueue(label: "turnover.kokoro.write")
-    nonisolated static func render(_ text: String, voice: String, deliver: @escaping @Sendable (AVAudioPCMBuffer?) -> Void) -> (@Sendable () -> Void)? {
+    nonisolated static func render(_ text: String, voice: String, rate: Float, deliver: @escaping @Sendable (AVAudioPCMBuffer?) -> Void) -> (@Sendable () -> Void)? {
         guard ready.value else { return nil }
         let id: UInt32 = { nextID.lock.lock(); defer { nextID.lock.unlock() }; let i = nextID.unsafeValue; nextID.unsafeValue &+= 1; return i }()
         handlers.lock.lock(); handlers.unsafeValue[id] = deliver; handlers.lock.unlock()
-        let speed = UserDefaults.standard.double(forKey: "kokoroSpeed")
-        let request: [String: Any] = ["id": id, "text": text, "voice": voice, "speed": speed > 0 ? speed : 1.1]
+        // The speed from the speech rate; the EQ and the volume are the speech player's, as for any voice.
+        let request: [String: Any] = ["id": id, "text": text, "voice": voice, "speed": speed(forRate: rate)]
         guard let json = try? JSONSerialization.data(withJSONObject: request) else { return nil }
         guard let handle = input.value else { return nil }
         // Written on a queue of its own, never the speech queue's: with say all handing over paragraph after paragraph
@@ -213,6 +278,7 @@ public enum KokoroVoice {
             handlers.lock.lock(); let h = handlers.unsafeValue[id]; if samples == nil { handlers.unsafeValue[id] = nil }; handlers.lock.unlock()
             guard let h else { continue }
             guard let samples else { h(nil); continue }
+            fallbacks.value = 0
             guard let pcm = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count)) else { continue }
             pcm.frameLength = AVAudioFrameCount(samples.count)
             samples.withUnsafeBufferPointer { src in pcm.floatChannelData![0].update(from: src.baseAddress!, count: samples.count) }

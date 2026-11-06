@@ -98,9 +98,13 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // its state be
     static let shared = WindowsKeyLayer()
     private var thread: Thread?
     private var runLoop: CFRunLoop?
-    private var tap: CFMachPort?
-    private var manager: IOHIDManager?
-    private var connect: io_connect_t = 0
+    /// What one tap thread set up, torn down by that thread and no other: a stop and a start at once (a style change,
+    /// or the layer refreshed on activation) had the old thread's tear-down clear the new thread's tap (issue 53;
+    /// KeyboardHandler's Layer did the same for TurnOver's own tap, 8 Oct 2026).
+    private final class Layer { var tap: CFMachPort?; var manager: IOHIDManager?; var connect: io_connect_t = 0 }
+    private var layer: Layer?
+    private var tap: CFMachPort? { layer?.tap }
+    private var connect: io_connect_t { layer?.connect ?? 0 }
     private var capsDown = false
     private var swallowedUps = Set<Int64>()
     private var browse = false
@@ -114,28 +118,36 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // its state be
         MainActor.assumeIsolated { Self.buildStyleChords() }   // start() is called on the main thread (refreshWindowsLayer); again on a style change while running
         guard thread == nil else { return }
         WindowsRemap.watchFrontApp()
+        let mine = Layer()
+        layer = mine
         let t = Thread { [self] in
             runLoop = CFRunLoopGetCurrent()
             let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching(kIOHIDSystemClass))
-            if service != 0 { IOServiceOpen(service, mach_task_self_, UInt32(kIOHIDParamConnectType), &connect); IOObjectRelease(service) }
-            openHID()
+            if service != 0 { IOServiceOpen(service, mach_task_self_, UInt32(kIOHIDParamConnectType), &mine.connect); IOObjectRelease(service) }
+            openHID(mine)
             let mask = CGEventMask(1 << CGEventType.flagsChanged.rawValue | 1 << CGEventType.keyDown.rawValue | 1 << CGEventType.keyUp.rawValue)
             guard let tp = CGEvent.tapCreate(tap: .cghidEventTap, place: .headInsertEventTap, options: .defaultTap, eventsOfInterest: mask, callback: { _, type, event, refcon in
                 guard let refcon else { return Unmanaged.passUnretained(event) }
                 return Unmanaged<WindowsKeyLayer>.fromOpaque(refcon).takeUnretainedValue().handle(type, event)
             }, userInfo: Unmanaged.passUnretained(self).toOpaque()) else {
-                Log.error("NVDA keys where VoiceOver reads: no event tap"); return
+                // What was opened is closed, and the layer let go, so the next start isn't refused (a review, 3 Nov 2026).
+                Log.error("NVDA keys where VoiceOver reads: no event tap")
+                if let m = mine.manager { IOHIDManagerClose(m, IOOptionBits(kIOHIDOptionsTypeNone)) }
+                if mine.connect != 0 { IOServiceClose(mine.connect) }
+                if layer === mine { layer = nil; thread = nil; runLoop = nil }
+                return
             }
-            tap = tp
+            mine.tap = tp
             CFRunLoopAddSource(CFRunLoopGetCurrent(), CFMachPortCreateRunLoopSource(nil, tp, 0), .defaultMode)
             Log.info("NVDA keys where VoiceOver reads: on")
             CFRunLoopRun()
-            if let tp = tap { CGEvent.tapEnable(tap: tp, enable: false) }
-            tap = nil
-            if let m = manager { IOHIDManagerClose(m, IOOptionBits(kIOHIDOptionsTypeNone)) }
-            manager = nil
-            if connect != 0 { IOServiceClose(connect); connect = 0 }
-            capsDown = false; browse = false; swallowedUps.removeAll()
+            if let tp = mine.tap { CGEvent.tapEnable(tap: tp, enable: false) }
+            mine.tap = nil
+            if let m = mine.manager { IOHIDManagerClose(m, IOOptionBits(kIOHIDOptionsTypeNone)) }
+            mine.manager = nil
+            if mine.connect != 0 { IOServiceClose(mine.connect); mine.connect = 0 }
+            // The key state is the running layer's: a newer thread's is left alone.
+            if layer === mine { layer = nil; capsDown = false; browse = false; swallowedUps.removeAll() }
             Log.info("NVDA keys where VoiceOver reads: off")
         }
         t.name = "turnover.windowskeys"
@@ -151,7 +163,7 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // its state be
         thread = nil; runLoop = nil
     }
 
-    private func openHID() {
+    private func openHID(_ mine: Layer) {
         let m = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
         IOHIDManagerSetDeviceMatching(m, [kIOHIDDeviceUsagePageKey: kHIDPage_GenericDesktop, kIOHIDDeviceUsageKey: kHIDUsage_GD_Keyboard] as CFDictionary)
         IOHIDManagerSetInputValueMatching(m, [kIOHIDElementUsagePageKey: kHIDPage_KeyboardOrKeypad, kIOHIDElementUsageKey: kHIDUsage_KeyboardCapsLock] as CFDictionary)
@@ -161,7 +173,7 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // its state be
         }, Unmanaged.passUnretained(self).toOpaque())
         IOHIDManagerScheduleWithRunLoop(m, CFRunLoopGetCurrent(), CFRunLoopMode.defaultMode.rawValue)
         IOHIDManagerOpen(m, IOOptionBits(kIOHIDOptionsTypeNone))
-        manager = m
+        mine.manager = m
     }
 
     private func caps(_ value: IOHIDValue) {

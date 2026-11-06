@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // TurnOver's own sound set (17 Oct 2026: "a more interesting sound set for TurnOver, something fresher"):
 // files made by make-sounds.py (plucked, glassy and wooden notes, glides, a small room), in Resources/Sounds. Played
-// when the sounds setting is TurnOver's (Experimental), and where VoiceOver has no sound of its own. The old
-// synthesised tones (Tones.beep, playBell) stay as the fallback when a file is missing.
+// where TurnOver's own may play (Tones.own). The old synthesised tones (Tones.beep, playBell) stay as the fallback when
+// a file is missing.
 import Foundation
 import AVFoundation
 

@@ -104,6 +104,12 @@ public final class SpeechPlayer: @unchecked Sendable {
         get { settingsLock.lock(); defer { settingsLock.unlock() }; return _volume }
         set { settingsLock.lock(); _volume = max(0.1, min(2, newValue)); settingsLock.unlock() }
     }
+    /// Bass, middle and treble in decibels, -12 to 12, for every voice (SpeechEQ); each utterance takes them as it starts.
+    private var _eq: [Float] = [0, 0, 0]
+    public var eq: [Float] {
+        get { settingsLock.lock(); defer { settingsLock.unlock() }; return _eq }
+        set { settingsLock.lock(); _eq = newValue.map { max(-12, min(12, $0)) }; settingsLock.unlock() }
+    }
     private func applyVolume(_ b: AVAudioPCMBuffer) {
         let gain = volume
         guard abs(gain - 1) > 0.01, let data = b.floatChannelData else { return }
@@ -458,8 +464,11 @@ public final class SpeechPlayer: @unchecked Sendable {
     /// "external:" is rendered by this, which delivers its audio buffers and then nil, and returns a way to cancel; nil
     /// when it can't take the utterance now. Anything that fails, or gives nothing within a second, is said with the
     /// Mac's own voice instead, so speech never stops.
-    public typealias ExternalRenderer = (_ text: String, _ voice: String, _ deliver: @escaping @Sendable (AVAudioPCMBuffer?) -> Void) -> (@Sendable () -> Void)?
+    /// `rate` is the speech rate the utterance would have in a Mac voice (0.1 to 1), which the external voice follows.
+    public typealias ExternalRenderer = (_ text: String, _ voice: String, _ rate: Float, _ deliver: @escaping @Sendable (AVAudioPCMBuffer?) -> Void) -> (@Sendable () -> Void)?
     public var externalRenderer: ExternalRenderer?
+    /// The external voice gave nothing in time and the Mac voice said it instead (on the speech queue).
+    public var onExternalFallback: (@Sendable () -> Void)?
     /// The Mac voice used when the external voice can't speak.
     public var fallbackVoiceIdentifier = ""
 
@@ -488,10 +497,14 @@ public final class SpeechPlayer: @unchecked Sendable {
             pending.append(state); noteBusy()
             let utterance = AVSpeechUtterance(string: text)
             utterance.voice = voice.flatMap(AVSpeechSynthesisVoice.init(identifier:)) ?? AVSpeechSynthesisVoice(identifier: voiceIdentifier) ?? AVSpeechSynthesisVoice(language: nil) ?? AVSpeechSynthesisVoice(language: "en-GB")   // (language nil: the system language's voice; a Spanish tester heard English: code review, 16 Oct 2026)
-            state.voice = utterance.voice?.identifier ?? ""
-            // A voice that never answers would hold every utterance behind it: after 3 s with nothing, it is done.
+            let wanted = voice ?? voiceIdentifier
+            // An external voice's silence is its own: counted as the Mac voice's, two slow starts of the natural voice
+            // could swap the Mac voice for Reed (a review, 2 Nov 2026).
+            state.voice = wanted.hasPrefix("external:") ? wanted : utterance.voice?.identifier ?? ""
+            // A voice that never answers would hold every utterance behind it: after 3 s with nothing, it is done. Not
+            // an external voice: it has its own wait, then the Mac voice says it (this ended it first, unsaid).
             queue.asyncAfter(deadline: .now() + 3) { [weak self] in
-                guard let self, state.buffers == 0, !state.renderFinished else { return }
+                guard let self, state.buffers == 0, !state.renderFinished, !wanted.hasPrefix("external:") else { return }
                 self.endRender(state, gen: gen)
             }
             utterance.rate = rateOverride ?? rate
@@ -501,12 +514,12 @@ public final class SpeechPlayer: @unchecked Sendable {
             current = (utterance, state, gen)
             // An external voice (Kokoro): its buffers go through the same path; if it can't, or is silent for a second,
             // the Mac's voice says it.
-            let wanted = voice ?? voiceIdentifier
             if wanted.hasPrefix("external:"), let external = externalRenderer {
                 let fallback: @Sendable () -> Void = { [weak self] in
                     guard let self else { return }
                     self.queue.async {
                         guard gen == self.generation, state.buffers == 0, !state.renderFinished else { return }
+                        self.onExternalFallback?()
                         state.renderFinished = true
                         self.pending.removeAll { $0 === state }; self.noteBusy()
                         self.rendering = false
@@ -515,7 +528,7 @@ public final class SpeechPlayer: @unchecked Sendable {
                     }
                 }
                 doing("external voice render")
-                let cancel = external(text, String(wanted.dropFirst("external:".count))) { [weak self] pcm in
+                let cancel = external(text, String(wanted.dropFirst("external:".count)), rateOverride ?? rate) { [weak self] pcm in
                     guard let self else { return }
                     guard let pcm else { self.queue.async { if state.buffers == 0 { fallback() } else { self.endRender(state, gen: gen) } }; return }
                     self.deliver(pcm, state: state, gen: gen, timing: timing, onStart: onStart)
@@ -599,6 +612,8 @@ public final class SpeechPlayer: @unchecked Sendable {
             guard gen == self.generation, !state.renderFinished || state.buffers > 0 else { return }
             state.buffers += 1
             guard pcm.frameLength > 0, let out = self.convert(pcm), out.frameLength > 0 else { return }
+            if state.eq == nil { state.eq = SpeechEQ(self.eq, sampleRate: out.format.sampleRate) }
+            state.eq?.run(out)
             self.applyVolume(out)
             self.outputHealth.scheduledFrames(for: state.outputIncident, sampleTime: self.outputSampleTime())
             if timing.value.firstBufferAt == nil {
@@ -666,6 +681,8 @@ public final class SpeechPlayer: @unchecked Sendable {
         var voice = ""
         var hasWords = false
         var outputIncident: SpeechOutputIncident?
+        /// The EQ as the utterance's first buffer came, its filters carried from buffer to buffer.
+        var eq: SpeechEQ?
         /// For where the reading has got to (say all stopping on a word): the frames scheduled, and the player's
         /// sample time as the first of them started.
         var frames: AVAudioFramePosition = 0
@@ -730,7 +747,7 @@ public final class SpeechPlayer: @unchecked Sendable {
     /// instead of restarting. Reads nothing through the stuck queue.
     public func freshCopy() throws -> SpeechPlayer {
         let p = try SpeechPlayer(voice: voiceIdentifier, rate: rate, bufferFrames: bufferFrames)
-        p.volume = volume; p.pitch = pitch; p.fallbackVoiceIdentifier = fallbackVoiceIdentifier
+        p.volume = volume; p.pitch = pitch; p.eq = eq; p.fallbackVoiceIdentifier = fallbackVoiceIdentifier
         p.onFirstAudio = onFirstAudio; p.onVoiceSilent = onVoiceSilent; p.onOutputChange = onOutputChange
         p.onOutputUnavailable = onOutputUnavailable
         p.onQueueStuck = onQueueStuck; p.externalRenderer = externalRenderer
