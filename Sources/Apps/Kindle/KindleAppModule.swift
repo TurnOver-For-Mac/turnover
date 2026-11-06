@@ -154,34 +154,18 @@ final class KindleAppModule: AppModule {
     /// Kindle's own arrow keys turn the page (probe: Right forward, Left back, the words changed within a second).
     /// The key goes to Kindle, the words are watched for, and `done` hears whether the page turned. A picture page
     /// (the cover) has no words to watch: from or to one, a moment's wait stands in.
-    private var pageTurnGeneration = 0
-
     private func turnPage(forward: Bool, _ done: @escaping (Bool) -> Void) {
         guard let (doc, page) = bookDocument() else { done(false); return }
-        pageTurnGeneration += 1
-        let turn = pageTurnGeneration
-        let epoch = doc.pageGeneration
-        let intent = doc.bufferIntent
         let before = page?.string(kAXValueAttribute) ?? ""
-        func rebuild() {
-            doc.buffer.newPage()
-            doc.saidPartial = false
-            doc.buffer.build { [weak self, weak doc] in
-                guard let self, let doc, self.pageTurnGeneration == turn, doc.pageGeneration == epoch,
-                      doc.bufferIntent == intent, API.focusTreeInterceptor === doc else { return }
-                done(true)
-            }
-        }
         KeyboardGesture(identifier: forward ? "kb:rightArrow" : "kb:leftArrow")?.send()
         func check(_ n: Int) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-                guard let self, self.pageTurnGeneration == turn, doc.pageGeneration == epoch,
-                      doc.bufferIntent == intent, API.focusTreeInterceptor === doc else { return }
-                guard NSWorkspace.shared.frontmostApplication?.processIdentifier == self.pid else { return }
+                guard let self else { return }
+                guard NSWorkspace.shared.frontmostApplication?.processIdentifier == self.pid else { Log.io("kindle: left before the page turned"); done(false); return }
                 let now = self.reader(in: doc.webArea).flatMap { self.pageText(in: $0) }?.string(kAXValueAttribute) ?? ""
-                if now != before { rebuild() }
+                if now != before { doc.buffer.build { done(true) } }
                 else if n > 1 { check(n - 1) }
-                else if before.isEmpty { rebuild() }
+                else if before.isEmpty { doc.buffer.build { done(true) } }
                 else { Log.io("kindle: the page did not turn"); done(false) }
             }
         }

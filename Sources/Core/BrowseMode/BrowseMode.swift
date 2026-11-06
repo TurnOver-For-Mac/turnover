@@ -121,6 +121,7 @@ public final class BrowseModeDocument: ScriptableObject {
     var lastURL = ""
     var pageGeneration = 0
     var bufferIntent = 0
+    var publicationWasEmpty = false
     var publicationAnchor: BrowseModeHandler.Saved?
     var announceWhenReady = false
     var saidPartial = false
@@ -134,7 +135,6 @@ public final class BrowseModeDocument: ScriptableObject {
         guard now != lastURL else { return false }
         let first = lastURL.isEmpty
         lastURL = now
-        SayAll.stopReading(buffer: buffer)
         rootRunner.cancel(); discoveringRoot = false; watchingFor = nil
         buffer.newPage()
         pageGeneration += 1
@@ -479,12 +479,9 @@ public final class BrowseModeDocument: ScriptableObject {
         // An empty address too: Safari not answering reports none (6 Oct 2026, playtestcloud: "page  —", 0 lines,
         // and every key said "no next heading").
         guard buffer.lines.isEmpty, url != "about:blank" else { return true }
-        let unavailable = buffer.status == .unavailable
         buffer.build()
-        guard buffer.lines.isEmpty else { Log.io("browse mode: the page has arrived"); return true }
-        Speech.speakMessage(unavailable
-            ? String(localized: "page content is unavailable; try refreshing", comment: "Spoken when document collection failed before any content was available")
-            : String(localized: "nothing on this page yet; it may still be loading", comment: "Spoken message"))
+        if buffer.isLoading { return false }
+        Speech.speakMessage(String(localized: "nothing on this page yet; it may still be loading", comment: "Spoken message"))
         watchForContent()
         return false
     }
@@ -614,7 +611,7 @@ public final class BrowseModeDocument: ScriptableObject {
         // test of 23 Oct 2026 showed both typing h into a field the user had just left with Escape, on four pages.
         if let s = super.script(for: gesture) {
             if passThrough && s.name != "disablePassThrough" { return nil }
-            return s
+            return contentScript(s)
         }
         // A letter or digit with no command of its own (z, 0) is kept from the page in browse mode, as NVDA's trap
         // non-command gestures does: otherwise it would reach a field that still has the keyboard after Escape.

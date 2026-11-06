@@ -3,8 +3,7 @@ import Foundation
 import ApplicationServices
 import TurnOverAX
 
-/// Provider work has no reader objects, speech, mutable settings or callbacks into main. Interpretation uses
-/// the captured attributes on main so existing app overlays and presentation rules keep their ownership.
+/// Worker-owned provider reads; main interprets immutable values with the existing app and speech rules.
 nonisolated package struct WebBufferCollection: Sendable {
     package let snapshot: AXSnapshot
     let documentText: String
@@ -12,87 +11,123 @@ nonisolated package struct WebBufferCollection: Sendable {
     package let stop: AXWalkStop?
     let elapsedMs: Int
     var navigationChanged = false
+    package var skippedElements = 0
+
+    package struct Limits: Sendable {
+        package var elements = 6000
+        package var queries = 24_000
+        package var depth = 59
+        package var attributes = 128
+        package var stringLength = 131_072
+        package var characters = 8_000_000
+        package var duration: UInt64 = 2_000_000_000
+        package init() {}
+    }
 
     package init(snapshot: AXSnapshot, documentText: String, focusedPart: AXUIElement?, stop: AXWalkStop?, elapsedMs: Int, navigationChanged: Bool = false) {
         self.snapshot = snapshot; self.documentText = documentText; self.focusedPart = focusedPart
         self.stop = stop; self.elapsedMs = elapsedMs; self.navigationChanged = navigationChanged
     }
 
-    package static func collect(root: AXUIElement, focus: AXUIElement?, request: AXWalkRequest) -> Self {
-        let budget = AXWalkBudget(request: request, maxVisits: 6000, maxAXQueries: 24_000, maxDepth: 59)
-        var nodes: [ElementKey: AXSnapshot.Node] = [:]
-        var path: Set<ElementKey> = []
-        var references: [AXUIElement] = []
-        var referenceKeys: Set<ElementKey> = []
-        var characters = 0
-        var text = ""
-        var part: AXUIElement?
-        var changed = false
+    package static func collect(root: AXUIElement, focus: AXUIElement?, request: AXWalkRequest, limits: Limits = Limits(),
+                                now: @escaping @Sendable () -> UInt64 = { DispatchTime.now().uptimeNanoseconds }) -> Self {
+        // Submission can wait behind an obsolete, uninterruptible AX call. That wait is not this read's budget.
+        let began = now()
+        let budget = AXWalkBudget(request: request, duration: limits.duration, maxVisits: limits.elements,
+                                  maxAXQueries: limits.queries, maxDepth: limits.depth, startedAt: began, now: now)
+        var nodes: [ElementKey: AXSnapshot.Node] = [:], path: Set<ElementKey> = []
+        var references: [AXUIElement] = [], referenceKeys: Set<ElementKey> = []
+        var characters = 0, skipped = 0
+        var text = "", part: AXUIElement?, changed = false
+        var hadOmissions = false
 
         func capture(_ element: AXUIElement) -> Bool {
             let key = ElementKey(element)
             if nodes[key] != nil { return true }
             guard budget.visit() else { return false }
-            // Attribute names include provider-specific labels used by app overlays. The batch is bounded;
-            // unsupported values (text markers, opaque provider objects) never leave this worker.
             guard let names = element.attributeNamesResult().value as? [String], names.contains(kAXRoleAttribute), budget.check() else {
-                if budget.check() { budget.halt(.providerFailure) }
+                if budget.check() {
+                    if element.isSame(root) { budget.halt(.providerFailure) }
+                    else { skipped += 1; hadOmissions = true }
+                }
                 return false
             }
-            if names.count > 128 { budget.halt(.queries); return false }
-            // Read the subrole before values: do not copy a password into the page's snapshot.
+            // A provider-specific attribute list must not exclude the structure and labels needed to read its
+            // children. Ignore surplus metadata instead of ending the entire document (review, 6 Nov 2026).
+            let priority = [kAXRoleAttribute, kAXSubroleAttribute, kAXChildrenAttribute, kAXValueAttribute, kAXTitleAttribute,
+                            kAXDescriptionAttribute, kAXParentAttribute, kAXWindowAttribute, kAXTitleUIElementAttribute]
+            let first = priority.filter { names.contains($0) }
+            var wanted = first + names.filter { !first.contains($0) }.prefix(max(0, limits.attributes - first.count))
             let subrole = element.string(kAXSubroleAttribute)
-            let secureAttributes: Set<String> = [kAXRoleAttribute, kAXSubroleAttribute, kAXTitleAttribute, kAXDescriptionAttribute, kAXHelpAttribute, kAXParentAttribute, kAXWindowAttribute, kAXEnabledAttribute, kAXFocusedAttribute, kAXPositionAttribute, kAXSizeAttribute, kAXIdentifierAttribute, kAXTitleUIElementAttribute, "AXRequired"]
-            let wanted = subrole == "AXSecureTextField" ? names.filter { secureAttributes.contains($0) } : names
+            if subrole == "AXSecureTextField" {
+                let safe: Set<String> = [kAXRoleAttribute, kAXSubroleAttribute, kAXTitleAttribute, kAXDescriptionAttribute,
+                    kAXHelpAttribute, kAXParentAttribute, kAXWindowAttribute, kAXEnabledAttribute, kAXFocusedAttribute,
+                    kAXPositionAttribute, kAXSizeAttribute, kAXIdentifierAttribute, kAXTitleUIElementAttribute, "AXRequired"]
+                wanted = wanted.filter { safe.contains($0) }
+            }
             let batch = element.attributesResult(wanted)
             guard budget.check() else { return false }
             let fallback = batch.query.error == .attributeUnsupported || batch.query.error == .notImplemented
-            guard fallback || batch.isAligned else { budget.halt(.providerFailure); return false }
             var attributes: [String: AXSnapshotValue] = [:]
-            for name in wanted {
-                guard budget.check() else { return false }
-                guard let value = fallback ? element.attr(name) : batch.attributes[name]?.value else { continue }
-                if let string = value as? String {
-                    characters += string.utf16.count
-                    guard characters <= 8_000_000, string.utf16.count <= 131_072 else { budget.halt(.queries); return false }
+            if fallback || batch.isAligned {
+                for name in wanted {
+                    guard budget.check() else { return false }
+                    guard let value = fallback ? element.attr(name) : batch.attributes[name]?.value else { continue }
+                    if let string = value as? String {
+                        // One oversized value is local to its element. The aggregate retained-text cap still
+                        // bounds this read, including many individually reasonable values.
+                        if string.utf16.count > limits.stringLength { hadOmissions = true; continue }
+                        characters += string.utf16.count
+                        guard characters <= limits.characters else { budget.halt(.queries); return false }
+                    }
+                    if let value = AXSnapshotValue(value) { attributes[name] = value }
                 }
-                if let v = AXSnapshotValue(value) { attributes[name] = v }
             }
-            guard attributes[kAXRoleAttribute] != nil else { budget.halt(.providerFailure); return false }
+            guard attributes[kAXRoleAttribute] != nil else {
+                if element.isSame(root) { budget.halt(.providerFailure) }
+                else { skipped += 1; hadOmissions = true }
+                return false
+            }
             let actions = (element.actionNamesResult().value as? [String]) ?? []
-            guard budget.check() else { return false }
             var settable: [String: Bool] = [:]
             if case .string("AXWebArea") = attributes[kAXRoleAttribute], let value = element.attributeSettableResult(kAXValueAttribute).value { settable[kAXValueAttribute] = value }
             if attributes["AXDisclosing"] != nil, let value = element.attributeSettableResult("AXDisclosing").value { settable["AXDisclosing"] = value }
             guard budget.check() else { return false }
             nodes[key] = AXSnapshot.Node(attributes: attributes, actions: actions, settable: settable)
             for name in [kAXTitleUIElementAttribute, kAXWindowAttribute] {
-                if case .element(let e) = attributes[name], referenceKeys.insert(ElementKey(e)).inserted { references.append(e) }
+                if case .element(let element) = attributes[name], referenceKeys.insert(ElementKey(element)).inserted { references.append(element) }
             }
             return true
         }
-
         func visit(_ element: AXUIElement, depth: Int) {
             guard budget.depth(depth) else { return }
             let key = ElementKey(element)
             guard !path.contains(key) else { budget.halt(.cycle); return }
             guard nodes[key] == nil, capture(element) else { return }
-            path.insert(key)
-            defer { path.remove(key) }
+            path.insert(key); defer { path.remove(key) }
             if case .array(let children) = nodes[key]?.attributes[kAXChildrenAttribute] {
                 for child in children {
                     guard budget.check() else { break }
-                    if case .element(let e) = child { visit(e, depth: depth + 1) }
+                    if case .element(let element) = child { visit(element, depth: depth + 1) }
                 }
             }
         }
-
-        AXReadScope.with(while: { budget.check() }, onQuery: { budget.admitAXQuery() }, onResult: { budget.record($0) }) {
+        AXReadScope.with(while: { budget.check() }, onQuery: { budget.admitAXQuery() }, onResult: { status in
+            switch status {
+            case .returned(let error) where [.invalidUIElement, .failure, .cannotComplete].contains(error):
+                // A disappearing child must not discard its surviving siblings. AXHealth still accounts for
+                // transport time and backoff; a disabled API, exhausted budget or client backoff remains global.
+                hadOmissions = true
+            default: budget.record(status)
+            }
+        }) {
             visit(root, depth: 0)
             let bridge = WebDocumentBridge(webArea: root)
-            if let range = bridge.documentRange(), budget.check() { text = bridge.string(range) }
-            // A web modal can be omitted from AXChildren. Capture its branch too, as the old synchronous
-            // buffer did, but the focus and parent walk now share the same cancellation and query budget.
+            if let range = bridge.documentRange(), budget.check() {
+                let value = bridge.string(range)
+                if value.utf16.count <= limits.characters { text = value }
+            }
+            // Safari can omit a modal from AXChildren. Capture the focused branch under the same budget.
             if let focus, focus.pid == root.pid, !focus.isSame(root) {
                 var child = focus
                 for _ in 0..<60 {
@@ -101,27 +136,25 @@ nonisolated package struct WebBufferCollection: Sendable {
                     child = parent
                 }
             }
-            // Labels and window/ancestor rules must resolve locally during interpretation. These are stubs:
-            // no walk into sibling windows or the rest of the application.
             var parent = root.element(kAXParentAttribute)
             for _ in 0..<60 {
-                guard budget.check(), let e = parent else { break }
-                _ = capture(e)
-                parent = e.element(kAXParentAttribute)
+                guard budget.check(), let element = parent else { break }
+                _ = capture(element); parent = element.element(kAXParentAttribute)
             }
             var index = 0
-            while index < references.count, index < 256, budget.check() {
-                _ = capture(references[index]); index += 1
-            }
+            while index < references.count, index < 256, budget.check() { _ = capture(references[index]); index += 1 }
             if index < references.count, budget.check() { budget.halt(.visits) }
+            // Isolated omissions are normal on changing pages; losing the root itself (including app exit)
+            // is a failed read, never a complete empty document.
+            if hadOmissions, budget.check(), root.attributeResult(kAXRoleAttribute).value == nil { budget.halt(.providerFailure) }
             if budget.check() {
-                let old = nodes[ElementKey(root)]?.attributes["AXURL"]?.value
-                let new = root.attr("AXURL")
                 func address(_ value: CFTypeRef?) -> String { (value as? URL)?.absoluteString ?? (value as? String) ?? "" }
-                changed = address(old) != address(new)
+                changed = address(nodes[ElementKey(root)]?.attributes["AXURL"]?.value) != address(root.attr("AXURL"))
             }
         }
-        return Self(snapshot: AXSnapshot(nodes: nodes), documentText: text, focusedPart: part,
-                    stop: budget.stopped, elapsedMs: Int((DispatchTime.now().uptimeNanoseconds - request.startedAt) / 1_000_000), navigationChanged: changed)
+        var result = Self(snapshot: AXSnapshot(nodes: nodes), documentText: text, focusedPart: part, stop: budget.stopped,
+                          elapsedMs: Int((now() &- began) / 1_000_000), navigationChanged: changed)
+        result.skippedElements = skipped
+        return result
     }
 }

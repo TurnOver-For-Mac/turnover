@@ -27,17 +27,15 @@ During a same-page refresh, commands can continue reading the previous publicati
 usable content retains that publication, marks it incomplete and leaves it due for retry. At replacement, the document
 anchors the current caret by its line text and offset. It does not restore the position from request time.
 `BufferTextInfo` and its copies retain the publication their offsets describe; stale ranges cannot update the
-caret of a newer publication. Publishing or retiring a document stops its queued Say All chunks.
+caret of a newer publication. Say All retains its pinned reading publication across refreshes; a background publication does not stop it.
 
 A URL change clears the old publication and advances the document generation. The worker also checks for a URL
 change during collection, and publication checks the captured address against the requesting document. Leaving the document, retiring it or handing control to VoiceOver cancels collection
 and deferred actions. Callbacks additionally check the document generation, current interceptor, latest key
 intent and reading position before moving or speaking. A burst of keys cannot become a delayed burst of moves.
 
-Page loading, focus tracking, manual refresh, missing quick-navigation targets, scroll-for-more and Kindle page
-turns consume asynchronous results. Loading timers discover replacement roots on a separate bounded worker and
-apply app root policies only to that captured window. Partial documents report the available-content boundary
-rather than confidently announcing the end of the whole page or that no further item exists.
+Page loading, focus tracking, manual refresh, missing quick-navigation targets, scroll-for-more consume asynchronous results. Kindle retains its existing page-turn policy and only waits for build completion. Loading timers discover replacement roots on a separate bounded worker and
+apply app root policies only to that captured window. Partial documents keep the existing partial-page announcement. New spoken wording and paged-reading policy changes are deferred.
 
 `buildForInspection()` is an explicit synchronous path for the command-line plugin inspector. Interactive reader
 code must use `build(completion:)`. This change does not move every AX operation out of browse commands: native
@@ -50,3 +48,5 @@ scope isolation and actual collector stops. Existing recorded-page tests wait fo
 navigation. Live validation still needs Safari and Chromium pages, focus/browse transitions, long-page boundaries,
 Back/Forward, VoiceOver handover, and Kindle page turns where available. A passing build does not establish speech
 quality or the behavior of those applications.
+
+The 6,000-element safety cap is retained. This addresses responsiveness under issue 119, not complete reachability of long conversations in issue 227.

@@ -28,7 +28,6 @@ public enum SayAll {
     /// JAWS: Page Up and Page Down during say all change the speed for this say all only. Nil when unchanged.
     private static var sayAllRate: Float?
     private static var continuing = false
-    private static var waitingForPage = false
 
     /// NVDA: readText with CURSOR.CARET.
     public static func readText(from obj: TurnOverObject) {
@@ -113,35 +112,16 @@ public enum SayAll {
 
     private static func finish(_ gen: Int) {
         guard gen == generation else { return }
-        // Keep one page turn in flight. Publishing that requested page is allowed to resume this reader;
-        // an unrelated refresh or leaving the document still retires its old chunks.
-        guard !waitingForPage else { return }
-        let partial = (reader as? BufferTextInfo).map {
-            $0.buffer.isPartial || ($0.obj as? WebArea)?.document?.buffer.isPartial == true
-        } ?? false
-        if buffered == 0, !partial, let obj = reader?.obj {
-            waitingForPage = true
-            let continued = AppModuleHandler.shared.appModule(for: obj.pid).sayAllReachedEnd(obj, resume: { info in
-                guard gen == generation else { return }
-                waitingForPage = false
-                readText(info: info)
-            })
-            if continued { Log.io("say all: the app carries on"); return }
-            waitingForPage = false
+        // The app may go on (Kindle's next page): reader is kept, so a key still stops say all while it turns.
+        if buffered == 0, let obj = reader?.obj,
+           AppModuleHandler.shared.appModule(for: obj.pid).sayAllReachedEnd(obj, resume: { info in
+               guard gen == generation else { return }
+               readText(info: info)
+           }) {
+            Log.io("say all: the app carries on"); return
         }
-        if buffered == 0 {
-            reader = nil; restoreRate()
-            Speech.speakOnly(partial ? String(localized: "end of the available content; the page was read in part", comment: "Spoken instead of a complete-page boundary when document collection was incomplete") : String(localized: "end of document", comment: "Spoken message"))
-            Log.io("say all finished")
-        }   // (queued as the last line starts: on the display it hid that line)
+        if buffered == 0 { reader = nil; restoreRate(); Speech.speakOnly(String(localized: "end of document", comment: "Spoken message")); Log.io("say all finished") }   // (queued as the last line starts: on the display it hid that line)
         // Otherwise the last chunk's onStart will call nextLine again and land here with buffered 0.
-    }
-
-    /// Publishing or retiring a document must not leave old chunks moving the caret through new offsets.
-    static func stopReading(buffer: WebBuffer, preservingPageTurn: Bool = false) {
-        if preservingPageTurn && waitingForPage { return }
-        guard let reading = reader as? BufferTextInfo, reading.buffer.webArea.isSame(buffer.webArea) else { return }
-        stop(); Speech.cancel()
     }
 
     /// The end of the first sentence (after its full stop, question or exclamation mark and the space after).
@@ -172,7 +152,6 @@ public enum SayAll {
     public static func stop(byGesture: Bool = false) {
         guard reader != nil else { return }
         generation += 1
-        waitingForPage = false
         reader = nil
         restoreRate()
         buffered = 0

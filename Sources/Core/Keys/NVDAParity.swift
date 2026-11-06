@@ -281,9 +281,7 @@ extension GlobalCommands {
             d.buffer.isDirty = true
             d.buffer.build { [weak d] in
                 guard let d, API.focusTreeInterceptor === d else { return }
-                Speech.speakMessage(d.buffer.isPartial
-                    ? String(localized: "page could not be fully refreshed", comment: "Spoken when a manual document refresh failed or returned incomplete content")
-                    : String(localized: "refreshed", comment: "Spoken message"))
+                Speech.speakMessage(String(localized: "refreshed", comment: "Spoken message"))
             }
         }
         add("toggleSingleLetterNavigation", String(localized: "Single-letter navigation on or off; turns single-letter navigation on or off for this page, so the page's own letter keys work (NVDA+Shift+Space)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+shift+space"]) { _ in

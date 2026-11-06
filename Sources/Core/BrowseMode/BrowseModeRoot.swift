@@ -8,7 +8,7 @@ nonisolated struct BrowseRootCollection: Sendable {
     let collection: WebBufferCollection?
 
     static func collect(pid: pid_t, request: AXWalkRequest) -> Self {
-        let budget = AXWalkBudget(request: request)
+        let budget = AXWalkBudget(request: request, startedAt: DispatchTime.now().uptimeNanoseconds)
         return AXReadScope.with(while: { budget.check() }, onQuery: { budget.admitAXQuery() }, onResult: { budget.record($0) }) {
             let app = AXUIElementCreateApplication(pid)
             guard let window = app.element(kAXFocusedWindowAttribute) ?? app.element(kAXMainWindowAttribute), budget.check() else {

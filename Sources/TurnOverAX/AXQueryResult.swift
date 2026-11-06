@@ -128,6 +128,11 @@ public extension AXUIElement {
         return execution.result(settable.boolValue)
     }
 
+    func actionResult(_ name: String, policy: AXQueryPolicy = .respectBackoff) -> AXQueryResult<Bool> {
+        let execution = AXHealth.query(self, policy: policy) { AXUIElementPerformAction(self, name as CFString) }
+        return execution.result(execution.status == .returned(.success))
+    }
+
     func parameterizedResult(_ name: String, _ parameter: CFTypeRef, policy: AXQueryPolicy = .respectBackoff) -> AXQueryResult<CFTypeRef> {
         var value: CFTypeRef?
         let execution = AXHealth.query(self, policy: policy) { AXUIElementCopyParameterizedAttributeValue(self, name as CFString, parameter, &value) }

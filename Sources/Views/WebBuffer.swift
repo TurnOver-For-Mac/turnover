@@ -82,7 +82,7 @@ public final class WebBuffer {
     package var acceptsSnapshot: ((AXSnapshot) -> Bool)?
 
     public convenience init(webArea: AXUIElement) {
-        self.init(webArea: webArea, collect: WebBufferCollection.collect)
+        self.init(webArea: webArea) { root, focus, request in WebBufferCollection.collect(root: root, focus: focus, request: request) }
     }
     package init(webArea: AXUIElement, collect: @escaping @Sendable (AXUIElement, AXUIElement?, AXWalkRequest) -> WebBufferCollection) {
         self.collect = collect
@@ -141,7 +141,12 @@ public final class WebBuffer {
         let focus = API.focusObject?.element
         let collector = collect
         runner.submit(collect: { request in
-            if let scrollTo, !request.isCancelled { _ = AXUIElementPerformAction(scrollTo, "AXScrollToVisible" as CFString) }
+            if let scrollTo {
+                let budget = AXWalkBudget(request: request, startedAt: DispatchTime.now().uptimeNanoseconds)
+                AXReadScope.with(while: { budget.check() }, onQuery: { budget.admitAXQuery() }, onResult: { budget.record($0) }) {
+                    _ = scrollTo.actionResult("AXScrollToVisible")
+                }
+            }
             return collector(root, focus, request)
         }, publish: { [weak self] result in
             guard let self, generation == current else { return }

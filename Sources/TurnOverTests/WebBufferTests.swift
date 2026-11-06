@@ -6,15 +6,6 @@ import TurnOverAX
 import AXFixtures
 import os
 
-private final class SnapshotPagedModule: AppModule {
-    static var turns = 0
-    static var resume: ((TextInfo) -> Void)?
-    override func sayAllReachedEnd(_ obj: TurnOverObject, resume: @escaping (TextInfo) -> Void) -> Bool {
-        Self.turns += 1; Self.resume = resume
-        return true
-    }
-}
-
 func waitForBuffer(_ buffer: WebBuffer, file: String = #fileID, line: Int = #line) {
     let deadline = Date().addingTimeInterval(3)
     while buffer.isLoading, Date() < deadline { RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01)) }
@@ -239,38 +230,6 @@ func webBufferTests() {
         expect(WebBufferCollection.collect(root: AXReplay.root!, focus: nil, request: AXWalkRequest()).stop, .cycle)
     }
 
-    test("document snapshot: a requested Say All page survives publication and is retired on departure") {
-        let root = AXUIElementCreateApplication(910_000)
-        let bundle = "pid.910000"
-        let previous = AppModuleHandler.shared.moduleType(for: bundle)
-        AppModuleHandler.shared.register(SnapshotPagedModule.self, for: bundle)
-        SnapshotPagedModule.turns = 0; SnapshotPagedModule.resume = nil
-        defer {
-            API.setFocusObject(nil, ancestors: []); SayAll.stop()
-            SnapshotPagedModule.resume = nil
-            AppModuleHandler.shared.register(previous ?? AppModule.self, for: bundle)
-            AppModuleHandler.shared.remove(pid: 910_000)
-        }
-        let buffer = WebBuffer(webArea: root, collect: { root, _, _ in sampleCollection(root, text: "The next public page.") })
-        let page = BrowseModeDocument(webArea: root, buffer: buffer)
-        page.passThrough = true
-        API.setFocusObject(nil, ancestors: [], interceptor: page)
-        waitForBuffer(buffer)
-        // An unregistered root gives this range an empty buffer. Reaching its end invokes the real app hook,
-        // without starting an audio engine or changing a running application's page.
-        let info = BufferTextInfo(obj: WebArea(element: root), start: 0, end: 0)
-        SayAll.readText(info: info)
-        expect(SnapshotPagedModule.turns, 1)
-        check(SayAll.isRunning, "Say All owns the pending page turn")
-        buffer.build(); waitForBuffer(buffer)
-        check(SayAll.isRunning, "publication of the requested page must not retire its resume callback")
-        API.setFocusObject(nil, ancestors: [])
-        check(!SayAll.isRunning, "focus departure still cancels a pending page turn")
-        SnapshotPagedModule.resume?(info)
-        check(!SayAll.isRunning, "late page completion cannot restart speech after departure")
-        expect(SnapshotPagedModule.turns, 1, "one page request, no queued repeat turns")
-    }
-
     test("document snapshot: text ranges and their copies retain offsets across publication") {
         var fixture = AXFixture(app: "Public sample", bundle: "test.ranges", recorded: "", root: 80, application: nil, focus: nil, nodes: [
             .init(id: 80, attrs: ["AXRole": .string("AXWebArea"), "AXChildren": .elements([81])]),
@@ -383,5 +342,166 @@ func webBufferTests() {
         waitForBuffer(buffer)
         expect(calls.withLock { $0 }, 2, "the initial collection and one edge refresh, despite the feed growing every time")
         check(said.contains("read in part") && !said.contains("no next heading"), "incomplete search reports available content, not a definitive missing heading")
+    }
+
+    test("document collection: a disappearing element and oversized attributes do not discard later siblings") {
+        var many: [String: AXFixture.Value] = ["AXRole": .string("AXGroup"), "AXChildren": .elements([3])]
+        for i in 0..<200 { many["Custom\(i)"] = .string("public metadata") }
+        AXReplay.load(.init(app: "Public changing page", bundle: "test.changing-buffer", recorded: "", root: 0, application: nil, focus: nil, nodes: [
+            .init(id: 0, attrs: ["AXRole": .string("AXWebArea"), "AXChildren": .elements([1, 404, 2, 4])]),
+            .init(id: 1, attrs: many),
+            .init(id: 2, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string(String(repeating: "x", count: 131_073))]),
+            .init(id: 3, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("Inside the large metadata element.")]),
+            .init(id: 4, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("The surviving last sibling.")]),
+        ]))
+        defer { AXReplay.unload() }
+        let result = WebBufferCollection.collect(root: AXReplay.root!, focus: nil, request: AXWalkRequest())
+        expect(result.stop, nil, "local omissions do not make a changing page globally incomplete")
+        expect(result.skippedElements, 1)
+        result.snapshot.with {
+            expect(AXReplay.element(3).string("AXValue"), "Inside the large metadata element.")
+            expect(AXReplay.element(4).string("AXValue"), "The surviving last sibling.")
+            check(AXReplay.element(2).attr("AXValue") == nil, "the oversized value alone was omitted")
+        }
+    }
+
+    test("document collection: a real tree larger than the element cap remains bounded") {
+        var nodes = [AXFixture.Node(id: 0, attrs: ["AXRole": .string("AXWebArea"), "AXChildren": .elements(Array(1...6005))])]
+        nodes += (1...6005).map { .init(id: $0, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("Public row \($0).")]) }
+        AXReplay.load(.init(app: "Public large page", bundle: "test.large-buffer", recorded: "", root: 0, application: nil, focus: nil, nodes: nodes))
+        defer { AXReplay.unload() }
+        let result = WebBufferCollection.collect(root: AXReplay.root!, focus: nil, request: AXWalkRequest())
+        check(result.stop.map { [AXWalkStop.visits, .axQueries, .deadline].contains($0) } == true, "the actual large traversal reports its cap")
+        check(result.snapshot.nodes.count <= 6000, "the safety cap is retained, not presented as a solution to long-page reachability")
+        result.snapshot.with {
+            expect(AXReplay.element(1).string("AXValue"), "Public row 1.")
+            check(AXReplay.element(6005).attr("AXValue") == nil, "a tail beyond the cap is not claimed to be available")
+        }
+    }
+
+    test("document collection: app exit during the provider read remains a failed read") {
+        AXReplay.load(.init(app: "Public exiting app", bundle: "test.exiting-buffer", recorded: "", root: 0, application: nil, focus: nil, nodes: [
+            .init(id: 0, attrs: ["AXRole": .string("AXWebArea"), "AXChildren": .elements([1, 2])]),
+            .init(id: 1, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("First public row.")]),
+            .init(id: 2, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("Second public row.")]),
+        ]))
+        defer { AXReplay.unload() }
+        let root = AXReplay.root!
+        var queries = 0
+        let result = AXReadScope.with(while: { true }, onQuery: {
+            queries += 1
+            if queries == 10 { AXReplay.unload() }   // every handle becomes invalid, like process exit
+            return true
+        }) { WebBufferCollection.collect(root: root, focus: nil, request: AXWalkRequest()) }
+        expect(result.stop, .providerFailure, "a dead root is not mistaken for isolated disappearing children")
+    }
+
+    test("document collection: queued time does not consume the actual read deadline") {
+        AXReplay.load(.init(app: "Public delayed read", bundle: "test.queued-buffer", recorded: "", root: 0, application: nil, focus: nil, nodes: [
+            .init(id: 0, attrs: ["AXRole": .string("AXWebArea"), "AXChildren": .elements([1])]),
+            .init(id: 1, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("Read after queueing.")]),
+        ]))
+        defer { AXReplay.unload() }
+        let result = WebBufferCollection.collect(root: AXReplay.root!, focus: nil, request: AXWalkRequest(startedAt: 0))
+        expect(result.stop, nil, "an arbitrarily old submission still receives its own collection budget")
+        result.snapshot.with { expect(AXReplay.element(1).string("AXValue"), "Read after queueing.") }
+    }
+
+    test("document snapshot: the first browse key waits for initial content") {
+        let root = AXUIElementCreateApplication(910_000)
+        let entered = DispatchSemaphore(value: 0), release = DispatchSemaphore(value: 0)
+        let buffer = WebBuffer(webArea: root, collect: { root, _, _ in
+            entered.signal(); _ = release.wait(timeout: .now() + 3)
+            return sampleCollection(root, text: "The page has arrived.")
+        })
+        let page = BrowseModeDocument(webArea: root, buffer: buffer)
+        API.setFocusObject(nil, ancestors: [], interceptor: page)
+        defer { API.setFocusObject(nil, ancestors: []) }
+        check(entered.wait(timeout: .now() + 2) == .success, "initial read is held")
+        var ran = false
+        check(page.deferInitialContent { ran = true }, "the command is accepted for deferred execution")
+        check(!ran, "no command searches an empty pending snapshot")
+        release.signal(); waitForBuffer(buffer)
+        check(ran, "the same command executes after initial publication")
+    }
+
+    test("Say All: an existing reading snapshot continues through page refresh") {
+        var nodes = [AXFixture.Node(id: 80, attrs: ["AXRole": .string("AXWebArea"), "AXChildren": .elements([81, 83, 85, 87, 89])])]
+        for i in 0..<5 {
+            nodes.append(.init(id: 81 + i * 2, attrs: ["AXRole": .string("AXGroup"), "AXChildren": .elements([82 + i * 2])]))
+            nodes.append(.init(id: 82 + i * 2, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("Original public line \(i + 1).")]))
+        }
+        AXReplay.load(.init(app: "Public reading", bundle: "test.sayall-buffer", recorded: "", root: 80, application: nil, focus: nil, nodes: nodes))
+        let driver = Speech.enqueueTestDriver, saved = config
+        var queued: [(String, (@Sendable () -> Void)?)] = []
+        Speech.enqueueTestDriver = { text, start, _ in queued.append((text, start)) }
+        defer {
+            SayAll.stop(); Speech.enqueueTestDriver = driver; config = saved
+            BrowseModeHandler.shared.forget(pid: 900_080); AXReplay.unload()
+        }
+        let page = BrowseModeHandler.shared.document(root: AXReplay.root!)
+        waitForBuffer(page.buffer)
+        guard let reading = page.makeTextInfo(.first) else { return check(false, "initial reading range") }
+        SayAll.readText(info: reading)
+        _ = AXUIElementSetAttributeValue(AXReplay.element(88), kAXValueAttribute as CFString, "Replacement public text." as CFString)
+        page.buffer.build(); waitForBuffer(page.buffer)
+        check(SayAll.isRunning, "publishing a new copy does not stop the existing reader")
+        guard let start = queued.first?.1 else { return check(false, "queued speech start") }
+        start()
+        let until = Date().addingTimeInterval(2)
+        while queued.count < 4, Date() < until { RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01)) }
+        check(queued.contains { $0.0.contains("Original public line 4") }, "subsequent chunks still read the old snapshot")
+        check(!queued.contains { $0.0.contains("Replacement public text") }, "a refresh cannot substitute new text under old reading offsets")
+    }
+
+    test("VoiceOver find: a dirty page is searched after its refreshed heading arrives") {
+        let root = AXUIElementCreateApplication(910_000), heading = AXUIElementCreateApplication(910_002), text = AXUIElementCreateApplication(910_003)
+        let calls = OSAllocatedUnfairLock(initialState: 0)
+        let entered = DispatchSemaphore(value: 0), release = DispatchSemaphore(value: 0)
+        let buffer = WebBuffer(webArea: root, collect: { root, _, _ in
+            let n = calls.withLock { $0 += 1; return $0 }
+            if n == 1 { return sampleCollection(root, text: "Public introduction.") }
+            entered.signal(); _ = release.wait(timeout: .now() + 3)
+            let ordinary = AXUIElementCreateApplication(910_001)
+            return WebBufferCollection(snapshot: AXSnapshot(nodes: [
+                ElementKey(root): .init(attributes: ["AXRole": .string("AXWebArea"), "AXChildren": .array([.element(ordinary), .element(heading)])]),
+                ElementKey(ordinary): .init(attributes: ["AXRole": .string("AXStaticText"), "AXValue": .string("Public introduction.")]),
+                ElementKey(heading): .init(attributes: ["AXRole": .string("AXHeading"), "AXValue": .number(2), "AXChildren": .array([.element(text)])]),
+                ElementKey(text): .init(attributes: ["AXRole": .string("AXStaticText"), "AXValue": .string("New public heading.")]),
+            ]), documentText: "", focusedPart: nil, stop: nil, elapsedMs: 0)
+        })
+        let page = BrowseModeDocument(webArea: root, buffer: buffer)
+        API.setFocusObject(nil, ancestors: [], interceptor: page)
+        let sink = Speech.sink; var heard = ""
+        Speech.sink = { heard += $0 }
+        defer { API.setFocusObject(nil, ancestors: []); Speech.sink = sink }
+        waitForBuffer(buffer)
+        buffer.isDirty = true
+        page.searchKey("AXHeadingSearchKey", spoken: "heading", forward: true)
+        check(entered.wait(timeout: .now() + 2) == .success, "VoiceOver find requested its refresh")
+        expect(page.position, 0, "the old copy is not searched while collection is held")
+        check(!heard.contains("no next heading"), "no premature missing-heading announcement")
+        release.signal(); waitForBuffer(buffer)
+        expect(page.position, buffer.find(from: -1, forward: true, roles: ["AXHeading"])?.offset ?? -1)
+        check(page.position > 0 && !heard.contains("no next heading"), "find lands on the refreshed heading")
+    }
+
+    test("document refresh: scrolling shares AX health and cancellation admission") {
+        AXReplay.load(.init(app: "Public scroll", bundle: "test.scroll-buffer", recorded: "", root: 0, application: nil, focus: nil, nodes: [
+            .init(id: 0, attrs: ["AXRole": .string("AXWebArea")]),
+            .init(id: 1, attrs: ["AXRole": .string("AXStaticText")], actions: ["AXScrollToVisible"]),
+        ]))
+        defer { AXReplay.unload() }
+        let before = AXStats.calls
+        let buffer = WebBuffer(webArea: AXReplay.root!, collect: { root, _, _ in sampleCollection(root, text: "After scrolling.") })
+        buffer.build(scrollTo: AXReplay.element(1)); waitForBuffer(buffer)
+        expect(AXStats.calls, before + 1, "the actual scroll action is timed and counted by AXHealth")
+        expect(AXReplay.actions.count, 1)
+        let request = AXWalkRequest(); request.cancel()
+        let budget = AXWalkBudget(request: request)
+        let result = AXReadScope.with(while: { budget.check() }, onQuery: { budget.admitAXQuery() }) { AXReplay.element(1).actionResult("AXScrollToVisible") }
+        expect(result.status, .clientWorkStopped)
+        check(!result.wasAttempted, "cancelled scroll never reaches the provider")
+        expect(AXReplay.actions.count, 1)
     }
 }

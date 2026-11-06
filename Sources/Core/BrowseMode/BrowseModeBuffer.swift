@@ -4,6 +4,35 @@ import ApplicationServices
 import TurnOverAX
 
 extension BrowseModeDocument {
+    /// A command that arrived during the first collection runs once its content is available. A later key,
+    /// navigation or focus departure retires it; the event-tap decision still returns immediately.
+    package func deferInitialContent(_ action: @escaping () -> Void) -> Bool {
+        guard buffer.lines.isEmpty, buffer.isLoading else { return false }
+        let epoch = pageGeneration, intent = bufferIntent, keys = ScriptHandler.keysArrivedCount
+        buffer.build { [weak self] in
+            guard let self, pageGeneration == epoch, bufferIntent == intent, ScriptHandler.keysArrivedCount == keys, API.focusTreeInterceptor === self, !passThrough else { return }
+            if !buffer.lines.isEmpty { action() }
+            else {
+                Speech.speakMessage(String(localized: "nothing on this page yet; it may still be loading", comment: "Spoken message"))
+                watchForContent()
+            }
+        }
+        return true
+    }
+
+    func contentScript(_ script: Script) -> Script {
+        guard !passThrough else { return script }
+        let deferred = Script(name: script.name, description: script.description, category: script.category, owner: self) { [weak self] gesture in
+            guard let self else { return }
+            if !deferInitialContent({ script.handler(gesture) }) { script.handler(gesture) }
+        }
+        deferred.canPropagate = script.canPropagate
+        deferred.bypassInputHelp = script.bypassInputHelp
+        deferred.resumesSayAll = script.resumesSayAll
+        deferred.isAvailable = script.isAvailable
+        return deferred
+    }
+
     func configureBuffer() {
         buffer.acceptsSnapshot = { [weak self] snapshot in
             guard let self else { return false }
@@ -24,7 +53,7 @@ extension BrowseModeDocument {
         }
         buffer.willPublish = { [weak self] in
             guard let self else { return }
-            SayAll.stopReading(buffer: buffer, preservingPageTurn: true)
+            publicationWasEmpty = buffer.lines.isEmpty
             publicationAnchor = buffer.lines.isEmpty ? nil : BrowseModeHandler.Saved(offset: position, text: lineText(at: position))
         }
         buffer.didPublish = { [weak self] in
@@ -35,6 +64,7 @@ extension BrowseModeDocument {
             positionMovedAt = movedAt
             publicationAnchor = nil
             guard API.focusTreeInterceptor === self else { return }
+            if Core.active, publicationWasEmpty, !buffer.lines.isEmpty { VoiceOverSounds.play("WebAreaLoaded.aiff") }
             reportPartialBuffer()
             if !buffer.lines.isEmpty, !passThrough, (announceWhenReady || announcedURL != lastURL) {
                 announceWhenReady = false
@@ -46,7 +76,7 @@ extension BrowseModeDocument {
     private func reportPartialBuffer() {
         guard buffer.isPartial, !saidPartial else { return }
         saidPartial = true
-        Speech.speakMessage(String(localized: "page read in part; more content may be missing", comment: "Spoken when document collection stops before the entire page is available"))
+        Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message"))
     }
 
     func followFocusAfterBuild(_ element: AXUIElement, requiresFocus: Bool = true) {
@@ -63,12 +93,11 @@ extension BrowseModeDocument {
 
     func reportBufferEnd(forward: Bool) {
         if buffer.isLoading { Speech.speakMessage(String(localized: "loading page", comment: "Spoken message")) }
-        else if buffer.isPartial { Speech.speakMessage(String(localized: "end of the available content; the page was read in part", comment: "Spoken instead of a complete-page boundary when document collection was incomplete")) }
+        else if buffer.isPartial { Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")) }
         else { Speech.speakMessage(forward ? String(localized: "bottom", comment: "Spoken message") : String(localized: "top", comment: "Spoken message")) }
     }
 
     func cancelBuffer() {
-        SayAll.stopReading(buffer: buffer)
         pageGeneration += 1
         rootRunner.cancel(); discoveringRoot = false
         watchingFor = nil
