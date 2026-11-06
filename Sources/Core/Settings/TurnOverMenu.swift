@@ -844,6 +844,7 @@ public final class TurnOverMenu {
             MenuItem("Each item's keyboard shortcut", .toggle(get: { config.presentation.reportKeyboardShortcuts }, set: { config.presentation.reportKeyboardShortcuts = $0 })),
             MenuItem("Position, such as 3 of 10", .toggle(get: { config.presentation.reportObjectPositionInformation }, set: { config.presentation.reportObjectPositionInformation = $0 })),
             MenuItem("Hints after a pause", .toggle(get: { config.presentation.speakHints }, set: { config.presentation.speakHints = $0 }), hint: "What you can do with an item"),
+            MenuItem("Mouse tracking", .toggle(get: { config.presentation.mouseTracking }, set: { config.presentation.mouseTracking = $0; MouseTracking.refresh() }), hint: "Reads what is under the mouse pointer as it moves, and takes the cursor there"),
             MenuItem("Progress bars", .cycle(options: [String(localized: "beep", comment: "A choice in the TurnOver menu"), String(localized: "speak the percentage", comment: "A choice in the TurnOver menu"), String(localized: "beep and speak", comment: "A choice in the TurnOver menu"), String(localized: "off", comment: "A choice in the TurnOver menu")],
                 get: { ProgressOutput.modes.firstIndex(of: config.presentation.progressBars) ?? 0 },
                 set: { config.presentation.progressBars = ProgressOutput.modes[$0] }), hint: "Beeps that rise in pitch as a progress bar moves, the percentage spoken, both, or nothing"),

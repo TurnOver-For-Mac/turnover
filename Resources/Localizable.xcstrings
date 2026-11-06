@@ -7468,6 +7468,12 @@
         }
       }
     },
+    "Mouse tracking" : {
+
+    },
+    "Mouse tracking on or off; reads what is under the mouse pointer as it moves (NVDA+M)" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
     "Move %@ down" : {
       "localizations" : {
         "tr" : {
@@ -10895,6 +10901,9 @@
         }
       }
     },
+    "Read what is under the mouse pointer as it moves" : {
+
+    },
     "Readers per app" : {
       "localizations" : {
         "tr" : {
@@ -11356,6 +11365,9 @@
           }
         }
       }
+    },
+    "Reads what is under the mouse pointer as it moves, and takes the cursor there" : {
+
     },
     "Rebuilds the page's browse mode view (NVDA+F5)" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -21572,6 +21584,9 @@
           }
         }
       }
+    },
+    "mouse tracking %@" : {
+      "comment" : "Mouse tracking turned on or off"
     },
     "mouse up" : {
       "comment" : "Spoken message",

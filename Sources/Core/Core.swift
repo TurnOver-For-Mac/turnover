@@ -141,6 +141,7 @@ public enum Core {
         SettingsBridge.start()   // TurnOver Settings, the window (18 Oct 2026)
         SpeechPort.shared.start(port: config.games.bridgePort)   // apps that speak through TurnOver, with the user's say-so
         InputSourceAnnouncer.start()   // the keyboard input source said as it changes ()
+        MouseTracking.refresh()   // the pointer read as it moves, where the Mouse tracking setting is on
         SettingsProfiles.start()   // VO-X Activities / NVDA's configuration profiles, by app
         PluginLibrary.startDailyChecks()   // the withdrawn line acted on (once per run, however often TurnOver activates)
     }
@@ -151,6 +152,7 @@ public enum Core {
         ObjectNavigator.shared.cancelWindowSearch()
         guard active else { return }
         active = false
+        MouseTracking.refresh()   // stops watching the pointer: VoiceOver reads now
         InputManager.isInputHelpActive = false
         SayAll.stop()
         AXHandler.shared.stop()
