@@ -21,7 +21,7 @@ extension BrowseModeDocument {
     }
 
     func contentScript(_ script: Script) -> Script {
-        guard !passThrough else { return script }
+        guard !passThrough, buffer.lines.isEmpty, buffer.isLoading else { return script }
         let deferred = Script(name: script.name, description: script.description, category: script.category, owner: self) { [weak self] gesture in
             guard let self else { return }
             if !deferInitialContent({ script.handler(gesture) }) { script.handler(gesture) }

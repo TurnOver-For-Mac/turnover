@@ -423,6 +423,9 @@ func webBufferTests() {
         check(!ran, "no command searches an empty pending snapshot")
         release.signal(); waitForBuffer(buffer)
         check(ran, "the same command executes after initial publication")
+        let arrow = KeyboardGesture(identifier: "kb:downArrow")!
+        let first = page.script(for: arrow), second = page.script(for: arrow)
+        check(first != nil && first === second, "loaded commands retain identity for ScriptHandler repeat tracking")
     }
 
     test("Say All: an existing reading snapshot continues through page refresh") {
