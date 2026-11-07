@@ -386,6 +386,9 @@
         }
       }
     },
+    "%@ doesn't quit" : {
+      "comment" : "Spoken message: Alt F4 in Finder, which can't be quit; the app's name"
+    },
     "%@ doesn't speak in TurnOver, so TurnOver is back to %@. Choose another in the TurnOver menu, Settings, Speech." : {
       "comment" : "A silent voice replaced: the voice, then the one used instead",
       "localizations" : {

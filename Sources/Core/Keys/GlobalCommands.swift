@@ -137,8 +137,12 @@ public final class GlobalCommands: ScriptableObject {
         script("openMenus", String(localized: "Opens the application's menus; closes them if open (Windows: Alt or F10). Also Command on its own", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:f10"], category: win) { _ in
             GlobalCommands.toggleMenus()
         }.isAvailable = windowsOn
-        script("quitApplication", String(localized: "Quits the application (Windows: Alt+F4)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+f4"], category: win) { _ in
-            KeyboardGesture(identifier: "kb:command+q")?.send()
+        // Alt F4. Two misses (Oliver, 7 Nov 2026: "command f4 ... doesn't quit apps"): with the top row as media keys (the
+        // Mac's default) F4 arrives as Spotlight (key 177; Launchpad, 131, on older keyboards), never as F4; and with Fn,
+        // the Command Q sent was heard and Safari stayed open. Both are now Alt F4, and the app is asked to quit
+        // directly, as the Dock's Quit does (unsaved work still asks first); the key is the fallback.
+        script("quitApplication", String(localized: "Quits the application (Windows: Alt+F4)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+f4"] + GlobalCommands.f4MediaKeys.map { "kb:command+\($0)" }, category: win) { _ in
+            DispatchQueue.main.async { GlobalCommands.quitFrontApp() }
         }.isAvailable = windowsOn
         script("forceQuit", String(localized: "Force quit an application; lists the running applications to force quit one, with a confirmation (the Mac's Force Quit window, spoken)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+option+escape"]) { _ in
             DispatchQueue.main.async { ForceQuit.open() }
@@ -146,7 +150,7 @@ public final class GlobalCommands: ScriptableObject {
         script("forceQuitWindows", String(localized: "Force quit, as Task Manager's key (Windows: Control+Shift+Escape)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:control+shift+escape"], category: win) { _ in
             DispatchQueue.main.async { ForceQuit.open() }
         }.isAvailable = windowsOn
-        script("closeWindow", String(localized: "Closes the window or tab (Windows: Control+F4)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:control+f4"], category: win) { _ in
+        script("closeWindow", String(localized: "Closes the window or tab (Windows: Control+F4)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:control+f4"] + GlobalCommands.f4MediaKeys.map { "kb:control+\($0)" }, category: win) { _ in
             KeyboardGesture(identifier: "kb:command+w")?.send()
         }.isAvailable = windowsOn
         // NVDA+R: the front window's text, read from the screen, as a result to move through and click in.
@@ -675,6 +679,24 @@ public final class GlobalCommands: ScriptableObject {
         Log.io("context menu: right click on \(e.role) at (\(Int(p.x)), \(Int(p.y)))")
         rightClick(at: p)
         return true
+    }
+
+    /// The F4 key's names when the top row sends its media keys: Spotlight (177) and Launchpad (131).
+    nonisolated static let f4MediaKeys = ["key177", "key131"]
+
+    /// Alt F4: the app in front asked to quit, as the Dock's Quit asks; Command Q if it says no. Finder, which never
+    /// quits, and TurnOver itself are left alone.
+    @MainActor static func quitFrontApp() {
+        guard let app = NSWorkspace.shared.frontmostApplication else {
+            Speech.speakMessage(String(localized: "no app", comment: "No application in front")); return
+        }
+        let name = app.localizedName ?? ""
+        if app.bundleIdentifier == "com.apple.finder" || app.processIdentifier == ProcessInfo.processInfo.processIdentifier {
+            Speech.speakMessage(String(localized: "\(name) doesn't quit", comment: "Spoken message: Alt F4 in Finder, which can't be quit; the app's name"))
+            return
+        }
+        Log.io("quit: asking \(app.bundleIdentifier ?? name) to quit")
+        if !app.terminate() { KeyboardGesture(identifier: "kb:command+q")?.send() }
     }
 
     public static func toggleMenus() {

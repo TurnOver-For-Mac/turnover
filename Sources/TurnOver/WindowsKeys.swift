@@ -62,8 +62,10 @@ nonisolated enum WindowsRemap {
             return true
         }
         // Alt F4 (Command F4) quits; Control F4 closes the window.
-        if code == f4, cmd, !ctrl { return set(letterQ, add: [], remove: [.maskSecondaryFn]) }
-        if code == f4, ctrl, !cmd { return set(letterW, add: .maskCommand, remove: [.maskControl, .maskSecondaryFn]) }
+        // F4 as the top row sends it by default: Spotlight (177), or Launchpad (131) on older keyboards (7 Nov 2026).
+        let isF4 = code == f4 || code == 177 || code == 131
+        if isF4, cmd, !ctrl { return set(letterQ, add: [], remove: [.maskSecondaryFn]) }
+        if isF4, ctrl, !cmd { return set(letterW, add: .maskCommand, remove: [.maskControl, .maskSecondaryFn]) }
         if cmd { return false }   // a Mac shortcut already
         let app = front
         let terminal = keepControl.contains(app)
