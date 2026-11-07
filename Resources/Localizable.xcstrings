@@ -13131,6 +13131,18 @@
         }
       }
     },
+    "Sends Spotify's next track shortcut and says next track" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
+    "Sends Spotify's previous track shortcut and says previous track" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
+    "Sends Spotify's volume down shortcut and says quieter" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
+    "Sends Spotify's volume up shortcut and says louder" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
     "Sends the command line to the shell" : {
       "comment" : "A command, as the key list and keyboard help say it",
       "localizations" : {
@@ -21422,6 +21434,9 @@
         }
       }
     },
+    "louder" : {
+      "comment" : "Spotify volume up shortcut"
+    },
     "low verbosity" : {
       "comment" : "Copying VoiceOver's settings",
       "localizations" : {
@@ -21850,6 +21865,9 @@
           }
         }
       }
+    },
+    "next track" : {
+      "comment" : "Spotify next track shortcut"
     },
     "next item" : {
       "comment" : "A braille chord's command, as braille help says it",
@@ -23887,6 +23905,9 @@
         }
       }
     },
+    "previous track" : {
+      "comment" : "Spotify previous track shortcut"
+    },
     "previous item" : {
       "comment" : "A braille chord's command, as braille help says it",
       "localizations" : {
@@ -23974,6 +23995,9 @@
           }
         }
       }
+    },
+    "quieter" : {
+      "comment" : "Spotify volume down shortcut"
     },
     "quote level %@" : {
       "comment" : "How deep a quote is in a Mail message",
