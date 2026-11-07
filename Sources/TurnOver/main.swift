@@ -108,17 +108,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // macOS 27 renamed Accessibility in Privacy and Security to Device Control and Data Access.
         let accessName = ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 27 ? String(localized: "Device Control and Data Access", comment: "macOS 27's name for the Accessibility list in Privacy and Security") : String(localized: "Accessibility", comment: "macOS's Accessibility list in Privacy and Security")
-        let version = String(describing: Edition.version)
         let updated = UserDefaults.standard.bool(forKey: "welcomed-1.0") || versionWelcomed
         // One page for the keys when the version changes (it was four, of nineteen: "a bit much").
         let keysPages: [(String, String)] = [
-            (String(localized: "Keys in \(version)", comment: "A welcome page's title: %@ is the version"),
+            (String(localized: "The keys", comment: "A welcome page's title after an update"),
              String(localized: "Command Control Period turns TurnOver on and off, from anywhere.\nCommand Control Comma is the way in to everything: then M for the menu, S for Settings, K for your keyboard style, H for the guides.\nThe keys are VoiceOver's, NVDA's or JAWS's: Command Control Comma, then K, changes the style.", comment: "The welcome page about keys after an update")),
         ]
         // The order (7 Nov 2026, Oliver): the two keys everything hangs on come straight after the welcome, before the
         // permissions and the rest. One point a line, read with Up and Down (WelcomeWindow).
         let firstRunPages: [(String, String)] = [
-            (String(localized: "Welcome to TurnOver \(version)", comment: "A welcome page's title: %@ is the version"),
+            (String(localized: "Welcome to TurnOver", comment: "The first welcome page's title"),
              String(localized: "TurnOver is a screen reader for the Mac. It reads every app with its own voice, and the keys you already know.\nRead each page with the Up and Down arrows.\nTab reaches the buttons: Next, Back and Skip. Return goes to the next page, Escape skips the rest.", comment: "The first welcome page")),
             (String(localized: "Two keys to remember", comment: "A welcome page's title"),
              String(localized: "Command Control Period turns TurnOver on and off, from anywhere. When it's off, VoiceOver reads as usual.\nCommand Control Comma is the way in to everything. Press it, hear TurnOver, then a letter:\nM, the TurnOver menu.\nS, the Settings window.\nK, your keyboard style.\nH, the guides.\nPress Command Control Comma twice to hear every letter.\nCommand Control M opens the menu in one press.", comment: "A welcome page: the two keys")),
@@ -140,7 +139,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             pages = versionWelcomed ? [] : keysPages
             pages += NewToTry.pagesDue || !versionWelcomed ? NewToTry.summaryPages() : []
-            if !pages.isEmpty { pages.insert((String(localized: "Welcome to TurnOver \(version), build \(String(build))", comment: "A welcome page's title after an update: the version and build"),
+            if !pages.isEmpty { pages.insert((String(localized: "Welcome to TurnOver build \(String(build))", comment: "A welcome page's title after an update: the build"),
                           String(localized: "A few short pages: what's new, and what to test.\nRead each page with the Up and Down arrows. Return goes to the next page, Escape skips the rest.\nThe details are in the TurnOver menu (Command Control Comma, then M), under What to test in build \(String(build)).", comment: "A welcome page")), at: 0) }
         }
         if keyboardNavigationTurnedOn {

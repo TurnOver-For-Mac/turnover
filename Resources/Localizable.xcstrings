@@ -16237,7 +16237,7 @@
         }
       }
     },
-    "TurnOver speaks VoiceOver's keys, NVDA's or JAWS's. Command Control Comma, then K, moves between them.\nThe VO keys do what they do in VoiceOver.\nTo bring your VoiceOver voice and speed with you: Command Control Comma, then V." : {
+    "TurnOver speaks VoiceOver's keys, NVDA's or JAWS's. Command Control Comma, then K, moves between them.\nThe VO keys do what they do in VoiceOver." : {
       "comment" : "A welcome page: keyboard styles"
     },
     "TurnOver stopped unexpectedly. Restarting it." : {
