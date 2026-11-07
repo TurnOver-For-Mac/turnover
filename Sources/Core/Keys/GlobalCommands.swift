@@ -481,12 +481,12 @@ public final class GlobalCommands: ScriptableObject {
         func span(_ minutes: Int) -> String? {
             guard minutes > 0 else { return nil }
             let h = minutes / 60, m = minutes % 60
-            let mins = String(localized: "\(String(m)) minutes", comment: "A battery's time: minutes")
+            let mins = String(localized: "\(m) minutes", comment: "A battery's time: minutes")
             guard h > 0 else { return mins }
-            let hours = h == 1 ? String(localized: "1 hour", comment: "A battery's time: hours") : String(localized: "\(String(h)) hours", comment: "A battery's time: hours")
+            let hours = h == 1 ? String(localized: "1 hour", comment: "A battery's time: hours") : String(localized: "\(h) hours", comment: "A battery's time: hours")
             return m > 0 ? String(localized: "\(hours) \(mins)", comment: "A battery's time: the hours, then the minutes") : hours
         }
-        var parts = [String(localized: "battery \(String(max > 0 ? current * 100 / max : current)) percent", comment: "The battery's charge: %@ is the percentage")]
+        var parts = [String(localized: "battery \(max > 0 ? current * 100 / max : current) percent", comment: "The battery's charge: %@ is the percentage")]
         if charged, onPower { parts.append(String(localized: "charged, on power", comment: "The battery")) }
         else if charging { parts.append(String(localized: "charging", comment: "The battery")); if let t = span(desc[kIOPSTimeToFullChargeKey] as? Int ?? -1) { parts.append(String(localized: "\(t) to full", comment: "The battery: %@ is how long until it is full")) } }
         else if onPower { parts.append(String(localized: "on power, not charging", comment: "The battery")) }
