@@ -23,6 +23,15 @@ IDENTITY="${TURNOVER_IDENTITY:-${DEVID:--}}"
 APPNAME="TurnOver"
 SWIFTFLAGS=""
 BUNDLEID="com.turnover.reader"; FEEDURL="https://doll-eye.github.io/turnover-updates/appcast.xml"; MARKER="TURNOVER-EDITION-BETA"
+# A contributor's build is TurnOver Developer (issue 248, 7 Nov 2026): installed beside the published TurnOver, not over
+# it, with its own identity, so each copy keeps its own permissions and the TurnOver menu switches between them. Any
+# build not signed by the project's own team (AV65T28PQ7) is one; TURNOVER_DEVELOPER=1 or 0 decides it instead.
+DEVELOPER="${TURNOVER_DEVELOPER:-auto}"
+if [ "$DEVELOPER" = auto ]; then case "$IDENTITY" in *"(AV65T28PQ7)"*) DEVELOPER=0 ;; *) DEVELOPER=1 ;; esac; fi
+if [ "$DEVELOPER" = 1 ]; then
+  APPNAME="TurnOver Developer"; BUNDLEID="com.turnover.reader.developer"; FEEDURL=""
+  echo "build.sh: building TurnOver Developer, to sit beside the published TurnOver (TURNOVER_DEVELOPER=0 builds TurnOver itself)"
+fi
 APP="$BUILD/$APPNAME.app"
 INSTALL="/Applications/$APPNAME.app"
 # Signing asks Apple's time server for a timestamp; with the network down it fails and leaves the app unsigned, and
@@ -181,6 +190,8 @@ ditto "$SPARKLE" "$APP/Contents/Frameworks/Sparkle.framework"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $BUNDLEID" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :SUFeedURL $FEEDURL" "$APP/Contents/Info.plist"
+# A developer build never takes updates: the published copy beside it does.
+[ -z "$FEEDURL" ] && /usr/libexec/PlistBuddy -c "Delete :SUFeedURL" "$APP/Contents/Info.plist"
 if [ "$APPNAME" != "TurnOver" ]; then
   /usr/libexec/PlistBuddy -c "Set :CFBundleName $APPNAME" "$APP/Contents/Info.plist"
   /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName $APPNAME" "$APP/Contents/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string $APPNAME" "$APP/Contents/Info.plist"
@@ -188,7 +199,7 @@ fi
 # A build not stripped for release is a developer's build: only it honours the developer switches (Edition.isDevBuild).
 [ "$TURNOVER_STRIP" = 1 ] || /usr/libexec/PlistBuddy -c "Add :TODevBuild bool true" "$APP/Contents/Info.plist"
 # A development build (installed here) takes no updates: a published build would replace the work in progress.
-[ "$1" = "--no-install" ] || /usr/libexec/PlistBuddy -c "Delete :SUFeedURL" "$APP/Contents/Info.plist"
+[ "$1" = "--no-install" ] || /usr/libexec/PlistBuddy -c "Delete :SUFeedURL" "$APP/Contents/Info.plist" 2>/dev/null || true   # gone already from a developer build
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 # TurnOver Key (Command+Control+Period starts and quits TurnOver): a login-item helper inside the bundle.
 # TurnOver Settings: the settings in a window, an app of its own inside TurnOver.app (18 Oct 2026).
@@ -254,7 +265,8 @@ if [ "$1" != "--no-install" ]; then
   # A Settings window left open from the copy being replaced: the new TurnOver turns it away (its signature is checked
   # against files no longer there) and it shows TurnOver as off until reopened (issue 77; again on 25 Oct 2026).
   pkill -x turnover-settings 2>/dev/null || true
-  pkill -f "com.turnover.key" 2>/dev/null || true
+  # Not for a developer build beside the published TurnOver: the published copy's helper answers the key for both.
+  if [ "$DEVELOPER" != 1 ] || [ ! -d "/Applications/TurnOver.app" ]; then pkill -f "com.turnover.key" 2>/dev/null || true; fi
   pkill -x turnover 2>/dev/null || true
   sleep 0.5
   rm -rf "$INSTALL"

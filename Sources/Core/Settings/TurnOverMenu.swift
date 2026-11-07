@@ -318,6 +318,8 @@ public final class TurnOverMenu {
         items.append(MenuItem("Help", .submenu { self.helpItems() }, hint: "The guide, about TurnOver, updates and previous builds"))
         items.append(Self.supportItem)
         items.append(contentsOf: extraItems)
+        // Your developer build beside the published TurnOver (issue 248, 7 Nov 2026): shown only when the other is installed.
+        if let item = DeveloperSwitch.menuItem { items.append(item) }
         items.append(MenuItem("Quit TurnOver", .action { Speech.speakMessage(String(localized: "TurnOver quitting", comment: "TurnOver is about to quit")); DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { (TurnOverMenu.shared.quit ?? { NSApp.terminate(nil) })() } },
                               hint: "VoiceOver takes over everywhere. Command Control Period starts TurnOver again"))
         return items

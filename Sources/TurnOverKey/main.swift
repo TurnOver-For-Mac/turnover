@@ -12,7 +12,15 @@ import TurnOverControl
 import TurnOverObjC
 
 // The reader this helper belongs to: TOReaderID in its Info.plist (build.sh writes it), else TurnOver's bundle id.
-let readerID = (Bundle.main.object(forInfoDictionaryKey: "TOReaderID") as? String) ?? "com.turnover.reader"
+let ownReaderID = (Bundle.main.object(forInfoDictionaryKey: "TOReaderID") as? String) ?? ActiveReader.published
+
+/// The reader the key starts and stops: the copy last started, when a developer build sits beside the published
+/// TurnOver and that copy is still installed (issue 248, 7 Nov 2026); otherwise the one this helper is inside.
+var readerID: String {
+    if let active = ActiveReader.recorded(), active != ownReaderID,
+       NSWorkspace.shared.urlForApplication(withBundleIdentifier: active) != nil { return active }
+    return ownReaderID
+}
 
 // One copy only.
 if NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bundleIdentifier ?? "com.turnover.key").count > 1 { exit(0) }
@@ -22,6 +30,8 @@ if NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bu
 /// A tester ran TurnOver from Downloads, moved it to Applications and deleted the first copy; the helper, started
 /// from the first copy, went on looking there and said TurnOver couldn't be found (5 Oct 2026).
 func readerApp() -> URL {
+    // The other copy (TurnOver Developer, or the published TurnOver) when it is the one in use.
+    if readerID != ownReaderID, let other = NSWorkspace.shared.urlForApplication(withBundleIdentifier: readerID) { return other }
     let inside = Bundle.main.bundleURL.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     if inside.pathExtension == "app", FileManager.default.fileExists(atPath: inside.appendingPathComponent("Contents/MacOS").path) { return inside }
     if let found = NSWorkspace.shared.urlForApplication(withBundleIdentifier: readerID) { return found }

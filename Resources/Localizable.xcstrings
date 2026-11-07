@@ -4256,6 +4256,9 @@
         }
       }
     },
+    "Could not switch: %@" : {
+      "comment" : "Switching between TurnOver copies failed"
+    },
     "Could not undo; it was already removed" : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -14008,6 +14011,12 @@
         }
       }
     },
+    "Switch to the published TurnOver" : {
+
+    },
+    "Switch to your developer build" : {
+
+    },
     "Switches back to browse mode" : {
       "comment" : "A command, as the key list and keyboard help say it",
       "localizations" : {
@@ -14084,6 +14093,12 @@
           }
         }
       }
+    },
+    "Switching to the published TurnOver." : {
+      "comment" : "TurnOver Developer is handing over to the published TurnOver"
+    },
+    "Switching to your developer build." : {
+      "comment" : "TurnOver is handing over to the contributor's own build"
     },
     "System" : {
       "comment" : "A group of commands in the key list",
@@ -15690,6 +15705,9 @@
           }
         }
       }
+    },
+    "TurnOver Developer, the copy you built, takes over. Switch back the same way at any time" : {
+
     },
     "TurnOver Down reads from here; TurnOver H moves by heading." : {
       "comment" : "A hint, said after a pause on an item",
