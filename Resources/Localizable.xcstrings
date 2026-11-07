@@ -5745,7 +5745,7 @@
         }
       }
     },
-    "Give it a name, a key, or keep it quiet. It works at once, and you can share it. TurnOver Shift Slash does the same" : {
+    "Give it a name, a key, or keep it quiet. It works at once, and you can share it. With VoiceOver keys, VO-Slash does the same" : {
 
     },
     "Give this item a key" : {
@@ -6909,6 +6909,7 @@
       }
     },
     "Label it, give it a key, read it when it changes, or keep it quiet. TurnOver Shift Slash does the same" : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -6917,6 +6918,9 @@
           }
         }
       }
+    },
+    "Label it, give it a key, read it when it changes, or keep it quiet. With VoiceOver keys, VO-Slash does the same" : {
+
     },
     "Label this item" : {
       "localizations" : {
@@ -15579,6 +15583,9 @@
           }
         }
       }
+    },
+    "To share it, open this list again and choose Share my changes." : {
+      "comment" : "Said after the first change made for an app"
     },
     "To the item under the pointer; moves object navigation to the item under the mouse pointer (NVDA+Shift+N)" : {
       "comment" : "A command, as the key list and keyboard help say it",

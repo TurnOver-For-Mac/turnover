@@ -121,6 +121,8 @@ public enum PluginMaker {
 
     static func encode<T: Encodable>(_ v: T) -> Data { let e = JSONEncoder(); e.outputFormatting = .sortedKeys; return (try? e.encode(v)) ?? Data() }
 
+    /// The apps whose sharing has been pointed out this session.
+    private static var toldHowToShare: Set<String> = []
     static func add(_ kind: String, bundle: String, appName: String, change: (inout Profile) -> Data) -> Bool {
         let (m, p0) = load(bundle: bundle, appName: appName)
         var p = p0
@@ -128,6 +130,13 @@ public enum PluginMaker {
         guard save(m, p, bundle: bundle) else { return false }
         history.append((bundle, appName, kind, json))
         Log.io("plugin maker: \(kind) added to My changes for \(appName)")
+        // Once per app each session, after what was saved is said: where sharing is (7 Nov 2026).
+        if !toldHowToShare.contains(bundle) {
+            toldHowToShare.insert(bundle)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                Speech.speakMessage(String(localized: "To share it, open this list again and choose Share my changes.", comment: "Said after the first change made for an app"))
+            }
+        }
         return true
     }
 
@@ -163,10 +172,11 @@ public enum PluginMaker {
             MenuItem("Give this item a key", .action { giveKey(e, pid: pid, bundle: bundle, appName: appName) }),
             MenuItem("Read this when it changes", .action { watch(e, pid: pid, bundle: bundle, appName: appName) }),
             MenuItem("Don't announce this", .action { silence(e, pid: pid, bundle: bundle, appName: appName) }),
-            MenuItem("Undo the last change", .action { undo() }),
-            MenuItem("My changes for \(appName)", .action { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { listChanges(bundle: bundle, appName: appName) } }),
+            // Sharing straight after the changes (7 Nov 2026: at the end of the list it went unfound).
             MenuItem("Share my changes for \(appName) on GitHub", .action { shareOnGitHub(bundle: bundle, appName: appName) },
                      hint: "Copies your changes and opens a short form in your browser. Accepted changes come with TurnOver for everyone. You need a free GitHub account"),
+            MenuItem("Undo the last change", .action { undo() }),
+            MenuItem("My changes for \(appName)", .action { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { listChanges(bundle: bundle, appName: appName) } }),
             MenuItem("Save my changes for \(appName) as a file", .action { share(bundle: bundle, appName: appName) },
                      hint: "A zip on the Desktop, to send to someone"),
         ]
