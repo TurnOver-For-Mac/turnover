@@ -10,7 +10,7 @@
 
 The sign-in screen read by Tab. No account was used for further testing, so library navigation, search and playback were not assessed.
 
-Spotify 1.3.6 on macOS 26.6.2: #226 records the volume shortcut conflict and the missing speech when the volume changes. The module forwards Command with an arrow and announces the requested playback command. Volume feedback also plays at the volume limits. The four shortcuts passed a listening trial on macOS 26.6.2.
+Spotify 1.3.6 on macOS 26.6.2: #226 records the missing feedback when the volume changes. Outside a text field, Command with an arrow forwards and announces the playback command in focus mode. Browse mode retains its document navigation, and the search combo box retains its caret commands. Volume feedback also plays at the volume limits.
 
 ## Evidence
 

@@ -13131,17 +13131,17 @@
         }
       }
     },
-    "Sends Spotify's next track shortcut and says next" : {
-      "comment" : "Spotify keyboard help"
+    "Sends Spotify's next track shortcut and says next track" : {
+      "comment" : "A command, as the key list and keyboard help say it"
     },
-    "Sends Spotify's previous track shortcut and says previous" : {
-      "comment" : "Spotify keyboard help"
+    "Sends Spotify's previous track shortcut and says previous track" : {
+      "comment" : "A command, as the key list and keyboard help say it"
     },
     "Sends Spotify's volume down shortcut and says quieter" : {
-      "comment" : "Spotify keyboard help"
+      "comment" : "A command, as the key list and keyboard help say it"
     },
     "Sends Spotify's volume up shortcut and says louder" : {
-      "comment" : "Spotify keyboard help"
+      "comment" : "A command, as the key list and keyboard help say it"
     },
     "Sends the command line to the shell" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -21866,7 +21866,7 @@
         }
       }
     },
-    "next" : {
+    "next track" : {
       "comment" : "Spotify next track shortcut"
     },
     "next item" : {
@@ -23905,7 +23905,7 @@
         }
       }
     },
-    "previous" : {
+    "previous track" : {
       "comment" : "Spotify previous track shortcut"
     },
     "previous item" : {

@@ -289,6 +289,7 @@ let package = Package(
                 "Apps/Slack/STATUS.md",
                 "Apps/Spotify/Experiments",
                 "Apps/Spotify/STATUS.md",
+                "Apps/Spotify/Tests",
                 "Apps/Spotlight/STATUS.md",
                 "Apps/Steam/STATUS.md",
                 "Apps/Stocks/Experiments",
