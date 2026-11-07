@@ -70,6 +70,7 @@ let coreSources: [String] = [
     "Apps/Panes/PanesAppModule.swift",
     "Apps/Photos/PhotosAppModule.swift",
     "Apps/Preview/PreviewAppModule.swift",
+    "Apps/Preview/PreviewAnnotations.swift",
     "Apps/Reminders/RemindersAppModule.swift",
     "Apps/Safari/SafariAppModule.swift",
     "Apps/Safari/SafariReplyEnvironment.swift",
