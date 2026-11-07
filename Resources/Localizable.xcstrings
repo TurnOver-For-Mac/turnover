@@ -6823,6 +6823,7 @@
     },
     "Keys in %@" : {
       "comment" : "A welcome page's title: %@ is the version",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -14850,6 +14851,9 @@
         }
       }
     },
+    "The keys" : {
+      "comment" : "A welcome page's title after an update"
+    },
     "The last item in the window (VO-Command-End)" : {
       "comment" : "A command, as the key list and keyboard help say it",
       "localizations" : {
@@ -17305,8 +17309,12 @@
         }
       }
     },
+    "Welcome to TurnOver" : {
+      "comment" : "The first welcome page's title"
+    },
     "Welcome to TurnOver %@" : {
       "comment" : "A welcome page's title: %@ is the version",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -17318,6 +17326,7 @@
     },
     "Welcome to TurnOver %@, build %@" : {
       "comment" : "A welcome page's title after an update: the version and build",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -17332,6 +17341,9 @@
           }
         }
       }
+    },
+    "Welcome to TurnOver build %@" : {
+      "comment" : "A welcome page's title after an update: the build"
     },
     "What TurnOver is and its keys" : {
       "localizations" : {
