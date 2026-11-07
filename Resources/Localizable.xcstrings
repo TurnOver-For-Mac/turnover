@@ -398,6 +398,16 @@
         }
       }
     },
+    "%@ helps you make the fix for %@, one step at a time, and checks with you before anything is sent. You need Xcode, Apple's free tool for building apps, and a free GitHub account; %@ helps you set them up. For three hours it may also try keys in %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ helps you make the fix for %2$@, one step at a time, and checks with you before anything is sent. You need Xcode, Apple's free tool for building apps, and a free GitHub account; %3$@ helps you set them up. For three hours it may also try keys in %4$@"
+          }
+        }
+      }
+    },
     "%@ hours" : {
       "comment" : "A battery's time: hours",
       "localizations" : {
@@ -548,6 +558,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Seçilen değil, %@ açık. Yeniden Return'e basın."
+          }
+        }
+      }
+    },
+    "%@ is opening in Terminal, with a folder about %@. It will ask you what goes wrong, and take you through the rest, one step at a time." : {
+      "comment" : "Help improve this app: an AI tool opened; the tool, then the app",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ is opening in Terminal, with a folder about %2$@. It will ask you what goes wrong, and take you through the rest, one step at a time."
           }
         }
       }
@@ -926,16 +947,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ tek başına %2$@ içinde yazı yazar. Verilmedi; bir değiştirici tuşla yeniden deneyin"
-          }
-        }
-      }
-    },
-    "%@ opens with a description of %@ and TurnOver's brief, and helps you make %@'s module and send it to the project. It asks you before anything is posted. For three hours it may also try keys in %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ opens with a description of %2$@ and TurnOver's brief, and helps you make %3$@'s module and send it to the project. It asks you before anything is posted. For three hours it may also try keys in %4$@"
           }
         }
       }
@@ -2459,10 +2470,10 @@
         }
       }
     },
-    "A folder describing %@ is open in Finder, and the guide to writing a module is open in your browser." : {
+    "A folder about %@ is open in Finder, and the guide to writing a module is open in your browser." : {
       "comment" : "Help improve this app: by hand; %@ is the app"
     },
-    "A folder describing %@, opened in Finder, and the guide to writing a module in your browser" : {
+    "A folder describing %@ opens in Finder, and the guide to writing a module opens in your browser. You need Xcode and a free GitHub account" : {
 
     },
     "A letter or digit with no command in browse mode: nothing" : {
@@ -2505,6 +2516,9 @@
           }
         }
       }
+    },
+    "A short form opens in your browser, already filled in with %@ and how it is built, never what is in it. You say what happens. Nothing to install; you need a free GitHub account" : {
+
     },
     "A sound" : {
       "localizations" : {
@@ -3649,6 +3663,9 @@
           }
         }
       }
+    },
+    "Claude Code is opening, with a folder about %@. Send the message that's typed in, and it will take you through the rest, one step at a time." : {
+      "comment" : "Help improve this app: Claude Code opened; %@ is the app"
     },
     "Clear" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -5307,6 +5324,9 @@
           }
         }
       }
+    },
+    "For when %@ needs something new from TurnOver itself. A short form opens in your browser, already filled in" : {
+
     },
     "Force quit" : {
       "localizations" : {
@@ -9580,17 +9600,6 @@
         }
       }
     },
-    "Opening %@ in Terminal, in a folder about %@. It will ask you what goes wrong." : {
-      "comment" : "Help improve this app: an AI tool opened; the tool, then the app",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Opening %1$@ in Terminal, in a folder about %2$@. It will ask you what goes wrong."
-          }
-        }
-      }
-    },
     "Opening %@ in Terminal, in the brief's folder. It will ask what is wrong in %@; it can check, try and install the plugin itself." : {
       "comment" : "Making a plugin with an AI tool: the tool, then the app",
       "localizations" : {
@@ -9607,9 +9616,6 @@
           }
         }
       }
-    },
-    "Opening Claude Code in a folder about %@. The request is typed in: send it, and Claude will ask you what goes wrong." : {
-      "comment" : "Help improve this app: Claude Code opened; %@ is the app"
     },
     "Opening Claude Code in the brief's folder. The request is typed in: finish the sentence with what is wrong in %@, and send. Claude can check and install the plugin itself." : {
       "comment" : "Making a plugin with Claude Code: %@ is the app",
@@ -9660,9 +9666,6 @@
           }
         }
       }
-    },
-    "Opens TurnOver's problem form in your browser, filled in with %@ and how it is built, never what is in it. You add what goes wrong. You need a GitHub account" : {
-
     },
     "Opens TurnOver's settings in its menu (JAWS: Insert+F2, Insert+6)" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -14556,9 +14559,6 @@
         }
       }
     },
-    "The building block form is open in your browser, filled in for %@. Say what the app needs, then submit it. You need a GitHub account." : {
-      "comment" : "Help improve this app: the building block form opened; %@ is the app"
-    },
     "The caption panel (VO-Command-F10)" : {
       "comment" : "A VoiceOver feature",
       "localizations" : {
@@ -14701,6 +14701,12 @@
           }
         }
       }
+    },
+    "The form is open in your browser, filled in for %@. Add what the app needs, then submit it. Thank you." : {
+      "comment" : "Help improve this app: the building block form opened; %@ is the app"
+    },
+    "The form is open in your browser, filled in for %@. Add what you did and what you heard, then submit it. Thank you." : {
+      "comment" : "Help improve this app: the problem form opened; %@ is the app"
     },
     "The guide is not in this copy of TurnOver" : {
       "comment" : "Spoken message",
@@ -15143,9 +15149,6 @@
           }
         }
       }
-    },
-    "The problem form is open in your browser, filled in for %@. Say what you did and what you heard, then submit it. You need a GitHub account." : {
-      "comment" : "Help improve this app: the problem form opened; %@ is the app"
     },
     "The rotor's next kind: headings, links, form controls, tables… (VO-Command-Right)" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -17380,16 +17383,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Yenilikler (değişiklik listesini Safari'de açar)"
-          }
-        }
-      }
-    },
-    "When %@ needs something TurnOver's core doesn't have yet. Opens the request form in your browser, filled in with %@ and how it is built" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "When %1$@ needs something TurnOver's core doesn't have yet. Opens the request form in your browser, filled in with %2$@ and how it is built"
           }
         }
       }

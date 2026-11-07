@@ -23,16 +23,16 @@ public enum HelpImprove {
     public static func menuItems(pid: pid_t, name: String) -> [MenuItem] {
         var items = [
             MenuItem("Tell us what's wrong in \(name)", .action { report(pid: pid, name: name, form: .problem) },
-                     hint: "Opens TurnOver's problem form in your browser, filled in with \(name) and how it is built, never what is in it. You add what goes wrong. You need a GitHub account"),
+                     hint: "A short form opens in your browser, already filled in with \(name) and how it is built, never what is in it. You say what happens. Nothing to install; you need a free GitHub account"),
         ]
         for ai in PluginAI.allCases where PluginAI.agentPath(ai) != nil || ai == .claude {
             items.append(MenuItem("Build it with \(ai.agentName)", .action { build(pid: pid, name: name, ai: ai) },
-                                  hint: "\(ai.agentName) opens with a description of \(name) and TurnOver's brief, and helps you make \(name)'s module and send it to the project. It asks you before anything is posted. For three hours it may also try keys in \(name)"))
+                                  hint: "\(ai.agentName) helps you make the fix for \(name), one step at a time, and checks with you before anything is sent. You need Xcode, Apple's free tool for building apps, and a free GitHub account; \(ai.agentName) helps you set them up. For three hours it may also try keys in \(name)"))
         }
         items.append(MenuItem("Build it myself", .action { build(pid: pid, name: name, ai: nil) },
-                              hint: "A folder describing \(name), opened in Finder, and the guide to writing a module in your browser"))
+                              hint: "A folder describing \(name) opens in Finder, and the guide to writing a module opens in your browser. You need Xcode and a free GitHub account"))
         items.append(MenuItem("Ask for a building block", .action { report(pid: pid, name: name, form: .buildingBlock) },
-                              hint: "When \(name) needs something TurnOver's core doesn't have yet. Opens the request form in your browser, filled in with \(name) and how it is built"))
+                              hint: "For when \(name) needs something new from TurnOver itself. A short form opens in your browser, already filled in"))
         return items
     }
 
@@ -91,8 +91,8 @@ public enum HelpImprove {
         Log.info("help improve: \(form == .problem ? "problem" : "building block") form for \(name)")
         NSWorkspace.shared.open(url)
         Speech.speakMessage(form == .problem
-            ? String(localized: "The problem form is open in your browser, filled in for \(name). Say what you did and what you heard, then submit it. You need a GitHub account.", comment: "Help improve this app: the problem form opened; %@ is the app")
-            : String(localized: "The building block form is open in your browser, filled in for \(name). Say what the app needs, then submit it. You need a GitHub account.", comment: "Help improve this app: the building block form opened; %@ is the app"))
+            ? String(localized: "The form is open in your browser, filled in for \(name). Add what you did and what you heard, then submit it. Thank you.", comment: "Help improve this app: the problem form opened; %@ is the app")
+            : String(localized: "The form is open in your browser, filled in for \(name). Add what the app needs, then submit it. Thank you.", comment: "Help improve this app: the building block form opened; %@ is the app"))
     }
 
     // MARK: Building it
@@ -124,7 +124,7 @@ public enum HelpImprove {
     }
 
     /// Off the main thread: the snapshot walks the window. Everything from the main actor comes in as arguments.
-    nonisolated static func write(pid: pid_t, name: String, bundle: String, report: String, base: URL, versions: String, brief: String) throws -> URL {
+    nonisolated package static func write(pid: pid_t, name: String, bundle: String, report: String, base: URL, versions: String, brief: String) throws -> URL {
         let stamp: String = { let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd HHmm"; return f.string(from: Date()) }()
         let safe = name.replacingOccurrences(of: "/", with: "-")
         let dir = base.appendingPathComponent("\(safe) \(stamp)", isDirectory: true)
@@ -136,8 +136,33 @@ public enum HelpImprove {
         \(versions)
 
         Follow TurnOver's brief for AI contributors, \(brief), to make or improve \(name)'s
-        module, with the person who opened this folder. Ask them first what goes wrong in \(name), and what they
-        hear. These files describe the app as TurnOver sees it:
+        module, with the person who opened this folder. They may never have done this before, and they're probably blind,
+        reading you with a screen reader. Work the way the brief's "How to work with them" says: one step at a time,
+        plain words, friendly without praise, honest about how long things take, and always a way to pause.
+
+        Start by asking what goes wrong in \(name), and what they hear.
+
+        Before you write any code, in TurnOver's repository:
+
+        - Read AGENTS.md (the rules every contributor follows) and MODULE-GUIDE.md (how modules work).
+        - Change only \(name)'s folder under Sources/Apps, its register line and its tests. Anything else is
+          TurnOver's core: ask for a building block instead (docs/BUILDING-BLOCKS.md).
+        - Before the pull request: ./build.sh must finish with every test passed, and
+          python3 Tools/check-module-fence.py origin/main --outside must say it's inside the fence. GitHub checks
+          both again on the pull request.
+
+        Before anything is installed, explain in a few plain sentences what this involves, and let them decide:
+
+        - They need Xcode (free from the App Store, but a very large download), a GitHub account, and you.
+        - Trying their module means installing the TurnOver they build in place of the one they have. It's signed
+          differently, so macOS may ask them to allow Accessibility and Input Monitoring again, and it doesn't
+          update itself.
+        - To go back afterwards: download TurnOver again from https://turnoverformac.com, replace the one in
+          Applications, and allow the permissions again if asked. Updates then come back.
+        - If that's more than they want, Tell us what's wrong (in TurnOver's menu, beside this) sends what they
+          know, and someone else can build it.
+
+        These files describe the app as TurnOver sees it:
 
         - report.txt: how \(name) is built (kinds of item and counts). It has no content, so it may be quoted in a
           public issue or pull request.
@@ -165,7 +190,7 @@ public enum HelpImprove {
                 Speech.speakMessage(String(localized: "Could not open the Claude app", comment: "Spoken message")); return
             }
             Log.info("help improve: Claude Code opened for \(name)")
-            Speech.speakMessage(String(localized: "Opening Claude Code in a folder about \(name). The request is typed in: send it, and Claude will ask you what goes wrong.", comment: "Help improve this app: Claude Code opened; %@ is the app"))
+            Speech.speakMessage(String(localized: "Claude Code is opening, with a folder about \(name). Send the message that's typed in, and it will take you through the rest, one step at a time.", comment: "Help improve this app: Claude Code opened; %@ is the app"))
             return
         }
         guard let agent = PluginAI.agentPath(ai) else { return }
@@ -180,13 +205,13 @@ public enum HelpImprove {
         }
         NSWorkspace.shared.open(script)
         Log.info("help improve: \(ai.agentName) opened for \(name)")
-        Speech.speakMessage(String(localized: "Opening \(ai.agentName) in Terminal, in a folder about \(name). It will ask you what goes wrong.", comment: "Help improve this app: an AI tool opened; the tool, then the app"))
+        Speech.speakMessage(String(localized: "\(ai.agentName) is opening in Terminal, with a folder about \(name). It will ask you what goes wrong, and take you through the rest, one step at a time.", comment: "Help improve this app: an AI tool opened; the tool, then the app"))
     }
 
     static func byHand(folder dir: URL, name: String) {
         NSWorkspace.shared.activateFileViewerSelecting([dir.appendingPathComponent("START.md")])
         NSWorkspace.shared.open(guideURL)
         Log.info("help improve: by hand for \(name), folder \(dir.lastPathComponent)")
-        Speech.speakMessage(String(localized: "A folder describing \(name) is open in Finder, and the guide to writing a module is open in your browser.", comment: "Help improve this app: by hand; %@ is the app"))
+        Speech.speakMessage(String(localized: "A folder about \(name) is open in Finder, and the guide to writing a module is open in your browser.", comment: "Help improve this app: by hand; %@ is the app"))
     }
 }

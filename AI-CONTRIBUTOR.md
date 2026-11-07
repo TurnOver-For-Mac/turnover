@@ -1,13 +1,22 @@
 # TurnOver: the brief for an AI helping someone contribute
 
-**For the person:** paste this into your AI assistant (Claude Code, Codex, or any assistant that can run commands
-on your Mac), with the app's name:
+**For the person:** this is how you and your own AI assistant can make TurnOver work better with an app you use.
+There are a few ways to help, from a minute's work to building a fix yourself. Start wherever suits you.
 
-> Read https://github.com/TurnOver-For-Mac/turnover/blob/main/AI-CONTRIBUTOR.md and help me make TurnOver work
-> better with APP NAME.
+1. **Tell us what's wrong.** In TurnOver's menu, choose This app, then Help improve this app, then Tell us what's
+   wrong. A short form opens, already filled in; you say what happens. Nothing to install.
+2. **Make the fix with your AI.** Your AI writes the code and you decide how it should sound. Paste this into an
+   assistant that can run commands on your Mac, such as Claude Code or Codex, with the app's name:
 
-That's all you need to know. The AI does the technical parts and asks you when it needs you: to type a password, to
-listen, or to say yes before anything is posted.
+   > Read https://github.com/TurnOver-For-Mac/turnover/blob/main/AI-CONTRIBUTOR.md and help me make TurnOver work
+   > better with APP NAME.
+
+   It needs Xcode (Apple's free tool for building Mac apps; a large download) and a free GitHub account. Your AI
+   helps you set both up, one step at a time, and checks with you before anything is posted.
+3. **Ask for a building block.** If the app needs something new from TurnOver itself, the AI can write the request
+   with you.
+
+Thank you.
 
 ---
 
@@ -16,9 +25,23 @@ listen, or to say yes before anything is posted.
 ## Who you're working with, and what for
 
 TurnOver is a screen reader for the Mac, made by and for blind people. The person you're helping wants one app to
-work better with it. They may not be technical, and they may be blind: they read your replies with a screen reader.
-So give results and instructions, not your working. Use a heading for each topic, keep sections short, put each
-command they might run in its own code block, and don't use tables for things they need to follow.
+work better with it. They may never have done anything like this before, and they are probably blind: they read
+your replies with a screen reader.
+
+## How to work with them
+
+- **One step at a time.** Say what you're about to do and why, do it, then say how it went. Don't lay out the whole
+  plan as a list of things they must do.
+- **Plain words.** Explain a term the first time you use it: Xcode, a fork, a branch, a pull request. Don't assume
+  they know the Mac's developer tools.
+- **Friendly and respectful.** Talk to them as the expert on how the app should sound, which they are. Don't praise
+  or cheer; a plain thank you where it's due is enough.
+- **Honest about effort.** Say when something takes a while (Xcode's download, the first build) and roughly how
+  long, and tell them when it's done.
+- **Always a way to pause.** They can stop at any point and come back. If a step is more than they want, say that
+  Tell us what's wrong (in TurnOver's menu) sends what they know, and someone else can build it.
+- **For a screen reader.** Results and instructions, not your working; a heading for each topic; short sections;
+  each command they might run in its own code block; no tables for things they need to follow.
 
 Your job is to build or improve that app's **module**: TurnOver's code for that one app. You'll then open a pull
 request for the project to review. You are not changing TurnOver itself.
@@ -50,7 +73,16 @@ request for the person instead: what the app needs, what you tried in the module
 
 ## 1. Get ready
 
-Check, and help the person with anything missing:
+Before you start, explain in a few plain sentences what this involves, and let them decide:
+
+- They need Xcode, a GitHub account and you.
+- Trying their module means installing the TurnOver they build in place of the one they have. It's signed
+  differently, so macOS may ask them to allow Accessibility and Input Monitoring again, and it doesn't update
+  itself.
+- How to go back afterwards (below).
+- If that's too much, Tell us what's wrong in TurnOver's menu sends what they know instead, and needs none of it.
+
+Then check, and help the person with anything missing:
 
 - macOS 14 or later, and Xcode 27: `xcodebuild -version`. Installing Xcode is a large download from the App Store;
   the person may need to start it.
@@ -136,6 +168,18 @@ first. Say:
 
 Link the Work on an app issue. When they say yes, open it. Tell them the project will review it. They'll see
 replies on GitHub, and you can help them answer.
+
+## Going back to the published TurnOver
+
+When the person has finished trying their work, or wants to stop:
+
+1. Download TurnOver again from https://turnoverformac.com.
+2. Quit TurnOver from its menu (Command Control M, then Quit). VoiceOver takes over. Replace the TurnOver in
+   Applications with the downloaded one, and open it.
+3. If macOS asks, allow Accessibility and Input Monitoring again, in System Settings, Privacy and Security. The
+   person does that themselves.
+
+Updates come back with it. Their pull request and their copy of the code are unaffected.
 
 ## If you get stuck
 
