@@ -334,3 +334,9 @@ The registered overnight suites exercise real owners/providers through public or
 (serial ownership, unique selection and actual native windows), and `SystemSettingsModuleTests` (part resolution,
 fresh focus/dialog guards, verified fallback and typed bounded labels). These do not establish audible speech
 quality, physical keyboard delivery, every live app page or VoiceOver-on parity. Record those checks separately.
+
+## Google editor document boundary
+
+`GoogleDocsTests` checks adapter delegation, focus/caret dispatch and Return word echo. `GoogleDocs.swift` is
+unchanged from main for this first boundary. Background polling and additional key pass-through are separate
+follow-ups. Run `turnover-tests "Google boundary" -v` and `turnover-tests "document adapters" -v` after building.

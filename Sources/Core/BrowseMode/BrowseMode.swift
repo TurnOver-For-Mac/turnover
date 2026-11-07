@@ -138,7 +138,7 @@ public final class BrowseModeDocument: ScriptableObject {
         position = at
         Log.io("browse mode: page \(Log.words(BrowseModeHandler.shortURL(now))) — resuming at \(position)\(saved == nil ? "" : " (saved \(saved!.offset))")")
         if announce, !buffer.lines.isEmpty { announcePage() }
-        GoogleDocs.checkSoon(self)
+        DocumentAdapters.shared.checkSoon(self)
         if !first, buffer.lines.isEmpty, webArea.role != "AXWebArea" { followReplacedRoot(tries: 10) }
         return true
     }
