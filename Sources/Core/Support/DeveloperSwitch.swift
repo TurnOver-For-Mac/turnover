@@ -24,10 +24,13 @@ public enum DeveloperSwitch {
     public static var menuItem: MenuItem? {
         guard let other else { return nil }
         let toDeveloper = other.id == ActiveReader.developer
-        return MenuItem(toDeveloper ? "Switch to your developer build" : "Switch to the published TurnOver",
+        // Each hint is its own String(localized:): the compiler listed only the first branch of a hint written as one
+        // conditional, so the second never reached the catalog (7 Nov 2026).
+        let hint = toDeveloper ? String(localized: "TurnOver Developer, the copy you built, takes over. Switch back the same way at any time")
+                               : String(localized: "The TurnOver everyone has takes over, with its updates. Your developer build stays installed")
+        return MenuItem(verbatim: toDeveloper ? String(localized: "Switch to your developer build") : String(localized: "Switch to the published TurnOver"),
                         .action { switchTo(other.id, at: other.url) },
-                        hint: toDeveloper ? "TurnOver Developer, the copy you built, takes over. Switch back the same way at any time"
-                                          : "The TurnOver everyone has takes over, with its updates. Your developer build stays installed")
+                        hint: hint)
     }
 
     static func switchTo(_ id: String, at url: URL) {
