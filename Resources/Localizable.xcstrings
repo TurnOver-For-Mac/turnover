@@ -2461,6 +2461,7 @@
     },
     "A few short pages: what's new and what to test. Next and Back move; Skip closes them. The details are in the TurnOver menu (Command Control Comma, then M), under What to test in build %@." : {
       "comment" : "A welcome page",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -2469,6 +2470,9 @@
           }
         }
       }
+    },
+    "A few short pages: what's new, and what to test.\nRead each page with the Up and Down arrows. Return goes to the next page, Escape skips the rest.\nThe details are in the TurnOver menu (Command Control Comma, then M), under What to test in build %@." : {
+      "comment" : "A welcome page"
     },
     "A folder about %@ is open in Finder, and the guide to writing a module is open in your browser." : {
       "comment" : "Help improve this app: by hand; %@ is the app"
@@ -3644,6 +3648,7 @@
     },
     "Choose the keys you know: VoiceOver's, NVDA's or JAWS's. Command Control Comma, then K, changes the style; the VO keys do what they do in VoiceOver. Command Control M opens the TurnOver menu. Every setting is in the Settings window: Command Control Comma, then S. To bring your VoiceOver voice and speed with you: Command Control Comma, then V." : {
       "comment" : "A welcome page",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -3809,8 +3814,12 @@
         }
       }
     },
+    "Command Control Comma, then H, opens the guides.\nIf TurnOver ever stops responding, VoiceOver comes on within a few seconds and TurnOver starts again.\nTo report a problem: Send feedback, in the TurnOver menu.\nTo help TurnOver read an app better: This app, then Help improve this app, in the TurnOver menu." : {
+      "comment" : "The last welcome page"
+    },
     "Command Control Period starts TurnOver and quits it, from anywhere. If TurnOver ever stops responding, VoiceOver comes on within a few seconds and TurnOver starts again. Command Control Comma, then H, opens the guides. To report a problem, use Send feedback in the TurnOver menu." : {
       "comment" : "A welcome page",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -3831,6 +3840,12 @@
           }
         }
       }
+    },
+    "Command Control Period turns TurnOver on and off, from anywhere.\nCommand Control Comma is the way in to everything: then M for the menu, S for Settings, K for your keyboard style, H for the guides.\nThe keys are VoiceOver's, NVDA's or JAWS's: Command Control Comma, then K, changes the style." : {
+      "comment" : "The welcome page about keys after an update"
+    },
+    "Command Control Period turns TurnOver on and off, from anywhere. When it's off, VoiceOver reads as usual.\nCommand Control Comma is the way in to everything. Press it, hear TurnOver, then a letter:\nM, the TurnOver menu.\nS, the Settings window.\nK, your keyboard style.\nH, the guides.\nPress Command Control Comma twice to hear every letter.\nCommand Control M opens the menu in one press." : {
+      "comment" : "A welcome page: the two keys"
     },
     "Command Down opens the item, Return renames it." : {
       "comment" : "A hint, said after a pause on an item",
@@ -5941,6 +5956,9 @@
         }
       }
     },
+    "Help, and helping" : {
+      "comment" : "A welcome page's title"
+    },
     "Higher (VoiceOver's higher speech pitch)" : {
       "comment" : "A command, as the key list and keyboard help say it",
       "localizations" : {
@@ -6808,6 +6826,7 @@
     },
     "Keys in %@" : {
       "comment" : "A welcome page's title: %@ is the version",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -8912,6 +8931,7 @@
     },
     "Next, TurnOver needs two permissions, %@ and Input Monitoring. macOS asks for the first. For the second, if no question appears, TurnOver shows you where to turn it on. Both are in System Settings, Privacy and Security." : {
       "comment" : "A welcome page: %@ is macOS's name for the Accessibility permission",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -8920,6 +8940,9 @@
           }
         }
       }
+    },
+    "Next, TurnOver needs two permissions: %@, and Input Monitoring.\nmacOS asks for the first.\nFor the second, if no question appears, TurnOver shows you where to turn it on.\nBoth are in System Settings, Privacy and Security." : {
+      "comment" : "A welcome page: the permissions; %@ is macOS's name for Accessibility"
     },
     "No" : {
       "localizations" : {
@@ -13707,6 +13730,7 @@
     },
     "Starting, quitting and help" : {
       "comment" : "A welcome page's title",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -14842,6 +14866,9 @@
         }
       }
     },
+    "The keys" : {
+      "comment" : "A welcome page's title after an update"
+    },
     "The last item in the window (VO-Command-End)" : {
       "comment" : "A command, as the key list and keyboard help say it",
       "localizations" : {
@@ -15752,6 +15779,9 @@
         }
       }
     },
+    "TurnOver and VoiceOver" : {
+      "comment" : "A welcome page's title"
+    },
     "TurnOver and VoiceOver swap: one comes on as the other goes off" : {
       "localizations" : {
         "tr" : {
@@ -15974,6 +16004,7 @@
     },
     "TurnOver is a full screen reader now: while it is on, it reads everything and VoiceOver is off. Command Control Period starts it and quits it.\n\nThe keys are VoiceOver's, NVDA's or JAWS's: Command Control Comma, then K, changes the style. Command Control M opens the TurnOver menu; Command Control Comma, then S, the Settings window." : {
       "comment" : "A welcome page",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -15983,8 +16014,12 @@
         }
       }
     },
+    "TurnOver is a screen reader for the Mac. It reads every app with its own voice, and the keys you already know.\nRead each page with the Up and Down arrows.\nTab reaches the buttons: Next, Back and Skip. Return goes to the next page, Escape skips the rest." : {
+      "comment" : "The first welcome page"
+    },
     "TurnOver is a screen reader for the Mac. It reads every app, with its own voice and the keys you already know. These few pages explain the start. Next and Back move between them." : {
       "comment" : "A welcome page",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -16224,6 +16259,9 @@
         }
       }
     },
+    "TurnOver speaks VoiceOver's keys, NVDA's or JAWS's. Command Control Comma, then K, moves between them.\nThe VO keys do what they do in VoiceOver." : {
+      "comment" : "A welcome page: keyboard styles"
+    },
     "TurnOver stopped unexpectedly. Restarting it." : {
       "comment" : "TurnOver Key: TurnOver crashed",
       "localizations" : {
@@ -16237,6 +16275,7 @@
     },
     "TurnOver takes over" : {
       "comment" : "A welcome page's title",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -16434,6 +16473,9 @@
           }
         }
       }
+    },
+    "Two keys to remember" : {
+      "comment" : "A welcome page's title"
     },
     "Two permissions" : {
       "comment" : "A welcome page's title",
@@ -17285,8 +17327,12 @@
         }
       }
     },
+    "Welcome to TurnOver" : {
+      "comment" : "The first welcome page's title"
+    },
     "Welcome to TurnOver %@" : {
       "comment" : "A welcome page's title: %@ is the version",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -17298,6 +17344,7 @@
     },
     "Welcome to TurnOver %@, build %@" : {
       "comment" : "A welcome page's title after an update: the version and build",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -17312,6 +17359,9 @@
           }
         }
       }
+    },
+    "Welcome to TurnOver build %@" : {
+      "comment" : "A welcome page's title after an update: the build"
     },
     "What TurnOver is and its keys" : {
       "localizations" : {
@@ -17482,6 +17532,7 @@
     },
     "While TurnOver is on, it reads everything and VoiceOver is off. TurnOver turns VoiceOver off as it starts and back on as it quits, so you are never without speech. To change that, Settings, Screen reader behaviour." : {
       "comment" : "A welcome page",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -17490,6 +17541,9 @@
           }
         }
       }
+    },
+    "While TurnOver is on, it reads everything, and VoiceOver is off.\nTurnOver turns VoiceOver off as it starts and back on as it quits, so you are never without speech. To change that: Settings, Screen reader behaviour.\nCommand Control Shift T gives the app in front to VoiceOver, or back to TurnOver, and remembers it." : {
+      "comment" : "A welcome page: TurnOver and VoiceOver"
     },
     "While playing: the next or previous slide, read" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -17686,7 +17740,7 @@
       }
     },
     "Your keys" : {
-      "comment" : "A group of commands in the key list",
+      "comment" : "A group of commands in the key list\nA welcome page's title",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
