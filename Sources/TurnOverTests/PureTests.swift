@@ -652,6 +652,22 @@ func pureTests() {
         expect(FormatField.name(ofColour: c(0, 0, 1)), "blue")
         expect(FormatField.name(ofColour: c(0.5, 0.5, 0.5)), "light grey")
     }
+    test("Help improve this app: the problem form is filled in with the app, the versions and the report") {
+        guard let url = HelpImprove.formURL(.problem, name: "Example", report: "Front window: 12 items", versions: "TurnOver 2.0 (build 23)"),
+              let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return Harness.fail("no address") }
+        let q = Dictionary(uniqueKeysWithValues: items.map { ($0.name, $0.value ?? "") })
+        expect(url.path, "/TurnOver-For-Mac/turnover/issues/new")
+        expect(q["template"], "problem.yml"); expect(q["app"], "Example"); expect(q["versions"], "TurnOver 2.0 (build 23)")
+        expect(q["report"]?.contains("Front window: 12 items"), true)
+        expect(Set(q.keys), ["template", "title", "app", "versions", "report"])   // nothing else goes in the address
+    }
+    test("Help improve this app: the building block form is filled in, and a long report is cut") {
+        guard let url = HelpImprove.formURL(.buildingBlock, name: "Example", report: String(repeating: "x", count: 5000), versions: ""),
+              let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return Harness.fail("no address") }
+        let q = Dictionary(uniqueKeysWithValues: items.map { ($0.name, $0.value ?? "") })
+        expect(q["template"], "building-block.yml"); expect(q["app"], "Example")
+        expect((q["tried"]?.count ?? 0) < 1700, true)
+    }
     test("VoiceOver export: the default voice, rate, volume, verbosity and typing echo are read; activities are ignored") {
         let plist: [String: Any] = ["ArchiveType": 1, "ArchiveVersionVO": 4, "export": [
             "allProfiles": [["profileInfo": ["profileName": "Safari"], "VoiceOverDefaultVoiceSelections": ["en", ["voiceId": "wrong.voice", "rate": 0.9]]]],
