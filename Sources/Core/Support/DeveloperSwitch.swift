@@ -37,10 +37,22 @@ public enum DeveloperSwitch {
             : String(localized: "Switching to the published TurnOver.", comment: "TurnOver Developer is handing over to the published TurnOver"))
         Log.info("switch: to \(id) at \(url.path)")
         // The launcher outlives this copy: it waits for it to go, then opens the other. (A child process is left
-        // running when its parent quits.)
+        // running when its parent quits.) Then the safety net: with the swap off (Oliver's Mac, 7 Nov 2026) quitting
+        // leaves VoiceOver off, so if the other copy hasn't started, or is waiting for its Accessibility permission
+        // (a first switch, before it was allowed), the launcher turns VoiceOver on. Never silence.
+        let logs = AppPaths.file("logs").path
+        let script = """
+        sleep 2
+        /usr/bin/open -g "$1"
+        sleep 8
+        newest=$(/bin/ls -t "$2"/turnover-*.log 2>/dev/null | /usr/bin/head -1)
+        if ! /usr/bin/pgrep -x turnover >/dev/null || /usr/bin/grep -q "waiting for the Accessibility grant" "$newest" 2>/dev/null; then
+          /usr/bin/open /System/Library/CoreServices/VoiceOver.app
+        fi
+        """
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/bin/sh")
-        p.arguments = ["-c", "sleep 2; /usr/bin/open -g \"$1\"", "switch", url.path]
+        p.arguments = ["-c", script, "switch", url.path, logs]
         p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
         do { try p.run() } catch {
             Log.error("switch: could not start the launcher: \(error.localizedDescription)")
