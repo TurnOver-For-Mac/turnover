@@ -257,6 +257,9 @@
         }
       }
     },
+    "%@ can't quit right now. A window may be waiting for an answer." : {
+      "comment" : "Spoken message: Alt F4 when the app's Quit is unavailable; the app's name"
+    },
     "%@ cannot be pressed" : {
       "comment" : "A dialog's choice could not be pressed: its name",
       "localizations" : {

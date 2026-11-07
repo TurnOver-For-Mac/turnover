@@ -695,8 +695,32 @@ public final class GlobalCommands: ScriptableObject {
             Speech.speakMessage(String(localized: "\(name) doesn't quit", comment: "Spoken message: Alt F4 in Finder, which can't be quit; the app's name"))
             return
         }
-        Log.io("quit: asking \(app.bundleIdentifier ?? name) to quit")
+        // The app's own Quit item first, pressed as a hand would choose it: Safari ignored both the quit request and
+        // the Command Q sent, and stayed open, where TextEdit quit (Oliver's trial, 7 Nov 2026).
+        // Its Quit item dimmed (Safari, 7 Nov 2026: a window waiting for an answer) means the app won't quit by any
+        // route, by hand included; it is said, rather than nothing happening.
+        switch pressQuitItem(app.processIdentifier) {
+        case .pressed: Log.io("quit: pressed \(app.bundleIdentifier ?? name)'s Quit item"); return
+        case .dimmed:
+            Log.io("quit: \(app.bundleIdentifier ?? name)'s Quit item is dimmed")
+            Speech.speakMessage(String(localized: "\(name) can't quit right now. A window may be waiting for an answer.", comment: "Spoken message: Alt F4 when the app's Quit is unavailable; the app's name"))
+            return
+        case .none: break
+        }
+        Log.io("quit: no Quit item to press; asking \(app.bundleIdentifier ?? name) to quit")
         if !app.terminate() { KeyboardGesture(identifier: "kb:command+q")?.send() }
+    }
+
+    enum QuitItem { case pressed, dimmed, none }
+    /// The item with Command Q in the app's own menu (the one after the Apple menu): pressed, dimmed, or not found.
+    @MainActor static func pressQuitItem(_ pid: pid_t) -> QuitItem {
+        let menus = AXUIElementCreateApplication(pid).element(kAXMenuBarAttribute)?.elements(kAXChildrenAttribute) ?? []
+        guard menus.count > 1, let menu = menus[1].elements(kAXChildrenAttribute).first else { return .none }
+        guard let item = menu.elements(kAXChildrenAttribute).first(where: {
+            $0.string("AXMenuItemCmdChar")?.uppercased() == "Q" && ($0.int("AXMenuItemCmdModifiers") ?? -1) == 0
+        }) else { return .none }
+        if (item.attr(kAXEnabledAttribute) as? Bool) == false { return .dimmed }
+        return AXUIElementPerformAction(item, kAXPressAction as CFString) == .success ? .pressed : .none
     }
 
     public static func toggleMenus() {
