@@ -74,6 +74,7 @@ let coreSources: [String] = [
     "Apps/Safari/SafariAppModule.swift",
     "Apps/Safari/SafariReplyEnvironment.swift",
     "Apps/Shortcuts/ShortcutsAppModule.swift",
+    "Apps/Spotify/SpotifyAppModule.swift",
     "Apps/Spotlight/SpotlightAppModule.swift",
     "Apps/SystemSettings/SystemSettingsAppModule.swift",
     "Apps/SystemSettings/SystemSettingsLabels.swift",
