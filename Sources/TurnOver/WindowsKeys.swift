@@ -109,8 +109,8 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // its state be
     private var swallowedUps = Set<Int64>()
     private var browse = false
     private var passNext = false
-    private var commandAlone = false, commandAt = Date.distantPast
-    private var optionAlone = false, optionCode: Int64 = 0, optionAt = Date.distantPast
+    private var loneCommand = LoneModifier()
+    private var loneOption = LoneModifier(), optionCode: Int64 = 0
 
     var isOn: Bool { thread != nil }
 
@@ -303,28 +303,27 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // its state be
         let flags = event.flags
         if type == .flagsChanged {
             if code == 57, KeySettings.current.capsIsTurnOver { return nil }   // Caps Lock's own event: the NVDA key
-            // The lone taps: Command alone the menu bar, left Option the Dock, right Option the shortcut menu.
+            // The lone taps: Command alone the menu bar, left Option the Dock, right Option the shortcut menu. Not while
+            // secure input is on: no key between is heard (LoneModifier).
+            let secure = IsSecureEventInputEnabled()
             if code == 55 || code == 54 {
-                if flags.contains(.maskCommand) { commandAlone = flags.intersection([.maskControl, .maskAlternate, .maskShift]).isEmpty && !capsDown; commandAt = Date() }
-                else {
-                    if commandAlone, Date().timeIntervalSince(commandAt) < 0.6 { Self.post(Target(code: 120, flags: .maskControl)) }
-                    commandAlone = false
-                }
-            } else { commandAlone = false }
+                if flags.contains(.maskCommand) { loneCommand.down(alone: flags.intersection([.maskControl, .maskAlternate, .maskShift]).isEmpty && !capsDown, secureInput: secure) }
+                else if loneCommand.up(secureInput: secure) { Self.post(Target(code: 120, flags: .maskControl)) }
+            } else { loneCommand.cancel() }
             if code == 58 || code == 61 {
                 if flags.contains(.maskAlternate) {
-                    optionAlone = flags.intersection([.maskControl, .maskCommand, .maskShift]).isEmpty && !capsDown && optionCode == 0
-                    optionCode = code; optionAt = Date()
+                    loneOption.down(alone: flags.intersection([.maskControl, .maskCommand, .maskShift]).isEmpty && !capsDown && optionCode == 0, secureInput: secure)
+                    optionCode = code
                 } else {
-                    if optionAlone, Date().timeIntervalSince(optionAt) < 0.6 {
+                    if loneOption.up(secureInput: secure) {
                         Self.post(optionCode == 61 ? Target(code: 46, flags: Self.vo.union(.maskShift)) : Target(code: 99, flags: .maskControl))
                     }
-                    optionAlone = false; optionCode = 0
+                    optionCode = 0
                 }
-            } else { optionAlone = false }
+            } else { loneOption.cancel() }
             return Unmanaged.passUnretained(event)
         }
-        commandAlone = false; optionAlone = false
+        loneCommand.cancel(); loneOption.cancel()
         if type == .keyUp {
             if swallowedUps.contains(code) { swallowedUps.remove(code); return nil }
             WindowsRemap.apply(type, event)
