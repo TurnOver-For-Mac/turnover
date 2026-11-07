@@ -8,6 +8,7 @@ import CoreGraphics
 import ApplicationServices
 import TurnOverCore
 import TurnOverSpeech
+import TurnOverControl
 import AXFixtures
 
 func pureTests() {
@@ -651,6 +652,12 @@ func pureTests() {
         expect(FormatField.name(ofColour: c(0.4, 0, 0)), "dark red")
         expect(FormatField.name(ofColour: c(0, 0, 1)), "blue")
         expect(FormatField.name(ofColour: c(0.5, 0.5, 0.5)), "light grey")
+    }
+    test("Developer switch: each copy's other is the other, and only TurnOver's two identifiers are recorded") {
+        expect(ActiveReader.other(than: ActiveReader.published), ActiveReader.developer)
+        expect(ActiveReader.other(than: ActiveReader.developer), ActiveReader.published)
+        expect(ActiveReader.published, "com.turnover.reader")
+        expect(ActiveReader.developer, "com.turnover.reader.developer")
     }
     test("Help improve this app: the problem form is filled in with the app, the versions and the report") {
         guard let url = HelpImprove.formURL(.problem, name: "Example", report: "Front window: 12 items", versions: "TurnOver 2.0 (build 23)"),

@@ -768,7 +768,8 @@ final class SettingsAppDelegate: NSObject, NSApplicationDelegate {
         // a window left open through an update showed TurnOver as off until reopened (build 22).
         Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { _ in
             MainActor.assumeIsolated {
-                let running = !NSRunningApplication.runningApplications(withBundleIdentifier: "com.turnover.reader").isEmpty
+                // Either copy, the published TurnOver or TurnOver Developer (issue 248).
+                let running = [ActiveReader.published, ActiveReader.developer].contains { !NSRunningApplication.runningApplications(withBundleIdentifier: $0).isEmpty }
                 Self.turnOverGoneChecks = running ? 0 : Self.turnOverGoneChecks + 1
                 if Self.turnOverGoneChecks >= 2 { NSApp.terminate(nil) }
             }

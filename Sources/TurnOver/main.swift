@@ -9,6 +9,7 @@ import ServiceManagement
 import ApplicationServices
 import IOKit.hid
 import TurnOverCore
+import TurnOverControl
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     fileprivate(set) var app: TurnOverApp?
@@ -254,6 +255,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// TurnOver Key (Command+Control+T starts and quits TurnOver) runs from login, apart from TurnOver: register it
     /// as a login item, and start it now if it is not running.
     private func startKeyHelper() {
+        // The copy that starts is the one in use: Command Control Period starts and stops it (issue 248, 7 Nov 2026).
+        let me = Bundle.main.bundleIdentifier ?? ActiveReader.published
+        ActiveReader.record(me)
+        // TurnOver Developer beside the published TurnOver: the published copy's helper answers the key for both, and
+        // this copy's never runs (only one program can hold the key, and the published copy's would be stopped as
+        // "another copy's" below). Started if it isn't running; not registered from here.
+        if me == ActiveReader.developer, NSWorkspace.shared.urlForApplication(withBundleIdentifier: ActiveReader.published) != nil {
+            guard NSRunningApplication.runningApplications(withBundleIdentifier: "com.turnover.key").isEmpty else {
+                Log.info("TurnOver Key: the published TurnOver's helper answers Command Control Period for this developer build")
+                return
+            }
+            let p = Process(); p.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+            p.arguments = ["kickstart", "gui/\(getuid())/com.turnover.key"]
+            p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
+            let started = (try? p.run()) != nil
+            Log.info("TurnOver Key: \(started ? "asked launchd to start" : "could not ask launchd to start") the published TurnOver's helper, for this developer build")
+            return
+        }
         // A helper from another copy of TurnOver (run from Downloads, then moved and deleted): it looks for
         // TurnOver in the wrong place. Stop it, and register and start this copy's.
         let mine = Bundle.main.bundleURL.appendingPathComponent("Contents/Library/LoginItems/TurnOver Key.app").standardizedFileURL.path
