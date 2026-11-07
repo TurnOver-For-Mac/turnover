@@ -13,6 +13,7 @@
 // Only what follows the start of the cursor's line is ever re-read, so a long scrollback costs
 // nothing.
 import Foundation
+import AppKit
 import ApplicationServices
 
 final class TerminalAppModule: AppModule {
@@ -20,8 +21,30 @@ final class TerminalAppModule: AppModule {
     override func objectClass(for element: AXUIElement, role: Role, subrole: String?) -> TurnOverObject.Type? {
         // (7 Oct 2026: Terminal no longer gives the subrole; the text area is still described as "shell".)
         if subrole == "AXTerminalTextArea" { return TerminalText.self }
-        return element.role == "AXTextArea" && element.string(kAXDescriptionAttribute) == "shell" ? TerminalText.self : nil
+        guard element.role == "AXTextArea", let description = element.string(kAXDescriptionAttribute) else { return nil }
+        // Terminal says "shell" in the language it runs in: "kabuk" on a Turkish Mac, where the module never came in
+        // (7 Nov 2026, macOS 27.2, Terminal 2.15: Return went to the edit field's script, new output wasn't read).
+        // iTerm2 says "shell".
+        return (bundleIdentifier == Self.bundleID ? Self.shellWords : ["shell"]).contains(description) ? TerminalText.self : nil
     }
+
+    /// Terminal's word for "shell" in each of its languages, from the table the description comes from (Accessibility:
+    /// that one word, in 42 languages, 21 different words; read once, about 18 ms; 7 Nov 2026, macOS 27.2). All of
+    /// them, not the one looked up for TurnOver: that lookup follows TurnOver's own language, and Terminal can run in
+    /// another (one set for it in System Settings). Before macOS 15.4 only that one (not tried); without the table,
+    /// "shell" alone.
+    static let shellWords: Set<String> = {
+        var words: Set<String> = ["shell"]
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID), let terminal = Bundle(url: url) else { return words }
+        if #available(macOS 15.4, *) {
+            for language in terminal.localizations {
+                words.insert(terminal.localizedString(forKey: "shell", value: "shell", table: "Accessibility", localizations: [Locale.Language(identifier: language)]))
+            }
+        } else {
+            words.insert(terminal.localizedString(forKey: "shell", value: "shell", table: "Accessibility"))
+        }
+        return words
+    }()
 }
 
 final class TerminalText: TurnOverObject {
