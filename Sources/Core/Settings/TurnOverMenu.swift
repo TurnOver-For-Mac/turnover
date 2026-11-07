@@ -433,9 +433,10 @@ public final class TurnOverMenu {
                 items.append(MenuItem("Change the item I'm on", .action { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { PluginMaker.open() } },
                                       hint: "Label it, give it a key, read it when it changes, or keep it quiet. TurnOver Shift Slash does the same"))
             }
-            if !Edition.isVerified(bundle) {
-                items.append(MenuItem("Ask for \(name) to be tuned", .action { AppRequest.request() }, hint: "Finds what the app is built with and writes the request for you, by email. (Plugins are parked for now.)"))
-            }
+            // Help improve this app (7 Nov 2026): tell the project what's wrong, build the app's module with your own AI
+            // or by hand, or ask for a building block. It took over from Ask for this app to be tuned, which emailed.
+            items.append(MenuItem("Help improve \(name)", .submenu { HelpImprove.menuItems(pid: pid, name: name) },
+                                  hint: "Tell the project what's wrong, build \(name)'s module with your AI or by hand, or ask for something TurnOver needs"))
             return items
         })
     }
