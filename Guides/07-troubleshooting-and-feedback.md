@@ -26,8 +26,9 @@ Command Option Escape lists the running apps: choose one, then force quit it, as
   opens on GitHub with your build and Mac filled in. Say in a sentence what you were doing and what you expected, and
   drag the report in if you like. Reports on GitHub are public: choose the report without what TurnOver said if
   anything private was on screen.
-- To ask for an app: switch to it, then the TurnOver menu, This app, Ask for it to be tuned. The request form opens
-  on GitHub, filled in with how the app is built (never what's in it).
+- To help with an app: switch to it, then the TurnOver menu, This app, Help improve this app. Tell us what's wrong
+  opens the form on GitHub, filled in with how the app is built (never what's in it). There's more in
+  [Helping TurnOver read your apps](helping-turnover.html).
 - You need a free GitHub account to post. TurnOver is a spare-time project: every report is read, but replies may
   take a while.
 
