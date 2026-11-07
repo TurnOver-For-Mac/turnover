@@ -65,6 +65,12 @@
             "state" : "new",
             "value" : "%1$@ %2$@. The harbour opens at nine."
           }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ %2$@. Liman dokuzda açılır."
+          }
         }
       }
     },
@@ -108,10 +114,26 @@
       }
     },
     "%@ and a half stars" : {
-      "comment" : "An app's rating in the catalog: %@ is the whole number of stars, in words"
+      "comment" : "An app's rating in the catalog: %@ is the whole number of stars, in words",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ buçuk yıldız"
+          }
+        }
+      }
     },
     "%@ and a quarter stars" : {
-      "comment" : "An app's rating in the catalog: %@ is the whole number of stars, in words"
+      "comment" : "An app's rating in the catalog: %@ is the whole number of stars, in words",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ve çeyrek yıldız"
+          }
+        }
+      }
     },
     "%@ and others" : {
       "comment" : "Some of many keys: %@ is the first eight",
@@ -125,7 +147,15 @@
       }
     },
     "%@ and three quarter stars" : {
-      "comment" : "An app's rating in the catalog: %@ is the whole number of stars, in words"
+      "comment" : "An app's rating in the catalog: %@ is the whole number of stars, in words",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ve üç çeyrek yıldız"
+          }
+        }
+      }
     },
     "%@ app connections, %@ lines heard." : {
       "comment" : "The speech port's status",
@@ -335,7 +365,15 @@
       }
     },
     "%@ decibels" : {
-      "comment" : "An EQ slider's value"
+      "comment" : "An EQ slider's value",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ desibel"
+          }
+        }
+      }
     },
     "%@ dialog" : {
       "comment" : "A dialog in front: %@ is its app (Windows style)",
@@ -404,6 +442,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@ helps you make the fix for %2$@, one step at a time, and checks with you before anything is sent. You need Xcode, Apple's free tool for building apps, and a free GitHub account; %3$@ helps you set them up. For three hours it may also try keys in %4$@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %2$@ için düzeltmeyi adım adım yapmanıza yardım eder ve bir şey gönderilmeden önce size sorar. Apple'ın uygulama geliştirmek için ücretsiz aracı Xcode'a ve ücretsiz bir GitHub hesabına ihtiyacınız var; %3$@ bunları kurmanıza yardım eder. Üç saat boyunca %4$@ uygulamasında tuş da deneyebilir"
           }
         }
       }
@@ -569,6 +613,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@ is opening in Terminal, with a folder about %2$@. It will ask you what goes wrong, and take you through the rest, one step at a time."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %2$@ hakkında bir klasörle Terminal'de açılıyor. Neyin yanlış gittiğini size soracak ve gerisinde adım adım yol gösterecek."
           }
         }
       }
@@ -1139,7 +1189,15 @@
       }
     },
     "%@ stars" : {
-      "comment" : "An app's rating in the catalog: %@ is the number of stars, in words"
+      "comment" : "An app's rating in the catalog: %@ is the number of stars, in words",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ yıldız"
+          }
+        }
+      }
     },
     "%@ submenu" : {
       "comment" : "A submenu opened: its name",
@@ -1197,7 +1255,15 @@
       }
     },
     "%@ ticked for VO-Command-Shift." : {
-      "comment" : "Speech settings"
+      "comment" : "Speech settings",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VO-Komut-Shift için %@ işaretli."
+          }
+        }
+      }
     },
     "%@ to %@" : {
       "comment" : "A run of letter keys: a to z",
@@ -1387,6 +1453,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@, %2$@ ratings"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %2$@ değerlendirme"
           }
         }
       }
@@ -2138,7 +2210,15 @@
       }
     },
     ", comes with TurnOver" : {
-      "comment" : "A plugin that ships inside TurnOver"
+      "comment" : "A plugin that ships inside TurnOver",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ", TurnOver ile gelir"
+          }
+        }
+      }
     },
     ", for %@" : {
       "comment" : "The apps a settings profile is for",
@@ -2416,7 +2496,14 @@
       }
     },
     "25 English voices made on your Mac. They download once, from Hugging Face; nothing you read or type leaves your Mac." : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mac'inizde üretilen 25 İngilizce ses. Hugging Face'ten bir kez indirilir; okuduğunuz ya da yazdığınız hiçbir şey Mac'inizden çıkmaz."
+          }
+        }
+      }
     },
     "A TurnOver update has downloaded. It installs when TurnOver next quits, or now from the TurnOver menu, About and updates, Updates." : {
       "comment" : "Spoken message",
@@ -2475,13 +2562,36 @@
       }
     },
     "A few short pages: what's new, and what to test.\nRead each page with the Up and Down arrows. Return goes to the next page, Escape skips the rest.\nThe details are in the TurnOver menu (Command Control Comma, then M), under What to test in build %@." : {
-      "comment" : "A welcome page"
+      "comment" : "A welcome page",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Birkaç kısa sayfa: yenilikler ve denenecekler.\nHer sayfayı Yukarı ve Aşağı Ok ile okuyun. Return sonraki sayfaya gider, Esc kalanını atlar.\nAyrıntılar TurnOver menüsünde (Komut Kontrol Ö, sonra M), %@ yapısında denenecekler altında."
+          }
+        }
+      }
     },
     "A folder about %@ is open in Finder, and the guide to writing a module is open in your browser." : {
-      "comment" : "Help improve this app: by hand; %@ is the app"
+      "comment" : "Help improve this app: by hand; %@ is the app",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ hakkında bir klasör Finder'da açık, modül yazma kılavuzu da tarayıcınızda açık."
+          }
+        }
+      }
     },
     "A folder describing %@ opens in Finder, and the guide to writing a module opens in your browser. You need Xcode and a free GitHub account" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ uygulamasını anlatan bir klasör Finder'da, modül yazma kılavuzu da tarayıcınızda açılır. Xcode'a ve ücretsiz bir GitHub hesabına ihtiyacınız var"
+          }
+        }
+      }
     },
     "A letter or digit with no command in browse mode: nothing" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -2525,7 +2635,14 @@
       }
     },
     "A short form opens in your browser, already filled in with %@ and how it is built, never what is in it. You say what happens. Nothing to install; you need a free GitHub account" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tarayıcınızda kısa bir form açılır; %@ ve nasıl yapıldığı önceden doldurulmuştur, içindekiler asla. Neler olduğunu siz yazarsınız. Kurulacak bir şey yok; ücretsiz bir GitHub hesabına ihtiyacınız var"
+          }
+        }
+      }
     },
     "A sound" : {
       "localizations" : {
@@ -2586,7 +2703,14 @@
       }
     },
     "A zip on the Desktop, to send to someone" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Masaüstünde, birine göndermek için bir zip dosyası"
+          }
+        }
+      }
     },
     "AIs can no longer try keys in any app." : {
       "comment" : "Spoken message",
@@ -3014,7 +3138,14 @@
       }
     },
     "Ask for a building block" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yapı taşı iste"
+          }
+        }
+      }
     },
     "Asked %@ to quit" : {
       "comment" : "An app asked to quit: its name",
@@ -3135,19 +3266,56 @@
       }
     },
     "Beep" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bip sesi"
+          }
+        }
+      }
     },
     "Beep and speak" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bip sesi ve yüzde"
+          }
+        }
+      }
     },
     "Beep and speak progress bar updates" : {
-      "comment" : "The progress bar setting (NVDA+U): beeps and the percentage"
+      "comment" : "The progress bar setting (NVDA+U): beeps and the percentage",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İlerleme çubuğu güncellemelerini bip sesiyle ve sözle bildir"
+          }
+        }
+      }
     },
     "Beep for progress bar updates" : {
-      "comment" : "The progress bar setting (NVDA+U): beeps that rise in pitch"
+      "comment" : "The progress bar setting (NVDA+U): beeps that rise in pitch",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İlerleme çubuğu güncellemelerini bip sesiyle bildir"
+          }
+        }
+      }
     },
     "Beeps that rise in pitch as a progress bar moves, the percentage spoken, both, or nothing" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İlerleme çubuğu ilerledikçe tizleşen bip sesleri, söylenen yüzde, ikisi ya da hiçbiri"
+          }
+        }
+      }
     },
     "Before the words, as NVDA" : {
       "localizations" : {
@@ -3360,10 +3528,24 @@
       }
     },
     "Build it myself" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kendim yapayım"
+          }
+        }
+      }
     },
     "Build it with %@" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ile yap"
+          }
+        }
+      }
     },
     "Buttons" : {
       "comment" : "A rotor kind",
@@ -3676,7 +3858,15 @@
       }
     },
     "Claude Code is opening, with a folder about %@. Send the message that's typed in, and it will take you through the rest, one step at a time." : {
-      "comment" : "Help improve this app: Claude Code opened; %@ is the app"
+      "comment" : "Help improve this app: Claude Code opened; %@ is the app",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude Code, %@ hakkında bir klasörle açılıyor. Yazılı duran mesajı gönderin; gerisinde size adım adım yol gösterecek."
+          }
+        }
+      }
     },
     "Clear" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -3821,7 +4011,15 @@
       }
     },
     "Command Control Comma, then H, opens the guides.\nIf TurnOver ever stops responding, VoiceOver comes on within a few seconds and TurnOver starts again.\nTo report a problem: Send feedback, in the TurnOver menu.\nTo help TurnOver read an app better: This app, then Help improve this app, in the TurnOver menu." : {
-      "comment" : "The last welcome page"
+      "comment" : "The last welcome page",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Komut Kontrol Ö, sonra H kılavuzları açar.\nTurnOver yanıt vermeyi bırakırsa birkaç saniye içinde VoiceOver açılır ve TurnOver yeniden başlar.\nBir sorunu bildirmek için: TurnOver menüsünde Geri bildirim gönder.\nTurnOver'ın bir uygulamayı daha iyi okumasına yardım etmek için: TurnOver menüsünde Bu uygulama, sonra bu uygulamayı iyileştirmeye yardım et."
+          }
+        }
+      }
     },
     "Command Control Period starts TurnOver and quits it, from anywhere. If TurnOver ever stops responding, VoiceOver comes on within a few seconds and TurnOver starts again. Command Control Comma, then H, opens the guides. To report a problem, use Send feedback in the TurnOver menu." : {
       "comment" : "A welcome page",
@@ -3848,10 +4046,26 @@
       }
     },
     "Command Control Period turns TurnOver on and off, from anywhere.\nCommand Control Comma is the way in to everything: then M for the menu, S for Settings, K for your keyboard style, H for the guides.\nThe keys are VoiceOver's, NVDA's or JAWS's: Command Control Comma, then K, changes the style." : {
-      "comment" : "The welcome page about keys after an update"
+      "comment" : "The welcome page about keys after an update",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Komut Kontrol Ç TurnOver'ı her yerden açıp kapatır.\nKomut Kontrol Ö her şeye giden yoldur: sonra menü için M, Ayarlar için S, klavye stiliniz için K, kılavuzlar için H.\nTuşlar VoiceOver'ınkiler, NVDA'nınkiler ya da JAWS'ınkiler: Komut Kontrol Ö, sonra K stili değiştirir."
+          }
+        }
+      }
     },
     "Command Control Period turns TurnOver on and off, from anywhere. When it's off, VoiceOver reads as usual.\nCommand Control Comma is the way in to everything. Press it, hear TurnOver, then a letter:\nM, the TurnOver menu.\nS, the Settings window.\nK, your keyboard style.\nH, the guides.\nPress Command Control Comma twice to hear every letter.\nCommand Control M opens the menu in one press." : {
-      "comment" : "A welcome page: the two keys"
+      "comment" : "A welcome page: the two keys",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Komut Kontrol Ç TurnOver'ı her yerden açıp kapatır. Kapalıyken VoiceOver her zamanki gibi okur.\nKomut Kontrol Ö her şeye giden yoldur. Basın, TurnOver'ı duyun, sonra bir harfe basın:\nM, TurnOver menüsü.\nS, Ayarlar penceresi.\nK, klavye stiliniz.\nH, kılavuzlar.\nTüm harfleri duymak için Komut Kontrol Ö'ye iki kez basın.\nKomut Kontrol M menüyü tek basışta açar."
+          }
+        }
+      }
     },
     "Command Down opens the item, Return renames it." : {
       "comment" : "A hint, said after a pause on an item",
@@ -4101,7 +4315,14 @@
       }
     },
     "Copies your changes and opens a short form in your browser. Accepted changes come with TurnOver for everyone. You need a free GitHub account" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Değişikliklerinizi kopyalar ve tarayıcınızda kısa bir form açar. Kabul edilen değişiklikler herkes için TurnOver ile gelir. Ücretsiz bir GitHub hesabına ihtiyacınız var"
+          }
+        }
+      }
     },
     "Copy" : {
       "localizations" : {
@@ -4178,7 +4399,15 @@
       }
     },
     "Could not make the folder: %@" : {
-      "comment" : "Help improve this app: the folder could not be written"
+      "comment" : "Help improve this app: the folder could not be written",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Klasör oluşturulamadı: %@"
+          }
+        }
+      }
     },
     "Could not open the Claude app" : {
       "comment" : "Spoken message",
@@ -4281,7 +4510,15 @@
       }
     },
     "Could not switch: %@" : {
-      "comment" : "Switching between TurnOver copies failed"
+      "comment" : "Switching between TurnOver copies failed",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geçiş yapılamadı: %@"
+          }
+        }
+      }
     },
     "Could not undo; it was already removed" : {
       "comment" : "Spoken message",
@@ -4437,7 +4674,14 @@
       }
     },
     "Deletes the downloaded natural voices, about 170 MB, and goes back to your Mac voice." : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İndirilen doğal sesleri (yaklaşık 170 MB) siler ve Mac sesinize döner."
+          }
+        }
+      }
     },
     "Deletes the tab stop on a ruler (VO-Backspace)" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -4534,7 +4778,15 @@
       }
     },
     "Describes the image or photo; anywhere else, what the window looks like (VO-Shift-L)" : {
-      "comment" : "A command, as the key list and keyboard help say it"
+      "comment" : "A command, as the key list and keyboard help say it",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resmi ya da fotoğrafı betimler; başka her yerde pencerenin nasıl göründüğünü (VO-Shift-L)"
+          }
+        }
+      }
     },
     "Describes the item with keyboard focus; twice, more about it (in text, where the insertion point is) (VO-F4, VO-F4-F4)" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -4560,10 +4812,26 @@
       }
     },
     "Describes the picture under TurnOver's cursor: what it shows and any text in it; anywhere else, what the window looks like" : {
-      "comment" : "A command, as the key list and keyboard help say it"
+      "comment" : "A command, as the key list and keyboard help say it",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TurnOver imlecinin altındaki resmi betimler: ne gösterdiğini ve içindeki metni; başka her yerde pencerenin nasıl göründüğünü"
+          }
+        }
+      }
     },
     "Describing a window needs the Mac's own model, with Apple Intelligence on. %@ reads its text." : {
-      "comment" : "Spoken message: %@ is the key for screen recognition"
+      "comment" : "Spoken message: %@ is the key for screen recognition",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bir pencereyi betimlemek için Apple Intelligence açıkken Mac'in kendi modeli gerekir. %@ metnini okur."
+          }
+        }
+      }
     },
     "Desktop, the number pad has its NVDA keys" : {
       "localizations" : {
@@ -4835,13 +5103,35 @@
       }
     },
     "Download natural voices, about 170 MB" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Doğal sesleri indir, yaklaşık 170 MB"
+          }
+        }
+      }
     },
     "Downloading the natural voices, about 170 MB. TurnOver will say when they're ready." : {
-      "comment" : "Said when the natural voices start downloading"
+      "comment" : "Said when the natural voices start downloading",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Doğal sesler indiriliyor, yaklaşık 170 MB. Hazır olduklarında TurnOver söyleyecek."
+          }
+        }
+      }
     },
     "Downloading the natural voices…" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Doğal sesler indiriliyor…"
+          }
+        }
+      }
     },
     "Duck when outputting speech" : {
       "comment" : "An audio ducking mode",
@@ -5282,7 +5572,14 @@
       }
     },
     "Fix the item I'm on" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Üzerinde olduğum öğeyi düzelt"
+          }
+        }
+      }
     },
     "Fn is not available from the display yet" : {
       "comment" : "Spoken message",
@@ -5356,7 +5653,14 @@
       }
     },
     "For when %@ needs something new from TurnOver itself. A short form opens in your browser, already filled in" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ için TurnOver'ın kendisinden yeni bir şey gerektiğinde. Tarayıcınızda önceden doldurulmuş kısa bir form açılır"
+          }
+        }
+      }
     },
     "Force quit" : {
       "localizations" : {
@@ -5746,7 +6050,14 @@
       }
     },
     "Give it a name, a key, or keep it quiet. It works at once, and you can share it. With VoiceOver keys, VO-Slash does the same" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bir ad ya da tuş verin veya susturun. Hemen çalışır ve paylaşabilirsiniz. VoiceOver tuşlarıyla VO-Eğik Çizgi de aynısını yapar"
+          }
+        }
+      }
     },
     "Give this item a key" : {
       "localizations" : {
@@ -5948,7 +6259,14 @@
       }
     },
     "Help improve %@" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ uygulamasını iyileştirmeye yardım et"
+          }
+        }
+      }
     },
     "Help text" : {
       "comment" : "A piece of an item's announcement, in the reading order",
@@ -5972,7 +6290,15 @@
       }
     },
     "Help, and helping" : {
-      "comment" : "A welcome page's title"
+      "comment" : "A welcome page's title",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yardım ve yardımcı olmak"
+          }
+        }
+      }
     },
     "Higher (VoiceOver's higher speech pitch)" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -6178,6 +6504,28 @@
         }
       }
     },
+    "In a sheet: the next control, its buttons included" : {
+      "comment" : "A command, as the key list and keyboard help say it",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bir sayfada: düğmeleri de dahil sonraki denetim"
+          }
+        }
+      }
+    },
+    "In a sheet: the previous control, its buttons included" : {
+      "comment" : "A command, as the key list and keyboard help say it",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bir sayfada: düğmeleri de dahil önceki denetim"
+          }
+        }
+      }
+    },
     "In a table, the column header (twice, the column from here down); elsewhere the character (twice, phonetically) (VO-C, VO-C-C)" : {
       "comment" : "A command, as the key list and keyboard help say it",
       "localizations" : {
@@ -6365,7 +6713,15 @@
       }
     },
     "In the rotor" : {
-      "comment" : "A switch in Speech settings, under Voice: the voice chosen there is one VO-Command-Shift steps through"
+      "comment" : "A switch in Speech settings, under Voice: the voice chosen there is one VO-Command-Shift steps through",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rotorda"
+          }
+        }
+      }
     },
     "Input Monitoring is on. TurnOver is ready." : {
       "comment" : "Spoken message",
@@ -6920,7 +7276,14 @@
       }
     },
     "Label it, give it a key, read it when it changes, or keep it quiet. With VoiceOver keys, VO-Slash does the same" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Etiketleyin, bir tuş verin, değişince okutun ya da susturun. VoiceOver tuşlarıyla VO-Eğik Çizgi de aynısını yapar"
+          }
+        }
+      }
     },
     "Label this item" : {
       "localizations" : {
@@ -7284,10 +7647,25 @@
       }
     },
     "Mac voices" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mac sesleri"
+          }
+        }
+      }
     },
     "Mac voices in the rotor" : {
-      "comment" : "A group in Speech settings"
+      "comment" : "A group in Speech settings",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rotordaki Mac sesleri"
+          }
+        }
+      }
     },
     "Mail" : {
       "comment" : "A group of commands in the key list",
@@ -8627,7 +9005,14 @@
       }
     },
     "Natural voice" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Doğal ses"
+          }
+        }
+      }
     },
     "Natural voice speed" : {
       "extractionState" : "stale",
@@ -8641,13 +9026,36 @@
       }
     },
     "Natural voices" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Doğal sesler"
+          }
+        }
+      }
     },
     "Natural voices in the rotor" : {
-      "comment" : "A group in Speech settings"
+      "comment" : "A group in Speech settings",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rotordaki doğal sesler"
+          }
+        }
+      }
     },
     "Natural voices removed. TurnOver speaks with %@." : {
-      "comment" : "Said when the natural voices are removed: %@ is the Mac voice"
+      "comment" : "Said when the natural voices are removed: %@ is the Mac voice",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Doğal sesler kaldırıldı. TurnOver %@ ile konuşuyor."
+          }
+        }
+      }
     },
     "Never" : {
       "localizations" : {
@@ -8961,7 +9369,15 @@
       }
     },
     "Next, TurnOver needs two permissions: %@, and Input Monitoring.\nmacOS asks for the first.\nFor the second, if no question appears, TurnOver shows you where to turn it on.\nBoth are in System Settings, Privacy and Security." : {
-      "comment" : "A welcome page: the permissions; %@ is macOS's name for Accessibility"
+      "comment" : "A welcome page: the permissions; %@ is macOS's name for Accessibility",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sırada TurnOver'ın iki izne ihtiyacı var: %@ ve Giriş İzleme.\nBirincisini macOS sorar.\nİkincisi için soru çıkmazsa TurnOver nereden açacağınızı gösterir.\nİkisi de Sistem Ayarları, Gizlilik ve Güvenlik'te."
+          }
+        }
+      }
     },
     "No" : {
       "localizations" : {
@@ -9091,7 +9507,15 @@
       }
     },
     "No progress bar updates" : {
-      "comment" : "The progress bar setting (NVDA+U): nothing"
+      "comment" : "The progress bar setting (NVDA+U): nothing",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İlerleme çubuğu güncellemelerini bildirme"
+          }
+        }
+      }
     },
     "No starter folder found. Choose Write a plugin yourself, or Make a plugin, first." : {
       "comment" : "Spoken message",
@@ -9135,7 +9559,15 @@
       }
     },
     "None ticked, VO-Command-Shift steps through every voice. Tick the ones you want." : {
-      "comment" : "Speech settings"
+      "comment" : "Speech settings",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hiçbiri işaretli değilse VO-Komut-Shift tüm seslerde gezinir. İstediklerinizi işaretleyin."
+          }
+        }
+      }
     },
     "None yet" : {
       "localizations" : {
@@ -9317,6 +9749,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Nothing in this window can be read. Press %1$@ to recognise its text, or %2$@ to describe it."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu pencerede okunabilecek bir şey yok. Metnini tanımak için %1$@, betimlemek için %2$@ tuşuna basın."
           }
         }
       }
@@ -10339,7 +10777,14 @@
       }
     },
     "Press the screen recognition key twice (VO-Shift-Y, or TurnOver R) for the window's controls: each row is one, such as \"Save, button\", and Return clicks it. Pressed once, it reads the text." : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pencerenin denetimleri için ekran tanıma tuşuna iki kez basın (VO-Shift-Y ya da TurnOver R): her satır bir denetimdir, örneğin \"Kaydet, düğme\", ve Return ona tıklar. Bir kez basılınca metni okur."
+          }
+        }
+      }
     },
     "Presses the dialog's choice" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -10577,10 +11022,25 @@
       }
     },
     "Progress bars" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İlerleme çubukları"
+          }
+        }
+      }
     },
     "Progress bars: beeps that rise in pitch, the percentage spoken, both, or nothing (NVDA+U)" : {
-      "comment" : "A command, as the key list and keyboard help say it"
+      "comment" : "A command, as the key list and keyboard help say it",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İlerleme çubukları: tizleşen bip sesleri, söylenen yüzde, ikisi ya da hiçbiri (NVDA+U)"
+          }
+        }
+      }
     },
     "Punctuation" : {
       "localizations" : {
@@ -11482,7 +11942,14 @@
       }
     },
     "Recognise again when the screen changes, while a result is open" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bir sonuç açıkken ekran değişince yeniden tanı"
+          }
+        }
+      }
     },
     "Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return. Pressed again in the result, recognises again" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -11497,10 +11964,26 @@
       }
     },
     "Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return. Pressed again in the result, recognises again. Pressed twice, its buttons, fields and icons instead" : {
-      "comment" : "A command, as the key list and keyboard help say it"
+      "comment" : "A command, as the key list and keyboard help say it",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Penceredeki metni ekrandan tanır (OCR); oklarla okumak ve Return ile tıklamak için. Sonuçta yeniden basılınca yeniden tanır. İki kez basılınca bunun yerine düğmelerini, alanlarını ve simgelerini tanır"
+          }
+        }
+      }
     },
     "Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return; pressed twice, its buttons, fields and icons instead (VO-Shift-Y, TurnOver's own)" : {
-      "comment" : "A command, as the key list and keyboard help say it"
+      "comment" : "A command, as the key list and keyboard help say it",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Penceredeki metni ekrandan tanır (OCR); oklarla okumak ve Return ile tıklamak için; iki kez basılınca bunun yerine düğmelerini, alanlarını ve simgelerini tanır (VO-Shift-Y, TurnOver'ın kendi komutu)"
+          }
+        }
+      }
     },
     "Reload plugins" : {
       "localizations" : {
@@ -11566,7 +12049,14 @@
       }
     },
     "Remove natural voices" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Doğal sesleri kaldır"
+          }
+        }
+      }
     },
     "Remove the app" : {
       "localizations" : {
@@ -12413,7 +12903,15 @@
       }
     },
     "Run it again whenever you change VoiceOver's settings: the TurnOver menu, Copy VoiceOver settings." : {
-      "comment" : "The VoiceOver settings copy done"
+      "comment" : "The VoiceOver settings copy done",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VoiceOver'ın ayarlarını her değiştirdiğinizde yeniden çalıştırın: TurnOver menüsü, VoiceOver ayarlarını kopyala."
+          }
+        }
+      }
     },
     "Run it again whenever you change VoiceOver's settings: the TurnOver menu, or the speech settings' last stop, sync with VoiceOver." : {
       "comment" : "The VoiceOver settings copy done",
@@ -12533,7 +13031,14 @@
       }
     },
     "Save my changes for %@ as a file" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ için değişikliklerimi dosya olarak kaydet"
+          }
+        }
+      }
     },
     "Save the last phrase to the Desktop; saves the last spoken phrase, with TurnOver's log, to a file on the Desktop (VO-Shift-Z)" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -13235,7 +13740,14 @@
       }
     },
     "Share my changes for %@ on GitHub" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ için değişikliklerimi GitHub'da paylaş"
+          }
+        }
+      }
     },
     "Sheet %@" : {
       "localizations" : {
@@ -13311,10 +13823,26 @@
       }
     },
     "Show the voices in the rotor: %@ chosen" : {
-      "comment" : "A switch in Speech settings"
+      "comment" : "A switch in Speech settings",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rotordaki sesleri göster: %@ seçili"
+          }
+        }
+      }
     },
     "Show the voices in the rotor: every voice" : {
-      "comment" : "A switch in Speech settings"
+      "comment" : "A switch in Speech settings",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rotordaki sesleri göster: tüm sesler"
+          }
+        }
+      }
     },
     "Show the word at the cursor uncontracted" : {
       "localizations" : {
@@ -13327,7 +13855,14 @@
       }
     },
     "Show voices for other languages" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diğer diller için sesleri göster"
+          }
+        }
+      }
     },
     "Single-letter keys go round the page" : {
       "localizations" : {
@@ -13630,10 +14165,25 @@
       }
     },
     "Speak progress bar updates" : {
-      "comment" : "The progress bar setting (NVDA+U): the percentage spoken"
+      "comment" : "The progress bar setting (NVDA+U): the percentage spoken",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İlerleme çubuğu güncellemelerini söyle"
+          }
+        }
+      }
     },
     "Speak the percentage" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yüzdeyi söyle"
+          }
+        }
+      }
     },
     "Speaks faster" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -13885,7 +14435,15 @@
       }
     },
     "Steam is running without its port; restart Steam from TurnOver's Settings, Other apps' speech." : {
-      "comment" : "The Steam program's status"
+      "comment" : "The Steam program's status",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Steam bağlantı noktası olmadan çalışıyor; Steam'i TurnOver Ayarları'ndan, Diğer uygulamaların konuşması bölümünden yeniden başlatın."
+          }
+        }
+      }
     },
     "Steam is running without its port; restart Steam from the Games menu." : {
       "comment" : "The Steam program's status",
@@ -13911,7 +14469,15 @@
       }
     },
     "Steam needs restarting before Big Picture can be read. Restart Steam is in TurnOver's Settings, Other apps' speech." : {
-      "comment" : "Steam speech"
+      "comment" : "Steam speech",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Big Picture okunabilmesi için Steam'in yeniden başlatılması gerekiyor. Steam'i yeniden başlat, TurnOver Ayarları'nda, Diğer uygulamaların konuşması bölümünde."
+          }
+        }
+      }
     },
     "Steam needs restarting before Big Picture can be read. Restart Steam is in the Games menu." : {
       "comment" : "Steam speech",
@@ -14062,10 +14628,24 @@
       }
     },
     "Switch to the published TurnOver" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yayımlanan TurnOver'a geç"
+          }
+        }
+      }
     },
     "Switch to your developer build" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geliştirici yapınıza geç"
+          }
+        }
+      }
     },
     "Switches back to browse mode" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -14145,10 +14725,26 @@
       }
     },
     "Switching to the published TurnOver." : {
-      "comment" : "TurnOver Developer is handing over to the published TurnOver"
+      "comment" : "TurnOver Developer is handing over to the published TurnOver",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yayımlanan TurnOver'a geçiliyor."
+          }
+        }
+      }
     },
     "Switching to your developer build." : {
-      "comment" : "TurnOver is handing over to the contributor's own build"
+      "comment" : "TurnOver is handing over to the contributor's own build",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geliştirici yapınıza geçiliyor."
+          }
+        }
+      }
     },
     "System" : {
       "comment" : "A group of commands in the key list",
@@ -14283,10 +14879,24 @@
       }
     },
     "Tell the project what's wrong, build %@'s module with your AI or by hand, or ask for something TurnOver needs" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Projeye sorunu bildirin, %@ modülünü yapay zekânızla ya da elle yapın veya TurnOver'da gereken bir şeyi isteyin"
+          }
+        }
+      }
     },
     "Tell us what's wrong in %@" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ uygulamasındaki sorunu bize bildir"
+          }
+        }
+      }
     },
     "Terminal" : {
       "comment" : "A group of commands in the key list",
@@ -14428,6 +15038,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Steam programı durdu."
+          }
+        }
+      }
+    },
+    "The TurnOver everyone has takes over, with its updates. Your developer build stays installed" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Herkesin kullandığı TurnOver, güncellemeleriyle birlikte devralır. Geliştirici yapınız yüklü kalır"
           }
         }
       }
@@ -14768,10 +15388,26 @@
       }
     },
     "The form is open in your browser, filled in for %@. Add what the app needs, then submit it. Thank you." : {
-      "comment" : "Help improve this app: the building block form opened; %@ is the app"
+      "comment" : "Help improve this app: the building block form opened; %@ is the app",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Form tarayıcınızda açık, %@ için doldurulmuş. Uygulamanın neye ihtiyacı olduğunu ekleyin, sonra gönderin. Teşekkürler."
+          }
+        }
+      }
     },
     "The form is open in your browser, filled in for %@. Add what you did and what you heard, then submit it. Thank you." : {
-      "comment" : "Help improve this app: the problem form opened; %@ is the app"
+      "comment" : "Help improve this app: the problem form opened; %@ is the app",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Form tarayıcınızda açık, %@ için doldurulmuş. Ne yaptığınızı ve ne duyduğunuzu ekleyin, sonra gönderin. Teşekkürler."
+          }
+        }
+      }
     },
     "The guide is not in this copy of TurnOver" : {
       "comment" : "Spoken message",
@@ -14893,7 +15529,15 @@
       }
     },
     "The keys" : {
-      "comment" : "A welcome page's title after an update"
+      "comment" : "A welcome page's title after an update",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tuşlar"
+          }
+        }
+      }
     },
     "The last item in the window (VO-Command-End)" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -14939,10 +15583,26 @@
       }
     },
     "The natural voices are ready. Choose one in Settings, Speech, Voice." : {
-      "comment" : "Said when the natural voices have finished downloading"
+      "comment" : "Said when the natural voices have finished downloading",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Doğal sesler hazır. Ayarlar, Konuşma, Ses'ten birini seçin."
+          }
+        }
+      }
     },
     "The natural voices couldn't be downloaded. Check the connection, then try again in Settings, Speech." : {
-      "comment" : "Said when the natural voices fail to download"
+      "comment" : "Said when the natural voices fail to download",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Doğal sesler indirilemedi. Bağlantıyı denetleyin, sonra Ayarlar, Konuşma'dan yeniden deneyin."
+          }
+        }
+      }
     },
     "The next control: the sidebar, then the section's controls in order" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -15401,7 +16061,14 @@
       }
     },
     "The voice above is a natural voice, so it speaks everything, with the rate, volume and EQ above. Other languages and raised capitals keep the Mac voice chosen before it, which also steps in if the natural voice is slow." : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yukarıdaki ses doğal bir ses, bu yüzden her şeyi yukarıdaki hız, ses düzeyi ve EQ ile söyler. Diğer diller ve perdesi yükseltilen büyük harfler ondan önce seçilen Mac sesinde kalır; doğal ses yavaş kalırsa da o devreye girer."
+          }
+        }
+      }
     },
     "The welcome pages" : {
       "localizations" : {
@@ -15425,7 +16092,14 @@
       }
     },
     "The window is looked at each second; when it has changed, what is new is read." : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pencereye her saniye bakılır; değiştiğinde yeni olan okunur."
+          }
+        }
+      }
     },
     "The window's size and where it is on the screen (VO-Command-F2)" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -15585,7 +16259,15 @@
       }
     },
     "To share it, open this list again and choose Share my changes." : {
-      "comment" : "Said after the first change made for an app"
+      "comment" : "Said after the first change made for an app",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paylaşmak için bu listeyi yeniden açın ve Değişikliklerimi paylaş'ı seçin."
+          }
+        }
+      }
     },
     "To the item under the pointer; moves object navigation to the item under the mouse pointer (NVDA+Shift+N)" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -15763,7 +16445,14 @@
       }
     },
     "TurnOver Developer, the copy you built, takes over. Switch back the same way at any time" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kendi derlediğiniz kopya olan TurnOver Developer devralır. İstediğiniz zaman aynı yolla geri dönebilirsiniz"
+          }
+        }
+      }
     },
     "TurnOver Down reads from here; TurnOver H moves by heading." : {
       "comment" : "A hint, said after a pause on an item",
@@ -15809,7 +16498,15 @@
       }
     },
     "TurnOver and VoiceOver" : {
-      "comment" : "A welcome page's title"
+      "comment" : "A welcome page's title",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TurnOver ve VoiceOver"
+          }
+        }
+      }
     },
     "TurnOver and VoiceOver swap: one comes on as the other goes off" : {
       "localizations" : {
@@ -16044,7 +16741,15 @@
       }
     },
     "TurnOver is a screen reader for the Mac. It reads every app with its own voice, and the keys you already know.\nRead each page with the Up and Down arrows.\nTab reaches the buttons: Next, Back and Skip. Return goes to the next page, Escape skips the rest." : {
-      "comment" : "The first welcome page"
+      "comment" : "The first welcome page",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TurnOver, Mac için bir ekran okuyucudur. Her uygulamayı kendi sesiyle ve zaten bildiğiniz tuşlarla okur.\nHer sayfayı Yukarı ve Aşağı Ok ile okuyun.\nTab düğmelere ulaşır: İleri, Geri ve Atla. Return sonraki sayfaya gider, Esc kalanını atlar."
+          }
+        }
+      }
     },
     "TurnOver is a screen reader for the Mac. It reads every app, with its own voice and the keys you already know. These few pages explain the start. Next and Back move between them." : {
       "comment" : "A welcome page",
@@ -16289,7 +16994,15 @@
       }
     },
     "TurnOver speaks VoiceOver's keys, NVDA's or JAWS's. Command Control Comma, then K, moves between them.\nThe VO keys do what they do in VoiceOver." : {
-      "comment" : "A welcome page: keyboard styles"
+      "comment" : "A welcome page: keyboard styles",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TurnOver, VoiceOver'ın, NVDA'nın ya da JAWS'ın tuşlarıyla çalışır. Komut Kontrol Ö, sonra K bunlar arasında geçiş yapar.\nVO tuşları VoiceOver'da ne yapıyorsa onu yapar."
+          }
+        }
+      }
     },
     "TurnOver stopped unexpectedly. Restarting it." : {
       "comment" : "TurnOver Key: TurnOver crashed",
@@ -16315,7 +17028,14 @@
       }
     },
     "TurnOver turned this window away: it was probably updated while the window was open. Quit Settings and open it again from the TurnOver menu." : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TurnOver bu pencereyi kabul etmedi: büyük olasılıkla pencere açıkken güncellendi. Ayarlar'dan çıkın ve TurnOver menüsünden yeniden açın."
+          }
+        }
+      }
     },
     "TurnOver will read %@ when it changes. Saved" : {
       "comment" : "An item watched for changes: %@ is its name",
@@ -16504,7 +17224,15 @@
       }
     },
     "Two keys to remember" : {
-      "comment" : "A welcome page's title"
+      "comment" : "A welcome page's title",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hatırlanacak iki tuş"
+          }
+        }
+      }
     },
     "Two permissions" : {
       "comment" : "A welcome page's title",
@@ -17260,7 +17988,14 @@
       }
     },
     "VoiceOver's: VoiceOver's own sounds where it has one, such as links and boundaries, and TurnOver's set for the rest. TurnOver's: its set throughout." : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VoiceOver'ınkiler: bağlantılar ve sınırlar gibi VoiceOver'ın kendi sesi olan yerlerde o ses, kalanında TurnOver'ın takımı. TurnOver'ınkiler: her yerde onun takımı."
+          }
+        }
+      }
     },
     "Voices for other languages" : {
       "extractionState" : "stale",
@@ -17357,7 +18092,15 @@
       }
     },
     "Welcome to TurnOver" : {
-      "comment" : "The first welcome page's title"
+      "comment" : "The first welcome page's title",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TurnOver'a hoş geldiniz"
+          }
+        }
+      }
     },
     "Welcome to TurnOver %@" : {
       "comment" : "A welcome page's title: %@ is the version",
@@ -17390,7 +18133,15 @@
       }
     },
     "Welcome to TurnOver build %@" : {
-      "comment" : "A welcome page's title after an update: the build"
+      "comment" : "A welcome page's title after an update: the build",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TurnOver %@ yapısına hoş geldiniz"
+          }
+        }
+      }
     },
     "What TurnOver is and its keys" : {
       "localizations" : {
@@ -17572,7 +18323,15 @@
       }
     },
     "While TurnOver is on, it reads everything, and VoiceOver is off.\nTurnOver turns VoiceOver off as it starts and back on as it quits, so you are never without speech. To change that: Settings, Screen reader behaviour.\nCommand Control Shift T gives the app in front to VoiceOver, or back to TurnOver, and remembers it." : {
-      "comment" : "A welcome page: TurnOver and VoiceOver"
+      "comment" : "A welcome page: TurnOver and VoiceOver",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TurnOver açıkken her şeyi okur ve VoiceOver kapalıdır.\nTurnOver başlarken VoiceOver'ı kapatır, çıkarken yeniden açar; böylece hiçbir zaman konuşmasız kalmazsınız. Bunu değiştirmek için: Ayarlar, Ekran okuyucu davranışı.\nKomut Kontrol Shift T öndeki uygulamayı VoiceOver'a ya da yeniden TurnOver'a verir ve bunu hatırlar."
+          }
+        }
+      }
     },
     "While playing: the next or previous slide, read" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -17606,7 +18365,14 @@
       }
     },
     "Whose sounds" : {
-
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hangi sesler"
+          }
+        }
+      }
     },
     "Windows" : {
       "localizations" : {
@@ -17769,7 +18535,15 @@
       }
     },
     "Your changes for %@ are copied, and the form is open in your browser. Paste them where it asks, check they hold nothing private, then submit it. Thank you." : {
-      "comment" : "Sharing plugin changes on GitHub: %@ is the app"
+      "comment" : "Sharing plugin changes on GitHub: %@ is the app",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ için değişiklikleriniz kopyalandı ve form tarayıcınızda açık. Onları istenen yere yapıştırın, özel bir şey içermediklerini denetleyin, sonra gönderin. Teşekkürler."
+          }
+        }
+      }
     },
     "Your keys" : {
       "comment" : "A group of commands in the key list\nA welcome page's title",
@@ -17860,7 +18634,15 @@
       }
     },
     "album by %@" : {
-      "comment" : "A Music catalog result: %@ is the artist"
+      "comment" : "A Music catalog result: %@ is the artist",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ albümü"
+          }
+        }
+      }
     },
     "alert" : {
       "comment" : "A role: an alert",
@@ -18094,7 +18876,15 @@
       }
     },
     "artist" : {
-      "comment" : "A kind of result in Music's catalog"
+      "comment" : "A kind of result in Music's catalog",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sanatçı"
+          }
+        }
+      }
     },
     "asking the catalog; a moment" : {
       "comment" : "Spoken message",
@@ -18152,10 +18942,26 @@
       }
     },
     "beep" : {
-      "comment" : "A choice in the TurnOver menu"
+      "comment" : "A choice in the TurnOver menu",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bip sesi"
+          }
+        }
+      }
     },
     "beep and speak" : {
-      "comment" : "A choice in the TurnOver menu"
+      "comment" : "A choice in the TurnOver menu",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bip sesi ve yüzde"
+          }
+        }
+      }
     },
     "before the words, as NVDA" : {
       "comment" : "A choice in the TurnOver menu",
@@ -18257,7 +19063,15 @@
       }
     },
     "bold mixed" : {
-      "comment" : "After a formatting shortcut, the selection contains both bold and non-bold text"
+      "comment" : "After a formatting shortcut, the selection contains both bold and non-bold text",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kısmen kalın"
+          }
+        }
+      }
     },
     "bold text" : {
       "comment" : "A kind of thing to find, after next or previous",
@@ -18469,7 +19283,15 @@
       }
     },
     "by %@" : {
-      "comment" : "A Podcasts catalog result: %@ is who makes the show"
+      "comment" : "A Podcasts catalog result: %@ is who makes the show",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ tarafından"
+          }
+        }
+      }
     },
     "by keyboard style" : {
       "comment" : "A choice in the TurnOver menu",
@@ -19436,7 +20258,15 @@
       }
     },
     "describing the window" : {
-      "comment" : "Spoken message"
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pencere betimleniyor"
+          }
+        }
+      }
     },
     "deselected, %@ selected" : {
       "comment" : "An item taken out of the selection; how many are selected",
@@ -20022,7 +20852,15 @@
       }
     },
     "free" : {
-      "comment" : "An app's price in the catalog"
+      "comment" : "An app's price in the catalog",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ücretsiz"
+          }
+        }
+      }
     },
     "function" : {
       "comment" : "The Fn key's name, as keyboard help says it",
@@ -20290,10 +21128,26 @@
       }
     },
     "iPhone or iPad app" : {
-      "comment" : "An app in the catalog made for iPhone or iPad"
+      "comment" : "An app in the catalog made for iPhone or iPad",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iPhone ya da iPad uygulaması"
+          }
+        }
+      }
     },
     "icon" : {
-      "comment" : "A kind of control screen recognition finds: a picture with no text"
+      "comment" : "A kind of control screen recognition finds: a picture with no text",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "simge"
+          }
+        }
+      }
     },
     "ignored" : {
       "comment" : "Spoken message",
@@ -20450,7 +21304,15 @@
       }
     },
     "italic mixed" : {
-      "comment" : "After a formatting shortcut, the selection contains both italic and non-italic text"
+      "comment" : "After a formatting shortcut, the selection contains both italic and non-italic text",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kısmen italik"
+          }
+        }
+      }
     },
     "italic text" : {
       "comment" : "A kind of thing to find, after next or previous",
@@ -23029,7 +23891,15 @@
       }
     },
     "nothing found" : {
-      "comment" : "Screen recognition found no controls or text"
+      "comment" : "Screen recognition found no controls or text",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hiçbir şey bulunamadı"
+          }
+        }
+      }
     },
     "nothing here" : {
       "comment" : "Spoken message",
@@ -23373,7 +24243,15 @@
       }
     },
     "one star" : {
-      "comment" : "An app's rating in the catalog"
+      "comment" : "An app's rating in the catalog",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bir yıldız"
+          }
+        }
+      }
     },
     "only %@ messages" : {
       "comment" : "Fewer messages than asked for: how many there are",
@@ -24141,7 +25019,15 @@
       }
     },
     "recognised controls, %@" : {
-      "comment" : "Screen recognition of controls: how many rows"
+      "comment" : "Screen recognition of controls: how many rows",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tanınan denetimler, %@"
+          }
+        }
+      }
     },
     "recognised text, %@" : {
       "comment" : "Screen recognition: how many rows",
@@ -25013,7 +25899,15 @@
       }
     },
     "song by %@" : {
-      "comment" : "A Music catalog result: %@ is the artist"
+      "comment" : "A Music catalog result: %@ is the artist",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ şarkısı"
+          }
+        }
+      }
     },
     "sorted" : {
       "comment" : "A state, spoken after an item's role",
@@ -25049,7 +25943,15 @@
       }
     },
     "speak the percentage" : {
-      "comment" : "A choice in the TurnOver menu"
+      "comment" : "A choice in the TurnOver menu",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yüzdeyi söyle"
+          }
+        }
+      }
     },
     "speak typed characters %@" : {
       "comment" : "Typing echo changed: %@ is off, in edit controls or always",
@@ -26678,7 +27580,15 @@
       }
     },
     "the catalog answered %@" : {
-      "comment" : "Why the catalog gave no results: %@ is an HTTP status"
+      "comment" : "Why the catalog gave no results: %@ is an HTTP status",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "katalog %@ yanıtını verdi"
+          }
+        }
+      }
     },
     "the catalog did not answer" : {
       "comment" : "Spoken message",
@@ -26692,7 +27602,15 @@
       }
     },
     "the catalog's answer could not be read" : {
-      "comment" : "Why the catalog gave no results"
+      "comment" : "Why the catalog gave no results",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kataloğun yanıtı okunamadı"
+          }
+        }
+      }
     },
     "the default order" : {
       "comment" : "Spoken message: an app's reading order back to the default",
@@ -26761,7 +27679,15 @@
       }
     },
     "the window could not be captured. TurnOver needs Screen Recording, in System Settings, Privacy and Security" : {
-      "comment" : "Spoken message"
+      "comment" : "Spoken message",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pencere yakalanamadı. TurnOver'ın Sistem Ayarları, Gizlilik ve Güvenlik'te Ekran Kaydı iznine ihtiyacı var"
+          }
+        }
+      }
     },
     "the window has moved; recognising again" : {
       "comment" : "Spoken message",
