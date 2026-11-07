@@ -137,7 +137,7 @@ enum BrailleCommands {
         config.speech.volume = min(200, max(10, config.speech.volume + step))
         Speech.player?.volume = Float(config.speech.volume) / 100
         config.save()
-        Speech.speakMessage(String(localized: "volume \(String(config.speech.volume)) percent", comment: "The speech volume changed: %@ is the percentage"))
+        Speech.speakMessage(String(localized: "volume \(config.speech.volume) percent", comment: "The speech volume changed: %@ is the percentage"))
     }
 
     private static func readFromTop() {

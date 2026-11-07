@@ -339,7 +339,7 @@ struct SpeechView: View {
                     .accessibilityLabel("Say cap before a capital")
                 Slider(value: model.number("speech", "capitalPitch"), in: 0...100, step: 10) { Text("Raise the pitch for a capital") }
                     .accessibilityValue(model.number("speech", "capitalPitch").wrappedValue == 0 ? String(localized: "off", comment: "A setting that is off")
-                        : String(localized: "\(String(Int(model.number("speech", "capitalPitch").wrappedValue))) percent", comment: "A slider's value"))
+                        : String(localized: "\(Int(model.number("speech", "capitalPitch").wrappedValue)) percent", comment: "A slider's value"))
             }
             // The speech rotor's own short list (18 Oct 2026): none ticked, every voice.
             // Folded until opened: a picker per language is the costliest part of the pane to draw (23 Oct 2026).
