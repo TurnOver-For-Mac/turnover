@@ -97,27 +97,60 @@ extension AXHandler {
     /// com.apple.campo) clears its search field eight minutes after it closes and reports a nameless AXUnknown as the
     /// focus; TurnOver held it as a new app's focus, and from then on the arrows read nothing, Tab went round the
     /// hidden panel, and Command alone pressed Siri AI's Apple menu, which kept the keyboard until a restart (macOS
-    /// 27.2, 31 Oct 2026: four times in a morning, each eight minutes after Spotlight was used). Measured that
-    /// morning: the Dock and Notification Center always have a window on screen, Control Center and Siri AI none while
-    /// closed.
+    /// 27.2, 31 Oct 2026: four times in a morning, each eight minutes after Spotlight was used). Measured closed, 7 Nov
+    /// 2026: Siri AI's two windows are off screen, Control Center has none, and Notification Centre's full-screen
+    /// window is off screen too; what Notification Centre has on screen is the widgets on the desktop, if any (three
+    /// here, at the desktop's level; none on a reviewer's Mac, 6 Nov 2026).
+    ///
+    /// An agent opening can report its focus before its window is on screen: in this Mac's logs of 31 Oct to 6 Nov
+    /// 2026, Siri AI's first reports came 66-108 ms after Command Space and were set aside after 8 of 94 presses, and
+    /// after one the search field's own report never followed, so the letters typed went to the list behind for 3.6 s.
+    /// So the agent is asked once more 0.3 s later, and its focus is taken if a window of it is on screen by then.
     func ruleHiddenAgent(_ target: AXUIElement, _ pid: pid_t, _ element: AXUIElement) -> FocusVerdict {
-        if pid != activePid, let app = NSRunningApplication(processIdentifier: pid),
-           Self.ignoresHiddenAgent(bundleID: app.bundleIdentifier, windowOnScreen: Self.hasWindowOnScreen(pid)) {
-            Log.io("focus from \(app.localizedName ?? "pid \(pid)") with no window on screen; ignored")
-            return .ignore
+        guard pid != activePid, Self.ignoresHiddenAgent(bundleID: agentFacts.bundle(pid), windowOnScreen: agentFacts.windowOnScreen(pid)) else {
+            return .go(target)
         }
-        return .go(target)
+        let name = NSRunningApplication(processIdentifier: pid)?.localizedName ?? "pid \(pid)"
+        if hiddenAgentReports.updateValue(target, forKey: pid) == nil {
+            Log.io("focus from \(name) with no window on screen; ignored, asking again shortly")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in self?.askHiddenAgentAgain(pid) }
+        } else {
+            Log.io("focus from \(name) with no window on screen; ignored")
+        }
+        return .ignore
+    }
+
+    /// The second question, a moment after an agent's focus was first set aside: with a window of it on screen now, its
+    /// focus (or the element it last reported, if it names none) goes through the rules again. Only once: the pid
+    /// leaves the list after the rules have run, so a report set aside meanwhile does not ask a third time.
+    func askHiddenAgentAgain(_ pid: pid_t) {
+        defer { hiddenAgentReports[pid] = nil }
+        // TurnOver stopped meanwhile (no application is active), or a report after the window came was taken (the focus
+        // is in the agent already): nothing to ask.
+        guard let reported = hiddenAgentReports[pid], activePid != 0, API.focusObject?.pid != pid else { return }
+        guard agentFacts.windowOnScreen(pid) else { Log.io("focus asked again: still no window on screen; left aside"); return }
+        let focus = AXUIElementCreateApplication(pid).element(kAXFocusedUIElementAttribute) ?? reported
+        Log.io("focus asked again: a window on screen now; \(focus.role)")
+        focusChanged(focus, pid: pid)
     }
 
     /// The rule's decision alone, for the tests' table: a system agent's focus counts only while it has a window on
-    /// screen. (The window list is asked only for an agent.)
+    /// screen. The Dock's window is always on screen, so the Dock is not asked (review, 6 Nov 2026); nor is anything
+    /// but an agent.
     public static func ignoresHiddenAgent(bundleID: String?, windowOnScreen: @autoclosure () -> Bool) -> Bool {
-        systemUIAgents.contains(bundleID ?? "") && !windowOnScreen()
+        guard let bundleID, systemUIAgents.contains(bundleID), bundleID != "com.apple.dock" else { return false }
+        return !windowOnScreen()
     }
 
     /// Whether a window of the process is on screen: ordered in, whatever its alpha, so a panel still fading in counts.
     static func hasWindowOnScreen(_ pid: pid_t) -> Bool {
-        let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+        hasWindowOnScreen(pid, in: CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]])
+    }
+
+    /// The same, in a window list as read (for the tests). A list that can't be read counts as on screen, so no agent
+    /// is set aside for it (review, 6 Nov 2026).
+    public static func hasWindowOnScreen(_ pid: pid_t, in windows: [[String: Any]]?) -> Bool {
+        guard let windows else { return true }
         return windows.contains { ($0[kCGWindowOwnerPID as String] as? Int) == Int(pid) }
     }
 

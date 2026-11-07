@@ -380,6 +380,59 @@ func focusRuleTests() {
         }
     }
 
+    /// Spotlight's panel as Siri AI shows it: a window (40) with its search field (41), the application (9) naming the
+    /// field its focus; and a text area (50) in the application in front. Numbers of their own, as above. No
+    /// application above the window: the replayed one is no process, and "owned by another process" would set the
+    /// field aside for that.
+    func agentPanel() -> AXFixture {
+        var f = AXFixture(app: "Siri", bundle: "com.apple.campo", recorded: "", root: 40, application: 9, focus: 41, nodes: [])
+        f.nodes = [
+            .init(id: 40, attrs: ["AXRole": .string("AXWindow"), "AXTitle": .string("Spotlight"), "AXChildren": .elements([41])]),
+            .init(id: 41, attrs: ["AXRole": .string("AXTextField"), "AXSubrole": .string("AXSearchField"), "AXParent": .element(40), "AXWindow": .element(40),
+                                  "AXValue": .string(""), "AXSelectedTextRange": .range(0, 0), "AXNumberOfCharacters": .number(0), "AXFocused": .bool(true)]),
+            .init(id: 50, attrs: ["AXRole": .string("AXTextArea"), "AXValue": .string("Notes"), "AXSelectedTextRange": .range(0, 0), "AXNumberOfCharacters": .number(5)]),
+            .init(id: 9, attrs: ["AXRole": .string("AXApplication"), "AXTitle": .string("Siri"), "AXChildren": .elements([40]), "AXWindows": .elements([40]),
+                                 "AXFocusedWindow": .element(40), "AXFocusedUIElement": .element(41)]),
+        ]
+        return f
+    }
+    /// Siri AI played: its bundle, and a window on screen or not as the test says, with another application in front and
+    /// TurnOver's focus in that application's text area.
+    func playingAgent(_ body: (_ windowShows: (Bool) -> Void, _ asked: () -> Int) -> Void) {
+        playing(agentPanel()) {
+            let handler = AXHandler.shared
+            let saved = handler.agentFacts
+            defer { handler.agentFacts = saved }
+            var onScreen = false, asked = 0
+            handler.agentFacts = (bundle: { _ in "com.apple.campo" }, windowOnScreen: { _ in asked += 1; return onScreen })
+            handler.activePid = 900_050
+            API.setFocusObject(ObjectFactory.make(AXReplay.element(50)), ancestors: [])
+            body({ onScreen = $0 }, { asked })
+        }
+    }
+    // Siri AI's first reports can come before its window is on screen: after 8 of 94 Command Spaces in this Mac's logs of
+    // 31 Oct to 6 Nov 2026, and once the search field's own report never followed (review of #223, 6 Nov 2026).
+    test("focus rules: Spotlight's field reported before its window is on screen is asked about again, and taken once the window is there") {
+        playingAgent { windowShows, _ in
+            for _ in 0..<5 { AXHandler.shared.focusChanged(AXReplay.element(41), pid: 900_009) }
+            check(focusIs(50), "set aside while the panel has no window on screen: the focus stays in the application in front")
+            windowShows(true)   // the window comes a moment later, and nothing more is reported
+            RunLoop.main.run(until: Date().addingTimeInterval(0.5))
+            check(focusIs(41), "asked again 0.3 s later: the window is on screen now, and the search field is the focus")
+        }
+    }
+    test("focus rules: a hidden agent's focus is asked about once more, and left aside while it still has no window on screen") {
+        playingAgent { _, asked in
+            for _ in 0..<3 { AXHandler.shared.focusChanged(AXReplay.element(41), pid: 900_009) }
+            expect(asked(), 3, "each report asks whether a window is on screen")
+            RunLoop.main.run(until: Date().addingTimeInterval(0.5))
+            expect(asked(), 4, "asked once more for the three reports, not once for each")
+            RunLoop.main.run(until: Date().addingTimeInterval(0.5))
+            expect(asked(), 4, "and not again after that")
+            check(focusIs(50), "no window came (the panel's eight-minute timer): the focus stays in the application in front")
+        }
+    }
+
     /// A Pages document: a window (0) in the application (9), its page layout (2) holding two pages (3, 5), each
     /// with its copy of the body text (4, 6). Both copies give the caret, or (a document just opened) neither does.
     func pages(caret: Bool) -> AXFixture {

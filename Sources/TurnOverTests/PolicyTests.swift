@@ -72,17 +72,30 @@ func policyTests() {
         expect(watch.look([103]), .init(stopped: true), "102 crashed, and 103 started before the next look")
     }
     test("focus: a system agent with no window on screen is not where the keys go (Spotlight's hidden panel, 31 Oct 2026)") {
-        let table: [(String, String?, Bool, Bool)] = [
-            ("Spotlight's panel closed (Siri AI)", "com.apple.campo", false, true),
-            ("Spotlight's panel open", "com.apple.campo", true, false),
-            ("the Dock, always on screen", "com.apple.dock", true, false),
-            ("Control Center closed", "com.apple.controlcenter", false, true),
-            ("an ordinary app with no window: the background rule's business", "com.apple.TextEdit", false, false),
-            ("no bundle identifier", nil, false, false),
+        // What, the bundle, a window of it on screen, set aside, the window list asked.
+        let table: [(String, String?, Bool, Bool, Bool)] = [
+            ("Spotlight's panel closed (Siri AI)", "com.apple.campo", false, true, true),
+            ("Spotlight's panel open", "com.apple.campo", true, false, true),
+            ("Notification Centre closed, nothing of it on screen (a reviewer's Mac, 6 Nov 2026)", "com.apple.notificationcenterui", false, true, true),
+            ("Notification Centre with widgets on the desktop, which are its windows on screen (7 Nov 2026)", "com.apple.notificationcenterui", true, false, true),
+            ("Control Center closed", "com.apple.controlcenter", false, true, true),
+            ("the Dock: its window is always on screen, so it is not asked", "com.apple.dock", false, false, false),
+            ("an ordinary app with no window: the background rule's business", "com.apple.TextEdit", false, false, false),
+            ("no bundle identifier", nil, false, false, false),
         ]
-        for (what, bundle, onScreen, ignored) in table {
-            expect(AXHandler.ignoresHiddenAgent(bundleID: bundle, windowOnScreen: onScreen), ignored, what)
+        for (what, bundle, onScreen, ignored, listAsked) in table {
+            var asked = false
+            expect(AXHandler.ignoresHiddenAgent(bundleID: bundle, windowOnScreen: { asked = true; return onScreen }()), ignored, what)
+            expect(asked, listAsked, "\(what): the window list \(listAsked ? "is" : "is not") asked")
         }
+    }
+    test("focus: a window list that can't be read counts as on screen, so no agent's focus is set aside for it (6 Nov 2026)") {
+        let siri: pid_t = 428, dock: pid_t = 389
+        func window(of pid: pid_t) -> [String: Any] { [kCGWindowOwnerPID as String: Int(pid)] }
+        check(AXHandler.hasWindowOnScreen(siri, in: nil), "the list could not be read: counted as on screen")
+        check(!AXHandler.hasWindowOnScreen(siri, in: []), "an empty list: no window of it on screen")
+        check(!AXHandler.hasWindowOnScreen(siri, in: [window(of: dock)]), "another process's window only")
+        check(AXHandler.hasWindowOnScreen(siri, in: [window(of: dock), window(of: siri)]), "a window of its own on screen")
     }
     test("fixtures: every recorded window's focus reads as something, within a call budget") {
         let dir = fixtureURL("textedit-guide").deletingLastPathComponent()
