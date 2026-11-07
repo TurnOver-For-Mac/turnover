@@ -3913,11 +3913,23 @@
     },
     "Control alone stops speech; Shift alone pauses it and carries on" : {
       "comment" : "In the key list",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tek başına Kontrol konuşmayı durdurur; tek başına Shift duraklatır ve sürdürür"
+          }
+        }
+      }
+    },
+    "Control alone stops speech; Shift alone pauses it and carries on, but not while secure input is on" : {
+      "comment" : "In the key list",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tek başına Kontrol konuşmayı durdurur; tek başına Shift duraklatır ve sürdürür, ama güvenli giriş açıkken duraklatmaz"
           }
         }
       }

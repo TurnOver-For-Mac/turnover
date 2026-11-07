@@ -444,6 +444,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
                     loneShift.down(alone: event.flags.intersection([.maskControl, .maskAlternate, .maskCommand]).isEmpty && !capsDown, secureInput: secure)
                 } else {
                     let tapped = loneShift.up(secureInput: secure)
+                    if loneShift.setAsideForSecureInput, settings.windowsKeys { Log.io("shift released alone with secure input on: not taken") }
                     if tapped, settings.windowsKeys, !InputManager.isInputHelpActive { onMain { Speech.togglePause() } }
                 }
             } else { loneShift.cancel() }
@@ -453,6 +454,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
                     loneCommand.down(alone: event.flags.intersection(others).isEmpty && !capsDown, secureInput: secure)
                 } else {
                     let tapped = loneCommand.up(secureInput: secure)
+                    if loneCommand.setAsideForSecureInput, settings.windowsKeys { Log.io("command released alone with secure input on: not taken") }
                     if tapped, settings.windowsKeys {
                         Log.io("command released alone")
                         onMain {
@@ -474,7 +476,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
                     let tapped = loneOption.up(secureInput: secure)
                     let which = optionCode
                     optionCode = 0
-                    Log.io("option \(which == 61 ? "right" : "left") released\(tapped ? " alone" : "")")
+                    Log.io("option \(which == 61 ? "right" : "left") released\(tapped ? " alone" : loneOption.setAsideForSecureInput ? " alone with secure input on: not taken" : "")")
                     if tapped, settings.windowsKeys {
                         let name = which == 61 ? "contextMenu" : "focusDock"
                         let g = KeyboardGesture(keyCode: which, modifiers: .option, characters: "", timestamp: 0, isRepeat: false, flags: [])

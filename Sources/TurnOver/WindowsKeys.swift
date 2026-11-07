@@ -297,6 +297,7 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // its state be
             if code == 55 || code == 54 {
                 if flags.contains(.maskCommand) { loneCommand.down(alone: flags.intersection([.maskControl, .maskAlternate, .maskShift]).isEmpty && !capsDown, secureInput: secure) }
                 else if loneCommand.up(secureInput: secure) { Self.post(Target(code: 120, flags: .maskControl)) }
+                else if loneCommand.setAsideForSecureInput { Log.io("NVDA keys where VoiceOver reads: command released alone with secure input on: not taken") }
             } else { loneCommand.cancel() }
             if code == 58 || code == 61 {
                 if flags.contains(.maskAlternate) {
@@ -305,6 +306,8 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // its state be
                 } else {
                     if loneOption.up(secureInput: secure) {
                         Self.post(optionCode == 61 ? Target(code: 46, flags: Self.vo.union(.maskShift)) : Target(code: 99, flags: .maskControl))
+                    } else if loneOption.setAsideForSecureInput {
+                        Log.io("NVDA keys where VoiceOver reads: option \(optionCode == 61 ? "right" : "left") released alone with secure input on: not taken")
                     }
                     optionCode = 0
                 }

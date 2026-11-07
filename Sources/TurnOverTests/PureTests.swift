@@ -466,6 +466,29 @@ func pureTests() {
         command.down(alone: true, secureInput: false, at: t)
         check(!command.up(secureInput: true, at: soon), "secure input on by the time it came up")
     }
+    // The log says why nothing happened (asked in review, 7 Nov 2026): only a press that would have been on its own.
+    test("keys: a lone press set aside for secure input says so; a press that wasn't alone doesn't") {
+        let t = Date(timeIntervalSince1970: 100), soon = t.addingTimeInterval(0.2)
+        var shift = LoneModifier()
+        for (atDown, atUp) in [(true, true), (true, false), (false, true)] {
+            shift.down(alone: true, secureInput: atDown, at: t)
+            check(!shift.up(secureInput: atUp, at: soon), "not taken with secure input on (down \(atDown), up \(atUp))")
+            check(shift.setAsideForSecureInput, "and said to be set aside for it (down \(atDown), up \(atUp))")
+        }
+        shift.down(alone: true, secureInput: false, at: t)
+        check(shift.up(secureInput: false, at: soon), "secure input off: taken")
+        check(!shift.setAsideForSecureInput, "secure input off: nothing set aside")
+        shift.down(alone: true, secureInput: true, at: t)
+        _ = shift.up(secureInput: true, at: t.addingTimeInterval(0.7))
+        check(!shift.setAsideForSecureInput, "held too long: not a lone press anyway")
+        shift.down(alone: true, secureInput: true, at: t)
+        shift.cancel()
+        _ = shift.up(secureInput: true, at: soon)
+        check(!shift.setAsideForSecureInput, "a key heard between: not a lone press anyway")
+        shift.down(alone: false, secureInput: true, at: t)
+        _ = shift.up(secureInput: true, at: soon)
+        check(!shift.setAsideForSecureInput, "another modifier held: not a lone press anyway")
+    }
 
     test("settings: an old file keeps its values and gets the defaults for the rest") {
         let json = """

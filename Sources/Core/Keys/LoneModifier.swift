@@ -12,13 +12,18 @@ import Foundation
 
 nonisolated public struct LoneModifier: Sendable {
     private var alone = false
+    private var secureAtDown = false
     private var downAt = Date.distantPast
+    /// The last let-go would have been a press on its own but for secure input, so the log can say why nothing
+    /// happened (asked in review, 7 Nov 2026).
+    public private(set) var setAsideForSecureInput = false
 
     public init() {}
 
     /// It went down. `alone`: nothing is held with it that rules a press on its own out (each key has its own rule).
     public mutating func down(alone: Bool, secureInput: Bool, at now: Date = Date()) {
-        self.alone = alone && !secureInput
+        self.alone = alone
+        secureAtDown = secureInput
         downAt = now
     }
 
@@ -28,6 +33,8 @@ nonisolated public struct LoneModifier: Sendable {
     /// It came up: whether it was pressed on its own, and let go within 0.6 s.
     public mutating func up(secureInput: Bool, at now: Date = Date()) -> Bool {
         defer { alone = false }
-        return alone && !secureInput && now.timeIntervalSince(downAt) < 0.6
+        let lone = alone && now.timeIntervalSince(downAt) < 0.6
+        setAsideForSecureInput = lone && (secureAtDown || secureInput)
+        return lone && !setAsideForSecureInput
     }
 }
