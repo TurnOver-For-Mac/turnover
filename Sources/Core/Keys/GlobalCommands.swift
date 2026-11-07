@@ -99,18 +99,15 @@ public final class GlobalCommands: ScriptableObject {
             _ = GlobalCommands.contextMenuForItem()
         }.isAvailable = windowsOn
         script("focusDock", String(localized: "Moves to the Dock (Windows: the Windows key). Left Option on its own", comment: "A command, as the key list and keyboard help say it"), category: win) { _ in
+            // Pressed in the Dock, Control F3 takes the focus back to the application, as the Windows key closes an
+            // open Start menu: looked at before it is sent, for the check below.
+            let fromDock = GlobalCommands.dockItemSelected()
             KeyboardGesture(identifier: "kb:control+f3")?.send()
             // Control F3 is macOS's "Move focus to the Dock", a shortcut the person can have turned off, and on a
             // MacBook it needs the Fn flag (sent above). A reader on AppleVis heard nothing at all (26 Oct 2026):
             // half a second on, if no Dock item is selected, say so and where the shortcut lives.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                let selected = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock").first.map { dock -> Bool in
-                    let app = AXUIElementCreateApplication(dock.processIdentifier)
-                    return app.elements(kAXChildrenAttribute).contains { list in
-                        list.role == "AXList" && list.elements(kAXChildrenAttribute).contains { ($0.attr(kAXSelectedAttribute) as? Bool) == true }
-                    }
-                } ?? false
-                guard !selected else { return }
+                guard GlobalCommands.dockShortcutSeemsOff(fromDock: fromDock, selectedNow: GlobalCommands.dockItemSelected()) else { return }
                 Log.info("focus Dock: no Dock item selected half a second after Control F3")
                 Speech.speakMessage(String(localized: "The Dock didn't take the focus. In System Settings, Keyboard, Keyboard Shortcuts, Keyboard, turn on Move focus to the Dock.", comment: "Spoken message"))
             }
@@ -492,6 +489,25 @@ public final class GlobalCommands: ScriptableObject {
         else if onPower { parts.append(String(localized: "on power, not charging", comment: "The battery")) }
         else { parts.append(String(localized: "on battery", comment: "The battery")); if let t = span(desc[kIOPSTimeToEmptyKey] as? Int ?? -1) { parts.append(String(localized: "\(t) left", comment: "The battery: %@ is how long it will last")) } }
         return parts.joined(separator: ", ")
+    }
+
+    /// Whether the Dock's own list has an item selected: the Dock has the keyboard (Control F3; Option alone in the
+    /// Windows style). The Dock never activates, so this asks the Dock rather than the focus.
+    static func dockItemSelected() -> Bool {
+        NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock").first.map { dock -> Bool in
+            let app = AXUIElementCreateApplication(dock.processIdentifier)
+            return app.elements(kAXChildrenAttribute).contains { list in
+                list.role == "AXList" && list.elements(kAXChildrenAttribute).contains { ($0.attr(kAXSelectedAttribute) as? Bool) == true }
+            }
+        } ?? false
+    }
+
+    /// Whether, half a second after Option alone sent Control F3, TurnOver says the Dock didn't take the focus. Only
+    /// for a press from outside the Dock: in the Dock, Control F3 gives the focus back to the application, so no item
+    /// selected is the press working. A second Option in the Dock said to turn on a shortcut that was on (four times
+    /// from 27 Oct to 6 Nov 2026, macOS 27: the Dock let its item go within 9 ms of the press each time).
+    public static func dockShortcutSeemsOff(fromDock: Bool, selectedNow: Bool) -> Bool {
+        !fromDock && !selectedNow
     }
 
     /// The shortcuts list (NVDA: Input Gestures, spoken): every script that would answer a key right
