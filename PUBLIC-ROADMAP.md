@@ -5,9 +5,9 @@ for. Requests are weighed, not queued, and there are no dates or promises: thing
 sooner if someone sends a fix. To ask for something, use the idea form on GitHub (Send feedback in the TurnOver menu
 opens it).
 
-TurnOver works alongside VoiceOver. VoiceOver stays on: TurnOver reads every app by default, and Command Control Shift
-T gives the app in front to VoiceOver, or back. VoiceOver always handles security (password fields, Touch ID, macOS's
-own prompts). There are keyboard styles for VoiceOver's keys and NVDA's, with Narrator's and JAWS's on the way.
+TurnOver is a second choice beside VoiceOver: while it is on, it reads everything, password fields and macOS's own
+prompts included, and VoiceOver is off; turn it off and VoiceOver is back. With Readers per app on, Command Control
+Shift T keeps the app in front with VoiceOver, or gives it back. There are keyboard styles for VoiceOver's keys and NVDA's, with Narrator's and JAWS's on the way.
 
 ## Plugins: coming back, in the open
 

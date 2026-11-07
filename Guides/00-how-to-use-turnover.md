@@ -1,7 +1,9 @@
 # How to use TurnOver
 
-TurnOver is a screen reader for the Mac that works alongside VoiceOver. VoiceOver stays on; TurnOver reads every app
-with its own voice and the keys you already know, and VoiceOver handles passwords and macOS's own security prompts.
+TurnOver is a screen reader for the Mac: a second choice beside VoiceOver, not an add-on to it. While TurnOver is on,
+it reads everything, with its own voice and the keys you already know, password fields and macOS's own prompts
+included, and VoiceOver is off. Turn TurnOver off and VoiceOver comes back. If you'd rather VoiceOver kept some apps,
+it can: see Keeping some apps with VoiceOver, below.
 This page is the short tour. Each section links to the guide that goes into detail.
 
 ## Three things to remember
@@ -11,9 +13,20 @@ This page is the short tour. Each section links to the guide that goes into deta
    **Command Control M** opens the menu in one press. The menu is short: This app, Settings, Keys, Tools, Help,
    Support TurnOver, Quit. Every setting lives in the Settings window, in sections down the side.
 2. **Command Control Period** turns TurnOver off and on, from anywhere. Off, VoiceOver reads as usual.
-3. **Command Control Shift T** gives the app in front to VoiceOver, or back to TurnOver, and remembers it.
+3. If TurnOver ever stops responding, VoiceOver comes on within a few seconds and TurnOver starts again.
 
 Everything else is the keys of the screen reader you already know. See [The TurnOver layer](the-turnover-layer.html).
+
+## Keeping some apps with VoiceOver
+
+If VoiceOver reads an app better for you, it can keep that app while TurnOver reads the rest:
+
+1. Open Settings (Command Control Comma, then S), go to **Screen reader behaviour**, and under Experimental turn on
+   **Readers per app**.
+2. In the app, press **Command Control Shift T**. VoiceOver takes it over, and TurnOver remembers your choice. The
+   same key gives it back to TurnOver.
+
+The list of apps is under Tools in the TurnOver menu. More in [TurnOver and VoiceOver](coexist.html).
 
 ## Choose your keys
 

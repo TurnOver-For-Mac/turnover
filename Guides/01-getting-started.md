@@ -13,9 +13,10 @@ the apps you use every day more simply than VoiceOver does. It runs on macOS 14 
 ## Starting and stopping
 
 - **Command Control Period** starts TurnOver, or stops it, from anywhere. A rising chime means on, a falling one off.
-  When TurnOver stops, VoiceOver takes over.
-- **Command Control Shift T** gives the app in front to VoiceOver, or back to TurnOver, and remembers it. TurnOver
-  reads every app unless you give one to VoiceOver; VoiceOver always handles passwords and macOS's own prompts.
+  While TurnOver is on it reads everything, password fields and macOS's own prompts included, and VoiceOver is off.
+  When TurnOver stops, VoiceOver comes back.
+- To keep some apps with VoiceOver: turn on **Readers per app** in Settings, Screen reader behaviour; then
+  **Command Control Shift T** gives the app in front to VoiceOver, or back to TurnOver, and remembers it.
 - To start TurnOver when you log in: the TurnOver menu, Settings, Starting, Open TurnOver at login.
 
 ## The first five minutes

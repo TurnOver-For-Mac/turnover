@@ -5,9 +5,11 @@ fixes code that is not live. Each has a date and a reason. To reopen one, open a
 
 ## Settled
 
-- **VoiceOver stays on** (16 Oct 2026). TurnOver reads the apps it is given; VoiceOver is silenced there by a sound
-  tap and keeps passwords, macOS's own prompts and every other app. A blind person is never without speech, and
-  TurnOver can concentrate on the apps where it reads better. The README says the rest under Where TurnOver stands.
+- **One reader at a time** (24 Oct 2026, replacing "VoiceOver stays on" of 16 Oct). While TurnOver is on it reads
+  everything, password fields and macOS's own prompts included, and VoiceOver is off; VoiceOver comes back when
+  TurnOver quits or hangs, so a blind person is never without speech. CoExist, VoiceOver kept running and silenced by
+  a sound tap, is an experiment, off unless turned on (28 Oct 2026). The README says the rest under Where TurnOver
+  stands.
 - **On or off, and that is all** (22 Oct 2026). TurnOver is on or off; VoiceOver is on or off; TurnOver reads
   everywhere while it is on. No apps labelled for a reader, no switching as apps change, unless the experimental
   readers-per-app switch is on. The two things that relate the readers are in Settings, Screen reader behaviour:

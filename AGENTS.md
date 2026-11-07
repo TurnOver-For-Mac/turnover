@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-TurnOver is a Swift 6 macOS screen reader that works alongside VoiceOver. `Package.swift` defines its targets:
+TurnOver is a Swift 6 macOS screen reader, a replacement for VoiceOver that hands back to it when it quits or hangs. `Package.swift` defines its targets:
 
 - `Sources/TurnOver/`: app lifecycle, keyboard handling, menus, and VoiceOver coordination.
 - `Sources/Core/`: shared reading, navigation, text, speech policy, keys, settings and plugins, grouped by responsibility.
