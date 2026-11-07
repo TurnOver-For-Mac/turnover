@@ -19,7 +19,7 @@ notes explain its rules. Read it top to bottom once; then PATTERNS.md for how Ma
 | `TurnOverSpeech` | The audio engine: AVSpeechSynthesizer as a renderer, our own player for cancellation, volume, pitch and device changes. |
 | `TurnOverAX` | A thin wrapper over HIServices with timeouts, health and call counting (`AXHealth`, `AXStats`). |
 | `TurnOverKey` | The login-item helper: Command Control Period starts and quits TurnOver. Needs no permissions. |
-| `TurnOverPlugin` | `turnover-plugin`: the plugin maker's tool. Parked; not built into the product. |
+| `TurnOverPlugin` | `turnover-plugin`: the plugin maker's tool, inside TurnOver.app (build.sh copies it). It ships: an AI or a person uses it to snapshot an app and to try keys in it, for plugins and for app modules (Help improve this app, AI-CONTRIBUTOR.md). |
 | `TurnOverTests`, `AXFixtures`, `AXReplayShim`, `PluginTestKit`, `TurnOverCoreTest`, `TurnOverProbe` | The tests, the recorded-window replay, a plugin's own screens, the recorder and the probes. TESTING.md. |
 
 ## Source folders
@@ -111,10 +111,10 @@ See [Word module ownership](docs/WORD-MODULE-ISOLATION.md) for the file split an
 
 | Part | Files | Test |
 |---|---|---|
-| Settings | `Config.swift` (`settings.json`, a daily copy, `settings-previous.json`); no settings of TurnOver's own in the product: `TurnOverMenu.swift` has six items (This app, Keys, Copy my VoiceOver settings, Send feedback, About and updates, Quit) | `PureTests` (config) |
-| What this build is | `Edition.swift` (the supported apps, the experimental ones, the version and build number, the guide's name, the developer-build switches), `build.sh` (the product's guide, no plugin tool); releases are made by the maintainer with private release tooling | `PolicyTests` (one app) |
+| Settings | `Config.swift` (`settings.json`, a daily copy, `settings-previous.json`), shown and changed in the Settings window (`Sources/TurnOverSettings`, its own app inside TurnOver.app, since 22 Oct 2026; `SettingsBridge.swift` carries the changes). `TurnOverMenu.swift`: This app, Settings, Keys, Tools, Help, Support TurnOver, the developer switch when a developer build is installed, Quit | `PureTests` (config) |
+| What this build is | `Edition.swift` (the supported apps, the experimental ones, the version and build number, the guide's name, the developer-build switches), `build.sh` (the product's guide, the plugin maker's tool, the helpers; TurnOver Developer for a build not signed by the project's team); releases are made by the maintainer with private release tooling | `PolicyTests` (one app) |
 | VoiceOver's settings copied | `VoiceOverSettings.swift` (VoiceOver Utility's export by accessibility, read and applied: voice, rate, pitch, volume, verbosity, typing echo, how links and misspellings are marked; undo under About). docs/TOC-PREFERENCES.md is the map. | `PureTests` (the export) |
-| Plugins (parked) | `PluginFormat.swift` and the rest stay in the code, off | `PluginTests` |
+| Plugins | `PluginFormat.swift` and the rest. What ships, on by default (the `plugins` default, `Edition.includesPlugins`): the user's own fixes (This app, Change the item I'm on: `ProfilesPlugin`), the Plugins menu, and the maker's tool. Parked since 17 Oct 2026: the public plugin library and its steward. `SettingsProfiles` (settings by app, as VoiceOver's Activities and NVDA's profiles) is not a plugin and always runs | `PluginTests` |
 | Updates | `TurnOver/Updater.swift` (Sparkle: https, EdDSA from the keychain), `TurnOver/Uninstaller.swift` | by hand |
 | Feedback and the log | `Feedback.swift` (the report: logs with lengths, the last 15 minutes of speech and 5 minutes around each marked moment, settings without the apps list), `Log.swift` (words only with the `logSpeech` default) | `PureTests` (redaction) |
 
