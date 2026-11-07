@@ -1,5 +1,5 @@
 name: Share a fix
-description: Changes you made to an app with TurnOver Shift Slash, so they can come with TurnOver for everyone
+description: Changes you made to an app with TurnOver's fix list (VO-Slash, or This app in the menu), so they can come with TurnOver for everyone
 labels: [fix]
 body:
   - type: markdown

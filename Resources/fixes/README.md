@@ -1,6 +1,7 @@
 # Fixes that come with TurnOver
 
-Each folder here is a fix someone made with TurnOver Shift Slash (label an item, give it a key, read it when it
+Each folder here is a fix someone made with TurnOver's fix list (VO-Slash with VoiceOver keys, or This app, Change
+the item I'm on, in the TurnOver menu: label an item, give it a key, read it when it
 changes, keep it quiet), shared with Share my changes on GitHub, and accepted by the project. `build.sh` copies this
 folder into TurnOver.app, and TurnOver loads every fix in it for everyone, before each person's own changes.
 

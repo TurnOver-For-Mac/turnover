@@ -5,7 +5,8 @@ There are a few ways to help, from a minute's work to building a fix yourself. S
 
 1. **Tell us what's wrong.** In TurnOver's menu, choose This app, then Help improve this app, then Tell us what's
    wrong. A short form opens, already filled in; you say what happens. Nothing to install.
-2. **Fix an item yourself.** On a button or line that reads badly, press TurnOver Shift Slash. You can give it a
+2. **Fix an item yourself.** On a button or line that reads badly, press VO-Slash with VoiceOver keys, or choose
+   This app, then Help improve this app, then Fix the item I'm on, in TurnOver's menu. You can give it a
    name, a key, or keep it quiet, and it works at once. Share my changes on GitHub, in the same list, sends it to the
    project; accepted fixes come with TurnOver for everyone. Nothing to install.
 3. **Make the fix with your AI.** Your AI writes the code and you decide how it should sound. Paste this into an

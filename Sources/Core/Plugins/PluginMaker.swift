@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Making a plugin by hand, in the app, with nothing to write (docs/PLUGIN-TOOLKIT-PLAN.md, item 1; 11 Oct 2026).
 //
-// TurnOver Shift Slash (VoiceOver's VO Shift Slash labels an item; NVDA needs Python for any of this) opens a short
+// VO-Slash with VoiceOver keys, or This app, Change the item I'm on, in the TurnOver menu (VoiceOver's own VO-Slash
+// commands label an item; NVDA needs Python for any of this; 7 Nov 2026: this said TurnOver Shift Slash, which
+// opens the guide) opens a short
 // list for the item TurnOver is on (the review cursor if it is in the app in front, else the focus):
 //   What is this?            role, name, identifier, where it sits, and the match TurnOver would use; copied too
 //   Label this item          type a name; it is called that from now on
@@ -97,7 +99,7 @@ public enum PluginMaker {
         if let m = loaded.manifest, let p = loaded.profile { return (m, p) }
         let safe = String(bundle.map { $0.isLetter || $0.isNumber ? $0 : "-" })
         var m = PluginManifest(id: "my-" + safe, name: "My changes for \(appName)", version: "1", author: NSFullUserName(),
-                               description: "Made in TurnOver with TurnOver Shift Slash.", apps: [bundle])
+                               description: "Made in TurnOver with its fix list.", apps: [bundle])
         m.kind = "profile"; m.formatVersion = PluginFormat.currentVersion
         return (m, Profile(labels: nil, keys: nil, watch: nil, silence: nil, view: nil))
     }
@@ -147,7 +149,7 @@ public enum PluginMaker {
         return done && save(m, p, bundle: bundle)
     }
 
-    // MARK: The list (TurnOver Shift Slash)
+    // MARK: The list (VO-Slash, or This app in the menu)
 
     public static func open() {
         guard Edition.includesPlugins else { Speech.speakMessage(String(localized: "Plugins are not on in this version", comment: "Spoken message")); return }

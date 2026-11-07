@@ -433,7 +433,7 @@ public final class TurnOverMenu {
                                   hint: "What the picture shows and any text in it"))
             if Edition.includesPlugins {
                 items.append(MenuItem("Change the item I'm on", .action { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { PluginMaker.open() } },
-                                      hint: "Label it, give it a key, read it when it changes, or keep it quiet. TurnOver Shift Slash does the same"))
+                                      hint: "Label it, give it a key, read it when it changes, or keep it quiet. With VoiceOver keys, VO-Slash does the same"))
             }
             // Help improve this app (7 Nov 2026): tell the project what's wrong, build the app's module with your own AI
             // or by hand, or ask for a building block. It took over from Ask for this app to be tuned, which emailed.
