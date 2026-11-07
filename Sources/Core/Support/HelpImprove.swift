@@ -124,7 +124,7 @@ public enum HelpImprove {
     }
 
     /// Off the main thread: the snapshot walks the window. Everything from the main actor comes in as arguments.
-    nonisolated static func write(pid: pid_t, name: String, bundle: String, report: String, base: URL, versions: String, brief: String) throws -> URL {
+    nonisolated package static func write(pid: pid_t, name: String, bundle: String, report: String, base: URL, versions: String, brief: String) throws -> URL {
         let stamp: String = { let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd HHmm"; return f.string(from: Date()) }()
         let safe = name.replacingOccurrences(of: "/", with: "-")
         let dir = base.appendingPathComponent("\(safe) \(stamp)", isDirectory: true)
@@ -137,7 +137,18 @@ public enum HelpImprove {
 
         Follow TurnOver's brief for AI contributors, \(brief), to make or improve \(name)'s
         module, with the person who opened this folder. Ask them first what goes wrong in \(name), and what they
-        hear. These files describe the app as TurnOver sees it:
+        hear.
+
+        Before you write any code, in TurnOver's repository:
+
+        - Read AGENTS.md (the rules every contributor follows) and MODULE-GUIDE.md (how modules work).
+        - Change only \(name)'s folder under Sources/Apps, its register line and its tests. Anything else is
+          TurnOver's core: ask for a building block instead (docs/BUILDING-BLOCKS.md).
+        - Before the pull request: ./build.sh must finish with every test passed, and
+          python3 Tools/check-module-fence.py origin/main --outside must say it's inside the fence. GitHub checks
+          both again on the pull request.
+
+        These files describe the app as TurnOver sees it:
 
         - report.txt: how \(name) is built (kinds of item and counts). It has no content, so it may be quoted in a
           public issue or pull request.

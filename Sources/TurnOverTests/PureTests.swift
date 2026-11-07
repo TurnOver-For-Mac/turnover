@@ -661,6 +661,16 @@ func pureTests() {
         expect(q["report"]?.contains("Front window: 12 items"), true)
         expect(Set(q.keys), ["template", "title", "app", "versions", "report"])   // nothing else goes in the address
     }
+    test("Help improve this app: START.md names the rules, the fence and a clean build") {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent("help-improve-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: base) }
+        guard let dir = try? HelpImprove.write(pid: 1, name: "Example", bundle: "com.example", report: "Front window: 1 items",
+                                               base: base, versions: "TurnOver", brief: "https://example.invalid/AI-CONTRIBUTOR.md"),
+              let start = try? String(contentsOf: dir.appendingPathComponent("START.md"), encoding: .utf8) else { return Harness.fail("no START.md") }
+        for words in ["AGENTS.md", "MODULE-GUIDE.md", "./build.sh", "check-module-fence.py", "AI-CONTRIBUTOR.md", "never paste it anywhere public"] {
+            expect(start.contains(words), true)
+        }
+    }
     test("Help improve this app: the building block form is filled in, and a long report is cut") {
         guard let url = HelpImprove.formURL(.buildingBlock, name: "Example", report: String(repeating: "x", count: 5000), versions: ""),
               let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return Harness.fail("no address") }
