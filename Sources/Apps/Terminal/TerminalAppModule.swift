@@ -32,7 +32,9 @@ final class TerminalAppModule: AppModule {
     /// that one word, in 42 languages, 21 different words; read once, about 18 ms; 7 Nov 2026, macOS 27.2). All of
     /// them, not the one looked up for TurnOver: that lookup follows TurnOver's own language, and Terminal can run in
     /// another (one set for it in System Settings). Before macOS 15.4 only that one (not tried); without the table,
-    /// "shell" alone.
+    /// "shell" alone. Taking all of them takes no other text area: only Terminal's own text areas are asked, the whole
+    /// description has to be one of the words, and the table holds nothing but the word Terminal gives its shell, so
+    /// another text area would have to be described as a shell too.
     static let shellWords: Set<String> = {
         var words: Set<String> = ["shell"]
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID), let terminal = Bundle(url: url) else { return words }
