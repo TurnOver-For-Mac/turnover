@@ -16,14 +16,23 @@ import AppKit
 import ApplicationServices
 import TurnOverAX
 
+/// Whose menu bar the menu-bar keys take (Control-F2, VO-M, Command alone): the plugin's decision, kept apart from it
+/// so a test can ask it.
+public enum MenuBarOwner {
+    /// The application whose menus the menu bar shows (NSWorkspace's menuBarOwningApplication); a test puts in its own.
+    public static var current: () -> pid_t? = { NSWorkspace.shared.menuBarOwningApplication?.processIdentifier }
+
+    /// The app whose bar is opened or held: the bar's owner, not that of whatever app TurnOver's focus is in.
+    /// Spotlight's hidden panel (Siri AI) had reported the focus, and Command alone pressed Siri AI's Apple menu: a menu
+    /// in an app with nothing on screen, never shown, which kept the keyboard until a restart, every key a beep (macOS
+    /// 27.2, 31 Oct 2026; WindowServer's log had Siri AI as the key thief from that press on). With no owner there is
+    /// no bar: the key goes on, or the edge sound plays. The focus's app is no stand-in, as that was the app whose
+    /// menu was pressed (a review, 6 Nov 2026).
+    public static var pid: pid_t? { current() }
+}
+
 final class MenuNavigationPlugin: GlobalPlugin {
     static var menuBarPid: pid_t = 0
-    /// The application whose menus the menu bar shows: the bar opened or held is its own, not that of whatever app
-    /// TurnOver's focus is in. Spotlight's hidden panel (Siri AI) had reported the focus, and Command alone pressed
-    /// Siri AI's Apple menu: a menu in an app with nothing on screen, never shown, which kept the keyboard until a
-    /// restart, every key a beep (macOS 27.2, 31 Oct 2026; WindowServer's log had Siri AI as the key thief from that
-    /// press on).
-    static var menuBarAppPid: pid_t? { NSWorkspace.shared.menuBarOwningApplication?.processIdentifier ?? API.focusPid }
     private var lastItem: AXUIElement?
     private var lastSpoken: (AXUIElement, Date)?
     private var typed = "", typedAt = Date.distantPast
@@ -138,7 +147,7 @@ final class MenuNavigationPlugin: GlobalPlugin {
     /// Control-F2, VO-M, Command alone: open the Apple menu through accessibility, as macOS and VoiceOver land there
     /// (8 Oct 2026: the application menu is what the Mac does NOT do).
     private func openMenuBar(_ g: KeyboardGesture) {
-        guard let pid = Self.menuBarAppPid, let bar = AXUIElementCreateApplication(pid).element(kAXMenuBarAttribute) else { g.send(); return }
+        guard let pid = MenuBarOwner.pid, let bar = AXUIElementCreateApplication(pid).element(kAXMenuBarAttribute) else { g.send(); return }
         let titles = bar.elements(kAXChildrenAttribute)
         guard titles.count > 1 else { g.send(); return }
         Self.menuBarPid = pid
@@ -180,7 +189,7 @@ final class MenuNavigationPlugin: GlobalPlugin {
     /// Right, Down opens one (a vertical list, with the arrows bumping, was the NVDA way: a tester, 8 Oct 2026).
     static func holdStatusItems() {
         let extras = StatusMenus.gather()
-        guard let pid = menuBarAppPid else { Tones.edge(); return }
+        guard let pid = MenuBarOwner.pid else { Tones.edge(); return }
         // TurnOver's own item last, as in the list on Windows+B; it was missing here (9 Oct 2026).
         let me = getpid()
         heldBar = (pid, extras.map(\.element) + [AXUIElementCreateApplication(me)], 0)
@@ -191,7 +200,7 @@ final class MenuNavigationPlugin: GlobalPlugin {
     }
 
     static func holdMenuBar() {
-        guard let pid = menuBarAppPid, let bar = AXUIElementCreateApplication(pid).element(kAXMenuBarAttribute) else { Tones.edge(); return }
+        guard let pid = MenuBarOwner.pid, let bar = AXUIElementCreateApplication(pid).element(kAXMenuBarAttribute) else { Tones.edge(); return }
         let titles = bar.elements(kAXChildrenAttribute)
         guard !titles.isEmpty else { Tones.edge(); return }
         heldBar = (pid, titles, 0)
@@ -222,7 +231,7 @@ final class MenuNavigationPlugin: GlobalPlugin {
 
     private static func barKey(_ g: KeyboardGesture) {
         guard var h = heldBar else { g.send(); return }
-        guard menuBarAppPid == h.pid else { heldBar = nil; g.send(); return }
+        guard MenuBarOwner.pid == h.pid else { heldBar = nil; g.send(); return }
         switch g.keyName {
         case "leftArrow", "rightArrow":
             let j = h.index + (g.keyName == "rightArrow" ? 1 : -1)

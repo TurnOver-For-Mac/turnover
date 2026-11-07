@@ -3,6 +3,7 @@
 // every recorded window read once (code review, 16 Oct 2026).
 import Foundation
 import AppKit
+import ApplicationServices
 import TurnOverCore
 import TurnOverControl
 import AXFixtures
@@ -89,6 +90,16 @@ func policyTests() {
             check(!parts.isEmpty || silentGroup, "\(url.lastPathComponent): the focus says something (role \(obj.axRole))")
             check(calls < 400, "\(url.lastPathComponent): reading the focus took \(calls) accessibility calls")
         }
+    }
+    test("menu bar: with no owner, no app's bar is taken, not even the focus's (Siri AI's hidden menu took the keyboard, 31 Oct 2026)") {
+        let owner = MenuBarOwner.current
+        let saved = (API.focusObject, API.focusAncestors, API.focusTreeInterceptor)
+        defer { MenuBarOwner.current = owner; API.setFocusObject(saved.0, ancestors: saved.1, interceptor: saved.2) }
+        API.setFocusObject(ObjectFactory.make(AXUIElementCreateApplication(getpid())), ancestors: [])
+        MenuBarOwner.current = { nil }
+        expect(MenuBarOwner.pid, nil, "no owner, with TurnOver's focus in an app")
+        MenuBarOwner.current = { 1352 }
+        expect(MenuBarOwner.pid, 1352, "the owner's bar")
     }
 }
 
