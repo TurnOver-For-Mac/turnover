@@ -5,7 +5,10 @@ There are a few ways to help, from a minute's work to building a fix yourself. S
 
 1. **Tell us what's wrong.** In TurnOver's menu, choose This app, then Help improve this app, then Tell us what's
    wrong. A short form opens, already filled in; you say what happens. Nothing to install.
-2. **Make the fix with your AI.** Your AI writes the code and you decide how it should sound. Paste this into an
+2. **Fix an item yourself.** On a button or line that reads badly, press TurnOver Shift Slash. You can give it a
+   name, a key, or keep it quiet, and it works at once. Share my changes on GitHub, in the same list, sends it to the
+   project; accepted fixes come with TurnOver for everyone. Nothing to install.
+3. **Make the fix with your AI.** Your AI writes the code and you decide how it should sound. Paste this into an
    assistant that can run commands on your Mac, such as Claude Code or Codex, with the app's name:
 
    > Read https://github.com/TurnOver-For-Mac/turnover/blob/main/AI-CONTRIBUTOR.md and help me make TurnOver work
@@ -13,7 +16,7 @@ There are a few ways to help, from a minute's work to building a fix yourself. S
 
    It needs Xcode (Apple's free tool for building Mac apps; a large download) and a free GitHub account. Your AI
    helps you set both up, one step at a time, and checks with you before anything is posted.
-3. **Ask for a building block.** If the app needs something new from TurnOver itself, the AI can write the request
+4. **Ask for a building block.** If the app needs something new from TurnOver itself, the AI can write the request
    with you.
 
 Thank you.

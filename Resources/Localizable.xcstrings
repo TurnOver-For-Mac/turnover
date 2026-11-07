@@ -2137,6 +2137,9 @@
         }
       }
     },
+    ", comes with TurnOver" : {
+      "comment" : "A plugin that ships inside TurnOver"
+    },
     ", for %@" : {
       "comment" : "The apps a settings profile is for",
       "localizations" : {
@@ -2581,6 +2584,9 @@
           }
         }
       }
+    },
+    "A zip on the Desktop, to send to someone" : {
+
     },
     "AIs can no longer try keys in any app." : {
       "comment" : "Spoken message",
@@ -4094,6 +4100,9 @@
         }
       }
     },
+    "Copies your changes and opens a short form in your browser. Accepted changes come with TurnOver for everyone. You need a free GitHub account" : {
+
+    },
     "Copy" : {
       "localizations" : {
         "tr" : {
@@ -5272,6 +5281,9 @@
         }
       }
     },
+    "Fix the item I'm on" : {
+
+    },
     "Fn is not available from the display yet" : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -5732,6 +5744,9 @@
           }
         }
       }
+    },
+    "Give it a name, a key, or keep it quiet. It works at once, and you can share it. TurnOver Shift Slash does the same" : {
+
     },
     "Give this item a key" : {
       "localizations" : {
@@ -8997,7 +9012,7 @@
       }
     },
     "No changes for %@ yet" : {
-      "comment" : "Spoken message: %@ is the app",
+      "comment" : "Sharing plugin changes: there are none for the app\nSpoken message: %@ is the app",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -12513,6 +12528,9 @@
         }
       }
     },
+    "Save my changes for %@ as a file" : {
+
+    },
     "Save the last phrase to the Desktop; saves the last spoken phrase, with TurnOver's log, to a file on the Desktop (VO-Shift-Z)" : {
       "comment" : "A command, as the key list and keyboard help say it",
       "localizations" : {
@@ -13202,6 +13220,7 @@
       }
     },
     "Share my changes for %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -13210,6 +13229,9 @@
           }
         }
       }
+    },
+    "Share my changes for %@ on GitHub" : {
+
     },
     "Sheet %@" : {
       "localizations" : {
@@ -17738,6 +17760,9 @@
           }
         }
       }
+    },
+    "Your changes for %@ are copied, and the form is open in your browser. Paste them where it asks, check they hold nothing private, then submit it. Thank you." : {
+      "comment" : "Sharing plugin changes on GitHub: %@ is the app"
     },
     "Your keys" : {
       "comment" : "A group of commands in the key list\nA welcome page's title",

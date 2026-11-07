@@ -1,0 +1,36 @@
+name: Share a fix
+description: Changes you made to an app with TurnOver Shift Slash, so they can come with TurnOver for everyone
+labels: [fix]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        TurnOver copied your changes when you chose Share my changes on GitHub. Paste them below. Before you submit, read them through: they can hold names TurnOver used to find an item, and those should be the app's own words, not your messages, documents or anyone's name. Thank you.
+  - type: input
+    id: app
+    attributes:
+      label: Which app?
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What do your changes fix?
+      description: For example, the unnamed button beside the search field is now called Filter.
+    validations:
+      required: true
+  - type: textarea
+    id: changes
+    attributes:
+      label: Your changes
+      description: Paste what TurnOver copied.
+      render: json
+    validations:
+      required: true
+  - type: checkboxes
+    id: private
+    attributes:
+      label: Nothing private
+      options:
+        - label: I've read my changes, and they hold nothing private.
+          required: true

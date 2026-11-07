@@ -397,6 +397,12 @@ public final class ProfileStore {
     public static var folder: URL {
         AppPaths.file("plugins")
     }
+    /// The accepted fixes inside TurnOver.app (Contents/Resources/fixes), when there are any. Read only.
+    public static var shippedFixes: URL? {
+        guard let url = Bundle.main.resourceURL?.appendingPathComponent("fixes", isDirectory: true),
+              FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return url
+    }
     nonisolated private let lock = NSLock()
     nonisolated(unsafe) private var _plugins: [LoadedPlugin] = []   // under `lock`
     nonisolated public var plugins: [LoadedPlugin] { lock.lock(); defer { lock.unlock() }; return _plugins }
@@ -457,8 +463,13 @@ public final class ProfileStore {
     public func reload(force: Bool = false, quiet: Bool = false) -> Bool {
         let fm = FileManager.default
         try? fm.createDirectory(at: Self.folder, withIntermediateDirectories: true)
-        let folders = ((try? fm.contentsOfDirectory(at: Self.folder, includingPropertiesForKeys: nil)) ?? [])
-            .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }.sorted { $0.path < $1.path }
+        func subfolders(_ dir: URL) -> [URL] {
+            ((try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? [])
+                .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }.sorted { $0.path < $1.path }
+        }
+        // The fixes people shared and the project accepted (Resources/fixes, copied into the app by build.sh; 7 Nov
+        // 2026) first, then the person's own, which can add to or undo them.
+        let folders = (Self.shippedFixes.map(subfolders) ?? []) + subfolders(Self.folder)
         let current = plugins
         if !force, folders.count == current.count, zip(folders, current).allSatisfy({ f, p in
             f == p.folder && ([f.appendingPathComponent("manifest.json"), f.appendingPathComponent("profile.json")]

@@ -10,7 +10,8 @@
 //   Don't announce this
 //   Undo the last change
 //   My changes for <app>     each change; Return removes one
-//   Share my changes         the plugin as a .zip on the Desktop, to send or submit
+//   Share my changes on GitHub   copied, with the Share a fix form opened; accepted ones come with TurnOver
+//   Save my changes as a file    the plugin as a .zip on the Desktop, to send to someone
 // Every change goes into a plugin of the user's own for that app ("My changes for Bambu Studio", folder my-<bundle>)
 // in TurnOver's plugins folder, and applies at once. The match is chosen and checked by TurnOver: the identifier
 // first; else the title, description or tooltip; else "unnamed, inside" the nearest named part, with its place
@@ -162,7 +163,10 @@ public enum PluginMaker {
             MenuItem("Don't announce this", .action { silence(e, pid: pid, bundle: bundle, appName: appName) }),
             MenuItem("Undo the last change", .action { undo() }),
             MenuItem("My changes for \(appName)", .action { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { listChanges(bundle: bundle, appName: appName) } }),
-            MenuItem("Share my changes for \(appName)", .action { share(bundle: bundle, appName: appName) }),
+            MenuItem("Share my changes for \(appName) on GitHub", .action { shareOnGitHub(bundle: bundle, appName: appName) },
+                     hint: "Copies your changes and opens a short form in your browser. Accepted changes come with TurnOver for everyone. You need a free GitHub account"),
+            MenuItem("Save my changes for \(appName) as a file", .action { share(bundle: bundle, appName: appName) },
+                     hint: "A zip on the Desktop, to send to someone"),
         ]
         TurnOverMenu.shared.openList(verbatim: String(localized: "Change \(itemName)", comment: "The plugin maker's list for an item: %@ is the item"), items: items)
     }
@@ -270,6 +274,27 @@ public enum PluginMaker {
         for r in p.watch ?? [] { item("Read when it changes: \(words(r.match))", kind: "watch", json: encode(r)) }
         for m in p.silence ?? [] { item("Not announced: \(words(m))", kind: "silence", json: encode(m)) }
         TurnOverMenu.shared.openList(verbatim: String(localized: "My changes for \(appName). Return removes one", comment: "A list of your plugin changes: %@ is the app"), items: items)
+    }
+
+    /// Share my changes on GitHub (7 Nov 2026, Oliver asked for a way to share these little fixes so they reach
+    /// everyone): the two files go on the clipboard, not into the address, so the person reads exactly what they send
+    /// and can take out anything private before submitting; the form (Share a fix) is opened, filled in with the app.
+    /// A fix the project accepts goes into Resources/fixes and comes with TurnOver (ProfileStore.shippedFixes).
+    static func shareOnGitHub(bundle: String, appName: String) {
+        let dir = folder(for: bundle)
+        guard let manifest = try? String(contentsOf: dir.appendingPathComponent("manifest.json"), encoding: .utf8),
+              let profile = try? String(contentsOf: dir.appendingPathComponent("profile.json"), encoding: .utf8) else {
+            Speech.speakMessage(String(localized: "No changes for \(appName) yet", comment: "Sharing plugin changes: there are none for the app")); return
+        }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString("manifest.json\n\(manifest)\n\nprofile.json\n\(profile)", forType: .string)
+        var c = URLComponents(string: Edition.issuesURL + "/new")!
+        c.queryItems = [URLQueryItem(name: "template", value: "share-a-fix.yml"), URLQueryItem(name: "title", value: "A fix for \(appName)"),
+                        URLQueryItem(name: "app", value: appName)]
+        guard let url = c.url else { return }
+        Log.info("plugin maker: changes for \(bundle) copied to share on GitHub")
+        NSWorkspace.shared.open(url)
+        Speech.speakMessage(String(localized: "Your changes for \(appName) are copied, and the form is open in your browser. Paste them where it asks, check they hold nothing private, then submit it. Thank you.", comment: "Sharing plugin changes on GitHub: %@ is the app"))
     }
 
     static func share(bundle: String, appName: String) {
