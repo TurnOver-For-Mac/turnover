@@ -10,14 +10,12 @@
 import AppKit
 import ServiceManagement
 import TurnOverCore
-import TurnOverControl
 
 enum Uninstaller {
     /// While true, nothing turns VoiceOver off again (the lead watcher would, with Mail in front).
     static private(set) var running = false
 
-    /// Both copies when a developer build sits beside the published one (issue 248): uninstalling either removes both.
-    nonisolated static let bundleIDs = [ActiveReader.published, ActiveReader.developer, "com.turnover.key"]
+    nonisolated static let bundleIDs = ["com.turnover.reader", "com.turnover.key"]
 
     static func menuItems() -> [MenuItem] {
         [
@@ -132,12 +130,6 @@ enum Uninstaller {
     nonisolated private static func trashApp() -> Bool {
         let app = Bundle.main.bundleURL
         guard app.pathExtension == "app" else { return false }
-        // The other copy too, TurnOver Developer or the published TurnOver, when it is installed (issue 248).
-        let me = Bundle.main.bundleIdentifier ?? ActiveReader.published
-        if let other = NSWorkspace.shared.urlForApplication(withBundleIdentifier: ActiveReader.other(than: me)), other != app {
-            do { try FileManager.default.trashItem(at: other, resultingItemURL: nil) } catch { Log.warning("uninstall: the other copy: \(error)") }
-        }
-        try? FileManager.default.removeItem(at: AppPaths.file("active-reader"))
         do { try FileManager.default.trashItem(at: app, resultingItemURL: nil); return true }
         catch { Log.warning("uninstall: app: \(error)"); return false }
     }

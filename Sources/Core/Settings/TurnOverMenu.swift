@@ -433,7 +433,7 @@ public final class TurnOverMenu {
                                   hint: "What the picture shows and any text in it"))
             if Edition.includesPlugins {
                 items.append(MenuItem("Change the item I'm on", .action { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { PluginMaker.open() } },
-                                      hint: "Label it, give it a key, read it when it changes, or keep it quiet. TurnOver Shift Slash does the same"))
+                                      hint: "Label it, give it a key, read it when it changes, or keep it quiet. With VoiceOver keys, VO-Slash does the same"))
             }
             // Help improve this app (7 Nov 2026): tell the project what's wrong, build the app's module with your own AI
             // or by hand, or ask for a building block. It took over from Ask for this app to be tuned, which emailed.
@@ -571,14 +571,20 @@ public final class TurnOverMenu {
                 var title = String(localized: "\(m.name) \(String(describing: m.version)), for \(apps)", comment: "A plugin: its name, version and apps")
                 if let author { title += String(localized: ", by \(author)", comment: "A plugin's author, after its name") }
                 if let view = p.profile?.view { title += String(localized: ", a \(String(describing: view.kind)) view", comment: "A plugin's kind of view (chat, media)") }
-                items.append(MenuItem(verbatim: title, .submenu {[
+                // A fix that ships inside TurnOver (Resources/fixes) can't be moved out of the app: no Remove for it.
+                let shipped = ProfileStore.shippedFixes.map { folder.path.hasPrefix($0.path) } ?? false
+                if shipped { title += String(localized: ", comes with TurnOver", comment: "A plugin that ships inside TurnOver") }
+                items.append(MenuItem(verbatim: title, .submenu {
+                    var sub: [MenuItem] = [
                     MenuItem("About", .action {
                         let p2 = ProfileStore.shared.plugins.first { $0.manifest?.id == m.id }?.profile
                         let n = (p2?.labels?.count ?? 0, p2?.keys?.count ?? 0, p2?.watch?.count ?? 0)
                         Speech.speakMessage(String(localized: "\(m.description ?? m.name). \(String(n.0)) labels, \(String(n.1)) keys, \(String(n.2)) watched.", comment: "About a plugin: its description, then what it has"))
                     }),
-                    MenuItem("Remove", .action { Self.removePlugin(at: folder, name: m.name) }, hint: "Moves it to the Trash; put it back from there to have it again"),
-                ]}))
+                    ]
+                    if !shipped { sub.append(MenuItem("Remove", .action { Self.removePlugin(at: folder, name: m.name) }, hint: "Moves it to the Trash; put it back from there to have it again")) }
+                    return sub
+                }))
             } else {
                 let folder = p.folder
                 items.append(MenuItem("\(p.folder.lastPathComponent): does not load. \(p.error ?? "")", .submenu {[

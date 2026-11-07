@@ -176,6 +176,8 @@ cp "Resources/TurnOver Guide.txt" "$APP/Contents/Resources/TurnOver Guide.txt"
 cp "$BIN/turnover-plugin" "$APP/Contents/MacOS/turnover-plugin"
 cp PLUGIN-GUIDE.md "$APP/Contents/Resources/PLUGIN-GUIDE.md"
 rm -rf "$APP/Contents/Resources/plugin-schema"; cp -R Resources/plugin-schema "$APP/Contents/Resources/plugin-schema"
+# The fixes people shared and the project accepted (Resources/fixes, 7 Nov 2026): loaded for everyone (ProfileStore).
+rm -rf "$APP/Contents/Resources/fixes"; [ -d Resources/fixes ] && cp -R Resources/fixes "$APP/Contents/Resources/fixes"
 # Left by older builds: the beta guide (the guides replaced it) and the listings (built into the program now,
 # make-embedded.py).
 rm -rf "$APP/Contents/Resources/official" "$APP/Contents/Resources/TurnOver Beta Guide.txt"

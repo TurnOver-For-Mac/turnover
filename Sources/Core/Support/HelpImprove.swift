@@ -25,6 +25,11 @@ public enum HelpImprove {
             MenuItem("Tell us what's wrong in \(name)", .action { report(pid: pid, name: name, form: .problem) },
                      hint: "A short form opens in your browser, already filled in with \(name) and how it is built, never what is in it. You say what happens. Nothing to install; you need a free GitHub account"),
         ]
+        // The quickest fix: name, key or quieten the item TurnOver is on, with nothing to install (PluginMaker).
+        if Edition.includesPlugins {
+            items.append(MenuItem("Fix the item I'm on", .action { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { PluginMaker.open() } },
+                                  hint: "Give it a name, a key, or keep it quiet. It works at once, and you can share it. With VoiceOver keys, VO-Slash does the same"))
+        }
         for ai in PluginAI.allCases where PluginAI.agentPath(ai) != nil || ai == .claude {
             items.append(MenuItem("Build it with \(ai.agentName)", .action { build(pid: pid, name: name, ai: ai) },
                                   hint: "\(ai.agentName) helps you make the fix for \(name), one step at a time, and checks with you before anything is sent. You need Xcode, Apple's free tool for building apps, and a free GitHub account; \(ai.agentName) helps you set them up. For three hours it may also try keys in \(name)"))

@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Making a plugin by hand, in the app, with nothing to write (docs/PLUGIN-TOOLKIT-PLAN.md, item 1; 11 Oct 2026).
 //
-// TurnOver Shift Slash (VoiceOver's VO Shift Slash labels an item; NVDA needs Python for any of this) opens a short
+// VO-Slash with VoiceOver keys, or This app, Change the item I'm on, in the TurnOver menu (VoiceOver's own VO-Slash
+// commands label an item; NVDA needs Python for any of this; 7 Nov 2026: this said TurnOver Shift Slash, which
+// opens the guide) opens a short
 // list for the item TurnOver is on (the review cursor if it is in the app in front, else the focus):
 //   What is this?            role, name, identifier, where it sits, and the match TurnOver would use; copied too
 //   Label this item          type a name; it is called that from now on
@@ -10,7 +12,8 @@
 //   Don't announce this
 //   Undo the last change
 //   My changes for <app>     each change; Return removes one
-//   Share my changes         the plugin as a .zip on the Desktop, to send or submit
+//   Share my changes on GitHub   copied, with the Share a fix form opened; accepted ones come with TurnOver
+//   Save my changes as a file    the plugin as a .zip on the Desktop, to send to someone
 // Every change goes into a plugin of the user's own for that app ("My changes for Bambu Studio", folder my-<bundle>)
 // in TurnOver's plugins folder, and applies at once. The match is chosen and checked by TurnOver: the identifier
 // first; else the title, description or tooltip; else "unnamed, inside" the nearest named part, with its place
@@ -96,7 +99,7 @@ public enum PluginMaker {
         if let m = loaded.manifest, let p = loaded.profile { return (m, p) }
         let safe = String(bundle.map { $0.isLetter || $0.isNumber ? $0 : "-" })
         var m = PluginManifest(id: "my-" + safe, name: "My changes for \(appName)", version: "1", author: NSFullUserName(),
-                               description: "Made in TurnOver with TurnOver Shift Slash.", apps: [bundle])
+                               description: "Made in TurnOver with its fix list.", apps: [bundle])
         m.kind = "profile"; m.formatVersion = PluginFormat.currentVersion
         return (m, Profile(labels: nil, keys: nil, watch: nil, silence: nil, view: nil))
     }
@@ -118,6 +121,8 @@ public enum PluginMaker {
 
     static func encode<T: Encodable>(_ v: T) -> Data { let e = JSONEncoder(); e.outputFormatting = .sortedKeys; return (try? e.encode(v)) ?? Data() }
 
+    /// The apps whose sharing has been pointed out this session.
+    private static var toldHowToShare: Set<String> = []
     static func add(_ kind: String, bundle: String, appName: String, change: (inout Profile) -> Data) -> Bool {
         let (m, p0) = load(bundle: bundle, appName: appName)
         var p = p0
@@ -125,6 +130,13 @@ public enum PluginMaker {
         guard save(m, p, bundle: bundle) else { return false }
         history.append((bundle, appName, kind, json))
         Log.io("plugin maker: \(kind) added to My changes for \(appName)")
+        // Once per app each session, after what was saved is said: where sharing is (7 Nov 2026).
+        if !toldHowToShare.contains(bundle) {
+            toldHowToShare.insert(bundle)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                Speech.speakMessage(String(localized: "To share it, open this list again and choose Share my changes.", comment: "Said after the first change made for an app"))
+            }
+        }
         return true
     }
 
@@ -146,7 +158,7 @@ public enum PluginMaker {
         return done && save(m, p, bundle: bundle)
     }
 
-    // MARK: The list (TurnOver Shift Slash)
+    // MARK: The list (VO-Slash, or This app in the menu)
 
     public static func open() {
         guard Edition.includesPlugins else { Speech.speakMessage(String(localized: "Plugins are not on in this version", comment: "Spoken message")); return }
@@ -160,9 +172,13 @@ public enum PluginMaker {
             MenuItem("Give this item a key", .action { giveKey(e, pid: pid, bundle: bundle, appName: appName) }),
             MenuItem("Read this when it changes", .action { watch(e, pid: pid, bundle: bundle, appName: appName) }),
             MenuItem("Don't announce this", .action { silence(e, pid: pid, bundle: bundle, appName: appName) }),
+            // Sharing straight after the changes (7 Nov 2026: at the end of the list it went unfound).
+            MenuItem("Share my changes for \(appName) on GitHub", .action { shareOnGitHub(bundle: bundle, appName: appName) },
+                     hint: "Copies your changes and opens a short form in your browser. Accepted changes come with TurnOver for everyone. You need a free GitHub account"),
             MenuItem("Undo the last change", .action { undo() }),
             MenuItem("My changes for \(appName)", .action { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { listChanges(bundle: bundle, appName: appName) } }),
-            MenuItem("Share my changes for \(appName)", .action { share(bundle: bundle, appName: appName) }),
+            MenuItem("Save my changes for \(appName) as a file", .action { share(bundle: bundle, appName: appName) },
+                     hint: "A zip on the Desktop, to send to someone"),
         ]
         TurnOverMenu.shared.openList(verbatim: String(localized: "Change \(itemName)", comment: "The plugin maker's list for an item: %@ is the item"), items: items)
     }
@@ -270,6 +286,27 @@ public enum PluginMaker {
         for r in p.watch ?? [] { item("Read when it changes: \(words(r.match))", kind: "watch", json: encode(r)) }
         for m in p.silence ?? [] { item("Not announced: \(words(m))", kind: "silence", json: encode(m)) }
         TurnOverMenu.shared.openList(verbatim: String(localized: "My changes for \(appName). Return removes one", comment: "A list of your plugin changes: %@ is the app"), items: items)
+    }
+
+    /// Share my changes on GitHub (7 Nov 2026, Oliver asked for a way to share these little fixes so they reach
+    /// everyone): the two files go on the clipboard, not into the address, so the person reads exactly what they send
+    /// and can take out anything private before submitting; the form (Share a fix) is opened, filled in with the app.
+    /// A fix the project accepts goes into Resources/fixes and comes with TurnOver (ProfileStore.shippedFixes).
+    static func shareOnGitHub(bundle: String, appName: String) {
+        let dir = folder(for: bundle)
+        guard let manifest = try? String(contentsOf: dir.appendingPathComponent("manifest.json"), encoding: .utf8),
+              let profile = try? String(contentsOf: dir.appendingPathComponent("profile.json"), encoding: .utf8) else {
+            Speech.speakMessage(String(localized: "No changes for \(appName) yet", comment: "Sharing plugin changes: there are none for the app")); return
+        }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString("manifest.json\n\(manifest)\n\nprofile.json\n\(profile)", forType: .string)
+        var c = URLComponents(string: Edition.issuesURL + "/new")!
+        c.queryItems = [URLQueryItem(name: "template", value: "share-a-fix.yml"), URLQueryItem(name: "title", value: "A fix for \(appName)"),
+                        URLQueryItem(name: "app", value: appName)]
+        guard let url = c.url else { return }
+        Log.info("plugin maker: changes for \(bundle) copied to share on GitHub")
+        NSWorkspace.shared.open(url)
+        Speech.speakMessage(String(localized: "Your changes for \(appName) are copied, and the form is open in your browser. Paste them where it asks, check they hold nothing private, then submit it. Thank you.", comment: "Sharing plugin changes on GitHub: %@ is the app"))
     }
 
     static func share(bundle: String, appName: String) {
