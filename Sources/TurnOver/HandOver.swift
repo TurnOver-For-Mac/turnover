@@ -54,7 +54,10 @@ enum HandOver {
         // a slow start isn't toggled back off (a code review, 25 Oct 2026). Waited for here when asked, else later.
         // And only if no newer choice of reader came meanwhile: the user turning VoiceOver off in those seconds must not
         // find it turned back on (the same review).
-        func fallBack() {
+        // @Sendable: it may run on a global queue (below). It captures only `why` and `mine`, both values, and reads
+        // `choice` through its lock; the rest are nonisolated statics that ask the system (7 Nov 2026: the Sendable
+        // warning noted at 22.5, docs/releases/23-NEXT.md).
+        @Sendable func fallBack() {
             guard choice.value == mine, !NSWorkspace.shared.isVoiceOverEnabled, !voiceOverRunning else { return }
             Log.error("\(why): VoiceOver.app didn't bring VoiceOver; its shortcut")
             postToggle()
