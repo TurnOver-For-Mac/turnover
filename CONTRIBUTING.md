@@ -7,6 +7,11 @@ mostly about not wasting your time or mine.
 
 - **Report a problem** with the [issue form](../../issues/new/choose): what you did, what happened, what you expected,
   your macOS version and keyboard style. One problem per issue.
+- **Make or improve an app module**: the code that teaches TurnOver one app. Claim the app with the Work on an app
+  form, then follow [MODULE-GUIDE.md](MODULE-GUIDE.md) from looking at the app to a pull request. With an AI
+  assistant, give it [AI-CONTRIBUTOR.md](AI-CONTRIBUTOR.md) and the app's name: it does the technical parts.
+- **Ask for a building block** when a module needs something from TurnOver's core that it can't do alone: the
+  A building block form. [docs/BUILDING-BLOCKS.md](docs/BUILDING-BLOCKS.md) says how requests are handled.
 - **Make a plugin** for an app TurnOver doesn't read well yet: reading rules, labels and keys, written as data. See
   [PLUGIN-GUIDE.md](PLUGIN-GUIDE.md). This is the easiest way in, and needs no Swift.
 - **Fix something**, in the code or the guides (Guides/), with a pull request.
