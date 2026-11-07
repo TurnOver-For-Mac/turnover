@@ -101,6 +101,20 @@ func policyTests() {
         MenuBarOwner.current = { 1352 }
         expect(MenuBarOwner.pid, 1352, "the owner's bar")
     }
+    test("menu bar: leaving the held bar says the focus it was taken from, the Dock's too (a review, 6 Nov 2026)") {
+        // (what, the focus's pid, named, the focus the bar was taken from, the bar's pid, the window named, said)
+        let table: [(String, pid_t?, Bool, Bool, pid_t, Bool, MenuBarOwner.Leaving)] = [
+            ("the Dock: its list has no name, and the bar is the front app's", 600, false, true, 1352, true, .focus),
+            ("another app's named focus, the bar the front app's", 700, true, true, 1352, true, .focus),
+            ("the front app's named focus", 1352, true, true, 1352, true, .focus),
+            ("the front app's nameless focus: the window's name", 1352, false, true, 1352, true, .window),
+            ("the focus went to another app while the bar was held: the window's name", 600, false, false, 1352, true, .window),
+            ("no focus, and a nameless window: the app is asked", nil, false, false, 1352, false, .app),
+        ]
+        for (what, pid, named, cameFrom, bar, window, want) in table {
+            expect(MenuBarOwner.leaving(focusPid: pid, focusNamed: named, focusIsWhereItCameFrom: cameFrom, barPid: bar, windowNamed: window), want, what)
+        }
+    }
 }
 
 func activityTests() {

@@ -16,8 +16,8 @@ import AppKit
 import ApplicationServices
 import TurnOverAX
 
-/// Whose menu bar the menu-bar keys take (Control-F2, VO-M, Command alone): the plugin's decision, kept apart from it
-/// so a test can ask it.
+/// Whose menu bar the menu-bar keys take (Control-F2, VO-M, Command alone), and what leaving the held bar says: the
+/// plugin's decisions, kept apart from it so the tests can ask them.
 public enum MenuBarOwner {
     /// The application whose menus the menu bar shows (NSWorkspace's menuBarOwningApplication); a test puts in its own.
     public static var current: () -> pid_t? = { NSWorkspace.shared.menuBarOwningApplication?.processIdentifier }
@@ -29,6 +29,19 @@ public enum MenuBarOwner {
     /// no bar: the key goes on, or the edge sound plays. The focus's app is no stand-in, as that was the app whose
     /// menu was pressed (a review, 6 Nov 2026).
     public static var pid: pid_t? { current() }
+
+    /// What leaving the held bar without a choice says (Escape, or VO-M again).
+    public enum Leaving: Equatable { case focus, window, app }
+
+    /// The held bar never moves the keys, so the focus TurnOver had when the bar was taken is said again when it is
+    /// still the focus and in another app than the bar's: in the Dock (its list has no name), Escape read the front
+    /// app's window instead of the Dock item (a review, 6 Nov 2026). In the bar's own app, as before: a named focus,
+    /// else the window's name, else the app is asked (refocus alone was silent when nothing had changed, 8 Oct 2026).
+    public static func leaving(focusPid: pid_t?, focusNamed: Bool, focusIsWhereItCameFrom: Bool, barPid: pid_t, windowNamed: Bool) -> Leaving {
+        if let p = focusPid, focusIsWhereItCameFrom, p != barPid { return .focus }
+        if let p = focusPid, p == barPid, focusNamed { return .focus }
+        return windowNamed ? .window : .app
+    }
 }
 
 final class MenuNavigationPlugin: GlobalPlugin {
@@ -184,6 +197,8 @@ final class MenuNavigationPlugin: GlobalPlugin {
     static var heldBar: (pid: pid_t, titles: [AXUIElement], index: Int)?
     /// Holding the status items instead (VO M M): their names and owning processes, by index.
     static var heldStatus: (names: [String], pids: [pid_t])?
+    /// TurnOver's focus when the bar was taken, said again on leaving it (MenuBarOwner.leaving).
+    static var cameFrom: TurnOverObject?
 
     /// The status menus as VoiceOver has them (Mac style, VO M M): along the right of the menu bar with Left and
     /// Right, Down opens one (a vertical list, with the arrows bumping, was the NVDA way: a tester, 8 Oct 2026).
@@ -192,6 +207,7 @@ final class MenuNavigationPlugin: GlobalPlugin {
         guard let pid = MenuBarOwner.pid else { Tones.edge(); return }
         // TurnOver's own item last, as in the list on Windows+B; it was missing here (9 Oct 2026).
         let me = getpid()
+        if heldBar == nil { cameFrom = API.focusObject }   // (VO M M: the first M held the bar, from that focus)
         heldBar = (pid, extras.map(\.element) + [AXUIElementCreateApplication(me)], 0)
         heldStatus = (extras.map(\.name) + ["TurnOver"], extras.map(\.pid) + [me])
         Speech.speakMessage(String(localized: "status menus, \(String(extras.count + 1))", comment: "The status menus list opened: how many"))
@@ -203,6 +219,7 @@ final class MenuNavigationPlugin: GlobalPlugin {
         guard let pid = MenuBarOwner.pid, let bar = AXUIElementCreateApplication(pid).element(kAXMenuBarAttribute) else { Tones.edge(); return }
         let titles = bar.elements(kAXChildrenAttribute)
         guard !titles.isEmpty else { Tones.edge(); return }
+        if heldBar == nil { cameFrom = API.focusObject }
         heldBar = (pid, titles, 0)
         Speech.speakMessage(String(localized: "menu bar", comment: "Spoken message"))
         sayBarTitle()
@@ -211,11 +228,16 @@ final class MenuNavigationPlugin: GlobalPlugin {
 
     static func releaseBar() { heldBar = nil; heldStatus = nil }
 
-    /// Leaving the bar: where the keyboard still is, said (refocus alone was silent when nothing had changed, 8 Oct 2026).
+    /// Leaving the bar of the app `pid`: where the keyboard still is, said (MenuBarOwner.leaving).
     static func backFromBar(pid: pid_t) {
-        if let f = API.focusObject, f.pid == pid, !f.name.isEmpty { Speech.speakObject(f, reason: .focus) }
-        else if let w = API.foregroundObject, !w.name.isEmpty { Speech.speakMessage(w.name + ", " + Role.window.displayString) }
-        else { AXHandler.shared.refocus(pid: pid) }
+        let f = API.focusObject, from = cameFrom
+        cameFrom = nil
+        switch MenuBarOwner.leaving(focusPid: f?.pid, focusNamed: !(f?.name.isEmpty ?? true), focusIsWhereItCameFrom: f?.isSameElement(as: from) ?? false,
+                                    barPid: pid, windowNamed: !(API.foregroundObject?.name.isEmpty ?? true)) {
+        case .focus: if let f { Speech.speakObject(f, reason: .focus) }
+        case .window: if let w = API.foregroundObject { Speech.speakMessage(w.name + ", " + Role.window.displayString) }
+        case .app: AXHandler.shared.refocus(pid: pid)
+        }
     }
 
     private static func sayBarTitle() {
