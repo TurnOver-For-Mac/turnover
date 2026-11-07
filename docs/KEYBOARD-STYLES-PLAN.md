@@ -22,7 +22,7 @@ already do; the gaps are listed; the Mac-versus-Windows design choices are made 
 | JAWS | 408 | 78 | 161 | 124 | 8 | 37 |
 | VoiceOver (Mac style) | 104 | 96 | 3 | 5 | n/a | n/a |
 
-- **NVDA**: nearly there. To build: review modes (screen review), mouse tracking, table headers set by hand, progress
+- **NVDA**: nearly there. To build: review modes (screen review), table headers set by hand, progress
   bar beeps, maths.
 - **Narrator**: mostly a key table; TurnOver already does nearly all of it on other keys. To build: read from the top,
   verbosity levels, speech recap, mouse mode.

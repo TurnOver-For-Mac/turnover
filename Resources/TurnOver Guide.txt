@@ -1219,6 +1219,7 @@ NVDA keys
   TurnOver F9: Marks the review cursor as the start of text to copy (NVDA+F9)
   TurnOver Home: Moves the review cursor to the start of the line (NVDA+Home)
   TurnOver K: Reports where the link goes (NVDA+K)
+  TurnOver M: Mouse tracking on or off; reads what is under the mouse pointer as it moves (NVDA+M)
   TurnOver Period: Reports the character at the review cursor; twice, spells it (NVDA+Period)
   TurnOver U: Progress bars: beeps that rise in pitch, the percentage spoken, both, or nothing (NVDA+U)
   TurnOver V: Screen layout on or off in browse mode: things side by side on one line (NVDA+V)
