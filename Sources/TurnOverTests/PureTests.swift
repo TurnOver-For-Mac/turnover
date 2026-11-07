@@ -667,7 +667,8 @@ func pureTests() {
         guard let dir = try? HelpImprove.write(pid: 1, name: "Example", bundle: "com.example", report: "Front window: 1 items",
                                                base: base, versions: "TurnOver", brief: "https://example.invalid/AI-CONTRIBUTOR.md"),
               let start = try? String(contentsOf: dir.appendingPathComponent("START.md"), encoding: .utf8) else { return Harness.fail("no START.md") }
-        for words in ["AGENTS.md", "MODULE-GUIDE.md", "./build.sh", "check-module-fence.py", "AI-CONTRIBUTOR.md", "never paste it anywhere public"] {
+        for words in ["AGENTS.md", "MODULE-GUIDE.md", "./build.sh", "check-module-fence.py", "AI-CONTRIBUTOR.md", "never paste it anywhere public",
+                      "Xcode", "turnoverformac.com", "Tell us what's wrong"] {
             expect(start.contains(words), true)
         }
     }

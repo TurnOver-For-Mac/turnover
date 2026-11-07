@@ -9,6 +9,11 @@ on your Mac), with the app's name:
 That's all you need to know. The AI does the technical parts and asks you when it needs you: to type a password, to
 listen, or to say yes before anything is posted.
 
+What it takes: Xcode (free from the App Store, but a very large download), a GitHub account, and an AI that can run
+commands on your Mac. While you try your work, your Mac runs the TurnOver you built instead of the published one;
+the AI tells you how to go back. If that's more than you want, choose Tell us what's wrong in TurnOver's menu
+instead (This app, Help improve this app): it needs none of this, and someone else can build it.
+
 ---
 
 **For the AI:** the rest of this file is for you. Follow it in order.
@@ -50,7 +55,16 @@ request for the person instead: what the app needs, what you tried in the module
 
 ## 1. Get ready
 
-Check, and help the person with anything missing:
+First tell the person, plainly, what this involves, and let them choose:
+
+- They need Xcode, a GitHub account and you.
+- Trying their module means installing the TurnOver they build in place of the one they have. It's signed
+  differently, so macOS may ask them to allow Accessibility and Input Monitoring again, and it doesn't update
+  itself.
+- How to go back afterwards (below).
+- If that's too much, Tell us what's wrong in TurnOver's menu sends what they know instead, and needs none of it.
+
+Then check, and help the person with anything missing:
 
 - macOS 14 or later, and Xcode 27: `xcodebuild -version`. Installing Xcode is a large download from the App Store;
   the person may need to start it.
@@ -136,6 +150,18 @@ first. Say:
 
 Link the Work on an app issue. When they say yes, open it. Tell them the project will review it. They'll see
 replies on GitHub, and you can help them answer.
+
+## Going back to the published TurnOver
+
+When the person has finished trying their work, or wants to stop:
+
+1. Download TurnOver again from https://turnoverformac.com.
+2. Quit TurnOver from its menu (Command Control M, then Quit). VoiceOver takes over. Replace the TurnOver in
+   Applications with the downloaded one, and open it.
+3. If macOS asks, allow Accessibility and Input Monitoring again, in System Settings, Privacy and Security. The
+   person does that themselves.
+
+Updates come back with it. Their pull request and their copy of the code are unaffected.
 
 ## If you get stuck
 

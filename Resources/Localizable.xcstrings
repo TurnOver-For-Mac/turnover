@@ -930,16 +930,6 @@
         }
       }
     },
-    "%@ opens with a description of %@ and TurnOver's brief, and helps you make %@'s module and send it to the project. It asks you before anything is posted. For three hours it may also try keys in %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ opens with a description of %2$@ and TurnOver's brief, and helps you make %3$@'s module and send it to the project. It asks you before anything is posted. For three hours it may also try keys in %4$@"
-          }
-        }
-      }
-    },
     "%@ page" : {
       "comment" : "An area of the Music, Podcasts or TV window: %@ is the page's title",
       "localizations" : {
@@ -2461,9 +2451,6 @@
     },
     "A folder describing %@ is open in Finder, and the guide to writing a module is open in your browser." : {
       "comment" : "Help improve this app: by hand; %@ is the app"
-    },
-    "A folder describing %@, opened in Finder, and the guide to writing a module in your browser" : {
-
     },
     "A letter or digit with no command in browse mode: nothing" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -5297,6 +5284,19 @@
           }
         }
       }
+    },
+    "For people with %@ and Xcode installed and a GitHub account; Tell us what's wrong needs none of that. %@ opens with a description of %@ and TurnOver's brief, and helps you make %@'s module and send it to the project. It asks you before anything is posted. For three hours it may also try keys in %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "For people with %1$@ and Xcode installed and a GitHub account; Tell us what's wrong needs none of that. %2$@ opens with a description of %3$@ and TurnOver's brief, and helps you make %4$@'s module and send it to the project. It asks you before anything is posted. For three hours it may also try keys in %5$@"
+          }
+        }
+      }
+    },
+    "For people with Xcode and a GitHub account. A folder describing %@, opened in Finder, and the guide to writing a module in your browser" : {
+
     },
     "For this app, until TurnOver quits. Command Control Comma, then T, does the same and remembers it" : {
       "localizations" : {

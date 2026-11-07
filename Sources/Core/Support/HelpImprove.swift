@@ -27,10 +27,10 @@ public enum HelpImprove {
         ]
         for ai in PluginAI.allCases where PluginAI.agentPath(ai) != nil || ai == .claude {
             items.append(MenuItem("Build it with \(ai.agentName)", .action { build(pid: pid, name: name, ai: ai) },
-                                  hint: "\(ai.agentName) opens with a description of \(name) and TurnOver's brief, and helps you make \(name)'s module and send it to the project. It asks you before anything is posted. For three hours it may also try keys in \(name)"))
+                                  hint: "For people with \(ai.agentName) and Xcode installed and a GitHub account; Tell us what's wrong needs none of that. \(ai.agentName) opens with a description of \(name) and TurnOver's brief, and helps you make \(name)'s module and send it to the project. It asks you before anything is posted. For three hours it may also try keys in \(name)"))
         }
         items.append(MenuItem("Build it myself", .action { build(pid: pid, name: name, ai: nil) },
-                              hint: "A folder describing \(name), opened in Finder, and the guide to writing a module in your browser"))
+                              hint: "For people with Xcode and a GitHub account. A folder describing \(name), opened in Finder, and the guide to writing a module in your browser"))
         items.append(MenuItem("Ask for a building block", .action { report(pid: pid, name: name, form: .buildingBlock) },
                               hint: "When \(name) needs something TurnOver's core doesn't have yet. Opens the request form in your browser, filled in with \(name) and how it is built"))
         return items
@@ -147,6 +147,17 @@ public enum HelpImprove {
         - Before the pull request: ./build.sh must finish with every test passed, and
           python3 Tools/check-module-fence.py origin/main --outside must say it's inside the fence. GitHub checks
           both again on the pull request.
+
+        Before anything is installed, tell the person, plainly:
+
+        - They need Xcode (free from the App Store, but a very large download), a GitHub account, and you.
+        - Trying their module means installing the TurnOver they build in place of the one they have. It's signed
+          differently, so macOS may ask them to allow Accessibility and Input Monitoring again, and it doesn't
+          update itself.
+        - To go back afterwards: download TurnOver again from https://turnoverformac.com, replace the one in
+          Applications, and allow the permissions again if asked. Updates then come back.
+        - If that's more than they want, Tell us what's wrong (in TurnOver's menu, beside this) sends what they
+          know, and someone else can build it.
 
         These files describe the app as TurnOver sees it:
 
