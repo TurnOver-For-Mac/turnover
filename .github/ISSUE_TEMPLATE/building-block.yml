@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         A building block is something every app could use: a hook app modules don't have yet, a kind of control TurnOver doesn't read, or a change to how focus, speech or keys work. MODULE-GUIDE.md and docs/BUILDING-BLOCKS.md explain more.
-        You don't need to know how to build it. Say what the app needs, and what you tried.
+        You don't need to know how to build it. Say what the app needs, and what you tried. Thank you.
   - type: input
     id: app
     attributes:
