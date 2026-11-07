@@ -19,4 +19,6 @@ Start with [How to use TurnOver](how-to-use-turnover.html): the short tour, with
 
 ## Extending TurnOver
 
+- [Helping TurnOver read your apps](helping-turnover.html): tell us what's wrong, fix an item, share it, or build a
+  fix with your AI.
 - [Plugins](plugins.html)

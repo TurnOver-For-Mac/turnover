@@ -2,6 +2,31 @@
 
 The newest build is first. "Reported by a tester" marks a fix for something a tester sent in. Thank you.
 
+## 2.0, build 24
+
+### New to try
+
+- Help improve this app, in the TurnOver menu under This app: tell us what's wrong in the app in front, with a short
+  form already filled in with the app and how it is built (never what's in it); fix the item you're on; build a fix
+  with your own AI assistant (Claude Code, Codex or Gemini CLI) or by hand; or ask for something new from TurnOver
+  itself. It takes over from Ask for this app to be tuned. The guide, Helping TurnOver read your apps, has the steps.
+- Share the fixes you make: after labelling an item, giving it a key, or keeping it quiet (VO-Slash with VoiceOver
+  keys, or This app, Change the item I'm on), choose Share my changes on GitHub. TurnOver copies them and opens a
+  short form. Fixes the project accepts come with TurnOver for everyone who uses that app.
+- The welcome pages read like little web pages: Up and Down read a page a line at a time, Return goes on, Escape
+  skips the rest. The two keys everything hangs on come straight after the welcome: Command Control Period turns
+  TurnOver on and off, and Command Control Comma is the way in to everything.
+
+### Changed
+
+- If you build TurnOver yourself, it installs as TurnOver Developer beside TurnOver, so the TurnOver you have keeps
+  its permissions and its updates. The TurnOver menu switches between them, and Command Control Period follows
+  whichever you used last.
+
+### Fixed
+
+- Uninstall completely also removes TurnOver Developer, when it is installed.
+
 ## 2.0, build 23
 
 Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
