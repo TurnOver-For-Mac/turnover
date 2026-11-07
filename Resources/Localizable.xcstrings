@@ -11464,6 +11464,7 @@
     },
     "Readers per app are off: TurnOver reads everywhere while it is on. Command Control Period turns it off and on; Settings, Experimental, turns readers per app on." : {
       "comment" : "Spoken message",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -18322,16 +18323,8 @@
         }
       }
     },
-    "While TurnOver is on, it reads everything, and VoiceOver is off.\nTurnOver turns VoiceOver off as it starts and back on as it quits, so you are never without speech. To change that: Settings, Screen reader behaviour.\nCommand Control Shift T gives the app in front to VoiceOver, or back to TurnOver, and remembers it." : {
-      "comment" : "A welcome page: TurnOver and VoiceOver",
-      "localizations" : {
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "TurnOver açıkken her şeyi okur ve VoiceOver kapalıdır.\nTurnOver başlarken VoiceOver'ı kapatır, çıkarken yeniden açar; böylece hiçbir zaman konuşmasız kalmazsınız. Bunu değiştirmek için: Ayarlar, Ekran okuyucu davranışı.\nKomut Kontrol Shift T öndeki uygulamayı VoiceOver'a ya da yeniden TurnOver'a verir ve bunu hatırlar."
-          }
-        }
-      }
+    "While TurnOver is on, it reads everything, and VoiceOver is off.\nTurnOver turns VoiceOver off as it starts and back on as it quits, so you are never without speech. To change that: Settings, Screen reader behaviour.\nCommand Control Shift T keeps the app in front with VoiceOver, or gives it back to TurnOver, and remembers it." : {
+      "comment" : "A welcome page: TurnOver and VoiceOver"
     },
     "While playing: the next or previous slide, read" : {
       "comment" : "A command, as the key list and keyboard help say it",

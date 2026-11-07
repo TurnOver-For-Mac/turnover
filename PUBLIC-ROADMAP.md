@@ -6,8 +6,7 @@ sooner if someone sends a fix. To ask for something, use the idea form on GitHub
 opens it).
 
 TurnOver is a second choice beside VoiceOver: while it is on, it reads everything, password fields and macOS's own
-prompts included, and VoiceOver is off; turn it off and VoiceOver is back. With Readers per app on, Command Control
-Shift T keeps the app in front with VoiceOver, or gives it back. There are keyboard styles for VoiceOver's keys and NVDA's, with Narrator's and JAWS's on the way.
+prompts included, and VoiceOver is off; turn it off and VoiceOver is back. Command Control Shift T keeps the app in front with VoiceOver, or gives it back. There are keyboard styles for VoiceOver's keys and NVDA's, with Narrator's and JAWS's on the way.
 
 ## Plugins: coming back, in the open
 

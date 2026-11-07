@@ -12,7 +12,7 @@ fixes code that is not live. Each has a date and a reason. To reopen one, open a
   stands.
 - **On or off, and that is all** (22 Oct 2026). TurnOver is on or off; VoiceOver is on or off; TurnOver reads
   everywhere while it is on. No apps labelled for a reader, no switching as apps change, unless the experimental
-  readers-per-app switch is on. The two things that relate the readers are in Settings, Screen reader behaviour:
+  readers-per-app switch is on (Command Control Shift T turns it on when it gives an app to VoiceOver, 7 Nov 2026). The two things that relate the readers are in Settings, Screen reader behaviour:
   CoExist, and the swap (TurnOver on when VoiceOver goes off, and off when it comes on). Discussion 46 asked the
   community about the default behind this.
 - **The keys follow the reader they are named after** (15 Oct 2026). VoiceOver keys do what VoiceOver's do; NVDA keys

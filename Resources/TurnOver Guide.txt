@@ -21,14 +21,12 @@ Everything else is the keys of the screen reader you already know. See The TurnO
 
 Keeping some apps with VoiceOver
 
-If VoiceOver reads an app better for you, it can keep that app while TurnOver reads the rest:
+If VoiceOver reads an app better for you, it can keep that app while TurnOver reads the rest. In the app, press
+Command Control Shift T: VoiceOver takes it over, and TurnOver remembers your choice. The same key gives it back
+to TurnOver.
 
-1. Open Settings (Command Control Comma, then S), go to Screen reader behaviour, and under Experimental turn on
-   Readers per app.
-2. In the app, press Command Control Shift T. VoiceOver takes it over, and TurnOver remembers your choice. The
-   same key gives it back to TurnOver.
-
-The list of apps is under Tools in the TurnOver menu. More in TurnOver and VoiceOver.
+The first press turns on Readers per app (Settings, Screen reader behaviour). The list of VoiceOver's apps is
+under Tools in the TurnOver menu. More in TurnOver and VoiceOver.
 
 Choose your keys
 
@@ -95,8 +93,7 @@ Starting and stopping
 - Command Control Period starts TurnOver, or stops it, from anywhere. A rising chime means on, a falling one off.
   While TurnOver is on it reads everything, password fields and macOS's own prompts included, and VoiceOver is off.
   When TurnOver stops, VoiceOver comes back.
-- To keep some apps with VoiceOver: turn on Readers per app in Settings, Screen reader behaviour; then
-  Command Control Shift T gives the app in front to VoiceOver, or back to TurnOver, and remembers it.
+- Command Control Shift T keeps the app in front with VoiceOver, or gives it back to TurnOver, and remembers it.
 - To start TurnOver when you log in: the TurnOver menu, Settings, Starting, Open TurnOver at login.
 
 The first five minutes
@@ -326,12 +323,10 @@ What to expect
 
 Keeping some apps with VoiceOver
 
-If VoiceOver reads an app better for you, it can keep that app while TurnOver reads the rest.
-
-1. Open Settings (Command Control Comma, then S) and go to Screen reader behaviour. Under Experimental, turn on
-   Readers per app.
-2. In the app, press Command Control Shift T. VoiceOver takes it over, and TurnOver remembers your choice next
-   time. The same key gives it back to TurnOver.
+If VoiceOver reads an app better for you, it can keep that app while TurnOver reads the rest. In the app, press
+Command Control Shift T: VoiceOver takes it over, and TurnOver remembers your choice next time. The same key gives
+it back to TurnOver. The first press turns on Readers per app, in Settings, Screen reader behaviour, where you can
+turn it off again.
 
 The list of VoiceOver's apps is under Tools in the TurnOver menu, where you can also remove one. With Readers per app
 on you can also choose a mode: TurnOver everywhere except your VoiceOver apps (the usual one), TurnOver only in its
