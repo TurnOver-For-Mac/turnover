@@ -1,0 +1,114 @@
+{
+  "processExitCode": 1,
+  "result": {
+    "AXRequestsAttempted": 0,
+    "AXServiceAdvertised": false,
+    "DTXAborted": false,
+    "DTXClosed": false,
+    "DTXConnected": false,
+    "RSDCheckinAccepted": false,
+    "RSDCheckinAttempted": true,
+    "RSDConnectionsClosed": 0,
+    "RSDConnectionsOpened": 0,
+    "RSDHandshakeComplete": false,
+    "RSDStartServiceAccepted": false,
+    "XPCConnectionsCancelled": 2,
+    "XPCConnectionsReleased": 2,
+    "actionsAttempted": 0,
+    "assertionAcquired": true,
+    "assertionCreationUncertain": false,
+    "assertionInfoShape": {
+      "fields": {
+        "rsdDeviceInfo": {
+          "fields": {
+            "name": {
+              "type": "string"
+            },
+            "uuid": {
+              "type": "uuid"
+            }
+          },
+          "omittedKeyCount": 0,
+          "type": "dictionary"
+        },
+        "tunnelIPAddress": {
+          "type": "string"
+        }
+      },
+      "omittedKeyCount": 0,
+      "type": "dictionary"
+    },
+    "assertionReleaseAttempted": true,
+    "assertionReleaseErrorPresent": false,
+    "assertionReleaseReplyReceived": true,
+    "assertionRequested": true,
+    "attributesRead": false,
+    "auditRequested": false,
+    "cleanupConfirmed": true,
+    "clientEntitlementsModified": false,
+    "dependencyVersion": "11.10.2",
+    "deviceAPIVersionNegotiated": false,
+    "deviceIdentifiersLogged": false,
+    "dispatchQueueReleased": true,
+    "elapsedMilliseconds": 505,
+    "eligiblePhoneCount": 1,
+    "encryptionHandling": "native-netcat-owned",
+    "endpointAddressesLogged": false,
+    "errorClass": "IncompleteReadError",
+    "escrowBagIncluded": false,
+    "inspectorFocusRequested": false,
+    "inspectorMonitoringRequested": false,
+    "legacyCapabilitiesComplete": false,
+    "legacyCapabilitiesRequested": false,
+    "localTransportClosed": true,
+    "method": "native-existing-paired-legacy-shim-capabilities-only",
+    "modernAXAPI26Tested": false,
+    "nativeAXServiceFound": false,
+    "nativeDeviceFound": false,
+    "nativeDeviceUUIDMatches": false,
+    "nativeEndpointMatched": true,
+    "nativeObjectCleanupConfirmed": false,
+    "nativeRSDUUIDPresent": true,
+    "nativeWorkerCompleted": false,
+    "nativeWorkerForcedStop": false,
+    "nativeWorkerStarted": false,
+    "netcatExitCode": 69,
+    "netcatFDPassing": false,
+    "netcatKilled": false,
+    "netcatReaped": true,
+    "netcatStarted": true,
+    "netcatStderr": {
+      "bytesObserved": 132,
+      "clipped": false,
+      "errnoExplicitlyReported": false,
+      "knownClasses": [
+        "socket-connect-failed"
+      ]
+    },
+    "netcatTerminated": false,
+    "pairingAttempted": false,
+    "pairingRecordsRead": false,
+    "phoneTextLogged": false,
+    "processExitMethod": "explicit-after-owned-resource-cleanup",
+    "protocolFamily": "legacy-AXAudit-shim",
+    "rawNetcatStderrRetained": false,
+    "schemaVersion": 1,
+    "selectedNativeTransport": "network",
+    "selectedPhoneIdentityConfirmed": false,
+    "serviceFDClosed": false,
+    "serviceFDReturned": false,
+    "serviceSocketAttempted": false,
+    "settingsRequested": false,
+    "socketPayloadBytesRead": 0,
+    "socketPayloadBytesSent": 0,
+    "stage": "RSDCheckin",
+    "status": "legacy-shim-capabilities-error",
+    "subscriptionStarted": false,
+    "systemCLIAdditionalEntitlements": true,
+    "uidRetargeted": false,
+    "unlockRequested": false,
+    "unsolicitedAXPacketCount": 0,
+    "unsolicitedAXPayloadBytes": 0
+  },
+  "stderrBytes": 0
+}

@@ -1,0 +1,47 @@
+{
+  "processExitCode": 0,
+  "result": {
+    "AXRequestsAttempted": 0,
+    "XPCConnectionsCancelled": 2,
+    "XPCConnectionsReleased": 2,
+    "actionsAttempted": 0,
+    "assertionAcquired": true,
+    "assertionReleaseAttempted": true,
+    "assertionReleaseErrorPresent": false,
+    "assertionReleaseReplyReceived": true,
+    "clientEntitlementsModified": false,
+    "deviceIdentifiersLogged": false,
+    "dispatchQueueReleased": true,
+    "elapsedMilliseconds": 554,
+    "eligiblePhoneCount": 1,
+    "fixedAXPortProperty": {
+      "accessibilityServiceNames": [],
+      "exactAXServiceMentioned": false,
+      "exitCode": 66,
+      "numericPortReturned": false,
+      "status": "command-failed",
+      "stderrBytes": 106,
+      "stdoutBytes": 0
+    },
+    "method": "existing-paired-signed-remotectl-metadata",
+    "nativeEndpointMatched": true,
+    "pairingAttempted": false,
+    "phoneTextLogged": false,
+    "selectedNativeTransport": "network",
+    "show": {
+      "accessibilityServiceNames": [
+        "com.apple.accessibility.axAuditDaemon.remoteAXService",
+        "com.apple.accessibility.axAuditDaemon.remoteserver.shim.remote"
+      ],
+      "exactAXServiceMentioned": true,
+      "exitCode": 0,
+      "numericPortReturned": false,
+      "status": "metadata-complete",
+      "stderrBytes": 0,
+      "stdoutBytes": 5538
+    },
+    "status": "signed-CLI-comparison-complete",
+    "systemCLIAdditionalEntitlements": true
+  },
+  "stderrBytes": 0
+}
