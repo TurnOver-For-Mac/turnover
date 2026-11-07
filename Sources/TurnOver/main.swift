@@ -125,7 +125,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             (String(localized: "Two permissions", comment: "A welcome page's title"),
              String(localized: "Next, TurnOver needs two permissions: \(accessName), and Input Monitoring.\nmacOS asks for the first.\nFor the second, if no question appears, TurnOver shows you where to turn it on.\nBoth are in System Settings, Privacy and Security.", comment: "A welcome page: the permissions; %@ is macOS's name for Accessibility")),
             (String(localized: "Your keys", comment: "A welcome page's title"),
-             String(localized: "TurnOver speaks VoiceOver's keys, NVDA's or JAWS's. Command Control Comma, then K, moves between them.\nThe VO keys do what they do in VoiceOver.\nTo bring your VoiceOver voice and speed with you: Command Control Comma, then V.", comment: "A welcome page: keyboard styles")),
+             String(localized: "TurnOver speaks VoiceOver's keys, NVDA's or JAWS's. Command Control Comma, then K, moves between them.\nThe VO keys do what they do in VoiceOver.", comment: "A welcome page: keyboard styles")),
             (String(localized: "TurnOver and VoiceOver", comment: "A welcome page's title"),
              String(localized: "While TurnOver is on, it reads everything, and VoiceOver is off.\nTurnOver turns VoiceOver off as it starts and back on as it quits, so you are never without speech. To change that: Settings, Screen reader behaviour.\nCommand Control Shift T gives the app in front to VoiceOver, or back to TurnOver, and remembers it.", comment: "A welcome page: TurnOver and VoiceOver")),
             (String(localized: "Help, and helping", comment: "A welcome page's title"),
