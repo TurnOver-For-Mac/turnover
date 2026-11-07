@@ -353,7 +353,7 @@ open class TextInfo {
         start = s; end = e
     }
 
-    public func copy() -> Self { Self(obj: obj, start: start, end: end) }
+    open func copy() -> Self { Self(obj: obj, start: start, end: end) }
 
     public func compareEndPoints(_ other: TextInfo, _ which: EndPointComparison) -> Int {
         let a: Int, b: Int

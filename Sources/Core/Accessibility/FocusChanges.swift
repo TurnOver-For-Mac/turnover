@@ -271,9 +271,10 @@ extension AXHandler {
                 return
             }
             let oldGone = !document.isAlive || document.webArea.elements(kAXChildrenAttribute).isEmpty
-            if oldGone, let fresh = document.currentWebArea(), !fresh.isSame(document.webArea), !fresh.elements(kAXChildrenAttribute).isEmpty {
-                Log.io("focus: the page in hand went; following the window's new web area")
-                self.focusChanged(fresh, pid: fresh.pid)
+            if oldGone {
+                document.followCurrentRoot(requireEmpty: false) { [weak self] followed in
+                    if !followed, tries > 1 { self?.followIfPageWent(document, tries: tries - 1) }
+                }
                 return
             }
             if tries > 1 { self.followIfPageWent(document, tries: tries - 1) }

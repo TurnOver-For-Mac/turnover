@@ -441,15 +441,33 @@ extension VoiceOverKeysPlugin {
 extension BrowseModeDocument {
     /// VoiceOver's find-by-kind on a page: WebKit's search key from where the reading is, then read it there.
     public func searchKey(_ key: String, spoken: String, forward: Bool) {
+        if deferInitialContent({ [weak self] in self?.searchKey(key, spoken: spoken, forward: forward) }) { return }
         guard ensureContent() else { return }
-        if buffer.isDirty { buffer.build() }
+        if buffer.isDirty || buffer.isLoading {
+            let epoch = pageGeneration, intent = bufferIntent, movedAt = positionMovedAt, keys = ScriptHandler.keysArrivedCount
+            buffer.build { [weak self] in
+                guard let self, pageGeneration == epoch, bufferIntent == intent, ScriptHandler.keysArrivedCount == keys, positionMovedAt == movedAt, API.focusTreeInterceptor === self else { return }
+                searchPublishedKey(key, spoken: spoken, forward: forward)
+            }
+            return
+        }
+        searchPublishedKey(key, spoken: spoken, forward: forward)
+    }
+
+    private func searchPublishedKey(_ key: String, spoken: String, forward: Bool) {
         let from = lastQuickNavTarget ?? (buffer.segment(at: position)?.element ?? buffer.lineIndex(at: position).flatMap { buffer.lines[$0].element }) ?? bridge.webArea
         var found = bridge.search(key: key, from: from, forward: forward, limit: 1).first
         var at = found.flatMap { buffer.offset(of: $0) }
         // A run of styled text inside a paragraph: the buffer knows the paragraph.
         var hops = 0
         while at == nil, let f = found, hops < 4 { found = f.element(kAXParentAttribute); at = found.flatMap { buffer.offset(of: $0) }; hops += 1 }
-        guard let el = found, let offset = at else { Tones.edge(); Speech.speakMessage(Phrases.noNext(spoken, forward: forward)); return }
+        if at == nil, let kind = Self.voiceOverQuickNav.first(where: { $0.searchKey == key }), let roles = Self.quickNavRoles[kind.name],
+           let hit = buffer.find(from: position, forward: forward, roles: roles) { found = hit.element; at = hit.offset }
+        guard let el = found, let offset = at else {
+            if buffer.isPartial { reportBufferEnd(forward: forward) }
+            else { Tones.edge(); Speech.speakMessage(Phrases.noNext(spoken, forward: forward)) }
+            return
+        }
         position = offset
         lastQuickNavTarget = el
         speakQuickNavText(at: offset, link: el.role == "AXLink", element: el)

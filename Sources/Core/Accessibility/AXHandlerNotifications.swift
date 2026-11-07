@@ -129,7 +129,7 @@ extension AXHandler {
                         self?.navigationCheckPending = false
                         guard let d2 = API.focusTreeInterceptor, d2 === d, !ScriptHandler.isScriptRunning else { return }
                         if d2.refreshIfNavigated(announce: !d2.passThrough) { Log.io("browse mode: page changed under the document (\(name))") }
-                        else if d2.loadedAfterBlank(announce: !d2.passThrough) { Log.io("browse mode: page finished loading (\(name))") }
+                        else { d2.loadedAfterBlank(announce: !d2.passThrough) }
                     }
                 }
             }
