@@ -132,7 +132,10 @@ package final class SystemSettingsAppModule: AppModule {
             dependencies.speak(String(localized: "could not locate the \(value.request.part.name)", comment: "Spoken message: %@ is a part of System Settings")); finish(value.work); return
         }
         pending?.target = result.target
-        if result.canFocus {
+        // Keyboard focus already in the part: no write, so no check against TurnOver's own idea of the focus. That
+        // could be the window while the sidebar held the keys, and the command ended in silence with the review
+        // cursor left in the pane (issue 256, 8 Nov 2026). Verification below still reads the actual focus.
+        if result.canFocus, !result.focusInside {
             guard acceptsEffect(value, focus: value.context.focus) else { finish(value.work); return }
             _ = dependencies.setFocus(result.target)
         }
