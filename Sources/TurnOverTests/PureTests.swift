@@ -494,6 +494,50 @@ func pureTests() {
         expect(answer.value, .passed, "an unbound key goes to the application")
         if case .found(let found) = ScriptHandler.lookup(g) { expect(found.name, "test_mainkey") } else { Harness.fail("the main thread's own lookup") }
     }
+    // While Chrome held secure input after a sign-in, Command Tab and Command A opened the menu bar, six times of six
+    // (31 Oct 2026): the key tap got Command going down and coming up, and no key between.
+    test("keys: a modifier is pressed alone only with secure input off, as it goes down and as it comes up") {
+        let t = Date(timeIntervalSince1970: 100), soon = t.addingTimeInterval(0.2)
+        var command = LoneModifier()
+        command.down(alone: true, secureInput: false, at: t)
+        check(command.up(secureInput: false, at: soon), "Command alone, quickly: the menu bar, as before")
+        command.down(alone: true, secureInput: false, at: t)
+        check(!command.up(secureInput: false, at: t.addingTimeInterval(0.7)), "held too long")
+        command.down(alone: true, secureInput: false, at: t)
+        command.cancel()
+        check(!command.up(secureInput: false, at: soon), "a key heard while it was held: a shortcut")
+        command.down(alone: false, secureInput: false, at: t)
+        check(!command.up(secureInput: false, at: soon), "with another modifier held")
+        command.down(alone: true, secureInput: true, at: t)
+        check(!command.up(secureInput: true, at: soon), "secure input on: Command Tab, its Tab unheard")
+        command.down(alone: true, secureInput: true, at: t)
+        check(!command.up(secureInput: false, at: soon), "secure input off again by the time it came up")
+        command.down(alone: true, secureInput: false, at: t)
+        check(!command.up(secureInput: true, at: soon), "secure input on by the time it came up")
+    }
+    // The log says why nothing happened (asked in review, 7 Nov 2026): only a press that would have been on its own.
+    test("keys: a lone press set aside for secure input says so; a press that wasn't alone doesn't") {
+        let t = Date(timeIntervalSince1970: 100), soon = t.addingTimeInterval(0.2)
+        var shift = LoneModifier()
+        for (atDown, atUp) in [(true, true), (true, false), (false, true)] {
+            shift.down(alone: true, secureInput: atDown, at: t)
+            check(!shift.up(secureInput: atUp, at: soon), "not taken with secure input on (down \(atDown), up \(atUp))")
+            check(shift.setAsideForSecureInput, "and said to be set aside for it (down \(atDown), up \(atUp))")
+        }
+        shift.down(alone: true, secureInput: false, at: t)
+        check(shift.up(secureInput: false, at: soon), "secure input off: taken")
+        check(!shift.setAsideForSecureInput, "secure input off: nothing set aside")
+        shift.down(alone: true, secureInput: true, at: t)
+        _ = shift.up(secureInput: true, at: t.addingTimeInterval(0.7))
+        check(!shift.setAsideForSecureInput, "held too long: not a lone press anyway")
+        shift.down(alone: true, secureInput: true, at: t)
+        shift.cancel()
+        _ = shift.up(secureInput: true, at: soon)
+        check(!shift.setAsideForSecureInput, "a key heard between: not a lone press anyway")
+        shift.down(alone: false, secureInput: true, at: t)
+        _ = shift.up(secureInput: true, at: soon)
+        check(!shift.setAsideForSecureInput, "another modifier held: not a lone press anyway")
+    }
 
     test("settings: an old file keeps its values and gets the defaults for the rest") {
         let json = """

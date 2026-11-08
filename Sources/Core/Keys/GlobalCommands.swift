@@ -561,7 +561,7 @@ public final class GlobalCommands: ScriptableObject {
         var items: [MenuItem] = groups.map { category, group in MenuItem(verbatim: "\(Script.categoryName(category)), \(group.count)", .submenu { group }) }
         // A braille display connected: its keys and the space-with-dots commands.
         items += BrailleHelp.shortcutItems()
-        let speechKeys = config.general.windowsKeys ? String(localized: "Control alone stops speech; Shift alone pauses it and carries on", comment: "In the key list")
+        let speechKeys = config.general.windowsKeys ? String(localized: "Control alone stops speech; Shift alone pauses it and carries on, but not while secure input is on", comment: "In the key list")
             : String(localized: "Control alone pauses speech, and again carries on", comment: "In the key list")
         items.append(MenuItem(verbatim: speechKeys + (config.general.capsIsTurnOver ? String(localized: ". Caps Lock pressed twice toggles caps lock", comment: "In the key list, after the speech keys") : ""), .action {}))
         items.append(MenuItem(verbatim: String(localized: "Command Control Comma opens the TurnOver menu in any app", comment: "In the key list"), .action {}))
