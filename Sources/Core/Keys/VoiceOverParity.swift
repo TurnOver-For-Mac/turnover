@@ -366,17 +366,58 @@ extension VoiceOverKeysPlugin {
         }
     }
 
-    /// VoiceOver's window spots: the window's main parts in turn (its sidebar, toolbar, content), round.
+    /// VoiceOver's window spots: the window's main parts (toolbar, sidebar, list, content; on a web page its landmarks),
+    /// in reading order. Wrapper groups are seen through: an Electron window is a group in a group five deep before
+    /// anything of its own, and the window's direct children were the spots, so the Claude app had one, "Claude,
+    /// grouping" (8 Nov 2026). Bounded: twelve levels, four hundred elements.
+    static func windowSpots(of w: AXUIElement) -> [AXUIElement] {
+        var spots: [AXUIElement] = []
+        var visited = 0
+        let parts: Set<String> = ["AXToolbar", "AXTabGroup", "AXOutline", "AXTable", "AXList", "AXBrowser", "AXTextArea", "AXRadioGroup"]
+        func collect(_ e: AXUIElement, depth: Int) {
+            guard depth < 12, visited < 400 else { return }
+            visited += 1
+            let a = e.attrs([kAXRoleAttribute, kAXSubroleAttribute, kAXChildrenAttribute])
+            let role = (a[kAXRoleAttribute] as? String) ?? "?"
+            let sub = a[kAXSubroleAttribute] as? String
+            let kids = (a[kAXChildrenAttribute] as? [AXUIElement]) ?? []
+            // A part that holds smaller parts stands aside for them (a page's main landmark holding regions, a scroll
+            // area holding a list); one that holds none is the spot itself.
+            func partOrItsParts() {
+                let before = spots.count
+                for k in kids { collect(k, depth: depth + 1) }
+                if spots.count == before { spots.append(e) }
+            }
+            if let sub, sub.hasPrefix("AXLandmark") { partOrItsParts(); return }
+            switch role {
+            case _ where parts.contains(role): spots.append(e)
+            case "AXScrollArea", "AXWebArea": partOrItsParts()
+            case "AXSplitGroup":
+                for k in kids where k.role != "AXSplitter" {
+                    let before = spots.count
+                    collect(k, depth: depth + 1)
+                    if spots.count == before { spots.append(k) }   // a pane with nothing recognisable inside is a spot itself
+                }
+            case "AXButton", "AXStaticText", "AXImage", "AXCheckBox", "AXRadioButton", "AXPopUpButton", "AXMenuButton", "AXSlider", "AXTextField", "AXSplitter", "AXScrollBar": break
+            default: for k in kids { collect(k, depth: depth + 1) }
+            }
+        }
+        collect(w, depth: 0)
+        return spots
+    }
+
     static func windowSpot(forward: Bool) {
         guard let e = cursorElement(), let w = e.role == "AXWindow" ? e : e.element(kAXWindowAttribute) else { Tones.edge(); return }
-        let parts = w.elements(kAXChildrenAttribute).filter { !["AXButton", "AXStaticText", "AXImage"].contains($0.role) || $0.string(kAXSubroleAttribute) == nil }
-            .filter { !["AXCloseButton", "AXMinimizeButton", "AXZoomButton", "AXFullScreenButton"].contains($0.string(kAXSubroleAttribute) ?? "") }
-        guard !parts.isEmpty else { Tones.edge(); return }
-        var here = 0
+        let spots = windowSpots(of: w)
+        guard !spots.isEmpty else { Speech.speakMessage(String(localized: "no window spots", comment: "Spoken message")); return }
+        // The spot the cursor is in: the nearest one among its ancestors; outside every spot, the first or the last.
+        var here: Int? = nil
         var p: AXUIElement? = e; var hops = 0
-        while let x = p, hops < 30 { if let i = parts.firstIndex(where: { $0.isSame(x) }) { here = i; break }; p = x.element(kAXParentAttribute); hops += 1 }
-        let next = parts[((here + (forward ? 1 : -1)) % parts.count + parts.count) % parts.count]
-        ObjectNavigator.shared.moveTo(next)
+        while let x = p, hops < 30 { if let i = spots.firstIndex(where: { $0.isSame(x) }) { here = i; break }; p = x.element(kAXParentAttribute); hops += 1 }
+        let next: Int
+        if let here { next = ((here + (forward ? 1 : -1)) % spots.count + spots.count) % spots.count } else { next = forward ? 0 : spots.count - 1 }
+        if spots.count == 1, here != nil { Tones.edge() }
+        ObjectNavigator.shared.jumpTo(spots[next], within: spots[next])   // the reading and the keyboard go with the cursor
     }
 
     static func pageStatistics() -> String? {

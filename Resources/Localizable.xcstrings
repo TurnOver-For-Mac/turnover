@@ -23622,6 +23622,9 @@
         }
       }
     },
+    "no window spots" : {
+      "comment" : "Spoken message"
+    },
     "no window spots of your own" : {
       "comment" : "Spoken message",
       "localizations" : {

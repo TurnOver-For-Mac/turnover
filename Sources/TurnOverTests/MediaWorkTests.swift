@@ -551,6 +551,56 @@ func mediaWorkTests() {
         rig.view.refresh {}; rig.settle()
         body(rig.view, { said })
     }
+    test("media jump: a shelf heading and a window spot hand the arrows to the destination pane") {
+        AXReplay.load(.init(app: "Public media sample", bundle: "test.media", recorded: "", root: 1, application: 0, focus: nil, nodes: [
+            .init(id: 1, attrs: ["AXRole": .string("AXWindow")]),
+            .init(id: 2, attrs: ["AXRole": .string("AXScrollArea"), "AXParent": .element(1), "AXWindow": .element(1)]),
+            .init(id: 3, attrs: ["AXRole": .string("AXHeading"), "AXParent": .element(2), "AXWindow": .element(1)]),
+            .init(id: 30, attrs: ["AXRole": .string("AXRow"), "AXParent": .element(1), "AXWindow": .element(1)]),
+            .init(id: 31, attrs: ["AXRole": .string("AXRow"), "AXParent": .element(1), "AXWindow": .element(1)]),
+            .init(id: 100, attrs: ["AXRole": .string("AXButton"), "AXParent": .element(2), "AXWindow": .element(1)]),
+            .init(id: 101, attrs: ["AXRole": .string("AXButton"), "AXParent": .element(2), "AXWindow": .element(1)]),
+            .init(id: 102, attrs: ["AXRole": .string("AXButton"), "AXParent": .element(2), "AXWindow": .element(1)]),
+            .init(id: 103, attrs: ["AXRole": .string("AXHeading"), "AXWindow": .element(90)]),
+        ]))
+        defer { AXReplay.unload() }
+        let rig = MediaTestRig()
+        let savedSink = Speech.sink
+        Speech.sink = { _ in }
+        defer { rig.view.stop(); rig.worker.sync {}; Speech.sink = savedSink }
+        let first = MediaView.Item(label: "Earlier shelf item", element: AXReplay.element(102))
+        let a = MediaView.Item(label: "First recent item", element: AXReplay.element(100))
+        let b = MediaView.Item(label: "Second recent item", element: AXReplay.element(101))
+        var recent = MediaView.Shelf(title: "Recently Searched", items: [a, b])
+        recent.heading = AXReplay.element(3)
+        rig.source.result(.init(built: .init(sidebar: [
+            .init(label: "Search", element: AXReplay.element(30)),
+            .init(label: "Library", element: AXReplay.element(31)),
+        ], shelves: [
+            .init(title: "Earlier", items: [first]),
+            recent,
+        ], pageTitle: "Search")))
+        rig.view.refresh {}; rig.settle()
+        rig.view.pane = .sidebar
+
+        let region = AXReplay.element(2)
+        let landing = rig.view.adopt(AXReplay.element(3), within: region)
+        check(landing?.isSame(AXReplay.element(3)) == true, "the cursor still announces the destination heading")
+        rig.view.move(1)
+        expect(rig.view.currentItem()?.label, a.label, "Down reads the first item after the heading")
+        rig.view.move(1)
+        expect(rig.view.currentItem()?.label, b.label, "another Down continues in the destination shelf")
+        check(rig.view.adopt(AXReplay.element(103), within: nil) == nil, "a heading from another window cannot move this reader")
+        expect(rig.view.currentItem()?.label, b.label)
+
+        check(rig.view.adopt(AXReplay.element(30), within: nil)?.isSame(AXReplay.element(30)) == true, "the selected row becomes the sidebar landing")
+        rig.view.move(1)
+        expect(rig.view.currentItem()?.label, "Library", "Down after jumping back stays in the sidebar")
+        check(rig.view.adopt(region, within: region)?.isSame(first.element) == true, "a spot can name the whole page")
+        rig.view.move(1)
+        expect(rig.view.currentItem()?.label, a.label, "Down after the window spot advances through its page")
+    }
+
     test("media announcements: global position off applies to page sidebar player and toolbar") {
         withMediaAnnouncements { view, said in
             config.presentation.verbosity = Config.Verbosity()

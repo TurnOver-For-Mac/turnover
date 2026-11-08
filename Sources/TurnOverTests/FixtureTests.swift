@@ -66,6 +66,73 @@ func fixtureTests() {
     }
     // System Settings' password sheet on macOS 27.2 (31 Oct 2026): the application's focused element is a password field
     // of another process (every replayed element has a pid of its own, the application's is 9's).
+    // VO-J between a window's panes (8 Nov 2026, a second opinion's fixtures): the sidebar is the narrow pane with
+    // something chosen; from it, the content's first readable item; from anywhere else, the chosen item. Where the
+    // cursor is, is judged by position, so a row whose parent misleads (Music) still counts as the sidebar's.
+    func paneWindow(split: Bool) -> AXFixture {
+        var f = AXFixture(app: "T", bundle: "t", recorded: "", root: 0, application: nil, focus: 5, nodes: [])
+        func n(_ id: Int, _ role: String, _ parent: Int, _ x: Double, _ y: Double, _ w: Double, _ h: Double, _ extra: [String: AXFixture.Value] = [:]) -> AXFixture.Node {
+            var a: [String: AXFixture.Value] = ["AXRole": .string(role), "AXParent": .element(parent), "AXWindow": .element(0), "AXPosition": .point(x, y), "AXSize": .size(w, h)]
+            for (k, v) in extra { a[k] = v }
+            return .init(id: id, attrs: a)
+        }
+        var nodes: [AXFixture.Node] = [.init(id: 0, attrs: ["AXRole": .string("AXWindow"), "AXPosition": .point(0, 0), "AXSize": .size(1000, 600), "AXChildren": .elements([1])])]
+        if split {
+            // 1 split group: 2 sidebar scroll area (outline 3, rows 4 "Radio" and 5 "Search" selected), 11 search pane (field 12),
+            // 6 splitter, 7 content group (scroll 8, group 9, button 10). Row 4's parent is the content group, as Music has it.
+            nodes += [n(1, "AXSplitGroup", 0, 0, 0, 1000, 600, ["AXChildren": .elements([2, 11, 6, 7])]),
+                      n(2, "AXScrollArea", 1, 0, 50, 200, 550, ["AXChildren": .elements([3])]),
+                      n(3, "AXOutline", 2, 0, 50, 200, 550, ["AXDescription": .string("Sidebar"), "AXChildren": .elements([4, 5]), "AXRows": .elements([4, 5]), "AXSelectedRows": .elements([5])]),
+                      n(4, "AXRow", 7, 0, 60, 200, 30, ["AXSubrole": .string("AXOutlineRow"), "AXDescription": .string("Radio")]),
+                      n(5, "AXRow", 3, 0, 90, 200, 30, ["AXSubrole": .string("AXOutlineRow"), "AXDescription": .string("Search"), "AXSelected": .bool(true)]),
+                      n(11, "AXGroup", 1, 5, 10, 190, 30, ["AXChildren": .elements([12])]),
+                      n(12, "AXTextField", 11, 5, 10, 190, 30, ["AXSubrole": .string("AXSearchField")]),
+                      n(6, "AXSplitter", 1, 200, 0, 1, 600),
+                      n(7, "AXGroup", 1, 200, 0, 800, 600, ["AXChildren": .elements([8])]),
+                      n(8, "AXScrollArea", 7, 200, 0, 800, 600, ["AXChildren": .elements([9])]),
+                      n(9, "AXGroup", 8, 220, 20, 760, 560, ["AXChildren": .elements([10])]),
+                      n(10, "AXButton", 9, 220, 20, 200, 40, ["AXDescription": .string("Radiohead Essentials, Playlist")])]
+        } else {
+            // No split group (Podcasts): 1 host, 13 layout with two big children: 2 the sidebar of texts (4 Shows, 5 Home selected),
+            // 7 the content (group 9, heading 10) over the whole window; 14 a small split group inside the content, to be ignored.
+            nodes += [n(1, "AXGroup", 0, 0, 0, 1000, 600, ["AXChildren": .elements([13])]),
+                      n(13, "AXGroup", 1, 0, 0, 1000, 600, ["AXChildren": .elements([2, 7])]),
+                      n(2, "AXGroup", 13, 0, 0, 220, 600, ["AXChildren": .elements([4, 5])]),
+                      n(4, "AXStaticText", 2, 10, 60, 200, 30, ["AXDescription": .string("Shows")]),
+                      n(5, "AXStaticText", 2, 10, 90, 200, 30, ["AXDescription": .string("Home"), "AXSelected": .bool(true)]),
+                      n(7, "AXGroup", 13, 0, 0, 1000, 600, ["AXChildren": .elements([9])]),
+                      n(9, "AXGroup", 7, 240, 20, 740, 560, ["AXDescription": .string("Home"), "AXChildren": .elements([10, 14])]),
+                      n(10, "AXHeading", 9, 240, 20, 300, 30, ["AXDescription": .string("Home")]),
+                      n(14, "AXSplitGroup", 9, 240, 300, 200, 100, ["AXChildren": .elements([15])]),
+                      n(15, "AXGroup", 14, 240, 300, 200, 100)]
+        }
+        f.nodes = nodes
+        return f
+    }
+    test("VO-J: a split view's sidebar and content, judged by position, with a search pane in the way") {
+        AXReplay.load(paneWindow(split: true))
+        let saved = config, keep = Speech.sink
+        config.general.focusFollowsCursor = "off"
+        Speech.sink = { _ in }
+        defer { AXReplay.unload(); API.setFocusObject(nil, ancestors: []); config = saved; Speech.sink = keep }
+        let nav = ObjectNavigator.shared
+        @MainActor func jump(from id: Int) -> Int? { nav.place(AXReplay.element(id)); nav.jumpLinked(); return nav.reviewElement.flatMap { AXReplay.id(of: $0) } }
+        expect(jump(from: 4), 10, "from a sidebar row whose parent misleads: the content's first readable item")
+        expect(jump(from: 10), 5, "from the content: the sidebar's selected row")
+        expect(jump(from: 12), 5, "from the search field, a pane of its own: the sidebar's selected row, not the content")
+        expect(jump(from: 5), 10, "from the selected row: the content, not the search pane")
+    }
+    test("VO-J: a window with no split view: the sidebar is the narrow group with a selected item") {
+        AXReplay.load(paneWindow(split: false))
+        let saved = config, keep = Speech.sink
+        config.general.focusFollowsCursor = "off"
+        Speech.sink = { _ in }
+        defer { AXReplay.unload(); API.setFocusObject(nil, ancestors: []); config = saved; Speech.sink = keep }
+        let nav = ObjectNavigator.shared
+        @MainActor func jump(from id: Int) -> Int? { nav.place(AXReplay.element(id)); nav.jumpLinked(); return nav.reviewElement.flatMap { AXReplay.id(of: $0) } }
+        expect(jump(from: 4), 10, "from a sidebar text: the content's heading, the small split group inside ignored")
+        expect(jump(from: 10), 5, "from the content: the selected sidebar text")
+    }
     test("secure echo: a password field the application shows from another process is the one looked at") {
         var fixture = AXFixture(app: "System Settings", bundle: "com.apple.systempreferences", recorded: "", root: 0, application: 9, focus: 3, nodes: [])
         fixture.nodes = [

@@ -718,13 +718,265 @@ public final class ObjectNavigator {
 
     /// VO-J: the linked item (Mail's message list to the message), from the item's AXLinkedUIElements.
     public func jumpLinked() {
-        guard let cur = element else { return }
+        // From the reading position on a page in browse mode, else from the review cursor (the cursor sat on the
+        // web area while the reading was on a tab, so VO-J found nothing, 8 Nov 2026).
+        guard var cur = VoiceOverKeysPlugin.cursorElement() ?? element else { return }
+        // A review cursor left on a row the app has since replaced (Mail makes its rows anew as the arrows move the
+        // selection: VO-J said "no linked item" after every arrow, 8 Nov 2026): the keyboard focus is where the user is.
+        if cur.role == "?", let f = API.focusObject?.element { cur = f }
         var x: AXUIElement? = cur; var hops = 0
-        while let y = x, hops < 4 {
-            if let linked = y.elements("AXLinkedUIElements").first { Tones.beep(660, 30); land(on: linked); return }
+        while let y = x, hops < 8 {
+            // What the app links (Mail's message list to its message body and back, a web page's tab to its panel),
+            // looked for up to eight levels up: Mail's body text is five below the group that carries the link, and
+            // four levels found nothing (8 Nov 2026). On a label, the control it names. Not a control's own label, nor
+            // an ancestor's: System Settings' switches and lists are titled by texts and groups, and VO-J landed on those.
+            var linked = y.elements("AXLinkedUIElements").first
+            if hops == 0, y.role == "AXStaticText" { linked = linked ?? y.elements("AXServesAsTitleForUIElements").first }
+            if let linked, !linked.isSame(y), linked.role != "?" {
+                // Into the linked thing, not onto it: Mail's body is a nameless group ("grouping"), its message the
+                // first item inside; a table's selected row rather than the table.
+                let target = Self.landingPlace(in: linked)
+                Log.io("VO-J: \(y.role) links to \(linked.role); landing on \(target.role) \"\(Log.words(String((target.string(kAXDescriptionAttribute) ?? target.string(kAXTitleAttribute) ?? target.string(kAXValueAttribute) ?? "").prefix(30))))\"")
+                if !target.isSame(cur) { Tones.beep(660, 30); jumpTo(target, within: linked); return }
+            }
             x = y.element(kAXParentAttribute); hops += 1
         }
+        // Nothing linked by the app: between the window's panes, as VoiceOver goes from a sidebar to its content and
+        // back (8 Nov 2026, Oliver, with VoiceOver on to compare). One rule for every app: see paneJump.
+        if let target = paneJump(from: cur), !target.isSame(cur) { Tones.beep(660, 30); jumpTo(target, within: Self.lastJump?.to); return }
         Speech.speakMessage(String(localized: "no linked item", comment: "Spoken message"))
+    }
+
+    /// One move for VO-J and the window spot keys (a second opinion, 8 Nov 2026: the bracket keys moved the review
+    /// cursor and left the page's reading position behind, so the arrows still read the old place): the cursor lands,
+    /// the reading goes into or out of a page with it, and the keyboard follows as near as it can within `region`.
+    func jumpTo(_ target: AXUIElement, within region: AXUIElement? = nil) {
+        let web = Self.containingWebArea(target)
+        if web == nil, let landing = AppModuleHandler.shared.appModule(for: target.pid).adoptReading(target, within: region) {
+            land(on: landing, followFocus: false)
+            focusNear(landing, within: region)
+            return
+        }
+        land(on: target)
+        moveReading(to: target, in: web)
+        focusNear(target, within: region)
+    }
+
+    /// The jump between a window's panes. The sidebar is the narrow pane with something chosen in it: a list's selected
+    /// row, or a selected item (Podcasts' tab bar is texts, one selected). From anywhere else VO-J lands on that chosen
+    /// item; from the sidebar it lands on the first words of the content, the biggest other pane. With no sidebar the
+    /// panes are taken in turn, going back where the last jump came from. Where the cursor is, is the pane its parents
+    /// lead to when that pane holds it on screen, else the smallest pane round it.
+    private func paneJump(from cur: AXUIElement) -> AXUIElement? {
+        let panes = Self.panes(around: cur)
+        guard panes.count > 1 else { Log.io("VO-J: no panes round the \(cur.role)"); return nil }
+        func area(_ e: AXUIElement) -> CGFloat { TurnOverObject.frame(e).map { $0.width * $0.height } ?? 0 }
+        // Where the cursor is: the pane its parents lead to, when that pane's frame really holds it (Podcasts' content
+        // spans the whole window behind the sidebar, so by position alone a heading in it counted as the sidebar's, 8 Nov
+        // 2026); otherwise the smallest pane round the cursor's centre (Music's rows lead by parent to the wrong pane).
+        var here: Int?
+        let centre = TurnOverObject.frame(cur).flatMap { $0.width > 0 ? CGPoint(x: $0.midX, y: $0.midY) : nil }
+        var byParent: Int?
+        var p: AXUIElement? = cur; var up = 0
+        while let y = p, up < 20, byParent == nil { byParent = panes.firstIndex(where: { $0.isSame(y) }); p = y.element(kAXParentAttribute); up += 1 }
+        if let byParent, let centre, TurnOverObject.frame(panes[byParent])?.contains(centre) ?? false { here = byParent }
+        if here == nil, let centre {
+            here = panes.indices.filter { TurnOverObject.frame(panes[$0])?.contains(centre) ?? false }.min { area(panes[$0]) < area(panes[$1]) }
+        }
+        if here == nil { here = byParent }
+        // The sidebar: a pane with something chosen in it, and of those the narrow one (under half the window's
+        // width), leftmost first; a selected message in Mail's list or a cell in a sheet is a selection, not a sidebar
+        // (a second opinion, 8 Nov 2026).
+        let windowWidth = (cur.role == "AXWindow" ? cur : cur.element(kAXWindowAttribute)).flatMap { TurnOverObject.frame($0) }?.width ?? .greatestFiniteMagnitude
+        let chosen: [(index: Int, item: AXUIElement)] = panes.indices.compactMap { i in Self.chosenItem(in: panes[i]).map { (index: i, item: $0) } }
+        let sidebar = chosen.filter { (TurnOverObject.frame(panes[$0.index])?.width ?? 0) < windowWidth / 2 }
+            .min { (TurnOverObject.frame(panes[$0.index])?.minX ?? 0) < (TurnOverObject.frame(panes[$1.index])?.minX ?? 0) } ?? chosen.first
+        var target: AXUIElement?; var from: AXUIElement?; var to: AXUIElement?
+        if let sidebar {
+            if here == sidebar.index || cur.isSame(sidebar.item) {
+                // The biggest other pane, always: coming back from a search pane must not send the next press to the
+                // search pane (the fixture test caught it, 8 Nov 2026).
+                let others = panes.indices.filter { $0 != sidebar.index }.map { panes[$0] }.sorted { area($0) > area($1) }
+                from = panes[sidebar.index]; to = others.first
+                target = to.map { Self.landingPlace(in: $0) }
+            } else {
+                from = here.map { panes[$0] }; to = panes[sidebar.index]
+                target = sidebar.item
+            }
+        } else {
+            let i = here ?? -1
+            var other = panes[(i + 1) % panes.count]
+            if let here, let back = Self.lastJump, back.to.isSame(panes[here]), panes.contains(where: { $0.isSame(back.from) }) { other = back.from }
+            from = here.map { panes[$0] }; to = other
+            target = Self.landingPlace(in: other)
+        }
+        if let from, let to { Self.lastJump = (from: from, to: to) }
+        Log.io("VO-J: from \(cur.role) in pane \(here.map(String.init) ?? "?") of \(panes.count), sidebar \(sidebar.map { String($0.index) } ?? "none"); landing on \(target?.role ?? "nothing") \"\(Log.words(String((target.flatMap { $0.string(kAXDescriptionAttribute) ?? $0.string(kAXTitleAttribute) ?? $0.string(kAXValueAttribute) } ?? "").prefix(30))))\"")
+        return target
+    }
+
+    /// The window's panes: a split view's children where there is one (the nearest by parent, else the window's
+    /// first, when it covers over a third of the window); otherwise the first container down from the window whose
+    /// children hold two or more areas each a twentieth of the window (Catalyst apps such as Podcasts lay their sidebar
+    /// and content out as plain groups, 8 Nov 2026).
+    private static func panes(around cur: AXUIElement) -> [AXUIElement] {
+        var p: AXUIElement? = cur; var up = 0; var split: AXUIElement?
+        while let y = p, up < 20, split == nil { if y.element(kAXParentAttribute)?.role == "AXSplitGroup" { split = y.element(kAXParentAttribute) }; p = y.element(kAXParentAttribute); up += 1 }
+        let window = cur.role == "AXWindow" ? cur : cur.element(kAXWindowAttribute)
+        guard let w = window, let wf = TurnOverObject.frame(w) else { return [] }
+        let tenth = wf.width * wf.height / 10
+        let twentieth = tenth / 2
+        if split == nil { split = w.firstDescendant(role: "AXSplitGroup", maxVisited: 200) }
+        // A split view counts when it is the window's: two panes or more, over a third of the window (Podcasts has a
+        // small one inside its content, which left "no panes" from the window, 8 Nov 2026).
+        if let split, (TurnOverObject.frame(split).map { $0.width * $0.height } ?? 0) > tenth * 3 {
+            let panes = split.elements(kAXChildrenAttribute).filter { $0.role != "AXSplitter" }
+            if panes.count > 1 { return panes }
+        }
+        var e = w; var depth = 0
+        while depth < 8 {
+            let kids = e.elements(kAXChildrenAttribute).filter { !["AXToolbar", "AXButton", "AXStaticText", "AXImage", "AXMenuBar"].contains($0.role) }
+            let big = kids.filter { (TurnOverObject.frame($0).map { $0.width * $0.height } ?? 0) >= twentieth }
+            if big.count >= 2 { return big }
+            guard let next = big.first ?? kids.first else { return [] }
+            e = next; depth += 1
+        }
+        return []
+    }
+
+    /// What is chosen in a pane, which makes it the sidebar: a list's selected row, else a selected item (a text,
+    /// button or cell with AXSelected). Bounded: three hundred elements.
+    private static func chosenItem(in pane: AXUIElement) -> AXUIElement? {
+        let spots = VoiceOverKeysPlugin.windowSpots(of: pane)
+        if let row = spots.lazy.compactMap({ $0.elements(kAXSelectedRowsAttribute).first }).first { return row }
+        var queue = [pane]; var seen = 0
+        while !queue.isEmpty, seen < 300 {
+            let e = queue.removeFirst(); seen += 1
+            let a = e.attrs([kAXRoleAttribute, kAXSelectedAttribute, kAXChildrenAttribute])
+            let role = (a[kAXRoleAttribute] as? String) ?? "?"
+            if ["AXStaticText", "AXButton", "AXCell", "AXRadioButton", "AXTab"].contains(role), (a[kAXSelectedAttribute] as? Bool) == true { return e }
+            if ["AXTable", "AXOutline", "AXList", "AXWebArea", "AXScrollBar"].contains(role) { continue }   // a list's rows are the selected-rows question above
+            queue.append(contentsOf: (a[kAXChildrenAttribute] as? [AXUIElement]) ?? [])
+        }
+        return nil
+    }
+
+    private static func containingWebArea(_ target: AXUIElement) -> AXUIElement? {
+        var element: AXUIElement? = target
+        for _ in 0..<12 {
+            guard let current = element else { break }
+            if current.role == "AXWebArea" { return current }
+            element = current.element(kAXParentAttribute)
+        }
+        return nil
+    }
+
+    /// After landing, TurnOver's own focus goes where the cursor went (Oliver, 8 Nov 2026: "it's reading where I
+    /// should be going but not actually moving the TurnOver focus there"; the arrows and the app modules' commands
+    /// follow TurnOver's focus object, not the review cursor, so Podcasts' Down Arrow went on through the sidebar).
+    /// Inside a page that isn't being written in, the focus is the page's document, read from the landed line (Mail
+    /// accepts a keyboard focus request on its body and leaves its keys in the list, so this is the only way in);
+    /// anywhere else, the landed item itself, quietly, since the cursor has just said it.
+    private func moveReading(to target: AXUIElement, in web: AXUIElement?) {
+        if let web, !EditableWebArea.isEditable(web) {
+            let d: BrowseModeDocument
+            if let current = API.focusTreeInterceptor, current.webArea.isSame(web) { d = current }
+            else {
+                d = BrowseModeHandler.shared.document(root: web)
+                let obj = ObjectFactory.make(web)
+                API.setFocusObject(obj, ancestors: obj.ancestors, interceptor: d)
+                Log.io("review: the reading goes into the page round the landing")
+            }
+            if d.passThrough { d.setPassThrough(false, announce: false) }
+            if d.buffer.lines.isEmpty { d.buffer.build() }
+            if let o = d.buffer.offset(of: target) { d.position = o }
+            return
+        }
+        if let f = API.focusObject?.element, f.isSame(target) { return }
+        let obj = ObjectFactory.make(target)
+        API.setFocusObject(obj, ancestors: obj.ancestors)
+        Log.io("review: the reading goes to the \(target.role) landed on\(API.focusTreeInterceptor == nil ? "" : ", out of the page")")
+    }
+
+    /// The last split-view jump: the pane left and the pane landed in.
+    private static var lastJump: (from: AXUIElement, to: AXUIElement)?
+    /// Where VO-J lands inside a pane or a linked container: a list's selected row, else the first part's first item;
+    /// a control or a text is itself.
+    private static func landingPlace(in e: AXUIElement) -> AXUIElement {
+        func named(_ x: AXUIElement) -> Bool {
+            [kAXDescriptionAttribute, kAXTitleAttribute, kAXValueAttribute].contains { !(x.string($0) ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        }
+        if let row = e.elements(kAXSelectedRowsAttribute).first { return row }
+        let readable: Set<String> = ["AXStaticText", "AXHeading", "AXButton", "AXLink", "AXCheckBox", "AXRadioButton", "AXPopUpButton", "AXMenuButton",
+                                     "AXTextField", "AXTextArea", "AXComboBox", "AXSlider", "AXRow", "AXCell", "AXImage", "AXMenuItem", "AXTab", "AXDisclosureTriangle"]
+        if readable.contains(e.role) { return e }
+        let spots = VoiceOverKeysPlugin.windowSpots(of: e)
+        if let row = spots.lazy.compactMap({ $0.elements(kAXSelectedRowsAttribute).first }).first { return row }
+        // Down from the pane itself to the first thing that reads: through lists (their selected row, else the first)
+        // and nameless wrappers (Mail's message was "Email from Anthropic, grouping, 18 items"; TV's content a list of
+        // lists of groups, so VO-J said "list" and then "grouping", 8 Nov 2026), eight levels at most. Among a wrapper's
+        // first few items: the first that reads and isn't tiny (a paging chevron, 28 by 52 points), else the biggest
+        // container (a banner's text sits in a group beside the groups of its buttons and chevrons). A named wrapper
+        // (a landmark, "Post header") is gone into like any other and is the landing only when nothing in it reads.
+        func area(_ x: AXUIElement) -> CGFloat { TurnOverObject.frame(x).map { $0.width * $0.height } ?? 0 }
+        var item = e; var holder = e; var depth = 0
+        while depth < 8, !readable.contains(item.role) {
+            if ["AXTable", "AXOutline", "AXList"].contains(item.role), let row = item.elements(kAXSelectedRowsAttribute).first ?? item.elements(kAXRowsAttribute).first {
+                holder = item; item = row; depth += 1; continue
+            }
+            let kids = groupItems(item).isEmpty ? item.elements(kAXChildrenAttribute) : groupItems(item)
+            let candidates = Array(kids.filter { !["AXScrollBar", "AXSplitter"].contains($0.role) && (named($0) || !$0.elements(kAXChildrenAttribute).isEmpty) }.prefix(6))
+            let next = candidates.first(where: { readable.contains($0.role) && area($0) >= 1500 })
+                ?? candidates.filter({ !readable.contains($0.role) }).max(by: { area($0) < area($1) })
+                ?? candidates.first ?? kids.first
+            guard let next else { break }
+            holder = item; item = next; depth += 1
+        }
+        // A message that opens with its sender's logo (a link or a picture) is landed on at its first words instead
+        // (Mail: "Claude, link", then the text, 8 Nov 2026); the logo stays a Left arrow away.
+        if ["AXImage", "AXLink"].contains(item.role) {
+            let items = groupItems(holder).prefix(8)
+            if let text = items.first(where: { ["AXStaticText", "AXHeading"].contains($0.role) && named($0) }) { return text }
+        }
+        return item
+    }
+
+    /// After landing: the keyboard goes as near the landed item as it can, so the arrows and Tab carry on from there
+    /// rather than from the sidebar left behind (TV, 8 Nov 2026: Tab had to be pressed to get across). The item itself
+    /// if it takes focus; else the first thing round it that does, in its own cell or the cells beside it; else an
+    /// ancestor, six levels at most. Inside a page the reading goes in by moveReading instead, and the keyboard stays.
+    private func focusNear(_ target: AXUIElement, within region: AXUIElement? = nil) {
+        guard config.general.cursorMovesFocus else { return }
+        let bounds = region.flatMap { TurnOverObject.frame($0) }
+        func inside(_ e: AXUIElement) -> Bool {
+            guard let b = bounds, let f = TurnOverObject.frame(e) else { return true }
+            return b.insetBy(dx: -2, dy: -2).contains(CGPoint(x: f.midX, y: f.midY))
+        }
+        var p: AXUIElement? = target; var hops = 0
+        while let y = p, hops < 12 { if y.role == "AXWebArea" { return }; p = y.element(kAXParentAttribute); hops += 1 }
+        func takesFocus(_ e: AXUIElement) -> Bool {
+            var settable: DarwinBoolean = false
+            return AXUIElementIsAttributeSettable(e, kAXFocusedAttribute as CFString, &settable) == .success && settable.boolValue
+                && !["AXWindow", "AXScrollArea", "AXSplitGroup", "AXStaticText", "AXImage", "AXHeading", "AXScrollBar", "AXSplitter", "AXValueIndicator", "AXGenericElement"].contains(e.role)   // a scroll bar takes focus and is no use with it (Music, 8 Nov 2026)
+        }
+        var found: AXUIElement?
+        if takesFocus(target) { found = target }
+        else {
+            // Round the item: its parent's subtree, a little way down.
+            let root = target.element(kAXParentAttribute)?.element(kAXParentAttribute) ?? target.element(kAXParentAttribute) ?? target
+            var queue = [root]; var seen = 0
+            while !queue.isEmpty, seen < 80, found == nil {
+                let e = queue.removeFirst(); seen += 1
+                if !e.isSame(root), takesFocus(e), inside(e) { found = e; break }
+                queue.append(contentsOf: e.elements(kAXChildrenAttribute))
+            }
+            var up: AXUIElement? = target.element(kAXParentAttribute); var h = 0
+            while found == nil, let y = up, h < 6 { if takesFocus(y), inside(y) { found = y }; up = y.element(kAXParentAttribute); h += 1 }
+        }
+        guard let f = found, (f.attr(kAXFocusedAttribute) as? Bool) != true else { return }
+        let r = f.set(kAXFocusedAttribute, kCFBooleanTrue)
+        if r == .success { followed = (f, Date()) }
+        Log.io("review: the keyboard put on the \(f.role) near the landing → \(r.rawValue)")
     }
 
     /// VO-Return: select the item: a row in its list, or a menu item.
@@ -837,13 +1089,13 @@ public final class ObjectNavigator {
         currentPid = e.pid
     }
 
-    private func land(on e: AXUIElement) {
+    private func land(on e: AXUIElement, followFocus: Bool = true) {
         landedByStep = false
         current = e
         currentPid = e.pid
         labelSource = ProfileStore.shared.labelDetail(for: e, pid: e.pid)?.source
         report(e)
-        follow(e)
+        if followFocus { follow(e) }
     }
 
     /// For tests: what each property of the navigator object says.

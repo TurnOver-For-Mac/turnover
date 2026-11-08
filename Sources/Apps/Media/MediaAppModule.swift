@@ -100,6 +100,10 @@ final class MediaAppModule: AppModule {
         }
     }
 
+    override func adoptReading(_ element: AXUIElement, within region: AXUIElement?) -> AXUIElement? {
+        view.adopt(element, within: region)
+    }
+
     override func handleEvent(_ event: Event, next: () -> Void) {
         // Music's video player: its buttons speak as anywhere else. Leaving it, the page is read again.
         if event.kind == .gainFocus || event.kind == .focusEntered {

@@ -69,6 +69,10 @@ open class AppModule: ScriptableObject {
     /// True when it did.
     open func takeFocus(_ element: AXUIElement) -> Bool { false }
 
+    /// Adopt the destination of a linked-item or window-spot jump. Return the element the reader can continue
+    /// from, or nil when the destination is outside this reader. The caller places and announces the review cursor.
+    open func adoptReading(_ element: AXUIElement, within region: AXUIElement?) -> AXUIElement? { nil }
+
     /// Where the app misreports its focus, the element that really has it.
     open func redirectFocus(_ element: AXUIElement) -> AXUIElement? { nil }
 
