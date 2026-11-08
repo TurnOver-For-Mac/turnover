@@ -2614,6 +2614,7 @@
       }
     },
     "A list of apps for each reader, a mode (TurnOver in its apps, everywhere, or VoiceOver everywhere), and switching between the readers as you change apps. The list is under Tools in the TurnOver menu while this is on. Off, TurnOver reads everywhere while it is on." : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -3073,6 +3074,7 @@
       }
     },
     "Apps TurnOver reads" : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -3091,6 +3093,9 @@
           }
         }
       }
+    },
+    "Apps VoiceOver reads" : {
+
     },
     "Arcade" : {
       "comment" : "An App Store page",
@@ -5337,6 +5342,9 @@
         }
       }
     },
+    "Every app comes back to TurnOver. Command Control Comma, then A, does this anywhere" : {
+
+    },
     "Every build on GitHub, newest first, to go back to one if the newest breaks something: download it, replace the app, and skip the newer one in Updates" : {
       "localizations" : {
         "tr" : {
@@ -5432,6 +5440,9 @@
         }
       }
     },
+    "Experimental: CoExist" : {
+
+    },
     "Experimental: readers per app" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5444,6 +5455,7 @@
       }
     },
     "Experimental: readers per app, CoExist" : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -9600,6 +9612,9 @@
         }
       }
     },
+    "None: TurnOver reads every app. In an app, Command Control Shift T gives it to VoiceOver, and the same key gives it back." : {
+
+    },
     "None: TurnOver reads them all" : {
       "localizations" : {
         "tr" : {
@@ -11474,6 +11489,7 @@
       }
     },
     "Readers per app" : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -11509,6 +11525,7 @@
     },
     "Readers per app are off: TurnOver reads everywhere while it is on. Settings, Screen reader behaviour, turns them on." : {
       "comment" : "Spoken message",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -12069,6 +12086,9 @@
           }
         }
       }
+    },
+    "Remove %@: TurnOver reads it again" : {
+
     },
     "Remove natural voices" : {
       "localizations" : {
@@ -15228,6 +15248,9 @@
         }
       }
     },
+    "The apps you gave to VoiceOver with Command Control Shift T, and TurnOver reads everywhere again" : {
+
+    },
     "The board to the left" : {
       "comment" : "A command, as the key list and keyboard help say it",
       "localizations" : {
@@ -16665,6 +16688,7 @@
     },
     "TurnOver everywhere" : {
       "comment" : "Who reads: a mode",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -16743,6 +16767,7 @@
     },
     "TurnOver in its apps" : {
       "comment" : "Who reads: a mode",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -16753,6 +16778,7 @@
       }
     },
     "TurnOver in its apps, TurnOver everywhere, or VoiceOver everywhere. Command Control Comma, then A, does this anywhere" : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -16886,6 +16912,7 @@
     },
     "TurnOver leads in %@" : {
       "comment" : "Spoken message\nTurnOver reads the app in front: %@ is the app",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -17026,6 +17053,30 @@
           }
         }
       }
+    },
+    "TurnOver reads %@ now" : {
+      "comment" : "The app in front came back to TurnOver: %@ is the app"
+    },
+    "TurnOver reads every other app. Command Control Shift T in one of these gives it back to TurnOver, as does Remove here." : {
+
+    },
+    "TurnOver reads everywhere" : {
+
+    },
+    "TurnOver reads everywhere already" : {
+      "comment" : "Spoken message: no app was VoiceOver's"
+    },
+    "TurnOver reads everywhere. %@ apps came back from VoiceOver" : {
+      "comment" : "Spoken message: %@ is how many"
+    },
+    "TurnOver reads everywhere. 1 app came back from VoiceOver" : {
+      "comment" : "Spoken message"
+    },
+    "TurnOver reads everywhere: take back the %@ apps VoiceOver reads" : {
+
+    },
+    "TurnOver reads everywhere: take back the 1 app VoiceOver reads" : {
+
     },
     "TurnOver speaks VoiceOver's keys, NVDA's or JAWS's. Command Control Comma, then K, moves between them.\nThe VO keys do what they do in VoiceOver." : {
       "comment" : "A welcome page: keyboard styles",
@@ -17771,6 +17822,7 @@
     },
     "VoiceOver everywhere" : {
       "comment" : "Who reads: a mode",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -17824,6 +17876,7 @@
     },
     "VoiceOver leads in %@" : {
       "comment" : "VoiceOver reads the app in front: %@ is the app",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -17833,8 +17886,12 @@
         }
       }
     },
+    "VoiceOver reads %@ now. Command Control Shift T gives it back to TurnOver." : {
+      "comment" : "The app in front was given to VoiceOver: %@ is the app"
+    },
     "VoiceOver reads everywhere. Change Who reads first." : {
       "comment" : "Moving an app between readers when VoiceOver reads everything",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -17846,6 +17903,7 @@
     },
     "VoiceOver reads everywhere. Command Control Comma, then A, to change that." : {
       "comment" : "Spoken message",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -18335,6 +18393,7 @@
       }
     },
     "Which apps TurnOver reads, and which VoiceOver reads (readers per app, Settings, Experimental)" : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -18381,6 +18440,7 @@
       }
     },
     "Who reads" : {
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -18758,8 +18818,12 @@
         }
       }
     },
+    "all apps back to TurnOver: it reads everywhere again" : {
+      "comment" : "A letter's command in the TurnOver layer (Command Control Comma)"
+    },
     "all apps: TurnOver in its apps, everywhere, or VoiceOver everywhere" : {
       "comment" : "A letter's command in the TurnOver layer (Command Control Comma)",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -22742,9 +22806,6 @@
         }
       }
     },
-    "next track" : {
-      "comment" : "Spotify next track shortcut"
-    },
     "next item" : {
       "comment" : "A braille chord's command, as braille help says it",
       "localizations" : {
@@ -22766,6 +22827,9 @@
           }
         }
       }
+    },
+    "next track" : {
+      "comment" : "Spotify next track shortcut"
     },
     "no %@ here" : {
       "comment" : "The rotor found none of a kind: %@ is the kind (headings)",
@@ -24800,9 +24864,6 @@
         }
       }
     },
-    "previous track" : {
-      "comment" : "Spotify previous track shortcut"
-    },
     "previous item" : {
       "comment" : "A braille chord's command, as braille help says it",
       "localizations" : {
@@ -24824,6 +24885,9 @@
           }
         }
       }
+    },
+    "previous track" : {
+      "comment" : "Spotify previous track shortcut"
     },
     "progress bar" : {
       "comment" : "A role, spoken after an item's name",

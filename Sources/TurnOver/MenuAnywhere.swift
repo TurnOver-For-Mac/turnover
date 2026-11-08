@@ -71,7 +71,7 @@ final class MenuAnywhere {
         "r": (String(localized: "screen recognition", comment: "A letter's command in the TurnOver layer (Command Control Comma)"), .list, { MenuAnywhere.shared.recognize() }),
         "t": (String(localized: "switch reader", comment: "A letter's command in the TurnOver layer (Command Control Comma)"), .run, { MenuAnywhere.shared.switchLead?(MenuAnywhere.shared.voiceOverWasReading) }),
         "d": (String(localized: "direct: this app's keys straight to it, TurnOver quiet", comment: "A letter's command in the TurnOver layer (Command Control Comma)"), .run, { MenuAnywhere.shared.toggleDirect?() }),
-        "a": (String(localized: "all apps: TurnOver in its apps, everywhere, or VoiceOver everywhere", comment: "A letter's command in the TurnOver layer (Command Control Comma)"), .run, { MenuAnywhere.shared.cycleLeadMode?() }),
+        "a": (String(localized: "all apps back to TurnOver: it reads everywhere again", comment: "A letter's command in the TurnOver layer (Command Control Comma)"), .run, { MenuAnywhere.shared.cycleLeadMode?() }),
         "k": (String(localized: "keyboard style: VoiceOver, NVDA or JAWS keys", comment: "A letter's command in the TurnOver layer (Command Control Comma)"), .run, { MenuAnywhere.runScript("toggleKeyboardStyle") }),
         "j": (String(localized: "that was wrong", comment: "A letter's command in the TurnOver layer (Command Control Comma)"), .run, { MenuAnywhere.runScript("markProblem") }),
         "h": (String(localized: "guide", comment: "A letter's command in the TurnOver layer (Command Control Comma)"), .run, { TurnOverGuide.open() }),

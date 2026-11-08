@@ -28,6 +28,9 @@ public enum Edition {
     /// Where Support TurnOver goes: straight to the payment pages, nothing in between (20 Oct 2026: "as easy as possible").
     public static let sponsorsURL = "https://github.com/sponsors/TurnOver-For-Mac"
     public static let kofiURL = "https://ko-fi.com/oliverkennett"
+    /// Where TurnOver's users talk to each other (a permanent invitation, Oliver, 8 Nov 2026). Not support: problems
+    /// and requests go through GitHub, by Send feedback.
+    public static let discordURL = "https://discord.gg/6AsrUXwRgV"
     /// Every published build, newest first, each with its notes and its zip: for going back to an earlier one.
     public static let releasesURL = "https://github.com/TurnOver-For-Mac/turnover/releases"
     /// The build number (CFBundleVersion; raised for every published build), so a report says exactly which build.

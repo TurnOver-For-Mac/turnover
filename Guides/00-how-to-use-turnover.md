@@ -23,8 +23,9 @@ If VoiceOver reads an app better for you, it can keep that app while TurnOver re
 **Command Control Shift T**: VoiceOver takes it over, and TurnOver remembers your choice. The same key gives it back
 to TurnOver.
 
-The first press turns on **Readers per app** (Settings, Screen reader behaviour). The list of VoiceOver's apps is
-under Tools in the TurnOver menu. More in [TurnOver and VoiceOver](coexist.html).
+There is nothing to turn on first. The list of VoiceOver's apps is in Settings, Screen reader behaviour, and under
+Tools in the TurnOver menu, where **TurnOver reads everywhere** brings every app back at once (also Command Control
+Comma, then A). More in [TurnOver and VoiceOver](coexist.html).
 
 ## Choose your keys
 

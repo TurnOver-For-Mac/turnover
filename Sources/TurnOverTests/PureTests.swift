@@ -12,18 +12,19 @@ import TurnOverControl
 import AXFixtures
 
 func pureTests() {
-    test("readers per app: a fresh file is off, a file with a list or another mode keeps working as it did") {
+    test("who reads: one list; an old file's modes and switch are let go and its VoiceOver apps kept") {
         let decode: (String) -> Config.Applications = { json in
             try! JSONDecoder().decode(Config.Applications.self, from: json.data(using: .utf8)!)
         }
-        expect(Config.Applications().perAppReaders, false, "a fresh install: TurnOver everywhere while it is on")
-        expect(decode("{}").perAppReaders, true, "a file from before the modes starts in apps mode, so its lists are kept")
-        expect(decode("{\"leadMode\": \"everywhere\", \"voiceOverBundles\": []}").perAppReaders, false, "everywhere with no list: nothing to keep")
-        expect(decode("{\"leadMode\": \"everywhere\", \"voiceOverBundles\": [\"com.apple.Safari\"]}").perAppReaders, true, "an app given to VoiceOver is kept")
-        expect(decode("{\"leadMode\": \"apps\"}").perAppReaders, true, "TurnOver in its apps is kept")
-        expect(decode("{\"perAppReaders\": false, \"leadMode\": \"apps\"}").perAppReaders, false, "a choice made is kept over the lists")
-        let off = decode("{\"leadMode\": \"everywhere\"}")
-        expect(off.effectiveLeadMode, "everywhere"); expect(off.switchesAsAppsChange, false); expect(off.handsOverAtLaunch, true)
+        let fresh = Config.Applications()
+        expect(fresh.voiceOverBundles, [], "a fresh install: TurnOver reads everywhere")
+        expect(fresh.switchesAsAppsChange, true); expect(fresh.handsOverAtLaunch, true)
+        expect(decode("{}").voiceOverBundles, [], "a file from before the lists")
+        expect(decode("{\"leadMode\": \"everywhere\", \"voiceOverBundles\": [\"com.apple.Safari\"]}").voiceOverBundles, ["com.apple.Safari"], "an app given to VoiceOver is kept")
+        expect(decode("{\"leadMode\": \"voiceover\", \"voiceOverBundles\": [\"com.apple.Safari\"]}").listedForTurnOver("com.apple.mail"), true, "VoiceOver everywhere is no more: TurnOver reads the rest")
+        expect(decode("{\"leadMode\": \"apps\", \"leadBundles\": [\"com.apple.mail\"]}").listedForTurnOver("com.apple.TextEdit"), true, "TurnOver in its apps is no more: everywhere")
+        expect(decode("{\"perAppReaders\": false, \"voiceOverBundles\": [\"com.apple.Safari\"]}").listedForTurnOver("com.apple.Safari"), false, "the switch is gone; the list applies")
+        expect(decode("{\"automaticHandOver\": false}").switchesAsAppsChange, false, "the menu's switch is kept")
         expect(decode("{}").swapWithVoiceOver, true, "the swap with VoiceOver is on unless turned off")
         expect(decode("{\"swapWithVoiceOver\": false}").swapWithVoiceOver, false, "the choice is kept")
     }
@@ -161,23 +162,17 @@ func pureTests() {
         expect(Languages.detectUnmarked("a"), nil, "a Latin letter stays with the main voice")
         expect(Languages.detectUnmarked("."), nil, "punctuation stays with the main voice")
     }
-    test("reading modes: each mode's own list, for showing and for moving") {
+    test("who reads: the VoiceOver list, for showing and for moving") {
         var a = Config.Applications()
-        a.perAppReaders = true   // the lists only count with readers per app on (22 Oct 2026)
-        a.leadBundles = ["com.apple.mail"]; a.voiceOverBundles = ["com.apple.Safari"]
-        a.leadMode = "apps"
+        a.voiceOverBundles = ["com.apple.Safari"]
         expect(a.listedForTurnOver("com.apple.mail"), true); expect(a.listedForTurnOver("com.apple.Safari"), false)
-        a.leadMode = "everywhere"
-        expect(a.listedForTurnOver("com.apple.mail"), true); expect(a.listedForTurnOver("com.apple.Safari"), false)
-        expect(a.listedForTurnOver("com.apple.TextEdit"), true, "everywhere: any app not given to VoiceOver")
+        expect(a.listedForTurnOver("com.apple.TextEdit"), true, "any app not given to VoiceOver")
         a.give("com.apple.TextEdit", toTurnOver: false)
-        expect(a.voiceOverBundles.contains("com.apple.TextEdit"), true); expect(a.leadBundles, ["com.apple.mail"], "apps list untouched")
+        expect(a.voiceOverBundles, ["com.apple.Safari", "com.apple.TextEdit"])
         a.give("com.apple.Safari", toTurnOver: true)
-        expect(a.voiceOverBundles.contains("com.apple.Safari"), false)
-        a.leadMode = "voiceover"
-        expect(a.listedForTurnOver("com.apple.mail"), false)
-        let before = a; a.give("com.apple.mail", toTurnOver: true)
-        expect(a.leadBundles, before.leadBundles, "VoiceOver everywhere: nothing moves"); expect(a.voiceOverBundles, before.voiceOverBundles)
+        expect(a.voiceOverBundles, ["com.apple.TextEdit"])
+        a.give("com.apple.TextEdit", toTurnOver: false)
+        expect(a.voiceOverBundles, ["com.apple.TextEdit"], "given twice is listed once")
     }
     test("plugin format: comments, trailing commas, lines, unknown fields, choices, versions") {
         let text = """

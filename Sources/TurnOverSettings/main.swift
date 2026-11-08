@@ -725,6 +725,13 @@ struct ReadersView: View {
     private var coexist: Binding<Bool> {
         Binding(get: { model.special("_coexist") as? Bool ?? false }, set: { model.setSpecial("_coexist", $0) })
     }
+    /// An app's name from its bundle identifier, for the list; the identifier itself when the app isn't installed.
+    static func appName(_ bundle: String) -> String {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundle) else { return bundle }
+        return (Bundle(url: url)?.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)
+            ?? (Bundle(url: url)?.object(forInfoDictionaryKey: "CFBundleName") as? String)
+            ?? url.deletingPathExtension().lastPathComponent
+    }
     var body: some View {
         Form {
             Section {
@@ -738,11 +745,27 @@ struct ReadersView: View {
             }
             // A plain section, not a disclosure group: the triangle took the focus but neither Return nor VO Space
             // opened it (Oliver, 28 Oct 2026: "I can't get into the experimental part").
-            Section(header: Text("Experimental: readers per app, CoExist")) {
+            // The apps given to VoiceOver with Command Control Shift T (8 Nov 2026, in place of the Readers per app
+            // switch and its three modes): a plain list with Remove, so what the key did can be seen and undone here.
+            Section(header: Text("Apps VoiceOver reads")) {
+                let apps = model.get("applications", "voiceOverBundles") as? [String] ?? []
+                if apps.isEmpty {
+                    Text("None: TurnOver reads every app. In an app, Command Control Shift T gives it to VoiceOver, and the same key gives it back.").font(.caption)
+                } else {
+                    Text("TurnOver reads every other app. Command Control Shift T in one of these gives it back to TurnOver, as does Remove here.").font(.caption)
+                    ForEach(apps, id: \.self) { bundle in
+                        HStack {
+                            Text(Self.appName(bundle))
+                            Spacer()
+                            Button("Remove") { model.set("applications", "voiceOverBundles", apps.filter { $0 != bundle }) }
+                                .accessibilityLabel("Remove \(Self.appName(bundle)): TurnOver reads it again")
+                        }
+                    }
+                }
+            }
+            Section(header: Text("Experimental: CoExist")) {
                 Toggle("CoExist: VoiceOver stays running alongside TurnOver", isOn: coexist)
                 Text("VoiceOver is kept quiet by an audio tap where TurnOver reads and keeps passwords and macOS's own prompts. Removed on 24 Oct 2026 and back as an experiment: it can leave a Mac silent if macOS asks for audio permission while VoiceOver is muted. Changing it restarts TurnOver.").font(.caption)
-                Toggle("Readers per app", isOn: model.bool("applications", "perAppReaders"))
-                Text("A list of apps for each reader, a mode (TurnOver in its apps, everywhere, or VoiceOver everywhere), and switching between the readers as you change apps. The list is under Tools in the TurnOver menu while this is on. Off, TurnOver reads everywhere while it is on.").font(.caption)
             }
         }.formStyle(.grouped).navigationTitle("Screen reader behaviour")
     }

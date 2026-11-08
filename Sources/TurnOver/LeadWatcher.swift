@@ -267,8 +267,8 @@ final class LeadWatcher {
         // VoiceOver everywhere: TurnOver steps back from every app (Command Control Comma, A).
         // The rules themselves are LeadPolicy.leads (pure, with a table test); this gathers what they need.
         return LeadPolicy.leads(.init(gameLeads: Games.leads(bundle), pin: pins[bundle],
-                                      leadMode: config.applications.effectiveLeadMode, supported: Edition.supports(bundle),
-                                      inVoiceOverList: config.applications.effectiveVoiceOverBundles.contains(bundle), inLeadList: config.applications.leadBundles.contains(bundle)))
+                                      leadMode: Config.Applications.leadMode, supported: Edition.supports(bundle),
+                                      inVoiceOverList: config.applications.voiceOverBundles.contains(bundle), inLeadList: config.applications.leadBundles.contains(bundle)))
     }
 
     /// The game VoiceOver was turned off for, and when: VoiceOver's quit hands the front to the app it was started
@@ -314,14 +314,14 @@ final class LeadWatcher {
         if !locked, restoreAfterWakeIfNeeded() { return }
         // A Wine program has no bundle at all (CrossOver runs it through a bare loader stub); game speech gives it a key.
         // A direct program without one (a Godot game run from Terminal) is known by its name.
-        // Without readers per app TurnOver reads everywhere, so the first take-over (at launch, or once Input Monitoring
-        // is granted) still happens; after it, apps changing hands is only with the switch on (a second reviewer, 22 Oct 2026).
+        // TurnOver reads everywhere, so the first take-over (at launch, or once Input Monitoring is granted) always
+        // happens; after it, apps changing hands is only with the switch on (a second reviewer, 22 Oct 2026).
         // Not after VoiceOver was turned on by hand (the swap gave it the Mac): that choice stands until VoiceOver goes
         // off again or TurnOver is turned on by its own key (a second reviewer, 22 Oct 2026).
         // And never by turning VoiceOver off when the swap is off: then TurnOver's own key is the only way it comes on.
         let mayTurnVoiceOverOff = Coexist.on || config.applications.swapWithVoiceOver
         // And never while TurnOver is off by its own key (suspended): an app change then changes nothing.
-        let firstTakeOver = !config.applications.perAppReaders && initialTakeOverPending && !suspended && !turnOverActive() && !yieldedToVoiceOverByHand && mayTurnVoiceOverOff
+        let firstTakeOver = initialTakeOverPending && !suspended && !turnOverActive() && !yieldedToVoiceOverByHand && mayTurnVoiceOverOff
         guard config.applications.switchesAsAppsChange || firstTakeOver, app.activationPolicy == .regular || own,
               let bundle = app.bundleIdentifier ?? Games.leadKey(for: app) ?? (direct ? directKey : nil), bundle != "com.apple.VoiceOver" else { return }
         // TurnOver in front with no window of its own showing: a moment's activation macOS reports as a window
@@ -523,28 +523,31 @@ final class LeadWatcher {
         }
     }
 
-    /// Command Control Comma, A: the next of the three modes, said, saved, and the app in front given to its reader.
-    /// Words for TurnOver's next take-over instead of "TurnOver on" (a mode change): consumed by the app.
+    /// Command Control Comma, A, and the menu: TurnOver reads everywhere again. The apps given to VoiceOver come
+    /// back, the hand choices go, and the app in front is taken if VoiceOver had it. (The three modes this cycled
+    /// went on 8 Nov 2026, Oliver: one list is the whole story.)
+    /// Words for TurnOver's next take-over instead of "TurnOver on": consumed by the app.
     static var nextTakeoverWords: String?
 
-    func cycleMode() {
-        let modes = Config.Applications.leadModes
-        let next = modes[((modes.firstIndex(of: config.applications.leadMode) ?? 0) + 1) % modes.count]
-        config.applications.leadMode = next
-        pins.removeAll()   // the hand choices of the moment belong to the mode that was
+    func readEverywhere() {
+        let came = config.applications.voiceOverBundles.count
+        config.applications.voiceOverBundles = []
+        pins.removeAll()
         config.save()
-        Log.info("lead mode: \(next)")
+        Log.info("read everywhere: \(came) apps back from VoiceOver")
+        SettingsBridge.settingsChanged()
         choiceGeneration += 1
         let generation = choiceGeneration
+        let words = came == 0 ? String(localized: "TurnOver reads everywhere already", comment: "Spoken message: no app was VoiceOver's")
+            : came == 1 ? String(localized: "TurnOver reads everywhere. 1 app came back from VoiceOver", comment: "Spoken message")
+            : String(localized: "TurnOver reads everywhere. \(String(came)) apps came back from VoiceOver", comment: "Spoken message: %@ is how many")
         let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
-        if shouldLead(front) {
-            // TurnOver takes over for the new mode: the mode's name in place of "TurnOver on", then the app as usual.
-            // Said after it, the name ran into "TurnOver on" and the app ("a bit of a mouthful", 15 Oct 2026).
-            if NSWorkspace.shared.isVoiceOverEnabled { Self.nextTakeoverWords = Config.Applications.leadModeName(next) }
+        if shouldLead(front), NSWorkspace.shared.isVoiceOverEnabled {
+            // TurnOver takes the app in front from VoiceOver: the words in place of "TurnOver on", then the app as usual.
+            Self.nextTakeoverWords = words
             handOver(voiceOverOn: false)
-            if !NSWorkspace.shared.isVoiceOverEnabled { sayWhenTurnOverIsUp(Config.Applications.leadModeName(next), generation: generation) }
         } else {
-            say(Config.Applications.leadModeName(next))
+            say(words)
             settleReader(after: 1.2, generation: generation)
         }
     }
@@ -585,10 +588,9 @@ final class LeadWatcher {
     }
 
     func switchCurrent(toTurnOver wanted: Bool? = nil) {
-        // Keeping an app with VoiceOver is one key (Oliver, 7 Nov 2026: yes to Command Control Shift T working without
-        // the setting). Readers per app off, the key turns them on (once it has an app to give), TurnOver everywhere but the apps VoiceOver keeps,
-        // and goes on to give the app in front away. Before, it said readers per app were off and did nothing, while the
-        // welcome and the guides said the key gave the app to VoiceOver (22 Oct 2026 to 7 Nov 2026).
+        // Keeping an app with VoiceOver is one key, with nothing to turn on first (Oliver, 7 and 8 Nov 2026). Before,
+        // it said readers per app were off and did nothing, while the welcome and the guides said the key gave the app
+        // to VoiceOver (22 Oct 2026 to 7 Nov 2026).
         guard let app = NSWorkspace.shared.frontmostApplication, app.activationPolicy == .regular,
               let bundle = app.bundleIdentifier ?? Games.leadKey(for: app), bundle != Bundle.main.bundleIdentifier else {
             Log.info("switch reader: nothing to switch in front"); Tones.edge(); return
@@ -596,40 +598,28 @@ final class LeadWatcher {
         let name = app.localizedName ?? bundle
         guard !locked else { return }
         guard InputAccess.granted else { Log.info("switch reader: no Input Monitoring"); Tones.edge(); return }
-        if !config.applications.perAppReaders {
-            config.applications.perAppReaders = true
-            config.applications.leadMode = "everywhere"
-            Log.info("switch reader: readers per app turned on by the key")
-        }
         let toTurnOver = wanted ?? !shouldLead(bundle)
-        // Saved in the mode's own list: TurnOver's apps, or (everywhere) the apps VoiceOver keeps.
-        if config.applications.leadMode == "voiceover" {
-            say(String(localized: "VoiceOver reads everywhere. Command Control Comma, then A, to change that.", comment: "Spoken message"))
-            return
-        }
-        if config.applications.leadMode == "everywhere" {
-            config.applications.voiceOverBundles.removeAll { $0 == bundle }
-            if !toTurnOver { config.applications.voiceOverBundles.append(bundle) }
-        } else {
-            config.applications.leadBundles.removeAll { $0 == bundle }
-            if toTurnOver { config.applications.leadBundles.append(bundle) }
-        }
+        config.applications.give(bundle, toTurnOver: toTurnOver)
         pins[bundle] = nil
         if shouldLead(bundle) != toTurnOver { pins[bundle] = toTurnOver }   // a game, or a rule the list does not decide
         config.save()
         Log.info("switch reader: \(name) is now \(toTurnOver ? "TurnOver's" : "VoiceOver's") (saved)")
+        SettingsBridge.settingsChanged()
         onChoiceSaved?()
         choiceGeneration += 1
         if toTurnOver, Coexist.on {
             // Said first, then the app, as "VoiceOver leads in" is: said once TurnOver was up, it came after the app's
             // window, field and all, and wasn't heard (19 Oct 2026, twice).
-            Speech.speakMessage(String(localized: "TurnOver leads in \(name)", comment: "Spoken message"))
+            Speech.speakMessage(String(localized: "TurnOver reads \(name) now", comment: "The app in front came back to TurnOver: %@ is the app"))
             settleReader(after: 1.0, generation: choiceGeneration)
         } else if toTurnOver {
             handOver(voiceOverOn: false)
-            sayWhenTurnOverIsUp(String(localized: "TurnOver leads in \(name)", comment: "TurnOver reads the app in front: %@ is the app"), generation: choiceGeneration)
+            sayWhenTurnOverIsUp(String(localized: "TurnOver reads \(name) now", comment: "The app in front came back to TurnOver: %@ is the app"), generation: choiceGeneration)
         } else {
-            Speech.speakMessage(String(localized: "VoiceOver leads in \(name)", comment: "VoiceOver reads the app in front: %@ is the app"))
+            // What changed is said, since the key may have been pressed by accident and nothing else tells; the way
+            // back is a hint, for those with hints on (Oliver, 8 Nov 2026).
+            Speech.speakMessage(String(localized: "VoiceOver reads \(name) now", comment: "The app in front was given to VoiceOver: %@ is the app"))
+            Hints.schedule(String(localized: "Command Control Shift T gives it back to TurnOver.", comment: "A hint after an app went to VoiceOver"))
             settleReader(after: 0.8, generation: choiceGeneration)
         }
     }
