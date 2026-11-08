@@ -137,8 +137,12 @@ public final class GlobalCommands: ScriptableObject {
         script("openMenus", String(localized: "Opens the application's menus; closes them if open (Windows: Alt or F10). Also Command on its own", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:f10"], category: win) { _ in
             GlobalCommands.toggleMenus()
         }.isAvailable = windowsOn
-        script("quitApplication", String(localized: "Quits the application (Windows: Alt+F4)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+f4"], category: win) { _ in
-            KeyboardGesture(identifier: "kb:command+q")?.send()
+        // Alt F4. Two misses (Oliver, 7 Nov 2026: "command f4 ... doesn't quit apps"): with the top row as media keys (the
+        // Mac's default) F4 arrives as Spotlight (key 177; Launchpad, 131, on older keyboards), never as F4; and with Fn,
+        // the Command Q sent was heard and Safari stayed open. Both are now Alt F4, and the app is asked to quit
+        // directly, as the Dock's Quit does (unsaved work still asks first); the key is the fallback.
+        script("quitApplication", String(localized: "Quits the application (Windows: Alt+F4)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+f4"] + GlobalCommands.f4MediaKeys.map { "kb:command+\($0)" }, category: win) { _ in
+            DispatchQueue.main.async { GlobalCommands.quitFrontApp() }
         }.isAvailable = windowsOn
         script("forceQuit", String(localized: "Force quit an application; lists the running applications to force quit one, with a confirmation (the Mac's Force Quit window, spoken)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+option+escape"]) { _ in
             DispatchQueue.main.async { ForceQuit.open() }
@@ -146,7 +150,7 @@ public final class GlobalCommands: ScriptableObject {
         script("forceQuitWindows", String(localized: "Force quit, as Task Manager's key (Windows: Control+Shift+Escape)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:control+shift+escape"], category: win) { _ in
             DispatchQueue.main.async { ForceQuit.open() }
         }.isAvailable = windowsOn
-        script("closeWindow", String(localized: "Closes the window or tab (Windows: Control+F4)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:control+f4"], category: win) { _ in
+        script("closeWindow", String(localized: "Closes the window or tab (Windows: Control+F4)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:control+f4"] + GlobalCommands.f4MediaKeys.map { "kb:control+\($0)" }, category: win) { _ in
             KeyboardGesture(identifier: "kb:command+w")?.send()
         }.isAvailable = windowsOn
         // NVDA+R: the front window's text, read from the screen, as a result to move through and click in.
@@ -675,6 +679,48 @@ public final class GlobalCommands: ScriptableObject {
         Log.io("context menu: right click on \(e.role) at (\(Int(p.x)), \(Int(p.y)))")
         rightClick(at: p)
         return true
+    }
+
+    /// The F4 key's names when the top row sends its media keys: Spotlight (177) and Launchpad (131).
+    nonisolated static let f4MediaKeys = ["key177", "key131"]
+
+    /// Alt F4: the app in front asked to quit, as the Dock's Quit asks; Command Q if it says no. Finder, which never
+    /// quits, and TurnOver itself are left alone.
+    @MainActor static func quitFrontApp() {
+        guard let app = NSWorkspace.shared.frontmostApplication else {
+            Speech.speakMessage(String(localized: "no app", comment: "No application in front")); return
+        }
+        let name = app.localizedName ?? ""
+        if app.bundleIdentifier == "com.apple.finder" || app.processIdentifier == ProcessInfo.processInfo.processIdentifier {
+            Speech.speakMessage(String(localized: "\(name) doesn't quit", comment: "Spoken message: Alt F4 in Finder, which can't be quit; the app's name"))
+            return
+        }
+        // The app's own Quit item first, pressed as a hand would choose it: Safari ignored both the quit request and
+        // the Command Q sent, and stayed open, where TextEdit quit (Oliver's trial, 7 Nov 2026).
+        // Its Quit item dimmed (Safari, 7 Nov 2026: a window waiting for an answer) means the app won't quit by any
+        // route, by hand included; it is said, rather than nothing happening.
+        switch pressQuitItem(app.processIdentifier) {
+        case .pressed: Log.io("quit: pressed \(app.bundleIdentifier ?? name)'s Quit item"); return
+        case .dimmed:
+            Log.io("quit: \(app.bundleIdentifier ?? name)'s Quit item is dimmed")
+            Speech.speakMessage(String(localized: "\(name) can't quit right now. A window may be waiting for an answer.", comment: "Spoken message: Alt F4 when the app's Quit is unavailable; the app's name"))
+            return
+        case .none: break
+        }
+        Log.io("quit: no Quit item to press; asking \(app.bundleIdentifier ?? name) to quit")
+        if !app.terminate() { KeyboardGesture(identifier: "kb:command+q")?.send() }
+    }
+
+    enum QuitItem { case pressed, dimmed, none }
+    /// The item with Command Q in the app's own menu (the one after the Apple menu): pressed, dimmed, or not found.
+    @MainActor static func pressQuitItem(_ pid: pid_t) -> QuitItem {
+        let menus = AXUIElementCreateApplication(pid).element(kAXMenuBarAttribute)?.elements(kAXChildrenAttribute) ?? []
+        guard menus.count > 1, let menu = menus[1].elements(kAXChildrenAttribute).first else { return .none }
+        guard let item = menu.elements(kAXChildrenAttribute).first(where: {
+            $0.string("AXMenuItemCmdChar")?.uppercased() == "Q" && ($0.int("AXMenuItemCmdModifiers") ?? -1) == 0
+        }) else { return .none }
+        if (item.attr(kAXEnabledAttribute) as? Bool) == false { return .dimmed }
+        return AXUIElementPerformAction(item, kAXPressAction as CFString) == .success ? .pressed : .none
     }
 
     public static func toggleMenus() {

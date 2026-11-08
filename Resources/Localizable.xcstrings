@@ -257,6 +257,9 @@
         }
       }
     },
+    "%@ can't quit right now. A window may be waiting for an answer." : {
+      "comment" : "Spoken message: Alt F4 when the app's Quit is unavailable; the app's name"
+    },
     "%@ cannot be pressed" : {
       "comment" : "A dialog's choice could not be pressed: its name",
       "localizations" : {
@@ -385,6 +388,9 @@
           }
         }
       }
+    },
+    "%@ doesn't quit" : {
+      "comment" : "Spoken message: Alt F4 in Finder, which can't be quit; the app's name"
     },
     "%@ doesn't speak in TurnOver, so TurnOver is back to %@. Choose another in the TurnOver menu, Settings, Speech." : {
       "comment" : "A silent voice replaced: the voice, then the one used instead",
