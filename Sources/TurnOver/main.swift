@@ -127,7 +127,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             (String(localized: "Your keys", comment: "A welcome page's title"),
              String(localized: "TurnOver speaks VoiceOver's keys, NVDA's or JAWS's. Command Control Comma, then K, moves between them.\nThe VO keys do what they do in VoiceOver.", comment: "A welcome page: keyboard styles")),
             (String(localized: "TurnOver and VoiceOver", comment: "A welcome page's title"),
-             String(localized: "While TurnOver is on, it reads everything, and VoiceOver is off.\nTurnOver turns VoiceOver off as it starts and back on as it quits, so you are never without speech. To change that: Settings, Screen reader behaviour.\nCommand Control Shift T gives the app in front to VoiceOver, or back to TurnOver, and remembers it.", comment: "A welcome page: TurnOver and VoiceOver")),
+             String(localized: "While TurnOver is on, it reads everything, and VoiceOver is off.\nTurnOver turns VoiceOver off as it starts and back on as it quits, so you are never without speech. To change that: Settings, Screen reader behaviour.\nCommand Control Shift T keeps the app in front with VoiceOver, or gives it back to TurnOver, and remembers it.", comment: "A welcome page: TurnOver and VoiceOver")),
             (String(localized: "Help, and helping", comment: "A welcome page's title"),
              String(localized: "Command Control Comma, then H, opens the guides.\nIf TurnOver ever stops responding, VoiceOver comes on within a few seconds and TurnOver starts again.\nTo report a problem: Send feedback, in the TurnOver menu.\nTo help TurnOver read an app better: This app, then Help improve this app, in the TurnOver menu.", comment: "The last welcome page")),
         ]
