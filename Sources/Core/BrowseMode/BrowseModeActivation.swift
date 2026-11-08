@@ -20,7 +20,7 @@ extension BrowseModeDocument {
 
     /// `byAccessibility`: VO-Space. The control with the keyboard is pressed through accessibility, as VoiceOver's
     /// VO-Space presses it, where Enter and Space send the real key (below): a page that ignores one answers the other.
-    func activate(_ gesture: KeyboardGesture, byAccessibility: Bool = false) {
+    func activate(_ gesture: KeyboardGesture, byAccessibility: Bool = false, reread: Bool = false) {
         var e: AXUIElement? = nil
         if let t = lastQuickNavTarget, buffer.offset(of: t) == position {
             e = BrowseModeDocument.actionable(t) ? t : t.firstDescendant(role: "AXLink", maxVisited: 60) ?? t.firstDescendant(role: "AXButton", maxVisited: 60) ?? t
@@ -68,6 +68,12 @@ extension BrowseModeDocument {
             }
         }
         if press(nearestTo: e) { if let e { enterPlayer(e) }; return }
+        // Nothing pressed: what was tried, for the log, so a "nothing to activate" can be read back to its cause.
+        if let e {
+            var tried: [String] = []; var x: AXUIElement? = e; var d = 0
+            while let y = x, d < 8 { tried.append(y.role); x = y.element(kAXParentAttribute); d += 1 }
+            Log.io("browse mode: nothing pressed from \(Log.words(tried.joined(separator: " < ")))")
+        }
         // The page rebuilt that part of itself after the buffer was read (AppleVis's Main Menu: its items are made
         // anew when it opens, so "Log out" in the buffer pointed at an element that no longer exists, 3 Oct 2026).
         // Find the live link or button with the line's text and press that.
@@ -75,6 +81,21 @@ extension BrowseModeDocument {
         if !text.isEmpty, let live = Self.liveActionable(named: text, in: webArea) {
             Log.io("browse mode: \"\(Log.words(text))\" was stale in the buffer; pressing the page's own \(live.role)")
             if press(nearestTo: live) { buffer.build(); clampPosition(); return }
+        }
+        // The buffer's element is gone and the page has nothing by that name: the page changed since the buffer was
+        // read (the Claude app's sidebar after a session was deleted: "Locks" stayed in the buffer and Enter said
+        // "nothing to activate", 8 Nov 2026). Read the page again, once: the line is pressed where it still is, and
+        // said gone where it isn't.
+        if !reread, let e, e.role == "?" {
+            rebuildKeepingPlace()
+            if !text.isEmpty, lineText(at: position).trimmingCharacters(in: .whitespacesAndNewlines) == text {
+                Log.io("browse mode: \"\(Log.words(text))\" was stale in the buffer; the page read again and the line found")
+                activate(gesture, byAccessibility: byAccessibility, reread: true)
+            } else {
+                Log.io("browse mode: \"\(Log.words(text))\" is gone from the page; the page read again")
+                Speech.speakMessage(String(localized: "gone from the page", comment: "Spoken message: the line the reading position was on is no longer on the page"))
+            }
+            return
         }
         // What was there, for the log: the buffer's element and its ancestors (alive or gone).
         var chain: [String] = []; var x = e; var d = 0

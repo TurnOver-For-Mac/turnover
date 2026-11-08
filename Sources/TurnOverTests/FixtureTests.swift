@@ -694,6 +694,55 @@ func focusRuleTests() {
         check(focus(66, fromOutside: true), "back into the prompt in focus mode, the focus is followed as before")
         check(page.passThrough, "focus mode stays")
     }
+
+    // The Claude app's sidebar after "Delete all 3 sessions" (8 Nov 2026): the page changed after the buffer was read
+    // and Chromium announced no layout change, so "Locks" stayed in the buffer for half a minute and Enter on it said
+    // "nothing to activate". A line whose element has gone from the page is proof enough: the page is read again.
+    test("browse mode: a line whose element has gone from the page is reread on arriving, and said gone on Enter") {
+        var f = conversation()
+        AXReplay.load(f)
+        let keep = Speech.sink
+        var said = ""
+        Speech.sink = { said += $0 + " " }
+        defer { AXReplay.unload(); API.setFocusObject(nil, ancestors: []); BrowseModeHandler.shared.forget(pid: 900_060); Speech.sink = keep }
+        API.setFocusObject(nil, ancestors: [])
+        let page = BrowseModeHandler.shared.document(root: AXReplay.element(60))
+        let copy = page.buffer.text.range(of: "Copy").location
+        check(copy != NSNotFound, "the Copy button is on the page")
+        guard let enter = KeyboardGesture(identifier: "kb:enter"), let downArrow = KeyboardGesture(identifier: "kb:downArrow"),
+              let activate = page.script(named: "activatePosition"), let down = page.script(named: "moveByLine_forward") else { check(false, "the keys and the scripts exist"); return }
+
+        // First the live page: Enter on the button presses it, Enter on the prompt enters it (focus mode).
+        page.position = copy
+        activate.handler(enter)
+        check(AXReplay.actions.contains { $0.id == 65 && $0.action == "AXPress" }, "Enter on the live Copy button presses it")
+        let prompt = page.buffer.text.range(of: "Prompt").location
+        check(prompt != NSNotFound, "the prompt is on the page")
+        page.position = prompt
+        activate.handler(enter)
+        check(page.passThrough, "Enter on the prompt enters it: focus mode")
+        page.setPassThrough(false, announce: false)
+
+        // The Copy button is removed from the page behind the buffer's back; Enter on its line.
+        f.nodes.removeAll { $0.id == 65 }
+        f.nodes[1].attrs["AXChildren"] = .elements([61, 63, 66])
+        AXReplay.load(f)
+        page.position = copy
+        said = ""
+        activate.handler(enter)
+        check(said.contains("gone from the page"), "Enter says the line has gone: \(said)")
+        check(page.buffer.text.range(of: "Copy").location == NSNotFound, "the buffer was read again without it")
+
+        // The same removal, arriving on the line by arrow: the page is read again and the line now there is read.
+        AXReplay.load(conversation())
+        page.buffer.isDirty = true; page.buffer.build()
+        page.position = page.buffer.text.range(of: "The reading stopped").location
+        AXReplay.load(f)
+        said = ""
+        down.handler(downArrow)
+        check(page.buffer.text.range(of: "Copy").location == NSNotFound, "the buffer was read again on arriving at the gone line")
+        check(!said.contains("Copy") && said.contains("Prompt"), "the line now there is read, not the gone one: \(said)")
+    }
 }
 
 // Scale: a generated window with a 1,000-row list. Searches for a window's parts must not walk the rows, and

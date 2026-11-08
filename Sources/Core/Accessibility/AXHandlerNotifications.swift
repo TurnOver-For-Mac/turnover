@@ -140,6 +140,11 @@ extension AXHandler {
             // costing the main thread four round trips for a log line (a code review, 14 Oct 2026).
             // A second window: does this app list every window's elements under each (Qt Quick)? Checked once it does.
             if name == kAXWindowCreatedNotification, !ForeignChildren.contains(pid) { ForeignChildren.check(pid: pid) }
+            // Chromium (the Claude app) sends none of WebKit's layout notices: a sidebar row deleted came as a flood
+            // of AXLiveRegionCreated and nothing else, so the buffer was never marked stale and kept the row for
+            // half a minute (8 Nov 2026). A flag only; the next move rereads a cheap page (rebuildIfCheap).
+            if [kAXCreatedNotification, kAXRowCountChangedNotification, "AXLiveRegionCreated"].contains(name),
+               let d = API.focusTreeInterceptor, d.webArea.pid == pid { d.buffer.isDirty = true }
             if Date().timeIntervalSince(loggedOnlyWindow) > 1 { loggedOnlyWindow = Date(); loggedOnlyCount = 0 }
             loggedOnlyCount += 1
             if loggedOnlyCount <= 20 { Log.io("notification \(name): \(element.role) \"\(Log.words(element.string(kAXTitleAttribute) ?? ""))\"") }
