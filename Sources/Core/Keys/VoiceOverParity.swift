@@ -83,8 +83,8 @@ extension VoiceOverKeysPlugin {
             guard let (cell, table) = Self.tableCell() else { Speech.speakMessage(String(localized: "not in a table", comment: "Spoken message")); return }
             if count() > 0 {
                 let rows = table.elements(kAXRowsAttribute).count, cols = table.elements(kAXColumnsAttribute).count
-                let rowWords = rows == 1 ? String(localized: "1 row", comment: "A table's size") : String(localized: "\(String(rows)) rows", comment: "A table's size")
-                let columnWords = cols == 1 ? String(localized: "1 column", comment: "A table's size") : String(localized: "\(String(cols)) columns", comment: "A table's size")
+                let rowWords = rows == 1 ? String(localized: "1 row", comment: "A table's size") : String(localized: "\(rows) rows", comment: "A table's size")
+                let columnWords = cols == 1 ? String(localized: "1 column", comment: "A table's size") : String(localized: "\(cols) columns", comment: "A table's size")
                 Speech.speakMessage("\(rowWords), \(columnWords)"); return
             }
             let r = Self.index(cell, "AXRowIndexRange").map { $0 + 1 }, c = Self.index(cell, "AXColumnIndexRange").map { $0 + 1 }

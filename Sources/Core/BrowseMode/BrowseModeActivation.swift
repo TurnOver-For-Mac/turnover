@@ -255,7 +255,7 @@ extension BrowseModeDocument {
             let name = el.string(kAXTitleAttribute) ?? el.string(kAXDescriptionAttribute) ?? ""
             var rows: CFIndex = 0
             AXUIElementGetAttributeValueCount(el, kAXRowsAttribute as CFString, &rows)
-            return (name.isEmpty ? Role.table.displayString : "\(name), \(Role.table.displayString)") + (rows > 0 ? ", " + String(localized: "\(String(rows)) rows", comment: "A table's size") : "")
+            return (name.isEmpty ? Role.table.displayString : "\(name), \(Role.table.displayString)") + (rows > 0 ? ", " + String(localized: "\(rows) rows", comment: "A table's size") : "")
         case "Landmarks":
             let what = el.string(kAXRoleDescriptionAttribute) ?? Role.landmark.displayString
             let name = el.string(kAXDescriptionAttribute) ?? el.string(kAXTitleAttribute) ?? ""

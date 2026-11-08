@@ -28,6 +28,16 @@ public enum SettingsBridge {
         default: return section
         }
     }
+    /// An EQ slider's name, as a change announces it: from a list in the window, so the catalog has the three
+    /// spelled out (a tester heard "Treble" under a Russian interface, 8 Nov 2026).
+    nonisolated public static func eqName(_ name: String) -> String {
+        switch name {
+        case "Bass": return String(localized: "Bass", comment: "An equalizer slider: the low frequencies")
+        case "Middle": return String(localized: "Middle", comment: "An equalizer slider: the middle frequencies")
+        case "Treble": return String(localized: "Treble", comment: "An equalizer slider: the high frequencies")
+        default: return name
+        }
+    }
     private static var started = false
     /// Restart TurnOver (set by the app): CoExist changes need it.
     public static var restart: (() -> Void)?
@@ -181,7 +191,7 @@ public enum SettingsBridge {
             if before.games.readBigPicture != next.games.readBigPicture { Games.restartBigPicture() }
             // The EQ heard as it is set: a short sample once the slider stops.
             for (name, was, now) in [("Bass", before.speech.bass, next.speech.bass), ("Middle", before.speech.middle, next.speech.middle), ("Treble", before.speech.treble, next.speech.treble)] where was != now {
-                previewSoon(String(localized: "\(name) \(String(Int(now))). The harbour opens at nine.", comment: "The EQ changed: %1$@ is bass, middle or treble, %2$@ the decibels"))
+                previewSoon(String(localized: "\(Self.eqName(name)) \(String(Int(now))). The harbour opens at nine.", comment: "The EQ changed: %1$@ is bass, middle or treble, %2$@ the decibels"))
             }
             let voiceChanged = before.speech.voice != next.speech.voice
             let languageVoicesChanged = before.speech.languageVoices != next.speech.languageVoices
