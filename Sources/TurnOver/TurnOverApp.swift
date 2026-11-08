@@ -84,9 +84,8 @@ final class TurnOverApp {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { self.lead.pinCurrentToVoiceOver() }
         }, hint: "For this app, until TurnOver quits. Command Control Comma, then T, does the same and remembers it")
         TurnOverMenu.shared.aboutItems = [MenuItem("Read the guide", .action { TurnOverGuide.open() }, hint: "What TurnOver is and its keys"),
-                                          MenuItem("The apps TurnOver reads", .action {
-                                              Speech.speakMessage(String(localized: "Experimental mode: the apps on your list under Apps, \(String(config.applications.leadBundles.count)) of them. Everywhere else VoiceOver reads.", comment: "Experimental mode: %@ is how many apps"))
-                                          }),
+                                          MenuItem("TurnOver's Discord, where users talk", .action { NSWorkspace.shared.open(URL(string: Edition.discordURL)!) },
+                                                   hint: "Opens the invitation in your browser. It is for talking with other users; problems and requests go through GitHub, by Send feedback"),
                                           MenuItem("Undo the VoiceOver settings copy", .action { Speech.speakMessage(VoiceOverSettings.undo()) }, hint: "Puts back the voice, rate, pitch, volume, verbosity and typing echo from before the first copy"),
                                           MenuItem("Updates", .submenu { Updater.shared.menuItems() }),
                                           MenuItem("Previous builds", .action {
@@ -177,10 +176,10 @@ final class TurnOverApp {
         }
         MenuAnywhere.shared.cycleLeadMode = { [weak self] in
             self?.inputActivation.readerSelected()
-            guard config.applications.perAppReaders else { Speech.speakMessage(String(localized: "Readers per app are off: TurnOver reads everywhere while it is on. Settings, Screen reader behaviour, turns them on.", comment: "Spoken message")); return }
-            self?.lead.cycleMode()
+            self?.lead.readEverywhere()
         }
         TurnOverMenu.shared.leadModeChanged = { [weak self] in self?.lead.refreshAfterModeChange() }
+        TurnOverMenu.shared.readEverywhere = { [weak self] in self?.lead.readEverywhere() }
         Core.lendToVoiceOver = { [weak self] s in self?.lead.lend(seconds: s) }
         MenuAnywhere.shared.register()
         TurnOverMenu.shared.relaunch = {

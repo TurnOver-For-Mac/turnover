@@ -59,6 +59,8 @@ public final class TurnOverMenu {
     /// Whether TurnOver reads an app (the lead watcher's answer), and switching the app in front to the other reader.
     public var readsApp: ((String) -> Bool)?
     public var switchReader: (() -> Void)?
+    /// Every app back to TurnOver (the menu item and Command Control Comma, A).
+    public var readEverywhere: (() -> Void)?
     /// Quitting, the app's way (coexisting: VoiceOver gets its apps back first).
     public var quit: (() -> Void)?
     /// The coexist option: VoiceOver stays on and is silenced in the apps of the list, instead of being turned off
@@ -138,7 +140,8 @@ public final class TurnOverMenu {
         guard let top = stack.last, top.items.indices.contains(top.index) else { return }
         let item = top.items[top.index]
         hintWork?.cancel()
-        if let hint = item.hint, !valueOnly {
+        // Only with hints on: the menu said every item's hint while Hints after a pause was off (Oliver, 8 Nov 2026).
+        if let hint = item.hint, !valueOnly, config.presentation.speakHints {
             let depth = stack.count, index = top.index
             let work = DispatchWorkItem { [weak self] in
                 guard let self, self.isOpen, self.stack.count == depth, self.stack.last?.index == index else { return }
@@ -482,9 +485,7 @@ public final class TurnOverMenu {
 
     private func toolItems() -> [MenuItem] {
         var items: [MenuItem] = []
-        if config.applications.perAppReaders {
-            items.append(MenuItem("Apps TurnOver reads", .submenu { self.applicationItems() }, hint: "Which apps TurnOver reads, and which VoiceOver reads (readers per app, Settings, Experimental)"))
-        }
+        items.append(MenuItem("Apps VoiceOver reads", .submenu { self.applicationItems() }, hint: "The apps you gave to VoiceOver with Command Control Shift T, and TurnOver reads everywhere again"))
         items += [
             Self.copyVoiceOverItem,
             MenuItem("Send feedback", .submenu { self.feedbackItems() }, hint: "A report in TurnOver's reports folder, and the problem form on GitHub"),
@@ -617,21 +618,10 @@ public final class TurnOverMenu {
     public var onGeneralChanged: (() -> Void)?
     /// Which applications TurnOver leads in: the listed ones and every regular application running now.
     private func applicationItems() -> [MenuItem] {
-        // Each app is in one list or another, so where it is says who reads it (docs/MENU-PLAN.md).
+        // One list (8 Nov 2026): the apps VoiceOver reads, each going back to TurnOver on Return and gone from the
+        // list once it does (Oliver: "it should vanish"); the app in front as an action; every app back at once; and
+        // the rest of the Mac's apps to give one to VoiceOver from here.
         var items: [MenuItem] = []
-        if let app = AppRequest.frontApp, let bundle = app.bundleIdentifier {
-            let turnOver = readsApp?(bundle) ?? config.applications.listedForTurnOver(bundle)
-            let reader = turnOver ? "TurnOver" : "VoiceOver", other = turnOver ? "VoiceOver" : "TurnOver"
-            let front = app.localizedName ?? String(localized: "The app in front", comment: "The application in front, when it has no name")
-            items.append(MenuItem("\(front), the app in front: read by \(reader)", .action { self.switchReader?() },
-                                  hint: "Return gives it to \(other)"))
-        }
-        items.append(MenuItem("Switch between TurnOver and VoiceOver as I change apps", .toggle(get: { config.applications.automaticHandOver }, set: { config.applications.automaticHandOver = $0 })))
-        // Who reads, everywhere at once (wishlist 2): also Command Control Comma, then A.
-        items.append(MenuItem("Who reads", .cycle(options: Config.Applications.leadModes.map(Config.Applications.leadModeName),
-            get: { Config.Applications.leadModes.firstIndex(of: config.applications.leadMode) ?? 0 },
-            set: { i in config.applications.leadMode = Config.Applications.leadModes[i]; config.save(); self.leadModeChanged?() }),
-            hint: "TurnOver in its apps, TurnOver everywhere, or VoiceOver everywhere. Command Control Comma, then A, does this anywhere"))
         let installed = Self.installedApps()
         func name(_ b: String) -> String {
             if let n = (Edition.supportedApps + Edition.devApps).first(where: { $0.bundle == b })?.name { return Self.plainName(n) }
@@ -639,43 +629,44 @@ public final class TurnOverMenu {
         }
         func move(_ b: String, toTurnOver: Bool) -> MenuItem.Kind {
             .action {
-                // The current mode's own list (code review, 13 Oct: these menus only ever changed the apps-mode list).
-                guard config.applications.leadMode != "voiceover" else {
-                    Speech.speakMessage(String(localized: "VoiceOver reads everywhere. Change Who reads first.", comment: "Moving an app between readers when VoiceOver reads everything")); return
-                }
                 config.applications.give(b, toTurnOver: toTurnOver)
                 config.save()
-                let reader = toTurnOver ? "TurnOver" : "VoiceOver"
-                Speech.speakMessage(String(localized: "\(name(b)): \(reader) reads it now", comment: "An app moved to a reader: %1$@ is the app, %2$@ TurnOver or VoiceOver"))
+                SettingsBridge.settingsChanged()
+                self.leadModeChanged?()
+                Speech.speakMessage(toTurnOver ? String(localized: "\(name(b)): TurnOver reads it now", comment: "An app back from VoiceOver: %@ is the app")
+                    : String(localized: "\(name(b)): VoiceOver reads it now", comment: "An app given to VoiceOver: %@ is the app"))
             }
         }
-        let apps = config.applications
-        // Every app the lists know of, and every installed one, shown by who reads it in this mode.
-        let known = Set(apps.leadBundles + apps.voiceOverBundles + installed.map(\.0) + (Edition.supportedApps + Edition.devApps).map(\.bundle))
-        let byTurnOver = known.filter { b in b != Bundle.main.bundleIdentifier && apps.listedForTurnOver(b)
-            && (apps.leadMode == "apps" || NSWorkspace.shared.urlForApplication(withBundleIdentifier: b) != nil) }
+        if let app = AppRequest.frontApp, let bundle = app.bundleIdentifier {
+            let turnOver = readsApp?(bundle) ?? config.applications.listedForTurnOver(bundle)
+            let front = app.localizedName ?? String(localized: "The app in front", comment: "The application in front, when it has no name")
+            items.append(MenuItem(turnOver ? "Give \(front), the app in front, to VoiceOver" : "\(front), the app in front, back to TurnOver", .action { self.switchReader?() },
+                                  hint: turnOver ? "VoiceOver reads it from now on; Command Control Shift T in the app does the same" : "TurnOver reads it again; Command Control Shift T in the app does the same"))
+        }
+        items.append(MenuItem("Switch between TurnOver and VoiceOver as I change apps", .toggle(get: { config.applications.automaticHandOver }, set: { config.applications.automaticHandOver = $0 })))
+        let given = config.applications.voiceOverBundles.filter { $0 != Bundle.main.bundleIdentifier }.sorted { name($0).lowercased() < name($1).lowercased() }
+        if given.isEmpty {
+            items.append(MenuItem("VoiceOver reads no app: TurnOver reads them all", .action {}, hint: "Command Control Shift T in an app gives it to VoiceOver"))
+        } else {
+            for b in given {
+                items.append(MenuItem(verbatim: String(localized: "\(name(b)), read by VoiceOver", comment: "An app on VoiceOver's list: %@ is the app"), move(b, toTurnOver: true),
+                                      hint: String(localized: "Return gives it back to TurnOver", comment: "A hint in the TurnOver menu")))
+            }
+            // Every app back to TurnOver at once (in place of the three modes): also Command Control Comma, then A.
+            items.append(MenuItem(given.count == 1 ? "TurnOver reads everywhere: take back the 1 app VoiceOver reads" : "TurnOver reads everywhere: take back the \(String(given.count)) apps VoiceOver reads",
+                .action { self.readEverywhere?() }, hint: "Every app comes back to TurnOver. Command Control Comma, then A, does this anywhere"))
+        }
+        // Every other app on this Mac, to give one to VoiceOver without going to it first.
+        let known = Set(installed.map(\.0) + (Edition.supportedApps + Edition.devApps).map(\.bundle))
+        let byTurnOver = known.filter { b in b != Bundle.main.bundleIdentifier && config.applications.listedForTurnOver(b)
+            && NSWorkspace.shared.urlForApplication(withBundleIdentifier: b) != nil }
             .sorted { name($0).lowercased() < name($1).lowercased() }
-        items.append(MenuItem(byTurnOver.count == 1 ? "Read by TurnOver, 1 app" : "Read by TurnOver, \(String(byTurnOver.count)) apps", .submenu {
-            byTurnOver.isEmpty ? [MenuItem("None yet", .action {})] : byTurnOver.map { b in
+        items.append(MenuItem(byTurnOver.count == 1 ? "Give another app to VoiceOver, 1 app" : "Give another app to VoiceOver, \(String(byTurnOver.count)) apps", .submenu {
+            byTurnOver.isEmpty ? [MenuItem("None", .action {})] : byTurnOver.map { b in
                 MenuItem(verbatim: Edition.isVerified(b) ? name(b) : String(localized: "\(name(b)), not yet checked", comment: "An app not yet checked with TurnOver"), move(b, toTurnOver: false),
                          hint: String(localized: "Return gives it to VoiceOver", comment: "A hint in the TurnOver menu"))
             }
-        }))
-        let supported = (Edition.supportedApps + Edition.devApps).filter { a in
-            !apps.listedForTurnOver(a.bundle) && NSWorkspace.shared.urlForApplication(withBundleIdentifier: a.bundle) != nil
-        }
-        items.append(MenuItem(supported.count == 1 ? "Read by VoiceOver, supported, 1 app" : "Read by VoiceOver, supported, \(String(supported.count)) apps", .submenu {
-            supported.isEmpty ? [MenuItem("None: TurnOver reads them all", .action {})] : supported.map { a in
-                MenuItem(verbatim: a.name.contains("preview") ? String(localized: "\(Self.plainName(a.name)), preview", comment: "An app TurnOver reads as a preview") : Self.plainName(a.name), move(a.bundle, toTurnOver: true),
-                         hint: String(localized: "Return gives it to TurnOver", comment: "A hint in the TurnOver menu"))
-            }
-        }, hint: "Apps TurnOver works with, which VoiceOver reads for now"))
-        let others = installed.filter { !Edition.isVerified($0.0) && !apps.listedForTurnOver($0.0) }
-        items.append(MenuItem("Other apps on this Mac, \(String(others.count))", .submenu {
-            others.sorted { $0.1.lowercased() < $1.1.lowercased() }.map { a in
-                MenuItem(verbatim: a.1, move(a.0, toTurnOver: true), hint: String(localized: "Not yet checked with TurnOver; it may read badly. Return gives it to TurnOver", comment: "A hint in the TurnOver menu"))
-            }
-        }, hint: "Not yet checked with TurnOver. Type the start of a name to move to it"))
+        }, hint: "Type the start of a name to move to it. Return gives the app to VoiceOver"))
         items += requestItem()
         return items
     }

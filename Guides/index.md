@@ -22,3 +22,8 @@ Start with [How to use TurnOver](how-to-use-turnover.html): the short tour, with
 - [Helping TurnOver read your apps](helping-turnover.html): tell us what's wrong, fix an item, share it, or build a
   fix with your AI.
 - [Plugins](plugins.html)
+
+## Other TurnOver users
+
+- [TurnOver's Discord](https://discord.gg/6AsrUXwRgV): where users talk to each other. Problems and requests still go
+  through GitHub; see [Troubleshooting and feedback](troubleshooting-and-feedback.html).

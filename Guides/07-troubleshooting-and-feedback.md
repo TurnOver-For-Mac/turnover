@@ -32,6 +32,12 @@ Command Option Escape lists the running apps: choose one, then force quit it, as
 - You need a free GitHub account to post. TurnOver is a spare-time project: every report is read, but replies may
   take a while.
 
+## Talking to other TurnOver users
+
+TurnOver has a Discord server, [discord.gg/6AsrUXwRgV](https://discord.gg/6AsrUXwRgV), where people who use it talk to
+each other: tips, apps that work well, what they have made. It is also in the TurnOver menu under Help. It isn't a
+support line: problems and requests go through GitHub, as above, so that they are seen and fixed.
+
 ## Removing TurnOver
 
 The TurnOver menu, About and updates, Uninstall TurnOver: the app only (your settings kept), or everything

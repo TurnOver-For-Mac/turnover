@@ -25,8 +25,9 @@ If VoiceOver reads an app better for you, it can keep that app while TurnOver re
 Command Control Shift T: VoiceOver takes it over, and TurnOver remembers your choice. The same key gives it back
 to TurnOver.
 
-The first press turns on Readers per app (Settings, Screen reader behaviour). The list of VoiceOver's apps is
-under Tools in the TurnOver menu. More in TurnOver and VoiceOver.
+There is nothing to turn on first. The list of VoiceOver's apps is in Settings, Screen reader behaviour, and under
+Tools in the TurnOver menu, where TurnOver reads everywhere brings every app back at once (also Command Control
+Comma, then A). More in TurnOver and VoiceOver.
 
 Choose your keys
 
@@ -324,13 +325,13 @@ What to expect
 Keeping some apps with VoiceOver
 
 If VoiceOver reads an app better for you, it can keep that app while TurnOver reads the rest. In the app, press
-Command Control Shift T: VoiceOver takes it over, and TurnOver remembers your choice next time. The same key gives
-it back to TurnOver. The first press turns on Readers per app, in Settings, Screen reader behaviour, where you can
-turn it off again.
+Command Control Shift T: VoiceOver takes it over, TurnOver says so and how to undo it, and remembers your choice
+next time. The same key gives it back to TurnOver. There is nothing to turn on first.
 
-The list of VoiceOver's apps is under Tools in the TurnOver menu, where you can also remove one. With Readers per app
-on you can also choose a mode: TurnOver everywhere except your VoiceOver apps (the usual one), TurnOver only in its
-own apps, or VoiceOver everywhere.
+The list of VoiceOver's apps is in Settings, Screen reader behaviour, with a Remove button for each, and under Tools in
+the TurnOver menu as Apps VoiceOver reads. There, TurnOver reads everywhere brings every app back to TurnOver
+at once; Command Control Comma, then A, does the same anywhere. There is no "VoiceOver everywhere" to choose:
+handing over to VoiceOver from the TurnOver menu, or quitting TurnOver, is that.
 
 The swap
 

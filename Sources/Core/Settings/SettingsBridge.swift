@@ -85,6 +85,10 @@ public enum SettingsBridge {
 
     /// The settings as they are now, and the ones kept outside the file, for the app to show: to the one that asked,
     /// or to every open Settings window.
+    /// The settings changed by a key or the menu rather than by the window: the window is told, so its list of
+    /// VoiceOver's apps follows Command Control Shift T (8 Nov 2026).
+    public static func settingsChanged() { sendState() }
+
     static func sendState(to reply: (@Sendable ([String: Any]) -> Void)? = nil) {
         guard let data = try? JSONEncoder().encode(config),
               var dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
@@ -175,7 +179,6 @@ public enum SettingsBridge {
             }
             if before.general.keyboardStyle != next.general.keyboardStyle { GlobalCommands.setKeyboardStyle(next.general.style) }
             if before.braille.bluetooth != next.braille.bluetooth, next.braille.bluetooth { BrailleDisplays.shared.lookNow() }
-            if before.applications.perAppReaders != next.applications.perAppReaders { TurnOverMenu.shared.leadModeChanged?() }
             if before.applications.swapWithVoiceOver != next.applications.swapWithVoiceOver { onSwapChanged?(next.applications.swapWithVoiceOver) }
             // Steam's switches from the window do what the menu's do.
             if before.games.readBigPicture != next.games.readBigPicture { Games.restartBigPicture() }

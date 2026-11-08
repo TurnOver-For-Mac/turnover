@@ -123,11 +123,14 @@ public enum EmptyWindowNotice {
         if config.general.style == .voiceOver {
             let text = GlobalCommands.spoken("kb:turnover+shift+y"), look = GlobalCommands.spoken("kb:turnover+shift+l")
             Log.info("empty window: nothing readable in the front window of pid \(pid); screen recognition offered (\(text), \(look))")
-            Speech.speakMessage(String(localized: "Nothing in this window can be read. Press \(text) to recognise its text, or \(look) to describe it.", comment: "Spoken message: %1$@ is the key that recognises the text, %2$@ the key that describes the window"))
+            // The fact is said; the keys are a hint, so they wait for the pause and for hints being on (Oliver, 8 Nov 2026).
+            Speech.speakMessage(String(localized: "Nothing in this window can be read.", comment: "Spoken message"))
+            Hints.schedule(String(localized: "Press \(text) to recognise its text, or \(look) to describe it.", comment: "A hint: %1$@ is the key that recognises the text, %2$@ the key that describes the window"))
             return
         }
         let key = GlobalCommands.spoken("kb:turnover+r")
         Log.info("empty window: nothing readable in the front window of pid \(pid); screen recognition offered (\(key))")
-        Speech.speakMessage(String(localized: "Nothing in this window can be read. Press \(key) to recognise the screen.", comment: "Spoken message"))
+        Speech.speakMessage(String(localized: "Nothing in this window can be read.", comment: "Spoken message"))
+        Hints.schedule(String(localized: "Press \(key) to recognise the screen.", comment: "A hint: %@ is the key"))
     }
 }
