@@ -17,11 +17,6 @@ Start with [How to use TurnOver](how-to-use-turnover.html): the short tour, with
 - [NVDA keys](keys-nvda.html)
 - [JAWS keys](keys-jaws.html)
 
-## Games
-
-- [Windows games on your Mac](windows-games.html): Steam's Windows games and their accessibility mods, run through
-  NotProton and CrossOver, speaking through TurnOver.
-
 ## Extending TurnOver
 
 - [Helping TurnOver read your apps](helping-turnover.html): tell us what's wrong, fix an item, share it, or build a
