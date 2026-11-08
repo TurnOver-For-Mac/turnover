@@ -30,6 +30,7 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 - The guides describe TurnOver as a second choice beside VoiceOver: one reader at a time, with some apps kept for
   VoiceOver, which Command Control Shift T does on its own.
 - Turkish: every string new in builds 23 and 24 is translated.
+- Russian: every string is translated, including the settings and the permission prompts.
 
 ### Fixed
 
