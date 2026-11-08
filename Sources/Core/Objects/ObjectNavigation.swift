@@ -431,12 +431,26 @@ public final class ObjectNavigator {
         groupCache = (container, items, Date())
         return items
     }
+
+    /// The same, for a walk that must stop when `stop` says so (a VO-J press out of its time: the group walk could ask
+    /// 2,500 elements past the press's budget, Codex, 8 Nov 2026). A walk that stopped part way isn't kept for the
+    /// steps after it.
+    package static func groupItems(_ container: AXUIElement, stoppingWhen stop: @escaping () -> Bool) -> [AXUIElement] {
+        if let c = groupCache, c.container.isSame(container), Date().timeIntervalSince(c.at) < groupCacheSeconds { return c.items }
+        var stopped = false
+        let items = walkGroupItems(container) {
+            if stop() { stopped = true }
+            return stopped
+        }
+        if !stopped { groupCache = (container, items, Date()) }
+        return items
+    }
     private static var groupCache: (container: AXUIElement, items: [AXUIElement], at: Date)?
     static var groupCacheSeconds: TimeInterval = 1.5
     /// The focus or the window moved: the next step walks afresh (called from the event handler).
     public static func forgetGroupItems() { groupCache = nil }
 
-    private static func walkGroupItems(_ container: AXUIElement) -> [AXUIElement] {
+    private static func walkGroupItems(_ container: AXUIElement, stop: @escaping () -> Bool = { false }) -> [AXUIElement] {
         // A table or outline: its rows, as the app orders them, in one call. Walked and sorted by position, Mail's
         // list of 6,500 messages took seconds a key, until the watchdog handed over to VoiceOver (a tester, build 14,
         // 7 Oct 2026).
@@ -459,6 +473,7 @@ public final class ObjectNavigator {
             for c in e.elements(kAXChildrenAttribute) {
                 visited += 1
                 guard visited < 2500, depth < 25 else { return }
+                guard !stop() else { return }
                 let role = c.role
                 if skippedRoles.contains(role) || role == "?" { continue }
                 // A segmented control (Finder's Back/Forward, its four views): its segments are the items, as on
@@ -478,16 +493,22 @@ public final class ObjectNavigator {
             }
         }
         collect(container, 0, nil)
+        // Told to stop (a VO-J press out of its time): what was collected, in the app's order, without asking each item
+        // where it is on screen, which is a question an item and more in the sort (Codex, 8 Nov 2026).
+        if stop() { return out }
         // Screen order: rows top to bottom (things level with each other are one row), then left to right. A toolbar
         // comes before the content under it (Safari lists its toolbar after the page).
         // The part of each that shows in the window: a long list reports its whole scrolled height (Mail's
         // messages: 39,306 points), which put it after everything level with it.
-        let frames = out.map { e -> CGRect? in
-            guard let f = TurnOverObject.frame(e) else { return nil }
-            guard let w = win else { return f }
+        var frames: [CGRect?] = []
+        for e in out {
+            if stop() { return out }
+            guard let f = TurnOverObject.frame(e) else { frames.append(nil); continue }
+            guard let w = win else { frames.append(f); continue }
             let c = f.intersection(w)
-            return c.isNull || c.isEmpty ? f : c
+            frames.append(c.isNull || c.isEmpty ? f : c)
         }
+        if stop() { return out }
         // What isn't in a column but sits within one (the window's buttons over WhatsApp's sidebar, its Edit button
         // under it) belongs to it.
         let columns = columnOf.compactMap { $0 }.reduce(into: [CGRect]()) { if !$0.contains($1) { $0.append($1) } }
@@ -718,6 +739,10 @@ public final class ObjectNavigator {
 
     /// VO-J: the linked item (Mail's message list to the message), from the item's AXLinkedUIElements.
     public func jumpLinked() {
+        Self.withinJumpBudget("VO-J") { jumpLinkedNow() }
+    }
+
+    private func jumpLinkedNow() {
         // From the reading position on a page in browse mode, else from the review cursor (the cursor sat on the
         // web area while the reading was on a tab, so VO-J found nothing, 8 Nov 2026).
         guard var cur = VoiceOverKeysPlugin.cursorElement() ?? element else { return }
@@ -750,16 +775,51 @@ public final class ObjectNavigator {
     /// One move for VO-J and the window spot keys (a second opinion, 8 Nov 2026: the bracket keys moved the review
     /// cursor and left the page's reading position behind, so the arrows still read the old place): the cursor lands,
     /// the reading goes into or out of a page with it, and the keyboard follows as near as it can within `region`.
-    func jumpTo(_ target: AXUIElement, within region: AXUIElement? = nil) {
-        let web = Self.containingWebArea(target)
+    package func jumpTo(_ target: AXUIElement, within region: AXUIElement? = nil) {
+        let web = Self.outermostWebArea(target)
         if web == nil, let landing = AppModuleHandler.shared.appModule(for: target.pid).adoptReading(target, within: region) {
             land(on: landing, followFocus: false)
-            focusNear(landing, within: region)
+            focusNear(landing, within: region, inPage: false)
             return
         }
+        // Asked before landing, which can move the keyboard (follow): a place to type that has the keyboard already
+        // gets no focus event to bring TurnOver's focus, so moveReading puts it there (Codex, 8 Nov 2026).
+        let keyboardAlreadyThere = Self.takesTyping(target) && Self.hasKeyboard(target)
         land(on: target)
-        moveReading(to: target, in: web)
-        focusNear(target, within: region)
+        moveReading(to: target, in: web, keyboardAlreadyThere: keyboardAlreadyThere)
+        focusNear(target, within: region, inPage: web != nil)
+    }
+
+    /// One press of VO-J or a window-spot key gets this long to ask the app, all its walks together. A press in a busy
+    /// Music took 1.9 s and 892 questions, with TurnOver silent throughout (a review, 8 Nov 2026). Past it, each walk
+    /// stops with what it has found: a landing nearer the top of a pane is better than a reader that doesn't answer.
+    package static var jumpBudgetSeconds: TimeInterval = 0.5
+    private static var jumpDeadline: Date?
+    private static var jumpCutShort = false
+
+    /// Runs one press within the budget, and says in the log when its walks were cut short.
+    package static func withinJumpBudget(_ press: String, _ body: () -> Void) {
+        let start = Date()
+        jumpDeadline = start.addingTimeInterval(jumpBudgetSeconds)
+        jumpCutShort = false
+        defer { jumpDeadline = nil }
+        body()
+        let elapsed = Date().timeIntervalSince(start)
+        let ms = Int(elapsed * 1000)
+        if jumpCutShort {
+            Log.io("\(press): out of time after \(ms) ms; the walks stopped with what they had found")
+        } else if elapsed > jumpBudgetSeconds {
+            // Over its time in a walk the budget doesn't reach (finding the page, a split group): said, so it shows.
+            Log.io("\(press): took \(ms) ms, over its time")
+        }
+    }
+
+    /// For a walk inside a press: true once the press has used its time. Outside a press, never.
+    package static func outOfJumpTime() -> Bool {
+        guard let deadline = jumpDeadline else { return false }
+        guard Date() >= deadline else { return false }
+        jumpCutShort = true
+        return true
     }
 
     /// The jump between a window's panes. The sidebar is the narrow pane with something chosen in it: a list's selected
@@ -770,33 +830,49 @@ public final class ObjectNavigator {
     private func paneJump(from cur: AXUIElement) -> AXUIElement? {
         let panes = Self.panes(around: cur)
         guard panes.count > 1 else { Log.io("VO-J: no panes round the \(cur.role)"); return nil }
-        func area(_ e: AXUIElement) -> CGFloat { TurnOverObject.frame(e).map { $0.width * $0.height } ?? 0 }
+        // Each pane's frame, asked for once in the press; every comparison below used to ask again (a review, 8 Nov 2026).
+        let frames = panes.map { TurnOverObject.frame($0) }
+        func area(_ i: Int) -> CGFloat { frames[i].map { $0.width * $0.height } ?? 0 }
+        func holds(_ i: Int, _ point: CGPoint) -> Bool { frames[i]?.contains(point) ?? false }
         // Where the cursor is: the pane its parents lead to, when that pane's frame really holds it (Podcasts' content
         // spans the whole window behind the sidebar, so by position alone a heading in it counted as the sidebar's, 8 Nov
         // 2026); otherwise the smallest pane round the cursor's centre (Music's rows lead by parent to the wrong pane).
         var here: Int?
         let centre = TurnOverObject.frame(cur).flatMap { $0.width > 0 ? CGPoint(x: $0.midX, y: $0.midY) : nil }
         var byParent: Int?
-        var p: AXUIElement? = cur; var up = 0
-        while let y = p, up < 20, byParent == nil { byParent = panes.firstIndex(where: { $0.isSame(y) }); p = y.element(kAXParentAttribute); up += 1 }
-        if let byParent, let centre, TurnOverObject.frame(panes[byParent])?.contains(centre) ?? false { here = byParent }
+        var p: AXUIElement? = cur
+        var up = 0
+        while let y = p, up < 20, byParent == nil {
+            byParent = panes.firstIndex(where: { $0.isSame(y) })
+            p = y.element(kAXParentAttribute)
+            up += 1
+        }
+        if let byParent, let centre, holds(byParent, centre) { here = byParent }
         if here == nil, let centre {
-            here = panes.indices.filter { TurnOverObject.frame(panes[$0])?.contains(centre) ?? false }.min { area(panes[$0]) < area(panes[$1]) }
+            here = panes.indices.filter { holds($0, centre) }.min { area($0) < area($1) }
         }
         if here == nil { here = byParent }
         // The sidebar: a pane with something chosen in it, and of those the narrow one (under half the window's
         // width), leftmost first; a selected message in Mail's list or a cell in a sheet is a selection, not a sidebar
         // (a second opinion, 8 Nov 2026).
+        // The narrow panes are searched first, and a wide pane only when no narrow one has anything chosen: the answer
+        // is the same, and searching the content for a selection it didn't have was most of Music's 900 questions a
+        // press (a review, 8 Nov 2026).
         let windowWidth = (cur.role == "AXWindow" ? cur : cur.element(kAXWindowAttribute)).flatMap { TurnOverObject.frame($0) }?.width ?? .greatestFiniteMagnitude
-        let chosen: [(index: Int, item: AXUIElement)] = panes.indices.compactMap { i in Self.chosenItem(in: panes[i]).map { (index: i, item: $0) } }
-        let sidebar = chosen.filter { (TurnOverObject.frame(panes[$0.index])?.width ?? 0) < windowWidth / 2 }
-            .min { (TurnOverObject.frame(panes[$0.index])?.minX ?? 0) < (TurnOverObject.frame(panes[$1.index])?.minX ?? 0) } ?? chosen.first
+        func isNarrow(_ i: Int) -> Bool { (frames[i]?.width ?? 0) < windowWidth / 2 }
+        func minX(_ i: Int) -> CGFloat { frames[i]?.minX ?? 0 }
+        func chosen(in i: Int) -> (index: Int, item: AXUIElement)? { Self.chosenItem(in: panes[i]).map { (index: i, item: $0) } }
+        let narrowChosen = panes.indices.filter { isNarrow($0) }.compactMap { chosen(in: $0) }
+        var sidebar = narrowChosen.min { minX($0.index) < minX($1.index) }
+        if sidebar == nil {
+            sidebar = panes.indices.lazy.filter { !isNarrow($0) }.compactMap { chosen(in: $0) }.first
+        }
         var target: AXUIElement?; var from: AXUIElement?; var to: AXUIElement?
         if let sidebar {
             if here == sidebar.index || cur.isSame(sidebar.item) {
                 // The biggest other pane, always: coming back from a search pane must not send the next press to the
                 // search pane (the fixture test caught it, 8 Nov 2026).
-                let others = panes.indices.filter { $0 != sidebar.index }.map { panes[$0] }.sorted { area($0) > area($1) }
+                let others = panes.indices.filter { $0 != sidebar.index }.sorted { area($0) > area($1) }.map { panes[$0] }
                 from = panes[sidebar.index]; to = others.first
                 target = to.map { Self.landingPlace(in: $0) }
             } else {
@@ -820,8 +896,16 @@ public final class ObjectNavigator {
     /// children hold two or more areas each a twentieth of the window (Catalyst apps such as Podcasts lay their sidebar
     /// and content out as plain groups, 8 Nov 2026).
     private static func panes(around cur: AXUIElement) -> [AXUIElement] {
-        var p: AXUIElement? = cur; var up = 0; var split: AXUIElement?
-        while let y = p, up < 20, split == nil { if y.element(kAXParentAttribute)?.role == "AXSplitGroup" { split = y.element(kAXParentAttribute) }; p = y.element(kAXParentAttribute); up += 1 }
+        // Each parent asked for once a level (it was asked three times, a review, 8 Nov 2026).
+        var p: AXUIElement? = cur
+        var up = 0
+        var split: AXUIElement?
+        while let y = p, up < 20, split == nil {
+            let parent = y.element(kAXParentAttribute)
+            if parent?.role == "AXSplitGroup" { split = parent }
+            p = parent
+            up += 1
+        }
         let window = cur.role == "AXWindow" ? cur : cur.element(kAXWindowAttribute)
         guard let w = window, let wf = TurnOverObject.frame(w) else { return [] }
         let tenth = wf.width * wf.height / 10
@@ -834,7 +918,7 @@ public final class ObjectNavigator {
             if panes.count > 1 { return panes }
         }
         var e = w; var depth = 0
-        while depth < 8 {
+        while depth < 8, !outOfJumpTime() {
             let kids = e.elements(kAXChildrenAttribute).filter { !["AXToolbar", "AXButton", "AXStaticText", "AXImage", "AXMenuBar"].contains($0.role) }
             let big = kids.filter { (TurnOverObject.frame($0).map { $0.width * $0.height } ?? 0) >= twentieth }
             if big.count >= 2 { return big }
@@ -850,7 +934,7 @@ public final class ObjectNavigator {
         let spots = VoiceOverKeysPlugin.windowSpots(of: pane)
         if let row = spots.lazy.compactMap({ $0.elements(kAXSelectedRowsAttribute).first }).first { return row }
         var queue = [pane]; var seen = 0
-        while !queue.isEmpty, seen < 300 {
+        while !queue.isEmpty, seen < 300, !outOfJumpTime() {
             let e = queue.removeFirst(); seen += 1
             let a = e.attrs([kAXRoleAttribute, kAXSelectedAttribute, kAXChildrenAttribute])
             let role = (a[kAXRoleAttribute] as? String) ?? "?"
@@ -861,14 +945,34 @@ public final class ObjectNavigator {
         return nil
     }
 
-    private static func containingWebArea(_ target: AXUIElement) -> AXUIElement? {
+    /// The page a landing is in, as browse mode takes it: the outermost web area above it, so a frame inside a page is
+    /// part of that page (BrowseModeHandler.document(for:ancestors:)), looked for all the way up to the window. It
+    /// looked twelve levels up and took the nearest, so a landing deep in a page counted as outside it, and one in a
+    /// frame got a document of its own (a review, 8 Nov 2026). Two questions a level, 256 levels at most.
+    package static func outermostWebArea(_ target: AXUIElement) -> AXUIElement? {
+        var outermost: AXUIElement?
         var element: AXUIElement? = target
-        for _ in 0..<12 {
-            guard let current = element else { break }
-            if current.role == "AXWebArea" { return current }
+        var levels = 0
+        while let current = element, levels < 256 {
+            let role = current.role
+            if role == "AXWindow" { break }
+            if role == "AXApplication" { break }
+            if role == "AXWebArea" { outermost = current }
             element = current.element(kAXParentAttribute)
+            levels += 1
         }
-        return nil
+        return outermost
+    }
+
+    /// Where the keys type: TurnOver's focus goes to such a place only with the keyboard, by the app's own focus
+    /// event, so what is read and where typing goes stay together (a review, 8 Nov 2026).
+    private static func takesTyping(_ e: AXUIElement) -> Bool {
+        ["AXTextField", "AXTextArea", "AXComboBox"].contains(e.role)
+    }
+
+    /// Whether the app's keyboard focus is on the element.
+    private static func hasKeyboard(_ e: AXUIElement) -> Bool {
+        (e.attr(kAXFocusedAttribute) as? Bool) == true
     }
 
     /// After landing, TurnOver's own focus goes where the cursor went (Oliver, 8 Nov 2026: "it's reading where I
@@ -877,19 +981,45 @@ public final class ObjectNavigator {
     /// Inside a page that isn't being written in, the focus is the page's document, read from the landed line (Mail
     /// accepts a keyboard focus request on its body and leaves its keys in the list, so this is the only way in);
     /// anywhere else, the landed item itself, quietly, since the cursor has just said it.
-    private func moveReading(to target: AXUIElement, in web: AXUIElement?) {
-        if let web, !EditableWebArea.isEditable(web) {
-            let d: BrowseModeDocument
-            if let current = API.focusTreeInterceptor, current.webArea.isSame(web) { d = current }
-            else {
-                d = BrowseModeHandler.shared.document(root: web)
-                let obj = ObjectFactory.make(web)
-                API.setFocusObject(obj, ancestors: obj.ancestors, interceptor: d)
-                Log.io("review: the reading goes into the page round the landing")
+    private func moveReading(to target: AXUIElement, in web: AXUIElement?, keyboardAlreadyThere: Bool = false) {
+        if let web, EditableWebArea.isEditable(web) {
+            // A page being written in (Mail's compose window, a web editor): TurnOver's focus isn't moved here, so it stays
+            // with the keyboard; the reading moved and the typing didn't (a review, 8 Nov 2026). Where the keyboard
+            // follows the cursor onto a control in the page (follow, in land), the app's own focus event brings
+            // TurnOver's focus with it. A field the keyboard is on already gets no event, so it goes on below (Codex).
+            if !keyboardAlreadyThere {
+                Log.io("review: the landing is in a page being written in; TurnOver's focus goes there only with the keyboard")
+                return
             }
-            if d.passThrough { d.setPassThrough(false, announce: false) }
-            if d.buffer.lines.isEmpty { d.buffer.build() }
-            if let o = d.buffer.offset(of: target) { d.position = o }
+        } else if let web {
+            // Browse mode's own document for the page, by its own rules: the outermost web area, and a page it can
+            // read. Made here directly, a landing in a frame got a document of its own (a review, 8 Nov 2026).
+            let page = ObjectFactory.make(web)
+            let pageAncestors = page.ancestors
+            if let d = BrowseModeHandler.shared.document(for: page, ancestors: pageAncestors) {
+                let entered = API.focusTreeInterceptor.map { $0.webArea.isSame(d.webArea) } ?? false
+                if !entered {
+                    API.setFocusObject(page, ancestors: pageAncestors, interceptor: d)
+                    Log.io("review: the reading goes into the page round the landing")
+                }
+                if d.passThrough { d.setPassThrough(false, announce: false) }
+                if d.buffer.lines.isEmpty { d.buffer.build() }
+                if let o = d.buffer.offset(of: target) { d.position = o }
+                return
+            }
+            // A page browse mode reads, whose document didn't answer just now (its liveness check is a fresh question):
+            // the reading stays where it is and the review cursor shows the landing. Taken as a plain element, browse
+            // mode was left (Codex, 8 Nov 2026).
+            if BrowseModeHandler.shared.supports(page) {
+                Log.io("review: the page's document didn't answer; the reading stays where it is")
+                return
+            }
+            // A page browse mode can't read: the landing is taken like any other element, below.
+        }
+        // Somewhere the keys type: TurnOver's focus goes there with the keyboard (see takesTyping). When the keyboard
+        // is there already, no focus event will come, so it is put there now.
+        if Self.takesTyping(target), !keyboardAlreadyThere {
+            Log.io("review: the landing is a place to type; TurnOver's focus goes there only with the keyboard")
             return
         }
         if let f = API.focusObject?.element, f.isSame(target) { return }
@@ -920,12 +1050,22 @@ public final class ObjectNavigator {
         // (a landmark, "Post header") is gone into like any other and is the landing only when nothing in it reads.
         func area(_ x: AXUIElement) -> CGFloat { TurnOverObject.frame(x).map { $0.width * $0.height } ?? 0 }
         var item = e; var holder = e; var depth = 0
-        while depth < 8, !readable.contains(item.role) {
+        while depth < 8, !readable.contains(item.role), !outOfJumpTime() {
             if ["AXTable", "AXOutline", "AXList"].contains(item.role), let row = item.elements(kAXSelectedRowsAttribute).first ?? item.elements(kAXRowsAttribute).first {
                 holder = item; item = row; depth += 1; continue
             }
-            let kids = groupItems(item).isEmpty ? item.elements(kAXChildrenAttribute) : groupItems(item)
-            let candidates = Array(kids.filter { !["AXScrollBar", "AXSplitter"].contains($0.role) && (named($0) || !$0.elements(kAXChildrenAttribute).isEmpty) }.prefix(6))
+            let grouped = groupItems(item, stoppingWhen: { Self.outOfJumpTime() })
+            let kids = grouped.isEmpty ? item.elements(kAXChildrenAttribute) : grouped
+            // A candidate: not a scroll bar or a splitter, and either named or holding something.
+            func qualifies(_ x: AXUIElement) -> Bool {
+                if ["AXScrollBar", "AXSplitter"].contains(x.role) { return false }
+                if named(x) { return true }
+                return !x.elements(kAXChildrenAttribute).isEmpty
+            }
+            // Lazily, so only children up to the sixth that qualifies are asked about, and none once the press is out
+            // of time (a review and Codex, 8 Nov 2026).
+            let inTime = kids.lazy.prefix(while: { _ in !Self.outOfJumpTime() })
+            let candidates = Array(inTime.filter(qualifies).prefix(6))
             let next = candidates.first(where: { readable.contains($0.role) && area($0) >= 1500 })
                 ?? candidates.filter({ !readable.contains($0.role) }).max(by: { area($0) < area($1) })
                 ?? candidates.first ?? kids.first
@@ -935,7 +1075,7 @@ public final class ObjectNavigator {
         // A message that opens with its sender's logo (a link or a picture) is landed on at its first words instead
         // (Mail: "Claude, link", then the text, 8 Nov 2026); the logo stays a Left arrow away.
         if ["AXImage", "AXLink"].contains(item.role) {
-            let items = groupItems(holder).prefix(8)
+            let items = groupItems(holder, stoppingWhen: { Self.outOfJumpTime() }).prefix(8)
             if let text = items.first(where: { ["AXStaticText", "AXHeading"].contains($0.role) && named($0) }) { return text }
         }
         return item
@@ -945,15 +1085,16 @@ public final class ObjectNavigator {
     /// rather than from the sidebar left behind (TV, 8 Nov 2026: Tab had to be pressed to get across). The item itself
     /// if it takes focus; else the first thing round it that does, in its own cell or the cells beside it; else an
     /// ancestor, six levels at most. Inside a page the reading goes in by moveReading instead, and the keyboard stays.
-    private func focusNear(_ target: AXUIElement, within region: AXUIElement? = nil) {
+    private func focusNear(_ target: AXUIElement, within region: AXUIElement? = nil, inPage: Bool) {
         guard config.general.cursorMovesFocus else { return }
+        // Inside a page, the reading went in by moveReading and the keyboard stays. The page used to be looked for only
+        // twelve levels up, so deep in a page the keyboard was moved too (a review, 8 Nov 2026).
+        if inPage { return }
         let bounds = region.flatMap { TurnOverObject.frame($0) }
         func inside(_ e: AXUIElement) -> Bool {
             guard let b = bounds, let f = TurnOverObject.frame(e) else { return true }
             return b.insetBy(dx: -2, dy: -2).contains(CGPoint(x: f.midX, y: f.midY))
         }
-        var p: AXUIElement? = target; var hops = 0
-        while let y = p, hops < 12 { if y.role == "AXWebArea" { return }; p = y.element(kAXParentAttribute); hops += 1 }
         func takesFocus(_ e: AXUIElement) -> Bool {
             var settable: DarwinBoolean = false
             return AXUIElementIsAttributeSettable(e, kAXFocusedAttribute as CFString, &settable) == .success && settable.boolValue
@@ -965,13 +1106,19 @@ public final class ObjectNavigator {
             // Round the item: its parent's subtree, a little way down.
             let root = target.element(kAXParentAttribute)?.element(kAXParentAttribute) ?? target.element(kAXParentAttribute) ?? target
             var queue = [root]; var seen = 0
-            while !queue.isEmpty, seen < 80, found == nil {
+            while !queue.isEmpty, seen < 80, found == nil, !Self.outOfJumpTime() {
                 let e = queue.removeFirst(); seen += 1
                 if !e.isSame(root), takesFocus(e), inside(e) { found = e; break }
                 queue.append(contentsOf: e.elements(kAXChildrenAttribute))
             }
-            var up: AXUIElement? = target.element(kAXParentAttribute); var h = 0
-            while found == nil, let y = up, h < 6 { if takesFocus(y), inside(y) { found = y }; up = y.element(kAXParentAttribute); h += 1 }
+            // Else an ancestor that takes focus, six levels at most.
+            var up: AXUIElement? = target.element(kAXParentAttribute)
+            var h = 0
+            while found == nil, let y = up, h < 6, !Self.outOfJumpTime() {
+                if takesFocus(y), inside(y) { found = y }
+                up = y.element(kAXParentAttribute)
+                h += 1
+            }
         }
         guard let f = found, (f.attr(kAXFocusedAttribute) as? Bool) != true else { return }
         let r = f.set(kAXFocusedAttribute, kCFBooleanTrue)
