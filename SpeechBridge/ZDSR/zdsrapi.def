@@ -1,0 +1,7 @@
+LIBRARY ZDSRAPI_x64
+EXPORTS
+InitTTS
+Speak
+GetSpeakState
+StopSpeak
+Braille

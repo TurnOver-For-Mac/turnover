@@ -1,0 +1,6 @@
+LIBRARY SAAPI64
+EXPORTS
+    SA_IsRunning
+    SA_SayW
+    SA_StopAudio
+    SA_BrlShowTextW

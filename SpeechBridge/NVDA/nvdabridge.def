@@ -1,0 +1,6 @@
+LIBRARY nvdaControllerClient
+EXPORTS
+    nvdaController_testIfRunning
+    nvdaController_speakText
+    nvdaController_cancelSpeech
+    nvdaController_brailleMessage

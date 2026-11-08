@@ -1,0 +1,12 @@
+LIBRARY WindowsTTS
+EXPORTS
+    Initialize
+    DestroySpeech
+    AddToSpeechQueue
+    StopSpeech
+    IsVoiceSpeaking
+    IsScreenReaderActive
+    SetRate
+    SetVolume
+    SetCultureInfo
+    SetVoiceSAPI
