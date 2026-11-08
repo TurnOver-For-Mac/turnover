@@ -54,6 +54,7 @@ public final class MediaView {
         /// Where the shelf begins on the screen when read, then (in `build`) on the whole page: shelves read at
         /// different scroll positions are put in order by it.
         var top: CGFloat?
+        package var heading: AXUIElement?
     }
 
     /// The toolbar: its buttons (More, Share; not Back, which Escape is), as Podcasts keeps Unfollow and Report in More.
@@ -112,7 +113,11 @@ public final class MediaView {
     private var index: [Pane: Int] = [:]
     // Executed navigation owns the pane/cursor even if it returns to the same item. Arrows waiting in queued
     // have not executed yet, so they leave this revision alone until their original turn (#188).
-    private var navigationIntent: UInt64 = 0
+    private var navigationIntent: UInt64 = 0 { didSet { navigatedAt = Date() } }
+    /// When this reader last moved (each executed navigation counts navigationIntent on): VO-J starts where it is only
+    /// when it moved after the review cursor (Codex, 8 Nov 2026: VO navigation after the arrows was ignored).
+    private var navigatedAt = Date.distantPast
+    private var jumpedToHeading: UInt64?
 
     var flatPage: [(shelf: Int, item: Item)] {
         shelves.enumerated().flatMap { s, shelf in shelf.items.map { (s, $0) } }
@@ -129,6 +134,7 @@ public final class MediaView {
     public func beginSession() {
         shelfReadiness?.cancel(); shelfReadiness = nil
         work.beginSession(); queued = []; loadingMore = false; refreshing = false; resolving = false
+        jumpedToHeading = nil
         builtAt = .distantPast; pendingSidebarBody = nil
     }
 
@@ -141,6 +147,7 @@ public final class MediaView {
     private func beginPageIntent() {
         shelfReadiness?.cancel(); shelfReadiness = nil
         work.beginSession(); queued = []; loadingMore = false; refreshing = false; resolving = false; pendingSidebarBody = nil
+        jumpedToHeading = nil
     }
     private var pendingSidebarBody: [String]?
 
@@ -313,6 +320,7 @@ public final class MediaView {
         let keep = currentItem().flatMap { $0.tableRow ? nil : $0 }
         let keepIndex = index[pane]
         let isTable = b.shelves.contains { $0.items.first?.tableRow == true }
+        if b.pageID != pageID { jumpedToHeading = nil }
         shelves = !isTable && !b.pageID.isEmpty && b.pageID == pageID ? Self.merge(shelves, b.shelves) : b.shelves
         sidebar = b.sidebar; pageID = b.pageID
         player = b.player; toolbar = b.toolbar; pageTitle = b.pageTitle; playerRoot = b.playerRoot; pageScroll = b.pageScroll
@@ -543,6 +551,7 @@ public final class MediaView {
                 }
                 out[j].items = items
                 if out[j].top == nil { out[j].top = ns.top }
+                out[j].heading = ns.heading ?? out[j].heading
                 at = j + 1
             } else {
                 out.insert(ns, at: min(at, out.count))
@@ -614,7 +623,7 @@ public final class MediaView {
         var visited = 0
         func startShelf(_ title: String, at e: AXUIElement? = nil) {
             if !current.items.isEmpty { shelves.append(current) }
-            current = Shelf(title: title, items: [], top: e.flatMap { Self.position($0)?.y })
+            current = Shelf(title: title, items: [], top: e.flatMap { Self.position($0)?.y }, heading: e)
         }
         func pressable(_ e: AXUIElement) -> Bool {
             var acts: CFArray?
@@ -896,14 +905,38 @@ public final class MediaView {
         return all[max(0, min(all.count - 1, index[pane] ?? 0))]
     }
 
+    /// Where this reader is reading, and when it last moved, for VO-J to start from: the current pane's current item.
+    /// These arrows don't move the review cursor, and TV makes its shelves anew as the page scrolls, so the cursor's item
+    /// and the keyboard's button were gone and VO-J said "no linked item" (TV, 8 Nov 2026). Nil in a video, while a
+    /// catalog has the page (its own position), when the model is another window's, or when the item has gone (Codex).
+    package func readingPosition() -> (element: AXUIElement, movedAt: Date)? {
+        if inVideo { return nil }
+        if catalogHasThePage { return nil }
+        guard let window = modelWindow else { return nil }
+        guard let front = windowQuery(pid) else { return nil }
+        guard CFEqual(window, front) else { return nil }
+        guard let item = currentItem() else { return nil }
+        if item.element.role == "?" { return nil }
+        return (item.element, navigatedAt)
+    }
+
+    /// The catalog's list is the page's reader (Catalog.swift), with its own position.
+    private var catalogHasThePage: Bool {
+        guard catalog != nil else { return false }
+        guard catalogDrives else { return false }
+        return pane == .page
+    }
+
     public func move(_ delta: Int) {
         if let c = catalog, catalogDrives, pane == .page { c.move(delta); return }
         guard rebuildOrQueue(waitForLoading: true, retry: { [weak self] in self?.move(delta) }) else { return }
+        let startsAtHeading = pane == .page && jumpedToHeading == navigationIntent
         navigationIntent &+= 1
+        jumpedToHeading = nil
         let all = items(of: pane)
         guard !all.isEmpty else { Speech.speakMessage(pane == .page ? String(localized: "nothing on this page yet", comment: "Spoken message") : String(localized: "empty", comment: "Spoken message")); return }
         let old = max(0, min(all.count - 1, index[pane] ?? 0))
-        let new = old + delta
+        let new = startsAtHeading && delta > 0 ? old + (delta - 1) : old + delta
         guard all.indices.contains(new) else {
             if pane == .page, delta > 0 { loadMore(then: { [weak self] in self?.move(delta) }) } else { Tones.edge() }
             return
@@ -1133,6 +1166,56 @@ public final class MediaView {
         let old = cur
         index[pane] = hit
         announce(crossedFrom: old)
+    }
+
+    /// Music's Recently Searched heading is shelf context, separate from the items the arrows visit (macOS 27.2,
+    /// 8 Nov 2026). A jump to it puts the reader just before that shelf's first item.
+    package func adopt(_ element: AXUIElement, within region: AXUIElement?) -> AXUIElement? {
+        guard !inVideo, rebuild(), let window = modelWindow,
+              element.element(kAXWindowAttribute)?.isSame(window) == true else { return nil }
+        let page = flatPage
+        let lists: [(Pane, [Item])] = [(.sidebar, sidebar), (.page, page.map(\.item)), (.player, player), (.toolbar, toolbar)]
+        func land(_ pane: Pane, at position: Int, in items: [Item], heading: AXUIElement? = nil) -> AXUIElement {
+            navigationIntent &+= 1
+            if pane == .page { catalogDrives = false }
+            self.pane = pane
+            index[pane] = position
+            jumpedToHeading = heading == nil ? nil : navigationIntent
+            Log.io("media: the reading adopted the landing, \(pane) \(heading == nil ? "" : "heading before ")item \(position + 1) of \(items.count)")
+            return heading ?? items[position].element
+        }
+
+        // Walk the landing's parents once. Exact items and shelf headings take precedence over overlapping frames.
+        var ancestor: AXUIElement? = element
+        for _ in 0..<12 {
+            guard let current = ancestor, !current.isSame(window) else { break }
+            for (pane, items) in lists {
+                if let position = items.firstIndex(where: { $0.element.isSame(current) }) {
+                    return land(pane, at: position, in: items)
+                }
+            }
+            if let shelf = shelves.firstIndex(where: { $0.heading?.isSame(current) == true }),
+               let position = page.firstIndex(where: { $0.shelf == shelf }) {
+                let heading = current.isSame(element) && current.role == "AXHeading" ? current : nil
+                return land(.page, at: position, in: lists[1].1, heading: heading)
+            }
+            ancestor = current.element(kAXParentAttribute)
+        }
+
+        // A window spot can be a container. Adopt it only when the model's first item identifies one pane inside
+        // it. Check a representative per pane so a library with thousands of rows does not require an AX walk.
+        let destination = region ?? element
+        let matches = lists.filter { _, items in
+            var child = items.first?.element
+            for _ in 0..<12 {
+                guard let current = child, !current.isSame(window) else { break }
+                if current.isSame(destination) { return true }
+                child = current.element(kAXParentAttribute)
+            }
+            return false
+        }
+        if matches.count == 1, let (pane, items) = matches.first { return land(pane, at: 0, in: items) }
+        return nil
     }
 
     public func switchPane(_ delta: Int) {

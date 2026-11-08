@@ -366,17 +366,96 @@ extension VoiceOverKeysPlugin {
         }
     }
 
-    /// VoiceOver's window spots: the window's main parts in turn (its sidebar, toolbar, content), round.
+    /// VoiceOver's window spots: the window's main parts (toolbar, sidebar, list, content; on a web page its landmarks),
+    /// in reading order. Wrapper groups are seen through: an Electron window is a group in a group five deep before
+    /// anything of its own, and the window's direct children were the spots, so the Claude app had one, "Claude,
+    /// grouping" (8 Nov 2026). Bounded: twelve levels, four hundred elements.
+    static func windowSpots(of w: AXUIElement) -> [AXUIElement] { windowSpotsWalk(of: w).spots }
+
+    /// The window spots, and whether the walk saw the whole window: within a press's time
+    /// (ObjectNavigator.jumpBudgetSeconds) it stops part way, and the spots after the last one found weren't seen.
+    static func windowSpotsWalk(of w: AXUIElement) -> (spots: [AXUIElement], complete: Bool) {
+        var spots: [AXUIElement] = []
+        var visited = 0
+        var complete = true
+        let parts: Set<String> = ["AXToolbar", "AXTabGroup", "AXOutline", "AXTable", "AXList", "AXBrowser", "AXTextArea", "AXRadioGroup"]
+        func collect(_ e: AXUIElement, depth: Int) {
+            guard depth < 12, visited < 400 else { return }
+            if ObjectNavigator.outOfJumpTime() {
+                complete = false
+                return
+            }
+            visited += 1
+            let a = e.attrs([kAXRoleAttribute, kAXSubroleAttribute, kAXChildrenAttribute])
+            let role = (a[kAXRoleAttribute] as? String) ?? "?"
+            let sub = a[kAXSubroleAttribute] as? String
+            let kids = (a[kAXChildrenAttribute] as? [AXUIElement]) ?? []
+            // A part that holds smaller parts stands aside for them (a page's main landmark holding regions, a scroll
+            // area holding a list); one that holds none is the spot itself.
+            func partOrItsParts() {
+                let before = spots.count
+                for k in kids { collect(k, depth: depth + 1) }
+                if spots.count == before { spots.append(e) }
+            }
+            if let sub, sub.hasPrefix("AXLandmark") { partOrItsParts(); return }
+            switch role {
+            case _ where parts.contains(role): spots.append(e)
+            case "AXScrollArea", "AXWebArea": partOrItsParts()
+            case "AXSplitGroup":
+                for k in kids where k.role != "AXSplitter" {
+                    let before = spots.count
+                    collect(k, depth: depth + 1)
+                    if spots.count == before { spots.append(k) }   // a pane with nothing recognisable inside is a spot itself
+                }
+            case "AXButton", "AXStaticText", "AXImage", "AXCheckBox", "AXRadioButton", "AXPopUpButton", "AXMenuButton", "AXSlider", "AXTextField", "AXSplitter", "AXScrollBar": break
+            default: for k in kids { collect(k, depth: depth + 1) }
+            }
+        }
+        collect(w, depth: 0)
+        return (spots, complete)
+    }
+
+    /// Which spot comes next: round the list when it is the whole window. When the walk stopped part way, nil (the
+    /// edge) instead of going round, since the spots after the last one found weren't seen: from the toolbar, the
+    /// next press landed on the toolbar again (Codex, 8 Nov 2026). Outside every spot, the first or the last.
+    package static func nextSpot(from here: Int?, count: Int, forward: Bool, complete: Bool) -> Int? {
+        guard count > 0 else { return nil }
+        guard let here else {
+            if forward { return 0 }
+            if complete { return count - 1 }
+            return nil
+        }
+        let next = here + (forward ? 1 : -1)
+        if next >= 0, next < count { return next }
+        if complete { return (next + count) % count }
+        return nil
+    }
+
     static func windowSpot(forward: Bool) {
+        ObjectNavigator.withinJumpBudget("window spot") { windowSpotNow(forward: forward) }
+    }
+
+    private static func windowSpotNow(forward: Bool) {
         guard let e = cursorElement(), let w = e.role == "AXWindow" ? e : e.element(kAXWindowAttribute) else { Tones.edge(); return }
-        let parts = w.elements(kAXChildrenAttribute).filter { !["AXButton", "AXStaticText", "AXImage"].contains($0.role) || $0.string(kAXSubroleAttribute) == nil }
-            .filter { !["AXCloseButton", "AXMinimizeButton", "AXZoomButton", "AXFullScreenButton"].contains($0.string(kAXSubroleAttribute) ?? "") }
-        guard !parts.isEmpty else { Tones.edge(); return }
-        var here = 0
-        var p: AXUIElement? = e; var hops = 0
-        while let x = p, hops < 30 { if let i = parts.firstIndex(where: { $0.isSame(x) }) { here = i; break }; p = x.element(kAXParentAttribute); hops += 1 }
-        let next = parts[((here + (forward ? 1 : -1)) % parts.count + parts.count) % parts.count]
-        ObjectNavigator.shared.moveTo(next)
+        let walk = windowSpotsWalk(of: w)
+        let spots = walk.spots
+        guard !spots.isEmpty else { Speech.speakMessage(String(localized: "no window spots", comment: "Spoken message")); return }
+        // The spot the cursor is in: the nearest one among its ancestors.
+        var here: Int? = nil
+        var p: AXUIElement? = e
+        var hops = 0
+        while let x = p, hops < 30, here == nil {
+            here = spots.firstIndex(where: { $0.isSame(x) })
+            p = x.element(kAXParentAttribute)
+            hops += 1
+        }
+        guard let next = nextSpot(from: here, count: spots.count, forward: forward, complete: walk.complete) else {
+            Log.io("window spot: the window was walked only part way; not going round what was found")
+            Tones.edge()
+            return
+        }
+        if spots.count == 1, here != nil { Tones.edge() }
+        ObjectNavigator.shared.jumpTo(spots[next], within: spots[next])   // the reading and the keyboard go with the cursor
     }
 
     static func pageStatistics() -> String? {

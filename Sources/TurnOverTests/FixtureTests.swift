@@ -66,6 +66,203 @@ func fixtureTests() {
     }
     // System Settings' password sheet on macOS 27.2 (31 Oct 2026): the application's focused element is a password field
     // of another process (every replayed element has a pid of its own, the application's is 9's).
+    // VO-J between a window's panes (8 Nov 2026, a second opinion's fixtures): the sidebar is the narrow pane with
+    // something chosen; from it, the content's first readable item; from anywhere else, the chosen item. Where the
+    // cursor is, is judged by position, so a row whose parent misleads (Music) still counts as the sidebar's.
+    func paneWindow(split: Bool) -> AXFixture {
+        var f = AXFixture(app: "T", bundle: "t", recorded: "", root: 0, application: nil, focus: 5, nodes: [])
+        func n(_ id: Int, _ role: String, _ parent: Int, _ x: Double, _ y: Double, _ w: Double, _ h: Double, _ extra: [String: AXFixture.Value] = [:]) -> AXFixture.Node {
+            var a: [String: AXFixture.Value] = ["AXRole": .string(role), "AXParent": .element(parent), "AXWindow": .element(0), "AXPosition": .point(x, y), "AXSize": .size(w, h)]
+            for (k, v) in extra { a[k] = v }
+            return .init(id: id, attrs: a)
+        }
+        var nodes: [AXFixture.Node] = [.init(id: 0, attrs: ["AXRole": .string("AXWindow"), "AXPosition": .point(0, 0), "AXSize": .size(1000, 600), "AXChildren": .elements([1])])]
+        if split {
+            // 1 split group: 2 sidebar scroll area (outline 3, rows 4 "Radio" and 5 "Search" selected), 11 search pane (field 12),
+            // 6 splitter, 7 content group (scroll 8, group 9, button 10). Row 4's parent is the content group, as Music has it.
+            nodes += [n(1, "AXSplitGroup", 0, 0, 0, 1000, 600, ["AXChildren": .elements([2, 11, 6, 7])]),
+                      n(2, "AXScrollArea", 1, 0, 50, 200, 550, ["AXChildren": .elements([3])]),
+                      n(3, "AXOutline", 2, 0, 50, 200, 550, ["AXDescription": .string("Sidebar"), "AXChildren": .elements([4, 5]), "AXRows": .elements([4, 5]), "AXSelectedRows": .elements([5])]),
+                      n(4, "AXRow", 7, 0, 60, 200, 30, ["AXSubrole": .string("AXOutlineRow"), "AXDescription": .string("Radio")]),
+                      n(5, "AXRow", 3, 0, 90, 200, 30, ["AXSubrole": .string("AXOutlineRow"), "AXDescription": .string("Search"), "AXSelected": .bool(true)]),
+                      n(11, "AXGroup", 1, 5, 10, 190, 30, ["AXChildren": .elements([12])]),
+                      n(12, "AXTextField", 11, 5, 10, 190, 30, ["AXSubrole": .string("AXSearchField")]),
+                      n(6, "AXSplitter", 1, 200, 0, 1, 600),
+                      n(7, "AXGroup", 1, 200, 0, 800, 600, ["AXChildren": .elements([8])]),
+                      n(8, "AXScrollArea", 7, 200, 0, 800, 600, ["AXChildren": .elements([9])]),
+                      n(9, "AXGroup", 8, 220, 20, 760, 560, ["AXChildren": .elements([10])]),
+                      n(10, "AXButton", 9, 220, 20, 200, 40, ["AXDescription": .string("Radiohead Essentials, Playlist")])]
+        } else {
+            // No split group (Podcasts): 1 host, 13 layout with two big children: 2 the sidebar of texts (4 Shows, 5 Home selected),
+            // 7 the content (group 9, heading 10) over the whole window; 14 a small split group inside the content, to be ignored.
+            nodes += [n(1, "AXGroup", 0, 0, 0, 1000, 600, ["AXChildren": .elements([13])]),
+                      n(13, "AXGroup", 1, 0, 0, 1000, 600, ["AXChildren": .elements([2, 7])]),
+                      n(2, "AXGroup", 13, 0, 0, 220, 600, ["AXChildren": .elements([4, 5])]),
+                      n(4, "AXStaticText", 2, 10, 60, 200, 30, ["AXDescription": .string("Shows")]),
+                      n(5, "AXStaticText", 2, 10, 90, 200, 30, ["AXDescription": .string("Home"), "AXSelected": .bool(true)]),
+                      n(7, "AXGroup", 13, 0, 0, 1000, 600, ["AXChildren": .elements([9])]),
+                      n(9, "AXGroup", 7, 240, 20, 740, 560, ["AXDescription": .string("Home"), "AXChildren": .elements([10, 14])]),
+                      n(10, "AXHeading", 9, 240, 20, 300, 30, ["AXDescription": .string("Home")]),
+                      n(14, "AXSplitGroup", 9, 240, 300, 200, 100, ["AXChildren": .elements([15])]),
+                      n(15, "AXGroup", 14, 240, 300, 200, 100)]
+        }
+        f.nodes = nodes
+        return f
+    }
+    test("VO-J: a split view's sidebar and content, judged by position, with a search pane in the way") {
+        AXReplay.load(paneWindow(split: true))
+        let saved = config, keep = Speech.sink
+        config.general.focusFollowsCursor = "off"
+        Speech.sink = { _ in }
+        defer { AXReplay.unload(); API.setFocusObject(nil, ancestors: []); config = saved; Speech.sink = keep }
+        let nav = ObjectNavigator.shared
+        @MainActor func jump(from id: Int) -> Int? { nav.place(AXReplay.element(id)); nav.jumpLinked(); return nav.reviewElement.flatMap { AXReplay.id(of: $0) } }
+        expect(jump(from: 4), 10, "from a sidebar row whose parent misleads: the content's first readable item")
+        expect(jump(from: 10), 5, "from the content: the sidebar's selected row")
+        expect(jump(from: 12), 5, "from the search field, a pane of its own: the sidebar's selected row, not the content")
+        expect(jump(from: 5), 10, "from the selected row: the content, not the search pane")
+    }
+    test("VO-J: a window with no split view: the sidebar is the narrow group with a selected item") {
+        AXReplay.load(paneWindow(split: false))
+        let saved = config, keep = Speech.sink
+        config.general.focusFollowsCursor = "off"
+        Speech.sink = { _ in }
+        defer { AXReplay.unload(); API.setFocusObject(nil, ancestors: []); config = saved; Speech.sink = keep }
+        let nav = ObjectNavigator.shared
+        @MainActor func jump(from id: Int) -> Int? { nav.place(AXReplay.element(id)); nav.jumpLinked(); return nav.reviewElement.flatMap { AXReplay.id(of: $0) } }
+        expect(jump(from: 4), 10, "from a sidebar text: the content's heading, the small split group inside ignored")
+        expect(jump(from: 10), 5, "from the content: the selected sidebar text")
+    }
+    test("VO-J: the page round a landing is the outermost web area, however deep the landing is") {
+        // 0 window, 1 group; 2 the page, with 21 a text at its top; 3 to 17 fifteen nested groups; under 17, 40 a text
+        // and 18 a frame's page (19 its group, 20 its text); 30 a text outside any page.
+        var f = AXFixture(app: "T", bundle: "t", recorded: "", root: 0, application: nil, focus: nil, nodes: [])
+        func n(_ id: Int, _ role: String, _ parent: Int, _ children: [Int] = []) -> AXFixture.Node {
+            .init(id: id, attrs: ["AXRole": .string(role), "AXParent": .element(parent), "AXWindow": .element(0), "AXChildren": .elements(children)])
+        }
+        var nodes: [AXFixture.Node] = [.init(id: 0, attrs: ["AXRole": .string("AXWindow"), "AXChildren": .elements([1])]),
+                                       n(1, "AXGroup", 0, [2, 30]),
+                                       n(2, "AXWebArea", 1, [3, 21])]
+        for id in 3...16 { nodes.append(n(id, "AXGroup", id - 1, [id + 1])) }
+        nodes += [n(17, "AXGroup", 16, [18, 40]), n(18, "AXWebArea", 17, [19]), n(19, "AXGroup", 18, [20]),
+                  n(20, "AXStaticText", 19), n(40, "AXStaticText", 17), n(21, "AXStaticText", 2), n(30, "AXStaticText", 1)]
+        f.nodes = nodes
+        AXReplay.load(f)
+        defer { AXReplay.unload() }
+        @MainActor func page(of id: Int) -> Int? { AXReplay.id(of: ObjectNavigator.outermostWebArea(AXReplay.element(id))) }
+        expect(page(of: 40), 2, "sixteen levels down: still in the page (twelve levels found nothing)")
+        expect(page(of: 20), 2, "inside a frame: the page round it, not the frame")
+        expect(page(of: 21), 2, "at the top of the page")
+        expect(page(of: 30), nil, "outside any page")
+    }
+    test("VO-J: a landing where the keys type leaves TurnOver's focus with the keyboard") {
+        // 0 window, 1 group: 2 a button (the keyboard's), 3 a text field, 8 a text field the keyboard is on, 4 a page
+        // (the shim says every attribute can be set, so every replayed page is one being written in) with its group 5,
+        // text 6 and text field 7.
+        var f = AXFixture(app: "T", bundle: "t", recorded: "", root: 0, application: nil, focus: 2, nodes: [])
+        func n(_ id: Int, _ role: String, _ parent: Int, _ extra: [String: AXFixture.Value] = [:]) -> AXFixture.Node {
+            var a: [String: AXFixture.Value] = ["AXRole": .string(role), "AXParent": .element(parent), "AXWindow": .element(0),
+                                                "AXPosition": .point(0, 0), "AXSize": .size(100, 30)]
+            for (k, v) in extra { a[k] = v }
+            return .init(id: id, attrs: a)
+        }
+        f.nodes = [.init(id: 0, attrs: ["AXRole": .string("AXWindow"), "AXChildren": .elements([1])]),
+                   n(1, "AXGroup", 0, ["AXChildren": .elements([2, 3, 8, 4])]),
+                   n(2, "AXButton", 1, ["AXDescription": .string("Send")]),
+                   n(3, "AXTextField", 1, ["AXDescription": .string("Subject")]),
+                   n(8, "AXTextField", 1, ["AXDescription": .string("To"), "AXFocused": .bool(true)]),
+                   n(4, "AXWebArea", 1, ["AXChildren": .elements([5])]),
+                   n(5, "AXGroup", 4, ["AXChildren": .elements([6, 7, 9])]),
+                   n(6, "AXStaticText", 5, ["AXValue": .string("Hello")]),
+                   n(7, "AXTextField", 5, ["AXDescription": .string("Name")]),
+                   n(9, "AXTextField", 5, ["AXDescription": .string("Address"), "AXFocused": .bool(true)])]
+        AXReplay.load(f)
+        let saved = config, keep = Speech.sink
+        config.general.focusFollowsCursor = "off"
+        Speech.sink = { _ in }
+        defer { AXReplay.unload(); API.setFocusObject(nil, ancestors: []); config = saved; Speech.sink = keep }
+        let nav = ObjectNavigator.shared
+        let button = ObjectFactory.make(AXReplay.element(2))
+        @MainActor func jump(to id: Int) -> (cursor: Int?, focus: Int?) {
+            API.setFocusObject(button, ancestors: [])
+            nav.jumpTo(AXReplay.element(id))
+            return (nav.reviewElement.flatMap { AXReplay.id(of: $0) }, API.focusObject.flatMap { AXReplay.id(of: $0.element) })
+        }
+        let field = jump(to: 3)
+        expect(field.cursor, 3, "the cursor shows the text field")
+        expect(field.focus, 2, "TurnOver's focus stays with the keyboard, on the button")
+        let line = jump(to: 6)
+        expect(line.cursor, 6, "the cursor shows the line in the page being written in")
+        expect(line.focus, 2, "the reading stays with the keyboard")
+        check(API.focusTreeInterceptor == nil, "no browse mode document for a page being written in")
+        expect(AXReplay.sets.count, 0, "nothing asked of the app's keyboard focus")
+        // A field the keyboard is on already, after a jump away left TurnOver's focus on the button: no focus event will
+        // come to bring it back, so it is put there now (Codex, 8 Nov 2026).
+        expect(jump(to: 8).focus, 8, "a field with the keyboard takes TurnOver's focus")
+        expect(jump(to: 9).focus, 9, "so does one with the keyboard in a page being written in")
+        // With the keyboard following the cursor, a field in the page gets the keyboard, and TurnOver's focus waits for
+        // the app's own focus event (which a replay doesn't send).
+        config.general.focusFollowsCursor = "on"
+        expect(jump(to: 7).focus, 2, "TurnOver's focus isn't set directly in a page being written in")
+        check(AXReplay.sets.contains { $0.id == 7 && $0.attribute == kAXFocusedAttribute }, "the keyboard was asked onto the field")
+    }
+    test("window spots: a walk cut short doesn't go round what it found") {
+        expect(VoiceOverKeysPlugin.nextSpot(from: 2, count: 3, forward: true, complete: true), 0, "round, with the whole window seen")
+        expect(VoiceOverKeysPlugin.nextSpot(from: 0, count: 3, forward: false, complete: true), 2, "round, backwards")
+        expect(VoiceOverKeysPlugin.nextSpot(from: 1, count: 3, forward: true, complete: false), 2, "on through what was found")
+        expect(VoiceOverKeysPlugin.nextSpot(from: 2, count: 3, forward: true, complete: false), nil, "not round part of a window")
+        expect(VoiceOverKeysPlugin.nextSpot(from: 0, count: 3, forward: false, complete: false), nil, "nor back round it")
+        expect(VoiceOverKeysPlugin.nextSpot(from: nil, count: 3, forward: true, complete: false), 0, "outside every spot: the first")
+        expect(VoiceOverKeysPlugin.nextSpot(from: nil, count: 3, forward: false, complete: false), nil, "the last one isn't known")
+        expect(VoiceOverKeysPlugin.nextSpot(from: 0, count: 1, forward: true, complete: true), 0, "one spot: itself again")
+    }
+    test("group items: a walk told to stop isn't kept for the steps after it") {
+        AXReplay.load(paneWindow(split: true))
+        ObjectNavigator.forgetGroupItems()
+        defer { AXReplay.reads = nil; ObjectNavigator.forgetGroupItems(); AXReplay.unload() }
+        let content = AXReplay.element(9)
+        expect(ObjectNavigator.groupItems(content, stoppingWhen: { true }).count, 0, "stopped before the first child")
+        var asked = 0
+        let partial = ObjectNavigator.groupItems(content, stoppingWhen: { asked += 1; return asked > 1 })
+        expect(partial.compactMap { AXReplay.id(of: $0) }, [10], "stopped after collecting: what was found, in the app's order")
+        AXReplay.reads = []
+        expect(ObjectNavigator.groupItems(content).compactMap { AXReplay.id(of: $0) }, [10], "the whole walk")
+        check(!(AXReplay.reads ?? []).isEmpty, "walked afresh: neither stopped walk was kept")
+    }
+    test("VO-J: a narrow sidebar with something chosen spares the content its search") {
+        AXReplay.load(paneWindow(split: true))
+        let saved = config, keep = Speech.sink
+        config.general.focusFollowsCursor = "off"
+        Speech.sink = { _ in }
+        defer { AXReplay.reads = nil; AXReplay.unload(); API.setFocusObject(nil, ancestors: []); config = saved; Speech.sink = keep }
+        let nav = ObjectNavigator.shared
+        nav.place(AXReplay.element(10))
+        AXReplay.reads = []
+        nav.jumpLinked()
+        expect(nav.reviewElement.flatMap { AXReplay.id(of: $0) }, 5, "from the content: the sidebar's selected row, as before")
+        let asked = Set((AXReplay.reads ?? []).filter { $0.attribute == kAXSelectedAttribute }.map(\.id))
+        check(asked.isDisjoint(with: [7, 8, 9, 10]), "nothing in the wide content pane was asked whether it was selected: \(asked.sorted())")
+    }
+    test("VO-J: a press out of time stops its walks and still answers") {
+        AXReplay.load(paneWindow(split: true))
+        let saved = config, keep = Speech.sink, budget = ObjectNavigator.jumpBudgetSeconds
+        config.general.focusFollowsCursor = "off"
+        Speech.sink = { _ in }
+        defer { ObjectNavigator.jumpBudgetSeconds = budget; AXReplay.reads = nil; AXReplay.unload(); API.setFocusObject(nil, ancestors: []); config = saved; Speech.sink = keep }
+        let nav = ObjectNavigator.shared
+        @MainActor func questions(from id: Int) -> Int {
+            nav.place(AXReplay.element(id))
+            AXReplay.reads = []
+            nav.jumpLinked()
+            return AXReplay.reads?.count ?? 0
+        }
+        let full = questions(from: 4)
+        expect(nav.reviewElement.flatMap { AXReplay.id(of: $0) }, 10, "with time: the content's first readable item")
+        ObjectNavigator.jumpBudgetSeconds = 0
+        let cut = questions(from: 4)
+        check(cut < full, "out of time, the press asks less: \(cut) questions against \(full)")
+        check(nav.reviewElement.flatMap { AXReplay.id(of: $0) } != 4, "and still lands somewhere")
+    }
     test("secure echo: a password field the application shows from another process is the one looked at") {
         var fixture = AXFixture(app: "System Settings", bundle: "com.apple.systempreferences", recorded: "", root: 0, application: 9, focus: 3, nodes: [])
         fixture.nodes = [
