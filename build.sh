@@ -190,6 +190,12 @@ SPARKLE="$BUILD/release/Sparkle.framework"
 [ -d "$SPARKLE" ] || { echo "Sparkle.framework missing from the build"; exit 1; }
 ditto "$SPARKLE" "$APP/Contents/Frameworks/Sparkle.framework"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+# Icon Composer supplies the layered icon and the .icns fallback for older Macs. The same asset catalog carries
+# the monochrome menu-bar mark; compiling both together keeps them in one Assets.car.
+xcrun actool Resources/TurnOver.icon Resources/Assets.xcassets \
+  --compile "$APP/Contents/Resources" --platform macosx --minimum-deployment-target 14.0 \
+  --app-icon TurnOver --output-partial-info-plist "$BUILD/icon-info.plist" --output-format human-readable-text
+/usr/libexec/PlistBuddy -c "Merge \"$BUILD/icon-info.plist\"" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $BUNDLEID" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :SUFeedURL $FEEDURL" "$APP/Contents/Info.plist"
 # A developer build never takes updates: the published copy beside it does.
@@ -206,9 +212,12 @@ printf 'APPL????' > "$APP/Contents/PkgInfo"
 # TurnOver Key (Command+Control+Period starts and quits TurnOver): a login-item helper inside the bundle.
 # TurnOver Settings: the settings in a window, an app of its own inside TurnOver.app (18 Oct 2026).
 SETAPP="$APP/Contents/Applications/TurnOver Settings.app"
-rm -rf "$SETAPP"; mkdir -p "$SETAPP/Contents/MacOS"
+rm -rf "$SETAPP"; mkdir -p "$SETAPP/Contents/MacOS" "$SETAPP/Contents/Resources"
 cp "$BIN/turnover-settings" "$SETAPP/Contents/MacOS/turnover-settings"
 cp Resources/TurnOverSettings-Info.plist "$SETAPP/Contents/Info.plist"
+# Settings has a Dock presence of its own, so it uses the reader's icon too.
+cp "$APP/Contents/Resources/Assets.car" "$APP/Contents/Resources/TurnOver.icns" "$SETAPP/Contents/Resources/"
+/usr/libexec/PlistBuddy -c "Merge \"$BUILD/icon-info.plist\"" "$SETAPP/Contents/Info.plist"
 printf 'APPL????' > "$SETAPP/Contents/PkgInfo"
 KEYAPP="$APP/Contents/Library/LoginItems/TurnOver Key.app"
 mkdir -p "$KEYAPP/Contents/MacOS"
