@@ -16,6 +16,10 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 - The welcome pages read like little web pages: Up and Down read a page a line at a time, Return goes on, Escape
   skips the rest. The two keys everything hangs on come straight after the welcome: Command Control Period turns
   TurnOver on and off, and Command Control Comma is the way in to everything.
+- A guide to Steam's Windows games: Windows games on your Mac, from Steam, CrossOver and NotProton to each game's
+  accessibility mods (Diablo IV's own reader, Stardew Access, the Hades II and Fallout 4 mods, and more), all
+  speaking through TurnOver. The stand-in speech files they need are SpeechBridge, a small project of its own on
+  GitHub; nothing in the app changes.
 
 ### Changed
 
