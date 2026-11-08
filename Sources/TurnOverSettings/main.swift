@@ -7,90 +7,6 @@ import SwiftUI
 import AVFoundation
 import TurnOverControl
 
-@MainActor
-final class Model: ObservableObject {
-    @Published var state: [String: Any] = [:]
-    @Published var connected = false
-    /// TurnOver closed the connection at once, five times running: this window is an old build's, left open across an
-    /// install, and TurnOver turns it away (issue 77: it knocked every two seconds until it was quit by hand).
-    @Published var turnedAway = false
-    private var refusals = 0
-    private var opened = Date()
-    /// A section TurnOver asked the window to show (a settings key pressed): with the first state, or on its own
-    /// while the window is open. The sidebar follows it and then clears it.
-    @Published var requestedSection: Pane?
-    private var connection: ControlClient.Connection?
-
-    init() {
-        connect()
-    }
-
-    /// Connected to TurnOver and listening for its settings; tried again every two seconds until TurnOver is there,
-    /// and again if TurnOver restarts.
-    private func connect() {
-        opened = Date()
-        connection = ControlClient.Connection(received: { [weak self] message in
-            self?.refusals = 0
-            if message["op"] as? String == "show", let name = message["section"] as? String {
-                self?.requestedSection = Pane(rawValue: name)
-                return
-            }
-            guard message["op"] as? String == "state", let json = message["json"] as? String, let data = json.data(using: .utf8),
-                  let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
-            self?.state = dict; self?.connected = true
-            if let name = dict["_showSection"] as? String { self?.requestedSection = Pane(rawValue: name) }
-        }, ended: { [weak self] in
-            guard let self else { return }
-            if !connected, Date().timeIntervalSince(opened) < 1 { refusals += 1 }
-            connected = false; connection = nil
-            retry()
-        })
-        if let connection { connection.send(["op": "subscribe"]) } else { retry() }
-    }
-
-    private func retry() {
-        guard refusals < 5 else { turnedAway = true; return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
-            guard let self, self.connection == nil else { return }
-            self.connect()
-        }
-    }
-
-    func ask() { connection?.send(["op": "ask"]) }
-
-    func get(_ section: String, _ key: String) -> Any? { (state[section] as? [String: Any])?[key] }
-    func special(_ key: String) -> Any? { state[key] }
-
-    func set(_ section: String, _ key: String, _ value: Any) {
-        var s = state[section] as? [String: Any] ?? [:]; s[key] = value; state[section] = s   // shown at once; TurnOver confirms
-        send([section: [key: value]])
-    }
-    func setSpecial(_ key: String, _ value: Any) { state[key] = value; send([key: value]) }
-
-    private func send(_ patch: [String: Any]) {
-        guard let data = try? JSONSerialization.data(withJSONObject: patch), let s = String(data: data, encoding: .utf8) else { return }
-        connection?.send(["op": "patch", "json": s])
-    }
-
-    // Bindings onto the settings.
-    func bool(_ section: String, _ key: String) -> Binding<Bool> {
-        Binding(get: { self.get(section, key) as? Bool ?? false }, set: { self.set(section, key, $0) })
-    }
-    func string(_ section: String, _ key: String, _ fallback: String) -> Binding<String> {
-        Binding(get: { self.get(section, key) as? String ?? fallback }, set: { self.set(section, key, $0) })
-    }
-    func int(_ section: String, _ key: String) -> Binding<Int> {
-        Binding(get: { (self.get(section, key) as? NSNumber)?.intValue ?? 0 }, set: { self.set(section, key, $0) })
-    }
-    /// A 0–1 value shown as 0–100 (rate, pitch).
-    func percent(_ section: String, _ key: String) -> Binding<Double> {
-        Binding(get: { ((self.get(section, key) as? NSNumber)?.doubleValue ?? 0.5) * 100 }, set: { self.set(section, key, ($0 / 100 * 100).rounded() / 100) })
-    }
-    func number(_ section: String, _ key: String) -> Binding<Double> {
-        Binding(get: { (self.get(section, key) as? NSNumber)?.doubleValue ?? 0 }, set: { self.set(section, key, Int($0.rounded())) })
-    }
-}
-
 enum Pane: String, CaseIterable, Identifiable {
     // NVDA's order, with TurnOver's own at the end: every setting the menu offered lives here since 21 Oct 2026.
     case general = "General", speech = "Speech", sounds = "Sounds", braille = "Braille", keyboard = "Keyboard", items = "Item details", webPages = "Web pages", documents = "Documents",
@@ -445,46 +361,6 @@ struct BrailleView: View {
             }
             Text("Panning on to another line moves the caret there, so the arrows carry on from what was read. Tethered to review, panning moves only the review cursor.").font(.caption)
         }.formStyle(.grouped).navigationTitle("Braille")
-    }
-}
-
-struct KeyboardView: View {
-    @EnvironmentObject var model: Model
-    var body: some View {
-        Form {
-            Picker("Keyboard style", selection: model.string("general", "keyboardStyle", "mac")) {
-                Text("VoiceOver keys").tag("mac"); Text("NVDA keys").tag("windows"); Text("JAWS keys").tag("jaws")
-            }
-            Toggle("NVDA and JAWS keys where VoiceOver reads too", isOn: model.bool("general", "keysWhereVoiceOverReads"))
-            Text("On, Caps Lock is the NVDA key in every app, whichever reader is speaking. Off, VoiceOver's own Caps Lock keys work in the apps VoiceOver reads.").font(.caption)
-            Picker("TurnOver key", selection: model.string("general", "bosunKey", "both")) {
-                Text("Caps Lock or Control Option").tag("both"); Text("Caps Lock").tag("caps"); Text("Control Option").tag("controlOption")
-            }
-            Picker("Keyboard layout", selection: model.string("keyboard", "layout", "laptop")) {
-                Text("Laptop").tag("laptop"); Text("Desktop, the number pad has its NVDA keys").tag("desktop")
-            }
-            Section("Typing echo") {
-                Picker("Characters", selection: model.int("keyboard", "speakTypedCharacters")) {
-                    Text("Off").tag(0); Text("In edit fields").tag(1); Text("Always").tag(2)
-                }
-                Picker("Words", selection: model.int("keyboard", "speakTypedWords")) {
-                    Text("Off").tag(0); Text("In edit fields").tag(1); Text("Always").tag(2)
-                }
-                Toggle("New line on Return", isOn: model.bool("keyboard", "speakNewLine"))
-                Toggle("Command keys, as you press them", isOn: model.bool("keyboard", "speakCommandKeys"))
-            }
-            Section("Moving around") {
-                Toggle("VoiceOver keys move by groups", isOn: model.bool("general", "navigateByGroups"))
-                Toggle("NVDA and JAWS keys move by groups too", isOn: model.bool("general", "groupsInWindowsStyle"))
-                Picker("Moving the cursor moves the keyboard focus", selection: model.string("general", "focusFollowsCursor", "auto")) {
-                    Text("By style: VoiceOver keys only").tag("auto"); Text("Always").tag("on"); Text("Never").tag("off")
-                }
-            }
-            Section("The keypad") {
-                Toggle("Keypad commands with VoiceOver keys (VO Clear switches)", isOn: model.bool("keyboard", "numpadCommander"))
-                Toggle("Keypad commands with NVDA keys (Clear switches)", isOn: model.bool("keyboard", "keypadCommands"))
-            }
-        }.formStyle(.grouped).navigationTitle("Keyboard")
     }
 }
 
