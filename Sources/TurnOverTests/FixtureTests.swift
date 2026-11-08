@@ -263,6 +263,26 @@ func fixtureTests() {
         check(cut < full, "out of time, the press asks less: \(cut) questions against \(full)")
         check(nav.reviewElement.flatMap { AXReplay.id(of: $0) } != 4, "and still lands somewhere")
     }
+    // System Settings' permission lists on macOS 27.2 (Screen & System Audio Recording, 8 Nov 2026): a row is a cell
+    // holding the app's name as a text and a nameless AXCheckBox of subrole AXSwitch, so each row said only "Claude".
+    test("row text: a nameless switch in a row says its role and state after the texts") {
+        var fixture = AXFixture(app: "System Settings", bundle: "com.apple.systempreferences", recorded: "", root: 0, application: nil, focus: 1, nodes: [])
+        fixture.nodes = [
+            .init(id: 0, attrs: ["AXRole": .string("AXWindow"), "AXChildren": .elements([1])]),
+            .init(id: 1, attrs: ["AXRole": .string("AXRow"), "AXSubrole": .string("AXOutlineRow"), "AXParent": .element(0), "AXChildren": .elements([2])]),
+            .init(id: 2, attrs: ["AXRole": .string("AXCell"), "AXParent": .element(1), "AXChildren": .elements([3, 4])]),
+            .init(id: 3, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("Claude"), "AXParent": .element(2)]),
+            .init(id: 4, attrs: ["AXRole": .string("AXCheckBox"), "AXSubrole": .string("AXSwitch"), "AXValue": .number(1), "AXParent": .element(2)]),
+        ]
+        AXReplay.load(fixture); defer { AXReplay.unload() }
+        expect(ObjectFactory.make(AXReplay.element(1)).name, "Claude, switch, on")
+        fixture.nodes[4].attrs["AXValue"] = .number(0)
+        AXReplay.load(fixture)
+        expect(ObjectFactory.make(AXReplay.element(1)).name, "Claude, switch, off")
+        fixture.nodes[4].attrs["AXSubrole"] = nil
+        AXReplay.load(fixture)
+        expect(ObjectFactory.make(AXReplay.element(1)).name, "Claude, check box, not checked", "a plain check box keeps its own words")
+    }
     test("secure echo: a password field the application shows from another process is the one looked at") {
         var fixture = AXFixture(app: "System Settings", bundle: "com.apple.systempreferences", recorded: "", root: 0, application: 9, focus: 3, nodes: [])
         fixture.nodes = [
