@@ -46,10 +46,9 @@ usually do should work too; the last section says how to tell us.
 - **NotProton**, free, from [github.com/NotProtonNot/NotProton](https://github.com/NotProtonNot/NotProton). It
   turns on Steam Play in the Mac Steam client, so Windows games install and run from Steam, through CrossOver.
 - **TurnOver**, build 20 or later, from [the download page](https://doll-eye.github.io/turnover-updates/).
-- **SpeechBridge**, the stand-ins. They come in TurnOver's source code, not in the app, because they go into the
-  games, not into TurnOver. Download it from
-  [github.com/TurnOver-For-Mac/turnover](https://github.com/TurnOver-For-Mac/turnover): the green Code button, then
-  Download ZIP; or, in Terminal, `git clone https://github.com/TurnOver-For-Mac/turnover.git`.
+- **SpeechBridge**, the stand-ins, a small project of its own that works with TurnOver: it goes into the games, not
+  into TurnOver. Download it from [github.com/Doll-Eye/SpeechBridge](https://github.com/Doll-Eye/SpeechBridge): the green Code button, then
+  Download ZIP; or, in Terminal, `git clone https://github.com/Doll-Eye/SpeechBridge.git`.
 - The Windows games you own. A game bought for the Mac usually includes its Windows version; it's the Windows one
   Steam installs once NotProton is chosen.
 - A controller is optional. A PlayStation DualSense works, wired or over Bluetooth.
@@ -85,14 +84,16 @@ Steam and stop it there).
 Open Terminal, go to the folder you downloaded, and run the setup:
 
 ```bash
-cd ~/Downloads/turnover-main
+cd ~/Downloads/SpeechBridge-main
 ```
 
 ```bash
-sh SpeechBridge/setup.sh
+sh install.sh
 ```
 
-(If you cloned with git, the folder is called turnover instead.) It finds every game Steam runs through NotProton,
+(If you cloned with git, the folder is called SpeechBridge instead.) One line does both, if you'd rather:
+`curl -fsSL https://raw.githubusercontent.com/Doll-Eye/SpeechBridge/main/get.sh | sh` fetches SpeechBridge into a
+folder called SpeechBridge in your home folder and runs the setup. It finds every game Steam runs through NotProton,
 puts the speech files into each one's prefix, swaps the game's own speech files for them, allows the mod loaders, and
 leaves **SpeechBridge Setup** in Applications: an app that does the same again, for after the next game installs.
 Nothing else to install. It needs no Xcode and no developer tools.
@@ -211,7 +212,7 @@ Before NotProton, the same games ran in a CrossOver "bottle" with Windows Steam 
 works, and the setup command sets it up too when it finds a bottle called Steam: it builds a **Windows Steam** app
 that starts the bottle's Steam without CrossOver's window, and TurnOver reads that Steam's Big Picture as well. It
 is more fiddly (CrossOver's own windows are only partly readable, and the bottle has habits of its own), so start
-with NotProton unless you already have the bottle. The detail is in SpeechBridge's README.
+with NotProton unless you already have the bottle. The detail is in [SpeechBridge's README](https://github.com/Doll-Eye/SpeechBridge#readme).
 
 ## With VoiceOver instead of TurnOver
 
@@ -236,8 +237,8 @@ help; TurnOver is the way Steam gets read. TurnOver and the listener can't both 
 
 ## The detail
 
-Everything above, with what was measured and why each step is the way it is, is in TurnOver's source code:
-[SpeechBridge/README.md](https://github.com/TurnOver-For-Mac/turnover/blob/main/SpeechBridge/README.md), and the
-engineering notes beside it. If a game not listed here speaks through one of the usual Windows ways (SAPI, Tolk,
+Everything above, with what was measured and why each step is the way it is, is in SpeechBridge's own repository:
+[github.com/Doll-Eye/SpeechBridge](https://github.com/Doll-Eye/SpeechBridge), its README and the engineering notes beside it. TurnOver's side, the
+speech port that listens and the Steam reading, is in TurnOver's code. If a game not listed here speaks through one of the usual Windows ways (SAPI, Tolk,
 NVDA's controller client, Prism, the Unity plugin, Ren'Py), it should simply work; tell us either way, on the
 [issue form](https://github.com/TurnOver-For-Mac/turnover/issues/new/choose).

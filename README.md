@@ -36,7 +36,7 @@ download it, replace the app, and skip the newer one in TurnOver's menu, About a
 
 The [guides](https://doll-eye.github.io/turnover-updates/guide.html) cover getting started, the keys, reading, the
 apps, the keyboard styles and troubleshooting, and [Steam's Windows games](Guides/14-windows-games.md) with their
-accessibility mods, which speak through TurnOver (the stand-ins they need are in [SpeechBridge](SpeechBridge/README.md)).
+accessibility mods, which speak through TurnOver (the stand-ins they need are [SpeechBridge](https://github.com/Doll-Eye/SpeechBridge), a project of its own).
 
 The two keys to remember:
 

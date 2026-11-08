@@ -16,11 +16,10 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 - The welcome pages read like little web pages: Up and Down read a page a line at a time, Return goes on, Escape
   skips the rest. The two keys everything hangs on come straight after the welcome: Command Control Period turns
   TurnOver on and off, and Command Control Comma is the way in to everything.
-- Windows games: SpeechBridge, the stand-in speech files that let Steam's Windows games and their accessibility mods
-  (Diablo IV's own reader, Stardew Access, the Hades II and Fallout 4 mods, and more) speak through TurnOver, is in
-  TurnOver's repository with a one-line setup, for games run through NotProton from the Mac Steam client or in a
-  CrossOver bottle. The guide, Windows games on your Mac, has the steps and each game. It isn't in the app: it goes
-  into the games' Windows side, not into TurnOver.
+- A guide to Steam's Windows games: Windows games on your Mac, from Steam, CrossOver and NotProton to each game's
+  accessibility mods (Diablo IV's own reader, Stardew Access, the Hades II and Fallout 4 mods, and more), all
+  speaking through TurnOver. The stand-in speech files they need are SpeechBridge, a small project of its own on
+  GitHub; nothing in the app changes.
 
 ### Changed
 

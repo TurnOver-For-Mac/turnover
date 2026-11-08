@@ -13,7 +13,6 @@ TurnOver is a Swift 6 macOS screen reader that works alongside VoiceOver. `Packa
 - `Sources/TurnOverAX/`, `TurnOverSpeech/`, `TurnOverBraille/`, and `TurnOverControl/`: accessibility, audio, braille, and local communication.
 - `Sources/TurnOverTests/`: test executable; `Tests/Fixtures/` and `Tests/Plugins/`: recorded windows and plugin samples.
 - `Resources/`: bundle configuration, sounds, recipes, and keymaps. `Helpers/` contains separate Swift packages; `Tools/` contains development utilities.
-- `SpeechBridge/`: the stand-in Windows speech DLLs (C, prebuilt, with sources and mingw-w64 build scripts), their installers and Setup app, for Steam's Windows games (run through NotProton, or in a CrossOver bottle) speaking through the speech port. Not built into the app; MIT licensed in its own LICENSE. Its README and NOTES.md are the record.
 - `Guides/` contains user documentation; `docs/` contains plans. Consult `ARCHITECTURE.md` and `PATTERNS.md` before changing shared behavior.
 
 ## Build, Test, and Development Commands
