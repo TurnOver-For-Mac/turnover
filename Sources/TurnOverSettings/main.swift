@@ -258,6 +258,16 @@ struct SpeechView: View {
             return (id, name)
         }
     }
+    /// An EQ slider's name: the labels come from a list, so SwiftUI does not put them in the catalog by itself
+    /// (a tester heard "Treble" under a Russian interface, 8 Nov 2026).
+    private func eqName(_ name: String) -> String {
+        switch name {
+        case "Bass": return String(localized: "Bass", comment: "An equalizer slider: the low frequencies")
+        case "Middle": return String(localized: "Middle", comment: "An equalizer slider: the middle frequencies")
+        case "Treble": return String(localized: "Treble", comment: "An equalizer slider: the high frequencies")
+        default: return name
+        }
+    }
     private var rotorChosen: [String] { (model.state["speech"] as? [String: Any])?["rotorVoices"] as? [String] ?? [] }
     private var rotorCandidates: [AVSpeechSynthesisVoice] { voiceLists.rotorCandidates }
     /// Every voice the rotor's list offers, the natural ones first.
@@ -321,7 +331,7 @@ struct SpeechView: View {
             // The EQ, for every voice (2 Nov 2026); each voice keeps its own, with its rate and volume.
             ForEach([("Bass", "bass"), ("Middle", "middle"), ("Treble", "treble")], id: \.1) { name, key in
                 let db = model.number("speech", key).wrappedValue
-                Slider(value: model.number("speech", key), in: -12...12, step: 1) { Text(name) }
+                Slider(value: model.number("speech", key), in: -12...12, step: 1) { Text(eqName(name)) }
                     .accessibilityValue(db == 0 ? "0" : String(localized: "\(String(format: "%+.0f", db)) decibels", comment: "An EQ slider's value"))
             }
             Picker("Punctuation", selection: model.int("speech", "symbolLevel")) {
@@ -339,7 +349,7 @@ struct SpeechView: View {
                     .accessibilityLabel("Say cap before a capital")
                 Slider(value: model.number("speech", "capitalPitch"), in: 0...100, step: 10) { Text("Raise the pitch for a capital") }
                     .accessibilityValue(model.number("speech", "capitalPitch").wrappedValue == 0 ? String(localized: "off", comment: "A setting that is off")
-                        : String(localized: "\(String(Int(model.number("speech", "capitalPitch").wrappedValue))) percent", comment: "A slider's value"))
+                        : String(localized: "\(Int(model.number("speech", "capitalPitch").wrappedValue)) percent", comment: "A slider's value"))
             }
             // The speech rotor's own short list (18 Oct 2026): none ticked, every voice.
             // Folded until opened: a picker per language is the costliest part of the pane to draw (23 Oct 2026).

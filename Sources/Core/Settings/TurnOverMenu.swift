@@ -761,7 +761,7 @@ public final class TurnOverMenu {
                     get: { ["timeout", "indefinitely", "off"].firstIndex(of: config.braille.showMessages) ?? 0 },
                     set: { config.braille.showMessages = ["timeout", "indefinitely", "off"][$0] })),
                 MenuItem("How long", .number(get: { Double(config.braille.messageSeconds) }, set: { config.braille.messageSeconds = Int($0) },
-                    step: 1, min: 1, max: 30, format: { Int($0.rounded()) == 1 ? String(localized: "1 second", comment: "A time") : String(localized: "\(String(Int($0.rounded()))) seconds", comment: "A time") }), hint: "For each display's width of message"),
+                    step: 1, min: 1, max: 30, format: { Int($0.rounded()) == 1 ? String(localized: "1 second", comment: "A time") : String(localized: "\(Int($0.rounded())) seconds", comment: "A time") }), hint: "For each display's width of message"),
             ] }),
             MenuItem("Keep words whole", .toggle(get: { config.braille.wordWrap }, set: { config.braille.wordWrap = $0; Braille.refreshSoon() }), hint: "A word is not split across the end of the display"),
             MenuItem("Cursor", .submenu { [
