@@ -2634,15 +2634,33 @@ where the game looks for them. Each one takes the words and passes them to TurnO
 game may speak through it, and then says them in your TurnOver voice. Nothing from Windows is installed, and the
 stand-ins can do nothing but speak.
 
+What plays
+
+  Game: How it speaks | What to install
+  Diablo IV: its own screen reader | nothing: two settings
+  Stardew Valley: Stardew Access | SMAPI and the mod
+  Hades II: Blind Accessibility and HadesIIAccess | the mods and their loader, by hand
+  Fallout 4: Fallout 4 Access | F4SE and four mods
+  Final Fantasy VI Pixel Remaster: FF6 Screen Reader | MelonLoader and the mod
+  Cyberpunk 2077: Cyberpunk Access | the mod and its nine requirements
+  Bits & Bops, Rhythm Doctor, Blind Drive: the games' own speech | nothing
+  Slay the Princess and other Ren'Py games: self-voicing | nothing: press V
+  Periphery Synthetic EP: the game's own text | nothing: a launch option the setup writes
+  Any game using Windows' built-in voice: the game's own speech | nothing
+  Steam itself: Big Picture, read by TurnOver | nothing: one TurnOver setting
+
+All of these were played this way in the autumn of 2026. A game not in the list that speaks the way Windows games
+usually do should work too; the last section says how to tell us.
+
 What you need
 
 - A Mac with Apple silicon (M1 or later). Big games want memory and disk: Diablo IV is about 160 GB.
-- Steam for the Mac, signed in.
-- CrossOver, from CodeWeavers, version 26.3 or later. It costs money, with a free trial. It runs the Windows
+- Steam for the Mac (store.steampowered.com/about), signed in.
+- CrossOver (codeweavers.com/crossover), version 26.3 or later. It costs money, with a free trial. It runs the Windows
   games; it needn't be open.
 - NotProton, free, from github.com/NotProtonNot/NotProton. It
   turns on Steam Play in the Mac Steam client, so Windows games install and run from Steam, through CrossOver.
-- TurnOver, build 20 or later.
+- TurnOver, build 20 or later, from the download page.
 - SpeechBridge, the stand-ins. They come in TurnOver's source code, not in the app, because they go into the
   games, not into TurnOver. Download it from
   github.com/TurnOver-For-Mac/turnover: the green Code button, then
@@ -2653,9 +2671,9 @@ What you need
 
 1. Steam, CrossOver and NotProton
 
-1. Install Steam from steampowered.com, open it and sign in.
+1. Install Steam from store.steampowered.com/about, open it and sign in.
 2. Install CrossOver into Applications. Open it once so it finishes its own setup; it needn't stay open.
-3. Install NotProton and open it. It makes its own copy of CrossOver's engine and registers itself with Steam as a
+3. Install NotProton from its releases page and open it. It makes its own copy of CrossOver's engine and registers itself with Steam as a
    "compatibility tool", named after the CrossOver version, such as "CrossOver 26.3". Its page says which Steam
    versions it works with.
 4. In Steam, Settings, Compatibility: enable Steam Play for all titles and choose that tool as the default. Then
@@ -2717,8 +2735,8 @@ In Finder, Go to Folder (Command Shift G) takes you to any of these:
   `~/Library/Application Support/Steam/steamapps/compatdata/<the game's number>/pfx/drive_c`, with Documents under
   `users/steamuser`. The number is in the game's store page address; Diablo IV is 2344520, Stardew Valley 413150.
 
-Mods are zip files you unpack into a game's folder. Most come from Nexus Mods (a free account), Thunderstore or
-GitHub.
+Mods are zip files you unpack into a game's folder. Most come from Nexus Mods (a free
+account), Thunderstore or GitHub; each game below links its own.
 
 Game by game
 
@@ -2744,15 +2762,17 @@ Stardew Valley
 
 Install SMAPI, the Stardew mod loader, by hand: unzip its download, and inside it `internal/windows/install.dat` is a
 zip too; unpack that into the game's folder, then copy `Stardew Valley.deps.json` to `StardewModdingAPI.deps.json`
-beside it. Then into the game's `Mods` folder: Stardew Access, with Kokoro and Project Fluent, which it
-needs. Run the setup again with Steam closed: it writes the launch option that starts the game through SMAPI, and
+beside it. Then into the game's `Mods` folder: Stardew Access, with
+Kokoro and Project Fluent, which it needs (its page links them). Run the setup again with Steam closed: it writes the launch option that starts the game through SMAPI, and
 swaps the speech file Stardew Access brings. Then play: "Stardew Access version 1.6.2 loaded", the title screen, the
 menus.
 
 Hades II
 
-Three mods from Thunderstore, unpacked by hand into the game's `Ship` folder: Lirin's Blind Accessibility and
-Hades 2 TOLk Compatibility, and FlatArther's HadesIIAccess, with the loader and libraries they list as
+Three mods from Thunderstore, unpacked by hand into the game's `Ship` folder:
+Lirin's Blind Accessibility and
+Hades 2 TOLk Compatibility (both on Lirin's page), and
+FlatArther's HadesIIAccess, with the loader and libraries they list as
 dependencies (Hell2Modding, LuaENVY-ENVY, SGG_Modding's ENVY, Chalk, ReLoad, SJSON, ModUtil, DemonDaemon). The
 loader's `d3d12.dll` goes beside `Hades2.exe`; each mod goes in `ReturnOfModding/plugins/<Team-Name>/`; HadesIIAccess's
 `plugins_data` folder moves to `ReturnOfModding/plugins_data/FlatArther-HadesIIAccess/`. Run the setup again: it
@@ -2760,8 +2780,9 @@ tells Wine to load the mod loader for this game. The main menu is read.
 
 Fallout 4
 
-Fallout 4 Access by alex19EP, from Nexus, with what it needs: F4SE (the script extender), the Address Library,
-Extended Dialogue Interface and Mod Configuration Menu. F4SE's files go in the game folder, the mods' `Data` folders
+Fallout 4 Access by alex19EP, with what it needs:
+F4SE (the script extender), the Address Library, Extended Dialogue Interface and Mod
+Configuration Menu, the last three from Nexus. F4SE's files go in the game folder, the mods' `Data` folders
 into the game's `Data`. One text file: in the game's Documents, My Games, Fallout4, `Fallout4Custom.ini` with
 `[Archive]`, `bInvalidateOlderFiles=1` and `sResourceDataDirsFinal=` on three lines. Turn Steam Input on for the
 game, as for Diablo IV. Then run the setup again: it writes the plugin list, puts F4SE in the launcher's place, and
@@ -2770,15 +2791,16 @@ the setup says so if it's missing). The main menu is read.
 
 Final Fantasy VI Pixel Remaster
 
-BlindGuyNW's FF6 Screen Reader on MelonLoader. Unpack MelonLoader's zip into the game folder, the mod's
+BlindGuyNW's FF6 Screen Reader on
+MelonLoader. Unpack MelonLoader's zip into the game folder, the mod's
 `FFVI_ScreenReader.dll` into `Mods`, and its `Tolk.dll` and `nvdaControllerClient64.dll` beside the game. Run the
 setup again. The first launch takes several minutes while MelonLoader fetches what it needs; Steam shows an
 "On-Screen Keyboard" notice the first time, which wants an OK. The opening crawl is read.
 
 Cyberpunk 2077
 
-Cyberpunk Access by Ludark, from Nexus, with its nine requirements (the mod page lists them, with Audioware from
-GitHub). Each unpacks over the game folder. The mods expect NVDA; they get TurnOver instead, through the same
+Cyberpunk Access by Ludark, from Nexus, with its nine
+requirements (the mod page lists them, with Audioware from GitHub). Each unpacks over the game folder. The mods expect NVDA; they get TurnOver instead, through the same
 stand-ins. Run the setup again. The user agreement and the main menu are read. After a game update the mods must
 match the game's version, as on Windows.
 
