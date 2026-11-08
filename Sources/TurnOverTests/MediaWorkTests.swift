@@ -514,6 +514,23 @@ func mediaWorkTests() {
             Speech.sink = savedSink; rig.view.stop(); rig.worker.sync {}; AXReplay.unload()
         }
     }
+    test("TV sidebar: Return on an item TV won't open, such as a heading, says so plainly and selects nothing") {
+        // Home's cell without AXPress, as TV's Library and Channels have it (8 Nov 2026).
+        var fixture = tvSidebarFixture()
+        fixture.nodes[6].actions = []
+        AXReplay.load(fixture)
+        defer { AXReplay.unload() }
+        let rig = MediaTestRig(liveCollector: true, sidebarNavigation: .selectRow)
+        defer { rig.view.stop(); rig.worker.sync {} }
+        selectTVHome(rig)
+        let savedSink = Speech.sink
+        var said: [String] = []
+        Speech.sink = { said.append($0) }
+        defer { Speech.sink = savedSink }
+        rig.view.activate(); rig.settle()
+        expect(said, ["Home can't be opened"], "said plainly, not as a failure to select")
+        check(AXReplay.sets.isEmpty && AXReplay.actions.isEmpty, "nothing selected or pressed")
+    }
     test("TV sidebar: an actual window switch retires queued row selection before its worker write") {
         AXReplay.load(tvSidebarFixture()); defer { AXReplay.unload() }
         let rig = MediaTestRig(liveCollector: true, sidebarNavigation: .selectRow)

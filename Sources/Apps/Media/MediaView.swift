@@ -250,7 +250,9 @@ public final class MediaView {
     nonisolated package enum ReadOperation: Sendable {
         case build(keepSidebar: Bool, detectVideo: Bool)
         case resolve(Item, bar: AXUIElement?)
-        case selectSidebar(row: AXUIElement, outline: AXUIElement, cell: AXUIElement, label: String, allowAlreadyOpen: Bool)
+        /// `stillWanted`: false once a newer key has come, which ends the wait for TV to show the selection.
+        case selectSidebar(row: AXUIElement, outline: AXUIElement, cell: AXUIElement, label: String, allowAlreadyOpen: Bool,
+                           stillWanted: @Sendable () -> Bool)
     }
     nonisolated package struct ReadInput: Sendable {
         package let pid: pid_t
@@ -336,9 +338,10 @@ public final class MediaView {
         AXReadScope.with(while: current) {
             guard current(), input.isWindowCurrent(), current() else { return nil }
             switch input.operation {
-            case .selectSidebar(let row, let outline, let cell, let label, let allowAlreadyOpen):
+            case .selectSidebar(let row, let outline, let cell, let label, let allowAlreadyOpen, let stillWanted):
                 let outcome = MediaSidebarSelection.select(row: row, outline: outline, cell: cell, expectedLabel: label,
                                                            allowAlreadyOpen: allowAlreadyOpen, current: current,
+                                                           stillWanted: stillWanted,
                                                            windowCurrent: { input.isWindowCurrent() })
                 return current() ? ReadResult(sidebarSelected: outcome != .failed, sidebarAlreadyOpen: outcome == .alreadyOpen) : nil
             case .build(let keepSidebar, let detectVideo):
@@ -1299,16 +1302,27 @@ public final class MediaView {
     }
 
     private func selectSidebar(_ item: Item, window: AXUIElement?, before: String, keys: Int, allowAlreadyOpen: Bool) {
-        guard let outline = item.sidebarOutline, let cell = item.press, !item.isHeader else {
+        // An item TV won't open: its group headings, Library and Channels, whose cells can't be pressed. Said plainly; Return
+        // there said "could not select that sidebar item", which sounded like a fault (8 Nov 2026). Not called a heading,
+        // since a cell whose actions couldn't be read looks the same (Codex).
+        if item.isHeader { sayCannotOpen(item); return }
+        if item.press == nil { sayCannotOpen(item); return }
+        guard let outline = item.sidebarOutline, let cell = item.press else {
             Speech.speakMessage(String(localized: "could not select that sidebar item", comment: "Spoken message"), remember: false); return
         }
         let body = Self.bodySignature(shelves)
         pendingSidebarBody = body
         resolving = true
-        read(.selectSidebar(row: item.element, outline: outline, cell: cell, label: item.label, allowAlreadyOpen: allowAlreadyOpen), capturedWindow: window) { [weak self] result in
+        // A newer key ends the wait for TV to show the selection, so the keys queued behind it aren't held (Codex).
+        let count = keyCount
+        let stillWanted: @Sendable () -> Bool = { count() == keys }
+        read(.selectSidebar(row: item.element, outline: outline, cell: cell, label: item.label, allowAlreadyOpen: allowAlreadyOpen,
+                            stillWanted: stillWanted), capturedWindow: window) { [weak self] result in
             guard let self else { return }
             resolving = false
             guard result?.sidebarSelected == true else {
+                // No page is coming from this, so nothing waits for its body any more (Codex, 8 Nov 2026).
+                pendingSidebarBody = nil
                 if keyCount() == keys { Speech.speakMessage(String(localized: "could not select that sidebar item", comment: "Spoken message"), remember: false) }
                 runQueued(); return
             }
@@ -1321,6 +1335,10 @@ public final class MediaView {
                            unchangedMessage: "could not open that sidebar item")
             runQueued()
         }
+    }
+
+    private func sayCannotOpen(_ item: Item) {
+        Speech.speakMessage(String(localized: "\(item.label) can't be opened", comment: "Spoken message: Return on a sidebar item the app won't open, such as a heading; %@ is the item"), remember: false)
     }
 
     private static func bodySignature(_ shelves: [Shelf]) -> [String] {
@@ -1545,8 +1563,17 @@ public final class MediaView {
                 if tries > 0 { waitForNewPage(different: before, tries: tries - 1, goingBack: goingBack, focusPage: focusPage,
                                               generation: session, keys: originalKeys, requiredBodyChange: requiredBodyChange,
                                               unchangedMessage: unchangedMessage) }
-                else if keyCount() != originalKeys { return }
-                else if let unchangedMessage { Speech.speakMessage(unchangedMessage, remember: false) }
+                else if keyCount() != originalKeys {
+                    // Newer keys took over: a sidebar wait (the only one with a required body) ends here (Codex).
+                    if requiredBodyChange != nil { pendingSidebarBody = nil }
+                    return
+                }
+                else if let unchangedMessage {
+                    // Given up: the sidebar's wait for a new body ends too, or later refreshes stay held for it (Codex,
+                    // 8 Nov 2026).
+                    pendingSidebarBody = nil
+                    Speech.speakMessage(unchangedMessage, remember: false)
+                }
                 else if goingBack { Speech.speakMessage(String(localized: "no previous page", comment: "Spoken message"), remember: false) }
                 else {
                     // No new page: a song or episode that plays when opened. Say so, from the player.
