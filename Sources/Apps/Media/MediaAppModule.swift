@@ -18,6 +18,8 @@ final class MediaAppModule: AppModule {
     private static let arrivalTries = 6
     private var focusGeneration = 0
     private var terminated = false
+    /// Whether the media view has the keys: the same test its commands use (`active` in init).
+    private var readerHasTheKeys: () -> Bool = { false }
 
     required init(pid: pid_t, bundleIdentifier: String, appName: String) {
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
@@ -30,6 +32,7 @@ final class MediaAppModule: AppModule {
             if [.editableText, .searchField, .comboBox, .passwordEdit].contains(f.role) { return false }
             return !MediaView.showsVideo(pid: f.pid)
         }
+        readerHasTheKeys = active
         // The catalog's list (Catalog.swift) is read while the search field still has the focus: the arrows, Home, End,
         // Return and Escape are the list's then; the letters stay the field's, for the next search.
         let activeOrCatalog: () -> Bool = { [weak self] in
@@ -102,6 +105,13 @@ final class MediaAppModule: AppModule {
 
     override func adoptReading(_ element: AXUIElement, within region: AXUIElement?) -> AXUIElement? {
         view.adopt(element, within: region)
+    }
+
+    override func readingPosition() -> (element: AXUIElement, movedAt: Date)? {
+        // Only while this reader has the keys: not in a search field, a menu, a dialog or sheet, or a video (Codex,
+        // 8 Nov 2026: in Music's "delete these songs?" alert, VO-J would have started behind it).
+        guard readerHasTheKeys() else { return nil }
+        return view.readingPosition()
     }
 
     override func handleEvent(_ event: Event, next: () -> Void) {

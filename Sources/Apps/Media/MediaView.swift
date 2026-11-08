@@ -113,7 +113,10 @@ public final class MediaView {
     private var index: [Pane: Int] = [:]
     // Executed navigation owns the pane/cursor even if it returns to the same item. Arrows waiting in queued
     // have not executed yet, so they leave this revision alone until their original turn (#188).
-    private var navigationIntent: UInt64 = 0
+    private var navigationIntent: UInt64 = 0 { didSet { navigatedAt = Date() } }
+    /// When this reader last moved (each executed navigation counts navigationIntent on): VO-J starts where it is only
+    /// when it moved after the review cursor (Codex, 8 Nov 2026: VO navigation after the arrows was ignored).
+    private var navigatedAt = Date.distantPast
     private var jumpedToHeading: UInt64?
 
     var flatPage: [(shelf: Int, item: Item)] {
@@ -897,6 +900,28 @@ public final class MediaView {
         let all = items(of: pane)
         guard !all.isEmpty else { return nil }
         return all[max(0, min(all.count - 1, index[pane] ?? 0))]
+    }
+
+    /// Where this reader is reading, and when it last moved, for VO-J to start from: the current pane's current item.
+    /// These arrows don't move the review cursor, and TV makes its shelves anew as the page scrolls, so the cursor's item
+    /// and the keyboard's button were gone and VO-J said "no linked item" (TV, 8 Nov 2026). Nil in a video, while a
+    /// catalog has the page (its own position), when the model is another window's, or when the item has gone (Codex).
+    package func readingPosition() -> (element: AXUIElement, movedAt: Date)? {
+        if inVideo { return nil }
+        if catalogHasThePage { return nil }
+        guard let window = modelWindow else { return nil }
+        guard let front = windowQuery(pid) else { return nil }
+        guard CFEqual(window, front) else { return nil }
+        guard let item = currentItem() else { return nil }
+        if item.element.role == "?" { return nil }
+        return (item.element, navigatedAt)
+    }
+
+    /// The catalog's list is the page's reader (Catalog.swift), with its own position.
+    private var catalogHasThePage: Bool {
+        guard catalog != nil else { return false }
+        guard catalogDrives else { return false }
+        return pane == .page
     }
 
     public func move(_ delta: Int) {

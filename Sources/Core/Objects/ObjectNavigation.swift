@@ -14,7 +14,9 @@ import AppKit
 public final class ObjectNavigator {
     public static let shared = ObjectNavigator()
     /// The navigator object's element; nil means "the focus".
-    private var current: AXUIElement? { didSet { cancelWindowSearch() } }
+    private var current: AXUIElement? { didSet { cancelWindowSearch(); movedAt = Date() } }
+    /// When the review cursor last moved: VO-J starts from an app's own reader only when that reader moved since.
+    private var movedAt = Date.distantPast
     private let windowSearch = AXWalkRunner<WindowKindSearchResult<AXUIElement>>()
     /// Where the review cursor is (for the plugin maker: the item it changes).
     public var reviewElement: AXUIElement? { current }
@@ -743,9 +745,19 @@ public final class ObjectNavigator {
     }
 
     private func jumpLinkedNow() {
-        // From the reading position on a page in browse mode, else from the review cursor (the cursor sat on the
-        // web area while the reading was on a tab, so VO-J found nothing, 8 Nov 2026).
-        guard var cur = VoiceOverKeysPlugin.cursorElement() ?? element else { return }
+        // From where an app's own reader is reading, when it keeps a position of its own (the media reader of Music,
+        // Podcasts and TV: its arrows don't move the review cursor, and in TV the cursor's item had gone as the page
+        // scrolled, 8 Nov 2026). Else from the reading position on a page in browse mode, else from the review cursor
+        // (the cursor sat on the web area while the reading was on a tab, so VO-J found nothing, 8 Nov 2026).
+        // That reader's position counts when it moved after the review cursor, so VO navigation after the arrows still
+        // starts from the cursor (Codex, 8 Nov 2026), or when the cursor's item has gone.
+        var start = VoiceOverKeysPlugin.cursorElement() ?? element
+        if let own = API.focusPid.flatMap({ AppModuleHandler.shared.appModule(for: $0).readingPosition() }) {
+            let movedLast = own.movedAt > movedAt
+            let cursorGone = start.map { $0.role == "?" } ?? true
+            if movedLast || cursorGone { start = own.element }
+        }
+        guard var cur = start else { return }
         // A review cursor left on a row the app has since replaced (Mail makes its rows anew as the arrows move the
         // selection: VO-J said "no linked item" after every arrow, 8 Nov 2026): the keyboard focus is where the user is.
         if cur.role == "?", let f = API.focusObject?.element { cur = f }

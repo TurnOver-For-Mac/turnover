@@ -590,12 +590,18 @@ func mediaWorkTests() {
         expect(rig.view.currentItem()?.label, a.label, "Down reads the first item after the heading")
         rig.view.move(1)
         expect(rig.view.currentItem()?.label, b.label, "another Down continues in the destination shelf")
+        // VO-J starts from here, not from the review cursor left on the heading (TV, 8 Nov 2026).
+        expect(AXReplay.id(of: rig.view.readingPosition()?.element), 101, "the reader says where it is reading: the second item")
         check(rig.view.adopt(AXReplay.element(103), within: nil) == nil, "a heading from another window cannot move this reader")
         expect(rig.view.currentItem()?.label, b.label)
 
         check(rig.view.adopt(AXReplay.element(30), within: nil)?.isSame(AXReplay.element(30)) == true, "the selected row becomes the sidebar landing")
         rig.view.move(1)
         expect(rig.view.currentItem()?.label, "Library", "Down after jumping back stays in the sidebar")
+        expect(AXReplay.id(of: rig.view.readingPosition()?.element), 31, "and the reading is the sidebar's Library row")
+        let before = rig.view.readingPosition()?.movedAt ?? .distantPast
+        rig.view.move(-1)
+        check((rig.view.readingPosition()?.movedAt ?? .distantPast) > before, "each move is noted, for VO-J to tell who moved last")
         check(rig.view.adopt(region, within: region)?.isSame(first.element) == true, "a spot can name the whole page")
         rig.view.move(1)
         expect(rig.view.currentItem()?.label, a.label, "Down after the window spot advances through its page")

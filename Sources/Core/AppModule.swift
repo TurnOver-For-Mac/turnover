@@ -73,6 +73,11 @@ open class AppModule: ScriptableObject {
     /// from, or nil when the destination is outside this reader. The caller places and announces the review cursor.
     open func adoptReading(_ element: AXUIElement, within region: AXUIElement?) -> AXUIElement? { nil }
 
+    /// Where this module's own reader is reading, and when it last moved, when it keeps a position of its own that its
+    /// arrows move (the media reader's pane and item): a linked-item jump starts there if it moved after the review
+    /// cursor. Nil when the review cursor and the focus say it, or when the reader doesn't have the keys.
+    open func readingPosition() -> (element: AXUIElement, movedAt: Date)? { nil }
+
     /// Where the app misreports its focus, the element that really has it.
     open func redirectFocus(_ element: AXUIElement) -> AXUIElement? { nil }
 
