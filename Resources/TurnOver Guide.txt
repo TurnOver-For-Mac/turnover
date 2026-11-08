@@ -2636,18 +2636,18 @@ stand-ins can do nothing but speak.
 
 What plays
 
-  Game: How it speaks | What to install
-  Diablo IV: its own screen reader | nothing: two settings
-  Stardew Valley: Stardew Access | SMAPI and the mod
-  Hades II: Blind Accessibility and HadesIIAccess | the mods and their loader, by hand
-  Fallout 4: Fallout 4 Access | F4SE and four mods
-  Final Fantasy VI Pixel Remaster: FF6 Screen Reader | MelonLoader and the mod
-  Cyberpunk 2077: Cyberpunk Access | the mod and its nine requirements
-  Bits & Bops, Rhythm Doctor, Blind Drive: the games' own speech | nothing
-  Slay the Princess and other Ren'Py games: self-voicing | nothing: press V
-  Periphery Synthetic EP: the game's own text | nothing: a launch option the setup writes
-  Any game using Windows' built-in voice: the game's own speech | nothing
-  Steam itself: Big Picture, read by TurnOver | nothing: one TurnOver setting
+  Game: How it speaks, and what to install
+  Diablo IV: its own screen reader; nothing to install, two settings
+  Stardew Valley: Stardew Access; SMAPI and the mod
+  Hades II: Blind Accessibility and HadesIIAccess; the mods and their loader, by hand
+  Fallout 4: Fallout 4 Access; F4SE and four mods
+  Final Fantasy VI Pixel Remaster: FF6 Screen Reader; MelonLoader and the mod
+  Cyberpunk 2077: Cyberpunk Access; the mod and its nine requirements
+  Bits & Bops, Rhythm Doctor, Blind Drive: the games' own speech; nothing to install
+  Slay the Princess and other Ren'Py games: self-voicing; nothing to install, press V
+  Periphery Synthetic EP: the game's own text; a launch option the setup writes
+  Any game using Windows' built-in voice: the game's own speech; nothing to install
+  Steam itself: Big Picture, read by TurnOver; one TurnOver setting
 
 All of these were played this way in the autumn of 2026. A game not in the list that speaks the way Windows games
 usually do should work too; the last section says how to tell us.
