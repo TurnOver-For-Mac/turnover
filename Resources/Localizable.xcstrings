@@ -257,6 +257,9 @@
         }
       }
     },
+    "%@ can't be opened" : {
+      "comment" : "Spoken message: Return on a sidebar item the app won't open, such as a heading; %@ is the item"
+    },
     "%@ can't quit right now. A window may be waiting for an answer." : {
       "comment" : "Spoken message: Alt F4 when the app's Quit is unavailable; the app's name"
     },
