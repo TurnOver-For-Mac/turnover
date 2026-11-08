@@ -51,6 +51,7 @@ PLUGIN-GUIDE.md says how to write one.
 - **NVDA's** mouse tracking, progress bar beeps, review modes, setting table headers by hand, maths, annotation
   details and magnifier.
 - **VoiceOver's** interactive tutorial, caption and braille panels, and the keypad's last keys.
+- **Steam's Windows games** under CrossOver, in TurnOver's Steam support.
 
 ## Asked for, suited to plugins one day
 
