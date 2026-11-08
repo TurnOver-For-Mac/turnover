@@ -18,7 +18,11 @@ nonisolated package struct SystemSettingsPartRequest: Sendable {
 nonisolated package struct SystemSettingsPartResolution: Sendable {
     package let target: AXUIElement
     package let canFocus: Bool
-    package init(target: AXUIElement, canFocus: Bool) { self.target = target; self.canFocus = canFocus }
+    /// The app's keyboard focus is already inside the part: nothing to write, only the cursor and the name.
+    package let focusInside: Bool
+    package init(target: AXUIElement, canFocus: Bool, focusInside: Bool = false) {
+        self.target = target; self.canFocus = canFocus; self.focusInside = focusInside
+    }
 }
 
 nonisolated package struct SystemSettingsFocusVerification: Sendable {
@@ -33,10 +37,21 @@ nonisolated package protocol SystemSettingsPartResolving: Sendable {
 }
 
 nonisolated package struct SystemSettingsAXParts: SystemSettingsPartResolving {
-    package init() {}
+    /// Where a lookup writes how it went (the log; tests capture it).
+    private let log: @Sendable (String) -> Void
+    /// Tests only: an error the provider returns for an element's children, by attribute; nil asks the provider.
+    private let childrenError: @Sendable (AXUIElement, String) -> AXError?
+    package init(log: @escaping @Sendable (String) -> Void = { Log.info($0) },
+                 childrenError: @escaping @Sendable (AXUIElement, String) -> AXError? = { _, _ in nil }) {
+        self.log = log; self.childrenError = childrenError
+    }
     package func resolve(_ request: SystemSettingsPartRequest, current: @escaping @Sendable () -> Bool) -> SystemSettingsPartResolution? {
-        let lookup = SystemSettingsPartLookup(request, current: current)
-        return lookup.run { lookup.resolve() }
+        let lookup = SystemSettingsPartLookup(request, current: current, log: log, childrenError: childrenError)
+        return lookup.run {
+            guard let found = lookup.resolve() else { return nil }
+            let inside = lookup.verifyFocus(inside: found.target)?.inside == true
+            return .init(target: found.target, canFocus: found.canFocus, focusInside: inside)
+        }
     }
     package func verify(_ request: SystemSettingsPartRequest, target: AXUIElement,
                         current: @escaping @Sendable () -> Bool) -> SystemSettingsFocusVerification? {
@@ -61,18 +76,49 @@ nonisolated package struct SystemSettingsAXParts: SystemSettingsPartResolving {
 nonisolated private final class SystemSettingsPartLookup {
     private struct Info { let role: String; let subrole: String?; let identifier: String? }
     private let request: SystemSettingsPartRequest
-    private let reader: AXNavigationChildren
+    // One reader per split-view branch: a reader that meets a provider error stays stopped, and one branch's error
+    // must not end the others (issue 256: on macOS 27.2 the settings pane's branch answered -25201 and the sidebar
+    // and search, already found, were lost with it, 8 Nov 2026).
+    private var reader: AXNavigationChildren
+    private let limits: AXNavigationChildren.Limits
+    private let current: @Sendable () -> Bool
+    private let childrenError: @Sendable (AXUIElement, String) -> AXError?
+    private var ordinaryChildren = false
+    private var phase = ""
     private var configured: [ObjectIdentifier: AXUIElement] = [:]
     private var metadata: [ElementKey: Info] = [:]
     private let splitIdentifier = "Main, SidebarNavigationSplitView"
     private let sidebarIdentifier = "com.apple.settings.sidebar.collectionView"
     private let terminals: Set<String> = ["AXOutline", "AXTable", "AXList", "AXRow", "AXCell", "AXButton", "AXStaticText",
         "AXTextField", "AXTextArea", "AXComboBox", "AXImage", "AXScrollBar", "AXToolbar", "AXMenu", "AXMenuBar"]
+    // What the walks met, for the log when a part is not found (a found part logs one line, how its split view was found): a report of the commands failing on macOS 27.2 had
+    // nothing to show the window's real tree (issue 256, 8 Nov 2026). Roles and subroles by level; identifiers
+    // only of split groups and outlines, the two the lookup asks for. No names or values.
+    private let log: @Sendable (String) -> Void
+    private var levels: [String] = []
+    private var deepSkipped = 0
+    private var foundLevels: [ElementKey: Int] = [:]
+    private var branchNotes: [String] = []
 
     init(_ request: SystemSettingsPartRequest, current: @escaping @Sendable () -> Bool,
-         limits: AXNavigationChildren.Limits = .init(durationNanoseconds: 500_000_000, queries: 256, nodes: 128, children: 96, depth: 12)) {
+         limits: AXNavigationChildren.Limits = .init(durationNanoseconds: 500_000_000, queries: 256, nodes: 128, children: 96, depth: 12),
+         log: @escaping @Sendable (String) -> Void = { _ in },
+         childrenError: @escaping @Sendable (AXUIElement, String) -> AXError? = { _, _ in nil }) {
         self.request = request
-        reader = AXNavigationChildren(limits: limits, current: current)
+        self.log = log
+        self.limits = limits; self.current = current; self.childrenError = childrenError
+        reader = Self.reader(limits: limits, current: current, childrenError: childrenError)
+    }
+
+    private static func reader(limits: AXNavigationChildren.Limits, current: @escaping @Sendable () -> Bool,
+                               childrenError: @escaping @Sendable (AXUIElement, String) -> AXError?) -> AXNavigationChildren {
+        var source = AXNavigationChildren.Source()
+        let count = source.count
+        source.count = { element, attribute in
+            guard let error = childrenError(element, attribute) else { return count(element, attribute) }
+            return AXQueryResult(value: nil, status: .returned(error), elapsedNanoseconds: 0, wasAttempted: true)
+        }
+        return AXNavigationChildren(limits: limits, current: current, source: source)
     }
 
     func run<T>(_ body: () -> T?) -> T? {
@@ -83,6 +129,7 @@ nonisolated private final class SystemSettingsPartLookup {
         guard reader.check() else { return false }
         let key = ObjectIdentifier(element)
         if configured[key] != nil { return true }
+        phase = "timeout setup"
         guard let result = reader.query({
             let start = DispatchTime.now().uptimeNanoseconds
             let error = AXUIElementSetMessagingTimeout(element, 0.05)
@@ -107,6 +154,7 @@ nonisolated private final class SystemSettingsPartLookup {
         guard prepare(element) else { return nil }
         if let cached = metadata[ElementKey(element)] { return cached }
         guard metadata.count < 128 else { reader.stop(.nodeLimit); return nil }
+        phase = "role"
         var batch: AXAttributeBatchResult?
         _ = reader.query {
             let value = element.attributesResult([kAXRoleAttribute, kAXSubroleAttribute, kAXIdentifierAttribute])
@@ -120,7 +168,15 @@ nonisolated private final class SystemSettingsPartLookup {
     }
 
     private func children(_ element: AXUIElement) -> [AXUIElement] {
-        prepare(element) ? reader.children(of: element) : []
+        guard prepare(element) else { return [] }
+        guard ordinaryChildren else { phase = "navigation-order children"; return reader.children(of: element) }
+        // The other public route, for a branch whose navigation-order children failed: plain AXChildren, bounded.
+        phase = "AXChildren"
+        if let error = childrenError(element, kAXChildrenAttribute) { reader.stop(.query(.returned(error))); return [] }
+        guard let result = reader.query({ element.attributeResult(kAXChildrenAttribute) }), result.status == .returned(.success),
+              let raw = result.value, CFGetTypeID(raw) == CFArrayGetTypeID() else { return [] }
+        guard CFArrayGetCount((raw as! CFArray)) <= 96 else { reader.stop(.childLimit); return [] }
+        return ((raw as? [AnyObject]) ?? []).compactMap { axElement($0) }
     }
 
     private func element(_ attribute: String, of parent: AXUIElement) -> AXUIElement? {
@@ -148,7 +204,7 @@ nonisolated private final class SystemSettingsPartLookup {
         return reader.check() ? window : nil
     }
 
-    private func find(in root: AXUIElement, depth: Int, stopAtScroll: Bool = false,
+    private func find(in root: AXUIElement, depth: Int, stopAtScroll: Bool = false, base: Int = 0,
                       matching: (Info) -> Bool) -> [AXUIElement] {
         struct Pending { let element: AXUIElement; let depth: Int; let ancestors: Set<ElementKey> }
         var stack = [Pending(element: root, depth: 0, ancestors: [])], seen = Set<ElementKey>(), found: [AXUIElement] = []
@@ -157,64 +213,117 @@ nonisolated private final class SystemSettingsPartLookup {
             guard !item.ancestors.contains(key) else { reader.stop(.cycle); return [] }
             guard seen.insert(key).inserted else { continue }
             guard let value = info(item.element) else { return [] }
-            if matching(value) { found.append(item.element); continue }
+            record(value, level: base + item.depth)
+            if matching(value) { found.append(item.element); foundLevels[key] = base + item.depth; continue }
             if terminals.contains(value.role) || (stopAtScroll && value.role == "AXScrollArea") { continue }
+            // A branch deeper than the limit is skipped, not the whole search. The first branch to reach the limit
+            // used to end it, so a split view elsewhere in the window was never found (issue 256).
+            if item.depth >= depth { deepSkipped += 1; continue }
             let next = children(item.element)
-            guard item.depth < depth || next.isEmpty else { reader.stop(.depthLimit); return [] }
             let ancestors = item.ancestors.union([key])
             stack.append(contentsOf: next.reversed().map { Pending(element: $0, depth: item.depth + 1, ancestors: ancestors) })
         }
         return reader.check() ? found : []
     }
 
-    func resolve() -> SystemSettingsPartResolution? {
-        guard let window = currentWindow() else { return nil }
-        let splits = find(in: window, depth: 4) { $0.role == "AXSplitGroup" && $0.identifier == self.splitIdentifier }
-        guard reader.check(), splits.count == 1, let split = splits.first else { return nil }
-        let branches = children(split)
-        var sidebars: [(AXUIElement, AXUIElement)] = [], searches: [(AXUIElement, AXUIElement)] = []
-        var scrolls: [(AXUIElement, AXUIElement)] = []
-        for branch in branches {
-            guard reader.check(), let value = info(branch) else { return nil }
-            if value.role == "AXSplitter" { continue }
-            // Stop at the branch's outer scroller. Searching its entire settings pane for a sidebar would turn
-            // these explicit part commands into a control/content walk and could confuse a pane's own search.
-            let roots = find(in: branch, depth: 4) {
-                $0.role == "AXScrollArea" || ($0.role == "AXOutline" && $0.identifier == self.sidebarIdentifier)
-                    || ($0.role == "AXTextField" && $0.subrole == "AXSearchField")
-            }
-            for root in roots {
-                guard let metadata = info(root) else { return nil }
-                if metadata.role == "AXOutline" { sidebars.append((branch, root)) }
-                else if metadata.role == "AXTextField" { searches.append((branch, root)) }
+    private func record(_ value: Info, level: Int) {
+        guard levels.count < 64 else { return }
+        let identifier = ["AXSplitGroup", "AXOutline"].contains(value.role) ? value.identifier.map { " #\($0)" } ?? " #none" : ""
+        levels.append("\(level) \(value.role)\(value.subrole.map { "/\($0)" } ?? "")\(identifier)")
+    }
+
+    /// Logged once per failed lookup, unless a newer command cancelled it: that is not a failure to find.
+    private func fail(_ step: String) -> SystemSettingsPartResolution? {
+        if reader.stopped != .cancelled {
+            log("System Settings: no \(request.part) (\(step)); stop \(reader.stopped.map { "\($0)" } ?? "none"), deep branches skipped \(deepSkipped)\(branchNotes.isEmpty ? "" : "; " + branchNotes.joined(separator: ", ")); levels: \(levels.joined(separator: "; "))")
+        }
+        return nil
+    }
+
+    private struct Found { var sidebars: [(AXUIElement, AXUIElement)] = [], searches: [(AXUIElement, AXUIElement)] = [], scrolls: [(AXUIElement, AXUIElement)] = [] }
+
+    /// One branch's sidebar, search field and scroll areas, or nil when its reader stopped.
+    private func parts(of branch: AXUIElement, level: Int) -> Found? {
+        var found = Found()
+        // Stop at the branch's outer scroller. Searching its entire settings pane for a sidebar would turn
+        // these explicit part commands into a control/content walk and could confuse a pane's own search.
+        let roots = find(in: branch, depth: 4, base: level) {
+            $0.role == "AXScrollArea" || ($0.role == "AXOutline" && $0.identifier == self.sidebarIdentifier)
+                || ($0.role == "AXTextField" && $0.subrole == "AXSearchField")
+        }
+        for root in roots {
+            guard let metadata = info(root) else { return nil }
+            if metadata.role == "AXOutline" { found.sidebars.append((branch, root)) }
+            else if metadata.role == "AXTextField" { found.searches.append((branch, root)) }
+            else {
+                let contents = children(root)
+                let outlines = contents.filter {
+                    guard let value = info($0) else { return false }
+                    return value.role == "AXOutline" && value.identifier == sidebarIdentifier
+                }
+                for outline in outlines { found.sidebars.append((branch, outline)) }
+                if outlines.isEmpty { found.scrolls.append((branch, root)) }
                 else {
-                    let contents = children(root)
-                    let outlines = contents.filter {
-                        guard let value = info($0) else { return false }
-                        return value.role == "AXOutline" && value.identifier == sidebarIdentifier
-                    }
-                    for outline in outlines { sidebars.append((branch, outline)) }
-                    if outlines.isEmpty { scrolls.append((branch, root)) }
-                    else {
-                        for field in contents {
-                            guard let value = info(field) else { return nil }
-                            if value.role == "AXTextField", value.subrole == "AXSearchField" { searches.append((branch, field)) }
-                        }
+                    for field in contents {
+                        guard let value = info(field) else { return nil }
+                        if value.role == "AXTextField", value.subrole == "AXSearchField" { found.searches.append((branch, field)) }
                     }
                 }
             }
         }
-        guard reader.check() else { return nil }
+        return reader.check() ? found : nil
+    }
+
+    func resolve() -> SystemSettingsPartResolution? {
+        guard let window = currentWindow() else { return nil }
+        // The split view by its identifier when it has one; otherwise the window's only split group, should a macOS
+        // update rename it (issue 256). Two split groups and no identifier stay ambiguous: nothing is guessed.
+        let splits = find(in: window, depth: 4) { $0.role == "AXSplitGroup" }
+        guard reader.check() else { return fail("split view") }
+        let named = splits.filter { metadata[ElementKey($0)]?.identifier == splitIdentifier }
+        guard let split = named.count == 1 ? named[0] : (named.isEmpty && splits.count == 1 ? splits[0] : nil) else {
+            return fail("split view: \(splits.count) split groups, \(named.count) with its identifier")
+        }
+        let splitLevel = foundLevels[ElementKey(split)] ?? 0, branchLevel = splitLevel + 1
+        let route = named.count == 1 ? "by its identifier" : "as the only split group"
+        let branches = children(split)
+        var sidebars: [(AXUIElement, AXUIElement)] = [], searches: [(AXUIElement, AXUIElement)] = []
+        var scrolls: [(AXUIElement, AXUIElement)] = []
+        let main = reader
+        for (index, branch) in branches.enumerated() {
+            guard reader.check(), let value = info(branch) else { return fail("split view's branches") }
+            if value.role == "AXSplitter" { continue }
+            // The branch with its own reader: navigation-order children first, then plain AXChildren. A provider
+            // error skips the branch, and only the branch; a cancel, deadline or limit still ends the lookup.
+            var found: Found?
+            for ordinary in [false, true] where found == nil {
+                reader = Self.reader(limits: limits, current: current, childrenError: childrenError)
+                ordinaryChildren = ordinary
+                let attempt = parts(of: branch, level: branchLevel)
+                let stop = reader.stopped, at = phase
+                reader = main; ordinaryChildren = false
+                guard case .query(let status)? = stop else {
+                    guard stop == nil, let attempt else { return fail("split view's branches") }
+                    found = attempt
+                    if ordinary { branchNotes.append("branch \(index + 1): AXChildren worked") }
+                    break
+                }
+                branchNotes.append("branch \(index + 1): \(ordinary ? "AXChildren" : "navigation-order") error \(status) at \(at)")
+            }
+            guard let found else { branchNotes.append("branch \(index + 1) skipped"); continue }
+            sidebars += found.sidebars; searches += found.searches; scrolls += found.scrolls
+        }
+        guard reader.check() else { return fail("split view's branches") }
         let target: AXUIElement
         switch request.part {
         case .sidebar:
-            guard sidebars.count == 1 else { return nil }; target = sidebars[0].1
+            guard sidebars.count == 1 else { return fail("\(sidebars.count) sidebars") }; target = sidebars[0].1
         case .search:
-            guard searches.count == 1 else { return nil }; target = searches[0].1
+            guard searches.count == 1 else { return fail("\(searches.count) search fields") }; target = searches[0].1
         case .pane:
-            guard sidebars.count == 1, searches.count == 1 else { return nil }
+            guard sidebars.count == 1, searches.count == 1 else { return fail("\(sidebars.count) sidebars, \(searches.count) search fields") }
             let panes = scrolls.filter { !CFEqual($0.0, sidebars[0].0) && !CFEqual($0.0, searches[0].0) }.map(\.1)
-            guard reader.check(), panes.count == 1 else { return nil }; target = panes[0]
+            guard reader.check(), panes.count == 1 else { return fail("\(panes.count) pane scroll areas") }; target = panes[0]
         }
         guard prepare(target), AXHealth.backoff(for: request.pid) == nil else { return nil }
         let focus = reader.query {
@@ -225,6 +334,8 @@ nonisolated private final class SystemSettingsPartLookup {
                                  elapsedNanoseconds: DispatchTime.now().uptimeNanoseconds &- start, wasAttempted: true)
         }
         guard let focus, focus.status == .returned(.success), reader.check(), currentWindow() != nil else { return nil }
+        // Which way the split view was found, so a report shows whether the identifier still holds (issue 256).
+        log("System Settings: \(request.part) found; split view \(route), level \(splitLevel)\(branchNotes.isEmpty ? "" : "; " + branchNotes.joined(separator: ", "))")
         return .init(target: target, canFocus: focus.value == true)
     }
 
