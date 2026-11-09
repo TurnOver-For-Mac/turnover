@@ -7417,6 +7417,9 @@
         }
       }
     },
+    "Deleted text" : {
+
+    },
     "Deletes the character after the caret and reads the next" : {
       "comment" : "A command, as the key list and keyboard help say it",
       "localizations" : {
@@ -12039,6 +12042,9 @@
           }
         }
       }
+    },
+    "Lower the pitch for deleted text, instead of saying deleted" : {
+
     },
     "Lowers the speech setting (NVDA+Shift+Control+Down Arrow)" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -20655,6 +20661,9 @@
           }
         }
       }
+    },
+    "Say space after a typed word" : {
+
     },
     "Say which plugin an app has as it comes to the front" : {
       "localizations" : {

@@ -351,6 +351,11 @@ struct SpeechView: View {
                     .accessibilityValue(model.number("speech", "capitalPitch").wrappedValue == 0 ? String(localized: "off", comment: "A setting that is off")
                         : String(localized: "\(Int(model.number("speech", "capitalPitch").wrappedValue)) percent", comment: "A slider's value"))
             }
+            Section("Deleted text") {
+                Slider(value: model.number("speech", "deletedPitch"), in: 0...50, step: 10) { Text("Lower the pitch for deleted text, instead of saying deleted") }
+                    .accessibilityValue(model.number("speech", "deletedPitch").wrappedValue == 0 ? String(localized: "off", comment: "A setting that is off")
+                        : String(localized: "\(Int(model.number("speech", "deletedPitch").wrappedValue)) percent", comment: "A slider's value"))
+            }
             // The speech rotor's own short list (18 Oct 2026): none ticked, every voice.
             // Folded until opened: a picker per language is the costliest part of the pane to draw (23 Oct 2026).
             Toggle("Show voices for other languages", isOn: $showLanguages).accessibilityLabel("Show voices for other languages")
@@ -480,6 +485,7 @@ struct KeyboardView: View {
                 Picker("Words", selection: model.int("keyboard", "speakTypedWords")) {
                     Text("Off").tag(0); Text("In edit fields").tag(1); Text("Always").tag(2)
                 }
+                Toggle("Say space after a typed word", isOn: model.bool("keyboard", "speakSpaceAfterWord"))
                 Toggle("New line on Return", isOn: model.bool("keyboard", "speakNewLine"))
                 Toggle("Command keys, as you press them", isOn: model.bool("keyboard", "speakCommandKeys"))
             }

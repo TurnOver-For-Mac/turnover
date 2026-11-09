@@ -164,6 +164,9 @@ public struct Config: Codable {
         /// NVDA's "capital pitch change": a capital letter said on its own (spelling, moving by character, typing) is
         /// raised by this percentage; 0 is off (a tester, 10 Oct 2026). Works with or without "cap".
         public var capitalPitch = 0
+        /// VoiceOver's pitch change for deleted text: 0 says "deleted" before a deleted word; above 0, the deleted
+        /// text is said that many percent lower instead, with no "deleted".
+        public var deletedPitch = 0
         /// The voice's pitch on VoiceOver's scale, 0 to 1 with 0.5 the voice's own (copied from VoiceOver, 15 Oct 2026).
         public var pitch: Float = 0.5
         /// The pitch as the player's multiplier: 0 is half, 0.5 is 1, 1 is double.
@@ -192,7 +195,7 @@ public struct Config: Codable {
         }
         public init() {}
         // Each field falls back to its default, so a setting added later never resets the voice and rate.
-        enum Keys: String, CodingKey { case voice, rate, symbolLevel, sayCapForCapitals, volume, autoLanguageSwitching, languageVoices, languageRates, outputDevice, capitalPitch, ducking, pitch, rotorVoices, bass, middle, treble, voiceTunings }
+        enum Keys: String, CodingKey { case voice, rate, symbolLevel, sayCapForCapitals, volume, autoLanguageSwitching, languageVoices, languageRates, outputDevice, capitalPitch, deletedPitch, ducking, pitch, rotorVoices, bass, middle, treble, voiceTunings }
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: Keys.self)
             voice = (try? c.decodeIfPresent(String.self, forKey: .voice)) ?? voice
@@ -205,6 +208,7 @@ public struct Config: Codable {
             languageRates = (try? c.decodeIfPresent([String: Float].self, forKey: .languageRates)) ?? languageRates
             outputDevice = (try? c.decodeIfPresent(String.self, forKey: .outputDevice)) ?? outputDevice
             capitalPitch = (try? c.decodeIfPresent(Int.self, forKey: .capitalPitch)) ?? capitalPitch
+            deletedPitch = (try? c.decodeIfPresent(Int.self, forKey: .deletedPitch)) ?? deletedPitch
             pitch = (try? c.decodeIfPresent(Float.self, forKey: .pitch)) ?? pitch
             ducking = (try? c.decodeIfPresent(String.self, forKey: .ducking)) ?? ducking
             rotorVoices = (try? c.decodeIfPresent([String].self, forKey: .rotorVoices)) ?? rotorVoices
@@ -219,7 +223,7 @@ public struct Config: Codable {
             try c.encode(sayCapForCapitals, forKey: .sayCapForCapitals); try c.encode(volume, forKey: .volume)
             try c.encode(autoLanguageSwitching, forKey: .autoLanguageSwitching); try c.encode(languageVoices, forKey: .languageVoices)
             try c.encode(languageRates, forKey: .languageRates); try c.encode(outputDevice, forKey: .outputDevice)
-            try c.encode(capitalPitch, forKey: .capitalPitch); try c.encode(ducking, forKey: .ducking); try c.encode(pitch, forKey: .pitch)
+            try c.encode(capitalPitch, forKey: .capitalPitch); try c.encode(deletedPitch, forKey: .deletedPitch); try c.encode(ducking, forKey: .ducking); try c.encode(pitch, forKey: .pitch)
             try c.encode(rotorVoices, forKey: .rotorVoices)
             try c.encode(bass, forKey: .bass); try c.encode(middle, forKey: .middle); try c.encode(treble, forKey: .treble)
             try c.encode(voiceTunings, forKey: .voiceTunings)
@@ -231,6 +235,9 @@ public struct Config: Codable {
         public var speakTypedCharacters: TypingEcho = .editControls
         public var speakTypedWords: TypingEcho = .off
         public var speakCommandKeys = false
+        /// "space" said after the typed word it ended (the word is said as the space is typed, so the space is
+        /// heard twice). Off, as VoiceOver; a space typed on its own is still said.
+        public var speakSpaceAfterWord = true
         /// NVDA's multiPressTimeout: the same script again within this window is a repeat.
         public var multiPressTimeoutMs = 500
         /// NVDA's keyboard layout: "desktop" or "laptop". Macs are laptops.
@@ -247,13 +254,14 @@ public struct Config: Codable {
         public init() {}
         /// The user's own keys (UserGestures): key identifier → "script:<name>", "app:<bundle id>" or "none".
         public var userGestures: [String: String] = [:]
-        enum Keys: String, CodingKey { case speakTypedCharacters, speakTypedWords, speakCommandKeys, multiPressTimeoutMs, layout, speakNewLine, userGestures, optionCommander, numpadCommander, keypadCommands }
+        enum Keys: String, CodingKey { case speakTypedCharacters, speakTypedWords, speakCommandKeys, speakSpaceAfterWord, multiPressTimeoutMs, layout, speakNewLine, userGestures, optionCommander, numpadCommander, keypadCommands }
         // Each setting falls back on its own, so adding one never resets the others.
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: Keys.self)
             speakTypedCharacters = (try? c.decodeIfPresent(TypingEcho.self, forKey: .speakTypedCharacters)) ?? .editControls
             speakTypedWords = (try? c.decodeIfPresent(TypingEcho.self, forKey: .speakTypedWords)) ?? .off
             speakCommandKeys = (try? c.decodeIfPresent(Bool.self, forKey: .speakCommandKeys)) ?? false
+            speakSpaceAfterWord = (try? c.decodeIfPresent(Bool.self, forKey: .speakSpaceAfterWord)) ?? true
             multiPressTimeoutMs = (try? c.decodeIfPresent(Int.self, forKey: .multiPressTimeoutMs)) ?? 500
             layout = (try? c.decodeIfPresent(String.self, forKey: .layout)) ?? "laptop"
             speakNewLine = (try? c.decodeIfPresent(Bool.self, forKey: .speakNewLine)) ?? true
@@ -270,7 +278,7 @@ public struct Config: Codable {
         public func encode(to encoder: Encoder) throws {
             var c = encoder.container(keyedBy: Keys.self)
             try c.encode(speakTypedCharacters, forKey: .speakTypedCharacters); try c.encode(speakTypedWords, forKey: .speakTypedWords)
-            try c.encode(speakCommandKeys, forKey: .speakCommandKeys); try c.encode(multiPressTimeoutMs, forKey: .multiPressTimeoutMs)
+            try c.encode(speakCommandKeys, forKey: .speakCommandKeys); try c.encode(speakSpaceAfterWord, forKey: .speakSpaceAfterWord); try c.encode(multiPressTimeoutMs, forKey: .multiPressTimeoutMs)
             try c.encode(layout, forKey: .layout); try c.encode(speakNewLine, forKey: .speakNewLine)
             try c.encode(userGestures, forKey: .userGestures); try c.encode(optionCommander, forKey: .optionCommander)
             try c.encode(numpadCommander, forKey: .numpadCommander); try c.encode(keypadCommands, forKey: .keypadCommands)

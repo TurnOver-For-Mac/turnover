@@ -160,6 +160,13 @@ public enum Speech {
         player.speak(s, interrupt: false, voice: kokoro ?? voice, rate: voice == nil ? nil : Languages.rate(for: language), pitch: pitch, onStart: onStart, completion: completion)
     }
     private static var pitchNext: Float?
+    /// Deleted text is said lower, not announced ("deleted"): VoiceOver's pitch change for deletions.
+    public static var deletionByPitch: Bool { config.speech.deletedPitch > 0 }
+    /// Lowers the pitch of the next thing said, when the deletion is marked by pitch.
+    public static func lowerForDeletion() {
+        guard deletionByPitch else { return }
+        pitchNext = max(0.5, 1 - Float(config.speech.deletedPitch) / 100)
+    }
     /// Set by say all while it queues its text: Kokoro's "for reading" takes it.
     public static var readingNow = false
     /// The next utterance is private (the clipboard, a link's address, a notification: a copied password, a reset
@@ -661,6 +668,7 @@ public enum Speech {
 
     public static func speakTypedCharacter(_ ch: Character, inEditable editable: Bool, wordBefore: (() -> String?)? = nil) {
         if typingIntoSecretField { typedWord.removeAll(); backspacedSinceWord = false; return }
+        var wordEchoed = false
         if ch.isLetter || ch.isNumber || ch == "'" || ch == "’" {
             typedWord.append(ch)
         } else if ch == "\u{8}" {
@@ -675,6 +683,7 @@ public enum Speech {
             lastTypedWordSpoken = nil
             let mode = config.keyboard.speakTypedWords
             if mode == .always || (mode == .editControls && editable) {
+                wordEchoed = true
                 lastTypedWordSpoken = word
                 // The word and the character that ended it in one breath ("fast period"): the next key cuts speech
                 // short, and two separate echoes lost the second.
@@ -687,6 +696,8 @@ public enum Speech {
         }
         let mode = config.keyboard.speakTypedCharacters
         guard ch >= " " else { return }
+        // The word just said already marked the space.
+        if ch == " ", wordEchoed, !config.keyboard.speakSpaceAfterWord { return }
         if mode == .always || (mode == .editControls && editable) { echo(Symbols.name(of: ch, locale: Symbols.typingLocale)); return }
         // Typed words only: a symbol is never part of a word, so it would never be heard. Say it as it is typed
         // (` grave, § section, / slash), as a word is said when it ends.

@@ -4,6 +4,13 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ## 2.0, build 24.1
 
+### New to try
+
+- Deleted text by pitch: Settings, Speech, "Lower the pitch for deleted text, instead of saying deleted" says a
+  deleted character or word lower, as VoiceOver does, without the word "deleted". Off by default.
+- Typing: Settings, Keyboard, "Say space after a typed word" (on by default) turns off the "space" that followed a
+  word already said as the space was typed. A space typed on its own is still said.
+
 ### Fixed
 
 - "Nothing in this window can be read", with the keys for screen recognition, is a hint now: turning off Hints after
