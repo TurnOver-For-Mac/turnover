@@ -31,10 +31,27 @@ public enum EmptyWindowNotice {
 
     nonisolated enum Look: Equatable { case readable(String), empty, inconclusive }
 
+    /// Whether the notice may be said in this app at all. It tells you which keys to press, so it is a hint, and
+    /// turning off Hints after a pause turns it off too (Oliver, 9 Nov 2026: "it's a tool tip and I think I have
+    /// mine off"). And not in Steam while TurnOver reads Big Picture: Big Picture's window has nothing for
+    /// accessibility, but the Steam program reads its pages, so "nothing in this window can be read" came over
+    /// Steam's own words ("it still read in Steam even though it is technically reading from there"). Each of the 26
+    /// notices in Steam in Oliver's logs, 27 Oct to 9 Nov 2026, came with Big Picture being read. With Big Picture
+    /// reading off, TurnOver can't read that window, so the notice stays.
+    static func wanted(pid: pid_t) -> Bool {
+        wanted(bundle: NSRunningApplication(processIdentifier: pid)?.bundleIdentifier)
+    }
+
+    package static func wanted(bundle: String?) -> Bool {
+        guard config.presentation.speakHints else { return false }
+        let steam = bundle == Games.steamBundle || bundle == Games.steamHelperBundle
+        return !(steam && config.games.readBigPicture)
+    }
+
     /// Called as a window comes to the front; looks a moment later, and again a second on, and says so if nothing
     /// readable is in it both times.
     public static func check(_ window: AXUIElement, pid: pid_t) {
-        guard !told.contains(where: { $0.isSame(window) }), !pending.contains(where: { $0.isSame(window) }) else { return }
+        guard wanted(pid: pid), !told.contains(where: { $0.isSame(window) }), !pending.contains(where: { $0.isSame(window) }) else { return }
         pending.append(window)
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 0.8) {
             let first = look(window)
@@ -55,7 +72,7 @@ public enum EmptyWindowNotice {
     /// had no window, so no notice either (Oliver, 2 Nov 2026). Said once for the app, as for an empty window. Not for
     /// an app still starting (a splash screen comes before the real window), and asked once more just before.
     public static func checkNoWindow(pid: pid_t) {
-        guard !toldApps.contains(pid), let app = NSRunningApplication(processIdentifier: pid), NSWorkspace.shared.frontmostApplication == app,
+        guard wanted(pid: pid), !toldApps.contains(pid), let app = NSRunningApplication(processIdentifier: pid), NSWorkspace.shared.frontmostApplication == app,
               app.launchDate.map({ Date().timeIntervalSince($0) > 15 }) ?? true, InputManager.directPid != pid, !InputManager.isAsleep(pid),
               ScreenRecognition.shownWindowFrame(pid: pid) != nil else { return }
         let ax = AXUIElementCreateApplication(pid)
@@ -109,8 +126,9 @@ public enum EmptyWindowNotice {
     private static func say(for window: AXUIElement, pid: pid_t) {
         forget(window)
         guard !told.contains(where: { $0.isSame(window) }) else { return }
-        // Still the window in front of the app in front, no sheet or dialog over it, and not a direct app.
-        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
+        // Still wanted (hints may have gone off in the two seconds), still the window in front of the app in front, no
+        // sheet or dialog over it, and not a direct app.
+        guard wanted(pid: pid), NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
               let front = AXUIElementCreateApplication(pid).element(kAXFocusedWindowAttribute), front.isSame(window),
               !AXHandler.modalInFront(pid: pid), InputManager.directPid != pid else { return }
         told.append(window); if told.count > 12 { told.removeFirst() }

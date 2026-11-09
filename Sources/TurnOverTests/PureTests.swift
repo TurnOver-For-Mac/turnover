@@ -1445,6 +1445,20 @@ func browseTextNavTests() {
         let old = try JSONDecoder().decode(Config.Games.self, from: Data(#"{"readBigPicture": true}"#.utf8))
         expect(old.readBigPicture, false, "an 'on' saved before it was a choice doesn't count")
     }
+    test("nothing in this window can be read: a hint, so off with hints, and never in Steam while Big Picture is read") {
+        let (hints, bigPicture) = (config.presentation.speakHints, config.games.readBigPicture)
+        defer { config.presentation.speakHints = hints; config.games.readBigPicture = bigPicture }
+        config.presentation.speakHints = true; config.games.readBigPicture = true
+        expect(EmptyWindowNotice.wanted(bundle: "com.parallels.desktop.appstore"), true, "an app that tells the Mac nothing: said")
+        expect(EmptyWindowNotice.wanted(bundle: nil), true, "a Wine program, which has no bundle: said")
+        expect(EmptyWindowNotice.wanted(bundle: Games.steamHelperBundle), false, "Big Picture, read by the Steam program: not said")
+        expect(EmptyWindowNotice.wanted(bundle: Games.steamBundle), false, "Steam itself: not said")
+        config.games.readBigPicture = false
+        expect(EmptyWindowNotice.wanted(bundle: Games.steamHelperBundle), true, "Big Picture not being read: said, so screen recognition is offered")
+        config.presentation.speakHints = false
+        expect(EmptyWindowNotice.wanted(bundle: "com.parallels.desktop.appstore"), false, "Hints after a pause off: not said (Oliver, 9 Nov 2026)")
+        expect(EmptyWindowNotice.wanted(bundle: Games.steamHelperBundle), false, "Hints after a pause off: not said in Steam either")
+    }
     test("keyboard styles: a style's table is read and normalised") {
         let t = StyleKeymap.parse(Data(#"{"style": "jaws", "keys": {"kb:NVDA+F6": "elementsList", "kb:turnover+downArrow": "sayAll", "kb:x": ""}}"#.utf8))
         expect(t[normalizeGestureIdentifier("kb:turnover+f6")], "elementsList", "NVDA+ written keys become the TurnOver key")
