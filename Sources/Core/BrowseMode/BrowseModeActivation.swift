@@ -304,11 +304,11 @@ extension BrowseModeDocument {
     }
 
     /// Read the page again (NVDA's buffer follows the page as it changes) and stay at the same place: on `anchor` if
-    /// given, otherwise on the same line's text nearest where it was.
-    func rebuildKeepingPlace(anchor: AXUIElement? = nil) {
+    /// given, otherwise on the same line's text nearest where it was. The read is done by `deadline` at the latest.
+    func rebuildKeepingPlace(anchor: AXUIElement? = nil, until deadline: Date = .distantFuture) {
         let oldLine = lineText(at: position).trimmingCharacters(in: .whitespacesAndNewlines)
         let oldPosition = position
-        buffer.build()
+        buffer.build(until: deadline)
         let n = buffer.text.length
         if let a = anchor, let o = buffer.offset(of: a) { position = o; return }
         if !oldLine.isEmpty {

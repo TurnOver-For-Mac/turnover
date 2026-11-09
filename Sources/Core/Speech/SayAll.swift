@@ -110,8 +110,28 @@ public enum SayAll {
         if buffered < maxBuffered { DispatchQueue.main.async { nextLine(gen) } }
     }
 
+    /// The say all whose read on of a long page waits for its next turn: the one that goes on with it, so other calls
+    /// at the end (the last chunks starting) don't each read for two seconds as well.
+    private static var readOnWaiting: Int?
+
     private static func finish(_ gen: Int) {
         guard gen == generation else { return }
+        // The end of the part of a long page read so far (a long chat, issue 227): read on and carry on, pass after
+        // pass while they find no text, for up to two seconds, then again after letting keys through; and an unchanged
+        // page with more after its end since has that added. The copy grows at its end, so the place reached stays.
+        if let buffer = (reader?.obj as? WebArea)?.document?.buffer, buffer.canReadOn, buffer.isPartial || !buffer.isDirty {
+            guard readOnWaiting != gen else { return }
+            let until = Date().addingTimeInterval(2)
+            repeat {
+                if buffer.buildMore(until: until) { Log.io("say all: the page read on"); nextLine(gen); return }
+            } while buffer.isPartial && buffer.canReadOn && Date() < until
+            if buffer.isPartial, buffer.canReadOn {
+                readOnWaiting = gen
+                Log.io("say all: no text yet where the page is read on; on again in a moment")
+                DispatchQueue.main.async { if readOnWaiting == gen { readOnWaiting = nil }; finish(gen) }
+                return
+            }
+        }
         // The app may go on (Kindle's next page): reader is kept, so a key still stops say all while it turns.
         if buffered == 0, let obj = reader?.obj,
            AppModuleHandler.shared.appModule(for: obj.pid).sayAllReachedEnd(obj, resume: { info in
