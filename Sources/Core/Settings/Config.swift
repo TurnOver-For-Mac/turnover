@@ -503,8 +503,11 @@ public struct Config: Codable {
         /// What is under the mouse pointer read as the pointer moves, and the cursor taken there (VoiceOver's cursor
         /// following the mouse pointer; NVDA+M). Off until asked for: a nudged mouse would otherwise start speech.
         public var mouseTracking = false
+        /// With mouse tracking, whether the review cursor goes to what the pointer is over (NVDA's review cursor
+        /// follows the mouse). The keyboard focus never does.
+        public var mouseMovesCursor = true
         public init() {}
-        enum Keys: String, CodingKey { case verbosity, verbosityByApp, reportObjectDescriptions, reportKeyboardShortcuts, reportObjectPositionInformation, reportDynamicContentChanges, speakHints, reportNotifications, announcePlugins, progressBars, mouseTracking }
+        enum Keys: String, CodingKey { case verbosity, verbosityByApp, reportObjectDescriptions, reportKeyboardShortcuts, reportObjectPositionInformation, reportDynamicContentChanges, speakHints, reportNotifications, announcePlugins, progressBars, mouseTracking, mouseMovesCursor }
         // Each setting falls back on its own: a settings file from before speakHints keeps the others.
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: Keys.self)
@@ -522,6 +525,7 @@ public struct Config: Codable {
             announcePlugins = (try? c.decodeIfPresent(Bool.self, forKey: .announcePlugins)) ?? true
             progressBars = (try? c.decodeIfPresent(String.self, forKey: .progressBars)).flatMap { ProgressOutput.modes.contains($0) ? $0 : nil } ?? "beep"
             mouseTracking = (try? c.decodeIfPresent(Bool.self, forKey: .mouseTracking)) ?? false
+            mouseMovesCursor = (try? c.decodeIfPresent(Bool.self, forKey: .mouseMovesCursor)) ?? true
         }
         public func encode(to encoder: Encoder) throws {
             var c = encoder.container(keyedBy: Keys.self)
@@ -530,7 +534,7 @@ public struct Config: Codable {
             try c.encode(reportObjectPositionInformation, forKey: .reportObjectPositionInformation); try c.encode(reportDynamicContentChanges, forKey: .reportDynamicContentChanges)
             try c.encode(speakHints, forKey: .speakHints); try c.encode(reportNotifications, forKey: .reportNotifications)
             try c.encode(announcePlugins, forKey: .announcePlugins); try c.encode(progressBars, forKey: .progressBars)
-            try c.encode(mouseTracking, forKey: .mouseTracking)
+            try c.encode(mouseTracking, forKey: .mouseTracking); try c.encode(mouseMovesCursor, forKey: .mouseMovesCursor)
         }
     }
     public struct DocumentFormatting: Codable {

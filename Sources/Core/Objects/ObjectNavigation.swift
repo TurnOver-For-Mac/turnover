@@ -1331,6 +1331,19 @@ public final class ObjectNavigator {
     /// Puts the review cursor on an element and reads it (VoiceOver's moves to a place: the desktop, a scroll bar).
     public func moveTo(_ e: AXUIElement) { land(on: e) }
 
+    /// What the mouse pointer is over, said. The keyboard focus never follows (a sweep of the pointer across a window
+    /// must not move where typing goes); the review cursor goes there only when asked. What is said is private: text on
+    /// the screen (a message) is not kept in the speech history, and goes only to a voice that may hear it.
+    public func hover(_ e: AXUIElement, movingCursor: Bool) {
+        if movingCursor {
+            landedByStep = false
+            current = e
+            currentPid = e.pid
+            labelSource = ProfileStore.shared.labelDetail(for: e, pid: e.pid)?.source
+        }
+        Speech.asPrivate { report(e) }
+    }
+
     /// Puts the review cursor on an element without a word: what already said it (a dialog's Tab) keeps the two
     /// cursors together, so VO-Space presses what Tab reached.
     public func place(_ e: AXUIElement) {

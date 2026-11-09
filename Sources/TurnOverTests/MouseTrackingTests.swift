@@ -14,17 +14,19 @@ func mouseTrackingTests() {
 
     test("mouse tracking: an item is said once, however many looks find it") {
         var t = PointerTracker<String>()
-        expect(t.answer("Save"), true)
-        expect(t.answer("Save"), false, "still over the same button")
-        expect(t.answer("Cancel"), true, "a new one")
-        expect(t.answer("Save"), true, "back to the first is a change")
+        expect(t.answer("Save"), .say)
+        expect(t.answer("Save"), .nothing, "still over the same button")
+        expect(t.answer("Cancel"), .say, "a new one")
+        expect(t.answer("Save"), .say, "back to the first is a change")
     }
 
-    test("mouse tracking: a blank place says nothing, and coming back to the item says it again") {
+    test("mouse tracking: a blank place is the empty sound once, and coming back to the item says it again") {
         var t = PointerTracker<String>()
-        expect(t.answer("Save"), true)
-        expect(t.answer(nil), false, "nothing under the pointer")
-        expect(t.answer("Save"), true, "the same button after a gap is heard again, as VoiceOver does")
+        expect(t.answer(nil), .nothing, "blank from the start has nothing to leave")
+        expect(t.answer("Save"), .say)
+        expect(t.answer(nil), .blank, "leaving the item for blank space")
+        expect(t.answer(nil), .nothing, "still blank: the sound is not repeated")
+        expect(t.answer("Save"), .say, "the same button after a gap is heard again, as VoiceOver does")
     }
 
     test("mouse tracking: a reset forgets where the pointer was and what was said") {
@@ -33,7 +35,7 @@ func mouseTrackingTests() {
         _ = t.answer("Save")
         t.reset()
         expect(t.worthLooking(at: CGPoint(x: 5, y: 5)), true)
-        expect(t.answer("Save"), true, "turned on again, the item under the pointer is said")
+        expect(t.answer("Save"), .say, "turned on again, the item under the pointer is said")
     }
 
     test("mouse tracking: off unless asked for, and kept in the file once set") {
@@ -44,5 +46,10 @@ func mouseTrackingTests() {
         expect(back?.presentation.mouseTracking, true)
         let old = try? JSONDecoder().decode(Config.self, from: Data("{\"presentation\":{\"verbosity\":\"medium\"}}".utf8))
         expect(old?.presentation.mouseTracking, false, "a file from before the setting existed")
+        expect(Config().presentation.mouseMovesCursor, true, "the cursor follows unless that is turned off")
+        c.presentation.mouseMovesCursor = false
+        let kept = try? JSONDecoder().decode(Config.self, from: JSONEncoder().encode(c))
+        expect(kept?.presentation.mouseMovesCursor, false)
+        expect(old?.presentation.mouseMovesCursor, true, "a file from before the setting existed")
     }
 }

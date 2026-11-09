@@ -69,9 +69,12 @@ Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
 ### New to try
 
 - Mouse tracking: Settings, Presentation, "Read what is under the mouse pointer as it moves" (or NVDA+M in the Windows
-  keyboard style) reads each item the pointer crosses and takes the cursor there, as VoiceOver's cursor following the
-  mouse pointer does. A blank place is silent, and coming back to an item reads it again. It watches the pointer only
-  while TurnOver is the reader, and it waits while Say All or the trackpad's explore is reading. Off by default.
+  keyboard style) reads each item the pointer crosses, as VoiceOver's cursor following the mouse pointer does. The
+  keyboard focus never moves with the pointer. "Mouse pointer moves the review cursor" (on by default) also takes the
+  cursor to the item, as NVDA's review cursor follows the mouse. A blank place (a window's background, a group with no
+  name) makes the empty space sound the trackpad's explore makes, once, and coming back to an item reads it again.
+  What it says is private: it is not kept in the speech history or the log. It watches the pointer only while
+  TurnOver is the reader, and it waits while Say All or the trackpad's explore is reading. Off by default.
 - Searching in the App Store, Music and Podcasts: Return in the search field reads the results as a plain list, from
   Apple's public catalog, and Return on one opens its page. The App Store's own results page couldn't be read reliably
   on macOS 27.2. When the catalog can't answer, the page is read instead. TV keeps its own page, as Apple TV+ isn't in

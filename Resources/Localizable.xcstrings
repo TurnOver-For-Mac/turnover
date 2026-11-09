@@ -12574,6 +12574,12 @@
         }
       }
     },
+    "Mouse moves the cursor" : {
+
+    },
+    "Mouse pointer moves the review cursor" : {
+
+    },
     "Mouse tracking" : {
 
     },
@@ -18731,7 +18737,7 @@
         }
       }
     },
-    "Reads what is under the mouse pointer as it moves, and takes the cursor there" : {
+    "Reads what is under the mouse pointer as it moves" : {
 
     },
     "Rebuilds the page's browse mode view (NVDA+F5)" : {
@@ -28826,6 +28832,9 @@
           }
         }
       }
+    },
+    "With mouse tracking, the review cursor goes to what the pointer is over; the keyboard focus never does" : {
+
     },
     "With no conversation open: into the conversations (or the sections, from one of them)" : {
       "comment" : "A command, as the key list and keyboard help say it",
