@@ -2,6 +2,13 @@
 
 The newest build is first. "Reported by a tester" marks a fix for something a tester sent in. Thank you.
 
+## 2.0, build 24.1
+
+### Fixed
+
+- "Nothing in this window can be read", with the keys for screen recognition, is a hint now: turning off Hints after
+  a pause turns it off too. It is no longer said in Steam's Big Picture while TurnOver is reading it.
+
 ## 2.0, build 24
 
 ### New to try
