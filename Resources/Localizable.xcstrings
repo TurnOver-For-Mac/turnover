@@ -44265,6 +44265,43 @@
           }
         }
       }
+    },
+    "Fix an item yourself: Fix the item I'm on, in Help improve this app, gives it a name or a key. With VoiceOver keys, VO-Slash does the same. Share your fix, and everyone who uses that app gets it." : {
+      "comment" : "Help make TurnOver: fixing an item"
+    },
+    "Help make TurnOver" : {
+      "comment" : "The title of the page about the ways to help TurnOver (a welcome page, and an item in the TurnOver menu's Help)"
+    },
+    "If you've found Discord hard going, it reads better with TurnOver on the Mac." : {
+      "comment" : "Help make TurnOver: Discord reads better with TurnOver"
+    },
+    "Open TurnOver on GitHub" : {
+      "comment" : "The button on the Help make TurnOver page"
+    },
+    "Open TurnOver on GitHub, below, to make a start. This page is in the TurnOver menu, under Help, as Help make TurnOver." : {
+      "comment" : "Help make TurnOver: the last line, before the buttons"
+    },
+    "Something wrong in one app: This app, then Help improve this app, in the TurnOver menu. A form opens, already filled in for that app." : {
+      "comment" : "Help make TurnOver: reporting a problem with an app"
+    },
+    "Talk with other people who use TurnOver on its Discord, at %@." : {
+      "comment" : "Help make TurnOver: the Discord server; the argument is its address"
+    },
+    "Teach TurnOver a whole app with your own AI assistant, such as Claude Code or Codex. Help improve this app starts it for you." : {
+      "comment" : "Help make TurnOver: building an app's module with an AI assistant"
+    },
+    "Tell us how it's going, good or bad: Tools, then Send feedback, in the TurnOver menu. A sentence is enough." : {
+      "comment" : "Help make TurnOver: feedback"
+    },
+    "The ways to help, from telling us what works to writing code, and TurnOver on GitHub" : {},
+    "Translate TurnOver into your language. The Turkish and Russian translations came from people who use it." : {
+      "comment" : "Help make TurnOver: translating"
+    },
+    "TurnOver is free and open source. It gets better when the people who use it say what works and what doesn't." : {
+      "comment" : "Help make TurnOver: the first line"
+    },
+    "Write code: TurnOver is on GitHub, and CONTRIBUTING.md there is the place to start." : {
+      "comment" : "Help make TurnOver: contributing code"
     }
   },
   "version" : "1.0"

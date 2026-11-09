@@ -15,19 +15,25 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
     private let text = NSTextView()
     private let next = NSButton(), back = NSButton(), skip = NSButton()
     private var openGuide = false
+    /// What the last page's second button opens instead of the guide (Help make TurnOver's: TurnOver on GitHub).
+    private let lastLink: (title: String, url: URL)?
+    private var openLink = false
 
     /// Shows the pages, one window, until Done, Skip, Escape or the window is closed. Returns when finished.
-    static func run(_ pages: [(String, String)]) {
+    /// `lastLink`: the last page's second button opens this instead of reading the guide.
+    static func run(_ pages: [(String, String)], lastLink: (title: String, url: URL)? = nil) {
         guard !pages.isEmpty else { return }
-        let w = WelcomeWindow(pages: pages)
+        let w = WelcomeWindow(pages: pages, lastLink: lastLink)
         w.show(0)
         NSApp.runModal(for: w.window)
         w.window.orderOut(nil)
-        if w.openGuide, let guide = Bundle.main.url(forResource: Edition.guideName, withExtension: "txt") { NSWorkspace.shared.open(guide) }
+        if w.openLink, let link = lastLink { NSWorkspace.shared.open(link.url) }
+        else if w.openGuide, let guide = Bundle.main.url(forResource: Edition.guideName, withExtension: "txt") { NSWorkspace.shared.open(guide) }
     }
 
-    private init(pages: [(String, String)]) {
+    private init(pages: [(String, String)], lastLink: (title: String, url: URL)?) {
         self.pages = pages
+        self.lastLink = lastLink
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 420), styleMask: [.titled, .closable], backing: .buffered, defer: false)
         super.init()
         window.delegate = self
@@ -82,7 +88,9 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
         text.scrollRangeToVisible(NSRange(location: 0, length: 0))
         text.setAccessibilityLabel(title)
         next.title = last ? String(localized: "Done", comment: "A welcome page's button") : String(localized: "Next", comment: "A welcome page's button")
-        skip.title = last ? String(localized: "Read the guide", comment: "A welcome page's button") : String(localized: "Skip", comment: "A welcome page's button")
+        skip.title = last ? (lastLink?.title ?? String(localized: "Read the guide", comment: "A welcome page's button")) : String(localized: "Skip", comment: "A welcome page's button")
+        // A link opens only when its button is pressed: Escape on that page closes (cancelOperation), never a browser.
+        skip.keyEquivalent = last && lastLink != nil ? "" : "\u{1b}"
         back.isHidden = i == 0
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
@@ -98,9 +106,12 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
     }
     @objc private func backPressed() { if index > 0 { show(index - 1) } }
     @objc private func skipPressed() {
-        // On the last page this button reads the guide (by its place, as before).
-        openGuide = index == pages.count - 1
+        // On the last page this button reads the guide (by its place, as before), or opens the page's own link.
+        let last = index == pages.count - 1
+        if last, lastLink != nil { openLink = true } else { openGuide = last }
         NSApp.stopModal()
     }
+    /// Escape where no button takes it (the last page of Help make TurnOver): close, as Skip does elsewhere.
+    @objc func cancelOperation(_ sender: Any?) { NSApp.stopModal() }
     func windowWillClose(_ notification: Notification) { NSApp.stopModal() }
 }

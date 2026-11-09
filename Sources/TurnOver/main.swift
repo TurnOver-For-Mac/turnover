@@ -43,6 +43,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // switched to F1 to F12).
         // The function keys are the Mac's own, always: TurnOver never changes them (10 Oct 2026). Earlier
         // builds switched the top row with the reader and put it back wrongly (a tester, 9 Oct 2026).
+        // Help make TurnOver, from the TurnOver menu's Help: the page by itself, its button opening GitHub.
+        HelpMakeTurnOver.show = { [weak self] in self?.showPages([HelpMakeTurnOver.page], lastLink: (HelpMakeTurnOver.buttonTitle, HelpMakeTurnOver.githubURL)) }
         welcomeOnFirstRun()
         // Opened from Finder or Spotlight, TurnOver comes to the front with no window: VoiceOver said "TurnOver has no
         // windows", and Command Tab was needed to get back (a tester, 10 Oct 2026). A moment after launch, with no
@@ -93,7 +95,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // welcomed never got it).
         let keyboardNavigationTurnedOn = turnOnKeyboardNavigation()
         // Nothing new: no version welcome due, this build's pages already seen, and nothing changed on the Mac.
-        guard !versionWelcomed || NewToTry.pagesDue || keyboardNavigationTurnedOn else { return }
+        guard !versionWelcomed || NewToTry.pagesDue || keyboardNavigationTurnedOn || HelpMakeTurnOver.due else { return }
         // VoiceOver on for the pages, or nobody reads them (a code review, 17 Oct 2026; again on 24 Oct, when CoExist
         // went). TurnOver's own launch hand-over turns it off after, by the swap setting.
         // VoiceOver's flag can stay on with VoiceOver gone (quit by script, or crashed): then it is started, since the
@@ -147,10 +149,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             pages.append((String(localized: "Tab reaches every control", comment: "A welcome page's title"),
                           String(localized: "Keyboard navigation was off on this Mac, so Tab reached only text fields and lists. TurnOver has turned it on: Tab now reaches buttons, pop-ups and sliders too, as on Windows. Apps already open pick it up when they next start. It is in System Settings, Keyboard, if you want it off.", comment: "A welcome page")))
         }
+        // Help make TurnOver (9 Nov 2026, Oliver: "a call to action to really get this open sourced"): once on this Mac,
+        // the last page, after an update's pages or a new user's first welcome; its button opens TurnOver on GitHub.
+        let helpMake = HelpMakeTurnOver.due
+        if helpMake { pages.append(HelpMakeTurnOver.page) }
         NSApp.activate(ignoringOtherApps: true)
-        showPages(pages)
+        showPages(pages, lastLink: helpMake ? (HelpMakeTurnOver.buttonTitle, HelpMakeTurnOver.githubURL) : nil)
         UserDefaults.standard.set(true, forKey: key)
         NewToTry.markSeen()
+        if helpMake { HelpMakeTurnOver.markShown() }
     }
 
     /// Keyboard navigation (System Settings, Keyboard) off: Tab reaches text fields and lists only, and a Tab through a
@@ -170,8 +177,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Pages as ordinary alerts, so VoiceOver (still running) reads each: a heading and "n of m", then Next (Return),
     /// Back and Skip; the last has Done, Back and Read the guide (12 Oct 2026).
-    func showPages(_ pages: [(String, String)]) {
-        WelcomeWindow.run(pages)
+    func showPages(_ pages: [(String, String)], lastLink: (title: String, url: URL)? = nil) {
+        WelcomeWindow.run(pages, lastLink: lastLink)
     }
 
     private func startReader() {

@@ -12,6 +12,21 @@ import TurnOverControl
 import AXFixtures
 
 func pureTests() {
+    test("Help make TurnOver: every way to help named, by the menu's own words, and it opens by itself once") {
+        let body = HelpMakeTurnOver.body
+        for words in ["Send feedback", "Help improve this app", "Fix the item I'm on", "VO-Slash", "Translate", "CONTRIBUTING.md",
+                      HelpMakeTurnOver.discordAddress, "Discord", "under Help, as Help make TurnOver"] {
+            check(body.contains(words), "the page names \(words)")
+        }
+        check(body.split(separator: "\n").count >= 8, "one point a line, read with Up and Down")
+        expect(HelpMakeTurnOver.githubURL.absoluteString, "https://github.com/TurnOver-For-Mac/turnover", "the button opens TurnOver on GitHub")
+        let key = "helpMakeTurnOverShown", saved = UserDefaults.standard.object(forKey: key)
+        defer { if let saved { UserDefaults.standard.set(saved, forKey: key) } else { UserDefaults.standard.removeObject(forKey: key) } }
+        UserDefaults.standard.removeObject(forKey: key)
+        check(HelpMakeTurnOver.due, "on a Mac that hasn't seen it, it's due")
+        HelpMakeTurnOver.markShown()
+        check(!HelpMakeTurnOver.due, "once shown, it doesn't open by itself again")
+    }
     test("readers per app: a fresh file is off, a file with a list or another mode keeps working as it did") {
         let decode: (String) -> Config.Applications = { json in
             try! JSONDecoder().decode(Config.Applications.self, from: json.data(using: .utf8)!)
