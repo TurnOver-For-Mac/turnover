@@ -257,6 +257,16 @@ open class EditableText: TurnOverObject {
         Log.io("selection: no change seen within \(Int(patience * 1000)) ms; the app's notice will read it")
     }
 
+    /// Whether the text has letters that run right to left (Hebrew, Arabic, Syriac, Thaana and the like), or a mark that says so.
+    public static func hasRightToLeft(_ text: String) -> Bool {
+        text.unicodeScalars.contains { u in
+            switch u.value {
+            case 0x0590...0x08FF, 0x200F, 0x202B, 0x202E, 0x2067, 0xFB1D...0xFDFF, 0xFE70...0xFEFF, 0x10800...0x10FFF, 0x1E800...0x1EFFF: return true
+            default: return false
+            }
+        }
+    }
+
     func caretMovement(_ gesture: KeyboardGesture, _ unit: TextUnit) {
         // Google Docs, Sheets, Slides: the text box is a hidden typing target; Google says the move itself.
         if GoogleDocs.isEditor(element) { gesture.send(); return }
@@ -282,11 +292,18 @@ open class EditableText: TurnOverObject {
         if !inCell, appModule.isTableCellText(element) { inCell = true }
         let noRoom = collapsed && !inCell && !gesture.modifiers.contains(.shift) && unit == .line
             && ((backwards && oldLine.start <= 0 && info.start <= 0) || (forwards && length > 0 && oldLine.end >= length && info.start >= length))
-        if noRoom {
-            Log.io("edge: nothing \(backwards ? "before" : "after") the caret (\(info.start) of \(length)); sent unwaited")
+        // Plain Left and Right at either end of left-to-right text are as sure an edge, so the bump is at once, as
+        // VoiceOver's is: a web field made them wait three times the caret's patience, over 300 ms (9 Nov 2026). Not where
+        // the line has right-to-left text, in which the arrows go the other way round.
+        // A length of 0 is believed only when the field says so itself: some editors answer 0 for text they do not expose.
+        let fieldIsEmpty = length == 0 && (element.int(kAXNumberOfCharactersAttribute) == 0 || element.string(kAXValueAttribute) == "")
+        let noRoomSideways = collapsed && !inCell && unit == .character && gesture.modifiers.isEmpty && !Self.hasRightToLeft(oldLine.text)
+            && ((key == "leftArrow" && info.start <= 0) || (key == "rightArrow" && info.start >= length && (length > 0 || fieldIsEmpty)))
+        if noRoom || noRoomSideways {
+            Log.io("edge: nothing \(backwards || key == "leftArrow" ? "before" : "after") the caret (\(info.start) of \(length)); sent unwaited")
             gesture.send()
             Tones.edge(keySent: true, sound: boundarySound)
-            caretMoved(speak: readsLineAtEdge ? .line : nil, gesture: gesture, info: info)
+            caretMoved(speak: unit == .line && readsLineAtEdge ? .line : nil, gesture: gesture, info: info)
             return
         }
         gesture.send()
