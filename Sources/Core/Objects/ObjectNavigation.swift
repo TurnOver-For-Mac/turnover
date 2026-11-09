@@ -904,31 +904,50 @@ public final class ObjectNavigator {
     }
 
     /// The window's panes: a split view's children where there is one (the nearest by parent, else the window's
-    /// first, when it covers over a third of the window); otherwise the first container down from the window whose
+    /// first, when it covers over three tenths of the window); otherwise the first container down from the window whose
     /// children hold two or more areas each a twentieth of the window (Catalyst apps such as Podcasts lay their sidebar
     /// and content out as plain groups, 8 Nov 2026).
     private static func panes(around cur: AXUIElement) -> [AXUIElement] {
-        // Each parent asked for once a level (it was asked three times, a review, 8 Nov 2026).
-        var p: AXUIElement? = cur
-        var up = 0
-        var split: AXUIElement?
-        while let y = p, up < 20, split == nil {
-            let parent = y.element(kAXParentAttribute)
-            if parent?.role == "AXSplitGroup" { split = parent }
-            p = parent
-            up += 1
+        /// The nearest split view above `start`, twenty levels at most; each parent asked for once a level (it was asked
+        /// three times, a review, 8 Nov 2026).
+        func splitAbove(_ start: AXUIElement) -> AXUIElement? {
+            var p: AXUIElement? = start
+            var up = 0
+            while let y = p, up < 20 {
+                let parent = y.element(kAXParentAttribute)
+                if let parent, parent.role == "AXSplitGroup" { return parent }
+                p = parent
+                up += 1
+            }
+            return nil
         }
         let window = cur.role == "AXWindow" ? cur : cur.element(kAXWindowAttribute)
         guard let w = window, let wf = TurnOverObject.frame(w) else { return [] }
         let tenth = wf.width * wf.height / 10
         let twentieth = tenth / 2
-        if split == nil { split = w.firstDescendant(role: "AXSplitGroup", maxVisited: 200) }
-        // A split view counts when it is the window's: two panes or more, over a third of the window (Podcasts has a
-        // small one inside its content, which left "no panes" from the window, 8 Nov 2026).
-        if let split, (TurnOverObject.frame(split).map { $0.width * $0.height } ?? 0) > tenth * 3 {
-            let panes = split.elements(kAXChildrenAttribute).filter { $0.role != "AXSplitter" }
-            if panes.count > 1 { return panes }
+        // A split view counts when it is the window's: over three tenths of the window (Podcasts has a small one inside its
+        // content, which left "no panes" from the window, 8 Nov 2026). Its panes leave out the splitters and the strips
+        // along an edge: Safari's "Open in App Banner" (the whole width, 54 points of 768) lies over the top of the page,
+        // so VO-J from the address bar landed on the banner's words and put the keyboard on the page's "Hide sidebar"
+        // under it (Oliver, 9 Nov 2026). With fewer than two, the split view round that one is asked: Finder's file list
+        // and its path bar are a split view inside the one that holds the sidebar (Codex, 9 Nov 2026). A window laid out by
+        // split views has no other panes, so if none has two there is nothing to jump to: below Safari's, its tab group
+        // holds three groups the size of the page, one over another, and those were taken for panes.
+        var split = splitAbove(cur) ?? w.firstDescendant(role: "AXSplitGroup", maxVisited: 200)
+        var laidOutBySplits = false
+        var nested = 0
+        // Four split views at most. The first is always looked at, as before, so a press out of time still lands; the ones
+        // round it only within the press's time (Codex, 9 Nov 2026: each look up is twenty levels).
+        while let s = split, nested < 4 {
+            if (TurnOverObject.frame(s).map { $0.width * $0.height } ?? 0) > tenth * 3 {
+                laidOutBySplits = true
+                let panes = s.elements(kAXChildrenAttribute).filter { $0.role != "AXSplitter" && !Self.isStrip($0, in: wf) }
+                if panes.count > 1 { return panes }
+            }
+            nested += 1
+            split = nested < 4 && !outOfJumpTime() ? splitAbove(s) : nil
         }
+        if laidOutBySplits { return [] }
         var e = w; var depth = 0
         while depth < 8, !outOfJumpTime() {
             let kids = e.elements(kAXChildrenAttribute).filter { !["AXToolbar", "AXButton", "AXStaticText", "AXImage", "AXMenuBar"].contains($0.role) }
@@ -938,6 +957,27 @@ public final class ObjectNavigator {
             e = next; depth += 1
         }
         return []
+    }
+
+    /// A strip along the window rather than a pane: under a tenth of its height, or under a twentieth of its width (a
+    /// banner, a search bar, a sidebar folded away). Without a frame it isn't judged one.
+    package static func isStrip(_ e: AXUIElement, in window: CGRect) -> Bool {
+        guard let f = TurnOverObject.frame(e) else { return false }
+        return f.height < window.height / 10 || f.width < window.width / 20
+    }
+
+    /// Whether `e`, an ancestor of `start` or `start` itself, is inside `region` or is it: looked for on the way up from
+    /// `start`, twelve levels at most (not met by then: taken as inside, as before there was a region).
+    package static func isWithin(_ e: AXUIElement, _ region: AXUIElement, from start: AXUIElement) -> Bool {
+        var x: AXUIElement? = start
+        var levels = 0
+        while let y = x, levels < 12 {
+            if y.isSame(e) { return true }        // met on the way up, at the region or before it
+            if y.isSame(region) { return false }  // the region came first: `e` is above it
+            x = y.element(kAXParentAttribute)
+            levels += 1
+        }
+        return true
     }
 
     /// What is chosen in a pane, which makes it the sidebar: a list's selected row, else a selected item (a text,
@@ -1115,19 +1155,23 @@ public final class ObjectNavigator {
         var found: AXUIElement?
         if takesFocus(target) { found = target }
         else {
-            // Round the item: its parent's subtree, a little way down.
-            let root = target.element(kAXParentAttribute)?.element(kAXParentAttribute) ?? target.element(kAXParentAttribute) ?? target
+            // Round the item: its parent's subtree, a little way down, but never above the pane or spot landed in. Taken
+            // by position alone, something lying over another part (Safari's app banner over the top of the page) had
+            // that part's buttons inside its frame, and the keyboard went into the page under it (9 Nov 2026).
+            var root = target.element(kAXParentAttribute)?.element(kAXParentAttribute) ?? target.element(kAXParentAttribute) ?? target
+            if let region, !Self.isWithin(root, region, from: target) { root = region }
             var queue = [root]; var seen = 0
             while !queue.isEmpty, seen < 80, found == nil, !Self.outOfJumpTime() {
                 let e = queue.removeFirst(); seen += 1
                 if !e.isSame(root), takesFocus(e), inside(e) { found = e; break }
                 queue.append(contentsOf: e.elements(kAXChildrenAttribute))
             }
-            // Else an ancestor that takes focus, six levels at most.
-            var up: AXUIElement? = target.element(kAXParentAttribute)
+            // Else an ancestor that takes focus, six levels at most, and none above the pane or spot landed in.
+            var up: AXUIElement? = region.map { target.isSame($0) } == true ? nil : target.element(kAXParentAttribute)
             var h = 0
             while found == nil, let y = up, h < 6, !Self.outOfJumpTime() {
                 if takesFocus(y), inside(y) { found = y }
+                if let region, y.isSame(region) { break }
                 up = y.element(kAXParentAttribute)
                 h += 1
             }
