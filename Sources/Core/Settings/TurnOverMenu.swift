@@ -328,6 +328,11 @@ public final class TurnOverMenu {
     /// Help: what is new to try, about, then the guide, updates, previous builds and uninstall (aboutItems, set by the app).
     private func helpItems() -> [MenuItem] {
         var items: [MenuItem] = []
+        // Help make TurnOver (9 Nov 2026): the welcome's page about the ways to help, again, its button opening GitHub.
+        if HelpMakeTurnOver.show != nil {
+            items.append(MenuItem("Help make TurnOver", .action { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { MainActor.assumeIsolated { HelpMakeTurnOver.show?() } } },
+                                  hint: "The ways to help, from telling us what works to writing code, and TurnOver on GitHub"))
+        }
         if let l = NewToTry.latest { items.append(MenuItem("What to test in build \(String(describing: l.build))", .submenu { NewToTry.menuItems() })) }
         items.append(MenuItem("About TurnOver", .action {
             let version = String(describing: Edition.version), build = String(describing: Edition.build)
