@@ -12580,6 +12580,9 @@
     "Mouse pointer moves the review cursor" : {
 
     },
+    "Mouse tracking: give up on a stuck lookup" : {
+
+    },
     "Mouse tracking: sound over blank places" : {
 
     },
@@ -28837,6 +28840,9 @@
       }
     },
     "With mouse tracking, a sound when the pointer leaves an item for a blank place" : {
+
+    },
+    "With mouse tracking, an app that holds the lookup for over a second is left behind so the pointer is read again" : {
 
     },
     "With mouse tracking, the review cursor goes to what the pointer is over; the keyboard focus never does" : {

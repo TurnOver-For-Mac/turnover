@@ -66,7 +66,13 @@ public enum MouseTracking {
     private static var lookScheduled = false
     private static var lookInFlight = false
     private static var generation = 0
-    private static let queue = DispatchQueue(label: "turnover.mouse-tracking", qos: .userInteractive)
+    /// Replaced when a look is given up on: the app that held it may hold its thread for good, and the next look
+    /// must not wait behind it.
+    private static var queue = DispatchQueue(label: "turnover.mouse-tracking", qos: .userInteractive)
+    /// How long a look may be out before the watchdog gives up on it.
+    nonisolated static var watchdogAfter: TimeInterval { 1.0 }
+    /// A look that took longer than this is written to the log (the role and the app, never the words).
+    nonisolated static var slowLook: TimeInterval { 0.3 }
 
     public static var isOn: Bool { config.presentation.mouseTracking }
 
@@ -120,11 +126,33 @@ public enum MouseTracking {
         lookInFlight = true
         let g = generation
         queue.async {
+            let began = Date()
             var hit: AXUIElement?
             if AXUIElementCopyElementAtPosition(AXUIElementCreateSystemWide(), Float(p.x), Float(p.y), &hit) != .success { hit = nil }
             let found = Found(element: hit, blank: hit.map(isBlank) ?? true)
+            let took = Date().timeIntervalSince(began)
+            if took > slowLook { Log.warning("mouse tracking: the look took \(Int(took * 1000)) ms (\(describe(hit)))") }
             onMain { arrived(found, generation: g) }
         }
+        if config.presentation.mouseWatchdog { onMain(after: watchdogAfter) { giveUp(onLookOf: g) } }
+    }
+
+    /// The look made in generation `g` has not come back: leave it and its thread, and look again where the pointer is
+    /// now. Last time the reading went on over everything else until the person clicked (a tester, 9 Nov 2026).
+    private static func giveUp(onLookOf g: Int) {
+        guard g == generation, lookInFlight, isOn, Core.active else { return }
+        Log.warning("mouse tracking: a look was out over \(Int(watchdogAfter * 1000)) ms; given up on")
+        generation += 1
+        queue = DispatchQueue(label: "turnover.mouse-tracking", qos: .userInteractive)
+        lookInFlight = false
+        moved()
+    }
+
+    /// What a look found, for the log: the role and the app, and not a word of what it says.
+    nonisolated static func describe(_ e: AXUIElement?) -> String {
+        guard let e else { return "nothing" }
+        let app = NSRunningApplication(processIdentifier: e.pid)?.bundleIdentifier ?? "pid \(e.pid)"
+        return "\(e.role) in \(app)"
     }
 
     /// Where the pointer is, in the coordinates the accessibility calls use: from the top left of the main display, and
@@ -150,10 +178,13 @@ public enum MouseTracking {
         guard isOn, Core.active else { return }
         switch tracker.answer(found.blank ? nil : found.element.map { Element(element: $0) }) {
         case .nothing: break
-        case .blank: if config.presentation.mouseEmptySound { VoiceOverSounds.play("EmptySpace.aiff") }
+        case .blank:
+            Log.io("mouse tracking: blank place (\(describe(found.element)))")
+            if config.presentation.mouseEmptySound { VoiceOverSounds.play("EmptySpace.aiff") }
         case .say:
             // As the trackpad's explore does: what was being said gives way, and the item is read. The focus stays where it is.
             guard let e = found.element else { return }
+            Log.io("mouse tracking: says \(describe(e))")
             Speech.cancel()
             ObjectNavigator.shared.hover(e, movingCursor: config.presentation.mouseMovesCursor)
         }

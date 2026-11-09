@@ -54,5 +54,9 @@ func mouseTrackingTests() {
         expect(Config().presentation.mouseEmptySound, true)
         c.presentation.mouseEmptySound = false
         expect((try? JSONDecoder().decode(Config.self, from: JSONEncoder().encode(c)))?.presentation.mouseEmptySound, false)
+        expect(Config().presentation.mouseWatchdog, true, "on unless turned off")
+        c.presentation.mouseWatchdog = false
+        expect((try? JSONDecoder().decode(Config.self, from: JSONEncoder().encode(c)))?.presentation.mouseWatchdog, false)
+        expect(old?.presentation.mouseWatchdog, true, "a file from before the setting existed")
     }
 }
