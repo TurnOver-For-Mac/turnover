@@ -18,9 +18,13 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   TurnOver on and off, and Command Control Comma is the way in to everything.
 - VO-J and the window spots work as VoiceOver's do. VO-J goes from a sidebar to its content and back, and from Mail's
   message list into the message; in Music, Podcasts and TV it goes between the sidebar and the page. VO-Right Bracket
-  and VO-Left Bracket go through the window's main parts. Wherever you land, the arrows carry on from there.
+  and VO-Left Bracket go through the window's main parts. Wherever you land, the arrows carry on from there. In
+  Safari, VO-J goes between a page's main parts, such as a site's sidebar and its content, and from the address bar
+  into the page.
 - Spotify: in its focus mode, Command with the arrows says what it did: louder, quieter, previous track or next track.
 - TurnOver has its own icon, and the menu bar shows a matching symbol instead of the name.
+- Help make TurnOver, in the TurnOver menu under Help: the ways to help, from a sentence of feedback to writing code,
+  with a button that opens TurnOver on GitHub, and TurnOver's Discord. It opens once by itself after this update.
 
 ### Changed
 
@@ -47,6 +51,9 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 - System Settings: a permission row says its switch and whether it is on, not only the app's name.
 - TV: Return on a sidebar item waits for TV to open it, instead of saying it could not; on a heading, such as
   Library, it says it can't be opened.
+- Long pages, such as a long chat in the ChatGPT app, are read to the end. TurnOver used to stop at the six
+  thousandth item and say bottom part way down; now Down Arrow, the quick navigation letters, Command Down Arrow and
+  Say All read on from where it stopped.
 
 ## 2.0, build 23
 
