@@ -72,7 +72,7 @@ Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
   keyboard style) reads each item the pointer crosses, as VoiceOver's cursor following the mouse pointer does. The
   keyboard focus never moves with the pointer. "Mouse pointer moves the review cursor" (on by default) also takes the
   cursor to the item, as NVDA's review cursor follows the mouse. A blank place (a window's background, a group with no
-  name) makes the empty space sound the trackpad's explore makes, once, and coming back to an item reads it again.
+  name) makes the empty space sound the trackpad's explore makes, once ("Mouse tracking: sound over blank places" turns it off), and coming back to an item reads it again.
   What it says is private: it is not kept in the speech history or the log. It watches the pointer only while
   TurnOver is the reader, and it waits while Say All or the trackpad's explore is reading. Off by default.
 - Searching in the App Store, Music and Podcasts: Return in the search field reads the results as a plain list, from

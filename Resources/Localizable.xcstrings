@@ -12580,6 +12580,9 @@
     "Mouse pointer moves the review cursor" : {
 
     },
+    "Mouse tracking: sound over blank places" : {
+
+    },
     "Mouse tracking" : {
 
     },
@@ -28832,6 +28835,9 @@
           }
         }
       }
+    },
+    "With mouse tracking, a sound when the pointer leaves an item for a blank place" : {
+
     },
     "With mouse tracking, the review cursor goes to what the pointer is over; the keyboard focus never does" : {
 

@@ -3,7 +3,8 @@
 // cursor following the mouse pointer; NVDA+M). Off until the Mouse tracking setting is on, and only while TurnOver is
 // the reader that speaks: where VoiceOver leads, its own pointer reading is the one heard. The keyboard focus is
 // never moved by the pointer, the review cursor follows only if "mouse moves the cursor" is on, and a blank place
-// (a window's background, a group with no name) is the empty space sound, as the trackpad's explore makes it.
+// (a window's background, a group with no name) is the empty space sound (as the trackpad's explore makes it) unless
+// that is turned off.
 //
 // The pointer is watched with a listen-only monitor of mouse-moved events: nothing is held back or changed, and the
 // keyboard is never involved. A move asks for a look at most every tenth of a second, so a long sweep across a window
@@ -149,7 +150,7 @@ public enum MouseTracking {
         guard isOn, Core.active else { return }
         switch tracker.answer(found.blank ? nil : found.element.map { Element(element: $0) }) {
         case .nothing: break
-        case .blank: VoiceOverSounds.play("EmptySpace.aiff")
+        case .blank: if config.presentation.mouseEmptySound { VoiceOverSounds.play("EmptySpace.aiff") }
         case .say:
             // As the trackpad's explore does: what was being said gives way, and the item is read. The focus stays where it is.
             guard let e = found.element else { return }

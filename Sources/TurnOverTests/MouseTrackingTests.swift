@@ -51,5 +51,8 @@ func mouseTrackingTests() {
         let kept = try? JSONDecoder().decode(Config.self, from: JSONEncoder().encode(c))
         expect(kept?.presentation.mouseMovesCursor, false)
         expect(old?.presentation.mouseMovesCursor, true, "a file from before the setting existed")
+        expect(Config().presentation.mouseEmptySound, true)
+        c.presentation.mouseEmptySound = false
+        expect((try? JSONDecoder().decode(Config.self, from: JSONEncoder().encode(c)))?.presentation.mouseEmptySound, false)
     }
 }

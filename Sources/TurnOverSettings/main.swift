@@ -567,6 +567,7 @@ struct ItemsView: View {
             Toggle("Hints after a pause", isOn: model.bool("presentation", "speakHints"))
             Toggle("Read what is under the mouse pointer as it moves", isOn: model.bool("presentation", "mouseTracking"))
             Toggle("Mouse pointer moves the review cursor", isOn: model.bool("presentation", "mouseMovesCursor"))
+            Toggle("Mouse tracking: sound over blank places", isOn: model.bool("presentation", "mouseEmptySound"))
             Toggle("Say which plugin an app has as it comes to the front", isOn: model.bool("presentation", "announcePlugins"))
             Picker("Heading, link and button: when to say them", selection: model.string("documentFormatting", "roleOrder", "auto")) {
                 Text("By keyboard style").tag("auto"); Text("Before the words, as NVDA").tag("before"); Text("After the words, as VoiceOver").tag("after")
