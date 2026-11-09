@@ -45,6 +45,9 @@ public struct PointerTracker<Hit: Equatable> {
         return .say
     }
 
+    /// A look that was given up on found nothing: where it was made is looked at again, not taken as seen.
+    public mutating func forgetLook() { lookedAt = nil }
+
     public mutating func reset() { lookedAt = nil; spoken = nil }
 }
 
@@ -66,6 +69,11 @@ public enum MouseTracking {
     private static var lookScheduled = false
     private static var lookInFlight = false
     private static var generation = 0
+    /// Which look is out, and the one watchdog set for it: a watchdog may give up only on its own look, never on a
+    /// later one that is on its way (the first version did, and dropped good looks).
+    private static var lookID = 0
+    private static var watchdog: DispatchWorkItem?
+    private static var lastLookAt = Date.distantPast
     /// Replaced when a look is given up on: the app that held it may hold its thread for good, and the next look
     /// must not wait behind it.
     private static var queue = DispatchQueue(label: "turnover.mouse-tracking", qos: .userInteractive)
@@ -104,6 +112,7 @@ public enum MouseTracking {
         if let m = monitor { NSEvent.removeMonitor(m) }
         monitor = nil
         generation += 1   // a look still out is dropped when it comes back
+        watchdog?.cancel(); watchdog = nil
         lookInFlight = false; lookScheduled = false
         tracker.reset()
         Log.info("mouse tracking: off")
@@ -112,7 +121,8 @@ public enum MouseTracking {
     private static func moved() {
         guard !lookScheduled else { return }   // the look already asked for reads the pointer where it is by then
         lookScheduled = true
-        onMain(after: interval) { look() }
+        // At once when a tenth of a second has passed since the last look, and otherwise when it has.
+        onMain(after: max(0, interval - Date().timeIntervalSince(lastLookAt))) { look() }
     }
 
     private static func look() {
@@ -124,7 +134,9 @@ public enum MouseTracking {
         guard tracker.worthLooking(at: p) else { return }
         tracker.looked(at: p)
         lookInFlight = true
-        let g = generation
+        lastLookAt = Date()
+        lookID += 1
+        let g = generation, id = lookID
         queue.async {
             let began = Date()
             var hit: AXUIElement?
@@ -134,14 +146,20 @@ public enum MouseTracking {
             if took > slowLook { Log.warning("mouse tracking: the look took \(Int(took * 1000)) ms (\(describe(hit)))") }
             onMain { arrived(found, generation: g) }
         }
-        if config.presentation.mouseWatchdog { onMain(after: watchdogAfter) { giveUp(onLookOf: g) } }
+        watchdog?.cancel(); watchdog = nil
+        if config.presentation.mouseWatchdog {
+            let item = DispatchWorkItem { MainActor.assumeIsolated { giveUp(onLookOf: id) } }
+            watchdog = item
+            DispatchQueue.main.asyncAfter(deadline: .now() + watchdogAfter, execute: item)
+        }
     }
 
-    /// The look made in generation `g` has not come back: leave it and its thread, and look again where the pointer is
-    /// now. Last time the reading went on over everything else until the person clicked (a tester, 9 Nov 2026).
-    private static func giveUp(onLookOf g: Int) {
-        guard g == generation, lookInFlight, isOn, Core.active else { return }
+    /// The look `id` has not come back: leave it and its thread, and look again where the pointer is now. Last time
+    /// the reading went on over everything else until the person clicked (a tester, 9 Nov 2026).
+    private static func giveUp(onLookOf id: Int) {
+        guard id == lookID, lookInFlight, isOn, Core.active else { return }
         Log.warning("mouse tracking: a look was out over \(Int(watchdogAfter * 1000)) ms; given up on")
+        tracker.forgetLook()
         generation += 1
         queue = DispatchQueue(label: "turnover.mouse-tracking", qos: .userInteractive)
         lookInFlight = false
@@ -171,6 +189,7 @@ public enum MouseTracking {
 
     private static func arrived(_ found: Found, generation g: Int) {
         guard g == generation else { return }
+        watchdog?.cancel(); watchdog = nil
         lookInFlight = false
         // The pointer may have gone on (or come to rest somewhere else) while the look was out: the moves in that time
         // were not asked for, so its resting place is looked at now.

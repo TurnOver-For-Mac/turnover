@@ -29,6 +29,16 @@ func mouseTrackingTests() {
         expect(t.answer("Save"), .say, "the same button after a gap is heard again, as VoiceOver does")
     }
 
+    test("mouse tracking: a look given up on leaves its place to be looked at again, and what was said stays said") {
+        var t = PointerTracker<String>()
+        t.looked(at: CGPoint(x: 5, y: 5))
+        _ = t.answer("Save")
+        t.forgetLook()
+        expect(t.worthLooking(at: CGPoint(x: 5, y: 5)), true, "the pointer resting where the lost look was")
+        expect(t.answer("Save"), .nothing, "the same item is not said twice")
+        expect(t.answer("Cancel"), .say)
+    }
+
     test("mouse tracking: a reset forgets where the pointer was and what was said") {
         var t = PointerTracker<String>()
         t.looked(at: CGPoint(x: 5, y: 5))
