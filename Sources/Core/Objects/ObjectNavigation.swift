@@ -959,24 +959,35 @@ public final class ObjectNavigator {
             }
             return cursorChain?.contains { $0.isSame(e) } ?? false
         }
-        var e = w; var depth = 0
-        while depth < 12, !outOfJumpTime() {
-            let kids = e.elements(kAXChildrenAttribute).filter { !["AXToolbar", "AXButton", "AXStaticText", "AXImage", "AXMenuBar"].contains($0.role) }
-            let big = kids.compactMap { k in TurnOverObject.frame(k).map { (element: k, frame: $0) } }
-                .filter { $0.frame.width * $0.frame.height >= twentieth && !Self.isStrip($0.frame, in: wf) }
-            if big.count >= 2 {
-                guard Self.areLayers(big.map(\.frame)) else { return big.map(\.element) }
-                let layers = big.map(\.element)
-                e = layers.first(where: holdsCursor)
-                    ?? layers.first(where: { $0.string(kAXSubroleAttribute) != "AXEmptyGroup" && !$0.elements(kAXChildrenAttribute).isEmpty })
-                    ?? layers[0]
-                depth += 1
-                continue
+        // A layer that leads nowhere gives way to the next (Codex, 9 Nov 2026: a first layer holding only an empty wrapper
+        // left "no linked item"), four layers a level at most, and two hundred containers in all.
+        var examined = 0
+        func search(from start: AXUIElement, depth startDepth: Int) -> [AXUIElement] {
+            var e = start; var depth = startDepth
+            while depth < 12, examined < 200, !outOfJumpTime() {
+                examined += 1
+                let kids = e.elements(kAXChildrenAttribute).filter { !["AXToolbar", "AXButton", "AXStaticText", "AXImage", "AXMenuBar"].contains($0.role) }
+                let big = kids.compactMap { k in TurnOverObject.frame(k).map { (element: k, frame: $0) } }
+                    .filter { $0.frame.width * $0.frame.height >= twentieth && !Self.isStrip($0.frame, in: wf) }
+                if big.count >= 2 {
+                    guard Self.areLayers(big.map(\.frame)) else { return big.map(\.element) }
+                    let layers = big.map(\.element)
+                    var order = layers.filter(holdsCursor)
+                    order += layers.filter { l in
+                        !order.contains { $0.isSame(l) } && l.string(kAXSubroleAttribute) != "AXEmptyGroup" && !l.elements(kAXChildrenAttribute).isEmpty
+                    }
+                    for layer in order.prefix(4) {
+                        let found = search(from: layer, depth: depth + 1)
+                        if !found.isEmpty { return found }
+                    }
+                    return []
+                }
+                guard let next = big.first?.element ?? kids.first else { return [] }
+                e = next; depth += 1
             }
-            guard let next = big.first?.element ?? kids.first else { return [] }
-            e = next; depth += 1
+            return []
         }
-        return []
+        return search(from: w, depth: 0)
     }
 
     /// A strip along the window rather than a pane: under a tenth of its height, or under a twentieth of its width (a

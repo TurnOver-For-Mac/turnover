@@ -209,7 +209,8 @@ func fixtureTests() {
     // Safari with its "Open in App Banner" (9 Nov 2026, Oliver: "I can't get into the page"): the banner, the whole width
     // and 54 points tall, is a child of the window's split view and lies over the top of the page. VO-J from the address
     // bar took it for a second pane, landed on its words, and put the keyboard on the page's "Hide sidebar" under it.
-    func safariBannerWindow() -> AXFixture {
+    /// `decoyFirst`: the page's first layer isn't marked empty and holds an empty wrapper (19), before the site's (Codex).
+    func safariBannerWindow(decoyFirst: Bool = false) -> AXFixture {
         var f = AXFixture(app: "Safari", bundle: "com.apple.Safari", recorded: "", root: 0, application: nil, focus: 3, nodes: [])
         func n(_ id: Int, _ role: String, _ parent: Int, _ x: Double, _ y: Double, _ w: Double, _ h: Double, _ extra: [String: AXFixture.Value] = [:]) -> AXFixture.Node {
             var a: [String: AXFixture.Value] = ["AXRole": .string(role), "AXParent": .element(parent), "AXWindow": .element(0), "AXPosition": .point(x, y), "AXSize": .size(w, h)]
@@ -227,9 +228,11 @@ func fixtureTests() {
                    n(4, "AXSplitter", 2, -1, 52, 0, 716),
                    n(5, "AXTabGroup", 2, 0, 0, 1024, 768, ["AXChildren": .elements([7])]),
                    n(7, "AXGroup", 5, 0, 52, 1024, 716, ["AXChildren": .elements([8])]),
-                   n(8, "AXWebArea", 7, 0, 52, 1024, 716, ["AXChildren": .elements([13, 14, 15])]),
+                   n(8, "AXWebArea", 7, 0, 52, 1024, 716, ["AXChildren": .elements(decoyFirst ? [14, 13, 15] : [13, 14, 15])]),
                    n(13, "AXGroup", 8, 0, 52, 1024, 716, ["AXChildren": .elements([16, 17])]),
-                   n(14, "AXGroup", 8, 0, 52, 1024, 716, ["AXSubrole": .string("AXEmptyGroup")]),
+                   decoyFirst ? n(14, "AXGroup", 8, 0, 52, 1024, 716, ["AXChildren": .elements([19])])
+                              : n(14, "AXGroup", 8, 0, 52, 1024, 716, ["AXSubrole": .string("AXEmptyGroup")]),
+                   n(19, "AXGroup", 14, 0, 52, 1024, 716),
                    n(15, "AXGroup", 8, 0, 52, 1024, 716),
                    n(16, "AXGroup", 13, 0, 52, 288, 716, ["AXChildren": .elements([9, 18])]),
                    n(9, "AXButton", 16, 10, 60, 40, 30, ["AXDescription": .string("Hide sidebar")]),
@@ -264,6 +267,11 @@ func fixtureTests() {
         expect(AXReplay.sets.filter { $0.attribute == kAXFocusedAttribute }.count, 0, "the keyboard wasn't moved: in a page only the reading goes")
         nav.jumpLinked()
         expect(nav.reviewElement.flatMap { AXReplay.id(of: $0) }, 10, "then on to the site's main part")
+        // A first layer that leads nowhere (only an empty wrapper) gives way to the site's.
+        AXReplay.load(safariBannerWindow(decoyFirst: true))
+        nav.place(AXReplay.element(3))
+        nav.jumpLinked()
+        expect(nav.reviewElement.flatMap { AXReplay.id(of: $0) }, 18, "past a first layer holding only an empty wrapper, into the site's sidebar")
     }
     test("VO-J: Finder's file list, in a split view of its own inside the sidebar's, goes to the sidebar") {
         // Recorded on 21 Oct 2026: /Applications in list view. Split view 1 holds the sidebar (7, outline 18, row 27
