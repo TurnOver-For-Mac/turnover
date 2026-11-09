@@ -1341,7 +1341,10 @@ public final class ObjectNavigator {
             currentPid = e.pid
             labelSource = ProfileStore.shared.labelDetail(for: e, pid: e.pid)?.source
         }
-        Speech.asPrivate { report(e) }
+        let began = Date()
+        Speech.asPrivate { report(e, countingGroupFor: 0.08) }
+        let took = Date().timeIntervalSince(began)
+        if took > 0.15 { Log.warning("mouse tracking: reading took \(Int(took * 1000)) ms (\(MouseTracking.describe(e)))") }
     }
 
     /// Puts the review cursor on an element without a word: what already said it (a dialog's Tab) keeps the two
@@ -1372,7 +1375,10 @@ public final class ObjectNavigator {
         report(e)
     }
 
-    private func report(_ e: AXUIElement) {
+    /// `countingGroupFor`: the longest to spend counting a group's items. A pointer sweeping over a window must not wait
+    /// on a walk of a big group while the next item queues behind it (a 263 ms stall, 9 Nov 2026); over the time the
+    /// group is said without its count.
+    private func report(_ e: AXUIElement, countingGroupFor budget: TimeInterval? = nil) {
         let obj = ObjectFactory.make(e)
         // (A text with its words only in its description, as Catalyst apps have, is said as other items are.)
         if e.role == "AXStaticText", let v = e.string(kAXValueAttribute), !v.isEmpty {
@@ -1382,8 +1388,13 @@ public final class ObjectNavigator {
         var parts = Speech.objectPropertiesSpeech(obj, reason: .query)
         // A group, the VoiceOver way: what it holds ("tool bar, 6 items"), and how to go in.
         if config.general.movesByGroups, Self.isGroup(e), !["AXTable", "AXOutline", "AXList", "AXWebArea"].contains(e.role) {
-            let n = Self.groupItems(e).count
-            parts.append(Phrases.items(n))
+            if let budget {
+                let end = Date().addingTimeInterval(budget)
+                let items = Self.groupItems(e, stoppingWhen: { Date() > end })
+                if Date() <= end { parts.append(Phrases.items(items.count)) }
+            } else {
+                parts.append(Phrases.items(Self.groupItems(e).count))
+            }
             Speech.speakItem(parts.joined(separator: ", "))
             Hints.schedule(String(localized: "VO Shift Down goes in.", comment: "Spoken message"))
             return
