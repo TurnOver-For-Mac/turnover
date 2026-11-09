@@ -63,8 +63,11 @@ extension BrowseModeDocument {
             guard let roles = BrowseModeDocument.quickNavRoles[q.name] else { Speech.speakMessage(String(localized: "not available here", comment: "Spoken message")); return }
             let level = headingLevel(for: q)
             var hit = buffer.find(from: position, forward: forward, roles: roles, headingLevel: level)
-            // Nothing ahead on a page that may have more below (): once, the page read again from its end.
-            if hit == nil, forward, reachForMore() { hit = buffer.find(from: position, forward: forward, roles: roles, headingLevel: level) }
+            // Nothing ahead on a page that may have more below: read on (a long chat, issue 227), or once, the page read
+            // again from its end.
+            if hit == nil, forward { hit = readingOn { buffer.find(from: position, forward: forward, roles: roles, headingLevel: level) } }
+            // Still nothing, with more of a long page not yet read: said, rather than wrapping to the top past it.
+            if hit == nil, forward, buffer.isPartial { Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")); return }
             guard let (at, el) = hit else {
                 wrapOrStop(); return
             }
@@ -82,6 +85,9 @@ extension BrowseModeDocument {
         if q.name == "Paragraph" || q.name == "NotLinkBlock" {
             let kind: WebBuffer.TextKind = q.name == "Paragraph" ? .paragraph : .afterLinks
             var hit = buffer.findText(from: position, forward: forward, kind: kind)
+            // The rest of a long page read on first (issue 227); with more still not read, said rather than wrapping.
+            if hit == nil, forward, buffer.isPartial { hit = readingOn { buffer.findText(from: position, forward: forward, kind: kind) } }
+            if hit == nil, forward, buffer.isPartial { Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")); return }
             if hit == nil, config.virtualBuffers.wrapQuickNav,
                let w = buffer.findText(from: forward ? -1 : buffer.text.length + 1, forward: forward, kind: kind), w.offset != position {
                 Tones.edge(); Speech.speakMessage(forward ? String(localized: "wrapped to the top", comment: "Spoken message") : String(localized: "wrapped to the bottom", comment: "Spoken message")); hit = w
