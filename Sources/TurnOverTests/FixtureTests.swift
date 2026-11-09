@@ -119,7 +119,7 @@ func fixtureTests() {
         @MainActor func jump(from id: Int) -> Int? { nav.place(AXReplay.element(id)); nav.jumpLinked(); return nav.reviewElement.flatMap { AXReplay.id(of: $0) } }
         expect(jump(from: 4), 10, "from a sidebar row whose parent misleads: the content's first readable item")
         expect(jump(from: 10), 5, "from the content: the sidebar's selected row")
-        expect(jump(from: 12), 5, "from the search field, a pane of its own: the sidebar's selected row, not the content")
+        expect(jump(from: 12), 5, "from the search field, a strip above the sidebar (not a pane since 9 Nov 2026): the sidebar's selected row, not the content")
         expect(jump(from: 5), 10, "from the selected row: the content, not the search pane")
     }
     test("VO-J: a window with no split view: the sidebar is the narrow group with a selected item") {
@@ -205,6 +205,103 @@ func fixtureTests() {
         config.general.focusFollowsCursor = "on"
         expect(jump(to: 7).focus, 2, "TurnOver's focus isn't set directly in a page being written in")
         check(AXReplay.sets.contains { $0.id == 7 && $0.attribute == kAXFocusedAttribute }, "the keyboard was asked onto the field")
+    }
+    // Safari with its "Open in App Banner" (9 Nov 2026, Oliver: "I can't get into the page"): the banner, the whole width
+    // and 54 points tall, is a child of the window's split view and lies over the top of the page. VO-J from the address
+    // bar took it for a second pane, landed on its words, and put the keyboard on the page's "Hide sidebar" under it.
+    /// `decoyFirst`: the page's first layer isn't marked empty and holds an empty wrapper (19), before the site's (Codex).
+    func safariBannerWindow(decoyFirst: Bool = false) -> AXFixture {
+        var f = AXFixture(app: "Safari", bundle: "com.apple.Safari", recorded: "", root: 0, application: nil, focus: 3, nodes: [])
+        func n(_ id: Int, _ role: String, _ parent: Int, _ x: Double, _ y: Double, _ w: Double, _ h: Double, _ extra: [String: AXFixture.Value] = [:]) -> AXFixture.Node {
+            var a: [String: AXFixture.Value] = ["AXRole": .string(role), "AXParent": .element(parent), "AXWindow": .element(0), "AXPosition": .point(x, y), "AXSize": .size(w, h)]
+            for (k, v) in extra { a[k] = v }
+            return .init(id: id, attrs: a)
+        }
+        // 0 window: 1 toolbar (3 the address field), 2 split view: 4 splitter, 5 tab group (7 group, 8 page), 6 the banner
+        // (11 its words, 12 its Open button). The page holds three layers the size of the page: 13 with the site in it,
+        // 14 an empty group, 15 an empty one. In 13: 16 the site's sidebar (9 "Hide sidebar" under the banner, 18 its
+        // first words) and 17 its main part, the whole width behind the sidebar (10 a text).
+        f.nodes = [.init(id: 0, attrs: ["AXRole": .string("AXWindow"), "AXPosition": .point(0, 0), "AXSize": .size(1024, 768), "AXChildren": .elements([1, 2])]),
+                   n(1, "AXToolbar", 0, 0, 0, 1024, 52, ["AXChildren": .elements([3])]),
+                   n(3, "AXTextField", 1, 300, 10, 400, 30, ["AXDescription": .string("smart search field"), "AXFocused": .bool(true)]),
+                   n(2, "AXSplitGroup", 0, 0, 0, 1024, 768, ["AXChildren": .elements([4, 5, 6])]),
+                   n(4, "AXSplitter", 2, -1, 52, 0, 716),
+                   n(5, "AXTabGroup", 2, 0, 0, 1024, 768, ["AXChildren": .elements([7])]),
+                   n(7, "AXGroup", 5, 0, 52, 1024, 716, ["AXChildren": .elements([8])]),
+                   n(8, "AXWebArea", 7, 0, 52, 1024, 716, ["AXChildren": .elements(decoyFirst ? [14, 13, 15] : [13, 14, 15])]),
+                   n(13, "AXGroup", 8, 0, 52, 1024, 716, ["AXChildren": .elements([16, 17])]),
+                   decoyFirst ? n(14, "AXGroup", 8, 0, 52, 1024, 716, ["AXChildren": .elements([19])])
+                              : n(14, "AXGroup", 8, 0, 52, 1024, 716, ["AXSubrole": .string("AXEmptyGroup")]),
+                   n(19, "AXGroup", 14, 0, 52, 1024, 716),
+                   n(15, "AXGroup", 8, 0, 52, 1024, 716),
+                   n(16, "AXGroup", 13, 0, 52, 288, 716, ["AXChildren": .elements([9, 18])]),
+                   n(9, "AXButton", 16, 10, 60, 40, 30, ["AXDescription": .string("Hide sidebar")]),
+                   n(18, "AXStaticText", 16, 10, 120, 200, 20, ["AXValue": .string("Recents")]),
+                   n(17, "AXGroup", 13, 0, 52, 1024, 716, ["AXSubrole": .string("AXLandmarkMain"), "AXChildren": .elements([10])]),
+                   n(10, "AXStaticText", 17, 300, 200, 300, 20, ["AXValue": .string("Northampton as a place to live")]),
+                   n(6, "AXGroup", 2, 0, 52, 1024, 54, ["AXDescription": .string("Open in App Banner"), "AXChildren": .elements([11, 12])]),
+                   n(11, "AXStaticText", 6, 60, 60, 200, 20, ["AXValue": .string("Tally")]),
+                   n(12, "AXButton", 6, 900, 62, 80, 30, ["AXDescription": .string("Open")])]
+        return f
+    }
+    test("VO-J: in Safari the banner isn't a pane, and the page's layers are gone through to the site's own parts") {
+        AXReplay.load(safariBannerWindow())
+        let saved = config, keep = Speech.sink
+        config.general.focusFollowsCursor = "on"
+        var said: [String] = []
+        Speech.sink = { said.append($0) }
+        defer { AXReplay.unload(); API.setFocusObject(nil, ancestors: []); config = saved; Speech.sink = keep }
+        let window = CGRect(x: 0, y: 0, width: 1024, height: 768)
+        check(ObjectNavigator.isStrip(AXReplay.element(6), in: window), "the banner, 54 points of 768, is a strip")
+        check(ObjectNavigator.isStrip(AXReplay.element(4), in: window), "so is the splitter, no width at all")
+        check(!ObjectNavigator.isStrip(AXReplay.element(5), in: window), "the tab group is a pane")
+        let page = CGRect(x: 0, y: 52, width: 1024, height: 716)
+        check(ObjectNavigator.areLayers([page, page, page]), "three groups the size of the page lie one over another")
+        check(!ObjectNavigator.areLayers([CGRect(x: 0, y: 52, width: 288, height: 716), page]),
+              "a sidebar in front of a main part as wide as the window is beside it (Podcasts')")
+        let nav = ObjectNavigator.shared
+        nav.place(AXReplay.element(3))
+        nav.jumpLinked()
+        expect(nav.reviewElement.flatMap { AXReplay.id(of: $0) }, 18, "from the address bar: into the page, the site's sidebar, not the banner")
+        check(!said.contains { $0.contains("no linked item") }, "and not \"no linked item\": \(said)")
+        expect(AXReplay.sets.filter { $0.attribute == kAXFocusedAttribute }.count, 0, "the keyboard wasn't moved: in a page only the reading goes")
+        nav.jumpLinked()
+        expect(nav.reviewElement.flatMap { AXReplay.id(of: $0) }, 10, "then on to the site's main part")
+        // A first layer that leads nowhere (only an empty wrapper) gives way to the site's.
+        AXReplay.load(safariBannerWindow(decoyFirst: true))
+        nav.place(AXReplay.element(3))
+        nav.jumpLinked()
+        expect(nav.reviewElement.flatMap { AXReplay.id(of: $0) }, 18, "past a first layer holding only an empty wrapper, into the site's sidebar")
+    }
+    test("VO-J: Finder's file list, in a split view of its own inside the sidebar's, goes to the sidebar") {
+        // Recorded on 21 Oct 2026: /Applications in list view. Split view 1 holds the sidebar (7, outline 18, row 27
+        // selected) and split view 9, which holds the file list (19, outline 36, the focus) and the path bar (20, 28
+        // points tall). Codex, 9 Nov 2026: with the path bar left out, split view 9 has one pane, and VO-J said "no
+        // linked item" instead of looking round it.
+        let url = fixtureURL("finder-applications")
+        guard FileManager.default.fileExists(atPath: url.path) else { print("     (no fixture, skipped)"); return }
+        AXReplay.load(try AXFixture.load(url))
+        let saved = config, keep = Speech.sink
+        config.general.focusFollowsCursor = "off"
+        Speech.sink = { _ in }
+        defer { AXReplay.unload(); API.setFocusObject(nil, ancestors: []); config = saved; Speech.sink = keep }
+        let nav = ObjectNavigator.shared
+        nav.place(AXReplay.element(36))
+        nav.jumpLinked()
+        expect(nav.reviewElement.flatMap { AXReplay.id(of: $0) }, 27, "from the file list: the sidebar's selected row")
+    }
+    test("VO-J: the keyboard is put near a landing within the part landed in, not on what lies under it") {
+        AXReplay.load(safariBannerWindow())
+        let saved = config, keep = Speech.sink
+        config.general.focusFollowsCursor = "on"
+        Speech.sink = { _ in }
+        defer { AXReplay.unload(); API.setFocusObject(nil, ancestors: []); config = saved; Speech.sink = keep }
+        check(!ObjectNavigator.isWithin(AXReplay.element(2), AXReplay.element(6), from: AXReplay.element(11)), "the split view is above the banner")
+        check(ObjectNavigator.isWithin(AXReplay.element(6), AXReplay.element(6), from: AXReplay.element(11)), "the banner is itself")
+        ObjectNavigator.shared.jumpTo(AXReplay.element(11), within: AXReplay.element(6))
+        let focused = AXReplay.sets.filter { $0.attribute == kAXFocusedAttribute }.map(\.id)
+        check(focused.contains(12), "the keyboard went to the banner's own button: \(focused)")
+        check(focused.allSatisfy { ![5, 6, 7, 8, 9].contains($0) }, "nothing round or under the banner took it: \(focused)")
     }
     test("window spots: a walk cut short doesn't go round what it found") {
         expect(VoiceOverKeysPlugin.nextSpot(from: 2, count: 3, forward: true, complete: true), 0, "round, with the whole window seen")
