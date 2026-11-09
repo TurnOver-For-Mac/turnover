@@ -930,30 +930,50 @@ public final class ObjectNavigator {
         // along an edge: Safari's "Open in App Banner" (the whole width, 54 points of 768) lies over the top of the page,
         // so VO-J from the address bar landed on the banner's words and put the keyboard on the page's "Hide sidebar"
         // under it (Oliver, 9 Nov 2026). With fewer than two, the split view round that one is asked: Finder's file list
-        // and its path bar are a split view inside the one that holds the sidebar (Codex, 9 Nov 2026). A window laid out by
-        // split views has no other panes, so if none has two there is nothing to jump to: below Safari's, its tab group
-        // holds three groups the size of the page, one over another, and those were taken for panes.
+        // and its path bar are a split view inside the one that holds the sidebar (Codex, 9 Nov 2026).
         var split = splitAbove(cur) ?? w.firstDescendant(role: "AXSplitGroup", maxVisited: 200)
-        var laidOutBySplits = false
         var nested = 0
         // Four split views at most. The first is always looked at, as before, so a press out of time still lands; the ones
         // round it only within the press's time (Codex, 9 Nov 2026: each look up is twenty levels).
         while let s = split, nested < 4 {
             if (TurnOverObject.frame(s).map { $0.width * $0.height } ?? 0) > tenth * 3 {
-                laidOutBySplits = true
                 let panes = s.elements(kAXChildrenAttribute).filter { $0.role != "AXSplitter" && !Self.isStrip($0, in: wf) }
                 if panes.count > 1 { return panes }
             }
             nested += 1
             split = nested < 4 && !outOfJumpTime() ? splitAbove(s) : nil
         }
-        if laidOutBySplits { return [] }
+        // Else the first container down from the window whose children hold two or more areas each a twentieth of the
+        // window, strips left out. Safari's split view holds only the page, so its panes are found this way, in the page
+        // (8 Nov 2026: AppleVis's five parts). Children lying one over another are layers, not panes (Safari's pages
+        // have them, three the size of the page on the Claude site, and VO-J went between them): the one round the cursor
+        // is gone into, else the first with something in it. Twelve levels: the Claude site's sidebar and conversation
+        // are eight down (9 Nov 2026). Each child's frame is asked for once.
+        var cursorChain: [AXUIElement]?
+        func holdsCursor(_ e: AXUIElement) -> Bool {
+            if cursorChain == nil {
+                var chain: [AXUIElement] = []
+                var x: AXUIElement? = cur
+                while let y = x, chain.count < 40 { chain.append(y); x = y.element(kAXParentAttribute) }
+                cursorChain = chain
+            }
+            return cursorChain?.contains { $0.isSame(e) } ?? false
+        }
         var e = w; var depth = 0
-        while depth < 8, !outOfJumpTime() {
+        while depth < 12, !outOfJumpTime() {
             let kids = e.elements(kAXChildrenAttribute).filter { !["AXToolbar", "AXButton", "AXStaticText", "AXImage", "AXMenuBar"].contains($0.role) }
-            let big = kids.filter { (TurnOverObject.frame($0).map { $0.width * $0.height } ?? 0) >= twentieth }
-            if big.count >= 2 { return big }
-            guard let next = big.first ?? kids.first else { return [] }
+            let big = kids.compactMap { k in TurnOverObject.frame(k).map { (element: k, frame: $0) } }
+                .filter { $0.frame.width * $0.frame.height >= twentieth && !Self.isStrip($0.frame, in: wf) }
+            if big.count >= 2 {
+                guard Self.areLayers(big.map(\.frame)) else { return big.map(\.element) }
+                let layers = big.map(\.element)
+                e = layers.first(where: holdsCursor)
+                    ?? layers.first(where: { $0.string(kAXSubroleAttribute) != "AXEmptyGroup" && !$0.elements(kAXChildrenAttribute).isEmpty })
+                    ?? layers[0]
+                depth += 1
+                continue
+            }
+            guard let next = big.first?.element ?? kids.first else { return [] }
             e = next; depth += 1
         }
         return []
@@ -963,7 +983,22 @@ public final class ObjectNavigator {
     /// banner, a search bar, a sidebar folded away). Without a frame it isn't judged one.
     package static func isStrip(_ e: AXUIElement, in window: CGRect) -> Bool {
         guard let f = TurnOverObject.frame(e) else { return false }
-        return f.height < window.height / 10 || f.width < window.width / 20
+        return isStrip(f, in: window)
+    }
+
+    package static func isStrip(_ f: CGRect, in window: CGRect) -> Bool {
+        f.height < window.height / 10 || f.width < window.width / 20
+    }
+
+    /// Whether areas lie one over another rather than side by side: each covers nine tenths of the first, and the first
+    /// nine tenths of it (a sidebar inside a content area that spans the window, Podcasts', is beside it, not over it).
+    package static func areLayers(_ frames: [CGRect]) -> Bool {
+        guard let first = frames.first, frames.count > 1 else { return false }
+        return frames.dropFirst().allSatisfy { f in
+            let common = first.intersection(f)
+            guard !common.isNull else { return false }
+            return common.width * common.height >= 0.9 * max(first.width * first.height, f.width * f.height)
+        }
     }
 
     /// Whether `e`, an ancestor of `start` or `start` itself, is inside `region` or is it: looked for on the way up from

@@ -216,8 +216,10 @@ func fixtureTests() {
             for (k, v) in extra { a[k] = v }
             return .init(id: id, attrs: a)
         }
-        // 0 window: 1 toolbar (3 the address field), 2 split view: 4 splitter, 5 tab group (7 group, 8 page: 9 "Hide
-        // sidebar" under the banner, 10 a text), 6 the banner (11 its words, 12 its Open button).
+        // 0 window: 1 toolbar (3 the address field), 2 split view: 4 splitter, 5 tab group (7 group, 8 page), 6 the banner
+        // (11 its words, 12 its Open button). The page holds three layers the size of the page: 13 with the site in it,
+        // 14 an empty group, 15 an empty one. In 13: 16 the site's sidebar (9 "Hide sidebar" under the banner, 18 its
+        // first words) and 17 its main part, the whole width behind the sidebar (10 a text).
         f.nodes = [.init(id: 0, attrs: ["AXRole": .string("AXWindow"), "AXPosition": .point(0, 0), "AXSize": .size(1024, 768), "AXChildren": .elements([1, 2])]),
                    n(1, "AXToolbar", 0, 0, 0, 1024, 52, ["AXChildren": .elements([3])]),
                    n(3, "AXTextField", 1, 300, 10, 400, 30, ["AXDescription": .string("smart search field"), "AXFocused": .bool(true)]),
@@ -225,15 +227,21 @@ func fixtureTests() {
                    n(4, "AXSplitter", 2, -1, 52, 0, 716),
                    n(5, "AXTabGroup", 2, 0, 0, 1024, 768, ["AXChildren": .elements([7])]),
                    n(7, "AXGroup", 5, 0, 52, 1024, 716, ["AXChildren": .elements([8])]),
-                   n(8, "AXWebArea", 7, 0, 52, 1024, 716, ["AXChildren": .elements([9, 10])]),
-                   n(9, "AXButton", 8, 10, 60, 40, 30, ["AXDescription": .string("Hide sidebar")]),
-                   n(10, "AXStaticText", 8, 100, 200, 300, 20, ["AXValue": .string("Northampton as a place to live")]),
+                   n(8, "AXWebArea", 7, 0, 52, 1024, 716, ["AXChildren": .elements([13, 14, 15])]),
+                   n(13, "AXGroup", 8, 0, 52, 1024, 716, ["AXChildren": .elements([16, 17])]),
+                   n(14, "AXGroup", 8, 0, 52, 1024, 716, ["AXSubrole": .string("AXEmptyGroup")]),
+                   n(15, "AXGroup", 8, 0, 52, 1024, 716),
+                   n(16, "AXGroup", 13, 0, 52, 288, 716, ["AXChildren": .elements([9, 18])]),
+                   n(9, "AXButton", 16, 10, 60, 40, 30, ["AXDescription": .string("Hide sidebar")]),
+                   n(18, "AXStaticText", 16, 10, 120, 200, 20, ["AXValue": .string("Recents")]),
+                   n(17, "AXGroup", 13, 0, 52, 1024, 716, ["AXSubrole": .string("AXLandmarkMain"), "AXChildren": .elements([10])]),
+                   n(10, "AXStaticText", 17, 300, 200, 300, 20, ["AXValue": .string("Northampton as a place to live")]),
                    n(6, "AXGroup", 2, 0, 52, 1024, 54, ["AXDescription": .string("Open in App Banner"), "AXChildren": .elements([11, 12])]),
                    n(11, "AXStaticText", 6, 60, 60, 200, 20, ["AXValue": .string("Tally")]),
                    n(12, "AXButton", 6, 900, 62, 80, 30, ["AXDescription": .string("Open")])]
         return f
     }
-    test("VO-J: a strip over the page isn't a pane, and a window with one pane has nothing to jump to") {
+    test("VO-J: in Safari the banner isn't a pane, and the page's layers are gone through to the site's own parts") {
         AXReplay.load(safariBannerWindow())
         let saved = config, keep = Speech.sink
         config.general.focusFollowsCursor = "on"
@@ -244,12 +252,18 @@ func fixtureTests() {
         check(ObjectNavigator.isStrip(AXReplay.element(6), in: window), "the banner, 54 points of 768, is a strip")
         check(ObjectNavigator.isStrip(AXReplay.element(4), in: window), "so is the splitter, no width at all")
         check(!ObjectNavigator.isStrip(AXReplay.element(5), in: window), "the tab group is a pane")
+        let page = CGRect(x: 0, y: 52, width: 1024, height: 716)
+        check(ObjectNavigator.areLayers([page, page, page]), "three groups the size of the page lie one over another")
+        check(!ObjectNavigator.areLayers([CGRect(x: 0, y: 52, width: 288, height: 716), page]),
+              "a sidebar in front of a main part as wide as the window is beside it (Podcasts')")
         let nav = ObjectNavigator.shared
         nav.place(AXReplay.element(3))
         nav.jumpLinked()
-        expect(nav.reviewElement.flatMap { AXReplay.id(of: $0) }, 3, "from the address bar: nowhere to jump, the cursor stays")
-        check(said.contains { $0.contains("no linked item") }, "and says so: \(said)")
-        expect(AXReplay.sets.filter { $0.attribute == kAXFocusedAttribute }.count, 0, "the keyboard wasn't moved")
+        expect(nav.reviewElement.flatMap { AXReplay.id(of: $0) }, 18, "from the address bar: into the page, the site's sidebar, not the banner")
+        check(!said.contains { $0.contains("no linked item") }, "and not \"no linked item\": \(said)")
+        expect(AXReplay.sets.filter { $0.attribute == kAXFocusedAttribute }.count, 0, "the keyboard wasn't moved: in a page only the reading goes")
+        nav.jumpLinked()
+        expect(nav.reviewElement.flatMap { AXReplay.id(of: $0) }, 10, "then on to the site's main part")
     }
     test("VO-J: Finder's file list, in a split view of its own inside the sidebar's, goes to the sidebar") {
         // Recorded on 21 Oct 2026: /Applications in list view. Split view 1 holds the sidebar (7, outline 18, row 27
