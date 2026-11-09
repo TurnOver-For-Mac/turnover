@@ -23586,6 +23586,9 @@
         }
       }
     },
+    "The pointer is not read while a page or Say All is being read out. If pages read themselves when they open, turn off \"Read a page through as it opens\" in Web pages to keep hearing the pointer." : {
+
+    },
     "The Steam program did not answer." : {
       "comment" : "Game speech status",
       "extractionState" : "stale",
