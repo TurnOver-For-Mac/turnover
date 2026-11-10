@@ -1454,7 +1454,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ не найден"
+            "value" : "Не найдено: %@"
           }
         },
         "tr" : {
@@ -37238,7 +37238,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "следующий %@ не найден"
+            "value" : "Нет следующего: %@"
           }
         },
         "tr" : {
@@ -37408,7 +37408,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "предыдущий %@ не найден"
+            "value" : "Нет предыдущего: %@"
           }
         },
         "tr" : {
