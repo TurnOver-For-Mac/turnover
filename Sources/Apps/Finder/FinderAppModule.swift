@@ -202,15 +202,17 @@ final class FinderItem: TurnOverObject {
             let ext = (name as NSString).pathExtension
             let guessed = ext.isEmpty ? nil : UTType(filenameExtension: ext)?.localizedDescription
             Log.io("finder: kind from \(ext.isEmpty ? "no extension" : "." + ext): \(guessed ?? "unknown")")
-            return guessed ?? "file"
+            return guessed ?? String(localized: "file", comment: "A file's kind, spoken after its name, when the Mac names no kind")
         }
         let v = try? url.resourceValues(forKeys: [.localizedTypeDescriptionKey, .isAliasFileKey, .isVolumeKey, .isPackageKey, .isDirectoryKey])
         // A mounted disk takes the Mac's own word for it ("Volume", «Том») rather than an English literal read
         // under a Russian interface (a tester, 8 Nov 2026).
         if v?.isVolume == true, let k = v?.localizedTypeDescription, !k.isEmpty { return Self.kindWord(k) }
-        if v?.isVolume == true { return "volume" }
-        if v?.isAliasFile == true { return "alias" }
-        guard let k = v?.localizedTypeDescription, !k.isEmpty else { return v?.isDirectory == true ? "folder" : nil }
+        if v?.isVolume == true { return String(localized: "disk", comment: "A mounted disk's kind, spoken after its name") }
+        if v?.isAliasFile == true { return String(localized: "alias", comment: "A file's kind, spoken after its name: a pointer to another file") }
+        guard let k = v?.localizedTypeDescription, !k.isEmpty else {
+            return v?.isDirectory == true ? String(localized: "folder", comment: "A folder's kind, spoken after its name") : nil
+        }
         return Self.kindWord(k)
     }()
 

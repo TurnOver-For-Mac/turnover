@@ -44302,6 +44302,116 @@
     },
     "Write code: TurnOver is on GitHub, and CONTRIBUTING.md there is the place to start." : {
       "comment" : "Help make TurnOver: contributing code"
+    },
+    "close" : {
+      "comment" : "A window's close button: what it does",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "закрыть"
+          }
+        }
+      }
+    },
+    "minimise" : {
+      "comment" : "A window's minimise button: what it does",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "свернуть"
+          }
+        }
+      }
+    },
+    "zoom" : {
+      "comment" : "A window's zoom button: what it does",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "развернуть"
+          }
+        }
+      }
+    },
+    "full screen" : {
+      "comment" : "A window's full screen button: what it does",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "на весь экран"
+          }
+        }
+      }
+    },
+    "alias" : {
+      "comment" : "A file's kind, spoken after its name: a pointer to another file",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "псевдоним"
+          }
+        }
+      }
+    },
+    "disk" : {
+      "comment" : "A mounted disk's kind, spoken after its name",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "том"
+          }
+        }
+      }
+    },
+    "file" : {
+      "comment" : "A file's kind, spoken after its name, when the Mac names no kind",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "файл"
+          }
+        }
+      }
+    },
+    "folder" : {
+      "comment" : "A folder's kind, spoken after its name",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "папка"
+          }
+        }
+      }
+    },
+    "object" : {
+      "comment" : "A page element with no name of its own, spoken where a placeholder stands",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "объект"
+          }
+        }
+      }
+    },
+    "VoiceOver is on, so TurnOver waits. Turn VoiceOver off and TurnOver speaks; or turn the swap on in Settings, Screen reader behaviour." : {
+      "comment" : "Said by VoiceOver when TurnOver starts while VoiceOver is on: the swap is off",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VoiceOver включён, поэтому TurnOver ждёт. Выключите VoiceOver, и заговорит TurnOver; либо включите подмену в настройках, раздел «Поведение скринридера»."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
