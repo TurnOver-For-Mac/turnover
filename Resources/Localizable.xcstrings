@@ -11818,7 +11818,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Строка за строкой"
+            "value" : "Построчно"
           }
         }
       }
@@ -16549,7 +16549,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Прокрутка двигает курсор"
+            "value" : "Курсор при прокрутке"
           }
         }
       }
