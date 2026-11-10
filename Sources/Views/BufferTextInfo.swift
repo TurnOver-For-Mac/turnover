@@ -28,11 +28,37 @@ public final class BufferTextInfo: TextInfo {
     }
     /// The page was read on (a long chat, issue 227): the newer publication only adds at the end, so this range's
     /// offsets hold in it, and say all goes on into what was added. Not for a refresh, which may move everything.
-    package func followReadingOn() {
+    package func followReadingOn() -> Bool {
         guard let document, document.pageGeneration == documentGeneration,
+              document.buffer.status != .cancelled,
               document.buffer.text.length >= buffer.text.length,
-              document.buffer.text.substring(to: buffer.text.length) == buffer.text as String else { return }
-        buffer = document.buffer.frozen()
+              document.buffer.revision == buffer.revision ||
+                document.buffer.text.compare(buffer.text as String, options: .literal, range: NSRange(location: 0, length: buffer.text.length)) == .orderedSame else { return false }
+        if document.buffer.revision != buffer.revision { buffer = document.buffer.frozen() }
+        return true
+    }
+
+    /// Speech can start after publication. Follow the spoken line if it still exists, keeping the word offset
+    /// within it. If the line vanished, leave the live caret where publication put it.
+    func updateReadingCaret(at offset: Int) {
+        guard let document, document.pageGeneration == documentGeneration else { return }
+        let latest = document.buffer
+        if latest.revision == buffer.revision { document.position = offset; return }
+        guard let index = buffer.lineIndex(at: offset) else { return }
+        let old = buffer.lines[index]
+        let length = old.end - old.start
+        let text = buffer.text.substring(with: NSRange(location: old.start, length: length))
+        var best: WebBuffer.Line?
+        var sameElement = false
+        for line in latest.lines where line.end - line.start == length {
+            guard latest.text.compare(text, options: .literal, range: NSRange(location: line.start, length: length)) == .orderedSame else { continue }
+            let same = old.element.map { line.element?.isSame($0) == true } ?? false
+            if sameElement && !same { continue }
+            if let best, same == sameElement, abs(best.start - old.start) <= abs(line.start - old.start) { continue }
+            best = line
+            sameElement = same
+        }
+        if let best { document.position = best.start + min(length, max(0, offset - old.start)) }
     }
     public var previousChain: [AXUIElement]?
     public private(set) var chain: [AXUIElement] = []

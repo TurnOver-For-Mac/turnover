@@ -54,7 +54,7 @@ public final class WebBuffer {
         let accessibility: AXSnapshot
     }
     private var snapshot = Snapshot(text: "", lines: [], segments: [], containers: [], accessibility: AXSnapshot(nodes: [:]))
-    /// The publication's elements, answered from its collection (and, for a page read on past it, from the app).
+    /// The publication's elements, answered from its collection.
     private func inPublication<Value>(_ body: () -> Value) -> Value { snapshot.accessibility.with(body) }
     public var text: NSString { snapshot.text }
     public var lines: [Line] { snapshot.lines }
@@ -77,6 +77,8 @@ public final class WebBuffer {
     /// What waits for the reading under way, each caller its own (review of #219, point 3: with one, a focus event
     /// could drop a key's, and Kindle's page turn never finish). Each checks for itself that it is still wanted.
     private var pendingCompletions: [() -> Void] = []
+    private var readOnCompletion: ((Bool) -> Void)?
+    private var refreshAfterReadOn: (() -> Void)?
     /// Both hooks run on main, immediately around the atomic replacement. The owner anchors the *current*
     /// caret here, rather than restoring a position captured before the user continued reading.
     var willPublish: (() -> Void)?
@@ -139,7 +141,11 @@ public final class WebBuffer {
     private var samePage = false
 
     public func cancel() {
+        let readOn = readOnCompletion
+        readOnCompletion = nil
+        refreshAfterReadOn = nil
         generation += 1; runner.cancel(); pendingCompletions = []; status = .cancelled
+        if let readOn { DispatchQueue.main.async { readOn(false) } }
     }
 
     /// Coalesce refreshes while a collection is in flight. A page change calls newPage first, cancelling the
@@ -148,6 +154,11 @@ public final class WebBuffer {
         // Every caller's action waits; each checks on completion that it is still the latest of its kind (its key's
         // intent, the document's generation), so a burst of keys does not replay as a burst of moves.
         if let completion { pendingCompletions.append(completion) }
+        if readOnCompletion != nil {
+            // Reading on extends the old copy. A caller asking to refresh needs a new collection from the root.
+            if refreshAfterReadOn == nil { refreshAfterReadOn = { [weak self] in self?.build(scrollTo: scrollTo) } }
+            return
+        }
         guard !isLoading else { return }
         status = .loading
         collectingDirtyRevision = dirtyRevision
@@ -237,7 +248,7 @@ public final class WebBuffer {
     /// Where the reader is (the browse mode document's position): a read of the page again goes this far.
     public var readingAt = 0
     /// There is somewhere to read on from (after a stop, or the end of a page read whole).
-    public var canReadOn: Bool { stopped && !resumeFrames.isEmpty }
+    public var canReadOn: Bool { status != .cancelled && stopped && !resumeFrames.isEmpty }
 
     /// How long the walk over a collection may take on main. Ashley's 100 ms (#219) is kept: past it the walk stops
     /// as at any limit, and the rest is read on.
@@ -255,6 +266,7 @@ public final class WebBuffer {
         let t0 = Date()
         // The copy being replaced, kept if this read is cut short and is the same as far as it goes (below).
         let old = saved()
+        walkOmissions = collection.omittedElements
         collectionWasCut = [.visits, .deadline, .queries, .axQueries].contains(collection.stop)
         collection.snapshot.with {
             out = ""; outLength = 0; current = []; currentElement = nil; pendingEntering = []; containerStack = []; linkDepth = 0
@@ -285,7 +297,7 @@ public final class WebBuffer {
         // time; #281's rule): the copy it had is kept, still due for reading again.
         if newLines.isEmpty, failed || stopped, samePage, !old.publication.lines.isEmpty {
             restore(old)
-            lastStop = collection.stop
+            lastStop = collection.stop ?? .deadline
             isDirty = true
             finish(since: t0, collectedMs: collection.elapsedMs, published: false)
             return
@@ -299,8 +311,16 @@ public final class WebBuffer {
         let wanted = min(readingAt + 2000, old.publication.text.length)
         if stopped, samePage, outLength <= wanted, readingAt >= outLength {
             status = .loading
-            catchUp(to: wanted, passesLeft: Self.passesPerBuild) { [weak self] in
+            catchUp(through: old.publication.text.length, passesLeft: Self.passesPerBuild) { [weak self] success in
                 guard let self else { return }
+                if !success {
+                    let stop = self.lastStop
+                    self.restore(old)
+                    self.lastStop = stop
+                    self.isDirty = true
+                    self.finish(since: t0, collectedMs: collection.elapsedMs, published: false)
+                    return
+                }
                 self.samePage = true
                 self.isDirty = self.dirtyRevision != self.collectingDirtyRevision
                 self.publishCopy()
@@ -324,8 +344,9 @@ public final class WebBuffer {
         lastBuildMs = collectedMs + Int(Date().timeIntervalSince(t0) * 1000)
         Log.info("virtual buffer: \(lines.count) lines, \(text.length) characters from \(elementCount) elements in \(lastBuildMs) ms (\(status)\(lastStop.map { ": " + $0.rawValue } ?? "")\(passes > 1 ? ", \(passes) passes" : ""))")
         let ready = pendingCompletions; pendingCompletions = []
+        let current = generation
         if published { didPublish?() } else { didFail?() }
-        ready.forEach { $0() }
+        for completion in ready where generation == current { completion() }
     }
 
     /// The end of a pass: after a stop, a place to read again from; after a whole read, its end to read on from.
@@ -346,6 +367,7 @@ public final class WebBuffer {
 
     /// The collections the walk has read so far, together: what the next publication answers from.
     private var walkAccessibility = AXSnapshot(nodes: [:])
+    private var walkOmissions: Set<ElementKey> = []
     /// Tests and the inspector collect at once, on the calling thread; the reader in the background.
     package var collectsAtOnce = false
 
@@ -365,8 +387,9 @@ public final class WebBuffer {
         let roots = frontier()
         guard !roots.isEmpty else { then(nil); return }
         let area = webArea
+        let expectedURL = walkAccessibility.nodes[ElementKey(area)]?.attributes["AXURL"]
         let job: @Sendable (AXWalkRequest) -> WebBufferCollection = { request in
-            WebBufferCollection.collect(root: area, focus: nil, request: request, continuing: roots)
+            WebBufferCollection.collect(root: area, focus: nil, request: request, continuing: roots, expectedURL: expectedURL)
         }
         if collectsAtOnce { then(job(AXWalkRequest())); return }
         let current = generation
@@ -377,12 +400,21 @@ public final class WebBuffer {
     }
 
     /// One pass of the walk over a collection of the rest of the page, added to the copy (not yet published).
-    private func readOn(from collection: WebBufferCollection) -> Bool {
+    private func readOn(from collection: WebBufferCollection) -> Bool? {
+        let cut = [.visits, .deadline, .queries, .axQueries].contains(collection.stop)
+        if let stop = collection.stop, !cut || collection.snapshot.nodes.isEmpty {
+            // Backoff, a dead provider or a pass that could not collect even one element cannot mean end of page.
+            lastStop = stop
+            stopped = false
+            isDirty = true
+            return nil
+        }
         walkAccessibility = walkAccessibility.merging(collection.snapshot)
-        collectionWasCut = [.visits, .deadline, .queries, .axQueries].contains(collection.stop)
+        walkOmissions.formUnion(collection.omittedElements)
+        collectionWasCut = cut
         let more = walkAccessibility.with { readOn(deadline: Date().addingTimeInterval(Self.layoutSeconds)) }
         collectionWasCut = false
-        lastStop = stopped ? (collection.stop ?? .deadline) : nil
+        lastStop = stopped ? (collection.stop ?? .deadline) : collection.stop
         return more
     }
 
@@ -390,17 +422,29 @@ public final class WebBuffer {
     /// says whether there was text in it; false at once when there is nothing to read on, or a reading is under way.
     public func buildMore(completion: ((Bool) -> Void)? = nil) {
         guard canReadOn, !isLoading else { completion?(false); return }
+        readOnCompletion = completion ?? { _ in }
         status = .loading
         let t0 = Date(), linesBefore = newLines.count, lengthBefore = outLength
         collectFrontier { [weak self] collection in
             guard let self else { return }
-            let more = collection.map { self.readOn(from: $0) } ?? false
-            if collection == nil { self.stopped = false; self.resumeFrames = []; self.lastStop = nil }
-            self.publishCopy()
+            if collection?.navigationChanged == true {
+                self.newPage()
+                self.didInvalidate?()
+                return
+            }
+            let more = collection.flatMap { self.readOn(from: $0) }
+            if collection == nil { self.stopped = false; self.isDirty = true }
+            let readOn = self.readOnCompletion
+            let refresh = self.refreshAfterReadOn
+            self.readOnCompletion = nil
+            self.refreshAfterReadOn = nil
+            if more != nil { self.publishCopy() }
             self.status = self.lastStop == nil ? .complete : .partial
             Log.info("virtual buffer: read on from where it stopped: \(self.newLines.count - linesBefore) lines, \(self.outLength - lengthBefore) characters from \(self.visited) elements in \(Int(Date().timeIntervalSince(t0) * 1000)) ms\(self.stopped ? "; more to read on" : ", to the end")")
-            self.didPublish?()
-            completion?(more)
+            let current = self.generation
+            if more != nil { self.didPublish?() } else { self.didFail?() }
+            if self.generation == current { refresh?() }
+            readOn?(more == true && self.generation == current)
         }
     }
 
@@ -413,14 +457,20 @@ public final class WebBuffer {
         return more
     }
 
-    /// Reads on, pass after pass, until the copy reaches `wanted` or the page's end, then `done`. Not published.
-    private func catchUp(to wanted: Int, passesLeft: Int, then done: @escaping () -> Void) {
-        guard stopped, outLength <= wanted, passesLeft > 0 else { done(); return }
+    /// Recheck the reader's position after each pass while the old publication is still available.
+    private func catchUp(through oldLength: Int, passesLeft: Int, then done: @escaping (Bool) -> Void) {
+        let wanted = min(readingAt + 2000, oldLength)
+        guard canReadOn, outLength <= wanted, passesLeft > 0 else { done(true); return }
         collectFrontier { [weak self] collection in
             guard let self else { return }
-            guard let collection else { done(); return }
-            _ = self.readOn(from: collection)
-            self.catchUp(to: wanted, passesLeft: passesLeft - 1, then: done)
+            guard let collection else { done(false); return }
+            if collection.navigationChanged {
+                self.newPage()
+                self.didInvalidate?()
+                return
+            }
+            guard self.readOn(from: collection) != nil else { done(false); return }
+            self.catchUp(through: oldLength, passesLeft: passesLeft - 1, then: done)
         }
     }
 
@@ -489,6 +539,7 @@ public final class WebBuffer {
     /// What a copy is, kept while the page is read again.
     private struct Copy {
         let publication: Snapshot; let lastStop: AXWalkStop?
+        let omissions: Set<ElementKey>
         let out: String; let outLength: Int
         let resumeFrames: [Frame]; let stopped: Bool; let resumeElement: AXUIElement?; let resumePending: [AXUIElement]
         let checkpoints: [Checkpoint]
@@ -496,13 +547,14 @@ public final class WebBuffer {
         let docText: NSString; let docCursor: Int; let lastTextEnd: Int?
     }
     private func saved() -> Copy {
-        Copy(publication: snapshot, lastStop: lastStop, out: out, outLength: outLength,
+        Copy(publication: snapshot, lastStop: lastStop, omissions: walkOmissions, out: out, outLength: outLength,
              resumeFrames: resumeFrames, stopped: stopped, resumeElement: resumeElement, resumePending: resumePending,
              checkpoints: checkpoints, passes: passes, textPieces: textPieces, elementCount: elementCount,
              docText: docText, docCursor: docCursor, lastTextEnd: lastTextEnd)
     }
     private func restore(_ c: Copy) {
         snapshot = c.publication; lastStop = c.lastStop
+        walkAccessibility = c.publication.accessibility; walkOmissions = c.omissions
         out = c.out; outLength = c.outLength
         newLines = c.publication.lines; newSegments = c.publication.segments; newContainers = c.publication.containers
         resumeFrames = c.resumeFrames; stopped = c.stopped
@@ -527,7 +579,8 @@ public final class WebBuffer {
     private func visit(_ el: AXUIElement, depth: Int) {
         guard depth < 60 else { return }
         // An element the collection did not reach, because it stopped at a limit, is where the walk stops too.
-        guard visited < Self.maxElements, Date() < buildDeadline, !(collectionWasCut && !AXSnapshot.holds(el)) else {
+        guard visited < Self.maxElements, Date() < buildDeadline,
+              !(collectionWasCut && !AXSnapshot.holds(el) && !walkOmissions.contains(ElementKey(el))) else {
             // The first element a limit turns away: the next pass starts here (issue 227), as the walk was.
             if !stopped {
                 stopped = true; resumeFrames = frames

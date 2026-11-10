@@ -446,13 +446,18 @@ func webBufferTests() {
         waitForBuffer(page.buffer)
         guard let reading = page.makeTextInfo(.first) else { return check(false, "initial reading range") }
         SayAll.readText(info: reading)
-        _ = AXUIElementSetAttributeValue(AXReplay.element(88), kAXValueAttribute as CFString, "Replacement public text." as CFString)
+        nodes[0].attrs["AXChildren"] = .elements([100, 81, 83, 85, 87, 89])
+        nodes.append(.init(id: 100, attrs: ["AXRole": .string("AXGroup"), "AXChildren": .elements([101])]))
+        nodes.append(.init(id: 101, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("Inserted above the reader.")]))
+        if let replaced = nodes.firstIndex(where: { $0.id == 88 }) { nodes[replaced].attrs["AXValue"] = .string("Replacement public text.") }
+        AXReplay.load(.init(app: "Public reading", bundle: "test.sayall-buffer", recorded: "", root: 80, application: nil, focus: nil, nodes: nodes))
         page.buffer.build(); waitForBuffer(page.buffer)
         check(SayAll.isRunning, "publishing a new copy does not stop the existing reader")
         guard let start = queued.first?.1 else { return check(false, "queued speech start") }
         start()
         let until = Date().addingTimeInterval(2)
         while queued.count < 4, Date() < until { RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01)) }
+        expect(page.position, page.buffer.text.range(of: "Original public line 1").location, "the caret follows the spoken line after text is inserted above it")
         check(queued.contains { $0.0.contains("Original public line 4") }, "subsequent chunks still read the old snapshot")
         check(!queued.contains { $0.0.contains("Replacement public text") }, "a refresh cannot substitute new text under old reading offsets")
     }

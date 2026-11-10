@@ -5,6 +5,7 @@
 import Foundation
 import ApplicationServices
 import TurnOverCore
+import TurnOverAX
 import AXFixtures
 
 func longPageTests() {
@@ -56,6 +57,80 @@ func longPageTests() {
     }
     func ids(_ es: [AXUIElement]) -> [Int] { es.compactMap { AXReplay.id(of: $0) } }
     func spans(_ b: WebBuffer) -> [[Int]] { b.lines.map { [$0.start, $0.end] } }
+
+    test("long page: an omitted element before the collection limit does not become the frontier") {
+        var fixture = page(headings: 8)
+        if let missing = fixture.nodes.firstIndex(where: { $0.id == 104 }) { fixture.nodes[missing].attrs["AXRole"] = nil }
+        AXReplay.load(fixture)
+        defer { AXReplay.unload() }
+        let buffer = WebBuffer(webArea: AXReplay.root!) { root, focus, request in
+            var limits = WebBufferCollection.Limits()
+            limits.elements = 6
+            return WebBufferCollection.collect(root: root, focus: focus, request: request, limits: limits)
+        }
+        buffer.build()
+        waitForBuffer(buffer)
+        expect(buffer.text as String, "Heading 1\nHeading 3\n", "the first pass skips the missing heading")
+        check(buffer.canReadOn, "the collection stops at the later element limit")
+        check(buffer.buildMoreAtOnce(), "reading on starts after the first pass")
+        check((buffer.text as String).hasSuffix("End of page\n") && !buffer.isPartial, "the surviving page reaches its end")
+    }
+
+    test("long page: refreshes requested during read-on keep their callbacks") {
+        AXReplay.load(page(headings: 8))
+        let limit = WebBuffer.maxElements
+        WebBuffer.maxElements = 3
+        defer { WebBuffer.maxElements = limit; AXReplay.unload() }
+        let buffer = WebBuffer(webArea: AXReplay.root!)
+        buffer.buildForInspection()
+        check(buffer.canReadOn, "the first publication has a frontier")
+        AXReplay.load(page(headings: 8, firstText: "Updated first heading"))
+        var finished: [String] = []
+        buffer.buildMore { more in
+            check(more, "the continuation added text")
+            check((buffer.text as String).hasPrefix("Heading 1\n"), "continuation preserves the published prefix")
+            finished.append("read on")
+        }
+        buffer.build { finished.append("first refresh") }
+        buffer.build { finished.append("second refresh") }
+        waitForBuffer(buffer)
+        expect(finished, ["read on", "first refresh", "second refresh"])
+        check((buffer.text as String).hasPrefix("Updated first heading\n"), "the refresh reread the changed prefix")
+    }
+
+    test("long page: losing the provider during read-on retains the partial publication") {
+        AXReplay.load(page(headings: 8))
+        let limit = WebBuffer.maxElements
+        WebBuffer.maxElements = 3
+        defer { WebBuffer.maxElements = limit; AXReplay.unload() }
+        let buffer = WebBuffer(webArea: AXReplay.root!)
+        buffer.buildForInspection()
+        let before = buffer.text, revision = buffer.revision
+        check(buffer.canReadOn, "the first publication has a frontier")
+        AXReplay.unload()
+        check(!buffer.buildMoreAtOnce(), "no text came back from the departed provider")
+        expect(buffer.text as String, before as String)
+        expect(buffer.revision, revision, "failure does not publish a replacement")
+        check(buffer.isPartial && buffer.isDirty, "the cached page remains partial and due for refresh")
+        check(!buffer.canReadOn, "the same failed request is not retried in a loop")
+    }
+
+    test("long page: read-on refuses a reused web area showing a different address") {
+        var fixture = page(headings: 8)
+        AXReplay.load(fixture)
+        let limit = WebBuffer.maxElements
+        WebBuffer.maxElements = 3
+        defer { WebBuffer.maxElements = limit; AXReplay.unload() }
+        let buffer = WebBuffer(webArea: AXReplay.root!)
+        buffer.buildForInspection()
+        check(buffer.canReadOn, "the first publication has a frontier")
+        if let root = fixture.nodes.firstIndex(where: { $0.id == 0 }) { fixture.nodes[root].attrs["AXURL"] = .url("https://example.com/other") }
+        AXReplay.load(fixture)
+        var invalidated = false
+        buffer.didInvalidate = { invalidated = true }
+        check(!buffer.buildMoreAtOnce(), "nothing is appended across the address change")
+        check(invalidated && buffer.lines.isEmpty, "the old publication is retired")
+    }
 
     test("long page: a page longer than a pass is read on to its end, its first part where it was (issue 227)") {
         AXReplay.load(page(headings: 300))

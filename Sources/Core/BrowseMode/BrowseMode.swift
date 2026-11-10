@@ -483,9 +483,10 @@ public final class BrowseModeDocument: ScriptableObject {
         // An empty address too: Safari not answering reports none (6 Oct 2026, playtestcloud: "page  —", 0 lines,
         // and every key said "no next heading").
         guard buffer.lines.isEmpty, url != "about:blank" else { return true }
-        let epoch = pageGeneration, movedAt = positionMovedAt
+        let epoch = pageGeneration, movedAt = positionMovedAt, intent = bufferIntent, keys = ScriptHandler.keysArrivedCount
         buffer.build { [weak self] in
-            guard let self, pageGeneration == epoch, positionMovedAt == movedAt, API.focusTreeInterceptor === self else { return }
+            guard let self, pageGeneration == epoch, positionMovedAt == movedAt, bufferIntent == intent,
+                  ScriptHandler.keysArrivedCount == keys, API.focusTreeInterceptor === self, !passThrough else { return }
             if buffer.lines.isEmpty {
                 Speech.speakMessage(String(localized: "nothing on this page yet; it may still be loading", comment: "Spoken message"))
                 watchForContent()
