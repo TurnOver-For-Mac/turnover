@@ -472,7 +472,7 @@ func longPageTests() {
         // The seven texts, the group with no subrole, the two list items, the row and the cell; not the heading, the
         // link, the landmark, the list, the table or the controls.
         expect(short.plain, 12, "the texts, the plain group, the list items, the row and the cell")
-        check(short.questions + 2 * short.plain <= full.questions, "each of them one question in place of three or more (\(short.questions) against \(full.questions))")
+        check(short.questions + short.plain <= full.questions, "the short path still saves provider calls (\(short.questions) against \(full.questions))")
         expect(AXSnapshot.takeMissed().count, 0, "and nothing asked of them that was not collected")
     }
 

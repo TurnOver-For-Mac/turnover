@@ -258,7 +258,11 @@ func webBufferTests() {
             .init(id: 83, attrs: ["AXRole": .string("AXTextField"), "AXSubrole": .string("AXSecureTextField"), "AXTitle": .string("Access code"), "AXValue": .string("public dummy secret"), "AXSelectedText": .string("dummy"), "AXParent": .element(82)]),
         ])
         AXReplay.load(fixture); defer { AXReplay.unload() }
+        AXReplay.reads = []
+        defer { AXReplay.reads = nil }
         let collection = WebBufferCollection.collect(root: AXReplay.root!, focus: nil, request: AXWalkRequest())
+        check(!(AXReplay.reads ?? []).contains { $0.id == 83 && ["AXValue", "AXSelectedText"].contains($0.attribute) },
+              "the provider is never asked for the password value or selection")
         collection.snapshot.with {
             let field = AXReplay.element(83)
             expect(field.string("AXTitle"), "Access code", "the safe label remains available")
