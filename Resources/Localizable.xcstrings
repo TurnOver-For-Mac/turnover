@@ -27296,6 +27296,12 @@
         }
       }
     },
+    "Left and Right move through the items; Return opens one." : {
+      "comment" : "A hint in the Dock at the bottom of the screen"
+    },
+    "Up and Down move through the items; Return opens one." : {
+      "comment" : "A hint in the Dock on the side of the screen"
+    },
     "Up and Down move through the items." : {
       "comment" : "A hint, said after a pause on an item",
       "localizations" : {
