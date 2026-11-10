@@ -267,6 +267,15 @@ open class EditableText: TurnOverObject {
         }
     }
 
+    /// Whether Left or Right has nowhere to go: the caret and its line both reach the edge, so a caret wrongly reported at 0 is not believed.
+    public nonisolated static func sidewaysEdge(key: String, caret: Int, lineStart: Int, lineEnd: Int, length: Int, fieldIsEmpty: Bool) -> Bool {
+        switch key {
+        case "leftArrow": return lineStart <= 0 && caret <= 0
+        case "rightArrow": return lineEnd >= length && caret >= length && (length > 0 || fieldIsEmpty)
+        default: return false
+        }
+    }
+
     func caretMovement(_ gesture: KeyboardGesture, _ unit: TextUnit) {
         // Google Docs, Sheets, Slides: the text box is a hidden typing target; Google says the move itself.
         if GoogleDocs.isEditor(element) { gesture.send(); return }
@@ -296,9 +305,10 @@ open class EditableText: TurnOverObject {
         // VoiceOver's is: a web field made them wait three times the caret's patience, over 300 ms (9 Nov 2026). Not where
         // the line has right-to-left text, in which the arrows go the other way round.
         // A length of 0 is believed only when the field says so itself: some editors answer 0 for text they do not expose.
+        // As for Up and Down, the line must also reach the edge: some apps report the caret at 0 when it is not.
         let fieldIsEmpty = length == 0 && (element.int(kAXNumberOfCharactersAttribute) == 0 || element.string(kAXValueAttribute) == "")
         let noRoomSideways = collapsed && !inCell && unit == .character && gesture.modifiers.isEmpty && !Self.hasRightToLeft(oldLine.text)
-            && ((key == "leftArrow" && info.start <= 0) || (key == "rightArrow" && info.start >= length && (length > 0 || fieldIsEmpty)))
+            && Self.sidewaysEdge(key: key, caret: info.start, lineStart: oldLine.start, lineEnd: oldLine.end, length: length, fieldIsEmpty: fieldIsEmpty)
         if noRoom || noRoomSideways {
             Log.io("edge: nothing \(backwards || key == "leftArrow" ? "before" : "after") the caret (\(info.start) of \(length)); sent unwaited")
             gesture.send()
