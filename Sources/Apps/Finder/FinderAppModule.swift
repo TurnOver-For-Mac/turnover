@@ -205,14 +205,21 @@ final class FinderItem: TurnOverObject {
             return guessed ?? "file"
         }
         let v = try? url.resourceValues(forKeys: [.localizedTypeDescriptionKey, .isAliasFileKey, .isVolumeKey, .isPackageKey, .isDirectoryKey])
+        // A mounted disk takes the Mac's own word for it ("Volume", «Том») rather than an English literal read
+        // under a Russian interface (a tester, 8 Nov 2026).
+        if v?.isVolume == true, let k = v?.localizedTypeDescription, !k.isEmpty { return Self.kindWord(k) }
         if v?.isVolume == true { return "volume" }
         if v?.isAliasFile == true { return "alias" }
         guard let k = v?.localizedTypeDescription, !k.isEmpty else { return v?.isDirectory == true ? "folder" : nil }
-        // "Folder" → "folder"; a name ("Microsoft Word document", "PDF document") stays as it is.
+        return Self.kindWord(k)
+    }()
+
+    /// Get Info's kind as a word: "Folder" → "folder"; a name ("Microsoft Word document", "PDF document") stays as it is.
+    static func kindWord(_ k: String) -> String {
         let first = k.split(separator: " ").first.map(String.init) ?? k
         return first.dropFirst().allSatisfy(\.isLowercase) && !["Microsoft", "Apple", "Adobe", "QuickTime", "Keynote", "Pages", "Numbers"].contains(first)
             ? k.prefix(1).lowercased() + k.dropFirst() : k
-    }()
+    }
 
     /// No file address: the item by its shown name, on the Desktop (the extension may be hidden), else a mounted volume
     /// of that name. Never /Volumes/<name>: for the startup disk that is a link to / and reads as an alias (19 Oct 2026).

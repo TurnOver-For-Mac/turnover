@@ -79,4 +79,31 @@ func terminalUnicodeTests() {
             expect(said(), [], "an incomplete context is not presented as a complete character")
         }
     }
+
+    // The text area as Terminal gives it now, without the subrole: only its description says it is the shell.
+    func terminalOverlay(bundle: String, description: String) -> TurnOverObject? {
+        BuiltInModules.register()
+        guard let type = AppModuleHandler.shared.moduleType(for: bundle) else {
+            Harness.fail("a module is registered for \(bundle)"); return nil
+        }
+        AXReplay.load(AXFixture(app: "Public Terminal sample", bundle: bundle, recorded: "synthetic", root: 1, application: nil, focus: 1,
+                                nodes: [.init(id: 1, attrs: ["AXRole": .string("AXTextArea"), "AXDescription": .string(description)])]))
+        defer { AXReplay.unload() }
+        let element = AXReplay.element(1)
+        let module = type.init(pid: element.pid, bundleIdentifier: bundle, appName: "Public Terminal sample")
+        return module.objectClass(for: element, role: .editableText, subrole: nil)?.init(element: element)
+    }
+    test("Terminal: the text area is the terminal when Terminal says \"shell\" in the Mac's language") {
+        // A Turkish Mac (7 Nov 2026, macOS 27.2, Terminal 2.15): no subrole, described "kabuk". Return went to the edit
+        // field's caret_newLine and new output was never read.
+        guard let object = terminalOverlay(bundle: "com.apple.Terminal", description: "kabuk") else {
+            return Harness.fail("a text area Terminal describes as \"kabuk\" is the terminal")
+        }
+        check(object.script(named: "terminal_enter") != nil, "Return goes to the terminal's script")
+    }
+    test("Terminal: a text area described otherwise stays an edit field; iTerm2 still needs \"shell\"") {
+        check(terminalOverlay(bundle: "com.apple.Terminal", description: "shell") != nil, "Terminal in English")
+        check(terminalOverlay(bundle: "com.apple.Terminal", description: "notes") == nil, "not a word of Terminal's for the shell")
+        check(terminalOverlay(bundle: "com.googlecode.iterm2", description: "shell") != nil, "iTerm2, as before")
+    }
 }

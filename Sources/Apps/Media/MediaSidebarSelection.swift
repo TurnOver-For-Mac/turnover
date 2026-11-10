@@ -8,15 +8,17 @@ import TurnOverAX
 nonisolated package enum MediaSidebarSelection {
     package enum Outcome: Sendable, Equatable { case selected, alreadyOpen, failed }
     /// Worker-only, finite protocol: three exact-handle timeout setups, four target-freshness reads, one settable
-    /// query, one write and one selected-row count/slice. Each array slice requests exactly one element.
+    /// query, one write and one selected-row count/slice, then, while the write isn't shown yet, that count/slice again
+    /// at most forty times in four seconds. Each array slice requests exactly one element.
     /// The current callback remains pure. Fresh-window queries are explicit boundaries, never AX scope admission.
     package static func select(row: AXUIElement, outline: AXUIElement, cell: AXUIElement, expectedLabel: String,
                                allowAlreadyOpen: Bool, current: @escaping @Sendable () -> Bool,
+                               stillWanted: @escaping @Sendable () -> Bool = { true },
                                windowCurrent: @escaping @Sendable () -> Bool) -> Outcome {
         let end = DispatchTime.now().uptimeNanoseconds.addingReportingOverflow(500_000_000)
         guard !end.overflow else { return .failed }
         let alive: @Sendable () -> Bool = { current() && DispatchTime.now().uptimeNanoseconds < end.partialValue }
-        return AXReadScope.with(while: alive) {
+        let written: Outcome? = AXReadScope.with(while: alive) {
             guard alive(), windowCurrent(), alive() else { return .failed }
             for element in [outline, row, cell] {
                 guard alive(), AXUIElementSetMessagingTimeout(element, 0.05) == .success else { return .failed }
@@ -47,7 +49,31 @@ nonisolated package enum MediaSidebarSelection {
                 AXUIElementSetAttributeValue(outline, kAXSelectedRowsAttribute as CFString, [row] as CFArray)
             }
             guard selection.status == .returned(.success), alive() else { return .failed }
-            return membership(row: row, outline: outline, current: alive, windowCurrent: windowCurrent) ? .selected : .failed
+            let shown = membership(row: row, outline: outline, current: alive, windowCurrent: windowCurrent)
+            if shown { return .selected }
+            return nil
+        }
+        if let written { return written }
+        // Written, but not shown yet. TV applies a selection in its own time: it opened Paramount+ 3.2 s after TurnOver
+        // had said it could not select it (8 Nov 2026). The selection is asked for again, every tenth of a second for up
+        // to four seconds, in a scope of its own (the first one ends at half a second); a new key ends the wait. A
+        // selection TV never shows still fails (#186), and nothing is accepted without it (Codex, 8 Nov 2026).
+        let wait = DispatchTime.now().uptimeNanoseconds.addingReportingOverflow(4_000_000_000)
+        guard !wait.overflow else { return .failed }
+        let waiting: @Sendable () -> Bool = {
+            guard current() else { return false }
+            guard stillWanted() else { return false }
+            return DispatchTime.now().uptimeNanoseconds < wait.partialValue
+        }
+        return AXReadScope.with(while: waiting) {
+            while waiting() {
+                usleep(100_000)
+                guard waiting() else { break }
+                guard windowCurrent() else { break }
+                let shown = membership(row: row, outline: outline, current: waiting, windowCurrent: windowCurrent)
+                if shown { return .selected }
+            }
+            return .failed
         }
     }
 

@@ -54,6 +54,8 @@ public final class WebBuffer {
         let accessibility: AXSnapshot
     }
     private var snapshot = Snapshot(text: "", lines: [], segments: [], containers: [], accessibility: AXSnapshot(nodes: [:]))
+    /// The publication's elements, answered from its collection (and, for a page read on past it, from the app).
+    private func inPublication<Value>(_ body: () -> Value) -> Value { snapshot.accessibility.with(body) }
     public var text: NSString { snapshot.text }
     public var lines: [Line] { snapshot.lines }
     public var segments: [Segment] { snapshot.segments }
@@ -112,16 +114,27 @@ public final class WebBuffer {
     private var newSegments: [Segment] = []
     private var newContainers: [(start: Int, end: Int, element: AXUIElement)] = []
     private var visited = 0
-    static let maxElements = 6000
+    private var elementCount = 0
+    /// The elements one pass reads (a test sets it lower).
+    nonisolated(unsafe) package static var maxElements = 6000
+    /// How long one read may take on the main thread, its passes together (a test sets it lower).
+    nonisolated(unsafe) package static var buildSeconds: TimeInterval = 2
+    /// The passes one `build` may make to get back to the reader (a test sets it lower).
+    nonisolated(unsafe) package static var passesPerBuild = 50
     private var buildDeadline = Date.distantFuture
-    /// The last read stopped at its time limit: the end of a very long page is missing.
-    /// A new page in the same web area: the partial-page notice is due again (code review, 16 Oct 2026, item 29).
+    /// A new page in the same web area: the partial-page notice is due again (code review, 16 Oct 2026, item 29),
+    /// and the reading position was in the page before.
     public func newPage() {
         cancel()
         revision += 1
         snapshot = Snapshot(text: "", lines: [], segments: [], containers: [], accessibility: AXSnapshot(nodes: [:]))
         lastStop = nil; builtAt = .distantPast; isDirty = true; status = .idle
+        loggedPartial = false; readingAt = 0; samePage = false
+        resumeFrames = []; checkpoints = []; stopped = false; passes = 1
     }
+    private var loggedPartial = false
+    /// The copy is of the page the web area shows (no new page since it was read): one read again may keep it.
+    private var samePage = false
 
     public func cancel() {
         generation += 1; runner.cancel(); pendingCompletion = nil; status = .cancelled
@@ -157,11 +170,79 @@ public final class WebBuffer {
     /// Explicit synchronous path for the command-line plugin inspector and recorded-tree layout tests.
     /// Interactive reader callers must use build(completion:).
     package func buildForInspection() {
+        let was = collectsAtOnce; collectsAtOnce = true; defer { collectsAtOnce = was }
+        collectingDirtyRevision = dirtyRevision
         publish(WebBufferCollection.collect(root: webArea, focus: API.focusObject?.element, request: AXWalkRequest()))
     }
     private var docText = "" as NSString
     private var docCursor = 0
     private var lastTextEnd: Int?
+
+    // MARK: Reading on (issue 227)
+    // A long chat in the ChatGPT app is more than one pass's 6,000 elements. Read again from the top, the same first
+    // part came back and its end was never reached (eleganckidenis, 7 Nov 2026). So the walk keeps the containers it
+    // is inside; where a pass stops at a limit, the next one starts, and its text goes on the end of the copy.
+
+    /// A container the walk is inside: its children, the one reached, and what its close still owes.
+    struct Frame {
+        let element: AXUIElement
+        let role: String
+        var kids: [AXUIElement]
+        /// The child being read; at a stop, the first one not read.
+        var next = 0
+        let depth: Int
+        let isLink: Bool
+        /// A link on a line of its own (screen layout off).
+        let ownLine: Bool
+        let isBlock: Bool
+        let announced: Bool
+        let eachOnALine: Bool
+        /// Where its text starts in the copy: an announced container's span.
+        let start: Int
+        /// A link that adds no text is read by its title: what the line being built had when it opened (as always),
+        /// and, for one a pass stopped inside, the pieces with words the copy had.
+        let countAtOpen: Int
+        let textPiecesAtOpen: Int
+        /// Opened again by reading on: its span may be in the copy already, and is lengthened rather than added.
+        var resumed = false
+    }
+    /// Where a pass stopped: the copy's length and counts then, and the walk's state, so the copy can be cut back to
+    /// it and read again from there (the reader's part of a long page, when the page is read again).
+    private struct Checkpoint {
+        let offset: Int, lineCount: Int, segmentCount: Int
+        let frames: [Frame], element: AXUIElement?, pending: [AXUIElement]
+        let textPieces: Int, passes: Int, docCursor: Int, lastTextEnd: Int?
+    }
+    /// Every place a pass of this copy stopped, in order.
+    private var checkpoints: [Checkpoint] = []
+    /// The containers the walk is inside, outermost first.
+    private var frames: [Frame] = []
+    /// Where reading on starts: the containers a pass stopped inside (the deepest one's `next` is the first child not
+    /// read), or, for a page read to its end, its last element at each level.
+    private var resumeFrames: [Frame] = []
+    /// The pass stopped at a limit.
+    private var stopped = false
+    /// At the stop: the element of the line being built, and the containers waiting to be announced by the next line
+    /// (none if a line was being built: it took them as it was ended).
+    private var resumeElement: AXUIElement?
+    private var resumePending: [AXUIElement] = []
+    /// The frame closed last and, inside it, the frames closed at its end: where a page read to its end ends.
+    private var edgeChain: [Frame] = []
+    /// Pieces of text with words in them added to this copy, ever.
+    private var textPieces = 0
+    /// The passes this copy took: more than one, it was read on past a limit.
+    public private(set) var passes = 1
+    /// Where the reader is (the browse mode document's position): a read of the page again goes this far.
+    public var readingAt = 0
+    /// There is somewhere to read on from (after a stop, or the end of a page read whole).
+    public var canReadOn: Bool { stopped && !resumeFrames.isEmpty }
+
+    /// How long the walk over a collection may take on main. Ashley's 100 ms (#219) is kept: past it the walk stops
+    /// as at any limit, and the rest is read on.
+    nonisolated(unsafe) package static var layoutSeconds: TimeInterval = 0.1   // a test sets it; main thread only
+    /// The collection the walk is reading: an element it did not collect, because the collection stopped at a limit,
+    /// is where the walk stops too, and reading on goes on from there (merging #219 with #281, 10 Nov 2026).
+    private var collectionWasCut = false
 
     private func publish(_ collection: WebBufferCollection) {
         if collection.navigationChanged || acceptsSnapshot?(collection.snapshot) == false {
@@ -170,12 +251,17 @@ public final class WebBuffer {
             return
         }
         let t0 = Date()
+        // The copy being replaced, kept if this read is cut short and is the same as far as it goes (below).
+        let old = saved()
+        collectionWasCut = [.visits, .deadline, .queries, .axQueries].contains(collection.stop)
         collection.snapshot.with {
             out = ""; outLength = 0; current = []; currentElement = nil; pendingEntering = []; containerStack = []; linkDepth = 0
             newLines = []; newSegments = []; newContainers = []; visited = 0
+            frames = []; resumeFrames = []; stopped = false; resumeElement = nil; resumePending = []; edgeChain = []; textPieces = 0; passes = 1
+            checkpoints = []
             // This deadline bounds local interpretation, not a provider wait. Every AX convenience read is served
             // from the immutable collection, including those made by existing object and app presentation rules.
-            buildDeadline = Date().addingTimeInterval(0.1)
+            buildDeadline = Date().addingTimeInterval(Self.layoutSeconds)
             iosContent = webArea.string(kAXSubroleAttribute) == "iOSContentGroup"
             profiled = !ProfileStore.shared.profiles(for: ProfileStore.shared.bundle(of: webArea.pid)).isEmpty
             consumed = []
@@ -183,28 +269,245 @@ public final class WebBuffer {
             docCursor = 0; lastTextEnd = nil
             visit(webArea, depth: 0)
             flush()
-            if newLines.isEmpty, let dialog = collection.focusedPart {
+            if newLines.isEmpty, !stopped, let dialog = collection.focusedPart {
                 visit(dialog, depth: 1); flush()
             }
+            endPass()
         }
-        lastStop = collection.stop ?? (Date() >= buildDeadline ? .deadline : nil)
-        let retained = lastStop != nil && newLines.isEmpty && !snapshot.lines.isEmpty
-        if retained {
-            // A transient provider failure is not an empty new document. Keep the last valid publication and
-            // its caret/ranges available, while marking the refresh incomplete and leaving it due for retry.
+        collectionWasCut = false
+        elementCount = visited
+        // A transient provider failure is not an empty new document. Keep the last valid publication and its
+        // caret/ranges available, while marking the refresh incomplete and leaving it due for retry.
+        let failed = collection.stop.map { [.providerFailure, .backoff, .cancelled, .cycle].contains($0) } ?? false
+        // Likewise a read of the same page that stopped before it had anything (a page that has stopped answering in
+        // time; #281's rule): the copy it had is kept, still due for reading again.
+        if newLines.isEmpty, failed || stopped, samePage, !old.publication.lines.isEmpty {
+            restore(old)
+            lastStop = collection.stop
             isDirty = true
-        } else {
-            willPublish?()
-            revision += 1
-            snapshot = Snapshot(text: out as NSString, lines: newLines, segments: newSegments, containers: newContainers, accessibility: collection.snapshot)
-            builtAt = Date(); isDirty = dirtyRevision != collectingDirtyRevision
+            finish(since: t0, collectedMs: collection.elapsedMs, published: false)
+            return
         }
+        walkAccessibility = collection.snapshot
+        // Every stop of the collection leaves the page incomplete (#219), even where the walk had all it reached.
+        lastStop = stopped ? (collection.stop ?? .deadline) : collection.stop
+        // The same page, read on past its first part before (a long chat, issue 227), with the reader past what this
+        // reading reached: the rest is read on, in the background as the first part was, as far as the reader, before
+        // anything is published. Until then the copy as it was stays readable.
+        let wanted = min(readingAt + 2000, old.publication.text.length)
+        if stopped, samePage, outLength <= wanted, readingAt >= outLength {
+            status = .loading
+            catchUp(to: wanted, passesLeft: Self.passesPerBuild) { [weak self] in
+                guard let self else { return }
+                self.samePage = true
+                self.isDirty = self.dirtyRevision != self.collectingDirtyRevision
+                self.publishCopy()
+                self.finish(since: t0, collectedMs: collection.elapsedMs, published: true)
+            }
+            return
+        }
+        samePage = true
+        isDirty = dirtyRevision != collectingDirtyRevision
+        publishCopy()
+        finish(since: t0, collectedMs: collection.elapsedMs, published: true)
+    }
+
+    /// The end of every reading of the page, published or not: status, the notice for a page read in part, the log,
+    /// and the action waiting for it.
+    private func finish(since t0: Date, collectedMs: Int, published: Bool) {
+        if published { builtAt = Date() }
         status = lastStop == nil ? .complete : (lines.isEmpty ? .unavailable : .partial)
-        lastBuildMs = collection.elapsedMs + Int(Date().timeIntervalSince(t0) * 1000)
-        Log.info("virtual buffer: \(lines.count) lines, \(text.length) characters from \(visited) elements in \(lastBuildMs) ms (\(status)\(lastStop.map { ": " + $0.rawValue } ?? ""))")
+        // (The notice for a page read in part is browse mode's, once a page: reportPartialBuffer.)
+        if stopped, !loggedPartial { loggedPartial = true; Log.error("virtual buffer: stopped at \(visited >= Self.maxElements ? "\(Self.maxElements) elements" : "a limit"), \(lastStop.map(\.rawValue) ?? "the walk's time"); the rest is read on") }
+        lastBuildMs = collectedMs + Int(Date().timeIntervalSince(t0) * 1000)
+        Log.info("virtual buffer: \(lines.count) lines, \(text.length) characters from \(elementCount) elements in \(lastBuildMs) ms (\(status)\(lastStop.map { ": " + $0.rawValue } ?? "")\(passes > 1 ? ", \(passes) passes" : ""))")
         let ready = pendingCompletion; pendingCompletion = nil
-        if retained { didFail?() } else { didPublish?() }
+        if published { didPublish?() } else { didFail?() }
         ready?()
+    }
+
+    /// The end of a pass: after a stop, a place to read again from; after a whole read, its end to read on from.
+    private func endPass() {
+        if stopped {
+            checkpoints.append(Checkpoint(offset: outLength, lineCount: newLines.count, segmentCount: newSegments.count,
+                                          frames: resumeFrames, element: resumeElement, pending: resumePending,
+                                          textPieces: textPieces, passes: passes, docCursor: docCursor, lastTextEnd: lastTextEnd))
+        } else {
+            resumeFrames = edgeChain
+        }
+    }
+
+    // MARK: Reading on in the background (merging #219 with #281, 10 Nov 2026)
+    // Where the walk stopped at a limit, the rest of the page is collected as the first part was, on the worker, from
+    // the elements the walk did not reach (`frontier`), and the walk goes on over that on main, its text added at the
+    // end of the copy so every offset before it stays as it was. Nothing in it asks the app on main.
+
+    /// The collections the walk has read so far, together: what the next publication answers from.
+    private var walkAccessibility = AXSnapshot(nodes: [:])
+    /// Tests and the inspector collect at once, on the calling thread; the reader in the background.
+    package var collectsAtOnce = false
+
+    /// The elements the walk did not reach, in reading order: the rest of the deepest container from the one it
+    /// stopped at, then the rest of each container round it.
+    private func frontier() -> [AXUIElement] {
+        guard stopped else { return [] }
+        var out: [AXUIElement] = []
+        for (k, f) in resumeFrames.enumerated().reversed() {
+            let from = k == resumeFrames.count - 1 ? f.next : f.next + 1
+            if from < f.kids.count { out += f.kids[max(0, from)...] }
+        }
+        return out
+    }
+
+    private func collectFrontier(_ then: @escaping (WebBufferCollection?) -> Void) {
+        let roots = frontier()
+        guard !roots.isEmpty else { then(nil); return }
+        let area = webArea
+        let job: @Sendable (AXWalkRequest) -> WebBufferCollection = { request in
+            WebBufferCollection.collect(root: area, focus: nil, request: request, continuing: roots)
+        }
+        if collectsAtOnce { then(job(AXWalkRequest())); return }
+        let current = generation
+        runner.submit(collect: job, publish: { [weak self] result in
+            guard let self, generation == current else { return }
+            then(result)
+        })
+    }
+
+    /// One pass of the walk over a collection of the rest of the page, added to the copy (not yet published).
+    private func readOn(from collection: WebBufferCollection) -> Bool {
+        walkAccessibility = walkAccessibility.merging(collection.snapshot)
+        collectionWasCut = [.visits, .deadline, .queries, .axQueries].contains(collection.stop)
+        let more = walkAccessibility.with { readOn(deadline: Date().addingTimeInterval(Self.layoutSeconds)) }
+        collectionWasCut = false
+        lastStop = stopped ? (collection.stop ?? .deadline) : nil
+        return more
+    }
+
+    /// Reads on from where the walk stopped, in the background, and publishes what it added. `completion` (on main)
+    /// says whether there was text in it; false at once when there is nothing to read on, or a reading is under way.
+    public func buildMore(completion: ((Bool) -> Void)? = nil) {
+        guard canReadOn, !isLoading else { completion?(false); return }
+        status = .loading
+        let t0 = Date(), linesBefore = newLines.count, lengthBefore = outLength
+        collectFrontier { [weak self] collection in
+            guard let self else { return }
+            let more = collection.map { self.readOn(from: $0) } ?? false
+            if collection == nil { self.stopped = false; self.resumeFrames = []; self.lastStop = nil }
+            self.publishCopy()
+            self.status = self.lastStop == nil ? .complete : .partial
+            Log.info("virtual buffer: read on from where it stopped: \(self.newLines.count - linesBefore) lines, \(self.outLength - lengthBefore) characters from \(self.visited) elements in \(Int(Date().timeIntervalSince(t0) * 1000)) ms\(self.stopped ? "; more to read on" : ", to the end")")
+            self.didPublish?()
+            completion?(more)
+        }
+    }
+
+    /// For the tests: reads on at once and says whether there was text.
+    @discardableResult
+    package func buildMoreAtOnce() -> Bool {
+        let was = collectsAtOnce; collectsAtOnce = true; defer { collectsAtOnce = was }
+        var more = false
+        buildMore { more = $0 }
+        return more
+    }
+
+    /// Reads on, pass after pass, until the copy reaches `wanted` or the page's end, then `done`. Not published.
+    private func catchUp(to wanted: Int, passesLeft: Int, then done: @escaping () -> Void) {
+        guard stopped, outLength <= wanted, passesLeft > 0 else { done(); return }
+        collectFrontier { [weak self] collection in
+            guard let self else { return }
+            guard let collection else { done(); return }
+            _ = self.readOn(from: collection)
+            self.catchUp(to: wanted, passesLeft: passesLeft - 1, then: done)
+        }
+    }
+
+    /// The copy as published, in one replacement, with the collections its elements are answered from.
+    private func publishCopy() {
+        willPublish?()
+        revision += 1
+        snapshot = Snapshot(text: out as NSString, lines: newLines, segments: newSegments, containers: newContainers,
+                            accessibility: walkAccessibility)
+    }
+
+    /// One pass from `resumeFrames`, added to the copy (not yet published). Whether it added text.
+    private func readOn(deadline: Date) -> Bool {
+        let chain = resumeFrames
+        guard !chain.isEmpty else { return false }
+        let wasStopped = stopped
+        let before = outLength
+        visited = 0
+        buildDeadline = min(Date().addingTimeInterval(Self.buildSeconds), deadline)
+        stopped = false; edgeChain = []
+        frames = reopened(chain, stopped: wasStopped)
+        // Inside the containers as the walk was when it stopped: the next line's element, and the announcements still
+        // owed (the rest were said where their containers began).
+        current = []
+        currentElement = wasStopped ? resumeElement : nil
+        pendingEntering = wasStopped ? resumePending : []
+        containerStack = frames.filter(\.announced).map(\.element)
+        linkDepth = frames.filter(\.isLink).count
+        // The deepest first: from the child not read (after a stop) or after its last; then each container around it,
+        // from the child after the one it was in.
+        var deepest = true
+        while !frames.isEmpty {
+            let f = frames.count - 1
+            if !(deepest && wasStopped) { frames[f].next += 1 }
+            deepest = false
+            readChildren(of: f)
+            close(frames.removeLast())
+        }
+        flush()
+        if outLength > before { passes += 1 }
+        endPass()
+        elementCount += visited
+        return outLength > before
+    }
+
+    /// The frames to read on from, with their children asked for again (a chat adds replies at its end). The child
+    /// each was at is found among them; one gone from the page leaves the children as they were read.
+    private func reopened(_ chain: [Frame], stopped wasStopped: Bool) -> [Frame] {
+        chain.map { saved in
+            var f = saved
+            f.resumed = true
+            // The child it was at: the one not read (a stop's deepest frame), the one it was inside, or its last.
+            let at: AXUIElement? = wasStopped ? (saved.next < saved.kids.count ? saved.kids[saved.next] : nil) : saved.kids.last
+            let fresh = childrenToRead(saved.element, role: saved.role)
+            if let at, let k = fresh.firstIndex(where: { $0.isSame(at) }) {
+                f.kids = fresh; f.next = k
+            } else if at == nil {
+                f.kids = fresh; f.next = -1   // it had no children when read: every one it has now is after its end
+            } else {
+                f.next = wasStopped ? saved.next : saved.kids.count - 1
+            }
+            return f
+        }
+    }
+
+    /// What a copy is, kept while the page is read again.
+    private struct Copy {
+        let publication: Snapshot; let lastStop: AXWalkStop?
+        let out: String; let outLength: Int
+        let resumeFrames: [Frame]; let stopped: Bool; let resumeElement: AXUIElement?; let resumePending: [AXUIElement]
+        let checkpoints: [Checkpoint]
+        let passes: Int; let textPieces: Int; let elementCount: Int
+        let docText: NSString; let docCursor: Int; let lastTextEnd: Int?
+    }
+    private func saved() -> Copy {
+        Copy(publication: snapshot, lastStop: lastStop, out: out, outLength: outLength,
+             resumeFrames: resumeFrames, stopped: stopped, resumeElement: resumeElement, resumePending: resumePending,
+             checkpoints: checkpoints, passes: passes, textPieces: textPieces, elementCount: elementCount,
+             docText: docText, docCursor: docCursor, lastTextEnd: lastTextEnd)
+    }
+    private func restore(_ c: Copy) {
+        snapshot = c.publication; lastStop = c.lastStop
+        out = c.out; outLength = c.outLength
+        newLines = c.publication.lines; newSegments = c.publication.segments; newContainers = c.publication.containers
+        resumeFrames = c.resumeFrames; stopped = c.stopped
+        resumeElement = c.resumeElement; resumePending = c.resumePending; checkpoints = c.checkpoints
+        passes = c.passes; textPieces = c.textPieces; elementCount = c.elementCount
+        docText = c.docText; docCursor = c.docCursor; lastTextEnd = c.lastTextEnd
+        frames = []; edgeChain = []; current = []; currentElement = nil; pendingEntering = []; containerStack = []; linkDepth = 0
     }
 
     static let controlRoles: Set<String> = ["AXButton", "AXPopUpButton", "AXComboBox", "AXTextField", "AXTextArea", "AXCheckBox", "AXRadioButton", "AXMenuItem", "AXSlider", "AXMenuButton", "AXIncrementor", "AXDisclosureTriangle", "AXColorWell", "AXDateField", "AXTimeField"]
@@ -220,7 +523,16 @@ public final class WebBuffer {
     private var consumed: [AXUIElement] = []
 
     private func visit(_ el: AXUIElement, depth: Int) {
-        guard visited < Self.maxElements, depth < 60, Date() < buildDeadline else { return }
+        guard depth < 60 else { return }
+        // An element the collection did not reach, because it stopped at a limit, is where the walk stops too.
+        guard visited < Self.maxElements, Date() < buildDeadline, !(collectionWasCut && !AXSnapshot.holds(el)) else {
+            // The first element a limit turns away: the next pass starts here (issue 227), as the walk was.
+            if !stopped {
+                stopped = true; resumeFrames = frames
+                resumeElement = currentElement; resumePending = current.isEmpty ? pendingEntering : []
+            }
+            return
+        }
         visited += 1
         let role = el.role
         // A separator (a page's <hr>, WebKit's AXSplitter) is a line of its own, as NVDA shows it: S finds it.
@@ -241,7 +553,7 @@ public final class WebBuffer {
                 if let src = d.source { consumed.append(src) }
                 flush()
                 currentElement = el
-                current.append((name, el, false))
+                addPiece(name, el, false)
                 flush(control: true, fields: [roleText ?? Role.from(axRole: role, subrole: el.string(kAXSubroleAttribute)).displayString])
                 return
             }
@@ -293,11 +605,9 @@ public final class WebBuffer {
             let ownLine = !config.virtualBuffers.screenLayout
             if ownLine { flush() }
             linkDepth += 1
-            let before = current.count
-            for k in el.elements(kAXChildrenAttribute) { visit(k, depth: depth + 1) }
-            if current.count == before, let t = el.string(kAXTitleAttribute) ?? el.string(kAXDescriptionAttribute), !t.isEmpty { append(t, el) }
-            linkDepth -= 1
-            if ownLine { flush() }
+            // Its children, then its title if they gave no text (close).
+            read(Frame(element: el, role: role, kids: childrenToRead(el, role: role), depth: depth, isLink: true, ownLine: ownLine,
+                       isBlock: false, announced: false, eachOnALine: false, start: outLength, countAtOpen: current.count, textPiecesAtOpen: textPieces))
         case "AXProgressIndicator" where el.elements(kAXChildrenAttribute).isEmpty:
             // A line of its own, read as a control is ("Test progress, progress bar, 40 percent"): it had no text, so a
             // page's bar was missing from browse mode and could never be followed (2 Nov 2026). Not through
@@ -307,7 +617,7 @@ public final class WebBuffer {
             let obj = ObjectFactory.make(el)
             let label = obj.name.isEmpty ? (obj.value ?? obj.role.displayString) : obj.name
             currentElement = el
-            current.append((label, el, false))
+            addPiece(label, el, false)
             flush(control: true, fields: [obj.role.displayString, obj.value].compactMap { $0 }.filter { $0 != label })
         case _ where Self.controlRoles.contains(role):
             flush()
@@ -315,7 +625,7 @@ public final class WebBuffer {
             let label = obj.name.isEmpty ? (obj.value ?? "") : obj.name
             let fields = Speech.objectPropertiesSpeech(obj, reason: .focus).filter { $0 != label }
             currentElement = el
-            current.append((label.isEmpty ? obj.role.displayString : label, el, false))
+            addPiece(label.isEmpty ? obj.role.displayString : label, el, false)
             flush(control: true, fields: fields)
         case "AXHeading" where el.elements(kAXChildrenAttribute).isEmpty:
             // A heading with no text children (SwiftUI content in Music) is its own title.
@@ -331,27 +641,84 @@ public final class WebBuffer {
             if block { flush() }
             if announced { pendingEntering.append(el); containerStack.append(el) }
             if block, currentElement == nil { currentElement = el }
-            let containerStart = outLength
-            var kids = el.elements(kAXChildrenAttribute)
-            // A table is read by its rows. Chromium also lists it by columns and repeats its header row in a group
-            // of cells: Google Sheets' grid was read three times over (Day 3, 10 Oct 2026).
-            if role == "AXTable" || role == "AXGrid" {
-                kids.removeAll { k in k.role == "AXColumn" || (k.role == "AXGroup" && { let c = k.elements(kAXChildrenAttribute); return !c.isEmpty && c.allSatisfy { $0.role == "AXCell" } }()) }
-            }
             // Each item of a list is a line of its own: Chromium's listbox options are bare texts, and with no line
             // break between them on the page they ran together ("Google DocsExample Doc"; Google Drive's file list).
-            // An iOS screen's parts that a module puts first (Kindle's Add Bookmark, after the page's words in the tree,
-            // was read by say all at the foot of every page before it turned).
-            if iosContent, !Self.iosLeadingIdentifiers.isEmpty {
-                let lead = kids.filter { Self.iosLeadingIdentifiers.contains($0.string(kAXIdentifierAttribute) ?? "") }
-                if !lead.isEmpty { kids = lead + kids.filter { k in !lead.contains { $0.isSame(k) } } }
-            }
-            let eachOnALine = role == "AXList" || role == "AXOutline"
-            for k in kids { if eachOnALine { flush() }; visit(k, depth: depth + 1) }
-            if block { flush() }
-            if announced { containerStack.removeLast(); pendingEntering.removeAll { $0.isSame(el) } }
-            if announced, role != "AXHeading", outLength > containerStart { newContainers.append((containerStart, outLength, el)) }
+            read(Frame(element: el, role: role, kids: childrenToRead(el, role: role), depth: depth, isLink: false, ownLine: false,
+                       isBlock: block, announced: announced, eachOnALine: role == "AXList" || role == "AXOutline",
+                       start: outLength, countAtOpen: current.count, textPiecesAtOpen: textPieces))
         }
+    }
+
+    /// The children a container is read by (asked for again when reading on).
+    private func childrenToRead(_ el: AXUIElement, role: String) -> [AXUIElement] {
+        var kids = el.elements(kAXChildrenAttribute)
+        guard role != "AXLink" else { return kids }
+        // A table is read by its rows. Chromium also lists it by columns and repeats its header row in a group
+        // of cells: Google Sheets' grid was read three times over (Day 3, 10 Oct 2026).
+        if role == "AXTable" || role == "AXGrid" {
+            kids.removeAll { k in k.role == "AXColumn" || (k.role == "AXGroup" && { let c = k.elements(kAXChildrenAttribute); return !c.isEmpty && c.allSatisfy { $0.role == "AXCell" } }()) }
+        }
+        // An iOS screen's parts that a module puts first (Kindle's Add Bookmark, after the page's words in the tree,
+        // was read by say all at the foot of every page before it turned).
+        if iosContent, !Self.iosLeadingIdentifiers.isEmpty {
+            let lead = kids.filter { Self.iosLeadingIdentifiers.contains($0.string(kAXIdentifierAttribute) ?? "") }
+            if !lead.isEmpty { kids = lead + kids.filter { k in !lead.contains { $0.isSame(k) } } }
+        }
+        return kids
+    }
+
+    /// A container's children, then its close; on `frames` meanwhile, so a stop knows where it was.
+    private func read(_ frame: Frame) {
+        frames.append(frame)
+        readChildren(of: frames.count - 1)
+        close(frames.removeLast())
+    }
+
+    /// The children of `frames[f]` from its `next` on, until they end or a limit stops the walk.
+    private func readChildren(of f: Int) {
+        let kids = frames[f].kids, depth = frames[f].depth, each = frames[f].eachOnALine
+        var i = max(0, frames[f].next)
+        while i < kids.count, !stopped {
+            frames[f].next = i
+            if each { flush() }
+            visit(kids[i], depth: depth + 1)
+            i += 1
+        }
+    }
+
+    /// What a container owes once its children are read: the end of its line, of its announcement and of its span,
+    /// and for a link with no text of its own, its title. After a stop, the title waits for the children (read on).
+    private func close(_ frame: Frame) {
+        if frame.isLink {
+            // Nothing from inside it: the line being built is as it was (as always); for a link a pass stopped inside,
+            // no piece with words came in either part.
+            let nothing = frame.resumed ? textPieces == frame.textPiecesAtOpen : current.count == frame.countAtOpen
+            if nothing, !stopped,
+               let t = frame.element.string(kAXTitleAttribute) ?? frame.element.string(kAXDescriptionAttribute), !t.isEmpty { append(t, frame.element) }
+            linkDepth -= 1
+            if frame.ownLine { flush() }
+        } else {
+            if frame.isBlock { flush() }
+            if frame.announced { containerStack.removeLast(); pendingEntering.removeAll { $0.isSame(frame.element) } }
+            if frame.announced, frame.role != "AXHeading", outLength > frame.start {
+                // NVDA's comma; one opened again by reading on had its span cut where the pass stopped: lengthened.
+                if frame.resumed, let k = newContainers.lastIndex(where: { $0.start == frame.start && $0.element.isSame(frame.element) }) {
+                    newContainers[k].end = outLength
+                } else {
+                    newContainers.append((frame.start, outLength, frame.element))
+                }
+            }
+        }
+        // Where a page read to its end ends, for reading on later: this frame, with the frames closed at its end inside.
+        if !stopped {
+            if let inner = edgeChain.first, let last = frame.kids.last, inner.element.isSame(last) { edgeChain.insert(frame, at: 0) } else { edgeChain = [frame] }
+        }
+    }
+
+    /// A piece of the line being built (one with words is counted, for a link a pass stops inside).
+    private func addPiece(_ s: String, _ el: AXUIElement, _ link: Bool) {
+        current.append((s, el, link))
+        if s.contains(where: { !$0.isWhitespace }) { textPieces += 1 }
     }
 
     /// `space`: whether the page has white space between this piece and the last (nil: not known, so add one).
@@ -359,8 +726,8 @@ public final class WebBuffer {
         lastTextEnd = nil
         let t = s.replacingOccurrences(of: "\n", with: " ")
         if current.isEmpty { currentElement = currentElement ?? el }
-        if !current.isEmpty, space ?? true, let last = current.last?.0.last, !last.isWhitespace, !(t.first?.isWhitespace ?? true) { current.append((" ", el, linkDepth > 0)) }
-        current.append((t, el, linkDepth > 0))
+        if !current.isEmpty, space ?? true, let last = current.last?.0.last, !last.isWhitespace, !(t.first?.isWhitespace ?? true) { addPiece(" ", el, linkDepth > 0) }
+        addPiece(t, el, linkDepth > 0)
     }
 
     /// Emit the line being built, wrapped, with its segments.
@@ -427,7 +794,7 @@ public final class WebBuffer {
     /// Text ranges retain the publication their offsets describe, including copies queued for speech.
     package func frozen() -> WebBuffer { WebBuffer(copying: self) }
 
-    package func withSnapshot<Value>(_ body: () -> Value) -> Value { snapshot.accessibility.with(body) }
+    package func withSnapshot<Value>(_ body: () -> Value) -> Value { inPublication(body) }
 
     // MARK: Lookup
 
@@ -469,7 +836,7 @@ public final class WebBuffer {
     public enum TextKind { case paragraph, afterLinks }
 
     public func findText(from offset: Int, forward: Bool, kind: TextKind) -> (offset: Int, element: AXUIElement?)? {
-        snapshot.accessibility.with { Self.findText(lines: lines, segments: segments, text: text, from: offset, forward: forward, kind: kind) }
+        inPublication { Self.findText(lines: lines, segments: segments, text: text, from: offset, forward: forward, kind: kind) }
     }
 
     /// The search itself, on plain values, so the tests can give it lines of their own.
@@ -530,7 +897,7 @@ public final class WebBuffer {
     }
 
     public func find(from offset: Int, forward: Bool, roles: Set<String>, headingLevel: Int? = nil) -> (offset: Int, element: AXUIElement)? {
-        snapshot.accessibility.with { findInSnapshot(from: offset, forward: forward, roles: roles, headingLevel: headingLevel) }
+        inPublication { findInSnapshot(from: offset, forward: forward, roles: roles, headingLevel: headingLevel) }
     }
     private func findInSnapshot(from offset: Int, forward: Bool, roles: Set<String>, headingLevel: Int?) -> (offset: Int, element: AXUIElement)? {
         guard !lines.isEmpty else { return nil }
@@ -601,7 +968,7 @@ public final class WebBuffer {
     }
 
     public func offset(of element: AXUIElement) -> Int? {
-        snapshot.accessibility.with { offsetInSnapshot(of: element) }
+        inPublication { offsetInSnapshot(of: element) }
     }
     private func offsetInSnapshot(of element: AXUIElement) -> Int? {
         if let s = segments.first(where: { $0.element.isSame(element) }) { return s.start }

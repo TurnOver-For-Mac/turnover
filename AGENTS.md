@@ -2,14 +2,14 @@
 
 ## Project Structure & Module Organization
 
-TurnOver is a Swift 6 macOS screen reader that works alongside VoiceOver. `Package.swift` defines its targets:
+TurnOver is a Swift 6 macOS screen reader, a replacement for VoiceOver that hands back to it when it quits or hangs. `Package.swift` defines its targets:
 
 - `Sources/TurnOver/`: app lifecycle, keyboard handling, menus, and VoiceOver coordination.
 - `Sources/Core/`: shared reading, navigation, text, speech policy, keys, settings and plugins, grouped by responsibility.
 - `Sources/Views/`: reusable window and document reading models. Core and Views still compile in TurnOverCore.
 - `Sources/Experiments/`: shared investigation index and records, excluded from default builds. See `Sources/README.md` for the source map.
 - `Sources/System/`: shared Mac menus, prompts, notifications, application chooser and built-in app registration. These files still compile in TurnOverCore.
-- `Sources/Apps/`: app implementations and records. Implementations still belong to TurnOverCore: `Package.swift` discovers the `Core`, `Views` and `System` folders and explicitly lists app Swift files. Add new app files to that list; new shared Core, Views or System files are discovered automatically. Run `python3 Tools/build-app-index.py` after app-record or documentation changes; it generates the app index and the Apps exclusions in `Package.swift`. App tests, fixtures and experiments are excluded. See `Sources/Apps/README.md`.
+- `Sources/Apps/`: app implementations and records. Implementations still belong to TurnOverCore: `Package.swift` discovers the `Core`, `Views` and `System` folders and explicitly lists app Swift files. Add new app files to that list; new shared Core, Views or System files are discovered automatically. Run `python3 Tools/build-app-index.py` after app-record or documentation changes; it generates the app index and the Apps exclusions in `Package.swift`. App tests, fixtures and experiments are excluded. See `Sources/Apps/README.md`, and `MODULE-GUIDE.md` for writing a module. A module that needs shared Core behaviour asks for a building block (`docs/BUILDING-BLOCKS.md`) rather than changing shared code in the module's pull request.
 - `Sources/TurnOverAX/`, `TurnOverSpeech/`, `TurnOverBraille/`, and `TurnOverControl/`: accessibility, audio, braille, and local communication.
 - `Sources/TurnOverTests/`: test executable; `Tests/Fixtures/` and `Tests/Plugins/`: recorded windows and plugin samples.
 - `Resources/`: bundle configuration, sounds, recipes, and keymaps. `Helpers/` contains separate Swift packages; `Tools/` contains development utilities.

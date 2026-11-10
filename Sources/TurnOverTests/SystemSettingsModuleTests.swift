@@ -123,6 +123,22 @@ func systemSettingsModuleTests() {
         rig.settle()
         expect(rig.state.reported, [21], "own focus news does not cancel verification of the containing part")
     }
+    test("System Settings: keyboard focus already in the part still brings the review cursor and the name") {
+        AXReplay.load(settingsControlFixture()); defer { AXReplay.unload() }
+        guard let rig = SettingsModuleRig() else { return }; defer { rig.stop() }
+        // TurnOver's focus is elsewhere (9), but the app's keyboard focus is a row in the sidebar (21), as when the
+        // review cursor was left in the pane on macOS 27.2 (issue 256).
+        rig.state.actualFocus = AXReplay.element(21)
+        rig.resolver.state.withLock {
+            $0.result = .init(target: AXReplay.element(20), canFocus: true, focusInside: true)
+            $0.verification = .init(focused: AXReplay.element(21))
+        }
+        rig.command("sidebar"); rig.settle()
+        expect(rig.state.writes, [], "nothing to write when the focus is already there")
+        expect(rig.state.reviewed, [21], "the review cursor comes to the focused row")
+        expect(rig.state.spoken, ["sidebar"], "the part's name is said")
+        expect(rig.state.reported, [21])
+    }
     test("System Settings: unavailable native focus uses an honest review cursor") {
         AXReplay.load(settingsControlFixture()); defer { AXReplay.unload() }
         guard let rig = SettingsModuleRig() else { return }; defer { rig.stop() }
@@ -233,6 +249,102 @@ func systemSettingsModuleTests() {
         }
         expect(result.withLock { $0 }, [20, 23, 16], "known sidebar and search branches anchor the unique detail scroller")
         check(AXReplay.actions.isEmpty && AXReplay.sets.isEmpty, "discovery never selected, pressed or changed settings")
+    }
+    test("System Settings: without its identifier the window's only split group is the split view") {
+        var fixture = try AXFixture.load(fixtureURL("settings-general"))
+        let split = fixture.nodes.firstIndex { $0.id == 7 }!
+        fixture.nodes[split].attrs["AXIdentifier"] = nil
+        AXReplay.load(fixture); defer { AXReplay.unload() }
+        let resolver = SystemSettingsAXParts(log: { _ in })
+        func parts() -> [Int?] {
+            SystemSettingsPart.allCases.map { AXReplay.id(of: resolver.resolve(.init(pid: AXReplay.floor, window: AXReplay.root!, part: $0), current: { true })?.target) }
+        }
+        expect(parts(), [20, 23, 16], "a renamed split view is still found when it is the only one")
+        // A second split group: with neither named, nothing is guessed; with the known one named, it wins.
+        fixture.nodes[0].attrs["AXChildrenInNavigationOrder"] = .elements([3, 5, 4, 2, 6, 310, 1])
+        fixture.nodes.append(.init(id: 310, attrs: ["AXRole": .string("AXSplitGroup"), "AXChildrenInNavigationOrder": .elements([])]))
+        AXReplay.load(fixture)
+        expect(parts(), [nil, nil, nil], "two unnamed split groups are ambiguous")
+        fixture.nodes[split].attrs["AXIdentifier"] = .string("Main, SidebarNavigationSplitView")
+        AXReplay.load(fixture)
+        expect(parts(), [20, 23, 16], "the identifier chooses between split groups")
+    }
+    test("System Settings: a branch deeper than the limit is skipped, not the whole search") {
+        var fixture = try AXFixture.load(fixtureURL("settings-general"))
+        // A chain of groups six levels deep, walked before the branch that holds the split view.
+        fixture.nodes[0].attrs["AXChildrenInNavigationOrder"] = .elements([300, 3, 5, 4, 2, 6, 1])
+        for id in 300...305 {
+            fixture.nodes.append(.init(id: id, attrs: ["AXRole": .string("AXGroup"),
+                                                       "AXChildrenInNavigationOrder": .elements(id == 305 ? [] : [id + 1])]))
+        }
+        AXReplay.load(fixture); defer { AXReplay.unload() }
+        let lines = OSAllocatedUnfairLock(initialState: [String]())
+        let resolver = SystemSettingsAXParts(log: { line in lines.withLock { $0.append(line) } })
+        let found = resolver.resolve(.init(pid: AXReplay.floor, window: AXReplay.root!, part: .sidebar), current: { true })
+        expect(AXReplay.id(of: found?.target), 20, "the split view after a deep branch is found")
+        expect(lines.withLock { $0 }, ["System Settings: sidebar found; split view by its identifier, level 2"], "a found part logs one line, not the levels")
+    }
+    test("System Settings: a found part logs how its split view was found and at which level") {
+        var fixture = try AXFixture.load(fixtureURL("settings-general"))
+        let lines = OSAllocatedUnfairLock(initialState: [String]())
+        let resolver = SystemSettingsAXParts(log: { line in lines.withLock { $0.append(line) } })
+        AXReplay.load(fixture); defer { AXReplay.unload() }
+        _ = resolver.resolve(.init(pid: AXReplay.floor, window: AXReplay.root!, part: .pane), current: { true })
+        let split = fixture.nodes.firstIndex { $0.id == 7 }!
+        fixture.nodes[split].attrs["AXIdentifier"] = nil
+        AXReplay.load(fixture)
+        _ = resolver.resolve(.init(pid: AXReplay.floor, window: AXReplay.root!, part: .sidebar), current: { true })
+        expect(lines.withLock { $0 }, ["System Settings: pane found; split view by its identifier, level 2",
+                                       "System Settings: sidebar found; split view as the only split group, level 2"])
+    }
+    test("System Settings: a branch whose children fail is retried through AXChildren, then skipped alone") {
+        AXReplay.load(try AXFixture.load(fixtureURL("settings-general"))); defer { AXReplay.unload() }
+        // The settings pane's branch (13) answers -25201 for its navigation-order children, as on macOS 27.2.
+        for failsBoth in [false, true] {
+            let lines = OSAllocatedUnfairLock(initialState: [String]())
+            let resolver = SystemSettingsAXParts(log: { line in lines.withLock { $0.append(line) } }, childrenError: { element, attribute in
+                guard AXReplay.id(of: element) == 13, failsBoth || attribute == AXNavigationChildren.navigationAttribute else { return nil }
+                return .illegalArgument
+            })
+            let found = SystemSettingsPart.allCases.map {
+                AXReplay.id(of: resolver.resolve(.init(pid: AXReplay.floor, window: AXReplay.root!, part: $0), current: { true })?.target)
+            }
+            let logged = lines.withLock { $0 }
+            if failsBoth {
+                expect(found, [20, nil, 16], "the sidebar and search are still found; the pane's branch is skipped")
+                check(logged.count == 3 && logged.allSatisfy { $0.contains("branch 4: navigation-order error") && $0.contains("-25201") && $0.contains("branch 4: AXChildren error") },
+                      "each line says which branch failed, how, and that AXChildren failed too: \(logged)")
+                check(logged[1].hasPrefix("System Settings: no pane") && logged[1].contains("branch 4 skipped"), "the pane's failure names the skipped branch: \(logged[1])")
+            } else {
+                expect(found, [20, 23, 16], "AXChildren reaches the pane after the navigation-order error")
+                check(logged.count == 3 && logged.allSatisfy { $0.contains("found") && $0.contains("branch 4: navigation-order error") && $0.contains("branch 4: AXChildren worked") },
+                      "the found lines say the other route worked: \(logged)")
+            }
+        }
+    }
+    test("System Settings: the resolver says whether the app's keyboard focus is already inside the part") {
+        AXReplay.load(try AXFixture.load(fixtureURL("settings-general"))); defer { AXReplay.unload() }
+        let resolver = SystemSettingsAXParts(log: { _ in })
+        let inside = SystemSettingsPart.allCases.map {
+            resolver.resolve(.init(pid: AXReplay.floor, window: AXReplay.root!, part: $0), current: { true })?.focusInside
+        }
+        expect(inside, [false, true, false], "the recorded focus (123) is a button in the settings pane")
+    }
+    test("System Settings: a failed lookup logs the levels it walked") {
+        var fixture = try AXFixture.load(fixtureURL("settings-general"))
+        let split = fixture.nodes.firstIndex { $0.id == 7 }!
+        fixture.nodes[split].attrs["AXRole"] = .string("AXGroup")
+        AXReplay.load(fixture); defer { AXReplay.unload() }
+        let lines = OSAllocatedUnfairLock(initialState: [String]())
+        let resolver = SystemSettingsAXParts(log: { line in lines.withLock { $0.append(line) } })
+        check(resolver.resolve(.init(pid: AXReplay.floor, window: AXReplay.root!, part: .pane), current: { true }) == nil, "no split group, no pane")
+        let logged = lines.withLock { $0 }
+        expect(logged.count, 1, "one line per failed lookup")
+        let line = logged.first ?? ""
+        check(line.contains("no pane (split view: 0 split groups"), "names the part and the failed step: \(line)")
+        check(line.contains("0 AXWindow/AXStandardWindow") && line.contains("1 AXGroup/AXHostingView") && line.contains("2 AXGroup"),
+              "levels with roles and subroles: \(line)")
+        check(!line.contains("general.about"), "identifiers only of split groups and outlines: \(line)")
     }
     test("System Settings: modal windows and ambiguous pane roots fail closed") {
         var fixture = try AXFixture.load(fixtureURL("settings-general"))

@@ -352,8 +352,8 @@ final class PagesTextInfo: AXTextInfo {
             // "Table 3, paginated, rows 1 to 4 of 8, columns 1 to 4 of 4": the whole table's size.
             let title = o.string(kAXTitleAttribute) ?? ""
             if let size = PagesTable.size(of: o) {
-                let rows = size.rows == 1 ? String(localized: "1 row", comment: "A table's size") : String(localized: "\(String(size.rows)) rows", comment: "A table's size")
-                let cols = size.cols == 1 ? String(localized: "1 column", comment: "A table's size") : String(localized: "\(String(size.cols)) columns", comment: "A table's size")
+                let rows = size.rows == 1 ? String(localized: "1 row", comment: "A table's size") : String(localized: "\(size.rows) rows", comment: "A table's size")
+                let cols = size.cols == 1 ? String(localized: "1 column", comment: "A table's size") : String(localized: "\(size.cols) columns", comment: "A table's size")
                 return "\(PagesTable.name(of: o)), \(rows), \(cols)"
             }
             return title.isEmpty ? "table" : title

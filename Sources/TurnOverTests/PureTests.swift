@@ -8,9 +8,25 @@ import CoreGraphics
 import ApplicationServices
 import TurnOverCore
 import TurnOverSpeech
+import TurnOverControl
 import AXFixtures
 
 func pureTests() {
+    test("Help make TurnOver: every way to help named, by the menu's own words, and it opens by itself once") {
+        let body = HelpMakeTurnOver.body
+        for words in ["Send feedback", "Help improve this app", "Fix the item I'm on", "VO-Slash", "Translate", "CONTRIBUTING.md",
+                      HelpMakeTurnOver.discordAddress, "Discord", "under Help, as Help make TurnOver"] {
+            check(body.contains(words), "the page names \(words)")
+        }
+        check(body.split(separator: "\n").count >= 8, "one point a line, read with Up and Down")
+        expect(HelpMakeTurnOver.githubURL.absoluteString, "https://github.com/TurnOver-For-Mac/turnover", "the button opens TurnOver on GitHub")
+        let key = "helpMakeTurnOverShown", saved = UserDefaults.standard.object(forKey: key)
+        defer { if let saved { UserDefaults.standard.set(saved, forKey: key) } else { UserDefaults.standard.removeObject(forKey: key) } }
+        UserDefaults.standard.removeObject(forKey: key)
+        check(HelpMakeTurnOver.due, "on a Mac that hasn't seen it, it's due")
+        HelpMakeTurnOver.markShown()
+        check(!HelpMakeTurnOver.due, "once shown, it doesn't open by itself again")
+    }
     test("readers per app: a fresh file is off, a file with a list or another mode keeps working as it did") {
         let decode: (String) -> Config.Applications = { json in
             try! JSONDecoder().decode(Config.Applications.self, from: json.data(using: .utf8)!)
@@ -493,6 +509,50 @@ func pureTests() {
         expect(answer.value, .passed, "an unbound key goes to the application")
         if case .found(let found) = ScriptHandler.lookup(g) { expect(found.name, "test_mainkey") } else { Harness.fail("the main thread's own lookup") }
     }
+    // While Chrome held secure input after a sign-in, Command Tab and Command A opened the menu bar, six times of six
+    // (31 Oct 2026): the key tap got Command going down and coming up, and no key between.
+    test("keys: a modifier is pressed alone only with secure input off, as it goes down and as it comes up") {
+        let t = Date(timeIntervalSince1970: 100), soon = t.addingTimeInterval(0.2)
+        var command = LoneModifier()
+        command.down(alone: true, secureInput: false, at: t)
+        check(command.up(secureInput: false, at: soon), "Command alone, quickly: the menu bar, as before")
+        command.down(alone: true, secureInput: false, at: t)
+        check(!command.up(secureInput: false, at: t.addingTimeInterval(0.7)), "held too long")
+        command.down(alone: true, secureInput: false, at: t)
+        command.cancel()
+        check(!command.up(secureInput: false, at: soon), "a key heard while it was held: a shortcut")
+        command.down(alone: false, secureInput: false, at: t)
+        check(!command.up(secureInput: false, at: soon), "with another modifier held")
+        command.down(alone: true, secureInput: true, at: t)
+        check(!command.up(secureInput: true, at: soon), "secure input on: Command Tab, its Tab unheard")
+        command.down(alone: true, secureInput: true, at: t)
+        check(!command.up(secureInput: false, at: soon), "secure input off again by the time it came up")
+        command.down(alone: true, secureInput: false, at: t)
+        check(!command.up(secureInput: true, at: soon), "secure input on by the time it came up")
+    }
+    // The log says why nothing happened (asked in review, 7 Nov 2026): only a press that would have been on its own.
+    test("keys: a lone press set aside for secure input says so; a press that wasn't alone doesn't") {
+        let t = Date(timeIntervalSince1970: 100), soon = t.addingTimeInterval(0.2)
+        var shift = LoneModifier()
+        for (atDown, atUp) in [(true, true), (true, false), (false, true)] {
+            shift.down(alone: true, secureInput: atDown, at: t)
+            check(!shift.up(secureInput: atUp, at: soon), "not taken with secure input on (down \(atDown), up \(atUp))")
+            check(shift.setAsideForSecureInput, "and said to be set aside for it (down \(atDown), up \(atUp))")
+        }
+        shift.down(alone: true, secureInput: false, at: t)
+        check(shift.up(secureInput: false, at: soon), "secure input off: taken")
+        check(!shift.setAsideForSecureInput, "secure input off: nothing set aside")
+        shift.down(alone: true, secureInput: true, at: t)
+        _ = shift.up(secureInput: true, at: t.addingTimeInterval(0.7))
+        check(!shift.setAsideForSecureInput, "held too long: not a lone press anyway")
+        shift.down(alone: true, secureInput: true, at: t)
+        shift.cancel()
+        _ = shift.up(secureInput: true, at: soon)
+        check(!shift.setAsideForSecureInput, "a key heard between: not a lone press anyway")
+        shift.down(alone: false, secureInput: true, at: t)
+        _ = shift.up(secureInput: true, at: soon)
+        check(!shift.setAsideForSecureInput, "another modifier held: not a lone press anyway")
+    }
 
     test("settings: an old file keeps its values and gets the defaults for the rest") {
         let json = """
@@ -651,6 +711,39 @@ func pureTests() {
         expect(FormatField.name(ofColour: c(0.4, 0, 0)), "dark red")
         expect(FormatField.name(ofColour: c(0, 0, 1)), "blue")
         expect(FormatField.name(ofColour: c(0.5, 0.5, 0.5)), "light grey")
+    }
+    test("Developer switch: each copy's other is the other, and only TurnOver's two identifiers are recorded") {
+        expect(ActiveReader.other(than: ActiveReader.published), ActiveReader.developer)
+        expect(ActiveReader.other(than: ActiveReader.developer), ActiveReader.published)
+        expect(ActiveReader.published, "com.turnover.reader")
+        expect(ActiveReader.developer, "com.turnover.reader.developer")
+    }
+    test("Help improve this app: the problem form is filled in with the app, the versions and the report") {
+        guard let url = HelpImprove.formURL(.problem, name: "Example", report: "Front window: 12 items", versions: "TurnOver 2.0 (build 23)"),
+              let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return Harness.fail("no address") }
+        let q = Dictionary(uniqueKeysWithValues: items.map { ($0.name, $0.value ?? "") })
+        expect(url.path, "/TurnOver-For-Mac/turnover/issues/new")
+        expect(q["template"], "problem.yml"); expect(q["app"], "Example"); expect(q["versions"], "TurnOver 2.0 (build 23)")
+        expect(q["report"]?.contains("Front window: 12 items"), true)
+        expect(Set(q.keys), ["template", "title", "app", "versions", "report"])   // nothing else goes in the address
+    }
+    test("Help improve this app: START.md names the rules, the fence and a clean build") {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent("help-improve-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: base) }
+        guard let dir = try? HelpImprove.write(pid: 1, name: "Example", bundle: "com.example", report: "Front window: 1 items",
+                                               base: base, versions: "TurnOver", brief: "https://example.invalid/AI-CONTRIBUTOR.md"),
+              let start = try? String(contentsOf: dir.appendingPathComponent("START.md"), encoding: .utf8) else { return Harness.fail("no START.md") }
+        for words in ["AGENTS.md", "MODULE-GUIDE.md", "./build.sh", "check-module-fence.py", "AI-CONTRIBUTOR.md", "never paste it anywhere public",
+                      "Xcode", "turnoverformac.com", "Tell us what's wrong"] {
+            expect(start.contains(words), true)
+        }
+    }
+    test("Help improve this app: the building block form is filled in, and a long report is cut") {
+        guard let url = HelpImprove.formURL(.buildingBlock, name: "Example", report: String(repeating: "x", count: 5000), versions: ""),
+              let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return Harness.fail("no address") }
+        let q = Dictionary(uniqueKeysWithValues: items.map { ($0.name, $0.value ?? "") })
+        expect(q["template"], "building-block.yml"); expect(q["app"], "Example")
+        expect((q["tried"]?.count ?? 0) < 1700, true)
     }
     test("VoiceOver export: the default voice, rate, volume, verbosity and typing echo are read; activities are ignored") {
         let plist: [String: Any] = ["ArchiveType": 1, "ArchiveVersionVO": 4, "export": [
@@ -1351,6 +1444,20 @@ func browseTextNavTests() {
         expect(try JSONDecoder().decode(Config.Games.self, from: data).readBigPicture, true, "read back on")
         let old = try JSONDecoder().decode(Config.Games.self, from: Data(#"{"readBigPicture": true}"#.utf8))
         expect(old.readBigPicture, false, "an 'on' saved before it was a choice doesn't count")
+    }
+    test("nothing in this window can be read: a hint, so off with hints, and never in Steam while Big Picture is read") {
+        let (hints, bigPicture) = (config.presentation.speakHints, config.games.readBigPicture)
+        defer { config.presentation.speakHints = hints; config.games.readBigPicture = bigPicture }
+        config.presentation.speakHints = true; config.games.readBigPicture = true
+        expect(EmptyWindowNotice.wanted(bundle: "com.parallels.desktop.appstore"), true, "an app that tells the Mac nothing: said")
+        expect(EmptyWindowNotice.wanted(bundle: nil), true, "a Wine program, which has no bundle: said")
+        expect(EmptyWindowNotice.wanted(bundle: Games.steamHelperBundle), false, "Big Picture, read by the Steam program: not said")
+        expect(EmptyWindowNotice.wanted(bundle: Games.steamBundle), false, "Steam itself: not said")
+        config.games.readBigPicture = false
+        expect(EmptyWindowNotice.wanted(bundle: Games.steamHelperBundle), true, "Big Picture not being read: said, so screen recognition is offered")
+        config.presentation.speakHints = false
+        expect(EmptyWindowNotice.wanted(bundle: "com.parallels.desktop.appstore"), false, "Hints after a pause off: not said (Oliver, 9 Nov 2026)")
+        expect(EmptyWindowNotice.wanted(bundle: Games.steamHelperBundle), false, "Hints after a pause off: not said in Steam either")
     }
     test("keyboard styles: a style's table is read and normalised") {
         let t = StyleKeymap.parse(Data(#"{"style": "jaws", "keys": {"kb:NVDA+F6": "elementsList", "kb:turnover+downArrow": "sayAll", "kb:x": ""}}"#.utf8))

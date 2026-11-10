@@ -131,7 +131,7 @@ open class TurnOverObject: ScriptableObject {
         var visited = 0
         // Each element's role, value, title, description and children in one question (SwiftUI apps are slow to
         // answer: Contacts' rows took 80 ms each to name, 10 Oct 2026).
-        let names = [kAXRoleAttribute, kAXValueAttribute, kAXTitleAttribute, kAXDescriptionAttribute, kAXChildrenAttribute]
+        let names = [kAXRoleAttribute, kAXSubroleAttribute, kAXValueAttribute, kAXTitleAttribute, kAXDescriptionAttribute, kAXChildrenAttribute]
         func trimmed(_ v: AnyObject?) -> String? {
             guard let t = (v as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty else { return nil }
             return t
@@ -142,9 +142,16 @@ open class TurnOverObject: ScriptableObject {
             let r = (a[kAXRoleAttribute] as? String) ?? "?"
             let kids = { (a[kAXChildrenAttribute] as? [AXUIElement]) ?? [] }
             let value = a[kAXValueAttribute], title = trimmed(a[kAXTitleAttribute]), desc = trimmed(a[kAXDescriptionAttribute])
-            if r == "AXCheckBox", let t = title {
+            if r == "AXCheckBox" {
+                // A switch says on or off; a check box says checked or not. One with no name of its own (System
+                // Settings' permission lists: the app's name is a text beside a nameless AXSwitch, so each row was
+                // only "Claude", 8 Nov 2026) still says its role and state after the texts.
                 let on = (value as? NSNumber)?.intValue == 1
-                parts.append("\(t), \(on ? State.checked.displayString : State.checked.negativeDisplayString)")
+                let isSwitch = (a[kAXSubroleAttribute] as? String) == "AXSwitch"
+                let state = isSwitch ? (on ? State.on.displayString : State.on.negativeDisplayString)
+                                     : (on ? State.checked.displayString : State.checked.negativeDisplayString)
+                if let t = title ?? desc { parts.append("\(t), \(state)") }
+                else { parts.append("\((isSwitch ? Role.switchControl : Role.checkBox).displayString), \(state)") }
             } else if r == "AXStaticText" || r == "AXTextField" {
                 if let v = trimmed(value) { parts.append(String(v.prefix(300))) }
                 else if r == "AXTextField" { queue.append(contentsOf: kids()) }
@@ -157,7 +164,7 @@ open class TurnOverObject: ScriptableObject {
                 parts.append(String(d.prefix(300)))
             } else if r == "AXImage" {
                 if let d = desc { images.append(d) }
-            } else if r == "AXButton" || r == "AXCheckBox" {
+            } else if r == "AXButton" {
                 if let d = desc ?? title { parts.append(d) }
             } else {
                 queue.append(contentsOf: kids())

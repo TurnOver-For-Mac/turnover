@@ -137,8 +137,12 @@ public final class GlobalCommands: ScriptableObject {
         script("openMenus", String(localized: "Opens the application's menus; closes them if open (Windows: Alt or F10). Also Command on its own", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:f10"], category: win) { _ in
             GlobalCommands.toggleMenus()
         }.isAvailable = windowsOn
-        script("quitApplication", String(localized: "Quits the application (Windows: Alt+F4)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+f4"], category: win) { _ in
-            KeyboardGesture(identifier: "kb:command+q")?.send()
+        // Alt F4. Two misses (Oliver, 7 Nov 2026: "command f4 ... doesn't quit apps"): with the top row as media keys (the
+        // Mac's default) F4 arrives as Spotlight (key 177; Launchpad, 131, on older keyboards), never as F4; and with Fn,
+        // the Command Q sent was heard and Safari stayed open. Both are now Alt F4, and the app is asked to quit
+        // directly, as the Dock's Quit does (unsaved work still asks first); the key is the fallback.
+        script("quitApplication", String(localized: "Quits the application (Windows: Alt+F4)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+f4"] + GlobalCommands.f4MediaKeys.map { "kb:command+\($0)" }, category: win) { _ in
+            DispatchQueue.main.async { GlobalCommands.quitFrontApp() }
         }.isAvailable = windowsOn
         script("forceQuit", String(localized: "Force quit an application; lists the running applications to force quit one, with a confirmation (the Mac's Force Quit window, spoken)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+option+escape"]) { _ in
             DispatchQueue.main.async { ForceQuit.open() }
@@ -146,7 +150,7 @@ public final class GlobalCommands: ScriptableObject {
         script("forceQuitWindows", String(localized: "Force quit, as Task Manager's key (Windows: Control+Shift+Escape)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:control+shift+escape"], category: win) { _ in
             DispatchQueue.main.async { ForceQuit.open() }
         }.isAvailable = windowsOn
-        script("closeWindow", String(localized: "Closes the window or tab (Windows: Control+F4)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:control+f4"], category: win) { _ in
+        script("closeWindow", String(localized: "Closes the window or tab (Windows: Control+F4)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:control+f4"] + GlobalCommands.f4MediaKeys.map { "kb:control+\($0)" }, category: win) { _ in
             KeyboardGesture(identifier: "kb:command+w")?.send()
         }.isAvailable = windowsOn
         // NVDA+R: the front window's text, read from the screen, as a result to move through and click in.
@@ -481,12 +485,12 @@ public final class GlobalCommands: ScriptableObject {
         func span(_ minutes: Int) -> String? {
             guard minutes > 0 else { return nil }
             let h = minutes / 60, m = minutes % 60
-            let mins = String(localized: "\(String(m)) minutes", comment: "A battery's time: minutes")
+            let mins = String(localized: "\(m) minutes", comment: "A battery's time: minutes")
             guard h > 0 else { return mins }
-            let hours = h == 1 ? String(localized: "1 hour", comment: "A battery's time: hours") : String(localized: "\(String(h)) hours", comment: "A battery's time: hours")
+            let hours = h == 1 ? String(localized: "1 hour", comment: "A battery's time: hours") : String(localized: "\(h) hours", comment: "A battery's time: hours")
             return m > 0 ? String(localized: "\(hours) \(mins)", comment: "A battery's time: the hours, then the minutes") : hours
         }
-        var parts = [String(localized: "battery \(String(max > 0 ? current * 100 / max : current)) percent", comment: "The battery's charge: %@ is the percentage")]
+        var parts = [String(localized: "battery \(max > 0 ? current * 100 / max : current) percent", comment: "The battery's charge: %lld is the percentage")]
         if charged, onPower { parts.append(String(localized: "charged, on power", comment: "The battery")) }
         else if charging { parts.append(String(localized: "charging", comment: "The battery")); if let t = span(desc[kIOPSTimeToFullChargeKey] as? Int ?? -1) { parts.append(String(localized: "\(t) to full", comment: "The battery: %@ is how long until it is full")) } }
         else if onPower { parts.append(String(localized: "on power, not charging", comment: "The battery")) }
@@ -557,7 +561,7 @@ public final class GlobalCommands: ScriptableObject {
         var items: [MenuItem] = groups.map { category, group in MenuItem(verbatim: "\(Script.categoryName(category)), \(group.count)", .submenu { group }) }
         // A braille display connected: its keys and the space-with-dots commands.
         items += BrailleHelp.shortcutItems()
-        let speechKeys = config.general.windowsKeys ? String(localized: "Control alone stops speech; Shift alone pauses it and carries on", comment: "In the key list")
+        let speechKeys = config.general.windowsKeys ? String(localized: "Control alone stops speech; Shift alone pauses it and carries on, but not while secure input is on", comment: "In the key list")
             : String(localized: "Control alone pauses speech, and again carries on", comment: "In the key list")
         items.append(MenuItem(verbatim: speechKeys + (config.general.capsIsTurnOver ? String(localized: ". Caps Lock pressed twice toggles caps lock", comment: "In the key list, after the speech keys") : ""), .action {}))
         items.append(MenuItem(verbatim: String(localized: "Command Control Comma opens the TurnOver menu in any app", comment: "In the key list"), .action {}))
@@ -675,6 +679,48 @@ public final class GlobalCommands: ScriptableObject {
         Log.io("context menu: right click on \(e.role) at (\(Int(p.x)), \(Int(p.y)))")
         rightClick(at: p)
         return true
+    }
+
+    /// The F4 key's names when the top row sends its media keys: Spotlight (177) and Launchpad (131).
+    nonisolated static let f4MediaKeys = ["key177", "key131"]
+
+    /// Alt F4: the app in front asked to quit, as the Dock's Quit asks; Command Q if it says no. Finder, which never
+    /// quits, and TurnOver itself are left alone.
+    @MainActor static func quitFrontApp() {
+        guard let app = NSWorkspace.shared.frontmostApplication else {
+            Speech.speakMessage(String(localized: "no app", comment: "No application in front")); return
+        }
+        let name = app.localizedName ?? ""
+        if app.bundleIdentifier == "com.apple.finder" || app.processIdentifier == ProcessInfo.processInfo.processIdentifier {
+            Speech.speakMessage(String(localized: "\(name) doesn't quit", comment: "Spoken message: Alt F4 in Finder, which can't be quit; the app's name"))
+            return
+        }
+        // The app's own Quit item first, pressed as a hand would choose it: Safari ignored both the quit request and
+        // the Command Q sent, and stayed open, where TextEdit quit (Oliver's trial, 7 Nov 2026).
+        // Its Quit item dimmed (Safari, 7 Nov 2026: a window waiting for an answer) means the app won't quit by any
+        // route, by hand included; it is said, rather than nothing happening.
+        switch pressQuitItem(app.processIdentifier) {
+        case .pressed: Log.io("quit: pressed \(app.bundleIdentifier ?? name)'s Quit item"); return
+        case .dimmed:
+            Log.io("quit: \(app.bundleIdentifier ?? name)'s Quit item is dimmed")
+            Speech.speakMessage(String(localized: "\(name) can't quit right now. A window may be waiting for an answer.", comment: "Spoken message: Alt F4 when the app's Quit is unavailable; the app's name"))
+            return
+        case .none: break
+        }
+        Log.io("quit: no Quit item to press; asking \(app.bundleIdentifier ?? name) to quit")
+        if !app.terminate() { KeyboardGesture(identifier: "kb:command+q")?.send() }
+    }
+
+    enum QuitItem { case pressed, dimmed, none }
+    /// The item with Command Q in the app's own menu (the one after the Apple menu): pressed, dimmed, or not found.
+    @MainActor static func pressQuitItem(_ pid: pid_t) -> QuitItem {
+        let menus = AXUIElementCreateApplication(pid).element(kAXMenuBarAttribute)?.elements(kAXChildrenAttribute) ?? []
+        guard menus.count > 1, let menu = menus[1].elements(kAXChildrenAttribute).first else { return .none }
+        guard let item = menu.elements(kAXChildrenAttribute).first(where: {
+            $0.string("AXMenuItemCmdChar")?.uppercased() == "Q" && ($0.int("AXMenuItemCmdModifiers") ?? -1) == 0
+        }) else { return .none }
+        if (item.attr(kAXEnabledAttribute) as? Bool) == false { return .dimmed }
+        return AXUIElementPerformAction(item, kAXPressAction as CFString) == .success ? .pressed : .none
     }
 
     public static func toggleMenus() {

@@ -109,7 +109,7 @@ public struct AXAttributeBatchResult {
 
 public extension AXUIElement {
     func attributeResult(_ name: String, policy: AXQueryPolicy = .respectBackoff) -> AXQueryResult<CFTypeRef> {
-        if let snapshot = AXSnapshot.current {
+        if let snapshot = AXSnapshot.serving(self) {
             let value = snapshot.attribute(name, of: self)
             return AXQueryResult(value: value, status: .returned(value == nil ? .noValue : .success), elapsedNanoseconds: 0, wasAttempted: false)
         }
@@ -119,7 +119,7 @@ public extension AXUIElement {
     }
 
     func attributeSettableResult(_ name: String, policy: AXQueryPolicy = .respectBackoff) -> AXQueryResult<Bool> {
-        if let snapshot = AXSnapshot.current {
+        if let snapshot = AXSnapshot.serving(self) {
             let value = snapshot.nodes[ElementKey(self)]?.settable[name]
             return AXQueryResult(value: value, status: .returned(value == nil ? .attributeUnsupported : .success), elapsedNanoseconds: 0, wasAttempted: false)
         }
@@ -140,7 +140,7 @@ public extension AXUIElement {
     }
 
     func attributeValueCountResult(_ name: String, policy: AXQueryPolicy = .respectBackoff) -> AXQueryResult<Int> {
-        if let snapshot = AXSnapshot.current {
+        if let snapshot = AXSnapshot.serving(self) {
             let value = (snapshot.attribute(name, of: self) as? [AnyObject])?.count
             return AXQueryResult(value: value, status: .returned(value == nil ? .noValue : .success), elapsedNanoseconds: 0, wasAttempted: false)
         }
@@ -151,7 +151,7 @@ public extension AXUIElement {
 
     /// Requests only the specified slice, unlike attr/elements which copy the entire attribute value.
     func attributeValuesResult(_ name: String, index: Int, maxValues: Int, policy: AXQueryPolicy = .respectBackoff) -> AXQueryResult<CFArray> {
-        if let snapshot = AXSnapshot.current {
+        if let snapshot = AXSnapshot.serving(self) {
             let all = snapshot.attribute(name, of: self) as? [AnyObject]
             let values = all.map { Array($0.dropFirst(max(0, index)).prefix(max(0, maxValues))) as CFArray }
             return AXQueryResult(value: values, status: .returned(all == nil ? .noValue : .success), elapsedNanoseconds: 0, wasAttempted: false)
@@ -162,7 +162,7 @@ public extension AXUIElement {
     }
 
     func attributeNamesResult(policy: AXQueryPolicy = .respectBackoff) -> AXQueryResult<CFArray> {
-        if let snapshot = AXSnapshot.current {
+        if let snapshot = AXSnapshot.serving(self) {
             let names = snapshot.nodes[ElementKey(self)].map { Array($0.attributes.keys) as CFArray }
             return AXQueryResult(value: names, status: .returned(names == nil ? .noValue : .success), elapsedNanoseconds: 0, wasAttempted: false)
         }
@@ -178,14 +178,14 @@ public extension AXUIElement {
     }
 
     func actionNamesResult(policy: AXQueryPolicy = .respectBackoff) -> AXQueryResult<CFArray> {
-        if let snapshot = AXSnapshot.current { return AXQueryResult(value: (snapshot.nodes[ElementKey(self)]?.actions ?? []) as CFArray, status: .returned(.success), elapsedNanoseconds: 0, wasAttempted: false) }
+        if let snapshot = AXSnapshot.serving(self) { return AXQueryResult(value: (snapshot.nodes[ElementKey(self)]?.actions ?? []) as CFArray, status: .returned(.success), elapsedNanoseconds: 0, wasAttempted: false) }
         var names: CFArray?
         let execution = AXHealth.query(self, policy: policy) { AXUIElementCopyActionNames(self, &names) }
         return execution.result(names)
     }
 
     func attributesResult(_ names: [String], policy: AXQueryPolicy = .respectBackoff) -> AXAttributeBatchResult {
-        if let snapshot = AXSnapshot.current {
+        if let snapshot = AXSnapshot.serving(self) {
             let values = names.map { snapshot.attribute($0, of: self) ?? kCFNull! } as CFArray
             return AXAttributeBatchResult(query: AXQueryResult(value: values, status: .returned(.success), elapsedNanoseconds: 0, wasAttempted: false), names: names)
         }

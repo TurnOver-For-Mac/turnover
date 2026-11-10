@@ -64,8 +64,21 @@ extension BrowseModeDocument {
         func bufferSearch() {
             guard let roles = BrowseModeDocument.quickNavRoles[q.name] else { Speech.speakMessage(String(localized: "not available here", comment: "Spoken message")); return }
             let level = headingLevel(for: q)
-            let hit = buffer.find(from: position, forward: forward, roles: roles, headingLevel: level)
-            // Nothing ahead on a page that may have more below (): once, the page read again from its end.
+            var hit = buffer.find(from: position, forward: forward, roles: roles, headingLevel: level)
+            // A long page read only in part (a long chat, issue 227): read on first; with more still not read, said,
+            // rather than wrapping to the top past it.
+            if hit == nil, forward, buffer.canReadOn {
+                readOnUntil({ [weak self] in
+                    guard let self else { return true }
+                    return buffer.find(from: position, forward: forward, roles: roles, headingLevel: level) != nil
+                }) { [weak self] found in
+                    guard let self else { return }
+                    if !found, buffer.isPartial { Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")); return }
+                    quickNav(q, forward: forward, afterRefresh: afterRefresh)
+                }
+                return
+            }
+            // Nothing ahead on a page that may have more below: once, the page read again from its end.
             if hit == nil, forward, !afterRefresh, reachForMore({ [weak self] more in
                 guard let self else { return }
                 if more { quickNav(q, forward: forward, afterRefresh: true) } else { wrapOrStop() }
@@ -87,6 +100,18 @@ extension BrowseModeDocument {
         if q.name == "Paragraph" || q.name == "NotLinkBlock" {
             let kind: WebBuffer.TextKind = q.name == "Paragraph" ? .paragraph : .afterLinks
             var hit = buffer.findText(from: position, forward: forward, kind: kind)
+            // The rest of a long page read on first (issue 227); with more still not read, said rather than wrapping.
+            if hit == nil, forward, buffer.canReadOn {
+                readOnUntil({ [weak self] in
+                    guard let self else { return true }
+                    return buffer.findText(from: position, forward: forward, kind: kind) != nil
+                }) { [weak self] found in
+                    guard let self else { return }
+                    if !found, buffer.isPartial { Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")); return }
+                    quickNav(q, forward: forward, afterRefresh: afterRefresh)
+                }
+                return
+            }
             if hit == nil, !buffer.isPartial, !buffer.isLoading, config.virtualBuffers.wrapQuickNav,
                let w = buffer.findText(from: forward ? -1 : buffer.text.length + 1, forward: forward, kind: kind), w.offset != position {
                 Tones.edge(); Speech.speakMessage(forward ? String(localized: "wrapped to the top", comment: "Spoken message") : String(localized: "wrapped to the bottom", comment: "Spoken message")); hit = w

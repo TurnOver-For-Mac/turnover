@@ -1,0 +1,5 @@
+# Who may change TurnOver's core without the label "core approved": one GitHub login a line. The module fence
+# (.github/workflows/module-fence.yml) reads this file as it is on main. (6 Nov 2026: GitHub reports the maintainer
+# as CONTRIBUTOR on this repository, so its author association can't be used.)
+Doll-Eye
+ashleycox

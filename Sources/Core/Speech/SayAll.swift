@@ -110,8 +110,36 @@ public enum SayAll {
         if buffered < maxBuffered { DispatchQueue.main.async { nextLine(gen) } }
     }
 
+    /// The say all whose read on of a long page waits for its next turn: the one that goes on with it, so other calls
+    /// at the end (the last chunks starting) don't each read for two seconds as well.
+    private static var readOnWaiting: Int?
+
     private static func finish(_ gen: Int) {
         guard gen == generation else { return }
+        // The end of the part of a long page read so far (a long chat, issue 227): read on and carry on, pass after
+        // pass while they find no text, for up to two seconds, then again after letting keys through; and an unchanged
+        // page with more after its end since has that added. The copy grows at its end, so the place reached stays.
+        // Read on in the background; say all goes on over the newer publication, which only adds at the end, so the
+        // place reached stays (merging #219 with #281, 10 Nov 2026).
+        if let buffer = (reader?.obj as? WebArea)?.document?.buffer, buffer.canReadOn {
+            guard readOnWaiting != gen else { return }
+            readOnWaiting = gen
+            if buffer.isLoading {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { if readOnWaiting == gen { readOnWaiting = nil }; finish(gen) }
+                return
+            }
+            buffer.buildMore { more in
+                if readOnWaiting == gen { readOnWaiting = nil }
+                guard gen == generation else { return }
+                (reader as? BufferTextInfo)?.followReadingOn()
+                if more { Log.io("say all: the page read on"); nextLine(gen) }
+                else if buffer.canReadOn {
+                    Log.io("say all: no text yet where the page is read on; on again in a moment")
+                    DispatchQueue.main.async { finish(gen) }
+                } else { finish(gen) }
+            }
+            return
+        }
         // The app may go on (Kindle's next page): reader is kept, so a key still stops say all while it turns.
         if buffered == 0, let obj = reader?.obj,
            AppModuleHandler.shared.appModule(for: obj.pid).sayAllReachedEnd(obj, resume: { info in

@@ -45,6 +45,28 @@ final class TurnOverSettingsAppModule: AppModule {
 /// when something asks for the row's contents), then the window is searched for the same control by role and frame
 /// (the element a focus change hands over can be a stand-in that never gets the label: "slider, 61 percent").
 final class SettingsLabelledObject: TurnOverObject {
+    // Settings updates its slider locally, then applies the reader's confirmed state. On macOS 27.2, build 23
+    // sent three value-change events and three speech requests for one rate arrow (8 Nov 2026). Keep this in
+    // Settings: other apps may need to report repeated values. AXHandler reuses the focused object for these events.
+    private var lastSliderValue: (number: Double, text: String)?
+
+    override func event_valueChange() {
+        guard role == .slider else { super.event_valueChange(); return }
+        guard API.focusObject?.isSameElement(as: self) == true else { return }
+        // The focus object's value is cached. Read the displayed value through a fresh object and speak its cached value.
+        let fresh = ObjectFactory.make(element)
+        if let number = element.attr(kAXValueAttribute) as? NSNumber, let text = fresh.value, !text.isEmpty {
+            let now = (number: number.doubleValue, text: text)
+            if let last = lastSliderValue, last.number == now.number, last.text == now.text { return }
+            // Compare the number too: formatting may round different values to the same words. Compare the text
+            // too: SwiftUI may supply the new description after the numeric value. Neither needs a time window.
+            lastSliderValue = now
+        } else {
+            lastSliderValue = nil   // an unreadable value must not hide the next successful report
+        }
+        Speech.speakObjectProperty(fresh, value: true)
+    }
+
     private var askedRow = false
     private var waitedForLabel = false
 
@@ -123,6 +145,7 @@ final class SettingsLabelledObject: TurnOverObject {
     private var labelWatch = 0
     private var labelWatchRunning = false
     override func event_gainFocus() {
+        lastSliderValue = nil
         guard name.isEmpty, [.switchControl, .checkBox, .radioButton, .button, .toggleButton, .popUpButton, .slider, .disclosureTriangle].contains(role) else {
             super.event_gainFocus(); return
         }
@@ -158,6 +181,6 @@ final class SettingsLabelledObject: TurnOverObject {
         }
     }
     private func reportLateFocus() { super.event_gainFocus() }   // (super can't be called from the closure above)
-    override func event_loseFocus() { labelWatch += 1; labelWatchRunning = false; super.event_loseFocus() }
+    override func event_loseFocus() { lastSliderValue = nil; labelWatch += 1; labelWatchRunning = false; super.event_loseFocus() }
     override func event_nameChange() { if !labelWatchRunning { super.event_nameChange() } }
 }

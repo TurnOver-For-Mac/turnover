@@ -215,7 +215,7 @@ public final class ScreenRecognition {
         } else {
             caret = 0
             let rows = r.rows.count
-            let count = rows == 1 ? String(localized: "1 row", comment: "A table's size") : String(localized: "\(String(rows)) rows", comment: "A table's size")
+            let count = rows == 1 ? String(localized: "1 row", comment: "A table's size") : String(localized: "\(rows) rows", comment: "A table's size")
             let found = showingInterface ? String(localized: "recognised controls, \(count)", comment: "Screen recognition of controls: how many rows") : String(localized: "recognised text, \(count)", comment: "Screen recognition: how many rows")
             Speech.speakMessage(reopen ? String(localized: "recognised again, \(count)", comment: "Screen recognition again: how many rows") : "\(r.title.isEmpty ? "" : r.title + ", ")" + found)
         }

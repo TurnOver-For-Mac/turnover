@@ -29,7 +29,11 @@ nonisolated package struct WebBufferCollection: Sendable {
         self.stop = stop; self.elapsedMs = elapsedMs; self.navigationChanged = navigationChanged
     }
 
+    /// `continuing`: instead of the page from its root, these elements and everything under them, in order: where the
+    /// walk over an earlier collection stopped, the rest of the page (a long chat read on, issue 227). The page's own
+    /// text, focus and ancestors were collected the first time and are not asked for again.
     package static func collect(root: AXUIElement, focus: AXUIElement?, request: AXWalkRequest, limits: Limits = Limits(),
+                                continuing: [AXUIElement]? = nil,
                                 now: @escaping @Sendable () -> UInt64 = { DispatchTime.now().uptimeNanoseconds }) -> Self {
         // Submission can wait behind an obsolete, uninterruptible AX call. That wait is not this read's budget.
         let began = now()
@@ -121,6 +125,13 @@ nonisolated package struct WebBufferCollection: Sendable {
             default: budget.record(status)
             }
         }) {
+            if let continuing {
+                for element in continuing {
+                    guard budget.check() else { break }
+                    visit(element, depth: 1)
+                }
+                return
+            }
             visit(root, depth: 0)
             let bridge = WebDocumentBridge(webArea: root)
             if let range = bridge.documentRange(), budget.check() {

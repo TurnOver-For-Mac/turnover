@@ -60,6 +60,8 @@ public final class BrowseModeDocument: ScriptableObject {
         // left, so Back on MacRumors started at the top (3 Oct 2026).
         didSet {
             positionMovedAt = Date()
+            // A read of the page again goes on at least this far (a long chat read on past its first part, issue 227).
+            buffer.readingAt = position
             if buffer.text.length > 0 { BrowseModeHandler.shared.remember(url: lastURL, position: position, text: lineText(at: position)) }
         }
     }
@@ -306,7 +308,7 @@ public final class BrowseModeDocument: ScriptableObject {
             self?.copySelection(g)
         }
         script("topOfDocument", String(localized: "Moves to the top of the document", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+upArrow", "kb:control+home"], category: nav, resumesSayAll: true) { [weak self] _ in guard let self else { return }; position = 0; speakUnit(.line) }
-        script("bottomOfDocument", String(localized: "Moves to the bottom of the document", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+downArrow", "kb:control+end"], category: nav) { [weak self] _ in guard let self else { return }; position = max(0, buffer.text.length - 1); speakUnit(.line) }
+        script("bottomOfDocument", String(localized: "Moves to the bottom of the document", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+downArrow", "kb:control+end"], category: nav) { [weak self] _ in guard let self else { return }; toBottom() }
         script("activatePosition", String(localized: "Activates the element at the caret", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:enter", "kb:numpadEnter", "kb:space"], category: nav) { [weak self] g in guard let self else { return }; activate(g) }
         // NVDA+F7 in the Windows style (the parity audit, 13 Oct 2026: it did nothing on a page); in the Mac style
         // VO-F7 stays VoiceOver's, and VO-U and VO-I reach this list.
@@ -514,16 +516,29 @@ public final class BrowseModeDocument: ScriptableObject {
     /// longer decides whether a dirty page may refresh: provider waits run on the worker and requests coalesce.
     func refreshBufferIfNeeded(stale: TimeInterval? = nil) {
         let age = Date().timeIntervalSince(buffer.builtAt)
-        if (stale.map { age > $0 } ?? false) || (buffer.isDirty && age > 1) { buffer.build() }
+        // Not for its age a page read on past its first part (a long chat, issue 227): read again from the top, it
+        // could take two seconds a key and still not get back to the reader. Its end is read on instead.
+        if let stale, age > stale, buffer.passes == 1 { buffer.build(); return }
+        if buffer.isDirty, age > 1 { buffer.build() }
     }
 
-    /// At the loaded edge, scroll once and wait for a new snapshot. The continuation belongs to this
-    /// document generation and reading position; another key or focus change makes it obsolete.
+    /// At the loaded edge: a page read only in part (a long chat, issue 227) is read on from where it stopped, in the
+    /// background. Otherwise scroll once and wait for a new snapshot.
+    /// The continuation belongs to this document generation and reading position; another key or focus change makes
+    /// it obsolete. False when there is nothing to reach for, and `completion` is not called.
     @discardableResult
     func reachForMore(_ completion: @escaping (Bool) -> Void) -> Bool {
         guard buffer.isDirty || buffer.isPartial || buffer.lastBuildMs >= 250 || Date().timeIntervalSince(buffer.builtAt) > 1 else { return false }
-        let last = buffer.lines.last?.element
         let before = buffer.text.length
+        if buffer.canReadOn {
+            readOnUntil({ [weak self] in (self?.buffer.text.length ?? 0) > before }) { [weak self] more in
+                guard let self else { return }
+                Log.io("browse mode: at the end of the part read, read on: \(more ? "\(buffer.text.length - before) characters more" : "nothing more\(buffer.isPartial ? " in the time" : ", to the end")")")
+                completion(more)
+            }
+            return true
+        }
+        let last = buffer.lines.last?.element
         let epoch = pageGeneration
         let movedAt = positionMovedAt
         let intent = bufferIntent
@@ -532,6 +547,44 @@ public final class BrowseModeDocument: ScriptableObject {
             completion(buffer.text.length > before)
         }
         return true
+    }
+
+    /// A page read only in part (a long chat, issue 227): read on in the background, pass after pass, until `found`
+    /// says yes, the page's end, or two seconds of passes; then `done`, on main, if this is still the key's reading.
+    func readOnUntil(_ found: @escaping () -> Bool, _ done: @escaping (Bool) -> Void) {
+        let epoch = pageGeneration, intent = bufferIntent, movedAt = positionMovedAt
+        let until = Date().addingTimeInterval(2)
+        func current() -> Bool { pageGeneration == epoch && bufferIntent == intent && positionMovedAt == movedAt && API.focusTreeInterceptor === self }
+        func pass() {
+            guard current() else { return }
+            // A refresh under way: its publication comes first, then the reading on.
+            if buffer.isLoading {
+                guard Date() < until else { done(found()); return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { pass() }
+                return
+            }
+            buffer.buildMore { [weak self] more in
+                guard let self, current() else { return }
+                if more, found() { done(true); return }
+                if buffer.canReadOn, Date() < until { pass() } else { done(found()) }
+            }
+        }
+        pass()
+    }
+
+    /// Command Down: the bottom of the page. A page read only in part (a long chat, issue 227) is read on first, for
+    /// up to two seconds; if there is more even then, that is said, and the key again reads on.
+    func toBottom() {
+        func land() {
+            position = max(0, buffer.text.length - 1)
+            speakUnit(.line)
+        }
+        guard buffer.canReadOn else { land(); return }
+        readOnUntil({ false }) { [weak self] _ in
+            guard let self else { return }
+            if buffer.isPartial { Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")) }
+            land()
+        }
     }
 
     /// A paged document (Preview's PDF): the page is said as the reading position crosses onto another one, as
@@ -591,6 +644,7 @@ public final class BrowseModeDocument: ScriptableObject {
             if more { move(unit, direction) }
             else { reportBufferEnd(forward: true) }
         }) { return }
+        // Not "bottom" with more of a long page still to read (its reading on ran out of time): reportBufferEnd says so.
         if moved == 0 { reportBufferEnd(forward: direction > 0) }
         position = info.start
         // Say all carries on from here and reads this line itself (NVDA's willSayAllResume).

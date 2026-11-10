@@ -26,6 +26,14 @@ public final class BufferTextInfo: TextInfo {
         result.buffer = buffer; result.document = document; result.documentGeneration = documentGeneration
         return result
     }
+    /// The page was read on (a long chat, issue 227): the newer publication only adds at the end, so this range's
+    /// offsets hold in it, and say all goes on into what was added. Not for a refresh, which may move everything.
+    package func followReadingOn() {
+        guard let document, document.pageGeneration == documentGeneration,
+              document.buffer.text.length >= buffer.text.length,
+              document.buffer.text.substring(to: buffer.text.length) == buffer.text as String else { return }
+        buffer = document.buffer.frozen()
+    }
     public var previousChain: [AXUIElement]?
     public private(set) var chain: [AXUIElement] = []
 

@@ -318,6 +318,8 @@ public final class TurnOverMenu {
         items.append(MenuItem("Help", .submenu { self.helpItems() }, hint: "The guide, about TurnOver, updates and previous builds"))
         items.append(Self.supportItem)
         items.append(contentsOf: extraItems)
+        // Your developer build beside the published TurnOver (issue 248, 7 Nov 2026): shown only when the other is installed.
+        if let item = DeveloperSwitch.menuItem { items.append(item) }
         items.append(MenuItem("Quit TurnOver", .action { Speech.speakMessage(String(localized: "TurnOver quitting", comment: "TurnOver is about to quit")); DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { (TurnOverMenu.shared.quit ?? { NSApp.terminate(nil) })() } },
                               hint: "VoiceOver takes over everywhere. Command Control Period starts TurnOver again"))
         return items
@@ -326,6 +328,11 @@ public final class TurnOverMenu {
     /// Help: what is new to try, about, then the guide, updates, previous builds and uninstall (aboutItems, set by the app).
     private func helpItems() -> [MenuItem] {
         var items: [MenuItem] = []
+        // Help make TurnOver (9 Nov 2026): the welcome's page about the ways to help, again, its button opening GitHub.
+        if HelpMakeTurnOver.show != nil {
+            items.append(MenuItem("Help make TurnOver", .action { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { MainActor.assumeIsolated { HelpMakeTurnOver.show?() } } },
+                                  hint: "The ways to help, from telling us what works to writing code, and TurnOver on GitHub"))
+        }
         if let l = NewToTry.latest { items.append(MenuItem("What to test in build \(String(describing: l.build))", .submenu { NewToTry.menuItems() })) }
         items.append(MenuItem("About TurnOver", .action {
             let version = String(describing: Edition.version), build = String(describing: Edition.build)
@@ -431,11 +438,12 @@ public final class TurnOverMenu {
                                   hint: "What the picture shows and any text in it"))
             if Edition.includesPlugins {
                 items.append(MenuItem("Change the item I'm on", .action { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { PluginMaker.open() } },
-                                      hint: "Label it, give it a key, read it when it changes, or keep it quiet. TurnOver Shift Slash does the same"))
+                                      hint: "Label it, give it a key, read it when it changes, or keep it quiet. With VoiceOver keys, VO-Slash does the same"))
             }
-            if !Edition.isVerified(bundle) {
-                items.append(MenuItem("Ask for \(name) to be tuned", .action { AppRequest.request() }, hint: "Finds what the app is built with and writes the request for you, by email. (Plugins are parked for now.)"))
-            }
+            // Help improve this app (7 Nov 2026): tell the project what's wrong, build the app's module with your own AI
+            // or by hand, or ask for a building block. It took over from Ask for this app to be tuned, which emailed.
+            items.append(MenuItem("Help improve \(name)", .submenu { HelpImprove.menuItems(pid: pid, name: name) },
+                                  hint: "Tell the project what's wrong, build \(name)'s module with your AI or by hand, or ask for something TurnOver needs"))
             return items
         })
     }
@@ -568,14 +576,20 @@ public final class TurnOverMenu {
                 var title = String(localized: "\(m.name) \(String(describing: m.version)), for \(apps)", comment: "A plugin: its name, version and apps")
                 if let author { title += String(localized: ", by \(author)", comment: "A plugin's author, after its name") }
                 if let view = p.profile?.view { title += String(localized: ", a \(String(describing: view.kind)) view", comment: "A plugin's kind of view (chat, media)") }
-                items.append(MenuItem(verbatim: title, .submenu {[
+                // A fix that ships inside TurnOver (Resources/fixes) can't be moved out of the app: no Remove for it.
+                let shipped = ProfileStore.shippedFixes.map { folder.path.hasPrefix($0.path) } ?? false
+                if shipped { title += String(localized: ", comes with TurnOver", comment: "A plugin that ships inside TurnOver") }
+                items.append(MenuItem(verbatim: title, .submenu {
+                    var sub: [MenuItem] = [
                     MenuItem("About", .action {
                         let p2 = ProfileStore.shared.plugins.first { $0.manifest?.id == m.id }?.profile
                         let n = (p2?.labels?.count ?? 0, p2?.keys?.count ?? 0, p2?.watch?.count ?? 0)
                         Speech.speakMessage(String(localized: "\(m.description ?? m.name). \(String(n.0)) labels, \(String(n.1)) keys, \(String(n.2)) watched.", comment: "About a plugin: its description, then what it has"))
                     }),
-                    MenuItem("Remove", .action { Self.removePlugin(at: folder, name: m.name) }, hint: "Moves it to the Trash; put it back from there to have it again"),
-                ]}))
+                    ]
+                    if !shipped { sub.append(MenuItem("Remove", .action { Self.removePlugin(at: folder, name: m.name) }, hint: "Moves it to the Trash; put it back from there to have it again")) }
+                    return sub
+                }))
             } else {
                 let folder = p.folder
                 items.append(MenuItem("\(p.folder.lastPathComponent): does not load. \(p.error ?? "")", .submenu {[
@@ -752,7 +766,7 @@ public final class TurnOverMenu {
                     get: { ["timeout", "indefinitely", "off"].firstIndex(of: config.braille.showMessages) ?? 0 },
                     set: { config.braille.showMessages = ["timeout", "indefinitely", "off"][$0] })),
                 MenuItem("How long", .number(get: { Double(config.braille.messageSeconds) }, set: { config.braille.messageSeconds = Int($0) },
-                    step: 1, min: 1, max: 30, format: { Int($0.rounded()) == 1 ? String(localized: "1 second", comment: "A time") : String(localized: "\(String(Int($0.rounded()))) seconds", comment: "A time") }), hint: "For each display's width of message"),
+                    step: 1, min: 1, max: 30, format: { Int($0.rounded()) == 1 ? String(localized: "1 second", comment: "A time") : String(localized: "\(Int($0.rounded())) seconds", comment: "A time") }), hint: "For each display's width of message"),
             ] }),
             MenuItem("Keep words whole", .toggle(get: { config.braille.wordWrap }, set: { config.braille.wordWrap = $0; Braille.refreshSoon() }), hint: "A word is not split across the end of the display"),
             MenuItem("Cursor", .submenu { [

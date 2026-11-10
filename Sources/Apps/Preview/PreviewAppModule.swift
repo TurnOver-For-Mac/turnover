@@ -6,8 +6,8 @@
 // holding an AXPage per page (AXPageIndex, AXPageIndexDescription), each with its text and headings; TurnOver's
 // web buffer reads it unchanged (probe: 5 pages, 119 lines in 6 ms).
 import Foundation
+import AppKit
 import ApplicationServices
-import PDFKit
 
 final class PreviewAppModule: AppModule {
     static let bundleID = "com.apple.Preview"
@@ -39,11 +39,6 @@ final class PreviewAppModule: AppModule {
 
     // MARK: Comments and highlights
 
-    /// Preview shows a PDF's highlights, underlines, strike-throughs, notes and text boxes but gives accessibility none
-    /// of them (probe, 17 Oct 2026: no elements, no text attributes; VoiceOver can't read them either). TurnOver opens
-    /// the file itself with PDFKit and says each where it sits: after the line it marks, or the line beside a note.
-    struct Mark { let page: Int; let anchor: String; let words: String }
-
     /// How a line's comments and highlights are told, as Word's comments are (18 Oct 2026: "should sounds be
     /// playing for annotations like it does in Word?"): a sound (the default), the words, or nothing. With the sound,
     /// a plain highlight is the sound alone (its words were just read in the line); a note's own words follow it.
@@ -60,84 +55,94 @@ final class PreviewAppModule: AppModule {
         if words.hasPrefix("text box: ") { return words }
         return nil
     }
-    private static var cache: (path: String, modified: Date, marks: [Mark])?
+    private struct LineRequest {
+        let document: BrowseModeDocument
+        let page: Int
+        let text: String
+        let position: Int
+        let movedAt: Date
+        let builtAt: Date
+        let keys: Int
 
-    static func marks(for root: AXUIElement) -> [Mark] {
-        guard let doc = root.element(kAXWindowAttribute)?.string("AXDocument"), let url = URL(string: doc), url.isFileURL,
-              url.pathExtension.lowercased() == "pdf" else { return [] }
-        let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-        if let c = cache, c.path == url.path, c.modified == modified { return c.marks }
-        var out: [Mark] = []
-        if let pdf = PDFDocument(url: url) {
-            for i in 0..<pdf.pageCount {
-                guard let page = pdf.page(at: i) else { continue }
-                let width = page.bounds(for: .mediaBox).width
-                for a in page.annotations {
-                    let type = a.type ?? ""
-                    let contents = (a.contents ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-                    let covered = (page.selection(for: a.bounds)?.string ?? "").replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
-                    // The line beside a note or a text box: the page's text across its whole width at that height.
-                    let besideRect = CGRect(x: 0, y: a.bounds.minY, width: width, height: max(a.bounds.height, 12))
-                    var beside = (page.selection(for: besideRect)?.string ?? "").components(separatedBy: .newlines).first { !$0.trimmingCharacters(in: .whitespaces).isEmpty } ?? ""
-                    if beside.isEmpty {
-                        // Nothing level with it (a text box in a margin or a gap): the nearest line above it.
-                        let pageHeight = page.bounds(for: .mediaBox).height
-                        let above = CGRect(x: 0, y: a.bounds.maxY, width: width, height: max(1, pageHeight - a.bounds.maxY))
-                        beside = (page.selection(for: above)?.string ?? "").components(separatedBy: .newlines).last { !$0.trimmingCharacters(in: .whitespaces).isEmpty } ?? ""
-                    }
-                    let note = contents.isEmpty ? "" : ", note: \(contents)"
-                    switch type {
-                    case "Highlight": if !covered.isEmpty { out.append(Mark(page: i, anchor: covered, words: "highlighted: \(covered)\(note)")) }
-                    case "Underline": if !covered.isEmpty { out.append(Mark(page: i, anchor: covered, words: "underlined: \(covered)\(note)")) }
-                    case "StrikeOut": if !covered.isEmpty { out.append(Mark(page: i, anchor: covered, words: "struck through: \(covered)\(note)")) }
-                    case "Squiggly": if !covered.isEmpty { out.append(Mark(page: i, anchor: covered, words: "marked: \(covered)\(note)")) }
-                    case "Text": if !contents.isEmpty { out.append(Mark(page: i, anchor: beside, words: "note: \(contents)")) }
-                    case "FreeText": if !contents.isEmpty { out.append(Mark(page: i, anchor: beside, words: "text box: \(contents)")) }
-                    case "Ink": out.append(Mark(page: i, anchor: beside, words: "drawing\(note)"))
-                    case "Square", "Circle", "Line": out.append(Mark(page: i, anchor: covered.isEmpty ? beside : covered, words: "\(type == "Square" ? "rectangle" : type.lowercased())\(covered.isEmpty ? "" : " around: \(covered)")\(note)"))
-                    case "Stamp": out.append(Mark(page: i, anchor: beside, words: "stamp\(note)"))
-                    default: break   // links and form fields are read already; popups belong to their note
-                    }
-                }
-            }
+        init(document: BrowseModeDocument, page: Int, text: String) {
+            self.document = document
+            self.page = page
+            self.text = text
+            position = document.position
+            movedAt = document.positionMovedAt
+            builtAt = document.buffer.builtAt
+            keys = ScriptHandler.keysArrivedCount
         }
-        cache = (url.path, modified, out)
-        Log.info("preview: \(out.count) comments and highlights read from the file")
-        return out
+
+        var isCurrent: Bool {
+            API.focusTreeInterceptor === document && !document.passThrough && !SayAll.isRunning
+                && document.position == position && document.positionMovedAt == movedAt
+                && document.buffer.builtAt == builtAt && ScriptHandler.keysArrivedCount == keys
+        }
     }
 
-    /// What marks the line just read: each mark on this page whose text starts on it (a highlight running onto the
-    /// next line is said once, where it begins).
+    private let annotations = AXWalkRunner<PreviewAnnotations.Page?>()
+    private var cachedPages: [PreviewAnnotations.Page] = []
+    private var pendingLine: LineRequest?
+    private var annotationRequest = 0
+
+    /// The browse document has already queued the line. On 7 Nov 2026 (#259), opening a PDF for its marks here
+    /// stopped the reader on the first Down Arrow. Leave that work on the collector and report only a current result.
     static func marks(for root: AXUIElement, page: Int, line: String) -> [String] {
+        guard markReport != .off, page >= 0, let document = API.focusTreeInterceptor, document.webArea.isSame(root),
+              let module = AppModuleHandler.shared.appModule(for: root.pid) as? PreviewAppModule else { return [] }
         let flat = line.replacingOccurrences(of: "\n", with: " ")
         guard !flat.trimmingCharacters(in: .whitespaces).isEmpty else { return [] }
-        return marks(for: root).filter { m in
-            Self.starts(m, on: flat, page: page)
-        }.map { m in wholeWords(m, in: flat) }
+        module.readMarks(LineRequest(document: document, page: page, text: flat))
+        return []
     }
 
-    /// A mark's words with its covered text widened to whole words as they stand in the line ("h has a highlighted"
-    /// is "with a highlighted phrase" cut by the mark's edges, which fall between letters).
-    static func wholeWords(_ m: Mark, in line: String) -> String {
-        let ns = line as NSString
-        let r = ns.range(of: String(m.anchor.prefix(24)))
-        guard r.location != NSNotFound, m.words.contains(m.anchor) else { return m.words }
-        var start = r.location, end = min(ns.length, r.location + m.anchor.count)
-        let letters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "'’-"))
-        func isLetter(_ i: Int) -> Bool { i >= 0 && i < ns.length && (ns.substring(with: NSRange(location: i, length: 1)).unicodeScalars.first.map { letters.contains($0) } ?? false) }
-        while isLetter(start - 1) { start -= 1 }
-        while isLetter(end) { end += 1 }
-        let widened = ns.substring(with: NSRange(location: start, length: end - start)).trimmingCharacters(in: .whitespaces)
-        return m.words.replacingOccurrences(of: m.anchor, with: widened)
+    private func readMarks(_ line: LineRequest) {
+        guard isReading, line.isCurrent else { return }
+        let previous = pendingLine
+        pendingLine = line
+        // Coalesce line movements on this page while the file is being read. Only the latest line can speak.
+        if previous?.document === line.document, previous?.page == line.page { return }
+        annotationRequest &+= 1
+        let request = annotationRequest
+        let root = line.document.webArea, page = line.page, cache = cachedPages
+        annotations.submit(collect: { work in
+            PreviewAnnotations.read(root: root, page: page, cache: cache, work: work)
+        }, publish: { [weak self] result in
+            self?.finishMarks(result, request: request)
+        })
     }
 
-    private static func starts(_ m: Mark, on flat: String, page: Int) -> Bool {
-        return [m].contains { m in
-            guard m.page == page, !m.anchor.isEmpty else { return false }
-            let head = String(m.anchor.prefix(24))
-            return flat.contains(head) || (m.anchor.count > 24 && flat.hasSuffix(String(m.anchor.prefix(min(m.anchor.count, flat.count)))))
-                || m.anchor.contains(flat.trimmingCharacters(in: .whitespaces)) && flat.count > 12 && m.anchor.hasPrefix(String(flat.prefix(12)))
+    private var isReading: Bool {
+        Core.active && API.focusPid == pid && NSWorkspace.shared.frontmostApplication?.processIdentifier == pid
+            && !AXHandler.shared.isMenuOpen && !TurnOverMenu.shared.isOpen
+            && InputManager.directPid != pid && !InputManager.isAsleep(pid)
+    }
+
+    private func finishMarks(_ result: PreviewAnnotations.Page?, request: Int) {
+        guard annotationRequest == request, let line = pendingLine else { return }
+        pendingLine = nil
+        guard let result, isReading, Self.markReport != .off else { return }
+        cachedPages.removeAll { $0.file != result.file || $0.index == result.index }
+        cachedPages.append(result)
+        if cachedPages.count > 4 { cachedPages.removeFirst() }
+        guard line.isCurrent else { return }
+        let words = PreviewAnnotations.words(in: result.marks, on: line.text)
+        guard !words.isEmpty else { return }
+        switch Self.markReport {
+        case .off: return
+        case .speech: words.forEach { Speech.speakMessage($0) }
+        case .tone:
+            Tones.comment()
+            for mark in words { if let note = Self.wordsWithTone(mark) { Speech.speakMessage(note) } }
         }
     }
-}
 
+    override func event_appModuleLoseFocus() {
+        annotationRequest &+= 1
+        pendingLine = nil
+        annotations.cancel()
+    }
+
+    override func terminate() { event_appModuleLoseFocus(); cachedPages.removeAll() }
+}
