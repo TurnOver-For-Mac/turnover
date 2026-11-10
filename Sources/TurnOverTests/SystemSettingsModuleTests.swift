@@ -322,6 +322,34 @@ func systemSettingsModuleTests() {
             }
         }
     }
+    test("System Settings: a lookup cancelled during a branch walk is not logged") {
+        AXReplay.load(try AXFixture.load(fixtureURL("settings-general"))); defer { AXReplay.unload() }
+        // A newer command arrives while the settings pane's branch (13) is walked, under the branch's own reader.
+        let cancelled = OSAllocatedUnfairLock(initialState: false)
+        let lines = OSAllocatedUnfairLock(initialState: [String]())
+        let resolver = SystemSettingsAXParts(log: { line in lines.withLock { $0.append(line) } }, childrenError: { element, _ in
+            if AXReplay.id(of: element) == 13 { cancelled.withLock { $0 = true } }
+            return nil
+        })
+        let found = resolver.resolve(.init(pid: AXReplay.floor, window: AXReplay.root!, part: .pane),
+                                     current: { !cancelled.withLock { $0 } })
+        check(found == nil, "a cancelled lookup finds nothing")
+        expect(lines.withLock { $0 }, [], "a cancel is not a failure to find")
+    }
+    test("System Settings: a branch that runs out of time is logged with its deadline") {
+        AXReplay.load(try AXFixture.load(fixtureURL("settings-general"))); defer { AXReplay.unload() }
+        // The settings pane's branch (13) answers after the 500 ms a lookup may take.
+        let lines = OSAllocatedUnfairLock(initialState: [String]())
+        let resolver = SystemSettingsAXParts(log: { line in lines.withLock { $0.append(line) } }, childrenError: { element, _ in
+            if AXReplay.id(of: element) == 13 { Thread.sleep(forTimeInterval: 0.6) }
+            return nil
+        })
+        check(resolver.resolve(.init(pid: AXReplay.floor, window: AXReplay.root!, part: .pane), current: { true }) == nil,
+              "a branch past its deadline ends the lookup")
+        let logged = lines.withLock { $0 }
+        check(logged.count == 1 && logged[0].hasPrefix("System Settings: no pane (split view's branches); stop deadline,"),
+              "the line gives the branch's reason, not the main reader's: \(logged)")
+    }
     test("System Settings: the resolver says whether the app's keyboard focus is already inside the part") {
         AXReplay.load(try AXFixture.load(fixtureURL("settings-general"))); defer { AXReplay.unload() }
         let resolver = SystemSettingsAXParts(log: { _ in })
