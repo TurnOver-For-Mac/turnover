@@ -167,6 +167,9 @@ extension AXValue: @unchecked @retroactive Sendable {}
 
 public extension AXUIElement {
     func attr(_ name: String) -> CFTypeRef? {
+        // Inside AXAttributeCache.with, an attribute the snapshot holds is not asked for again.
+        if let cached = AXAttributeCache.lookup(self, name) { return cached }
+        AXAttributeCache.count(name)
         var v: CFTypeRef?
         return AXHealth.ask(self) { AXUIElementCopyAttributeValue(self, name as CFString, &v) } == .success ? v : nil
     }

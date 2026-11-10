@@ -139,7 +139,7 @@ extension GlobalCommands {
         }
         add("screenLayout", String(localized: "Screen layout on or off in browse mode: things side by side on one line (NVDA+V)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+v"]) { _ in
             config.virtualBuffers.screenLayout.toggle(); config.save()
-            if let d = API.focusTreeInterceptor { d.buffer.isDirty = true; d.buffer.build() }
+            if let d = API.focusTreeInterceptor { d.buffer.buildAfresh() }
             Speech.speakMessage(config.virtualBuffers.screenLayout ? String(localized: "Use screen layout on", comment: "Spoken message") : String(localized: "Use screen layout off", comment: "Spoken message"))
         }
         add("progressBarOutput", String(localized: "Progress bars: beeps that rise in pitch, the percentage spoken, both, or nothing (NVDA+U)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+u"]) { _ in
@@ -278,7 +278,7 @@ extension GlobalCommands {
         // MARK: Browse mode
         add("refreshDocument", String(localized: "Rebuilds the page's browse mode view (NVDA+F5)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+f5"]) { _ in
             guard let d = API.focusTreeInterceptor else { Speech.speakMessage(String(localized: "not in a document", comment: "Spoken message")); return }
-            d.buffer.isDirty = true; d.buffer.build()
+            d.buffer.buildAfresh()
             Speech.speakMessage(String(localized: "refreshed", comment: "Spoken message"))
         }
         add("toggleSingleLetterNavigation", String(localized: "Single-letter navigation on or off; turns single-letter navigation on or off for this page, so the page's own letter keys work (NVDA+Shift+Space)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+shift+space"]) { _ in

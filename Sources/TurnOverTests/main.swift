@@ -20,6 +20,8 @@ if !AXReplay.isAvailable, ProcessInfo.processInfo.environment["TURNOVER_TESTS_RE
     }
 }
 Log.level = .error
+// No copies of pages taken in the background while the tests run: a test that wants one takes it itself.
+WebBuffer.aheadOverride = false
 Speech.mode = .off
 Speech.sink = { _ in }
 
@@ -30,6 +32,7 @@ recoveryWarningTests()
 speechOutputTests()
 progressOutputTests()
 longPageTests()
+pageBufferSnapshotTests()
 soundsTests()
 characterBoundaryTests()
 keyboardPrivacyTests()

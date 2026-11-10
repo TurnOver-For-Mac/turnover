@@ -19,6 +19,7 @@ import Foundation
 import ApplicationServices
 import TurnOverAX
 import AppKit
+import os
 
 public final class WebBuffer {
     public struct Segment {
@@ -51,7 +52,7 @@ public final class WebBuffer {
     /// Lists, tables, block quotes and landmarks, by the text they span: NVDA's comma and Shift comma.
     public private(set) var containers: [(start: Int, end: Int, element: AXUIElement)] = []
     public private(set) var builtAt = Date.distantPast
-    public var isDirty = true
+    public var isDirty = true { didSet { if isDirty { markedDirty() } } }
     /// How long the last build took: a page slow to read is not read again on every arrow.
     public private(set) var lastBuildMs = 0
     private var elementCount = 0
@@ -96,7 +97,10 @@ public final class WebBuffer {
     private var loggedPartial = false
     /// A new page in the same web area: the partial-page notice is due again (code review, 16 Oct 2026, item 29),
     /// and the reading position was in the page before.
-    public func newPage() { saidPartial = false; loggedPartial = false; readingAt = 0; samePage = false }
+    public func newPage() {
+        saidPartial = false; loggedPartial = false; readingAt = 0; samePage = false
+        dirtyAt = Date(); prefetched = nil; prefetchGeneration.withLock { $0 += 1 }
+    }
     /// The copy is of the page the web area shows (no new page since it was read): one read again may keep it.
     private var samePage = false
     private var docText = "" as NSString
@@ -162,9 +166,170 @@ public final class WebBuffer {
     /// There is somewhere to read on from (after a stop, or the end of a page read whole).
     public var canReadOn: Bool { !resumeFrames.isEmpty }
 
+    // MARK: From a snapshot (trial, 10 Nov 2026)
+    // The walk below asks each element several questions, one at a time: 0.24 ms an element over 9,716 builds in
+    // Oliver's logs. With this on, the page is first copied with one batched question an element (AXSnapshot), and
+    // the walk's questions are then answered from that copy (AXAttributeCache): the walk and its rules are untouched,
+    // so the lines are the same. Measured the same day, the text identical: Safari, 349 elements, 55 ms to 22;
+    // Claude (Electron), 462 elements, 77 ms to 58. What the copy does not hold is asked for as before.
+
+    /// `defaults write com.turnover.reader bufferSnapshot -bool false` reads pages as they were read until build 24.
+    /// A test sets `snapshotOverride`.
+    nonisolated static var usesSnapshot: Bool { snapshotOverride ?? (UserDefaults.standard.object(forKey: "bufferSnapshot") as? Bool ?? true) }
+    nonisolated(unsafe) package static var snapshotOverride: Bool?   // tests only, set and read on the main thread
+    /// What the walk asks of most elements, by count over Safari and Claude pages (turnover-coretest --buffer).
+    nonisolated package static let snapshotNames: [String] = [
+        kAXChildrenAttribute, kAXRoleAttribute, kAXSubroleAttribute, kAXValueAttribute, kAXTitleAttribute, kAXParentAttribute,
+        kAXFocusedAttribute, kAXDescriptionAttribute, kAXSelectedAttribute, "AXInvalid", kAXModalAttribute, kAXEnabledAttribute,
+        kAXDisclosingAttribute, "AXRequired", kAXMenuItemMarkCharAttribute, kAXMenuItemCmdCharAttribute]
+    /// The build under way began here, before its snapshot: the snapshot's time counts against the two seconds.
+    private var buildStart: Date?
+    private var snapshotLog = ""
+    /// Questions the last build's snapshot answered, and those the walk still asked of the app (0 and 0 without one).
+    public private(set) var lastSnapshotUse: (answered: Int, asked: Int) = (0, 0)
+
+    // MARK: The snapshot taken ahead, in the background (trial, 10 Nov 2026)
+    // Of a build from a snapshot, the snapshot is most of the time: 72 of 83 ms over the 19 builds of Oliver's first
+    // trial, and all of it on the main thread, where keys wait. But a page is read again because it said it changed,
+    // and the key that asks for the reading comes later. So when a page is marked changed, it is copied in the
+    // background, and the build that follows uses that copy if the page has not been marked changed again since the
+    // copy began. Only the walk over the copy, about 11 ms in that trial, is then on the main thread. With no such
+    // copy to hand (a page's first reading, a refresh asked for by key, a change while it was being copied), the
+    // snapshot is taken on the main thread, as before.
+
+    /// `defaults write com.turnover.reader bufferSnapshotAhead -bool false` takes every snapshot on the main thread.
+    nonisolated static var takesSnapshotAhead: Bool { aheadOverride ?? (UserDefaults.standard.object(forKey: "bufferSnapshotAhead") as? Bool ?? true) }
+    nonisolated(unsafe) package static var aheadOverride: Bool?   // tests only, set and read on the main thread
+    /// When the page was last marked changed.
+    private var dirtyAt = Date.distantPast
+    private var prefetched: (snapshot: AXSnapshot, startedAt: Date)?
+    private var prefetchWork: DispatchWorkItem?
+    private var lastPrefetchStart = Date.distantPast
+    private var lastPrefetchMs = 0.0
+    /// Counts the marks: a copy begun for an earlier one stops asking (AXReadScope) and is not kept.
+    private let prefetchGeneration = OSAllocatedUnfairLock(initialState: 0)
+    nonisolated private static let prefetchQueue = DispatchQueue(label: "turnover.buffer-snapshot", qos: .userInitiated)
+    /// The last build's snapshot was one taken ahead.
+    public private(set) var lastSnapshotWasAhead = false
+
+    /// How a copy begun at `startedAt` may be used. `.current`: nothing has marked the page changed since it began, so
+    /// it stands for the page as it is. `.recent`: the page was marked again, but the copy is under `recentSeconds`
+    /// old; it is read from, and the page stays marked changed, as it is when a notice comes just after a reading.
+    /// (The arrows already leave a changed page a second before reading it again: the same tolerance.) A page that
+    /// keeps saying it has changed, a reply streaming into a chat, otherwise never has a current copy: in Oliver's
+    /// trial in Claude one build in eight had one (10 Nov 2026).
+    package enum AheadUse: Equatable { case current, recent, none }
+    nonisolated static let recentSeconds = 1.5
+    nonisolated package static func aheadUse(startedAt: Date, dirtyAt: Date, now: Date, mustBeCurrent: Bool = false) -> AheadUse {
+        let age = now.timeIntervalSince(startedAt)
+        if startedAt >= dirtyAt, age < 30 { return .current }   // (an app that never says it changed is not trusted for longer)
+        return !mustBeCurrent && age < recentSeconds ? .recent : .none
+    }
+
+    private var copyInFlight = false
+    /// Why the last build had no copy to use, for the log.
+    private var aheadNote = ""
+
+    private func markedDirty() {
+        dirtyAt = Date()
+        scheduleCopyAhead()
+    }
+
+    /// One copy at a time, begun a moment after the page settles and never back to back: a copy asks the app a question
+    /// an element (92 ms of Claude's time for 600), so the next begins a second after the last at the earliest, six
+    /// times its length for a long one. Only for the page being read, and only while its reader is at the keys.
+    private func scheduleCopyAhead() {
+        guard Self.usesSnapshot, Self.takesSnapshotAhead, prefetchWork == nil, !copyInFlight else { return }
+        let earliest = lastPrefetchStart.addingTimeInterval(max(1.0, lastPrefetchMs / 1000 * 6))
+        let work = DispatchWorkItem { [weak self] in self?.startPrefetch() }
+        prefetchWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + max(0.15, earliest.timeIntervalSinceNow), execute: work)
+    }
+
+    private func startPrefetch() {
+        prefetchWork = nil
+        guard isDirty, API.focusTreeInterceptor?.buffer === self, Date().timeIntervalSince(InputManager.lastKeyDownAt) < 30 else { return }
+        let started = Date()
+        lastPrefetchStart = started
+        copyInFlight = true
+        let counter = prefetchGeneration, generation = counter.withLock { $0 }
+        let area = webArea, limit = Self.maxElements
+        Self.prefetchQueue.async { [weak self] in
+            let snapshot = AXReadScope.with(while: { counter.withLock { $0 } == generation }) {
+                AXSnapshotCapture.capture(area, limits: AXSnapshotLimits(maxNodes: limit, maxDepth: 60, seconds: 0.8), names: Self.snapshotNames)
+            }
+            onMain { self?.prefetchArrived(snapshot, startedAt: started, generation: generation) }
+        }
+    }
+
+    private func prefetchArrived(_ snapshot: AXSnapshot, startedAt: Date, generation: Int) {
+        copyInFlight = false
+        lastPrefetchMs = snapshot.milliseconds
+        // For a page since replaced or refreshed, or the app is resting: no copy. One cut short by its limits is a copy.
+        guard prefetchGeneration.withLock({ $0 }) == generation, !snapshot.nodes.isEmpty,
+              snapshot.stop != .clientStopped, snapshot.stop != .appResting else { return }
+        prefetched = (snapshot, startedAt)
+        // Marked again while it was being taken: another, in its turn.
+        if dirtyAt > startedAt { scheduleCopyAhead() }
+    }
+
+    /// Asked for by key (NVDA+F5, a change of layout): the page as it is this moment, never a copy from before.
+    public func buildAfresh() {
+        prefetched = nil
+        prefetchGeneration.withLock { $0 += 1 }
+        mustBeCurrent = true
+        isDirty = true
+        build()
+    }
+    private var mustBeCurrent = false
+
+    /// For tests: the copy taken ahead, here and now, as the background would have.
+    package func takeSnapshotAheadNow() {
+        let started = Date()
+        prefetched = (AXSnapshotCapture.capture(webArea, limits: AXSnapshotLimits(maxNodes: Self.maxElements, maxDepth: 60, seconds: 0.8),
+                                                names: Self.snapshotNames), started)
+    }
+
     /// Reads the page into the copy, in at most two seconds, done by `deadline` at the latest.
     public func build(until deadline: Date = .distantFuture) {
+        guard Self.usesSnapshot else { snapshotLog = ""; lastSnapshotUse = (0, 0); lastSnapshotWasAhead = false; mustBeCurrent = false; prefetched = nil; buildByAsking(until: deadline); return }
         let t0 = Date()
+        // At most two fifths of the time the build has, and never more than 0.8 s: a page that long is finished by
+        // the walk asking for the rest itself, within the same two seconds.
+        let ahead = prefetched
+        prefetched = nil
+        let use: AheadUse = !Self.takesSnapshotAhead ? .none
+            : ahead.map { Self.aheadUse(startedAt: $0.startedAt, dirtyAt: dirtyAt, now: t0, mustBeCurrent: mustBeCurrent) } ?? .none
+        mustBeCurrent = false
+        let snapshot: AXSnapshot
+        if use != .none, let ahead {
+            snapshot = ahead.snapshot
+            lastSnapshotWasAhead = true
+        } else {
+            let allowed = min(Self.buildSeconds, max(0, deadline.timeIntervalSince(t0)))
+            snapshot = AXSnapshotCapture.capture(webArea, limits: AXSnapshotLimits(maxNodes: Self.maxElements, maxDepth: 60, seconds: min(0.8, allowed * 0.4)),
+                                                 names: Self.snapshotNames)
+            lastSnapshotWasAhead = false
+        }
+        buildStart = t0
+        let answers = AXAttributeCache.with(snapshot) { buildByAsking(until: deadline) }.use
+        lastSnapshotUse = (answers.hits, answers.misses)
+        let age = ahead.map { Int(t0.timeIntervalSince($0.startedAt) * 1000) }
+        let how: String
+        switch use {
+        case .current: how = "taken ahead in the background, \(age ?? 0) ms before"
+        case .recent: how = "taken ahead in the background, \(age ?? 0) ms before, the page marked changed since"
+        case .none: how = "taken now (\(!Self.takesSnapshotAhead ? "copies ahead are off" : age.map { "the copy to hand was \($0) ms old and the page marked changed since" } ?? (copyInFlight ? "a copy was still being taken" : "no copy to hand")))"
+        }
+        Log.info("virtual buffer: from a snapshot of \(snapshot.nodes.count) elements in \(Int(snapshot.milliseconds)) ms, \(how)\(snapshot.stop.map { " (stopped: \($0.rawValue))" } ?? ""); it answered \(answers.hits) questions, \(answers.misses) were asked")
+        // Read from a copy the page has been marked changed since: it is still changed, and says so, which also
+        // sets the next copy going.
+        if use == .recent { isDirty = true }
+    }
+
+    private func buildByAsking(until deadline: Date) {
+        let t0 = buildStart ?? Date()
+        buildStart = nil
         // The copy being replaced, kept if this read is cut short and is the same as far as it goes (below).
         let old = saved(), wasDirty = isDirty
         out = ""; outLength = 0; current = []; currentElement = nil; pendingEntering = []; containerStack = []; linkDepth = 0
@@ -173,7 +338,7 @@ public final class WebBuffer {
         checkpoints = []
         // At most 2 s on the main thread (the watchdog trips at 4): a huge page is read only in part, rather than
         // TurnOver freezing (E6 audit, 4 Oct 2026). Reading such a page off the main thread is the full answer.
-        buildDeadline = min(Date().addingTimeInterval(Self.buildSeconds), deadline)
+        buildDeadline = min(t0.addingTimeInterval(Self.buildSeconds), deadline)
         let budget = buildDeadline
         profiled = !ProfileStore.shared.profiles(for: ProfileStore.shared.bundle(of: webArea.pid)).isEmpty
         consumed = []

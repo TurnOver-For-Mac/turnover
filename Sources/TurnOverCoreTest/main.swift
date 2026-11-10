@@ -8,6 +8,7 @@ import Foundation
 import AppKit
 import ApplicationServices
 import TurnOverCore
+import TurnOverAX
 import TurnOverSpeech
 import AXFixtures
 
@@ -45,6 +46,41 @@ if args.contains("--redact") {
     let i = args.firstIndex(of: "--redact")!
     let text = (try? String(contentsOfFile: args[i + 1], encoding: .utf8)) ?? ""
     print(Feedback.redact(text))
+    exit(0)
+}
+if args.contains("--buffer") {
+    // A page's buffer built as it is today, and built again with its questions answered from a snapshot taken just
+    // before: --buffer <bundle id> [--names N]. Counts and timings only, and whether the two texts are the same;
+    // never the text. Read-only. (10 Nov 2026)
+    guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: opt("--buffer") ?? "").first else { print("not running"); exit(1) }
+    let ax = AXUIElementCreateApplication(app.processIdentifier)
+    guard let window = ax.element(kAXFocusedWindowAttribute) ?? ax.element(kAXMainWindowAttribute) ?? ax.elements(kAXWindowsAttribute).first,
+          let web = { () -> AXUIElement? in
+              // The biggest page in the window: an Electron app's first web area can be an empty shell around the real one.
+              let whole = AXSnapshotCapture.capture(window, limits: AXSnapshotLimits(maxNodes: 8000, maxDepth: 80, seconds: 3))
+              return whole.nodes.indices.filter { whole.nodes[$0].role == "AXWebArea" }.max { whole.subtree($0).count < whole.subtree($1).count }.map { whole.nodes[$0].element }
+          }() else { print("no page found in the front window"); exit(1) }
+    Log.level = .error
+    func build(snapshot: Bool) -> (buffer: WebBuffer, ms: Double, questions: Int, counts: [String: Int]) {
+        WebBuffer.snapshotOverride = snapshot
+        defer { WebBuffer.snapshotOverride = nil }
+        let buffer = WebBuffer(webArea: web)
+        let before = AXStats.calls
+        let t = timed { AXAttributeCache.counting { buffer.build() } }
+        return (buffer, t.ms, AXStats.calls - before, t.value.counts)
+    }
+    let first = build(snapshot: false)
+    print("the page: \(first.buffer.lines.count) lines, \(first.buffer.text.length) characters")
+    print("what the build asks one question at a time: " + first.counts.sorted { $0.value > $1.value }.prefix(14).map { "\($0.key) \($0.value)" }.joined(separator: ", "))
+    for round in 1...3 {
+        let old = build(snapshot: false), new = build(snapshot: true)
+        let same = old.buffer.text.isEqual(to: new.buffer.text as String) && old.buffer.lines.count == new.buffer.lines.count
+        print("round \(round)")
+        print(String(format: "  as until now: %.0f ms, %d questions", old.ms, old.questions))
+        print(String(format: "  from a snapshot, as the reader now builds it: %.0f ms, %d questions; %d answers came from the snapshot, %d were asked",
+                     new.ms, new.questions, new.buffer.lastSnapshotUse.answered, new.buffer.lastSnapshotUse.asked))
+        print(same ? "  the two texts are the same" : "  the two texts differ (\(old.buffer.lines.count) lines against \(new.buffer.lines.count))")
+    }
     exit(0)
 }
 if args.contains("--appstore") {
