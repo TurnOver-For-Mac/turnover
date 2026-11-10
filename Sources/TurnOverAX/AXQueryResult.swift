@@ -38,6 +38,11 @@ public enum AXQueryPolicy: Sendable {
     /// For explicitly bounded diagnostic comparisons only, never normal reader retries. The call is still timed
     /// and contributes to health accounting. A standalone probe observes its own health, not the reader's (#166).
     case diagnosticDirect
+    /// One deliberately large read (AXHierarchyBridge: a whole subtree in one question). It respects a rest, and is
+    /// counted in AXStats, but its duration says nothing about the app's health: a second spent copying 5,000
+    /// elements is not a slow drip, and its timeout is the question being too big, not the app hanging. Neither
+    /// rests the app (10 Nov 2026).
+    case bulkRead
 }
 
 /// The provider's returned error and the client's decision must survive beyond an optional value. Existing

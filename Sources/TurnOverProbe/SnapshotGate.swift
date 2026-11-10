@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// snapshot: how long one copy of a window's accessibility tree takes, two ways (10 Nov 2026).
+// snapshot: how long one copy of a window's accessibility tree takes, three ways (prototype, 10 Nov 2026).
 //
-// 1. AXSnapshotCapture: one batched question an element.
-// 2. One attribute a question, as most of the reader asks today: the baseline the snapshot is meant to replace.
+// 1. AXSnapshotCapture with the private whole-subtree read (AXHierarchyBridge), where this macOS has it.
+// 2. AXSnapshotCapture with the public batched read only: one question an element.
+// 3. One attribute a question, as most of the reader asks today: the baseline the snapshot is meant to replace.
 //
 // Read-only. It logs counts, timings and a role census; never a title, label, value or identifier.
 import Foundation
@@ -21,19 +22,24 @@ func runSnapshotGate(_ args: [String]) {
     }
     AXUIElementSetMessagingTimeout(window, 5)
     if opts.has("profile") { profileSnapshot(window, seconds: opts.double("seconds", 8)); return }
+    Log.line("private whole-subtree read available: \(AXHierarchyBridge.isAvailable)")
     let limits = AXSnapshotLimits(maxNodes: 20_000, maxDepth: 80, seconds: 10)
     let repeats = max(1, opts.int("repeat", 3))
 
     func describe(_ name: String, _ s: AXSnapshot) {
-        Log.line(String(format: "%@: %d elements, %d questions, %.0f ms, unfilled %d, stop %@",
-                        name, s.nodes.count, s.questions, s.milliseconds, s.unfilledCount, s.stop?.rawValue ?? "none"))
+        let source = [s.source.contains(.hierarchy) ? "hierarchy" : nil, s.source.contains(.batched) ? "batched" : nil].compactMap { $0 }.joined(separator: "+")
+        let unfilled = s.unfilledCount
+        Log.line(String(format: "%@: %d elements, %d questions, %.0f ms, source %@, unfilled %d, stop %@",
+                        name, s.nodes.count, s.questions, s.milliseconds, source.isEmpty ? "none" : source, unfilled, s.stop?.rawValue ?? "none"))
     }
 
     var last: AXSnapshot?
-    for round in 1...repeats {
+    rounds: for round in 1...repeats {
         Log.line("round \(round)")
-        let batched = AXSnapshotCapture.capture(window, limits: limits)
-        describe("  batched snapshot  ", batched)
+        // The public batched read first, then the baseline, and the private read last: if it times out the app is
+        // left busy, and nothing measured after it would mean anything (the 56,000-element page, 10 Nov 2026).
+        let batched = AXSnapshotCapture.capture(window, limits: limits, useHierarchy: false)
+        describe("  public batched   ", batched)
         last = batched
         if batched.stop == .appResting { Log.line("  the app is resting after a timeout; stopping here"); break }
 
@@ -53,6 +59,13 @@ func runSnapshotGate(_ args: [String]) {
             return visited
         }
         Log.line(String(format: "  one attribute each: %d elements, %d questions, %.0f ms", single.value, AXStats.calls - before, single.ms))
+
+        if AXHierarchyBridge.isAvailable {
+            if AXHierarchyBridge.timedOutRecently(app.processIdentifier) { Log.line("  with private read: skipped, it timed out on this app within the last minute"); continue }
+            let s = AXSnapshotCapture.capture(window, limits: limits, useHierarchy: true)
+            describe("  with private read", s)
+            if s.stop == .appBusy { Log.line("  the private read timed out and the app is still busy with it; stopping here"); break rounds }
+        }
     }
 
     guard let last else { return }
