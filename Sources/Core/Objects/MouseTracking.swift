@@ -247,7 +247,7 @@ public enum MouseTracking {
             // As the trackpad's explore does: what was being said gives way, and the item is read. The focus stays where it is.
             guard let reading = found.reading else { tracker.forgetLook(); return }
             Log.io("mouse tracking: says \(describe(reading.element))")
-            Speech.cancel(source: Self.speechSource)
+            if config.presentation.mouseInterruptsSpeech { Speech.cancel() } else { Speech.cancel(source: Self.speechSource) }
             ObjectNavigator.shared.hover(reading, movingCursor: config.presentation.mouseMovesCursor)
         }
     }

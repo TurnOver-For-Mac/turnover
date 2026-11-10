@@ -73,7 +73,9 @@ Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
   keyboard focus never moves with the pointer. "Mouse pointer moves the review cursor" (on by default) also takes the
   cursor to the item, as NVDA's review cursor follows the mouse. A blank place (a window's background, a group with no
   name) is silent, and coming back to an item reads it again. The pointer's own speech is interrupted by the next item,
-  and nothing else is: notifications, focus changes and typing echo are left alone.
+  and nothing else is: notifications, focus changes and typing echo are left alone. A tester found that other speech
+  then kept talking over the pointer, so "Mouse pointer interrupts other speech" (off by default) makes the pointer cut
+  that off too.
   The whole lookup, the item's name, role, value, state and a group's item count, is read off the main thread under one
   deadline, and only the finished text is handed back, so an app that stops answering cannot freeze TurnOver. This
   reads less than the keyboard does: app-specific names (Mail, Excel, Finder, Calendar, Dock, Terminal and others),

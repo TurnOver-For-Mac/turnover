@@ -12574,7 +12574,13 @@
         }
       }
     },
+    "Mouse interrupts other speech" : {
+
+    },
     "Mouse moves the cursor" : {
+
+    },
+    "Mouse pointer interrupts other speech" : {
 
     },
     "Mouse pointer moves the review cursor" : {
@@ -15643,6 +15649,9 @@
           }
         }
       }
+    },
+    "Off, only the pointer's own speech gives way and a notification is not cut off. On, the pointer is heard at once, even while something else is talking." : {
+
     },
     "Off: each reader has its own switch and neither changes the other. Command Control Period is TurnOver's; Command F5 is VoiceOver's." : {
       "extractionState" : "stale",

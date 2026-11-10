@@ -568,6 +568,8 @@ struct ItemsView: View {
             Toggle("Read what is under the mouse pointer as it moves", isOn: model.bool("presentation", "mouseTracking"))
             Text("The pointer is not read while a page or Say All is being read out. If pages read themselves when they open, turn off \"Read a page through as it opens\" in Web pages to keep hearing the pointer.").font(.caption)
             Toggle("Mouse pointer moves the review cursor", isOn: model.bool("presentation", "mouseMovesCursor"))
+            Toggle("Mouse pointer interrupts other speech", isOn: model.bool("presentation", "mouseInterruptsSpeech"))
+            Text("Off, only the pointer's own speech gives way and a notification is not cut off. On, the pointer is heard at once, even while something else is talking.").font(.caption)
             Toggle("Say which plugin an app has as it comes to the front", isOn: model.bool("presentation", "announcePlugins"))
             Picker("Heading, link and button: when to say them", selection: model.string("documentFormatting", "roleOrder", "auto")) {
                 Text("By keyboard style").tag("auto"); Text("Before the words, as NVDA").tag("before"); Text("After the words, as VoiceOver").tag("after")

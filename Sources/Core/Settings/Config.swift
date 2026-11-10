@@ -506,8 +506,13 @@ public struct Config: Codable {
         /// With mouse tracking, whether the review cursor goes to what the pointer is over (NVDA's review cursor
         /// follows the mouse). The keyboard focus never does.
         public var mouseMovesCursor = true
+        /// With mouse tracking, whether an item under the pointer also cuts off other speech (a notification, a focus
+        /// change, typing echo). Off: only the pointer's own speech gives way, so a notification is not lost. On: the
+        /// pointer is heard at once, not after whatever else is talking (a tester, 10 Nov 2026: other speech kept
+        /// talking over the pointer).
+        public var mouseInterruptsSpeech = false
         public init() {}
-        enum Keys: String, CodingKey { case verbosity, verbosityByApp, reportObjectDescriptions, reportKeyboardShortcuts, reportObjectPositionInformation, reportDynamicContentChanges, speakHints, reportNotifications, announcePlugins, progressBars, mouseTracking, mouseMovesCursor }
+        enum Keys: String, CodingKey { case verbosity, verbosityByApp, reportObjectDescriptions, reportKeyboardShortcuts, reportObjectPositionInformation, reportDynamicContentChanges, speakHints, reportNotifications, announcePlugins, progressBars, mouseTracking, mouseMovesCursor, mouseInterruptsSpeech }
         // Each setting falls back on its own: a settings file from before speakHints keeps the others.
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: Keys.self)
@@ -526,6 +531,7 @@ public struct Config: Codable {
             progressBars = (try? c.decodeIfPresent(String.self, forKey: .progressBars)).flatMap { ProgressOutput.modes.contains($0) ? $0 : nil } ?? "beep"
             mouseTracking = (try? c.decodeIfPresent(Bool.self, forKey: .mouseTracking)) ?? false
             mouseMovesCursor = (try? c.decodeIfPresent(Bool.self, forKey: .mouseMovesCursor)) ?? true
+            mouseInterruptsSpeech = (try? c.decodeIfPresent(Bool.self, forKey: .mouseInterruptsSpeech)) ?? false
         }
         public func encode(to encoder: Encoder) throws {
             var c = encoder.container(keyedBy: Keys.self)
@@ -535,6 +541,7 @@ public struct Config: Codable {
             try c.encode(speakHints, forKey: .speakHints); try c.encode(reportNotifications, forKey: .reportNotifications)
             try c.encode(announcePlugins, forKey: .announcePlugins); try c.encode(progressBars, forKey: .progressBars)
             try c.encode(mouseTracking, forKey: .mouseTracking); try c.encode(mouseMovesCursor, forKey: .mouseMovesCursor)
+            try c.encode(mouseInterruptsSpeech, forKey: .mouseInterruptsSpeech)
         }
     }
     public struct DocumentFormatting: Codable {
