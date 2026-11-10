@@ -24273,7 +24273,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "выход Mac по умолчанию"
+            "value" : "Вывод Mac по умолчанию"
           }
         },
         "tr" : {
@@ -29587,7 +29587,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Куда идёт звук речи"
+            "value" : "Устройство вывода"
           }
         },
         "tr" : {
