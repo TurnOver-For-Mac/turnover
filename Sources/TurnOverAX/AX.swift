@@ -236,7 +236,7 @@ public extension AXUIElement {
 
 /// An element as a dictionary key or set member: equal when the accessibility API says the two refer to the same
 /// thing (CFEqual), which two `AXUIElement` objects for one control do.
-public struct ElementKey: Hashable {
+public struct ElementKey: Hashable, Sendable {
     public let element: AXUIElement
     public init(_ e: AXUIElement) { element = e }
     public static func == (a: ElementKey, b: ElementKey) -> Bool { CFEqual(a.element, b.element) }
