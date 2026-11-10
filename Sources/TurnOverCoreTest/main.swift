@@ -8,6 +8,7 @@ import Foundation
 import AppKit
 import ApplicationServices
 import TurnOverCore
+import TurnOverAX
 import TurnOverSpeech
 import AXFixtures
 
@@ -39,6 +40,31 @@ if args.contains("--record") {
     // Masked: the window's title is the user's too (a Ulysses sheet's first line, 10 Oct 2026), so it is not printed.
     let shownTitle = args.contains("--mask") ? "title masked" : (window.string(kAXTitleAttribute) ?? "untitled")
     print("recorded \(t.value.nodes.count) elements of \(app.localizedName ?? "") (\(shownTitle)) in \(Int(t.ms)) ms")
+    exit(0)
+}
+if args.contains("--chooser") {
+    // The Item Chooser's list for an app's focused window, collected both ways and compared: --chooser <bundle id>.
+    // Counts and timings only: never a label. Read-only; nothing is opened, spoken or focused. (10 Nov 2026)
+    guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: opt("--chooser") ?? "").first else { print("not running"); exit(1) }
+    let ax = AXUIElementCreateApplication(app.processIdentifier)
+    guard let window = ax.element(kAXFocusedWindowAttribute) ?? ax.element(kAXMainWindowAttribute) ?? ax.elements(kAXWindowsAttribute).first else { print("no window"); exit(1) }
+    for round in 1...2 {
+        let onScreen = timed { ItemChooser.snapshotItems(in: window, onScreenRowsOnly: true) }
+        print(String(format: "  what opens first, rows on screen only: %d items in %.0f ms, %d rows out of sight left for the fill (%@)",
+                     onScreen.value.items.count, onScreen.ms, onScreen.value.rowsLeftOut, onScreen.value.note))
+        let listed = ItemChooser.snapshotItems(in: window).items.count
+        let new = timed { ItemChooser.snapshotItems(in: window, onceByName: false) }
+        let old = timed { ItemChooser.oldWalkItems(in: window).items }
+        var met = Set<ElementKey>()
+        let oldOnce = old.value.filter { met.insert(ElementKey($0.element)).inserted }
+        let same = oldOnce.count == new.value.items.count && zip(oldOnce, new.value.items).allSatisfy { CFEqual($0.element, $1.element) && $0.label == $1.label }
+        let sharedStart = zip(oldOnce, new.value.items).prefix { CFEqual($0.element, $1.element) && $0.label == $1.label }.count
+        print("round \(round)")
+        print(String(format: "  new, from a snapshot: %d items in %.0f ms (%@)", new.value.items.count, new.ms, new.value.note))
+        print(String(format: "  old walk: %d items in %.0f ms, %d once repeats are taken out", old.value.count, old.ms, oldOnce.count))
+        print("  with texts that only repeat their item left out, as the Item Chooser lists it: \(listed) items")
+        print(same ? "  the two lists are the same" : "  the two lists differ: the first \(sharedStart) items agree")
+    }
     exit(0)
 }
 if args.contains("--redact") {
