@@ -20662,9 +20662,6 @@
         }
       }
     },
-    "Say space after a typed word" : {
-
-    },
     "Say which plugin an app has as it comes to the front" : {
       "localizations" : {
         "tr" : {

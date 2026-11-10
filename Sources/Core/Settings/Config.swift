@@ -235,9 +235,6 @@ public struct Config: Codable {
         public var speakTypedCharacters: TypingEcho = .editControls
         public var speakTypedWords: TypingEcho = .off
         public var speakCommandKeys = false
-        /// "space" said after the typed word it ended (the word is said as the space is typed, so the space is
-        /// heard twice). Off, as VoiceOver; a space typed on its own is still said.
-        public var speakSpaceAfterWord = true
         /// NVDA's multiPressTimeout: the same script again within this window is a repeat.
         public var multiPressTimeoutMs = 500
         /// NVDA's keyboard layout: "desktop" or "laptop". Macs are laptops.
@@ -254,14 +251,13 @@ public struct Config: Codable {
         public init() {}
         /// The user's own keys (UserGestures): key identifier → "script:<name>", "app:<bundle id>" or "none".
         public var userGestures: [String: String] = [:]
-        enum Keys: String, CodingKey { case speakTypedCharacters, speakTypedWords, speakCommandKeys, speakSpaceAfterWord, multiPressTimeoutMs, layout, speakNewLine, userGestures, optionCommander, numpadCommander, keypadCommands }
+        enum Keys: String, CodingKey { case speakTypedCharacters, speakTypedWords, speakCommandKeys, multiPressTimeoutMs, layout, speakNewLine, userGestures, optionCommander, numpadCommander, keypadCommands }
         // Each setting falls back on its own, so adding one never resets the others.
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: Keys.self)
             speakTypedCharacters = (try? c.decodeIfPresent(TypingEcho.self, forKey: .speakTypedCharacters)) ?? .editControls
             speakTypedWords = (try? c.decodeIfPresent(TypingEcho.self, forKey: .speakTypedWords)) ?? .off
             speakCommandKeys = (try? c.decodeIfPresent(Bool.self, forKey: .speakCommandKeys)) ?? false
-            speakSpaceAfterWord = (try? c.decodeIfPresent(Bool.self, forKey: .speakSpaceAfterWord)) ?? true
             multiPressTimeoutMs = (try? c.decodeIfPresent(Int.self, forKey: .multiPressTimeoutMs)) ?? 500
             layout = (try? c.decodeIfPresent(String.self, forKey: .layout)) ?? "laptop"
             speakNewLine = (try? c.decodeIfPresent(Bool.self, forKey: .speakNewLine)) ?? true
@@ -278,7 +274,7 @@ public struct Config: Codable {
         public func encode(to encoder: Encoder) throws {
             var c = encoder.container(keyedBy: Keys.self)
             try c.encode(speakTypedCharacters, forKey: .speakTypedCharacters); try c.encode(speakTypedWords, forKey: .speakTypedWords)
-            try c.encode(speakCommandKeys, forKey: .speakCommandKeys); try c.encode(speakSpaceAfterWord, forKey: .speakSpaceAfterWord); try c.encode(multiPressTimeoutMs, forKey: .multiPressTimeoutMs)
+            try c.encode(speakCommandKeys, forKey: .speakCommandKeys); try c.encode(multiPressTimeoutMs, forKey: .multiPressTimeoutMs)
             try c.encode(layout, forKey: .layout); try c.encode(speakNewLine, forKey: .speakNewLine)
             try c.encode(userGestures, forKey: .userGestures); try c.encode(optionCommander, forKey: .optionCommander)
             try c.encode(numpadCommander, forKey: .numpadCommander); try c.encode(keypadCommands, forKey: .keypadCommands)

@@ -7,9 +7,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 ### New to try
 
 - Deleted text by pitch: Settings, Speech, "Lower the pitch for deleted text, instead of saying deleted" says a
-  deleted character or word lower, as VoiceOver does, without the word "deleted". Off by default.
-- Typing: Settings, Keyboard, "Say space after a typed word" (on by default) turns off the "space" that followed a
-  word already said as the space was typed. A space typed on its own is still said.
+  deleted character or word lower, as VoiceOver does, without the word "deleted". Off by default. A deleted capital
+  is lowered too when capitals are raised.
 
 ### Fixed
 

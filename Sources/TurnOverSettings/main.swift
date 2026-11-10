@@ -485,7 +485,6 @@ struct KeyboardView: View {
                 Picker("Words", selection: model.int("keyboard", "speakTypedWords")) {
                     Text("Off").tag(0); Text("In edit fields").tag(1); Text("Always").tag(2)
                 }
-                Toggle("Say space after a typed word", isOn: model.bool("keyboard", "speakSpaceAfterWord"))
                 Toggle("New line on Return", isOn: model.bool("keyboard", "speakNewLine"))
                 Toggle("Command keys, as you press them", isOn: model.bool("keyboard", "speakCommandKeys"))
             }

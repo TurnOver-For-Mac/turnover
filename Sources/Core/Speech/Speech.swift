@@ -79,7 +79,7 @@ public enum Speech {
             // Raised only when the capital is the whole utterance; inside longer speech ("word A") the mark just goes.
             let plain = text.replacingOccurrences(of: capitalMark, with: "")
             if text.hasPrefix(capitalMark), !plain.contains(capitalMark), cleaned(plain).count <= 6 {
-                pitchNext = 1 + Float(config.speech.capitalPitch) / 100
+                pitchNext = capitalPitch(pending: pitchNext, percent: config.speech.capitalPitch)
             }
             return enqueue(plain, language: language, onStart: onStart, completion: completion)
         }
@@ -162,6 +162,8 @@ public enum Speech {
     private static var pitchNext: Float?
     /// Deleted text is said lower, not announced ("deleted"): VoiceOver's pitch change for deletions.
     public static var deletionByPitch: Bool { config.speech.deletedPitch > 0 }
+    /// The pitch for a capital said on its own: raised, unless a pitch is already set. A deleted capital stays lowered, as in VoiceOver.
+    public static func capitalPitch(pending: Float?, percent: Int) -> Float { pending ?? 1 + Float(percent) / 100 }
     /// Lowers the pitch of the next thing said, when the deletion is marked by pitch.
     public static func lowerForDeletion() {
         guard deletionByPitch else { return }
@@ -668,7 +670,6 @@ public enum Speech {
 
     public static func speakTypedCharacter(_ ch: Character, inEditable editable: Bool, wordBefore: (() -> String?)? = nil) {
         if typingIntoSecretField { typedWord.removeAll(); backspacedSinceWord = false; return }
-        var wordEchoed = false
         if ch.isLetter || ch.isNumber || ch == "'" || ch == "’" {
             typedWord.append(ch)
         } else if ch == "\u{8}" {
@@ -683,7 +684,6 @@ public enum Speech {
             lastTypedWordSpoken = nil
             let mode = config.keyboard.speakTypedWords
             if mode == .always || (mode == .editControls && editable) {
-                wordEchoed = true
                 lastTypedWordSpoken = word
                 // The word and the character that ended it in one breath ("fast period"): the next key cuts speech
                 // short, and two separate echoes lost the second.
@@ -696,8 +696,6 @@ public enum Speech {
         }
         let mode = config.keyboard.speakTypedCharacters
         guard ch >= " " else { return }
-        // The word just said already marked the space.
-        if ch == " ", wordEchoed, !config.keyboard.speakSpaceAfterWord { return }
         if mode == .always || (mode == .editControls && editable) { echo(Symbols.name(of: ch, locale: Symbols.typingLocale)); return }
         // Typed words only: a symbol is never part of a word, so it would never be heard. Say it as it is typed
         // (` grave, § section, / slash), as a word is said when it ends.
