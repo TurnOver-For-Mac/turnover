@@ -126,7 +126,6 @@ public final class BrowseModeDocument: ScriptableObject {
     var publicationWasEmpty = false
     var publicationAnchor: BrowseModeHandler.Saved?
     var announceWhenReady = false
-    var saidPartial = false
     let rootRunner = AXWalkRunner<BrowseRootCollection>()
     var discoveringRoot = false
     var followingRootFailure = false
@@ -141,7 +140,6 @@ public final class BrowseModeDocument: ScriptableObject {
         rootRunner.cancel(); discoveringRoot = false; followingRootFailure = false; watchingFor = nil
         buffer.newPage()
         pageGeneration += 1
-        saidPartial = false
         buffer.build()
         if !first {
             // A new page starts in browse mode, as NVDA's new document does. Focus mode carried over from the page

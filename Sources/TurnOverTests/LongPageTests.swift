@@ -5,7 +5,9 @@
 import Foundation
 import ApplicationServices
 import TurnOverCore
+import TurnOverAX
 import AXFixtures
+import os
 
 func longPageTests() {
     /// A page of `count` headings ("Heading 1" …), each with its text, then "End of page", then `after` more headings
@@ -335,5 +337,100 @@ func longPageTests() {
         let b = WebBuffer(webArea: AXReplay.root!)
         b.buildForInspection()
         check((b.text as String).contains("Docs"), "the link's title read")
+    }
+
+    // MARK: Plain elements read short, and a long page filled in quietly (10 Nov 2026)
+
+    /// A page with every kind of thing on it: a heading, a paragraph in a plain group with a link, a landmark, a button,
+    /// a tick box, a list of two, and a table of one row.
+    func mixedPage() -> AXFixture {
+        var f = AXFixture(app: "T", bundle: "t", recorded: "", root: 0, application: 1, focus: 0, nodes: [])
+        func n(_ id: Int, _ role: String, _ parent: Int, _ children: [Int] = [], _ extra: [String: AXFixture.Value] = [:]) -> AXFixture.Node {
+            var a: [String: AXFixture.Value] = ["AXRole": .string(role), "AXParent": .element(parent)]
+            if !children.isEmpty { a["AXChildren"] = .elements(children) }
+            for (k, v) in extra { a[k] = v }
+            return .init(id: id, attrs: a)
+        }
+        f.nodes = [n(0, "AXWebArea", 1, [10, 20, 25, 30, 31, 40, 50], ["AXURL": .url("https://example.com/mixed")]),
+                   .init(id: 1, attrs: ["AXRole": .string("AXApplication"), "AXTitle": .string("T"), "AXChildren": .elements([0])]),
+                   n(10, "AXHeading", 0, [11], ["AXValue": .number(1)]), n(11, "AXStaticText", 10, [], ["AXValue": .string("Sample page")]),
+                   n(20, "AXGroup", 0, [21, 22]), n(21, "AXStaticText", 20, [], ["AXValue": .string("Read the")]),
+                   n(22, "AXLink", 20, [23], ["AXURL": .url("https://example.com/guide")]), n(23, "AXStaticText", 22, [], ["AXValue": .string("guide")]),
+                   n(25, "AXGroup", 0, [26], ["AXSubrole": .string("AXLandmarkNavigation"), "AXDescription": .string("Site")]),
+                   n(26, "AXStaticText", 25, [], ["AXValue": .string("Home")]),
+                   n(30, "AXButton", 0, [], ["AXTitle": .string("Save"), "AXEnabled": .bool(true)]),
+                   n(31, "AXCheckBox", 0, [], ["AXTitle": .string("Remember me"), "AXValue": .number(1), "AXEnabled": .bool(true)]),
+                   n(40, "AXList", 0, [41, 43]),
+                   n(41, "AXGroup", 40, [42], ["AXSubrole": .string("AXListItem")]), n(42, "AXStaticText", 41, [], ["AXValue": .string("First")]),
+                   n(43, "AXGroup", 40, [44], ["AXSubrole": .string("AXListItem")]), n(44, "AXStaticText", 43, [], ["AXValue": .string("Second")]),
+                   n(50, "AXTable", 0, [51]), n(51, "AXRow", 50, [52]), n(52, "AXCell", 51, [53]),
+                   n(53, "AXStaticText", 52, [], ["AXValue": .string("Cell")])]
+        return f
+    }
+
+    test("page collection: plain text and plain groups read short give the same page, with fewer questions") {
+        AXReplay.load(mixedPage())
+        defer { AXReplay.unload() }
+        @MainActor func read(short: Bool) -> (buffer: WebBuffer, plain: Int, total: Int, questions: Int) {
+            var limits = WebBufferCollection.Limits()
+            limits.plainElementsShort = short
+            let fixed = limits
+            let counts = OSAllocatedUnfairLock(initialState: (0, 0))
+            let b = WebBuffer(webArea: AXReplay.root!) { root, focus, request in
+                let c = WebBufferCollection.collect(root: root, focus: focus, request: request, limits: fixed)
+                counts.withLock { $0 = (c.plainElements, c.snapshot.nodes.count) }
+                return c
+            }
+            b.collectionLimits = fixed
+            let before = AXStats.calls
+            b.build(); waitForBuffer(b)
+            let c = counts.withLock { $0 }
+            return (b, c.0, c.1, AXStats.calls - before)
+        }
+        let full = read(short: false), short = read(short: true)
+        check(full.buffer.lines.count >= 8, "the page was read (\(full.buffer.lines.count) lines)")
+        expect(short.buffer.text as String, full.buffer.text as String, "the same text")
+        expect(short.buffer.lines.map { [$0.start, $0.end] }, full.buffer.lines.map { [$0.start, $0.end] }, "the same lines")
+        expect(short.buffer.lines.map { $0.fields.joined(separator: "/") }, full.buffer.lines.map { $0.fields.joined(separator: "/") }, "the same words for each control")
+        expect(short.buffer.lines.map { $0.entering.count }, full.buffer.lines.map { $0.entering.count }, "the same containers announced")
+        expect(short.buffer.containers.count, full.buffer.containers.count, "the same containers")
+        expect(full.plain, 0, "nothing read short with it off")
+        // The seven texts, the group with no subrole, the two list items, the row and the cell; not the heading, the
+        // link, the landmark, the list, the table or the controls.
+        expect(short.plain, 12, "the texts, the plain group, the list items, the row and the cell")
+        check(short.questions + 2 * short.plain <= full.questions, "each of them one question in place of three or more (\(short.questions) against \(full.questions))")
+        expect(AXSnapshot.takeMissed().count, 0, "and nothing asked of them that was not collected")
+    }
+
+    test("page collection: an attribute asked of a plain element that was not collected is counted, for the log") {
+        let text = AXUIElementCreateApplication(910_010)
+        let snapshot = AXSnapshot(nodes: [ElementKey(text): .init(attributes: ["AXRole": .string("AXStaticText"), "AXValue": .string("Hello")], isPlain: true)])
+        _ = AXSnapshot.takeMissed()
+        snapshot.with {
+            expect(text.string(kAXValueAttribute), "Hello")
+            check(text.attr("AXVisited") == nil, "absent")
+            check(text.attr("AXVisited") == nil, "absent again")
+        }
+        expect(AXSnapshot.takeMissed(), ["AXVisited": 2])
+        expect(AXSnapshot.takeMissed().count, 0, "taken once")
+    }
+
+    test("long page: its first reading carries on to the end by itself, and nothing is said about its length") {
+        AXReplay.load(page(headings: 300))
+        let was = (WebBuffer.maxElements, WebBuffer.fillsOn), sink = Speech.sink
+        WebBuffer.maxElements = 100; WebBuffer.fillsOn = true
+        var said = ""
+        Speech.sink = { said += $0 + " " }
+        defer { AXReplay.unload(); WebBuffer.maxElements = was.0; WebBuffer.fillsOn = was.1; Speech.sink = sink }
+        let b = WebBuffer(webArea: AXReplay.root!)
+        b.build()
+        waitForBuffer(b)
+        check((b.text as String).hasPrefix("Heading 1\n"), "its first part is there at once")
+        let until = Date().addingTimeInterval(5)
+        while b.isPartial || b.canReadOn, Date() < until { RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01)) }
+        check(!b.isPartial, "read on to the end by itself")
+        expect((b.text as String).split(separator: "\n").map(String.init), (1...300).map { "Heading \($0)" } + ["End of page"], "every heading once, in order, and the end")
+        check(b.passes > 2, "in several passes (\(b.passes))")
+        check(!said.contains("read in part"), "nothing said about its length: \(said)")
     }
 }

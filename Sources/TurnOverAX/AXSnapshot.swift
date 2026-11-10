@@ -51,8 +51,11 @@ public struct AXSnapshot: Sendable {
         public let attributes: [String: AXSnapshotValue]
         public let actions: [String]
         public let settable: [String: Bool]
-        public init(attributes: [String: AXSnapshotValue], actions: [String] = [], settable: [String: Bool] = [:]) {
-            self.attributes = attributes; self.actions = actions; self.settable = settable
+        /// Collected with the short list only (`AXSnapshot.plainNames`): a page's plain text or plain group. Anything
+        /// else asked of it reads as absent, and is counted (`takeMissed`), so a rule that comes to need more shows.
+        public let isPlain: Bool
+        public init(attributes: [String: AXSnapshotValue], actions: [String] = [], settable: [String: Bool] = [:], isPlain: Bool = false) {
+            self.attributes = attributes; self.actions = actions; self.settable = settable; self.isPlain = isPlain
         }
     }
     public let nodes: [ElementKey: Node]
@@ -94,5 +97,65 @@ public struct AXSnapshot: Sendable {
         guard let scope = Thread.current.threadDictionary[key] as? Scope else { return true }
         return scope.liveForMissing || scope.snapshot.nodes[ElementKey(element)] != nil
     }
-    func attribute(_ name: String, of element: AXUIElement) -> CFTypeRef? { nodes[ElementKey(element)]?.attributes[name]?.value }
+    /// What is collected of a page's plain texts and plain groups, which are most of a page: what reading a page asks
+    /// of them (role, subrole, children, value, title, role description: turnover-coretest --page-needs on Safari and
+    /// Claude pages, 10 Nov 2026) and what other rules might (labels, identifiers, state, place). One batched question,
+    /// where every attribute an element has, with its names and its actions, was four questions and five times the
+    /// time (0.26 ms against 0.05 in Safari), and took a page of 2,900 elements past the two-second limit.
+    public static let plainNames: [String] = [
+        kAXRoleAttribute, kAXSubroleAttribute, kAXChildrenAttribute, kAXValueAttribute, kAXTitleAttribute, kAXDescriptionAttribute,
+        kAXRoleDescriptionAttribute, kAXParentAttribute, kAXWindowAttribute, kAXTitleUIElementAttribute, kAXHelpAttribute,
+        kAXIdentifierAttribute, "AXDOMIdentifier", "AXDOMClassList", "AXARIALive", "AXLanguage", "AXBlockQuoteLevel",
+        kAXEnabledAttribute, kAXFocusedAttribute, kAXSelectedAttribute, "AXExpanded", "AXElementBusy", kAXURLAttribute,
+        kAXPositionAttribute, kAXSizeAttribute, "AXEditableAncestor", kAXIndexAttribute, "AXRowIndexRange",
+        "AXColumnIndexRange", "AXRowSpan", "AXColSpan"]
+    private static let plainSet = Set(plainNames)
+    /// A page's text, its groups with no subrole, its list items, and a table's rows, columns and cells: read with
+    /// `plainNames` alone. Browse mode, its text ranges and its tables ask nothing else of these by name (every
+    /// attribute they read is in the list; checked in the source, 10 Nov 2026). Lists, tables, headings, links,
+    /// landmarks, pictures and every control are read in full.
+    public static func isPlain(role: String, subrole: String?) -> Bool {
+        switch role {
+        case "AXStaticText", "AXCell", "AXRow", "AXColumn": return true
+        case "AXGroup": return (subrole ?? "").isEmpty || subrole == "AXListItem"
+        default: return false
+        }
+    }
+
+    private static let missedLock = NSLock()
+    // Swift cannot express static NSLock ownership. Every read and write of `missed` holds `missedLock`.
+    nonisolated(unsafe) private static var missed: [String: Int] = [:]
+    /// Attributes asked of plain elements that were not collected, by name, since the last call: for the log.
+    public static func takeMissed() -> [String: Int] {
+        missedLock.lock(); defer { missedLock.unlock() }
+        let out = missed; missed = [:]
+        return out
+    }
+
+    func attribute(_ name: String, of element: AXUIElement) -> CFTypeRef? {
+        let node = nodes[ElementKey(element)]
+        if let node, node.isPlain, !Self.plainSet.contains(name) {
+            Self.missedLock.lock(); Self.missed[name, default: 0] += 1; Self.missedLock.unlock()
+        }
+        if let tally = Thread.current.threadDictionary[Self.tallyKey] as? Tally, let node {
+            var role = "?"
+            if case .string(let r)? = node.attributes[kAXRoleAttribute] { role = r }
+            tally.asked[role, default: [:]][name, default: 0] += 1
+        }
+        return node?.attributes[name]?.value
+    }
+
+    // MARK: Counting, for the probes
+    private static let tallyKey = "com.turnover.ax.snapshot-tally"
+    private final class Tally { var asked: [String: [String: Int]] = [:] }
+    /// What is asked of a snapshot's elements on this thread inside `body`: by the element's role, each attribute
+    /// name and how often. For measuring what reading a page really needs of each kind of element.
+    public static func counting<Value>(_ body: () throws -> Value) rethrows -> (value: Value, asked: [String: [String: Int]]) {
+        let dictionary = Thread.current.threadDictionary
+        let tally = Tally()
+        dictionary[tallyKey] = tally
+        defer { dictionary.removeObject(forKey: tallyKey) }
+        let value = try body()
+        return (value, tally.asked)
+    }
 }

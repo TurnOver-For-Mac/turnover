@@ -95,8 +95,15 @@ public final class WebBuffer {
     package var acceptsSnapshot: ((AXSnapshot) -> Bool)?
 
     public convenience init(webArea: AXUIElement) {
-        self.init(webArea: webArea) { root, focus, request in WebBufferCollection.collect(root: root, focus: focus, request: request) }
+        // An app with plugin profiles is read in full: a profile's rule may ask anything of any element.
+        var limits = WebBufferCollection.Limits()
+        limits.plainElementsShort = ProfileStore.shared.profiles(for: ProfileStore.shared.bundle(of: webArea.pid)).isEmpty
+        let fixed = limits
+        self.init(webArea: webArea) { root, focus, request in WebBufferCollection.collect(root: root, focus: focus, request: request, limits: fixed) }
+        collectionLimits = fixed
     }
+    /// The limits the rest of a long page is collected with (as its first part was).
+    package var collectionLimits = WebBufferCollection.Limits()
     package init(webArea: AXUIElement, collect: @escaping @Sendable (AXUIElement, AXUIElement?, AXWalkRequest) -> WebBufferCollection) {
         self.collect = collect
         self.webArea = webArea
@@ -149,6 +156,7 @@ public final class WebBuffer {
 
     public func cancel() {
         generation += 1; runner.cancel(); pendingCompletions = []; status = .cancelled
+        readingOn = false; rebuildAfterPass = false; readOnCompletions = []
     }
 
     /// Coalesce refreshes while a collection is in flight. A page change calls newPage first, cancelling the
@@ -157,6 +165,8 @@ public final class WebBuffer {
         // Every caller's action waits; each checks on completion that it is still the latest of its kind (its key's
         // intent, the document's generation), so a burst of keys does not replay as a burst of moves.
         if let completion { pendingCompletions.append(completion) }
+        // A pass of reading on is under way on the worker: this reading follows it, rather than cancelling it.
+        if readingOn { rebuildAfterPass = true; return }
         guard !isLoading else { return }
         status = .loading
         collectingDirtyRevision = dirtyRevision
@@ -300,6 +310,8 @@ public final class WebBuffer {
             return
         }
         walkAccessibility = collection.snapshot
+        lastCollectionCut = [.visits, .deadline, .queries, .axQueries].contains(collection.stop)
+        fillsThisPage = !samePage
         // Every stop of the collection leaves the page incomplete (#219), even where the walk had all it reached.
         lastStop = stopped ? (collection.stop ?? .deadline) : collection.stop
         // The same page, read on past its first part before (a long chat, issue 227), with the reader past what this
@@ -328,13 +340,17 @@ public final class WebBuffer {
     private func finish(since t0: Date, collectedMs: Int, published: Bool) {
         if published { builtAt = Date() }
         status = lastStop == nil ? .complete : (lines.isEmpty ? .unavailable : .partial)
-        // (The notice for a page read in part is browse mode's, once a page: reportPartialBuffer.)
         if stopped, !loggedPartial { loggedPartial = true; Log.error("virtual buffer: stopped at \(visited >= Self.maxElements ? "\(Self.maxElements) elements" : "a limit"), \(lastStop.map(\.rawValue) ?? "the walk's time"); the rest is read on") }
         lastBuildMs = collectedMs + Int(Date().timeIntervalSince(t0) * 1000)
         Log.info("virtual buffer: \(lines.count) lines, \(text.length) characters from \(elementCount) elements in \(lastBuildMs) ms (\(status)\(lastStop.map { ": " + $0.rawValue } ?? "")\(passes > 1 ? ", \(passes) passes" : ""))")
+        let missed = AXSnapshot.takeMissed()
+        if !missed.isEmpty {
+            Log.info("virtual buffer: asked of plain text or groups, but not collected of them: " + missed.sorted { $0.value > $1.value }.prefix(8).map { "\($0.key) \($0.value)" }.joined(separator: ", "))
+        }
         let ready = pendingCompletions; pendingCompletions = []
         if published { didPublish?() } else { didFail?() }
         ready.forEach { $0() }
+        if published { fillOnIfWanted() }
     }
 
     /// The end of a pass: after a stop, a place to read again from; after a whole read, its end to read on from.
@@ -373,9 +389,9 @@ public final class WebBuffer {
     private func collectFrontier(_ then: @escaping (WebBufferCollection?) -> Void) {
         let roots = frontier()
         guard !roots.isEmpty else { then(nil); return }
-        let area = webArea
+        let area = webArea, limits = collectionLimits
         let job: @Sendable (AXWalkRequest) -> WebBufferCollection = { request in
-            WebBufferCollection.collect(root: area, focus: nil, request: request, continuing: roots)
+            WebBufferCollection.collect(root: area, focus: nil, request: request, limits: limits, continuing: roots)
         }
         if collectsAtOnce { then(job(AXWalkRequest())); return }
         let current = generation
@@ -389,27 +405,79 @@ public final class WebBuffer {
     private func readOn(from collection: WebBufferCollection) -> Bool {
         walkAccessibility = walkAccessibility.merging(collection.snapshot)
         collectionWasCut = [.visits, .deadline, .queries, .axQueries].contains(collection.stop)
-        let more = walkAccessibility.with { readOn(deadline: Date().addingTimeInterval(Self.layoutSeconds)) }
+        lastCollectionCut = collectionWasCut
+        let more = walkAccessibility.with { readOn(deadline: Date().addingTimeInterval(sliceSeconds)) }
         collectionWasCut = false
         lastStop = stopped ? (collection.stop ?? .deadline) : nil
         return more
     }
 
+    /// A pass of reading on is under way (its collection on the worker, or its walk about to run).
+    private var readingOn = false
+    /// A reading of the whole page was asked for during that pass: it follows it.
+    private var rebuildAfterPass = false
+    private var readOnCompletions: [(Bool) -> Void] = []
+    /// The latest collection stopped at a limit: an element not in the snapshot is one not reached yet.
+    private var lastCollectionCut = false
+    /// This page's first reading: the rest of a long page is read on by itself (`fillOnIfWanted`).
+    private var fillsThisPage = false
+    /// A page's first reading carries on in the background to its end, quietly, in short turns on main, so that a
+    /// long page is all there by the time the reader gets far, and nothing need be said about its length (Oliver,
+    /// 10 Nov 2026: "I don't like the very long announcement"). Off in the tests, which read on by hand.
+    nonisolated(unsafe) package static var fillsOn = true   // set by the tests, on the main thread only
+    /// Past this many elements a page is read on only as the reader reaches for more.
+    nonisolated static let fillLimit = 60_000
+    /// How long one turn of the walk may hold main: a key or a first reading waits a tenth of a second for its page;
+    /// filling on by itself takes less, so keys in between are answered.
+    private var sliceSeconds: TimeInterval { readOnCompletions.isEmpty && readingOn ? min(Self.layoutSeconds, 0.04) : Self.layoutSeconds }
+
+    private func fillOnIfWanted() {
+        guard Self.fillsOn, !collectsAtOnce, fillsThisPage, canReadOn, elementCount < Self.fillLimit else { return }
+        let current = generation
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) { [weak self] in
+            guard let self, generation == current, !isLoading else { return }
+            buildMore()
+        }
+    }
+
     /// Reads on from where the walk stopped, in the background, and publishes what it added. `completion` (on main)
-    /// says whether there was text in it; false at once when there is nothing to read on, or a reading is under way.
+    /// says whether there was text in it; false at once when there is nothing to read on, or the whole page is being
+    /// read. One pass at a time: a call during a pass waits for that pass's answer.
     public func buildMore(completion: ((Bool) -> Void)? = nil) {
         guard canReadOn, !isLoading else { completion?(false); return }
-        status = .loading
-        let t0 = Date(), linesBefore = newLines.count, lengthBefore = outLength
+        if let completion { readOnCompletions.append(completion) }
+        guard !readingOn else { return }
+        readingOn = true
+        let t0 = Date(), linesBefore = newLines.count, lengthBefore = outLength, current = generation
+        let finishPass: (Bool) -> Void = { [weak self] more in
+            guard let self, generation == current else { return }
+            readingOn = false
+            publishCopy()
+            status = lastStop == nil ? .complete : .partial
+            Log.info("virtual buffer: read on from where it stopped: \(newLines.count - linesBefore) lines, \(outLength - lengthBefore) characters from \(visited) elements in \(Int(Date().timeIntervalSince(t0) * 1000)) ms\(stopped ? "; more to read on" : ", to the end")")
+            didPublish?()
+            let waiting = readOnCompletions; readOnCompletions = []
+            waiting.forEach { $0(more) }
+            if rebuildAfterPass { rebuildAfterPass = false; build() } else { fillOnIfWanted() }
+        }
+        // What the walk stopped at was collected already (the walk's own time ran out first): on over that.
+        if let next = frontier().first, walkAccessibility.nodes[ElementKey(next)] != nil {
+            let walkOn = { [weak self] in
+                guard let self, generation == current else { return }
+                collectionWasCut = lastCollectionCut
+                let more = walkAccessibility.with { self.readOn(deadline: Date().addingTimeInterval(self.sliceSeconds)) }
+                collectionWasCut = false
+                lastStop = stopped ? (lastStop ?? .deadline) : nil
+                finishPass(more)
+            }
+            if collectsAtOnce { walkOn() } else { DispatchQueue.main.async(execute: walkOn) }
+            return
+        }
         collectFrontier { [weak self] collection in
             guard let self else { return }
             let more = collection.map { self.readOn(from: $0) } ?? false
-            if collection == nil { self.stopped = false; self.resumeFrames = []; self.lastStop = nil }
-            self.publishCopy()
-            self.status = self.lastStop == nil ? .complete : .partial
-            Log.info("virtual buffer: read on from where it stopped: \(self.newLines.count - linesBefore) lines, \(self.outLength - lengthBefore) characters from \(self.visited) elements in \(Int(Date().timeIntervalSince(t0) * 1000)) ms\(self.stopped ? "; more to read on" : ", to the end")")
-            self.didPublish?()
-            completion?(more)
+            if collection == nil { stopped = false; resumeFrames = []; lastStop = nil }
+            finishPass(more)
         }
     }
 

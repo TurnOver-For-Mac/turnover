@@ -12,6 +12,8 @@ nonisolated package struct WebBufferCollection: Sendable {
     let elapsedMs: Int
     var navigationChanged = false
     package var skippedElements = 0
+    /// Elements read with the short list alone.
+    package var plainElements = 0
 
     package struct Limits: Sendable {
         package var elements = 6000
@@ -21,6 +23,10 @@ nonisolated package struct WebBufferCollection: Sendable {
         package var stringLength = 131_072
         package var characters = 8_000_000
         package var duration: UInt64 = 2_000_000_000
+        /// A web page's plain texts and plain groups are read with the short list alone (AXSnapshot.plainNames). Off
+        /// for an app with plugin profiles (their rules may ask anything of any element), and in the tests that
+        /// compare the two.
+        package var plainElementsShort = true
         package init() {}
     }
 
@@ -44,11 +50,44 @@ nonisolated package struct WebBufferCollection: Sendable {
         var characters = 0, skipped = 0
         var text = "", part: AXUIElement?, changed = false
         var hadOmissions = false
+        // Only on a web page: an iOS app's screen or a window (looked through for its page) is read in full.
+        var short = false
+        var plain = 0
 
         func capture(_ element: AXUIElement) -> Bool {
             let key = ElementKey(element)
             if nodes[key] != nil { return true }
             guard budget.visit() else { return false }
+            var knownSubrole: String??
+            if short {
+                let batch = element.attributesResult(AXSnapshot.plainNames)
+                guard budget.check() else { return false }
+                if batch.isAligned, let role = batch.attributes[kAXRoleAttribute]?.value as? String {
+                    let subrole = batch.attributes[kAXSubroleAttribute]?.value as? String
+                    knownSubrole = .some(subrole)
+                    if AXSnapshot.isPlain(role: role, subrole: subrole) {
+                        var attributes: [String: AXSnapshotValue] = [:]
+                        for name in AXSnapshot.plainNames {
+                            guard let value = batch.attributes[name]?.value else { continue }
+                            if let string = value as? String {
+                                if string.utf16.count > limits.stringLength { hadOmissions = true; continue }
+                                characters += string.utf16.count
+                                guard characters <= limits.characters else { budget.halt(.queries); return false }
+                            }
+                            if let value = AXSnapshotValue(value) { attributes[name] = value }
+                        }
+                        nodes[key] = AXSnapshot.Node(attributes: attributes, isPlain: true)
+                        plain += 1
+                        for name in [kAXTitleUIElementAttribute, kAXWindowAttribute] {
+                            if case .element(let element) = attributes[name], referenceKeys.insert(ElementKey(element)).inserted { references.append(element) }
+                        }
+                        return true
+                    }
+                }
+                // Anything else (a control, a link, a heading, a table's parts, a landmark), or a short read that did
+                // not answer: in full, below. What the short read gave of it is not kept (a password field's value
+                // was in the list asked for; the app gives bullets for it, and it is dropped here unread).
+            }
             guard let names = element.attributeNamesResult().value as? [String], names.contains(kAXRoleAttribute), budget.check() else {
                 if budget.check() {
                     if element.isSame(root) { budget.halt(.providerFailure) }
@@ -62,7 +101,7 @@ nonisolated package struct WebBufferCollection: Sendable {
                             kAXDescriptionAttribute, kAXParentAttribute, kAXWindowAttribute, kAXTitleUIElementAttribute]
             let first = priority.filter { names.contains($0) }
             var wanted = first + names.filter { !first.contains($0) }.prefix(max(0, limits.attributes - first.count))
-            let subrole = element.string(kAXSubroleAttribute)
+            let subrole = knownSubrole ?? element.string(kAXSubroleAttribute)
             if subrole == "AXSecureTextField" {
                 let safe: Set<String> = [kAXRoleAttribute, kAXSubroleAttribute, kAXTitleAttribute, kAXDescriptionAttribute,
                     kAXHelpAttribute, kAXParentAttribute, kAXWindowAttribute, kAXEnabledAttribute, kAXFocusedAttribute,
@@ -125,6 +164,7 @@ nonisolated package struct WebBufferCollection: Sendable {
             default: budget.record(status)
             }
         }) {
+            short = limits.plainElementsShort && root.string(kAXRoleAttribute) == "AXWebArea"
             if let continuing {
                 for element in continuing {
                     guard budget.check() else { break }
@@ -166,6 +206,7 @@ nonisolated package struct WebBufferCollection: Sendable {
         var result = Self(snapshot: AXSnapshot(nodes: nodes), documentText: text, focusedPart: part, stop: budget.stopped,
                           elapsedMs: Int((now() &- began) / 1_000_000), navigationChanged: changed)
         result.skippedElements = skipped
+        result.plainElements = plain
         return result
     }
 }

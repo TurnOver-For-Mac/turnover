@@ -49,7 +49,6 @@ extension BrowseModeDocument {
         }
         buffer.didFail = { [weak self] in
             guard let self, API.focusTreeInterceptor === self else { return }
-            reportPartialBuffer()
         }
         buffer.willPublish = { [weak self] in
             guard let self else { return }
@@ -65,19 +64,14 @@ extension BrowseModeDocument {
             publicationAnchor = nil
             guard API.focusTreeInterceptor === self else { return }
             if Core.active, publicationWasEmpty, !buffer.lines.isEmpty { VoiceOverSounds.play("WebAreaLoaded.aiff") }
-            reportPartialBuffer()
+            // Nothing is said of a long page as it arrives: its rest is read on by itself (WebBuffer.fillOnIfWanted),
+            // and "read in part" is for the reader who gets to the end of what there is first (reportBufferEnd).
             if buffer.rootFailed { followAfterRootFailure() }
             if !buffer.lines.isEmpty, !passThrough, (announceWhenReady || announcedURL != lastURL) {
                 announceWhenReady = false
                 announcePage()
             }
         }
-    }
-
-    private func reportPartialBuffer() {
-        guard buffer.stoppedAtLimit, !saidPartial else { return }
-        saidPartial = true
-        Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message"))
     }
 
     func followFocusAfterBuild(_ element: AXUIElement, requiresFocus: Bool = true) {
