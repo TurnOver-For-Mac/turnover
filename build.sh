@@ -168,9 +168,11 @@ cp NOTICE.md "$APP/Contents/Resources/NOTICE.md"
 rm -rf "$APP/Contents/Resources/recipes"
 # TurnOver's own sound set (make-sounds.py writes it; 17 Oct 2026).
 rm -rf "$APP/Contents/Resources/Sounds"; cp -R Resources/Sounds "$APP/Contents/Resources/Sounds"
-# The guide inside the app, made from the guides (Guides/*.md, 18 Oct 2026).
+# The guide inside the app, made from the guides (Guides/*.md, 18 Oct 2026). The Russian guide comes from Guides/ru
+# (10 Nov 2026): the same text, made the same way, copied into ru.lproj further down.
 python3 make-guides.py --text "Resources/TurnOver Guide.txt"
 cp "Resources/TurnOver Guide.txt" "$APP/Contents/Resources/TurnOver Guide.txt"
+python3 make-guides.py --text "Resources/TurnOver Guide ru.txt" --language ru
 # The plugin maker's tool and its guide (PLUGIN-GUIDE.md), for people and their AIs (17 Oct 2026), and the plugin
 # format's schemas, for editors and AIs.
 cp "$BIN/turnover-plugin" "$APP/Contents/MacOS/turnover-plugin"
@@ -228,6 +230,10 @@ printf 'APPL????' > "$KEYAPP/Contents/PkgInfo"
 # The translations, as <language>.lproj in each of the three apps: macOS picks the person's language, and English
 # where there is none (make-strings.py).
 python3 make-strings.py compile "$APP/Contents/Resources" "$SETAPP/Contents/Resources" "$KEYAPP/Contents/Resources" || { echo "STOP: make-strings.py compile failed"; exit 1; }
+# The Russian guide, in the folder the compile above has just written: macOS reads <language>.lproj before the
+# Resources folder, so with the language set to Russian TurnOver finds this copy with no code of its own (10 Nov 2026).
+mkdir -p "$APP/Contents/Resources/ru.lproj"
+cp "Resources/TurnOver Guide ru.txt" "$APP/Contents/Resources/ru.lproj/TurnOver Guide.txt"
 # TURNOVER_STRIP=1 (for release builds): stripped before it is signed, to keep it small. Swift keeps
 # class names, which its runtime needs. The unstripped programs are
 # kept privately, by their UUID, to read crash reports: atos -o <copy> -l <load address> <addresses>.

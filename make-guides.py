@@ -3,11 +3,18 @@
 """The guides (Guides/*.md, written plainly) as web pages for the updates site and as one plain-text guide inside the
 app. Headings stay headings, lists lists, tables tables, so a screen reader can move by them.
     python3 make-guides.py <site folder>      writes <site>/guides/*.html
-    python3 make-guides.py --text <file>      writes the combined plain-text guide"""
+    python3 make-guides.py --text <file>      writes the combined plain-text guide
+    python3 make-guides.py --text <file> --language ru   writes the Russian guide (Guides/ru/*.md)"""
 import glob, html, os, re, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SOURCES = sorted(glob.glob(os.path.join(HERE, "Guides", "[0-9]*.md")))
+TITLES = {"ru": "TurnOver: руководство"}
+
+def sources(language=None):
+    """The guide files for a language, in name order. A language folder, when given, sits beside the English files in
+    Guides/, so the English build and site never see it."""
+    folder = os.path.join(HERE, "Guides", language) if language else os.path.join(HERE, "Guides")
+    return sorted(glob.glob(os.path.join(folder, "[0-9]*.md")))
 
 def inline(t):
     t = html.escape(t, quote=False)
@@ -81,13 +88,17 @@ def to_text(md):
 
 if __name__ == "__main__":
     if sys.argv[1:2] == ["--text"]:
-        parts = [to_text(open(p, encoding="utf-8").read()).strip() for p in SOURCES]
-        open(sys.argv[2], "w", encoding="utf-8").write("TurnOver: the guide\n\n" + "\n\n\n".join(parts) + "\n")
+        args = sys.argv[2:]
+        language = None
+        if "--language" in args:
+            i = args.index("--language"); language = args[i + 1]; del args[i:i + 2]
+        parts = [to_text(open(p, encoding="utf-8").read()).strip() for p in sources(language)]
+        open(args[0], "w", encoding="utf-8").write(TITLES.get(language, "TurnOver: the guide") + "\n\n" + "\n\n\n".join(parts) + "\n")
         sys.exit(0)
     out = os.path.join(sys.argv[1], "guides"); os.makedirs(out, exist_ok=True)
-    for p in SOURCES:
+    for p in sources():
         title, body = to_html(open(p, encoding="utf-8").read())
         open(os.path.join(out, slug(p) + ".html"), "w", encoding="utf-8").write(page(title, body))
     title, body = to_html(open(os.path.join(HERE, "Guides", "index.md"), encoding="utf-8").read())
     open(os.path.join(out, "index.html"), "w", encoding="utf-8").write(page(title, body, back=False))
-    print(f"{len(SOURCES)} guides in {out}")
+    print(f"{len(sources())} guides in {out}")
