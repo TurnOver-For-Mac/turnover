@@ -6932,7 +6932,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Клавиши Command, как вы их нажимаете"
+            "value" : "Озвучивать командные клавиши"
           }
         },
         "tr" : {
