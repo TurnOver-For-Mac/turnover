@@ -22,13 +22,16 @@ public struct MenuItem {
     public let kind: Kind
     /// What it means, said after a pause on the item (docs/MENU-PLAN.md: names in titles, explanations after).
     public var hint: String?
+    /// Which thing a list's item stands for, when the list may be filled in after it opens (the Item Chooser): the
+    /// cursor stays on the item with the same tag. Nil for every menu and list that is made once.
+    public var tag: Int?
     /// TurnOver's own words, translated (Resources/Localizable.xcstrings): a literal title or hint is listed for
     /// translation as it is written. A number goes in as text ("\(String(n))"), so English reads as it did.
     public init(_ title: LocalizedStringResource, _ kind: Kind, hint: LocalizedStringResource? = nil) {
         self.init(verbatim: String(localized: title), kind, hint: hint.map { String(localized: $0) })
     }
     /// A title made elsewhere: an app's or a document's own words, or words already translated.
-    public init(verbatim title: String, _ kind: Kind, hint: String? = nil) { self.title = title; self.kind = kind; self.hint = hint }
+    public init(verbatim title: String, _ kind: Kind, hint: String? = nil, tag: Int? = nil) { self.title = title; self.kind = kind; self.hint = hint; self.tag = tag }
 
     var valueText: String? {
         switch kind {
@@ -124,6 +127,7 @@ public final class TurnOverMenu {
 
     public func close() {
         isOpen = false
+        listGeneration += 1
         stack.removeAll()
         filterSource = nil; filter = ""; rotor = nil
         config.save()
@@ -159,6 +163,7 @@ public final class TurnOverMenu {
     public func openChooser(verbatim title: String, items: [MenuItem]) {
         guard !items.isEmpty else { Speech.speakMessage(Self.none(title)); return }
         filterSource = items; filter = ""
+        listGeneration += 1
         stack = [(title, items, 0)]
         isOpen = true
         Speech.cancel()
@@ -168,6 +173,43 @@ public final class TurnOverMenu {
     private var filterSource: [MenuItem]?
     private var filter = ""
 
+    /// Counts every chooser and rotor opened and every close: a list filled in later proves it is still the same one.
+    public private(set) var listGeneration = 0
+
+    /// The open chooser's items replaced by a fuller list, quietly: nothing is spoken, what was typed still narrows
+    /// it, and the cursor stays on the item it was on (by `tag`). The Item Chooser opens on what is on screen and
+    /// fills in the rows scrolled out of sight a moment later (10 Nov 2026). Ignored unless `generation` is still the
+    /// open list's.
+    public func refillChooser(generation: Int, items: [MenuItem]) {
+        guard isOpen, generation == listGeneration, rotor == nil, filterSource != nil, stack.count == 1, !items.isEmpty else { return }
+        replaceShownItems(items)
+    }
+
+    /// The same for the rotor: each kind's list replaced, staying on the kind and the item it was on.
+    public func refillRotor(generation: Int, categories: [(name: String, items: [MenuItem])]) {
+        guard isOpen, generation == listGeneration, let old = rotor, stack.count == 1 else { return }
+        let kinds = categories.filter { !$0.items.isEmpty }
+        guard let index = kinds.firstIndex(where: { $0.name == old[rotorIndex].name }) else { return }
+        rotor = kinds
+        rotorIndex = index
+        replaceShownItems(kinds[index].items)
+    }
+
+    private func replaceShownItems(_ source: [MenuItem]) {
+        let top = stack[0]
+        let tag = top.items.indices.contains(top.index) ? top.items[top.index].tag : nil
+        filterSource = source
+        let matches = filter.isEmpty ? source : source.filter { $0.title.lowercased().contains(filter.lowercased()) }
+        let shown = matches.isEmpty ? source : matches
+        let index = tag.flatMap { t in shown.firstIndex { $0.tag == t } } ?? min(top.index, shown.count - 1)
+        stack[0] = (top.title, shown, index)
+    }
+
+    /// For tests: where the cursor is in the open list, and how long the list is.
+    public var debugPosition: (index: Int, count: Int, title: String)? {
+        stack.last.flatMap { top in top.items.indices.contains(top.index) ? (top.index, top.items.count, top.items[top.index].title) : nil }
+    }
+
     /// VoiceOver's Rotor (VO-U), NVDA's Elements List: kinds of item (Headings, Links, Form controls…). Left and
     /// Right change kind, Up and Down move through it, typing narrows it, Enter goes there. It opens on the kind
     /// used last, as VoiceOver's does.
@@ -176,6 +218,7 @@ public final class TurnOverMenu {
         guard !kinds.isEmpty else { Speech.speakMessage(String(localized: "nothing to list here", comment: "The rotor found nothing")); return }
         rotor = kinds
         rotorIndex = kinds.firstIndex { $0.name == lastRotorKind } ?? 0
+        listGeneration += 1
         isOpen = true
         Speech.cancel()
         showRotorKind(intro: String(localized: "rotor", comment: "VoiceOver's rotor, as it opens"))
