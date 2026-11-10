@@ -66,6 +66,7 @@ extension BrowseModeDocument {
             guard API.focusTreeInterceptor === self else { return }
             if Core.active, publicationWasEmpty, !buffer.lines.isEmpty { VoiceOverSounds.play("WebAreaLoaded.aiff") }
             reportPartialBuffer()
+            if buffer.rootFailed { followAfterRootFailure() }
             if !buffer.lines.isEmpty, !passThrough, (announceWhenReady || announcedURL != lastURL) {
                 announceWhenReady = false
                 announcePage()
@@ -74,7 +75,7 @@ extension BrowseModeDocument {
     }
 
     private func reportPartialBuffer() {
-        guard buffer.isPartial, !saidPartial else { return }
+        guard buffer.stoppedAtLimit, !saidPartial else { return }
         saidPartial = true
         Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message"))
     }
@@ -93,13 +94,14 @@ extension BrowseModeDocument {
 
     func reportBufferEnd(forward: Bool) {
         if buffer.isLoading { Speech.speakMessage(String(localized: "loading page", comment: "Spoken message")) }
-        else if buffer.isPartial { Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")) }
+        else if buffer.stoppedAtLimit { Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")) }
+        else if buffer.lines.isEmpty { Speech.speakMessage(String(localized: "nothing on this page yet; it may still be loading", comment: "Spoken message")) }
         else { Speech.speakMessage(forward ? String(localized: "bottom", comment: "Spoken message") : String(localized: "top", comment: "Spoken message")) }
     }
 
     func cancelBuffer() {
         pageGeneration += 1
-        rootRunner.cancel(); discoveringRoot = false
+        rootRunner.cancel(); discoveringRoot = false; followingRootFailure = false
         watchingFor = nil
         buffer.cancel()
     }

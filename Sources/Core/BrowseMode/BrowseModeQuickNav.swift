@@ -73,7 +73,7 @@ extension BrowseModeDocument {
                     return buffer.find(from: position, forward: forward, roles: roles, headingLevel: level) != nil
                 }) { [weak self] found in
                     guard let self else { return }
-                    if !found, buffer.isPartial { Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")); return }
+                    if !found, buffer.stoppedAtLimit { Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")); return }
                     quickNav(q, forward: forward, afterRefresh: afterRefresh)
                 }
                 return
@@ -107,7 +107,7 @@ extension BrowseModeDocument {
                     return buffer.findText(from: position, forward: forward, kind: kind) != nil
                 }) { [weak self] found in
                     guard let self else { return }
-                    if !found, buffer.isPartial { Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")); return }
+                    if !found, buffer.stoppedAtLimit { Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")); return }
                     quickNav(q, forward: forward, afterRefresh: afterRefresh)
                 }
                 return

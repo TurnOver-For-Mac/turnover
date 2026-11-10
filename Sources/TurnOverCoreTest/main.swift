@@ -8,6 +8,7 @@ import Foundation
 import AppKit
 import ApplicationServices
 import TurnOverCore
+import TurnOverAX
 import TurnOverSpeech
 import AXFixtures
 
@@ -39,6 +40,25 @@ if args.contains("--record") {
     // Masked: the window's title is the user's too (a Ulysses sheet's first line, 10 Oct 2026), so it is not printed.
     let shownTitle = args.contains("--mask") ? "title masked" : (window.string(kAXTitleAttribute) ?? "untitled")
     print("recorded \(t.value.nodes.count) elements of \(app.localizedName ?? "") (\(shownTitle)) in \(Int(t.ms)) ms")
+    exit(0)
+}
+if args.contains("--root") {
+    // How browse mode finds a window's current page when its own has been replaced (followCurrentRoot): the window
+    // collected as it does, then the page looked for in the collection, beside the same search asked live.
+    // Counts and roles only. --root <bundle id>  (10 Nov 2026)
+    guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: opt("--root") ?? "").first else { print("not running"); exit(1) }
+    let ax = AXUIElementCreateApplication(app.processIdentifier)
+    guard let window = ax.element(kAXFocusedWindowAttribute) ?? ax.element(kAXMainWindowAttribute) else { print("no window"); exit(1) }
+    let live = timed { window.firstDescendant(role: "AXWebArea", maxVisited: 400) }
+    print(String(format: "asked live: page %@ in %.0f ms", live.value == nil ? "not found" : "found", live.ms))
+    let c = timed { WebBufferCollection.collect(root: window, focus: nil, request: AXWalkRequest()) }
+    print(String(format: "the window collected: %d elements in %.0f ms, stop %@, skipped %d", c.value.snapshot.nodes.count, c.ms, c.value.stop?.rawValue ?? "none", c.value.skippedElements))
+    let inSnapshot: (found: Bool, visited: Int, windowRole: String) = c.value.snapshot.with {
+        var queue: [AXUIElement] = [window], visited = 0, found = false
+        while !queue.isEmpty { let e = queue.removeFirst(); visited += 1; if e.role == "AXWebArea" { found = true; break }; queue.append(contentsOf: e.elements(kAXChildrenAttribute)) }
+        return (found, visited, window.role)
+    }
+    print("in the collection: window's role \(inSnapshot.windowRole); page \(inSnapshot.found ? "found" : "not found") after \(inSnapshot.visited) elements, breadth first (the reader looks at 400)")
     exit(0)
 }
 if args.contains("--redact") {

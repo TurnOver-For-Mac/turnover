@@ -129,6 +129,7 @@ public final class BrowseModeDocument: ScriptableObject {
     var saidPartial = false
     let rootRunner = AXWalkRunner<BrowseRootCollection>()
     var discoveringRoot = false
+    var followingRootFailure = false
 
     /// After Back, Forward or a link: a new page in the same web area. Rebuild, and resume where this page was left.
     @discardableResult
@@ -137,7 +138,7 @@ public final class BrowseModeDocument: ScriptableObject {
         guard now != lastURL else { return false }
         let first = lastURL.isEmpty
         lastURL = now
-        rootRunner.cancel(); discoveringRoot = false; watchingFor = nil
+        rootRunner.cancel(); discoveringRoot = false; followingRootFailure = false; watchingFor = nil
         buffer.newPage()
         pageGeneration += 1
         saidPartial = false
@@ -588,7 +589,7 @@ public final class BrowseModeDocument: ScriptableObject {
         guard buffer.canReadOn else { land(); return }
         readOnUntil({ false }) { [weak self] _ in
             guard let self else { return }
-            if buffer.isPartial { Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")) }
+            if buffer.stoppedAtLimit { Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")) }
             land()
         }
     }

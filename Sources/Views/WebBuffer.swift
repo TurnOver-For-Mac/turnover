@@ -69,6 +69,15 @@ public final class WebBuffer {
     public private(set) var status: Status = .idle
     public var isLoading: Bool { status == .loading }
     public var isPartial: Bool { lastStop != nil }
+    /// The reading stopped at a limit with more of the page to come: the only case that is "read in part, it is very
+    /// long". A read that failed (the page gone, the app not answering) is incomplete too, but not long: on 10 Nov
+    /// 2026 a Safari page that had been replaced was announced as very long, with nothing read at all.
+    public var stoppedAtLimit: Bool {
+        guard let lastStop, !lines.isEmpty else { return false }
+        return [.deadline, .visits, .queries, .axQueries, .depth].contains(lastStop)
+    }
+    /// The page's own element no longer answers: the app has replaced it (Safari, as a page loads in a new window).
+    public var rootFailed: Bool { lastStop == .providerFailure && lines.isEmpty }
     package private(set) var lastStop: AXWalkStop?
     private lazy var runner = AXWalkRunner<WebBufferCollection>()
     private let collect: @Sendable (AXUIElement, AXUIElement?, AXWalkRequest) -> WebBufferCollection
