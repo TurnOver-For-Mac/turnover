@@ -499,6 +499,71 @@ func fixtureTests() {
         check(parts.contains("edit") || parts.contains("document") || parts.contains("text"), "says what it is: \(parts)")
     }
 
+    test("browse mode: paragraph keys skip wrapped lines and select through the final paragraph") {
+        let first = "First paragraph begins here. It is long enough to wrap into several lines."
+        let second = "Second paragraph begins here. This is the last sentence on the page."
+        let fixture = AXFixture(app: "Browser", bundle: "test.paragraphs", recorded: "synthetic",
+                                root: 1, application: 0, focus: 1, nodes: [
+            .init(id: 0, attrs: ["AXRole": .string("AXApplication"), "AXChildren": .elements([1])]),
+            .init(id: 1, attrs: ["AXRole": .string("AXWebArea"), "AXParent": .element(0), "AXChildren": .elements([2, 4])]),
+            .init(id: 2, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(1), "AXChildren": .elements([3])]),
+            .init(id: 3, attrs: ["AXRole": .string("AXStaticText"), "AXParent": .element(2), "AXValue": .string(first)]),
+            .init(id: 4, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(1), "AXChildren": .elements([5])]),
+            .init(id: 5, attrs: ["AXRole": .string("AXStaticText"), "AXParent": .element(4), "AXValue": .string(second)]),
+        ])
+        let saved = config, oldSink = Speech.sink
+        let oldFocus = API.focusObject, oldAncestors = API.focusAncestors, oldDocument = API.focusTreeInterceptor
+        config.general.keyboardStyle = "mac"
+        config.virtualBuffers.maxLineLength = 24
+        AXReplay.load(fixture)
+        let root = AXReplay.element(1)
+        let page = BrowseModeHandler.shared.document(root: root)
+        defer {
+            API.setFocusObject(oldFocus, ancestors: oldAncestors, interceptor: oldDocument)
+            BrowseModeHandler.shared.forget(pid: root.pid)
+            AXReplay.unload()
+            config = saved
+            Speech.sink = oldSink
+        }
+        API.setFocusObject(ObjectFactory.make(root), ancestors: [], interceptor: page)
+        var spoken: [String] = []
+        Speech.sink = { spoken.append($0) }
+        @MainActor func press(_ id: String) {
+            guard let key = KeyboardGesture(identifier: id), let script = ScriptHandler.findScript(for: key) else {
+                return Harness.fail("no browse command for \(id)")
+            }
+            spoken.removeAll()
+            script.handler(key)
+        }
+        let next = (first as NSString).length + 1
+        guard page.buffer.lines.count > 2, let info = page.makeTextInfo(.caret) else {
+            return Harness.fail("the fixture must wrap")
+        }
+        info.expand(.readingChunk)
+        expect(info.end, page.buffer.lines[0].endWithBreak, "ordinary Say All still reads a line")
+
+        press("kb:downArrow")
+        expect(page.position, page.buffer.lines[1].start, "Down still moves by line")
+        press("kb:option+downArrow")
+        expect(page.position, next, "the paragraph key skips the remaining wrapped lines")
+        check(spoken.contains { $0.contains(second) }, "reads the complete destination paragraph")
+        press("kb:option+upArrow")
+        expect(page.position, 0, "backward also skips the wrapped lines")
+        check(spoken.contains { $0.contains(first) }, "reads the complete first paragraph")
+
+        config.general.keyboardStyle = "windows"
+        press("kb:control+downArrow")
+        expect(page.position, next, "NVDA keys use the same paragraph boundaries")
+        press("kb:control+upArrow")
+        expect(page.position, 0, "NVDA keys can also go backward by paragraph")
+        config.general.keyboardStyle = "mac"
+
+        press("kb:shift+option+downArrow")
+        expect(page.selectedRange?.1, next, "the first selection ends at the next paragraph")
+        press("kb:shift+option+downArrow")
+        expect(page.selectedRange?.1, page.buffer.text.length, "the final paragraph can be selected to its end")
+    }
+
     // JAWS's lists of one kind (issue 125), on a made-up page: a heading, two links and a search field.
     test("JAWS keys: Caps Lock F7, F6 and F5 list a page's links, headings or form fields alone; F3 and F9 the whole list") {
         var f = AXFixture(app: "T", bundle: "t", recorded: "", root: 0, application: 9, focus: 0, nodes: [])

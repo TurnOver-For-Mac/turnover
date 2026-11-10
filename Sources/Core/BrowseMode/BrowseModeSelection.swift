@@ -38,8 +38,8 @@ extension BrowseModeDocument {
         if let target { new = max(0, min(target, buffer.text.length)) }
         else if let unit, let info = caretInfo() {
             if info.move(unit, direction) == 0 {
-                // At the end, a line selection takes the rest of the last line.
-                if unit == .line, direction > 0 { new = buffer.text.length } else { Tones.edge(); return }
+                // The end of a selection can reach past the last readable caret position.
+                if (unit == .line || unit == .paragraph), direction > 0 { new = buffer.text.length } else { Tones.edge(); return }
             } else { new = info.start }
         }
         guard new != old else { Tones.edge(); return }

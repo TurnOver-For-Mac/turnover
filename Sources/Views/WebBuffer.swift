@@ -894,12 +894,21 @@ public final class BufferTextInfo: TextInfo {
         let l = buffer.lines[i]
         return (l.start, l.endWithBreak)
     }
-    public override func paragraphOffsets(_ offset: Int) -> (Int, Int) { lineOffsets(offset) ?? characterOffsets(offset) }
+    public override func paragraphOffsets(_ offset: Int) -> (Int, Int) {
+        let buffer = self.buffer
+        guard let index = buffer.lineIndex(at: offset) else { return characterOffsets(offset) }
+        let lines = buffer.lines
+        var first = index, last = index
+        // A soft wrap has no break in the buffer text. A real break ends the paragraph.
+        while first > 0, !lines[first - 1].hasBreak, lines[first - 1].end == lines[first].start { first -= 1 }
+        while last + 1 < lines.count, !lines[last].hasBreak, lines[last].end == lines[last + 1].start { last += 1 }
+        return (lines[first].start, lines[last].endWithBreak)
+    }
     /// Say all reads a line at a time, as NVDA does; a long paragraph is wrapped into 100-character lines. Kokoro says
     /// each piece as a whole sentence, so "users of" ended like a full stop (12 Oct 2026: "the say all went a
     /// bit weird"). For Kokoro the pieces of one wrapped line are read together, up to about 600 characters.
     public override func readingChunkOffsets(_ offset: Int) -> (Int, Int) {
-        guard KokoroVoice.wanted(reading: true), var i = buffer.lineIndex(at: offset) else { return paragraphOffsets(offset) }
+        guard KokoroVoice.wanted(reading: true), var i = buffer.lineIndex(at: offset) else { return lineOffsets(offset) ?? characterOffsets(offset) }
         let start = buffer.lines[i].start
         while !buffer.lines[i].hasBreak, i + 1 < buffer.lines.count, buffer.lines[i + 1].start == buffer.lines[i].end,
               buffer.lines[i + 1].end - start <= 600 { i += 1 }
