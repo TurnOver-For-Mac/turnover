@@ -17,7 +17,7 @@ notes explain its rules. Read it top to bottom once; then PATTERNS.md for how Ma
 | `TurnOverCore` (libTurnOverCore.dylib) | Everything that reads: objects, text, speech, browse mode, app modules, views, plugins, settings. 30,000 lines. |
 | `TurnOver` (the app) | What is Mac-specific and stays: the key tap, who leads (LeadWatcher), VoiceOver's silencing (VoiceOverTap and its helper), the export through VoiceOver Utility (ActivityFlow), the watchdog, the menu-bar item, the Command Control Comma menu (MenuAnywhere), the updater, the uninstaller. |
 | `TurnOverSpeech` | The audio engine: AVSpeechSynthesizer as a renderer, our own player for cancellation, volume, pitch and device changes. |
-| `TurnOverAX` | A thin wrapper over HIServices with timeouts, health and call counting (`AXHealth`, `AXStats`). |
+| `TurnOverAX` | A thin wrapper over HIServices with timeouts, health and call counting (`AXHealth`, `AXStats`). `AXSnapshot` (10 Nov 2026, not yet used by the reader): one copy of a window's tree as plain values, taken off main by `AXSnapshotCapture` with one batched question an element; `AXSnapshotTests`, and `turnover-probe snapshot` to time it. |
 | `TurnOverKey` | The login-item helper: Command Control Period starts and quits TurnOver. Needs no permissions. |
 | `TurnOverPlugin` | `turnover-plugin`: the plugin maker's tool. Parked; not built into the product. |
 | `TurnOverTests`, `AXFixtures`, `AXReplayShim`, `PluginTestKit`, `TurnOverCoreTest`, `TurnOverProbe` | The tests, the recorded-window replay, a plugin's own screens, the recorder and the probes. TESTING.md. |
