@@ -32678,6 +32678,9 @@
         }
       }
     },
+    "gone from the page" : {
+      "comment" : "Spoken message: the line the reading position was on is no longer on the page"
+    },
     "graphic" : {
       "comment" : "A kind of thing to find, after next or previous\nA role, spoken after an item's name",
       "localizations" : {

@@ -523,6 +523,29 @@ public final class BrowseModeDocument: ScriptableObject {
         look(0)
     }
 
+    /// The buffer's element at `offset` has gone from the page: proof the page changed since the buffer was read,
+    /// whatever the app did or didn't announce (the Claude app's sidebar kept a deleted row, 8 Nov 2026). One
+    /// question to the app per move.
+    func isGone(at offset: Int) -> Bool {
+        guard let seg = buffer.segment(at: offset) else {
+            guard let e = buffer.lineIndex(at: offset).flatMap({ buffer.lines[$0].element }) else { return false }
+            return e.role == "?"
+        }
+        let a = seg.element.attrs([kAXRoleAttribute, kAXValueAttribute])
+        guard let role = a[kAXRoleAttribute] as? String else { return true }   // no role: gone
+        // A text whose words have changed under the buffer (fast.com's speed figure climbs several times a second
+        // and Safari sends no notice for it; the buffer said 44 for a quarter of a minute, 8 Nov 2026). The buffer's
+        // piece of the text (a wrapped line is one piece of the element's value) is looked for in the live value.
+        guard role == "AXStaticText", let live = a[kAXValueAttribute] as? String, seg.end <= buffer.text.length, seg.end > seg.start else { return false }
+        // Spaces compared loosely: the buffer joins and trims, and pages use non-breaking spaces; a difference in
+        // spacing alone must not cost a reread on every arrow.
+        func squeezed(_ s: String) -> String { s.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ") }
+        let piece = squeezed(buffer.text.substring(with: NSRange(location: seg.start, length: seg.end - seg.start)))
+        let now = squeezed(live)
+        guard !piece.isEmpty, !now.isEmpty else { return false }
+        return !now.contains(piece) && !piece.contains(now)
+    }
+
     /// One rule for the arrows, the letters and the container keys (code review, 16 Oct 2026, item 28: the letters
     /// rebuilt on any dirty flag, up to 2 s on main): a dirty page is rebuilt when the last build was cheap, and a
     /// page older than `stale` seconds is rebuilt whatever it cost.
@@ -655,6 +678,10 @@ public final class BrowseModeDocument: ScriptableObject {
                 : String(localized: "bottom", comment: "Spoken message"))
         }
         position = info.start
+        if isGone(at: position) {
+            Log.io("browse mode: the line moved onto is gone or changed on the page; the page read again")
+            rebuildKeepingPlace()
+        }
         // Say all carries on from here and reads this line itself (NVDA's willSayAllResume).
         if SayAll.resuming { return }
         announcePageIfChanged()
