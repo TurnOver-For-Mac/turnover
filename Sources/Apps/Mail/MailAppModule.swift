@@ -18,6 +18,12 @@ package final class MailAppModule: AppModule {
             guard let self, let f = API.focusObject?.element else { g.send(); return }
             self.composeMove(forward: false, from: f, g)
         }.isAvailable = { Self.place.hasPrefix("compose:") }
+        // Up and Down in the message list: the row is read before Mail has moved to it (MailReadAhead.swift).
+        script("mail_readAhead", "In the message list: reads the next or previous message at once, without waiting for Mail",
+               gestures: ["kb:downArrow", "kb:upArrow"], category: "Mail") { [weak self] g in
+            guard let self else { g.send(); return }
+            self.readAhead(g)
+        }.isAvailable = { Self.place == "messages" && Self.readsAhead }
         script("mail_toMailboxes", String(localized: "From the message list: the mailbox list (Shift Tab)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+tab"], category: "Mail") { [weak self] g in
             guard let self, let f = API.focusObject?.element else { g.send(); return }
             self.focusList("mailboxes", from: f)
@@ -103,6 +109,45 @@ package final class MailAppModule: AppModule {
     /// (Priority, From, Signature), so the From address could not be changed from the keyboard (5 Oct 2026).
     static let composeOrder = ["Mail.toField", "Mail.ccField", "Mail.bccField", "Mail.replyToField", "Mail.subjectField",
                                "popup_priority", "popup_from", "popup_signature", "body"]
+
+    /// `defaults write com.turnover.reader mailReadAhead -bool false` turns reading ahead off: the list is then read
+    /// when Mail reports its selection, as it was until 10 Nov 2026.
+    nonisolated static var readsAhead: Bool { UserDefaults.standard.object(forKey: "mailReadAhead") as? Bool ?? true }
+    private var ahead = MailReadAhead()
+
+    /// The list's own script for this key: the edges, an empty list, several rows selected, anything not plain.
+    private func listsOwn(_ g: KeyboardGesture) {
+        if let script = API.focusObject?.script(named: "list_\(g.keyName)") { script.handler(g) } else { g.send() }
+    }
+
+    private func readAhead(_ g: KeyboardGesture) {
+        guard g.modifiers.isEmpty, let focus = API.focusObject?.element else { listsOwn(g); return }
+        let table = focus.string(kAXDescriptionAttribute) == "messages" ? focus : focus.element(kAXParentAttribute)
+        guard let table, table.string(kAXDescriptionAttribute) == "messages" else { listsOwn(g); return }
+        let selected = table.elements(kAXSelectedRowsAttribute)
+        let now = ProcessInfo.processInfo.systemUptime
+        // Nothing selected, or several: the list's own rules. At the top or bottom there is no next row: its edge.
+        guard selected.count == 1, let from = ahead.base(selected: selected.first, now: now),
+              let next = ObjectNavigator.neighbourRow(of: from, in: table, offset: g.keyName == "downArrow" ? 1 : -1) else {
+            ahead.clear(); listsOwn(g); return
+        }
+        let serial = ahead.readingAhead(next, now: now)
+        Log.io("mail: reading the \(g.keyName == "downArrow" ? "next" : "previous") row ahead of Mail")
+        // Read in full before the key goes on, not queued: once Mail has the key it is busy moving its selection and
+        // loading the message, and every question about the row waits behind that. Queued, the row's words came 43 ms
+        // after the key and nothing was gained (39 presses in Oliver's trial, 10 Nov 2026: 77 ms to the first sound,
+        // against 76 before). Asked first, they cost the 2 ms they always did.
+        EventHandler.execute(Event(.selection, ObjectFactory.make(next)))
+        g.send()
+        // If Mail never lands there (it was busy, the list changed under the key), say where it is.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { [weak self] in
+            guard let self, self.ahead.serial == serial, let expected = self.ahead.row else { return }
+            guard let actual = table.elements(kAXSelectedRowsAttribute).first, !CFEqual(actual, expected) else { return }
+            Log.io("mail: Mail did not move to the row read ahead; reading the row it is on")
+            self.ahead.clear()
+            EventHandler.queue(Event(.selection, ObjectFactory.make(actual)))
+        }
+    }
 
     private func notePlace(_ e: AXUIElement) {
         var p = ""
@@ -239,6 +284,13 @@ package final class MailAppModule: AppModule {
         // After Command Shift D: "sent" before the window and focus behind the compose window are read.
         if Self.sending != nil, [.foreground, .gainFocus].contains(event.kind) { Self.saySentIfGone() }
         if event.kind == .gainFocus { notePlace(event.obj.element) }
+        if event.kind == .gainFocus { ahead.clear() }
+        // Mail's own news of a row already read ahead: not read again. Its unread note is still taken.
+        if event.kind == .selection, ahead.row != nil, !ahead.admits(event.obj.element, now: ProcessInfo.processInfo.systemUptime) {
+            Log.io("mail: Mail confirmed the row read ahead")
+            if let table = event.obj.element.element(kAXParentAttribute) { MailUnread.snapshot(table) }
+            return
+        }
         // The focus on the scroll area around a message (Mail can come back to it after Command Tab; nothing in it is
         // TurnOver's to read, and the arrows only scrolled, 13 Oct 2026): reading starts in the message, as
         // when a message opens in its own window.
