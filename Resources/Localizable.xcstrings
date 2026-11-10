@@ -3109,6 +3109,9 @@
         }
       }
     },
+    "%@, type to filter" : {
+      "comment" : "A list that narrows as you type, opened before all its items are in: its title, with no count yet"
+    },
     "%@, unselected" : {
       "comment" : "Text no longer selected in browse mode: %@ is the text",
       "localizations" : {

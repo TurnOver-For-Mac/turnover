@@ -13,10 +13,10 @@ public enum ItemChooser {
     public static func open() {
         if let d = API.focusTreeInterceptor, !d.passThrough { d.openItemChooser(); return }
         var generation = 0
-        collect { found, isFill in
+        collect { found, isFill, partial in
             let items = found.map { f in MenuItem(verbatim: f.label, .action { go(to: f.element) }, tag: f.tag) }
             if isFill { TurnOverMenu.shared.refillChooser(generation: generation, items: items); return }
-            TurnOverMenu.shared.openChooser("Items", items: items)
+            TurnOverMenu.shared.openChooser("Items", items: items, partial: partial)
             generation = TurnOverMenu.shared.listGeneration
         }
     }
@@ -24,7 +24,7 @@ public enum ItemChooser {
     /// VoiceOver's Rotor (VO-U) for a window: its items by kind. (On a page, browse mode's own rotor answers first.)
     public static func openRotor() {
         var generation = 0
-        collect { found, isFill in
+        collect { found, isFill, partial in
             let kinds: [(String, (String, String) -> Bool)] = [
                 ("Buttons", { r, _ in ["AXButton", "AXMenuButton", "AXDisclosureTriangle"].contains(r) }),
                 ("Text fields", { r, _ in ["AXTextField", "AXTextArea", "AXComboBox"].contains(r) }),
@@ -40,7 +40,7 @@ public enum ItemChooser {
                 (name: name, items: found.filter { test($0.role, $0.subrole) }.map { f in MenuItem(verbatim: f.label, .action { go(to: f.element) }, tag: f.tag) })
             }
             if isFill { TurnOverMenu.shared.refillRotor(generation: generation, categories: groups); return }
-            TurnOverMenu.shared.openRotor(groups)
+            TurnOverMenu.shared.openRotor(groups, partial: partial)
             generation = TurnOverMenu.shared.listGeneration
         }
     }
@@ -59,8 +59,9 @@ public enum ItemChooser {
     /// elements, Mail's message list; a slow walk on the main thread trips the watchdog). Delivered on the main thread:
     /// first what is on screen, so the list opens at once, and then, if rows were scrolled out of sight, everything,
     /// to fill the open list in (`isFill`). Oliver's idea, 10 Nov 2026: Mail's list opened after two seconds, cut
-    /// short; its on-screen part takes a tenth of that.
-    private static func collect(_ done: @escaping @MainActor (_ found: [Found], _ isFill: Bool) -> Void) {
+    /// short; its on-screen part takes a tenth of that. `partial` says the list being opened is only the part on
+    /// screen and a fill will follow, so its count is not said; a fill always follows it, fuller or not.
+    private static func collect(_ done: @escaping @MainActor (_ found: [Found], _ isFill: Bool, _ partial: Bool) -> Void) {
         guard let f = API.focusObject, let window = f.element.element(kAXWindowAttribute) ?? (f.role == .window ? f.element : nil) else {
             Speech.speakMessage(String(localized: "no items", comment: "Spoken message")); return
         }
@@ -73,23 +74,23 @@ public enum ItemChooser {
             }
             if usesOldWalk {
                 let old = timedItems { let w = oldWalkItems(in: window); return (w.items, w.note, 0) }
-                DispatchQueue.main.async { Log.info(old.line); done(old.items, false) }
+                DispatchQueue.main.async { Log.info(old.line); done(old.items, false, false) }
                 return
             }
             let first = timedItems { snapshotItems(in: window, onScreenRowsOnly: true) }
             let shown = tagged(first.items, after: [])
             guard first.rowsLeftOut > 0 else {
-                DispatchQueue.main.async { Log.info(first.line); done(shown, false) }
+                DispatchQueue.main.async { Log.info(first.line); done(shown, false, false) }
                 return
             }
             // The list waits a moment for the rows out of sight, so that it opens saying the full count when they
             // come quickly ("Items, 77 items" and then "2 of 87" 40 ms later, Oliver's trial in Mail, 10 Nov 2026).
-            // When they do not come within `openHold`, it opens on what is on screen and is filled in as before.
+            // When they do not come within `openHold`, it opens on what is on screen, saying no count, and is filled in.
             let opening = Opening()
             DispatchQueue.main.asyncAfter(deadline: .now() + openHold) {
                 guard !opening.opened else { return }
                 opening.opened = true
-                Log.info(first.line); done(shown, false)
+                Log.info(first.line); done(shown, false, true)
             }
             let rest = timedItems { snapshotItems(in: window) }
             let all = tagged(rest.items, after: shown)
@@ -100,10 +101,11 @@ public enum ItemChooser {
                     opening.opened = true
                     Log.info(first.line)
                     if fuller { Log.info(rest.line + ", with \(first.rowsLeftOut) rows out of sight, before the list opened") }
-                    done(fuller ? all : shown, false)
-                } else if fuller {
-                    Log.info(rest.line + ", filling in \(first.rowsLeftOut) rows out of sight")
-                    done(all, true)
+                    done(fuller ? all : shown, false, false)
+                } else {
+                    // Always, fuller or not: the open list is waiting for this before it says a count.
+                    Log.info(rest.line + (fuller ? ", filling in \(first.rowsLeftOut) rows out of sight" : ", no fuller than what is on screen"))
+                    done(fuller ? all : shown, true, false)
                 }
             }
         }

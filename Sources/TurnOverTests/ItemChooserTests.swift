@@ -171,4 +171,28 @@ func itemChooserTests() {
         menu.refillChooser(generation: generation, items: all)
         check(!menu.isOpen, "a fill after the list closed does nothing")
     }
+
+    test("chooser: opened on part of its items it says no count, and positions only once the rest is in") {
+        let menu = TurnOverMenu.shared
+        let said = Locked<[String]>([])
+        let oldSink = Speech.sink; Speech.sink = { said.value.append($0) }
+        defer { Speech.sink = oldSink; if menu.isOpen { menu.close() } }
+        @MainActor func items(_ titles: [(String, Int)]) -> [MenuItem] { titles.map { MenuItem(verbatim: $0.0, .action {}, tag: $0.1) } }
+        let shown = items([("Reply", 0), ("Message 1", 1)])
+        let all = items([("Reply", 0), ("Message 0", 2), ("Message 1", 1), ("Message 2", 3), ("Message 3", 4)])
+        guard let down = KeyboardGesture(identifier: "kb:downArrow") else { return Harness.fail("no down arrow gesture") }
+        menu.openChooser(verbatim: "Items", items: shown, partial: true)
+        let generation = menu.listGeneration
+        menu.handle(down)
+        check(!said.value.contains { $0.contains("2") }, "no count and no position from the part on screen: \(said.value)")
+        check(said.value.contains { $0.contains("Message 1") }, "the items themselves are said")
+        said.value.removeAll()
+        menu.refillChooser(generation: generation, items: all)
+        check(said.value.isEmpty, "the fill is quiet")
+        menu.handle(down)
+        check(said.value.contains { $0.contains("Message 2") && $0.contains(Phrases.position(4, of: 5)) }, "the full count once the rest is in: \(said.value)")
+        menu.close(); said.value.removeAll()
+        menu.openChooser(verbatim: "Items", items: all)
+        check(said.value.contains { $0.contains(Phrases.items(5)) }, "a whole list says its count as it opens: \(said.value)")
+    }
 }

@@ -115,6 +115,7 @@ public final class TurnOverMenu {
         guard !items.isEmpty else { Speech.speakMessage(Self.none(title)); return }
         stack = [(title, items, 0)]
         isOpen = true
+        countPending = false
         Speech.cancel()
         Speech.speakMessage("\(title), \(items.count)")
         announce()
@@ -129,7 +130,7 @@ public final class TurnOverMenu {
         isOpen = false
         listGeneration += 1
         stack.removeAll()
-        filterSource = nil; filter = ""; rotor = nil
+        filterSource = nil; filter = ""; rotor = nil; countPending = false
         config.save()
         let hook = onClose; onClose = nil
         Braille.releaseItem()
@@ -154,22 +155,30 @@ public final class TurnOverMenu {
         if valueOnly { Speech.speakItem("\(item.title): \(item.valueText ?? "")"); return }
         var parts = [item.title]
         if let v = item.valueText { parts.append(v) }
-        parts.append(Phrases.position(top.index + 1, of: top.items.count))
+        if !countPending { parts.append(Phrases.position(top.index + 1, of: top.items.count)) }
         Speech.speakItem(Speech.joined(parts))
     }
 
     /// A list that narrows as you type (VoiceOver's Item Chooser): every item whose title contains the text.
-    public func openChooser(_ title: LocalizedStringResource, items: [MenuItem]) { openChooser(verbatim: String(localized: title), items: items) }
-    public func openChooser(verbatim title: String, items: [MenuItem]) {
+    /// `partial`: these items are only the first of what is coming (the Item Chooser's rows on screen, with the rows out
+    /// of sight to follow in `refillChooser`). No count and no "1 of 23" is said until the rest is in: a small number
+    /// and then a big one was what was heard (Oliver, 10 Nov 2026).
+    public func openChooser(_ title: LocalizedStringResource, items: [MenuItem], partial: Bool = false) { openChooser(verbatim: String(localized: title), items: items, partial: partial) }
+    public func openChooser(verbatim title: String, items: [MenuItem], partial: Bool = false) {
         guard !items.isEmpty else { Speech.speakMessage(Self.none(title)); return }
         filterSource = items; filter = ""
         listGeneration += 1
         stack = [(title, items, 0)]
         isOpen = true
+        countPending = partial
         Speech.cancel()
-        Speech.speakMessage(String(localized: "\(title), \(Phrases.items(items.count)), type to filter", comment: "A list that narrows as you type: its title, then the count of items"))
+        Speech.speakMessage(partial ? String(localized: "\(title), type to filter", comment: "A list that narrows as you type, opened before all its items are in: its title, with no count yet")
+            : String(localized: "\(title), \(Phrases.items(items.count)), type to filter", comment: "A list that narrows as you type: its title, then the count of items"))
         announce()
     }
+    /// True from a chooser or rotor opening on part of its items until the rest arrives: counts and positions are not
+    /// said meanwhile, because they would be the part's.
+    private var countPending = false
     private var filterSource: [MenuItem]?
     private var filter = ""
 
@@ -182,12 +191,14 @@ public final class TurnOverMenu {
     /// open list's.
     public func refillChooser(generation: Int, items: [MenuItem]) {
         guard isOpen, generation == listGeneration, rotor == nil, filterSource != nil, stack.count == 1, !items.isEmpty else { return }
+        countPending = false
         replaceShownItems(items)
     }
 
     /// The same for the rotor: each kind's list replaced, staying on the kind and the item it was on.
     public func refillRotor(generation: Int, categories: [(name: String, items: [MenuItem])]) {
         guard isOpen, generation == listGeneration, let old = rotor, stack.count == 1 else { return }
+        countPending = false
         let kinds = categories.filter { !$0.items.isEmpty }
         guard let index = kinds.firstIndex(where: { $0.name == old[rotorIndex].name }) else { return }
         rotor = kinds
@@ -213,13 +224,14 @@ public final class TurnOverMenu {
     /// VoiceOver's Rotor (VO-U), NVDA's Elements List: kinds of item (Headings, Links, Form controls…). Left and
     /// Right change kind, Up and Down move through it, typing narrows it, Enter goes there. It opens on the kind
     /// used last, as VoiceOver's does.
-    public func openRotor(_ categories: [(name: String, items: [MenuItem])]) {
+    public func openRotor(_ categories: [(name: String, items: [MenuItem])], partial: Bool = false) {
         let kinds = categories.filter { !$0.items.isEmpty }
         guard !kinds.isEmpty else { Speech.speakMessage(String(localized: "nothing to list here", comment: "The rotor found nothing")); return }
         rotor = kinds
         rotorIndex = kinds.firstIndex { $0.name == lastRotorKind } ?? 0
         listGeneration += 1
         isOpen = true
+        countPending = partial
         Speech.cancel()
         showRotorKind(intro: String(localized: "rotor", comment: "VoiceOver's rotor, as it opens"))
     }
@@ -233,7 +245,7 @@ public final class TurnOverMenu {
         lastRotorKind = kind.name
         filterSource = kind.items; filter = ""
         stack = [(kind.name, kind.items, 0)]
-        Speech.speakMessage(Speech.joined([intro ?? "", kind.name, "\(kind.items.count)"]))
+        Speech.speakMessage(Speech.joined([intro ?? "", kind.name, countPending ? "" : "\(kind.items.count)"]))
         announce()
     }
 
