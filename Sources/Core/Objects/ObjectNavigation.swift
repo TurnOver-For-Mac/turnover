@@ -1334,17 +1334,15 @@ public final class ObjectNavigator {
     /// What the mouse pointer is over, said. The keyboard focus never follows (a sweep of the pointer across a window
     /// must not move where typing goes); the review cursor goes there only when asked. What is said is private: text on
     /// the screen (a message) is not kept in the speech history, and goes only to a voice that may hear it.
-    public func hover(_ e: AXUIElement, movingCursor: Bool) {
+    package func hover(_ reading: PointerReading, movingCursor: Bool) {
         if movingCursor {
             landedByStep = false
-            current = e
-            currentPid = e.pid
-            labelSource = ProfileStore.shared.labelDetail(for: e, pid: e.pid)?.source
+            current = reading.element
+            currentPid = reading.element.pid
+            // (No label source: finding it asks the profile store about the element, which is for the keyboard path.)
+            labelSource = nil
         }
-        let began = Date()
-        Speech.asPrivate { report(e, countingGroupFor: 0.08) }
-        let took = Date().timeIntervalSince(began)
-        if took > 0.15 { Log.warning("mouse tracking: reading took \(Int(took * 1000)) ms (\(MouseTracking.describe(e)))") }
+        Speech.asSource(MouseTracking.speechSource) { Speech.asPrivate { Speech.speakItem(reading.text, processed: true) } }
     }
 
     /// Puts the review cursor on an element without a word: what already said it (a dialog's Tab) keeps the two
@@ -1375,10 +1373,7 @@ public final class ObjectNavigator {
         report(e)
     }
 
-    /// `countingGroupFor`: the longest to spend counting a group's items. A pointer sweeping over a window must not wait
-    /// on a walk of a big group while the next item queues behind it (a 263 ms stall, 9 Nov 2026); over the time the
-    /// group is said without its count.
-    private func report(_ e: AXUIElement, countingGroupFor budget: TimeInterval? = nil) {
+    private func report(_ e: AXUIElement) {
         let obj = ObjectFactory.make(e)
         // (A text with its words only in its description, as Catalyst apps have, is said as other items are.)
         if e.role == "AXStaticText", let v = e.string(kAXValueAttribute), !v.isEmpty {
@@ -1388,13 +1383,7 @@ public final class ObjectNavigator {
         var parts = Speech.objectPropertiesSpeech(obj, reason: .query)
         // A group, the VoiceOver way: what it holds ("tool bar, 6 items"), and how to go in.
         if config.general.movesByGroups, Self.isGroup(e), !["AXTable", "AXOutline", "AXList", "AXWebArea"].contains(e.role) {
-            if let budget {
-                let end = Date().addingTimeInterval(budget)
-                let items = Self.groupItems(e, stoppingWhen: { Date() > end })
-                if Date() <= end { parts.append(Phrases.items(items.count)) }
-            } else {
-                parts.append(Phrases.items(Self.groupItems(e).count))
-            }
+            parts.append(Phrases.items(Self.groupItems(e).count))
             Speech.speakItem(parts.joined(separator: ", "))
             Hints.schedule(String(localized: "VO Shift Down goes in.", comment: "Spoken message"))
             return

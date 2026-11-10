@@ -94,6 +94,7 @@ public enum SettingsProfiles {
         Speech.player.voiceIdentifier = config.speech.voice
         Ducking.apply()
         Braille.refreshSoon()
+        MouseTracking.refresh()
     }
 
     // MARK: Apps

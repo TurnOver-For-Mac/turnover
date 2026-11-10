@@ -61,12 +61,45 @@ func mouseTrackingTests() {
         let kept = try? JSONDecoder().decode(Config.self, from: JSONEncoder().encode(c))
         expect(kept?.presentation.mouseMovesCursor, false)
         expect(old?.presentation.mouseMovesCursor, true, "a file from before the setting existed")
-        expect(Config().presentation.mouseEmptySound, true)
-        c.presentation.mouseEmptySound = false
-        expect((try? JSONDecoder().decode(Config.self, from: JSONEncoder().encode(c)))?.presentation.mouseEmptySound, false)
-        expect(Config().presentation.mouseWatchdog, true, "on unless turned off")
-        c.presentation.mouseWatchdog = false
-        expect((try? JSONDecoder().decode(Config.self, from: JSONEncoder().encode(c)))?.presentation.mouseWatchdog, false)
-        expect(old?.presentation.mouseWatchdog, true, "a file from before the setting existed")
+    }
+
+    test("mouse tracking: a file with the removed blank-sound and watchdog settings still loads") {
+        let old = try? JSONDecoder().decode(Config.self, from: Data("{\"presentation\":{\"mouseTracking\":true,\"mouseEmptySound\":false,\"mouseWatchdog\":false}}".utf8))
+        expect(old?.presentation.mouseTracking, true)
+    }
+
+    test("mouse tracking: a watchdog for an earlier look does nothing once a later one is out") {
+        var s = LookState()
+        let first = s.begin()
+        _ = s.arrived(generation: first.generation)
+        let second = s.begin()
+        expect(s.giveUp(onLookOf: first.id), false)
+        expect(s.inFlight, true, "the later look is still out")
+        expect(s.accepts(generation: second.generation), true)
+    }
+
+    test("mouse tracking: a look that arrives after it was given up on is dropped") {
+        var s = LookState()
+        let look = s.begin()
+        expect(s.giveUp(onLookOf: look.id), true)
+        expect(s.inFlight, false)
+        expect(s.arrived(generation: look.generation), false)
+    }
+
+    test("mouse tracking: stopping drops a look still out") {
+        var s = LookState()
+        let look = s.begin()
+        s.stop()
+        expect(s.inFlight, false)
+        expect(s.arrived(generation: look.generation), false)
+    }
+
+    test("mouse tracking: a look that arrives in time leaves the watchdog nothing to give up on") {
+        var s = LookState()
+        let look = s.begin()
+        expect(s.arrived(generation: look.generation), true)
+        expect(s.inFlight, false)
+        expect(s.giveUp(onLookOf: look.id), false)
+        expect(s.accepts(generation: look.generation), true, "nothing was dropped")
     }
 }

@@ -3,8 +3,7 @@
 // cursor following the mouse pointer; NVDA+M). Off until the Mouse tracking setting is on, and only while TurnOver is
 // the reader that speaks: where VoiceOver leads, its own pointer reading is the one heard. The keyboard focus is
 // never moved by the pointer, the review cursor follows only if "mouse moves the cursor" is on, and a blank place
-// (a window's background, a group with no name) is the empty space sound (as the trackpad's explore makes it) unless
-// that is turned off.
+// (a window's background, a group with no name) is silent.
 //
 // The pointer is watched with a listen-only monitor of mouse-moved events: nothing is held back or changed, and the
 // keyboard is never involved. A move asks for a look at most every tenth of a second, so a long sweep across a window
@@ -35,9 +34,9 @@ public struct PointerTracker<Hit: Equatable> {
 
     public enum Outcome: Equatable { case say, blank, nothing }
 
-    /// What a look found: whether to say it. The same item again is silent. A blank place (`nil`) is the empty space
-    /// sound, once, when the pointer came from an item; it is also forgotten, so coming back to the item says it
-    /// again (as VoiceOver does).
+    /// What a look found: whether to say it. The same item again is silent. A blank place (`nil`) is `.blank`, once,
+    /// when the pointer came from an item (nothing is said for it); it is also forgotten, so coming back to the item
+    /// says it again (as VoiceOver does).
     public mutating func answer(_ hit: Hit?) -> Outcome {
         guard let hit else { let was = spoken != nil; spoken = nil; return was ? .blank : .nothing }
         guard hit != spoken else { return .nothing }
@@ -51,7 +50,50 @@ public struct PointerTracker<Hit: Equatable> {
     public mutating func reset() { lookedAt = nil; spoken = nil }
 }
 
+/// Which look is out and which results still count, apart from every accessibility and main-thread call so a test can
+/// drive it with plain values.
+public struct LookState: Equatable {
+    /// Bumped whenever a look still out must be dropped when it comes back.
+    public private(set) var generation = 0
+    /// The look last begun: a watchdog may give up only on its own look, never on a later one that is on its way (the
+    /// first version did, and dropped good looks).
+    public private(set) var lookID = 0
+    public private(set) var inFlight = false
+
+    public init() {}
+
+    public mutating func begin() -> (generation: Int, id: Int) {
+        inFlight = true
+        lookID += 1
+        return (generation, lookID)
+    }
+
+    public func accepts(generation g: Int) -> Bool { g == generation }
+
+    /// A look came back: true if it is still wanted (and then nothing is out); a stale one is dropped.
+    public mutating func arrived(generation g: Int) -> Bool {
+        guard accepts(generation: g) else { return false }
+        inFlight = false
+        return true
+    }
+
+    /// The watchdog of look `id` fired: true if that look is still the one out, and it is left behind.
+    public mutating func giveUp(onLookOf id: Int) -> Bool {
+        guard id == lookID, inFlight else { return false }
+        generation += 1
+        inFlight = false
+        return true
+    }
+
+    public mutating func stop() {
+        generation += 1
+        inFlight = false
+    }
+}
+
 public enum MouseTracking {
+    /// Tags the pointer's own speech, so a new item interrupts only that and not a notification, a focus change or typing.
+    nonisolated static var speechSource: String { "mouse" }
     /// The longest between one look and the next while the pointer moves.
     nonisolated static var interval: TimeInterval { 0.1 }
 
@@ -61,17 +103,16 @@ public enum MouseTracking {
     }
 
     /// An element found on the lookup queue and handed to the main thread once. It is made inside the queue's block and
-    /// read only after the hop to main, where the queue no longer touches it: one owner at a time.
-    private struct Found: @unchecked Sendable { let element: AXUIElement?; let blank: Bool }
+    /// read only after the hop to main, where the queue no longer touches it: one owner at a time. The reading (which
+    /// holds the element too) is finished there, so main only says it.
+    private struct Found: @unchecked Sendable { let element: AXUIElement?; let blank: Bool; let reading: PointerReading? }
+    /// What is kept back from the watchdog's time for the hop to main.
+    nonisolated static var readMargin: TimeInterval { 0.15 }
 
     private static var monitor: Any?
     private static var tracker = PointerTracker<Element>()
     private static var lookScheduled = false
-    private static var lookInFlight = false
-    private static var generation = 0
-    /// Which look is out, and the one watchdog set for it: a watchdog may give up only on its own look, never on a
-    /// later one that is on its way (the first version did, and dropped good looks).
-    private static var lookID = 0
+    private static var looks = LookState()
     private static var watchdog: DispatchWorkItem?
     private static var lastLookAt = Date.distantPast
     /// Replaced when a look is given up on: the app that held it may hold its thread for good, and the next look
@@ -111,9 +152,9 @@ public enum MouseTracking {
     private static func stop() {
         if let m = monitor { NSEvent.removeMonitor(m) }
         monitor = nil
-        generation += 1   // a look still out is dropped when it comes back
+        looks.stop()   // a look still out is dropped when it comes back
         watchdog?.cancel(); watchdog = nil
-        lookInFlight = false; lookScheduled = false
+        lookScheduled = false
         tracker.reset()
         Log.info("mouse tracking: off")
     }
@@ -129,40 +170,43 @@ public enum MouseTracking {
         lookScheduled = false
         // The trackpad's explore is reading under the fingers; Say All is reading on, and the pointer is not what
         // the person is asking to be moved to.
-        guard isOn, Core.active, !lookInFlight, !Trackpad.controlOn, !SayAll.isRunning else { return }
+        guard isOn, Core.active, !looks.inFlight, !Trackpad.controlOn, !SayAll.isRunning else { return }
         let p = pointer()
         guard tracker.worthLooking(at: p) else { return }
         tracker.looked(at: p)
-        lookInFlight = true
         lastLookAt = Date()
-        lookID += 1
-        let g = generation, id = lookID
+        let (g, id) = looks.begin()
+        let countsGroups = config.general.movesByGroups
         queue.async {
             let began = Date()
             var hit: AXUIElement?
             if AXUIElementCopyElementAtPosition(AXUIElementCreateSystemWide(), Float(p.x), Float(p.y), &hit) != .success { hit = nil }
-            let found = Found(element: hit, blank: hit.map(isBlank) ?? true)
+            let blank = hit.map(isBlank) ?? true
+            var reading: PointerReading?
+            if let hit, !blank {
+                let deadline = began.addingTimeInterval(watchdogAfter - readMargin)
+                reading = PointerReader.read(hit, deadline: deadline, countsGroups: countsGroups)
+                if reading == nil { Log.warning("mouse tracking: the deadline was reached before reading (\(describe(hit)))") }
+                else if Date() > deadline { Log.warning("mouse tracking: the reading ended past its deadline (\(describe(hit)))") }
+            }
+            let found = Found(element: hit, blank: blank, reading: reading)
             let took = Date().timeIntervalSince(began)
             if took > slowLook { Log.warning("mouse tracking: the look took \(Int(took * 1000)) ms (\(describe(hit)))") }
             onMain { arrived(found, generation: g) }
         }
         watchdog?.cancel(); watchdog = nil
-        if config.presentation.mouseWatchdog {
-            let item = DispatchWorkItem { MainActor.assumeIsolated { giveUp(onLookOf: id) } }
-            watchdog = item
-            DispatchQueue.main.asyncAfter(deadline: .now() + watchdogAfter, execute: item)
-        }
+        let item = DispatchWorkItem { MainActor.assumeIsolated { giveUp(onLookOf: id) } }
+        watchdog = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + watchdogAfter, execute: item)
     }
 
     /// The look `id` has not come back: leave it and its thread, and look again where the pointer is now. Last time
     /// the reading went on over everything else until the person clicked (a tester, 9 Nov 2026).
     private static func giveUp(onLookOf id: Int) {
-        guard id == lookID, lookInFlight, isOn, Core.active else { return }
+        guard isOn, Core.active, looks.giveUp(onLookOf: id) else { return }
         Log.warning("mouse tracking: a look was out over \(Int(watchdogAfter * 1000)) ms; given up on")
         tracker.forgetLook()
-        generation += 1
         queue = DispatchQueue(label: "turnover.mouse-tracking", qos: .userInteractive)
-        lookInFlight = false
         moved()
     }
 
@@ -188,9 +232,8 @@ public enum MouseTracking {
     }
 
     private static func arrived(_ found: Found, generation g: Int) {
-        guard g == generation else { return }
+        guard looks.arrived(generation: g) else { return }
         watchdog?.cancel(); watchdog = nil
-        lookInFlight = false
         // The pointer may have gone on (or come to rest somewhere else) while the look was out: the moves in that time
         // were not asked for, so its resting place is looked at now.
         defer { if isOn, Core.active, tracker.worthLooking(at: pointer()) { moved() } }
@@ -199,13 +242,13 @@ public enum MouseTracking {
         case .nothing: break
         case .blank:
             Log.io("mouse tracking: blank place (\(describe(found.element)))")
-            if config.presentation.mouseEmptySound { VoiceOverSounds.play("EmptySpace.aiff") }
+            // No empty space sound: when on it made a lot of extra noise that was annoying (a tester, 10 Nov 2026).
         case .say:
             // As the trackpad's explore does: what was being said gives way, and the item is read. The focus stays where it is.
-            guard let e = found.element else { return }
-            Log.io("mouse tracking: says \(describe(e))")
-            Speech.cancel()
-            ObjectNavigator.shared.hover(e, movingCursor: config.presentation.mouseMovesCursor)
+            guard let reading = found.reading else { tracker.forgetLook(); return }
+            Log.io("mouse tracking: says \(describe(reading.element))")
+            Speech.cancel(source: Self.speechSource)
+            ObjectNavigator.shared.hover(reading, movingCursor: config.presentation.mouseMovesCursor)
         }
     }
 }
