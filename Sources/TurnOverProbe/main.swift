@@ -69,7 +69,7 @@ let gates: [String: (name: String, help: String, run: ([String]) -> Void)] = [
                  "Print the focused window's element tree. --bundle id [--focused] [--depth N] [--max N] [--all]",
                  runTreeGate),
     "snapshot": ("snapshot",
-                 "Time one copy of the focused window's tree as a batched snapshot and one attribute a question; --profile says where the time goes by role and attribute. Counts, timings and roles only; no labels or text. --app Name | --bundle id | --pid N [--repeat N] [--profile] [--seconds N]",
+                 "Time one copy of the focused window's tree as a batched snapshot, one attribute a question, and the private whole-subtree read last; --profile says where the time goes by role and attribute. Counts, timings and roles only; no labels or text. --app Name | --bundle id | --pid N [--repeat N] [--profile] [--seconds N]",
                  runSnapshotGate),
     "voices":   ("voices",
                  "List the voices available to this process.",

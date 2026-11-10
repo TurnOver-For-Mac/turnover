@@ -75,7 +75,7 @@ public enum AXHealth {
             AXReadScope.report(.clientWorkStopped)
             return AXQueryExecution(status: .clientWorkStopped, elapsedNanoseconds: 0, wasAttempted: false)
         }
-        if policy == .respectBackoff, let rest = backoff(for: p) {
+        if policy != .diagnosticDirect, let rest = backoff(for: p) {
             AXReadScope.report(.deferred(rest))
             return AXQueryExecution(status: .deferred(rest), elapsedNanoseconds: 0, wasAttempted: false)
         }
@@ -87,8 +87,10 @@ public enum AXHealth {
         let e = body()
         let took = clock() &- t0
         AXStats.note(took)
-        if e == .cannotComplete { note(e, pid: p, ns: took) }
-        if took > dripCallNs { noteDrip(pid: p, ns: took) }
+        if policy != .bulkRead {
+            if e == .cannotComplete { note(e, pid: p, ns: took) }
+            if took > dripCallNs { noteDrip(pid: p, ns: took) }
+        }
         AXReadScope.report(.returned(e))
         return AXQueryExecution(status: .returned(e), elapsedNanoseconds: took, wasAttempted: true)
     }
