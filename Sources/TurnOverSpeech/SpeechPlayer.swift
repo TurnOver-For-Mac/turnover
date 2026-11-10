@@ -737,7 +737,10 @@ public final class SpeechPlayer: @unchecked Sendable {
             let playing = pending.filter { !$0.done }
             let others = playing.contains { $0.source != source }
             guard !others, playing.contains(where: { $0.source == source }) || (current?.state.source == source) else { return }
+            // Taken out before the stop, which tells every waiting utterance it was cut off: these are not cut off,
+            // they are said next, so their completion must be called once, as finished.
             let kept = waiting
+            waiting.removeAll()
             cancelOnQueue()
             waiting = kept
             renderNext()

@@ -105,7 +105,8 @@ public enum MouseTracking {
     /// An element found on the lookup queue and handed to the main thread once. It is made inside the queue's block and
     /// read only after the hop to main, where the queue no longer touches it: one owner at a time. The reading (which
     /// holds the element too) is finished there, so main only says it.
-    private struct Found: @unchecked Sendable { let element: AXUIElement?; let blank: Bool; let reading: PointerReading? }
+    /// `label` is the role and the app's name for the log, read on the lookup queue: main asks the app nothing.
+    private struct Found: @unchecked Sendable { let element: AXUIElement?; let blank: Bool; let reading: PointerReading?; let label: String }
     /// What is kept back from the watchdog's time for the hop to main.
     nonisolated static var readMargin: TimeInterval { 0.15 }
 
@@ -182,16 +183,17 @@ public enum MouseTracking {
             var hit: AXUIElement?
             if AXUIElementCopyElementAtPosition(AXUIElementCreateSystemWide(), Float(p.x), Float(p.y), &hit) != .success { hit = nil }
             let blank = hit.map(isBlank) ?? true
+            let label = describe(hit)
             var reading: PointerReading?
             if let hit, !blank {
                 let deadline = began.addingTimeInterval(watchdogAfter - readMargin)
                 reading = PointerReader.read(hit, deadline: deadline, countsGroups: countsGroups)
-                if reading == nil { Log.warning("mouse tracking: the deadline was reached before reading (\(describe(hit)))") }
-                else if Date() > deadline { Log.warning("mouse tracking: the reading ended past its deadline (\(describe(hit)))") }
+                if reading == nil { Log.warning("mouse tracking: the deadline was reached before reading (\(label))") }
+                else if Date() > deadline { Log.warning("mouse tracking: the reading ended past its deadline (\(label))") }
             }
-            let found = Found(element: hit, blank: blank, reading: reading)
+            let found = Found(element: hit, blank: blank, reading: reading, label: label)
             let took = Date().timeIntervalSince(began)
-            if took > slowLook { Log.warning("mouse tracking: the look took \(Int(took * 1000)) ms (\(describe(hit)))") }
+            if took > slowLook { Log.warning("mouse tracking: the look took \(Int(took * 1000)) ms (\(label))") }
             onMain { arrived(found, generation: g) }
         }
         watchdog?.cancel(); watchdog = nil
@@ -210,7 +212,8 @@ public enum MouseTracking {
         moved()
     }
 
-    /// What a look found, for the log: the role and the app, and not a word of what it says.
+    /// What a look found, for the log: the role and the app, and not a word of what it says. Asks the app, so it runs
+    /// on the lookup queue only.
     nonisolated static func describe(_ e: AXUIElement?) -> String {
         guard let e else { return "nothing" }
         let app = NSRunningApplication(processIdentifier: e.pid)?.bundleIdentifier ?? "pid \(e.pid)"
@@ -241,12 +244,12 @@ public enum MouseTracking {
         switch tracker.answer(found.blank ? nil : found.element.map { Element(element: $0) }) {
         case .nothing: break
         case .blank:
-            Log.io("mouse tracking: blank place (\(describe(found.element)))")
+            Log.io("mouse tracking: blank place (\(found.label))")
             // No empty space sound: when on it made a lot of extra noise that was annoying (a tester, 10 Nov 2026).
         case .say:
             // As the trackpad's explore does: what was being said gives way, and the item is read. The focus stays where it is.
             guard let reading = found.reading else { tracker.forgetLook(); return }
-            Log.io("mouse tracking: says \(describe(reading.element))")
+            Log.io("mouse tracking: says \(found.label)")
             if config.presentation.mouseInterruptsSpeech { Speech.cancel() } else { Speech.cancel(source: Self.speechSource) }
             ObjectNavigator.shared.hover(reading, movingCursor: config.presentation.mouseMovesCursor)
         }
