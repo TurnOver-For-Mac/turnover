@@ -5459,7 +5459,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Блочные цитаты"
+            "value" : "Цитаты"
           }
         }
       }
@@ -20403,7 +20403,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Сказано"
+            "value" : "Озвучивать"
           }
         }
       }
