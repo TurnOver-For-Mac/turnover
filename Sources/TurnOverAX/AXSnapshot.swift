@@ -66,36 +66,24 @@ public struct AXSnapshot: Sendable {
 
     /// Synchronous, thread-local interpretation, never held across await. Absent attributes stay absent: a
     /// presentation rule cannot accidentally make a live provider call while the keyboard is waiting on main.
-    ///
-    /// `liveForMissing`: an element the snapshot holds is answered from it, and one it does not hold is asked of the
-    /// app. Only for reading on past the end of what was collected (a page longer than one collection, issue 227),
-    /// which reads the rest on main as build 24 did; never for a page's first reading.
-    public func with<Value>(liveForMissing: Bool = false, _ body: () throws -> Value) rethrows -> Value {
+    public func with<Value>(_ body: () throws -> Value) rethrows -> Value {
         let dictionary = Thread.current.threadDictionary
         let previous = dictionary[Self.key]
-        dictionary[Self.key] = Scope(self, liveForMissing: liveForMissing)
+        dictionary[Self.key] = Scope(self)
         defer { if let previous { dictionary[Self.key] = previous } else { dictionary.removeObject(forKey: Self.key) } }
-        return liveForMissing ? try body() : try AXReadScope.with(while: { false }, body)
+        return try AXReadScope.with(while: { false }, body)
     }
 
     private final class Scope {
         let snapshot: AXSnapshot
-        let liveForMissing: Bool
-        init(_ snapshot: AXSnapshot, liveForMissing: Bool) { self.snapshot = snapshot; self.liveForMissing = liveForMissing }
+        init(_ snapshot: AXSnapshot) { self.snapshot = snapshot }
     }
     private static let key = "com.turnover.ax.snapshot"
     static var current: AXSnapshot? { (Thread.current.threadDictionary[key] as? Scope)?.snapshot }
-    /// The snapshot that answers for `element` here: the scope's, unless it lets missing elements be asked live and
-    /// this is one.
-    static func serving(_ element: AXUIElement) -> AXSnapshot? {
-        guard let scope = Thread.current.threadDictionary[key] as? Scope else { return nil }
-        if scope.liveForMissing, scope.snapshot.nodes[ElementKey(element)] == nil { return nil }
-        return scope.snapshot
-    }
-    /// Inside a strict scope (`with()`), whether `element` was collected: an element that was not reads as empty.
+    /// Inside a snapshot scope, whether the element was collected.
     public static func holds(_ element: AXUIElement) -> Bool {
-        guard let scope = Thread.current.threadDictionary[key] as? Scope else { return true }
-        return scope.liveForMissing || scope.snapshot.nodes[ElementKey(element)] != nil
+        guard let current else { return true }
+        return current.nodes[ElementKey(element)] != nil
     }
     /// What is collected of a page's plain texts and plain groups, which are most of a page: what reading a page asks
     /// of them (role, subrole, children, value, title, role description: turnover-coretest --page-needs on Safari and

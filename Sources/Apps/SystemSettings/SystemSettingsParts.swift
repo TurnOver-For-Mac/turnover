@@ -233,9 +233,13 @@ nonisolated private final class SystemSettingsPartLookup {
     }
 
     /// Logged once per failed lookup, unless a newer command cancelled it: that is not a failure to find.
-    private func fail(_ step: String) -> SystemSettingsPartResolution? {
-        if reader.stopped != .cancelled {
-            log("System Settings: no \(request.part) (\(step)); stop \(reader.stopped.map { "\($0)" } ?? "none"), deep branches skipped \(deepSkipped)\(branchNotes.isEmpty ? "" : "; " + branchNotes.joined(separator: ", ")); levels: \(levels.joined(separator: "; "))")
+    private func fail(_ step: String) -> SystemSettingsPartResolution? { fail(step, stop: reader.stopped) }
+
+    /// A branch's reader is put back before its failure is logged, so the branch hands over its own stop reason:
+    /// the main reader's says neither that a newer command cancelled the walk nor that the branch ran out of time.
+    private func fail(_ step: String, stop: AXNavigationChildren.Stop?) -> SystemSettingsPartResolution? {
+        if stop != .cancelled {
+            log("System Settings: no \(request.part) (\(step)); stop \(stop.map { "\($0)" } ?? "none"), deep branches skipped \(deepSkipped)\(branchNotes.isEmpty ? "" : "; " + branchNotes.joined(separator: ", ")); levels: \(levels.joined(separator: "; "))")
         }
         return nil
     }
@@ -281,11 +285,18 @@ nonisolated private final class SystemSettingsPartLookup {
         let splits = find(in: window, depth: 4) { $0.role == "AXSplitGroup" }
         guard reader.check() else { return fail("split view") }
         let named = splits.filter { metadata[ElementKey($0)]?.identifier == splitIdentifier }
-        guard let split = named.count == 1 ? named[0] : (named.isEmpty && splits.count == 1 ? splits[0] : nil) else {
+        let byIdentifier = named.count == 1
+        let asOnlySplitGroup = named.isEmpty && splits.count == 1
+        let split: AXUIElement
+        if byIdentifier {
+            split = named[0]
+        } else if asOnlySplitGroup {
+            split = splits[0]
+        } else {
             return fail("split view: \(splits.count) split groups, \(named.count) with its identifier")
         }
         let splitLevel = foundLevels[ElementKey(split)] ?? 0, branchLevel = splitLevel + 1
-        let route = named.count == 1 ? "by its identifier" : "as the only split group"
+        let route = byIdentifier ? "by its identifier" : "as the only split group"
         let branches = children(split)
         var sidebars: [(AXUIElement, AXUIElement)] = [], searches: [(AXUIElement, AXUIElement)] = []
         var scrolls: [(AXUIElement, AXUIElement)] = []
@@ -302,13 +313,18 @@ nonisolated private final class SystemSettingsPartLookup {
                 let attempt = parts(of: branch, level: branchLevel)
                 let stop = reader.stopped, at = phase
                 reader = main; ordinaryChildren = false
-                guard case .query(let status)? = stop else {
-                    guard stop == nil, let attempt else { return fail("split view's branches") }
-                    found = attempt
-                    if ordinary { branchNotes.append("branch \(index + 1): AXChildren worked") }
-                    break
+                // A provider error: noted, then the other route, or the branch is skipped.
+                if case .query(let status)? = stop {
+                    branchNotes.append("branch \(index + 1): \(ordinary ? "AXChildren" : "navigation-order") error \(status) at \(at)")
+                    continue
                 }
-                branchNotes.append("branch \(index + 1): \(ordinary ? "AXChildren" : "navigation-order") error \(status) at \(at)")
+                // A cancel, deadline or limit ends the lookup, logged with the branch's own reason.
+                let branchStopped = stop != nil
+                let branchUnread = attempt == nil
+                if branchStopped || branchUnread { return fail("split view's branches", stop: stop) }
+                found = attempt
+                if ordinary { branchNotes.append("branch \(index + 1): AXChildren worked") }
+                break
             }
             guard let found else { branchNotes.append("branch \(index + 1) skipped"); continue }
             sidebars += found.sidebars; searches += found.searches; scrolls += found.scrolls

@@ -2,7 +2,8 @@
 
 Browse mode requests its accessibility data asynchronously. `WebBuffer.build()` returns immediately. A document
 owns one `AXWalkRunner` with one executing collection and one replaceable pending collection. Repeated refresh
-requests share the current collection; only the latest deferred navigation or action callback is retained.
+requests share the current collection. Each caller keeps its completion and checks whether its intent is current.
+A refresh requested during a continuation waits for that pass and then collects from the root.
 Dirty notifications arriving during collection remain due for a subsequent refresh. An edge search requests at
 most one extra collection for its command, so an infinite feed cannot turn one heading key into endless scrolling.
 
@@ -26,8 +27,14 @@ collection is distinct from a failed collection with no content.
 During a same-page refresh, commands can continue reading the previous publication. A failed refresh with no
 usable content retains that publication, marks it incomplete and leaves it due for retry. At replacement, the document
 anchors the current caret by its line text and offset. It does not restore the position from request time.
-`BufferTextInfo` and its copies retain the publication their offsets describe; stale ranges cannot update the
-caret of a newer publication. Say All retains its pinned reading publication across refreshes; a background publication does not stop it.
+`BufferTextInfo` and its copies retain the publication their offsets describe. Say All uses that copy for speech
+and stop positions. Across a refresh it moves the live caret only when it can match the spoken line.
+
+At the end of a partial page, the next collection starts at the saved frontier. The worker checks the page address
+and collects the remaining elements under the same per-pass limits. Main appends their text using the merged
+snapshot, preserving the published prefix and its offsets. A failed continuation leaves the cached page partial
+and due for refresh. Say All can move to a newer publication when the text it has read is still an exact prefix.
+A refresh of a long page can collect several passes before publication to reach the reader's position.
 
 A URL change clears the old publication and advances the document generation. The worker also checks for a URL
 change during collection, and publication checks the captured address against the requesting document. Leaving the document, retiring it or handing control to VoiceOver cancels collection
@@ -49,4 +56,5 @@ navigation. Live validation still needs Safari and Chromium pages, focus/browse 
 Back/Forward, VoiceOver handover, and Kindle page turns where available. A passing build does not establish speech
 quality or the behavior of those applications.
 
-The 6,000-element safety cap is retained. This addresses responsiveness under issue 119, not complete reachability of long conversations in issue 227.
+The 6,000-element cap applies to each pass. This combines the worker collection from issue 119 with the long-page
+continuation added for issue 227.

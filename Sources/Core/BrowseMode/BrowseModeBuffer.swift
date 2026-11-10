@@ -87,10 +87,11 @@ extension BrowseModeDocument {
     }
 
     func reportBufferEnd(forward: Bool) {
-        if buffer.isLoading { Speech.speakMessage(String(localized: "loading page", comment: "Spoken message")) }
+        if !forward { Speech.speakMessage(String(localized: "top", comment: "Spoken message")) }
+        else if buffer.isLoading { Speech.speakMessage(String(localized: "loading page", comment: "Spoken message")) }
         else if buffer.stoppedAtLimit { Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")) }
         else if buffer.lines.isEmpty { Speech.speakMessage(String(localized: "nothing on this page yet; it may still be loading", comment: "Spoken message")) }
-        else { Speech.speakMessage(forward ? String(localized: "bottom", comment: "Spoken message") : String(localized: "top", comment: "Spoken message")) }
+        else { Speech.speakMessage(String(localized: "bottom", comment: "Spoken message")) }
     }
 
     func cancelBuffer() {

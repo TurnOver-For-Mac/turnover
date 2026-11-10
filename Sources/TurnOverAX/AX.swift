@@ -167,12 +167,12 @@ extension AXValue: @unchecked @retroactive Sendable {}
 
 public extension AXUIElement {
     func attr(_ name: String) -> CFTypeRef? {
-        if let snapshot = AXSnapshot.serving(self) { return snapshot.attribute(name, of: self) }
+        if let snapshot = AXSnapshot.current { return snapshot.attribute(name, of: self) }
         var v: CFTypeRef?
         return AXHealth.ask(self) { AXUIElementCopyAttributeValue(self, name as CFString, &v) } == .success ? v : nil
     }
     func attrError(_ name: String) -> (CFTypeRef?, AXError) {
-        if let snapshot = AXSnapshot.serving(self) { let v = snapshot.attribute(name, of: self); return (v, v == nil ? .noValue : .success) }
+        if let snapshot = AXSnapshot.current { let v = snapshot.attribute(name, of: self); return (v, v == nil ? .noValue : .success) }
         var v: CFTypeRef?
         let e = AXHealth.ask(self) { AXUIElementCopyAttributeValue(self, name as CFString, &v) }
         return (v, e)
@@ -181,7 +181,7 @@ public extension AXUIElement {
     /// Several attributes in one question to the app (SwiftUI apps answer each question in about 4 ms: Contacts,
     /// 10 Oct 2026; one question for five is three times faster). Missing or failed ones are absent.
     func attrs(_ names: [String]) -> [String: AnyObject] {
-        if let snapshot = AXSnapshot.serving(self) { return Dictionary(uniqueKeysWithValues: names.compactMap { n in snapshot.attribute(n, of: self).map { (n, $0) } }) }
+        if let snapshot = AXSnapshot.current { return Dictionary(uniqueKeysWithValues: names.compactMap { n in snapshot.attribute(n, of: self).map { (n, $0) } }) }
         var out: CFArray?
         guard AXHealth.ask(self, { AXUIElementCopyMultipleAttributeValues(self, names as CFArray, AXCopyMultipleAttributeOptions(rawValue: 0), &out) }) == .success,
               let values = out as? [AnyObject], values.count == names.count else { return [:] }

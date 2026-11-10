@@ -11,7 +11,8 @@ nonisolated package struct WebBufferCollection: Sendable {
     package let stop: AXWalkStop?
     let elapsedMs: Int
     var navigationChanged = false
-    package var skippedElements = 0
+    var omittedElements: Set<ElementKey> = []
+    package var skippedElements: Int { omittedElements.count }
     /// Elements read with the short list alone.
     package var plainElements = 0
 
@@ -39,7 +40,7 @@ nonisolated package struct WebBufferCollection: Sendable {
     /// walk over an earlier collection stopped, the rest of the page (a long chat read on, issue 227). The page's own
     /// text, focus and ancestors were collected the first time and are not asked for again.
     package static func collect(root: AXUIElement, focus: AXUIElement?, request: AXWalkRequest, limits: Limits = Limits(),
-                                continuing: [AXUIElement]? = nil,
+                                continuing: [AXUIElement]? = nil, expectedURL: AXSnapshotValue? = nil,
                                 now: @escaping @Sendable () -> UInt64 = { DispatchTime.now().uptimeNanoseconds }) -> Self {
         // Submission can wait behind an obsolete, uninterruptible AX call. That wait is not this read's budget.
         let began = now()
@@ -47,7 +48,8 @@ nonisolated package struct WebBufferCollection: Sendable {
                                   maxAXQueries: limits.queries, maxDepth: limits.depth, startedAt: began, now: now)
         var nodes: [ElementKey: AXSnapshot.Node] = [:], path: Set<ElementKey> = []
         var references: [AXUIElement] = [], referenceKeys: Set<ElementKey> = []
-        var characters = 0, skipped = 0
+        var characters = 0
+        var omissions: Set<ElementKey> = []
         var text = "", part: AXUIElement?, changed = false
         var hadOmissions = false
         // Only on a web page: an iOS app's screen or a window (looked through for its page) is read in full.
@@ -91,7 +93,7 @@ nonisolated package struct WebBufferCollection: Sendable {
             guard let names = element.attributeNamesResult().value as? [String], names.contains(kAXRoleAttribute), budget.check() else {
                 if budget.check() {
                     if element.isSame(root) { budget.halt(.providerFailure) }
-                    else { skipped += 1; hadOmissions = true }
+                    else { omissions.insert(key); hadOmissions = true }
                 }
                 return false
             }
@@ -128,7 +130,7 @@ nonisolated package struct WebBufferCollection: Sendable {
             }
             guard attributes[kAXRoleAttribute] != nil else {
                 if element.isSame(root) { budget.halt(.providerFailure) }
-                else { skipped += 1; hadOmissions = true }
+                else { omissions.insert(key); hadOmissions = true }
                 return false
             }
             let actions = (element.actionNamesResult().value as? [String]) ?? []
@@ -155,6 +157,7 @@ nonisolated package struct WebBufferCollection: Sendable {
                 }
             }
         }
+        func address(_ value: CFTypeRef?) -> String { (value as? URL)?.absoluteString ?? (value as? String) ?? "" }
         AXReadScope.with(while: { budget.check() }, onQuery: { budget.admitAXQuery() }, onResult: { status in
             switch status {
             case .returned(let error) where [.invalidUIElement, .failure, .cannotComplete].contains(error):
@@ -166,10 +169,16 @@ nonisolated package struct WebBufferCollection: Sendable {
         }) {
             short = limits.plainElementsShort && root.string(kAXRoleAttribute) == "AXWebArea"
             if let continuing {
+                // Reused web areas can change pages without a new root. Check on the same worker as the walk.
+                guard root.attributeResult(kAXRoleAttribute).value != nil else { budget.halt(.providerFailure); return }
+                let start = address(root.attr("AXURL"))
+                if budget.check(), let expectedURL, address(expectedURL.value) != start { changed = true; return }
                 for element in continuing {
                     guard budget.check() else { break }
                     visit(element, depth: 1)
                 }
+                if hadOmissions, budget.check(), root.attributeResult(kAXRoleAttribute).value == nil { budget.halt(.providerFailure) }
+                if budget.check() { changed = start != address(root.attr("AXURL")) }
                 return
             }
             visit(root, depth: 0)
@@ -199,13 +208,12 @@ nonisolated package struct WebBufferCollection: Sendable {
             // is a failed read, never a complete empty document.
             if hadOmissions, budget.check(), root.attributeResult(kAXRoleAttribute).value == nil { budget.halt(.providerFailure) }
             if budget.check() {
-                func address(_ value: CFTypeRef?) -> String { (value as? URL)?.absoluteString ?? (value as? String) ?? "" }
                 changed = address(nodes[ElementKey(root)]?.attributes["AXURL"]?.value) != address(root.attr("AXURL"))
             }
         }
         var result = Self(snapshot: AXSnapshot(nodes: nodes), documentText: text, focusedPart: part, stop: budget.stopped,
                           elapsedMs: Int((now() &- began) / 1_000_000), navigationChanged: changed)
-        result.skippedElements = skipped
+        result.omittedElements = omissions
         result.plainElements = plain
         return result
     }
