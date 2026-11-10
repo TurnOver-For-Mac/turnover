@@ -6,6 +6,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- Typing, VoiceOver's keys: with words spoken as you type, the word said as the space is typed is no longer followed by
+  "space", as in VoiceOver. A space typed on its own is still said, and NVDA's and JAWS's keys say both.
 - "Nothing in this window can be read", with the keys for screen recognition, is a hint now: turning off Hints after
   a pause turns it off too. It is no longer said in Steam's Big Picture while TurnOver is reading it.
 
