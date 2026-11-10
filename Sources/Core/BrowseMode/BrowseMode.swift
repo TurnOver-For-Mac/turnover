@@ -477,14 +477,20 @@ public final class BrowseModeDocument: ScriptableObject {
     /// again now, and keep looking for half a minute, reading the page when it comes. A tester's report (6 Oct
     /// 2026): after a reload the copy stayed empty and every arrow said "bottom" or "top", then "blank".
     @discardableResult
-    func ensureContent() -> Bool {
+    /// `retry`: the key, done again once the page has come, if it is still the latest key. Until 10 Nov 2026 a key on
+    /// a page whose first read was still under way was dropped without a word (review of #219, point 1).
+    func ensureContent(_ retry: (() -> Void)? = nil) -> Bool {
         // An empty address too: Safari not answering reports none (6 Oct 2026, playtestcloud: "page  —", 0 lines,
         // and every key said "no next heading").
         guard buffer.lines.isEmpty, url != "about:blank" else { return true }
-        buffer.build()
-        if buffer.isLoading { return false }
-        Speech.speakMessage(String(localized: "nothing on this page yet; it may still be loading", comment: "Spoken message"))
-        watchForContent()
+        let epoch = pageGeneration, movedAt = positionMovedAt
+        buffer.build { [weak self] in
+            guard let self, pageGeneration == epoch, positionMovedAt == movedAt, API.focusTreeInterceptor === self else { return }
+            if buffer.lines.isEmpty {
+                Speech.speakMessage(String(localized: "nothing on this page yet; it may still be loading", comment: "Spoken message"))
+                watchForContent()
+            } else { retry?() }
+        }
         return false
     }
 
@@ -614,11 +620,13 @@ public final class BrowseModeDocument: ScriptableObject {
         }
     }
 
-    func move(_ unit: TextUnit, _ direction: Int) {
+    /// `afterRefresh`: the page was read again (or on) for this key already; at the end now, it is the end. A page
+    /// that keeps growing is not read again and again for one key (review of #219, point 5).
+    func move(_ unit: TextUnit, _ direction: Int, afterRefresh: Bool = false) {
         positionMovedAt = Date()
         refreshIfNavigated()
         clearSelection()
-        guard ensureContent() else { return }
+        guard ensureContent({ [weak self] in self?.move(unit, direction, afterRefresh: afterRefresh) }) else { return }
         refreshBufferIfNeeded()
         guard let info = caretInfo() else { return }
         // NVDA's _caretMovementScriptHelper: expand to the unit and collapse to its start before moving, so Up from
@@ -639,9 +647,9 @@ public final class BrowseModeDocument: ScriptableObject {
             }
             if hops > 0 { moved += hops * (direction > 0 ? 1 : -1) }
         }
-        if moved == 0, direction > 0, reachForMore({ [weak self] more in
+        if moved == 0, direction > 0, !afterRefresh, reachForMore({ [weak self] more in
             guard let self else { return }
-            if more { move(unit, direction) }
+            if more { move(unit, direction, afterRefresh: true) }
             else { reportBufferEnd(forward: true) }
         }) { return }
         // Not "bottom" with more of a long page still to read (its reading on ran out of time): reportBufferEnd says so.

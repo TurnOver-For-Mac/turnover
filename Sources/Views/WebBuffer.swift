@@ -74,7 +74,9 @@ public final class WebBuffer {
     private let collect: @Sendable (AXUIElement, AXUIElement?, AXWalkRequest) -> WebBufferCollection
     private var generation = 0
     package private(set) var revision = 0
-    private var pendingCompletion: (() -> Void)?
+    /// What waits for the reading under way, each caller its own (review of #219, point 3: with one, a focus event
+    /// could drop a key's, and Kindle's page turn never finish). Each checks for itself that it is still wanted.
+    private var pendingCompletions: [() -> Void] = []
     /// Both hooks run on main, immediately around the atomic replacement. The owner anchors the *current*
     /// caret here, rather than restoring a position captured before the user continued reading.
     var willPublish: (() -> Void)?
@@ -137,15 +139,15 @@ public final class WebBuffer {
     private var samePage = false
 
     public func cancel() {
-        generation += 1; runner.cancel(); pendingCompletion = nil; status = .cancelled
+        generation += 1; runner.cancel(); pendingCompletions = []; status = .cancelled
     }
 
     /// Coalesce refreshes while a collection is in flight. A page change calls newPage first, cancelling the
     /// old generation. Keeping the previous snapshot makes arrows usable during a same-page refresh.
     public func build(scrollTo: AXUIElement? = nil, completion: (() -> Void)? = nil) {
-        // Only the latest deferred action survives a burst of keys; reading commands already answered from
-        // the previous snapshot continue immediately. Do not replay a queue of old navigation on completion.
-        if let completion { pendingCompletion = completion }
+        // Every caller's action waits; each checks on completion that it is still the latest of its kind (its key's
+        // intent, the document's generation), so a burst of keys does not replay as a burst of moves.
+        if let completion { pendingCompletions.append(completion) }
         guard !isLoading else { return }
         status = .loading
         collectingDirtyRevision = dirtyRevision
@@ -321,9 +323,9 @@ public final class WebBuffer {
         if stopped, !loggedPartial { loggedPartial = true; Log.error("virtual buffer: stopped at \(visited >= Self.maxElements ? "\(Self.maxElements) elements" : "a limit"), \(lastStop.map(\.rawValue) ?? "the walk's time"); the rest is read on") }
         lastBuildMs = collectedMs + Int(Date().timeIntervalSince(t0) * 1000)
         Log.info("virtual buffer: \(lines.count) lines, \(text.length) characters from \(elementCount) elements in \(lastBuildMs) ms (\(status)\(lastStop.map { ": " + $0.rawValue } ?? "")\(passes > 1 ? ", \(passes) passes" : ""))")
-        let ready = pendingCompletion; pendingCompletion = nil
+        let ready = pendingCompletions; pendingCompletions = []
         if published { didPublish?() } else { didFail?() }
-        ready?()
+        ready.forEach { $0() }
     }
 
     /// The end of a pass: after a stop, a place to read again from; after a whole read, its end to read on from.

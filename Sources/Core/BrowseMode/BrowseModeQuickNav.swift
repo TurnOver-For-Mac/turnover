@@ -34,7 +34,7 @@ extension BrowseModeDocument {
         positionMovedAt = Date()
         refreshIfNavigated()
         clearSelection()
-        guard ensureContent() else { return }
+        guard ensureContent({ [weak self] in self?.quickNav(q, forward: forward, afterRefresh: afterRefresh) }) else { return }
         refreshBufferIfNeeded(stale: 20)
         /// Search the buffer by role (headings, buttons, links…): no WebKit to ask, or WebKit's answer is unusable.
         /// Nothing further this way: from the other end of the page (wrapping on), or "no next heading".
