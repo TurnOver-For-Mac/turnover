@@ -732,7 +732,7 @@ public final class GlobalCommands: ScriptableObject {
         }
         // Mac style: the bar's titles, as VoiceOver (a second VO M leaves them).
         if !config.general.windowsKeys {
-            if MenuNavigationPlugin.heldBar != nil { MenuNavigationPlugin.releaseBar(); Braille.releaseItem(); if let pid = API.focusPid { MenuNavigationPlugin.backFromBar(pid: pid) }; return }
+            if let h = MenuNavigationPlugin.heldBar { MenuNavigationPlugin.releaseBar(); Braille.releaseItem(); MenuNavigationPlugin.backFromBar(pid: h.pid); return }
             MenuNavigationPlugin.holdMenuBar(); return
         }
         // The handler itself, not executeScript: that would make this the last script run, and the caller's
