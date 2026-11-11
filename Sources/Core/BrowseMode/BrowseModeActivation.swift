@@ -21,6 +21,24 @@ extension BrowseModeDocument {
     /// `byAccessibility`: VO-Space. The control with the keyboard is pressed through accessibility, as VoiceOver's
     /// VO-Space presses it, where Enter and Space send the real key (below): a page that ignores one answers the other.
     func activate(_ gesture: KeyboardGesture, byAccessibility: Bool = false) {
+        // A press needs the page itself, and asks it by calls that wait out the timeout each time: on a page that is
+        // not answering it is not tried, and that is said (a review, 11 Nov 2026).
+        if pageSilent {
+            // A control that already has the keyboard still gets the real key: that asks the page nothing, and a
+            // page that is not answering accessibility may yet take a key (a review, 11 Nov 2026). What TurnOver
+            // already knows of the focus says so; nothing is asked to find out.
+            // (The controls a real key presses; not a text field, where Return would send its form.)
+            let pressedByAKey: Set<String> = ["AXButton", "AXLink", "AXCheckBox", "AXRadioButton", "AXMenuButton", "AXPopUpButton", "AXMenuItem", "AXTab", "AXDisclosureTriangle", "AXSwitch"]
+            let keyboardIsOnAControl = API.focusObject.map { $0.pid == webArea.pid && pressedByAKey.contains($0.axRole) } ?? false
+            if !byAccessibility, keyboardIsOnAControl {
+                Log.io("browse mode: \(gesture.keyName) sent to the control with the keyboard; the page is not answering, so nothing is asked of it")
+                gesture.send()
+                return
+            }
+            Log.io("browse mode: \(gesture.keyName) not tried: the page is not answering")
+            sayPageNotResponding()
+            return
+        }
         var e: AXUIElement? = nil
         if let t = lastQuickNavTarget, buffer.offset(of: t) == position {
             e = BrowseModeDocument.actionable(t) ? t : t.firstDescendant(role: "AXLink", maxVisited: 60) ?? t.firstDescendant(role: "AXButton", maxVisited: 60) ?? t
@@ -300,10 +318,14 @@ extension BrowseModeDocument {
         lastQuickNavTarget = el
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
             guard let self else { return }
-            if BrowseModeDocument.controlRoles.contains(el.role), !(el.role == "AXLink" && buffer.linkEnd(at: position) != nil) {
-                Speech.speakMessage(Speech.objectPropertiesSpeech(ObjectFactory.make(el), reason: .focus).joined(separator: ", "))
-                lastChain = []
-            } else { speakQuickNavText(at: position, link: el.role == "AXLink") }
+            let read = { [self] in
+                if BrowseModeDocument.controlRoles.contains(el.role), !(el.role == "AXLink" && buffer.linkEnd(at: position) != nil) {
+                    Speech.speakMessage(Speech.objectPropertiesSpeech(ObjectFactory.make(el), reason: .focus).joined(separator: ", "))
+                    lastChain = []
+                } else { speakQuickNavText(at: position, link: el.role == "AXLink") }
+            }
+            // Later than the key that chose it: on a page that is not answering, read from the copy like the key.
+            if !readFromCopyIfSilent(read) { read() }
         }
     }
 
@@ -408,6 +430,7 @@ extension BrowseModeDocument {
     /// right-clicked: a link's menu has Open in New Tab, Copy Link and the rest. False when there is nothing that
     /// takes one there (plain text keeps the page's own menu).
     func showContextMenuAtCaret() -> Bool {
+        guard !pageSilent else { return false }
         refreshIfNavigated()
         guard let start = (try? rootObject.makeTextInfo(.caret) as? BufferTextInfo)?.element(at: position) else { return false }
         let wanted: Set<String> = ["AXLink", "AXButton", "AXImage", "AXTextField", "AXTextArea", "AXCheckBox", "AXRadioButton", "AXPopUpButton", "AXComboBox", "AXMenuButton"]
