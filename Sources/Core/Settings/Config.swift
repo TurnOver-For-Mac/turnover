@@ -164,6 +164,9 @@ public struct Config: Codable {
         /// NVDA's "capital pitch change": a capital letter said on its own (spelling, moving by character, typing) is
         /// raised by this percentage; 0 is off (a tester, 10 Oct 2026). Works with or without "cap".
         public var capitalPitch = 0
+        /// VoiceOver's pitch change for deleted text: 0 says "deleted" before a deleted word; above 0, the deleted
+        /// text is said that many percent lower instead, with no "deleted".
+        public var deletedPitch = 0
         /// The voice's pitch on VoiceOver's scale, 0 to 1 with 0.5 the voice's own (copied from VoiceOver, 15 Oct 2026).
         public var pitch: Float = 0.5
         /// The pitch as the player's multiplier: 0 is half, 0.5 is 1, 1 is double.
@@ -192,7 +195,7 @@ public struct Config: Codable {
         }
         public init() {}
         // Each field falls back to its default, so a setting added later never resets the voice and rate.
-        enum Keys: String, CodingKey { case voice, rate, symbolLevel, sayCapForCapitals, volume, autoLanguageSwitching, languageVoices, languageRates, outputDevice, capitalPitch, ducking, pitch, rotorVoices, bass, middle, treble, voiceTunings }
+        enum Keys: String, CodingKey { case voice, rate, symbolLevel, sayCapForCapitals, volume, autoLanguageSwitching, languageVoices, languageRates, outputDevice, capitalPitch, deletedPitch, ducking, pitch, rotorVoices, bass, middle, treble, voiceTunings }
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: Keys.self)
             voice = (try? c.decodeIfPresent(String.self, forKey: .voice)) ?? voice
@@ -205,6 +208,7 @@ public struct Config: Codable {
             languageRates = (try? c.decodeIfPresent([String: Float].self, forKey: .languageRates)) ?? languageRates
             outputDevice = (try? c.decodeIfPresent(String.self, forKey: .outputDevice)) ?? outputDevice
             capitalPitch = (try? c.decodeIfPresent(Int.self, forKey: .capitalPitch)) ?? capitalPitch
+            deletedPitch = (try? c.decodeIfPresent(Int.self, forKey: .deletedPitch)) ?? deletedPitch
             pitch = (try? c.decodeIfPresent(Float.self, forKey: .pitch)) ?? pitch
             ducking = (try? c.decodeIfPresent(String.self, forKey: .ducking)) ?? ducking
             rotorVoices = (try? c.decodeIfPresent([String].self, forKey: .rotorVoices)) ?? rotorVoices
@@ -219,7 +223,7 @@ public struct Config: Codable {
             try c.encode(sayCapForCapitals, forKey: .sayCapForCapitals); try c.encode(volume, forKey: .volume)
             try c.encode(autoLanguageSwitching, forKey: .autoLanguageSwitching); try c.encode(languageVoices, forKey: .languageVoices)
             try c.encode(languageRates, forKey: .languageRates); try c.encode(outputDevice, forKey: .outputDevice)
-            try c.encode(capitalPitch, forKey: .capitalPitch); try c.encode(ducking, forKey: .ducking); try c.encode(pitch, forKey: .pitch)
+            try c.encode(capitalPitch, forKey: .capitalPitch); try c.encode(deletedPitch, forKey: .deletedPitch); try c.encode(ducking, forKey: .ducking); try c.encode(pitch, forKey: .pitch)
             try c.encode(rotorVoices, forKey: .rotorVoices)
             try c.encode(bass, forKey: .bass); try c.encode(middle, forKey: .middle); try c.encode(treble, forKey: .treble)
             try c.encode(voiceTunings, forKey: .voiceTunings)

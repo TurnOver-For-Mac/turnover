@@ -430,8 +430,9 @@ open class EditableText: TurnOverObject {
             gesture.send()
             _ = hasCaretMoved(from: bookmark)
             lastSelection = try? makeTextInfo(.selection)
-            Speech.speakMessage(gone.isEmpty || gone.count > 80 ? String(localized: "selection deleted", comment: "Selected text deleted")
-                : Phrases.deleted(gone.count == 1 ? Symbols.name(of: gone.first!) : gone))
+            let what = gone.count == 1 ? Symbols.name(of: gone.first!) : gone
+            if !gone.isEmpty, gone.count <= 80, Speech.deletionByPitch { Speech.lowerForDeletion(); Speech.speakMessage(what) }
+            else { Speech.speakMessage(gone.isEmpty || gone.count > 80 ? String(localized: "selection deleted", comment: "Selected text deleted") : Phrases.deleted(what)) }
             return
         }
         let test = old.copy()
@@ -460,7 +461,7 @@ open class EditableText: TurnOverObject {
             // A line break has nothing to spell: say what it was ("new line"), as for any character named on its own.
             if let only = c.first, c.count == 1, only.isNewline { Speech.speakMessage(Symbols.name(of: only)) }
             // A word or a line deleted says so ("deleted more"); a single character is just the character, as in NVDA.
-            else if c.count > 1 { Speech.speakText(unit == .character ? c : Phrases.deleted(c.trimmingCharacters(in: .whitespaces))) } else { Speech.speakSpelling(c) }
+            else if c.count > 1 { Speech.lowerForDeletion(); Speech.speakText(unit == .character || Speech.deletionByPitch ? c : Phrases.deleted(c.trimmingCharacters(in: .whitespaces))) } else { Speech.lowerForDeletion(); Speech.speakSpelling(c) }
         }
         let (moved, newInfo) = hasCaretMoved(from: bookmark)
         guard moved else { return }
