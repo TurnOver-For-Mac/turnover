@@ -9,3 +9,10 @@ Record support as browser tasks under [Safari](../Safari/STATUS.md) or [Chrome](
 ## Checks
 
 Use a public sample document. Record the browser and version, which Google editor, its screen reader support setting, TurnOver's keyboard style and focus mode, and what typing, caret movement and selection announce. Check each editor separately. Keep private document text out of fixtures and logs.
+
+## Document adapter
+
+`GoogleDocsDocumentAdapter` delegates the existing editor recognition, focus/caret handling and delayed support
+check through the shared `DocumentAdapter` boundary. `GoogleDocs.swift` retains its implementation, timer,
+baseline, limits and dated observations unchanged. Return and forward Delete retain the ordinary editing path.
+Background polling and additional key pass-through are separate follow-ups.

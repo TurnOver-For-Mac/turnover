@@ -4,7 +4,7 @@ System handles the Mac around the apps. These sources compile in TurnOverCore wi
 
 ## Finding the code
 
-- [BuiltInModules.swift](BuiltInModules.swift) registers the built-in app implementations and recipe-backed apps. The reader, core test tool and unit tests use this assembly.
+- [BuiltInModules.swift](BuiltInModules.swift) registers built-in app implementations, recipe-backed apps and website document adapters. The reader, core test tool and unit tests use this assembly.
 - [AppWake.swift](AppWake.swift) nudges apps whose accessibility interface needs activation before it answers.
 - [ApplicationChooser.swift](ApplicationChooser.swift) lists applications and their windows, including system prompts outside the ordinary Command-Tab switcher.
 - [ForceQuit.swift](ForceQuit.swift) provides the spoken force-quit chooser and confirmation.

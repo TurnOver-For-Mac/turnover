@@ -12,7 +12,7 @@ import re
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-ISOLATED_APPS = {"Word": "com.microsoft.Word"}
+ISOLATED_APPS = {"Word": "com.microsoft.Word", "GoogleDocs": None}
 TOKENS = re.compile(r'//[^\n]*|/\*.*?\*/|""".*?"""|"(?:\\.|[^"\\])*"|\b[A-Za-z_]\w*\b', re.S)
 
 
@@ -34,7 +34,7 @@ def violations(source, path, names, bundle):
     found = []
     for token in code_tokens(source):
         value = token[0]
-        if value in names or (value == f'"{bundle}"' and path != Path("Sources/Core/Edition.swift")):
+        if value in names or (bundle is not None and value == f'"{bundle}"' and path != Path("Sources/Core/Edition.swift")):
             line = source.count("\n", 0, token.start()) + 1
             found.append(f"{path}:{line}: app implementation reference {value}; use an app/object hook")
     return found
@@ -51,7 +51,11 @@ def self_test():
     assert not violations('"com.microsoft.Word"', Path("Sources/Core/Edition.swift"), names, bundle)
     assert violations('WordAppModule.self', Path("Sources/Core/Edition.swift"), names, bundle)
     assert violations('/* preceding comment */\nWordAppModule.self', path, names, bundle)[0].startswith(f"{path}:2:")
-    print("app boundary self-tests: 7 passed")
+    website = {"GoogleDocs", "GoogleDocsSession"}
+    assert violations("GoogleDocsSession(context: x)", path, website, None)
+    assert not violations('""', path, website, None)
+    assert not violations("DocumentAdapters.shared.observe(event)", path, website, None)
+    print("app boundary self-tests: 10 passed")
 
 
 def main():
@@ -72,7 +76,7 @@ def main():
     if errors:
         print("\n".join(errors), file=sys.stderr)
         return 1
-    print("app boundaries: Word implementation stays in Apps; shared code uses hooks")
+    print("app boundaries: Word and Google editor implementations stay in Apps; shared code uses hooks")
     return 0
 
 
