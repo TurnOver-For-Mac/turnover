@@ -35,6 +35,19 @@ func policyTests() {
         ]
         for (what, inputs, want) in table { expect(LeadPolicy.leads(inputs), want, what) }
     }
+    test("Dock: Option alone in the Dock takes the focus back out, and that is no sign of the shortcut being off") {
+        // A second Option in the Dock (6 Nov 2026): Control F3 took the focus back to the application, half a second
+        // on no Dock item was selected, and TurnOver said to turn on Move focus to the Dock, which was on.
+        let table: [(String, Bool, Bool, Bool)] = [
+            ("from an application, and the Dock took the focus", false, true, false),
+            ("from an application, and the Dock never took it: the shortcut is off", false, false, true),
+            ("from the Dock, and the focus went back to the application", true, false, false),
+            ("from the Dock, and the Dock kept it", true, true, false),
+        ]
+        for (what, fromDock, selectedNow, want) in table {
+            expect(GlobalCommands.dockShortcutSeemsOff(fromDock: fromDock, selectedNow: selectedNow), want, what)
+        }
+    }
     test("speech: a capital's pitch is used up by the next utterance even when nothing is said") {
         Speech.mode = .off
         Speech.speakMessage(Speech.capitalMark + "A")
