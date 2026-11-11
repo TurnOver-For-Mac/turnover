@@ -253,7 +253,7 @@ final class TurnOverApp {
                 heldForVoiceOver = true
                 // The Settings window must reach TurnOver while it waits, or the advice can't be followed (a code review).
                 SettingsBridge.start()
-                VoiceOverSpeak.say("VoiceOver is on, so TurnOver waits. Turn VoiceOver off and TurnOver speaks; or turn the swap on in Settings, Screen reader behaviour.")
+                VoiceOverSpeak.say(String(localized: "VoiceOver is on, so TurnOver waits. Turn VoiceOver off and TurnOver speaks; or turn the swap on in Settings, Screen reader behaviour.", comment: "Said by VoiceOver when TurnOver starts while VoiceOver is on: the swap is off"))
             } else {
                 Log.info("start: TurnOver on without a hand-over (the swap is off)")
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in

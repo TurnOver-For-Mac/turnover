@@ -44,8 +44,16 @@ open class TurnOverObject: ScriptableObject {
     open var name: String {
         // A field with no label but a placeholder ("Title" in Safari's bookmark sheet) is named by it, as VoiceOver does.
         if _name.isEmpty, [.editableText, .searchField, .comboBox].contains(role), let p = placeholder, !p.isEmpty { return p }
-        // The window's own buttons have no name: VoiceOver calls them by what they do.
-        if _name.isEmpty, let n = ["AXCloseButton": "close", "AXMinimizeButton": "minimise", "AXZoomButton": "zoom", "AXFullScreenButton": "full screen"][element.string(kAXSubroleAttribute) ?? ""] { return n }
+        // The window's own buttons have no name: VoiceOver calls them by what they do, in the reader's language.
+        if _name.isEmpty {
+            switch element.string(kAXSubroleAttribute) ?? "" {
+            case "AXCloseButton": return String(localized: "close", comment: "A window's close button: what it does")
+            case "AXMinimizeButton": return String(localized: "minimise", comment: "A window's minimise button: what it does")
+            case "AXZoomButton": return String(localized: "zoom", comment: "A window's zoom button: what it does")
+            case "AXFullScreenButton": return String(localized: "full screen", comment: "A window's full screen button: what it does")
+            default: break
+            }
+        }
         if _name.isEmpty, let l = swiftUILabel() { return l }
         return _name
     }
