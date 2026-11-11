@@ -286,6 +286,12 @@ public enum Speech {
     /// Speak an object the way NVDA does on focus: name, role, value, states, description, shortcut, position; then its text if it has any.
     private static var lastFocusWords = ""
     private static var lastFocusWordsAt = Date.distantPast
+    private static var lastFocusRow: AXUIElement?
+    /// Whether a focus is the one just said, reported again: the same words within half a second, unless they are
+    /// another row's.
+    public static func focusRepeated(words: String, last: String, after seconds: TimeInterval, anotherRow: Bool) -> Bool {
+        words == last && seconds < 0.5 && !anotherRow
+    }
     public static func speakObject(_ obj: TurnOverObject, reason: OutputReason) {
         var parts = objectPropertiesSpeech(obj, reason: reason)
         // A table or list that takes focus on macOS keeps its selection inside it: say the selected row too,
@@ -329,9 +335,14 @@ public enum Speech {
         // The same focus reported twice within half a second says it once (Excel after Return and Up: "12, A1" twice;
         // the stress test of 17 Oct 2026). Compared once the words are whole: compared on the object alone, two
         // "list view" outlines in a row (Finder opening a folder) looked the same with different rows selected.
+        // Another row with the same words is a move, not the same focus twice: two copies of one message in Mail's
+        // list, and Up from the lower to the upper within half a second said nothing, so the upper one seemed not to
+        // be there (Oliver, 11 Nov 2026).
         if reason == .focus {
-            if words == lastFocusWords, Date().timeIntervalSince(lastFocusWordsAt) < 0.5 { Log.io("focus: the same words again within 0.5 s; not repeated"); return }
-            lastFocusWords = words; lastFocusWordsAt = Date()
+            let row = obj.element.role == "AXRow" ? obj.element : nil
+            let anotherRow = row.map { r in lastFocusRow.map { !r.isSame($0) } ?? false } ?? false
+            if focusRepeated(words: words, last: lastFocusWords, after: Date().timeIntervalSince(lastFocusWordsAt), anotherRow: anotherRow) { Log.io("focus: the same words again within 0.5 s; not repeated"); return }
+            lastFocusWords = words; lastFocusWordsAt = Date(); lastFocusRow = row
         }
         if reason == .focus, let until = dropForFocusUntil {
             dropForFocusUntil = nil
