@@ -1492,6 +1492,14 @@ func browseTextNavTests() {
                  line("More Next Previous", more), line("That was the news.", p2)]
     let segs = ["Home", "News", "Sport", "More", "Next", "Previous"].map { w in WebBuffer.Segment(start: r(w).location, end: r(w).location + r(w).length, element: AXReplay.element(20), isLink: true) }
     func find(_ from: Int, _ fwd: Bool, _ k: WebBuffer.TextKind) -> Int? { WebBuffer.findText(lines: lines, segments: segs, text: t, from: from, forward: fwd, kind: k)?.offset }
+    test("browse mode: a menu button is pressed by Space, a role the app's module names by Return, the rest by the press") {
+        expect(BrowseModeDocument.keyboardPress(role: "AXPopUpButton", moduleRoles: []), .space, "a pop-up button in any app")
+        expect(BrowseModeDocument.keyboardPress(role: "AXMenuButton", moduleRoles: ["AXButton"]), .space, "a menu button keeps Space where buttons take Return")
+        expect(BrowseModeDocument.keyboardPress(role: "AXButton", moduleRoles: ["AXButton"]), .returnKey, "a button in an app whose module names buttons")
+        expect(BrowseModeDocument.keyboardPress(role: "AXButton", moduleRoles: []), nil, "a button anywhere else: the press")
+        expect(BrowseModeDocument.keyboardPress(role: "AXLink", moduleRoles: ["AXButton"]), nil, "a link in that app: the press")
+        expect(AppModule(pid: 0, bundleIdentifier: "test.other", appName: "Public other app").rolesPressedByKeyboard, [], "no app's buttons go by the keyboard unless its module says so")
+    }
     test("browse mode P: the next paragraph skips links and short headings") {
         expect(find(0, true, .paragraph), r("A lot happened").location)
         expect(find(r("A lot happened").location, true, .paragraph), r("That was the news.").location)

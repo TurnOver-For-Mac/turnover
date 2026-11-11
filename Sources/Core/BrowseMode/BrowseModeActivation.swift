@@ -324,6 +324,17 @@ extension BrowseModeDocument {
         position = min(oldPosition, max(0, n - 1))
     }
 
+    /// The key that presses a control when it is pressed by the keyboard and not by accessibility's press.
+    public enum KeyboardPress: Equatable { case space, returnKey }
+
+    /// How a control of this role is pressed by the keyboard: Space for a menu button in any app, Return for a role
+    /// the app's module names (AppModule.rolesPressedByKeyboard). Nil: accessibility's press, as before.
+    public static func keyboardPress(role: String, moduleRoles: Set<String>) -> KeyboardPress? {
+        if ["AXPopUpButton", "AXMenuButton"].contains(role) { return .space }
+        if moduleRoles.contains(role) { return .returnKey }
+        return nil
+    }
+
     /// The element or its nearest actionable ancestor is pressed (a text field is entered instead). False if none.
     func press(nearestTo start: AXUIElement?) -> Bool {
         var e = start
@@ -347,7 +358,10 @@ extension BrowseModeDocument {
                 // options" reported success and opened nothing, and Delete was out of reach (25 Oct 2026). Only once
                 // the keyboard is confirmed on it, so the Space can't go to whatever had the focus before; otherwise
                 // the press as before. Never both: one activation, so nothing is pressed twice.
-                if ["AXPopUpButton", "AXMenuButton"].contains(role) {
+                // The same for a role the app's module names, with Return: the Claude app's buttons, whose press
+                // reported success and did nothing (11 Nov 2026; ClaudeAppModule.rolesPressedByKeyboard).
+                let moduleRoles = AppModuleHandler.shared.appModule(for: x.pid).rolesPressedByKeyboard
+                if let key = Self.keyboardPress(role: role, moduleRoles: moduleRoles) {
                     let activation = Self.beginWatch(x)   // an older watch of this control stops
                     let name = Log.words(x.string(kAXTitleAttribute) ?? x.string(kAXDescriptionAttribute) ?? "")
                     let asked = Date()
@@ -364,8 +378,14 @@ extension BrowseModeDocument {
                             return
                         }
                         if confirmed {
-                            Log.io("browse mode: \(role) \"\(name)\" by the keyboard: Space")
-                            KeyboardGesture(keyCode: 49, modifiers: [], characters: " ", timestamp: 0, isRepeat: false, flags: []).send()
+                            switch key {
+                            case .space:
+                                Log.io("browse mode: \(role) \"\(name)\" by the keyboard: Space")
+                                KeyboardGesture(keyCode: 49, modifiers: [], characters: " ", timestamp: 0, isRepeat: false, flags: []).send()
+                            case .returnKey:
+                                Log.io("browse mode: \(role) \"\(name)\" by the keyboard: Return")
+                                KeyboardGesture(keyCode: 36, modifiers: [], characters: "\r", timestamp: 0, isRepeat: false, flags: []).send()
+                            }
                         } else {
                             let r = AXUIElementPerformAction(x, kAXPressAction as CFString)
                             Log.io("browse mode: \(role) \"\(name)\": the keyboard didn't reach it; pressed → \(describeError(r))")
