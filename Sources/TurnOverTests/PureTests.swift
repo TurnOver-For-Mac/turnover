@@ -1474,6 +1474,16 @@ func browseTextNavTests() {
         expect(NewToTry.heading("Direct (Command Control Comma, then D): for a game or app that speaks for itself, every key goes straight to it.").0, "Direct", "before the bracket")
         expect(NewToTry.heading("CoExist, much simpler: VoiceOver keeps running and is silenced at the sound level wherever TurnOver reads, and heard the instant.").0, "CoExist", "before the comma")
     }
+    test("browse mode: text the page takes clicks on is pressed, other text is not") {
+        let plain = ["AXShowMenu", "AXScrollToVisible"], pressable = ["AXPress", "AXShowMenu", "AXScrollToVisible"]
+        // A questionnaire's "Yes": text in three groups, the click listened for on the text or on a group around it.
+        expect(BrowseModeDocument.clickableText(in: [("AXStaticText", pressable), ("AXGroup", pressable), ("AXGroup", plain), ("AXWebArea", plain)]), 0, "the text itself")
+        expect(BrowseModeDocument.clickableText(in: [("AXStaticText", plain), ("AXGroup", pressable), ("AXGroup", plain), ("AXWebArea", plain)]), 1, "the group holding it")
+        expect(BrowseModeDocument.clickableText(in: [("AXStaticText", plain), ("AXGroup", plain), ("AXWebArea", plain)]), nil, "a paragraph: nothing to activate")
+        expect(BrowseModeDocument.clickableText(in: [("AXStaticText", plain), ("AXWebArea", pressable)]), nil, "never the page itself")
+        expect(BrowseModeDocument.clickableText(in: Array(repeating: ("AXGroup", plain), count: 6) + [("AXGroup", pressable)]), nil, "no more than six up")
+        expect(BrowseModeDocument.clickableText(in: []), nil, "nothing at the reading position")
+    }
     test("browse mode: NVDA's comma keys parse") {
         check(KeyboardGesture(identifier: "kb:,") != nil, "comma")
         check(KeyboardGesture(identifier: "kb:shift+,") != nil, "shift comma")
