@@ -145,6 +145,9 @@ extension GlobalCommands {
         add("progressBarOutput", String(localized: "Progress bars: beeps that rise in pitch, the percentage spoken, both, or nothing (NVDA+U)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+u"]) { _ in
             ProgressOutput.cycleMode()
         }
+        add("mouseTracking", String(localized: "Mouse tracking on or off; reads what is under the mouse pointer as it moves (NVDA+M)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+m"]) { _ in
+            MouseTracking.toggle()
+        }
         add("audioDucking", String(localized: "Audio ducking: no ducking, duck when outputting speech, always duck (NVDA+Shift+D)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+shift+d"]) { _ in
             Ducking.cycle()
         }
