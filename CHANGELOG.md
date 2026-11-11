@@ -8,6 +8,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 - "Nothing in this window can be read", with the keys for screen recognition, is a hint now: turning off Hints after
   a pause turns it off too. It is no longer said in Steam's Big Picture while TurnOver is reading it.
+- On a web page, Return, Space and VO-Space press text that the page takes clicks on, such as the "Yes" and "No"
+  answers of a questionnaire made without real buttons. They used to say "nothing to activate".
 
 ## 2.0, build 24
 
