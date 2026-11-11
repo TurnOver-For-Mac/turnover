@@ -161,7 +161,7 @@ public enum Speech {
         // No player (the plugin tool and the tests start no speech): nothing to say it with (a plugin list crashed
         // here, 13 Oct 2026).
         guard player != nil else { completion?(false); return }
-        player.speak(s, interrupt: false, voice: kokoro ?? voice, rate: voice == nil ? nil : Languages.rate(for: language), pitch: pitch, onStart: onStart, completion: completion)
+        player.speak(s, interrupt: false, voice: kokoro ?? voice, rate: voice == nil ? nil : Languages.rate(for: language), pitch: pitch, source: sourceNext, onStart: onStart, completion: completion)
     }
     private static var pitchNext: Float?
     /// Set by say all while it queues its text: Kokoro's "for reading" takes it.
@@ -169,6 +169,12 @@ public enum Speech {
     /// The next utterance is private (the clipboard, a link's address, a notification: a copied password, a reset
     /// token, a two-factor code): spoken, but logged only as its length (the code review, 12 Oct 2026).
     private static var privateNext = false
+    /// Who the next utterances are for, so that source alone can cancel them (the pointer's reading).
+    private static var sourceNext: String?
+    /// Whatever is spoken inside is tagged `source`; `cancel(source:)` then stops only that.
+    public static func asSource(_ source: String, _ speak: () -> Void) { sourceNext = source; speak(); sourceNext = nil }
+    /// Stop only the speech `asSource` tagged, leaving notifications, focus changes and typing echo alone.
+    public static func cancel(source: String) { player?.cancel(source: source) }
     public static func speakPrivate(_ text: String) { asPrivate { speakText(text) } }
     /// Whatever is spoken inside is logged only as its length (every part, if the speech is split by language).
     public static func asPrivate(_ speak: () -> Void) { privateNext = true; speak(); privateNext = false }

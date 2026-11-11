@@ -1331,6 +1331,20 @@ public final class ObjectNavigator {
     /// Puts the review cursor on an element and reads it (VoiceOver's moves to a place: the desktop, a scroll bar).
     public func moveTo(_ e: AXUIElement) { land(on: e) }
 
+    /// What the mouse pointer is over, said. The keyboard focus never follows (a sweep of the pointer across a window
+    /// must not move where typing goes); the review cursor goes there only when asked. What is said is private: text on
+    /// the screen (a message) is not kept in the speech history, and goes only to a voice that may hear it.
+    package func hover(_ reading: PointerReading, movingCursor: Bool) {
+        if movingCursor {
+            landedByStep = false
+            current = reading.element
+            currentPid = reading.element.pid
+            // (No label source: finding it asks the profile store about the element, which is for the keyboard path.)
+            labelSource = nil
+        }
+        Speech.asSource(MouseTracking.speechSource) { Speech.asPrivate { Speech.speakItem(reading.text, processed: true) } }
+    }
+
     /// Puts the review cursor on an element without a word: what already said it (a dialog's Tab) keeps the two
     /// cursors together, so VO-Space presses what Tab reached.
     public func place(_ e: AXUIElement) {
@@ -1369,8 +1383,7 @@ public final class ObjectNavigator {
         var parts = Speech.objectPropertiesSpeech(obj, reason: .query)
         // A group, the VoiceOver way: what it holds ("tool bar, 6 items"), and how to go in.
         if config.general.movesByGroups, Self.isGroup(e), !["AXTable", "AXOutline", "AXList", "AXWebArea"].contains(e.role) {
-            let n = Self.groupItems(e).count
-            parts.append(Phrases.items(n))
+            parts.append(Phrases.items(Self.groupItems(e).count))
             Speech.speakItem(parts.joined(separator: ", "))
             Hints.schedule(String(localized: "VO Shift Down goes in.", comment: "Spoken message"))
             return

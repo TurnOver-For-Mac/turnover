@@ -47,7 +47,7 @@ PLUGIN-GUIDE.md says how to write one.
 - **Google Docs, Sheets and Slides:** the Windows style's cursor keys everywhere in them.
 - **Image descriptions** on more web pages.
 - **Arabic typing** read back in every browser and editor.
-- **NVDA's** mouse tracking, progress bar beeps, review modes, setting table headers by hand, maths, annotation
+- **NVDA's** progress bar beeps, review modes, setting table headers by hand, maths, annotation
   details and magnifier.
 - **VoiceOver's** interactive tutorial, caption and braille panels, and the keypad's last keys.
 - **Steam's Windows games** under CrossOver, in TurnOver's Steam support.
