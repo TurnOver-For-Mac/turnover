@@ -15,6 +15,7 @@ nonisolated package struct WebBufferCollection: Sendable {
     package var skippedElements: Int { omittedElements.count }
     /// Elements read with the short list alone.
     package var plainElements = 0
+    private static let plainMetadataNames = AXSnapshot.plainNames.filter { $0 != kAXValueAttribute }
 
     package struct Limits: Sendable {
         package var elements = 6000
@@ -62,15 +63,18 @@ nonisolated package struct WebBufferCollection: Sendable {
             guard budget.visit() else { return false }
             var knownSubrole: String??
             if short {
-                let batch = element.attributesResult(AXSnapshot.plainNames)
+                // The role is unknown until the batch returns. Keep password values out of this first request.
+                let batch = element.attributesResult(plainMetadataNames)
                 guard budget.check() else { return false }
                 if batch.isAligned, let role = batch.attributes[kAXRoleAttribute]?.value as? String {
                     let subrole = batch.attributes[kAXSubroleAttribute]?.value as? String
                     knownSubrole = .some(subrole)
-                    if AXSnapshot.isPlain(role: role, subrole: subrole) {
+                    if subrole != "AXSecureTextField", AXSnapshot.isPlain(role: role, subrole: subrole) {
+                        let plainValue = element.attr(kAXValueAttribute)
+                        guard budget.check() else { return false }
                         var attributes: [String: AXSnapshotValue] = [:]
                         for name in AXSnapshot.plainNames {
-                            guard let value = batch.attributes[name]?.value else { continue }
+                            guard let value = name == kAXValueAttribute ? plainValue : batch.attributes[name]?.value else { continue }
                             if let string = value as? String {
                                 if string.utf16.count > limits.stringLength { hadOmissions = true; continue }
                                 characters += string.utf16.count
@@ -86,9 +90,7 @@ nonisolated package struct WebBufferCollection: Sendable {
                         return true
                     }
                 }
-                // Anything else (a control, a link, a heading, a table's parts, a landmark), or a short read that did
-                // not answer: in full, below. What the short read gave of it is not kept (a password field's value
-                // was in the list asked for; the app gives bullets for it, and it is dropped here unread).
+                // Other elements, or a short read that did not answer, use the full path below.
             }
             guard let names = element.attributeNamesResult().value as? [String], names.contains(kAXRoleAttribute), budget.check() else {
                 if budget.check() {
