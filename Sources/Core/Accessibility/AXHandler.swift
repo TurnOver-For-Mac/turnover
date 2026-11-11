@@ -179,6 +179,14 @@ public final class AXHandler {
     var seenNotifications: [String] = []
     var notificationCheck: DispatchWorkItem?
     var backgroundRecheckPending = false
+    /// System agents whose focus was set aside for want of a window, each with the element it last reported, until the
+    /// agent is asked again (FocusChanges.ruleHiddenAgent).
+    var hiddenAgentReports: [pid_t: AXUIElement] = [:]
+    /// What ruleHiddenAgent asks about a process: its bundle identifier, and whether a window of it is on screen.
+    /// (Settable: the tests play Siri AI, whose window comes on screen a moment after its first focus report.)
+    public var agentFacts: (bundle: @MainActor (pid_t) -> String?, windowOnScreen: @MainActor (pid_t) -> Bool) = (
+        bundle: { NSRunningApplication(processIdentifier: $0)?.bundleIdentifier },
+        windowOnScreen: { AXHandler.hasWindowOnScreen($0) })
     var navigationCheckPending = false
     /// When the last open menu closed, and in which process (menu-to-menu moves pass through no menu at all).
     var lastMenuClosed: (pid_t, Date)?
