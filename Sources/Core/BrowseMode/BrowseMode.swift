@@ -120,6 +120,36 @@ public final class BrowseModeDocument: ScriptableObject {
         let value = webArea.attr("AXURL")
         return (value as? URL)?.absoluteString ?? (value as? String) ?? ""
     }
+    /// What a read of the page's address says: the address, or that no answer came.
+    public enum AddressRead: Equatable { case address(String), noAnswer }
+    /// The address read for a decision about a new page. No answer is not an empty address: Safari stopped
+    /// answering four seconds after a page loaded, the empty answer was taken for a new address, and the page
+    /// already read was thrown away, with the reader's place in it (11 Nov 2026).
+    var addressNow: AddressRead {
+        let read = webArea.attributeResult("AXURL")
+        if read.isNoAnswer { return .noAnswer }
+        return .address((read.value as? URL)?.absoluteString ?? (read.value as? String) ?? "")
+    }
+    /// The page, or its app, is not answering: nothing live is asked of it by a key, and the copy is read.
+    var pageSilent: Bool { AXHealth.isSilent(webArea) || AXHealth.backoff(for: webArea.pid)?.reason == .timeout }
+    /// A key is being answered wholly from the copy (readFromCopyIfSilent).
+    private var readingFromCopy = false
+    /// On a page that is not answering, `body` runs inside the copy, where every question is answered from what was
+    /// read and nothing can be asked of the page: true when it did. The web area's own silence does not cover the
+    /// elements inside it, and a heading found in the copy was asked for its role live, a full timeout a key (a
+    /// review, 11 Nov 2026). False: the page answers (or this is already inside the copy), and the caller goes on.
+    func readFromCopyIfSilent(_ body: () -> Void) -> Bool {
+        guard !readingFromCopy, pageSilent, !buffer.lines.isEmpty else { return false }
+        readingFromCopy = true
+        defer { readingFromCopy = false }
+        buffer.withSnapshot(body)
+        return true
+    }
+    /// Said for a key that needs the page itself (a press, Tab from the reading position) while it is not answering.
+    func sayPageNotResponding() {
+        Speech.speakMessage(String(localized: "the page is not responding", comment: "Spoken message: a web page has stopped answering"))
+    }
+    private var noAnswerLoggedAt = Date.distantPast
     var lastURL = ""
     var pageGeneration = 0
     var bufferIntent = 0
@@ -133,7 +163,16 @@ public final class BrowseModeDocument: ScriptableObject {
     /// After Back, Forward or a link: a new page in the same web area. Rebuild, and resume where this page was left.
     @discardableResult
     public func refreshIfNavigated(announce: Bool = false) -> Bool {
-        let now = url
+        // Inside the copy the address is the copy's own, or missing from it: neither says the page has changed.
+        if readingFromCopy { return false }
+        guard case .address(let now) = addressNow else {
+            // Nothing is known: the page read stays, and so does the place in it. Logged once a few seconds.
+            if Date().timeIntervalSince(noAnswerLoggedAt) > 5 {
+                noAnswerLoggedAt = Date()
+                Log.io("browse mode: no answer for the page's address; the page read is kept (\(buffer.lines.count) lines)")
+            }
+            return false
+        }
         guard now != lastURL else { return false }
         let first = lastURL.isEmpty
         lastURL = now
@@ -487,7 +526,7 @@ public final class BrowseModeDocument: ScriptableObject {
             guard let self, pageGeneration == epoch, positionMovedAt == movedAt, bufferIntent == intent,
                   ScriptHandler.keysArrivedCount == keys, API.focusTreeInterceptor === self, !passThrough else { return }
             if buffer.lines.isEmpty {
-                Speech.speakMessage(String(localized: "nothing on this page yet; it may still be loading", comment: "Spoken message"))
+                sayNothingOnPageYet()
                 watchForContent()
             } else { retry?() }
         }
@@ -524,6 +563,8 @@ public final class BrowseModeDocument: ScriptableObject {
         let age = Date().timeIntervalSince(buffer.builtAt)
         // Not for its age a page read on past its first part (a long chat, issue 227): read again from the top, it
         // could take two seconds a key and still not get back to the reader. Its end is read on instead.
+        // A page that is not answering is not read again for a key: the look in the background says when it is back.
+        if pageSilent { return }
         if let stale, age > stale, buffer.passes == 1 { buffer.build(); return }
         if buffer.isDirty, age > 1 { buffer.build() }
     }
@@ -534,6 +575,8 @@ public final class BrowseModeDocument: ScriptableObject {
     /// it obsolete. False when there is nothing to reach for, and `completion` is not called.
     @discardableResult
     func reachForMore(_ completion: @escaping (Bool) -> Void) -> Bool {
+        // A page that is not answering has no more to give for now; and the answer would come later, outside the copy.
+        guard !pageSilent else { return false }
         guard buffer.isDirty || buffer.isPartial || buffer.lastBuildMs >= 250 || Date().timeIntervalSince(buffer.builtAt) > 1 else { return false }
         let before = buffer.text.length
         if buffer.canReadOn {
@@ -623,6 +666,7 @@ public final class BrowseModeDocument: ScriptableObject {
     /// `afterRefresh`: the page was read again (or on) for this key already; at the end now, it is the end. A page
     /// that keeps growing is not read again and again for one key (review of #219, point 5).
     func move(_ unit: TextUnit, _ direction: Int, afterRefresh: Bool = false) {
+        if readFromCopyIfSilent({ move(unit, direction, afterRefresh: afterRefresh) }) { return }
         positionMovedAt = Date()
         refreshIfNavigated()
         clearSelection()

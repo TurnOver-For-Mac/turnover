@@ -51,6 +51,8 @@ public struct AXQueryResult<Value> {
     public var value: Value? { status == .returned(.success) ? rawValue : nil }
     public var error: AXError? { if case .returned(let error) = status { return error }; return nil }
     public var legacyError: AXError { error ?? .cannotComplete }
+    /// No answer came: nothing is known, which is not "no value" (AXHealth.isNoAnswer).
+    public var isNoAnswer: Bool { AXHealth.isNoAnswer(status, elapsedNanoseconds: elapsedNanoseconds) }
 
     public init(value: Value?, status: AXQueryStatus, elapsedNanoseconds: UInt64, wasAttempted: Bool) {
         rawValue = value; self.status = status
