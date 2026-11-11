@@ -10051,6 +10051,9 @@
         }
       }
     },
+    "Hold number-pad 0 with another key to use TurnOver commands. Clear switches the number pad between commands and numbers. A separate Insert key works too." : {
+
+    },
     "Holds the left mouse button down, or lets it go (NVDA+Control+Left Bracket)" : {
       "comment" : "A command, as the key list and keyboard help say it",
       "localizations" : {
@@ -10691,6 +10694,9 @@
           }
         }
       }
+    },
+    "Insert (number-pad 0)" : {
+
     },
     "Install %@" : {
       "localizations" : {
@@ -33199,6 +33205,12 @@
           }
         }
       }
+    },
+    "insert" : {
+      "comment" : "Insert as the TurnOver key, spoken before another key"
+    },
+    "insert, the TurnOver key" : {
+      "comment" : "Keyboard help: Insert or number-pad zero as the reader modifier"
     },
     "insertion point" : {
       "comment" : "The caret, as VoiceOver calls it",
