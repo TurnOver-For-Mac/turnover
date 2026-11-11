@@ -83,8 +83,8 @@ extension BrowseModeDocument {
             // Follow the focus with the virtual caret.
             if !event.obj.isSameElement(as: webArea) {
                 lastFocusElement = event.obj.element
-                var at = buffer.offset(of: event.obj.element)
-                if at == nil, Date().timeIntervalSince(buffer.builtAt) > 1 { buffer.build(); at = buffer.offset(of: event.obj.element) }
+                let at = buffer.offset(of: event.obj.element)
+                if at == nil, Date().timeIntervalSince(buffer.builtAt) > 1 { followFocusAfterBuild(event.obj.element) }
                 if let at { position = at }
             }
             positionAtFocus = position

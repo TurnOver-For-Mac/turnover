@@ -522,6 +522,7 @@ func fixtureTests() {
         config.general.keyboardStyle = "jaws"
         let page = BrowseModeHandler.shared.document(root: AXReplay.root!)
         API.setFocusObject(ObjectFactory.make(AXReplay.root!), ancestors: [], interceptor: page)
+        waitForBuffer(page.buffer)
         /// The key's command, run as the key runs it; `said` from then on.
         @MainActor func press(_ id: String) -> String? {
             if TurnOverMenu.shared.isOpen { TurnOverMenu.shared.close() }
@@ -560,6 +561,7 @@ func fixtureTests() {
         expect(ran, 3, "off a page each runs the focus's own Caps Lock F7, as Word's elements list")
         config.general.keyboardStyle = "windows"
         API.setFocusObject(ObjectFactory.make(AXReplay.root!), ancestors: [], interceptor: page)
+        waitForBuffer(page.buffer)
         expect(press("kb:turnover+f7"), "elementsList", "NVDA keys: Caps Lock F7 is still the whole elements list")
     }
 }
@@ -766,10 +768,11 @@ func focusRuleTests() {
         let saved = config, keep = Speech.sink
         var said = ""
         Speech.sink = { said += $0 + " " }
-        defer { AXReplay.unload(); API.setFocusObject(nil, ancestors: []); BrowseModeHandler.shared.forget(pid: 900_060); config = saved; Speech.sink = keep }
+        defer { API.setFocusObject(nil, ancestors: []); BrowseModeHandler.shared.forget(pid: 900_060); AXReplay.unload(); config = saved; Speech.sink = keep }
         config.virtualBuffers.autoFocusMode = true
         Speech.testResetFocusTiming()
         let page = BrowseModeHandler.shared.document(root: AXReplay.element(60))
+        waitForBuffer(page.buffer)
         /// The focus on `id`, given to the page as AXHandler.present() and the event chain give it, from outside the page
         /// or from inside it. (Replayed, present() can't find the page from its focus: every replayed attribute is
         /// settable, so the web area reads as an editable one.) True when the page passes the event on to the control, as

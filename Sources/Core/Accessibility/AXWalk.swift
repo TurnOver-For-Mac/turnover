@@ -32,9 +32,10 @@ nonisolated package final class AXWalkBudget {
 
     package init(request: AXWalkRequest, duration: UInt64 = 2_000_000_000, maxVisits: Int = 5000,
                  maxQueries: Int = 20_000, maxAXQueries: Int = 20_000, maxDepth: Int = 200,
-                 now: @escaping @Sendable () -> UInt64 = { DispatchTime.now().uptimeNanoseconds }) {
+                 startedAt: UInt64? = nil, now: @escaping @Sendable () -> UInt64 = { DispatchTime.now().uptimeNanoseconds }) {
         self.request = request
-        deadline = request.startedAt.addingReportingOverflow(duration).overflow ? UInt64.max : request.startedAt + duration
+        let began = startedAt ?? request.startedAt
+        deadline = began.addingReportingOverflow(duration).overflow ? UInt64.max : began + duration
         self.maxVisits = maxVisits
         self.maxQueries = maxQueries
         self.maxAXQueries = maxAXQueries

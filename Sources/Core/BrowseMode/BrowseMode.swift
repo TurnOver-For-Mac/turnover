@@ -62,7 +62,7 @@ public final class BrowseModeDocument: ScriptableObject {
             positionMovedAt = Date()
             // A read of the page again goes on at least this far (a long chat read on past its first part, issue 227).
             buffer.readingAt = position
-            if buffer.text.length > 0 { BrowseModeHandler.shared.remember(url: url, position: position, text: lineText(at: position)) }
+            if buffer.text.length > 0 { BrowseModeHandler.shared.remember(url: lastURL, position: position, text: lineText(at: position)) }
         }
     }
     /// When the reading position last moved: a keyboard focus that moved since (Tab onto a control the buffer does
@@ -116,8 +116,19 @@ public final class BrowseModeDocument: ScriptableObject {
     }
 
     /// The page address now: Safari reuses one web area across navigations, so this is read each time.
-    public var url: String { (webArea.attr("AXURL") as? URL)?.absoluteString ?? (webArea.attr("AXURL") as? String) ?? "" }
+    public var url: String {
+        let value = webArea.attr("AXURL")
+        return (value as? URL)?.absoluteString ?? (value as? String) ?? ""
+    }
     var lastURL = ""
+    var pageGeneration = 0
+    var bufferIntent = 0
+    var publicationWasEmpty = false
+    var publicationAnchor: BrowseModeHandler.Saved?
+    var announceWhenReady = false
+    let rootRunner = AXWalkRunner<BrowseRootCollection>()
+    var discoveringRoot = false
+    var followingRootFailure = false
 
     /// After Back, Forward or a link: a new page in the same web area. Rebuild, and resume where this page was left.
     @discardableResult
@@ -126,9 +137,11 @@ public final class BrowseModeDocument: ScriptableObject {
         guard now != lastURL else { return false }
         let first = lastURL.isEmpty
         lastURL = now
+        rootRunner.cancel(); discoveringRoot = false; followingRootFailure = false; watchingFor = nil
+        buffer.newPage()
+        pageGeneration += 1
+        buffer.build()
         if !first {
-            buffer.newPage()   // "page read in part" once per page, not per web area (Safari reuses one)
-            buffer.build()
             // A new page starts in browse mode, as NVDA's new document does. Focus mode carried over from the page
             // before (Google's search box) kept the new page from being announced, and its keys went to the page
             // (a tester, 12 Oct 2026). A page that puts the focus in a field switches again by itself.
@@ -139,6 +152,7 @@ public final class BrowseModeDocument: ScriptableObject {
         let at = resumeOffset(saved)
         position = at
         Log.io("browse mode: page \(Log.words(BrowseModeHandler.shortURL(now))) — resuming at \(position)\(saved == nil ? "" : " (saved \(saved!.offset))")")
+        announceWhenReady = announceWhenReady || announce
         if announce, !buffer.lines.isEmpty { announcePage() }
         GoogleDocs.checkSoon(self)
         if !first, buffer.lines.isEmpty, webArea.role != "AXWebArea" { followReplacedRoot(tries: 10) }
@@ -149,14 +163,14 @@ public final class BrowseModeDocument: ScriptableObject {
     /// comes a moment later): the window's new page is followed as soon as it is there, rather than at the next key
     /// (Tab after Tab was silent, and Tab bonked, until an arrow found it, 18 Oct 2026).
     func followReplacedRoot(tries: Int) {
+        let epoch = pageGeneration
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            guard let self, API.focusTreeInterceptor === self, buffer.lines.isEmpty else { return }
-            buffer.build()
-            if !buffer.lines.isEmpty { return }
-            if let fresh = currentWebArea(), !fresh.isSame(webArea) {
-                Log.io("browse mode: the page moved on to another; following it")
-                AXHandler.shared.focusChanged(fresh, pid: webArea.pid)
-            } else if tries > 1 { followReplacedRoot(tries: tries - 1) }
+            guard let self, pageGeneration == epoch, API.focusTreeInterceptor === self, buffer.lines.isEmpty else { return }
+            followCurrentRoot { [weak self] followed in
+                guard let self, !followed else { return }
+                buffer.build()
+                if tries > 1 { followReplacedRoot(tries: tries - 1) }
+            }
         }
     }
     /// The page last announced (its title and its reading), so a page is announced once as it arrives.
@@ -165,15 +179,17 @@ public final class BrowseModeDocument: ScriptableObject {
     /// NVDA: a page arriving says its title, then is read (automatic say all, on by default), or, with that off,
     /// its first line (or the line it resumes at).
     func announcePage() {
-        announcedURL = url
-        let title = (webArea.string(kAXDescriptionAttribute) ?? webArea.element(kAXWindowAttribute)?.string(kAXTitleAttribute) ?? "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        announcedURL = lastURL
+        let title = buffer.withSnapshot {
+            (webArea.string(kAXDescriptionAttribute) ?? webArea.element(kAXWindowAttribute)?.string(kAXTitleAttribute) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         if !title.isEmpty { Speech.speakMessage(title) }
         if config.virtualBuffers.autoSayAllOnPageLoad {
             // Not a page the focus only passes through: Mail's message pane, on the way to the search field, had the
             // whole message read out (8 Oct 2026).
+            let epoch = pageGeneration, intent = bufferIntent, movedAt = positionMovedAt
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-                guard let self, API.focusTreeInterceptor === self else { return }
+                guard let self, pageGeneration == epoch, bufferIntent == intent, positionMovedAt == movedAt, !passThrough, API.focusTreeInterceptor === self else { return }
                 SayAll.readText(from: self.rootObject)
             }
         } else if let info = makeTextInfo(.bookmark(Bookmark(start: position, end: position))) {
@@ -194,19 +210,12 @@ public final class BrowseModeDocument: ScriptableObject {
         return at
     }
 
-    /// A page that was still empty when the document was made (a link just followed) has content now: read
-    /// where it resumes, as NVDA reads a page once it has loaded, instead of leaving "document, blank" as the last word.
-    @discardableResult
-    public func loadedAfterBlank(announce: Bool) -> Bool {
-        guard buffer.lines.isEmpty else { return false }
+    /// A load notification requests another collection. Publication resumes and announces the page once
+    /// content arrives; the notification itself cannot know whether the asynchronous request will find any.
+    public func loadedAfterBlank(announce: Bool) {
+        guard buffer.lines.isEmpty else { return }
+        announceWhenReady = announceWhenReady || announce
         buffer.build()
-        guard !buffer.lines.isEmpty else { return false }
-        let saved = BrowseModeHandler.cameBackByHistory ? BrowseModeHandler.shared.savedPosition(for: url) : nil
-        position = resumeOffset(saved)
-        VoiceOverSounds.play("WebAreaLoaded.aiff")   // VoiceOver's "web area loaded", the sound its list has for a page
-        Log.io("browse mode: page arrived — resuming at \(position)\(saved == nil ? "" : " (saved \(saved!.offset))")")
-        if announce, url != announcedURL { announcePage() }
-        return true
     }
 
     /// NVDA's passThrough: true is focus mode (keys go to the application).
@@ -238,13 +247,14 @@ public final class BrowseModeDocument: ScriptableObject {
         }
     }
 
-    init(webArea: AXUIElement) {
+    package init(webArea: AXUIElement, buffer suppliedBuffer: WebBuffer? = nil) {
         self.webArea = webArea
         bridge = WebDocumentBridge(webArea: webArea)
-        buffer = WebBuffer(webArea: webArea)
+        buffer = suppliedBuffer ?? WebBuffer(webArea: webArea)
         super.init()
-        buffer.build()
+        configureBuffer()
         refreshIfNavigated()
+        buffer.build()
         let nav = "Browse mode"
         // NVDA's cursor manager, on Mac modifiers.
         script("moveByLine_back", String(localized: "Moves to the previous line", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:upArrow"], category: nav, resumesSayAll: true) { [weak self] _ in guard let self else { return }; move(.line, -1) }
@@ -324,8 +334,8 @@ public final class BrowseModeDocument: ScriptableObject {
                 // The virtual caret goes to the control that had focus (NVDA): on a page that was still arriving when
                 // the field took focus, the field was not in the buffer yet and the caret stayed at the top.
                 if let f = API.focusObject, f.pid == webArea.pid, !f.isSameElement(as: webArea) {
-                    var at = buffer.offset(of: f.element)
-                    if at == nil { buffer.build(); at = buffer.offset(of: f.element) }
+                    let at = buffer.offset(of: f.element)
+                    if at == nil { followFocusAfterBuild(f.element) }
                     if let at { position = at }
                 }
                 disableAutoPassThrough = false   // Escape ends the by-hand choice too: the next field switches by itself again
@@ -466,130 +476,121 @@ public final class BrowseModeDocument: ScriptableObject {
     /// again now, and keep looking for half a minute, reading the page when it comes. A tester's report (6 Oct
     /// 2026): after a reload the copy stayed empty and every arrow said "bottom" or "top", then "blank".
     @discardableResult
-    func ensureContent() -> Bool {
+    /// `retry`: the key, done again once the page has come, if it is still the latest key. Until 10 Nov 2026 a key on
+    /// a page whose first read was still under way was dropped without a word (review of #219, point 1).
+    func ensureContent(_ retry: (() -> Void)? = nil) -> Bool {
         // An empty address too: Safari not answering reports none (6 Oct 2026, playtestcloud: "page  —", 0 lines,
         // and every key said "no next heading").
         guard buffer.lines.isEmpty, url != "about:blank" else { return true }
-        buffer.build()
-        guard buffer.lines.isEmpty else { Log.io("browse mode: the page has arrived"); return true }
-        // Safari can swap in a new web area on a reload (6 Oct 2026, fast.com: after Command R the copy was
-        // of the old one, one element and no address, while the page was there and Tab reached it). The window's
-        // web area now, if it is another one, is the page: move there, as Tab did.
-        if let fresh = currentWebArea(), !fresh.isSame(webArea) {
-            Log.io("browse mode: this web area was replaced (a reload); moving to the window's current one")
-            let pid = webArea.pid
-            DispatchQueue.main.async { AXHandler.shared.focusChanged(fresh, pid: pid) }
-            return false
+        let epoch = pageGeneration, movedAt = positionMovedAt, intent = bufferIntent, keys = ScriptHandler.keysArrivedCount
+        buffer.build { [weak self] in
+            guard let self, pageGeneration == epoch, positionMovedAt == movedAt, bufferIntent == intent,
+                  ScriptHandler.keysArrivedCount == keys, API.focusTreeInterceptor === self, !passThrough else { return }
+            if buffer.lines.isEmpty {
+                Speech.speakMessage(String(localized: "nothing on this page yet; it may still be loading", comment: "Spoken message"))
+                watchForContent()
+            } else { retry?() }
         }
-        Speech.speakMessage(String(localized: "nothing on this page yet; it may still be loading", comment: "Spoken message"))
-        watchForContent()
         return false
     }
 
-    /// The web area in the focused window of this document's application now (nil if there is none).
-    func currentWebArea() -> AXUIElement? {
-        let app = AXUIElementCreateApplication(webArea.pid)
-        guard let window = app.element(kAXFocusedWindowAttribute) ?? app.element(kAXMainWindowAttribute) else { return nil }
-        return window.firstDescendant(role: "AXWebArea", maxVisited: 400) ?? AppModuleHandler.shared.appModule(for: webArea.pid).browseRoot(inWindow: window)
-    }
-
-    var watchingFor = ""
-    /// Look again every second for 30 s while the copy is empty; when the page comes, say so and read it.
+    var watchingFor: String?
+    /// Look again every second for 30 s while the copy is empty. Publication announces arriving content;
+    /// this timer only requests work and follows replaced roots, never waits for accessibility on main.
     func watchForContent() {
-        let waiting = url
+        let waiting = lastURL, epoch = pageGeneration
         guard watchingFor != waiting else { return }
         watchingFor = waiting
         func look(_ n: Int) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
-                guard let self, url == waiting, watchingFor == waiting else { return }
-                if buffer.lines.isEmpty { buffer.build() }
-                if buffer.lines.isEmpty, API.focusTreeInterceptor === self, let fresh = currentWebArea(), !fresh.isSame(webArea) {
-                    watchingFor = ""
-                    Log.io("browse mode: this web area was replaced while waiting; moving to the window's current one")
-                    AXHandler.shared.focusChanged(fresh, pid: webArea.pid)
-                    return
+                guard let self, pageGeneration == epoch, API.focusTreeInterceptor === self, watchingFor == waiting else { return }
+                guard buffer.lines.isEmpty else { watchingFor = nil; return }
+                if !buffer.isLoading {
+                    followCurrentRoot { [weak self] followed in
+                        guard let self, pageGeneration == epoch, !followed, API.focusTreeInterceptor === self else { return }
+                        buffer.build()
+                    }
                 }
-                if !buffer.lines.isEmpty {
-                    watchingFor = ""
-                    // Once: AXLoadComplete may have announced it already (the title was said twice, 12 Oct 2026).
-                    guard url != announcedURL else { Log.io("browse mode: the page arrived after \(n + 1) s (already announced)"); return }
-                    Log.io("browse mode: the page arrived after \(n + 1) s")
-                    if API.focusTreeInterceptor === self, !passThrough { position = resumeOffset(BrowseModeHandler.cameBackByHistory ? BrowseModeHandler.shared.savedPosition(for: url) : nil); announcePage() }
-                    return
-                }
-                if n < 29 { look(n + 1) } else { watchingFor = ""; Log.io("browse mode: still nothing on the page after 30 s") }
+                if n < 29 { look(n + 1) }
+                else { watchingFor = nil; Log.io("browse mode: still nothing on the page after 30 s") }
             }
         }
         look(0)
     }
 
-    /// One rule for the arrows, the letters and the container keys (code review, 16 Oct 2026, item 28: the letters
-    /// rebuilt on any dirty flag, up to 2 s on main): a dirty page is rebuilt when the last build was cheap, and a
-    /// page older than `stale` seconds is rebuilt whatever it cost.
-    func rebuildIfCheap(stale: TimeInterval? = nil) {
+    /// A dirty or stale publication requests a refresh without interrupting reading. Collection cost no
+    /// longer decides whether a dirty page may refresh: provider waits run on the worker and requests coalesce.
+    func refreshBufferIfNeeded(stale: TimeInterval? = nil) {
         let age = Date().timeIntervalSince(buffer.builtAt)
         // Not for its age a page read on past its first part (a long chat, issue 227): read again from the top, it
         // could take two seconds a key and still not get back to the reader. Its end is read on instead.
-        if let stale, age > stale, buffer.passes == 1 { buffer.build(); clampPosition(); return }
-        if buffer.isDirty, buffer.lastBuildMs < 250, age > 1 { rebuildKeepingPlace() }
+        if let stale, age > stale, buffer.passes == 1 { buffer.build(); return }
+        if buffer.isDirty, age > 1 { buffer.build() }
     }
 
-    /// At the end of a page that loads more as it scrolls (YouTube said "bottom" before the end): the last
-    /// element scrolled into view, the page read again with a fresh deadline, and true if there is more now.
-    /// A page read only in part is read on instead (issue 227), and an unchanged one with more after its end since has
-    /// that added. All of it within two seconds, and by `deadline`.
-    func reachForMore(deadline: Date = .distantFuture) -> Bool {
+    /// At the loaded edge: a page read only in part (a long chat, issue 227) is read on from where it stopped, in the
+    /// background. Otherwise scroll once and wait for a new snapshot.
+    /// The continuation belongs to this document generation and reading position; another key or focus change makes
+    /// it obsolete. False when there is nothing to reach for, and `completion` is not called.
+    @discardableResult
+    func reachForMore(_ completion: @escaping (Bool) -> Void) -> Bool {
         guard buffer.isDirty || buffer.isPartial || buffer.lastBuildMs >= 250 || Date().timeIntervalSince(buffer.builtAt) > 1 else { return false }
-        let until = min(deadline, Date().addingTimeInterval(2))
         let before = buffer.text.length
-        // A page read only in part (a long chat): on from where the copy stopped, pass after pass while they find no
-        // text (a stretch of empty containers), until the time is up. Read again from the top, the same first part
-        // came back, and the end was never reached.
-        if buffer.isPartial, buffer.canReadOn {
-            repeat {
-                if buffer.buildMore(until: until) {
-                    Log.io("browse mode: at the end of the part read, read on: \(buffer.text.length - before) characters more")
-                    return true
-                }
-            } while buffer.isPartial && buffer.canReadOn && Date() < until
-            Log.io("browse mode: at the end of the part read, read on: nothing more\(buffer.isPartial ? " in the time" : ", to the end")")
-            return false
-        }
-        if let last = buffer.lines.last?.element { _ = AXUIElementPerformAction(last, "AXScrollToVisible" as CFString) }
-        // An unchanged page with more after its end since it was read (a reply added at its foot) has it added; one that
-        // said it changed is read again, so what changed in it is not kept beside what was added.
-        if !buffer.isPartial, !buffer.isDirty, buffer.buildMore(until: until) {
-            Log.io("browse mode: at the end, more after it: \(buffer.text.length - before) characters")
+        if buffer.canReadOn {
+            readOnUntil({ [weak self] in (self?.buffer.text.length ?? 0) > before }) { [weak self] more in
+                guard let self else { return }
+                Log.io("browse mode: at the end of the part read, read on: \(more ? "\(buffer.text.length - before) characters more" : "nothing more\(buffer.isPartial ? " in the time" : ", to the end")")")
+                completion(more)
+            }
             return true
         }
-        rebuildKeepingPlace(until: until)
-        let more = buffer.text.length > before
-        Log.io("browse mode: at the end, the page read again: \(more ? "more now (\(buffer.text.length - before) characters)" : "nothing more")")
-        return more
+        let last = buffer.lines.last?.element
+        let epoch = pageGeneration
+        let movedAt = positionMovedAt
+        let intent = bufferIntent
+        buffer.build(scrollTo: last) { [weak self] in
+            guard let self, pageGeneration == epoch, bufferIntent == intent, positionMovedAt == movedAt, API.focusTreeInterceptor === self else { return }
+            completion(buffer.text.length > before)
+        }
+        return true
     }
 
-    /// Nothing more ahead in the copy: read on (a long page) or read the page again from its end, once, and then,
-    /// while the page is read only in part, on again for up to two seconds, until `found` finds what was wanted.
-    func readingOn<T>(_ found: () -> T?) -> T? {
+    /// A page read only in part (a long chat, issue 227): read on in the background, pass after pass, until `found`
+    /// says yes, the page's end, or two seconds of passes; then `done`, on main, if this is still the key's reading.
+    func readOnUntil(_ found: @escaping () -> Bool, _ done: @escaping (Bool) -> Void) {
+        let epoch = pageGeneration, intent = bufferIntent, movedAt = positionMovedAt
         let until = Date().addingTimeInterval(2)
-        guard reachForMore(deadline: until) else { return nil }
-        if let hit = found() { return hit }
-        while buffer.isPartial, buffer.canReadOn, Date() < until {
-            if buffer.buildMore(until: until), let hit = found() { return hit }
+        func current() -> Bool { pageGeneration == epoch && bufferIntent == intent && positionMovedAt == movedAt && API.focusTreeInterceptor === self }
+        func pass() {
+            guard current() else { return }
+            // A refresh under way: its publication comes first, then the reading on.
+            if buffer.isLoading {
+                guard Date() < until else { done(found()); return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { pass() }
+                return
+            }
+            buffer.buildMore { [weak self] more in
+                guard let self, current() else { return }
+                if more, found() { done(true); return }
+                if buffer.canReadOn, Date() < until { pass() } else { done(found()) }
+            }
         }
-        return nil
+        pass()
     }
 
     /// Command Down: the bottom of the page. A page read only in part (a long chat, issue 227) is read on first, for
     /// up to two seconds; if there is more even then, that is said, and the key again reads on.
     func toBottom() {
-        if buffer.isPartial {
-            let until = Date().addingTimeInterval(2)
-            while buffer.isPartial, buffer.canReadOn, Date() < until { buffer.buildMore(until: until) }
-            if buffer.isPartial { Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")) }
+        func land() {
+            position = max(0, buffer.text.length - 1)
+            speakUnit(.line)
         }
-        position = max(0, buffer.text.length - 1)
-        speakUnit(.line)
+        guard buffer.canReadOn else { land(); return }
+        readOnUntil({ false }) { [weak self] _ in
+            guard let self else { return }
+            if buffer.stoppedAtLimit { Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")) }
+            land()
+        }
     }
 
     /// A paged document (Preview's PDF): the page is said as the reading position crosses onto another one, as
@@ -619,12 +620,15 @@ public final class BrowseModeDocument: ScriptableObject {
         }
     }
 
-    func move(_ unit: TextUnit, _ direction: Int) {
+    /// `afterRefresh`: the page was read again (or on) for this key already; at the end now, it is the end. A page
+    /// that keeps growing is not read again and again for one key (review of #219, point 5).
+    func move(_ unit: TextUnit, _ direction: Int, afterRefresh: Bool = false) {
+        positionMovedAt = Date()
         refreshIfNavigated()
         clearSelection()
-        guard ensureContent() else { return }
-        rebuildIfCheap()
-        guard var info = caretInfo() else { return }
+        guard ensureContent({ [weak self] in self?.move(unit, direction, afterRefresh: afterRefresh) }) else { return }
+        refreshBufferIfNeeded()
+        guard let info = caretInfo() else { return }
         // NVDA's _caretMovementScriptHelper: expand to the unit and collapse to its start before moving, so Up from
         // the middle of a line (where Find left the caret) goes to the line above, not the start of this one.
         if unit != .character { info.expand(unit); info.collapse() }
@@ -643,17 +647,13 @@ public final class BrowseModeDocument: ScriptableObject {
             }
             if hops > 0 { moved += hops * (direction > 0 ? 1 : -1) }
         }
-        if moved == 0, direction > 0, reachForMore(), let again = caretInfo() {
-            if unit != .character { again.expand(unit); again.collapse() }
-            moved = again.move(unit, direction)
-            if moved != 0 { info = again }
-        }
-        // Not "bottom" with more of a long page still to read (its reading on ran out of time): the key again reads on.
-        if moved == 0 {
-            Speech.speakMessage(direction < 0 ? String(localized: "top", comment: "Spoken message")
-                : buffer.isPartial ? String(localized: "page read in part, it is very long", comment: "Spoken message")
-                : String(localized: "bottom", comment: "Spoken message"))
-        }
+        if moved == 0, direction > 0, !afterRefresh, reachForMore({ [weak self] more in
+            guard let self else { return }
+            if more { move(unit, direction, afterRefresh: true) }
+            else { reportBufferEnd(forward: true) }
+        }) { return }
+        // Not "bottom" with more of a long page still to read (its reading on ran out of time): reportBufferEnd says so.
+        if moved == 0 { reportBufferEnd(forward: direction > 0) }
         position = info.start
         // Say all carries on from here and reads this line itself (NVDA's willSayAllResume).
         if SayAll.resuming { return }
@@ -665,6 +665,7 @@ public final class BrowseModeDocument: ScriptableObject {
     // (An override cannot live in an extension: the pass-through decision itself is in FocusModePolicy.swift.)
     /// Scripts answer only in browse mode (NVDA: passThrough filters the tree interceptor's scripts).
     public override func script(for gesture: KeyboardGesture) -> Script? {
+        bufferIntent += 1
         // NVDA's way, in both styles (Oliver, 23 Oct 2026, issue 82): in browse mode a letter is always a command. A
         // field is typed into after Return or Tab has entered it (focus mode), or after the switch by hand. Until then
         // a letter typed while the reading position was on a field went into it (Mac style, 9 Oct 2026), and a letter
@@ -672,7 +673,7 @@ public final class BrowseModeDocument: ScriptableObject {
         // test of 23 Oct 2026 showed both typing h into a field the user had just left with Escape, on four pages.
         if let s = super.script(for: gesture) {
             if passThrough && s.name != "disablePassThrough" { return nil }
-            return s
+            return contentScript(s)
         }
         // A letter or digit with no command of its own (z, 0) is kept from the page in browse mode, as NVDA's trap
         // non-command gestures does: otherwise it would reach a field that still has the keyboard after Escape.

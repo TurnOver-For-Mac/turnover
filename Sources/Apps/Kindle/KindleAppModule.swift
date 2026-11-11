@@ -163,9 +163,9 @@ final class KindleAppModule: AppModule {
                 guard let self else { return }
                 guard NSWorkspace.shared.frontmostApplication?.processIdentifier == self.pid else { Log.io("kindle: left before the page turned"); done(false); return }
                 let now = self.reader(in: doc.webArea).flatMap { self.pageText(in: $0) }?.string(kAXValueAttribute) ?? ""
-                if now != before { doc.buffer.build(); done(true) }
+                if now != before { doc.buffer.build { done(true) } }
                 else if n > 1 { check(n - 1) }
-                else if before.isEmpty { doc.buffer.build(); done(true) }
+                else if before.isEmpty { doc.buffer.build { done(true) } }
                 else { Log.io("kindle: the page did not turn"); done(false) }
             }
         }
