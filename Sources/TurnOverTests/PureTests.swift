@@ -262,6 +262,12 @@ func pureTests() {
         expect(UserGestures.spoken("kb:rightoption+s"), "right option s")
         expect(UserGestures.storedIdentifier(of: KeyboardGesture(identifier: "kb:turnover+shift+0")!), "kb:turnover+shift+0", "the plain form, not the layout's")
     }
+    test("speech: the same focus twice is said once, another row with the same words is said") {
+        check(Speech.focusRepeated(words: "12, A1", last: "12, A1", after: 0.1, anotherRow: false), "the same focus reported twice")
+        check(!Speech.focusRepeated(words: "Your order, 09:16", last: "Your order, 09:16", after: 0.1, anotherRow: true), "two copies of a message, one above the other")
+        check(!Speech.focusRepeated(words: "12, A1", last: "12, A1", after: 0.6, anotherRow: false), "after half a second it is said again")
+        check(!Speech.focusRepeated(words: "13, A2", last: "12, A1", after: 0.1, anotherRow: false), "other words")
+    }
     test("speech: a capital said alone is marked for a raised pitch only when the setting is on") {
         let was = config.speech.capitalPitch; defer { config.speech.capitalPitch = was }
         config.speech.capitalPitch = 0

@@ -6,6 +6,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- Two rows with the same words, one above the other, are both read when you move quickly between them, such as two
+  copies of one message in Mail's list. The second was not spoken.
 - "Nothing in this window can be read", with the keys for screen recognition, is a hint now: turning off Hints after
   a pause turns it off too. It is no longer said in Steam's Big Picture while TurnOver is reading it.
 
