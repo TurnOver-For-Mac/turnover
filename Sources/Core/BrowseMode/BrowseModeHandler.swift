@@ -31,10 +31,19 @@ public final class BrowseModeHandler {
         return documents.first { $0.webArea.isSame(webArea) }
     }
 
+    /// A known page among these objects, by identity (nothing asked), that is not answering (a third review, 12 Nov
+    /// 2026). Whether it is silent is asked of AXHealth outside the list's lock.
+    package func knownSilentPage(among objects: [TurnOverObject]) -> BrowseModeDocument? {
+        lock.lock()
+        let known = documents.filter { d in objects.contains { $0.isSameElement(as: d.webArea) } }
+        lock.unlock()
+        return known.first { $0.pageSilent }
+    }
+
     /// A document over any element an app module nominates (Music's content pane), made once per root.
     public func document(root: AXUIElement) -> BrowseModeDocument {
         lock.lock(); defer { lock.unlock() }
-        if let d = documents.first(where: { $0.webArea.isSame(root) }), d.isAlive { return d }
+        if let d = documents.first(where: { $0.webArea.isSame(root) }), d.isKept { return d }
         let d = BrowseModeDocument(webArea: root)
         documents.append(d)
         Log.info("browse mode document over \(root.role) \"\(Log.words(root.string(kAXDescriptionAttribute) ?? ""))\" in pid \(root.pid)")
@@ -44,6 +53,11 @@ public final class BrowseModeHandler {
     /// The document for a focus object, made on first sight (NVDA: the object's treeInterceptorClass).
     /// The outermost web area is the document; the frames inside it (advertisements, embeds) are part of it.
     public func document(for obj: TurnOverObject, ancestors: [TurnOverObject]) -> BrowseModeDocument? {
+        // A page that is not answering does not say it is a web area: its role is not asked while it is silent, and a
+        // frame inside it may still answer for its own. A known page among the ancestors that is silent is still that
+        // page, so a focus change inside it keeps browse mode (a third review, 12 Nov 2026: it was dropped, and nothing
+        // brought it back when the page answered again), and a frame in it does not become a page of its own (a fourth).
+        if let silent = knownSilentPage(among: [obj] + ancestors) { return silent }
         let webAreaObj = ([obj] + ancestors).last { $0.axRole == "AXWebArea" }
         // Not a web page: the app's module may name a document of its own (Preview's pages, 17 Oct 2026).
         if webAreaObj == nil, let root = obj.appModule.browseRoot(for: obj.element, ancestors: ancestors) { return document(root: root) }
@@ -55,7 +69,7 @@ public final class BrowseModeHandler {
         lock.lock()
         let known = documents.first(where: { $0.webArea.isSame(w.element) })
         lock.unlock()
-        if let known { return known.isAlive ? known : nil }
+        if let known { return known.isKept ? known : nil }
         guard supports(w) else { return nil }
         let d = BrowseModeDocument(webArea: w.element)
         lock.lock()
@@ -63,7 +77,7 @@ public final class BrowseModeHandler {
         documents.append(d)
         // Dead pages go first (Mail's message bodies come and go by the dozen; forty of them pushed Safari's tab
         // out and it was announced again from the top on return: code review, 16 Oct 2026). Then the oldest.
-        if documents.count > 40 { documents.removeAll { !$0.isAlive }; if documents.count > 40 { documents.removeFirst() } }
+        if documents.count > 40 { documents.removeAll { !$0.isKept }; if documents.count > 40 { documents.removeFirst() } }
         lock.unlock()
         Log.info("browse mode document for \"\(Log.words(w.name))\" in pid \(w.pid)")
         return d

@@ -107,9 +107,15 @@ public enum Core {
                 // The page may have moved on while it was silent. Its copy is read again in the background, where a
                 // page that answers for its role and still not for its address harms nobody; a new address found
                 // there is followed from there. Nothing is asked of it here, on the main thread.
+                // The app may also have replaced the page while it was silent: a dead page's read fails and keeps its
+                // old copy, so the window's current page is looked for first, in the background, and followed if it
+                // is another one (a fourth review, 12 Nov 2026).
                 if let document = API.focusTreeInterceptor, document.webArea.pid == pid {
-                    document.buffer.isDirty = true
-                    document.buffer.build()
+                    document.followCurrentRoot(requireEmpty: false) { followed in
+                        guard !followed else { return }
+                        document.buffer.isDirty = true
+                        document.buffer.build()
+                    }
                 } else if API.focusObject.map({ $0.axRole == "AXGroup" && $0.name.isEmpty }) ?? true {
                     AXHandler.shared.refocus(pid: pid)
                 }
