@@ -131,7 +131,7 @@ public final class BrowseModeDocument: ScriptableObject {
         return .address((read.value as? URL)?.absoluteString ?? (read.value as? String) ?? "")
     }
     /// The page, or its app, is not answering: nothing live is asked of it by a key, and the copy is read.
-    var pageSilent: Bool { AXHealth.isSilent(webArea) || AXHealth.backoff(for: webArea.pid)?.reason == .timeout }
+    package var pageSilent: Bool { AXHealth.isSilent(webArea) || AXHealth.backoff(for: webArea.pid)?.reason == .timeout }
     /// A key is being answered wholly from the copy (readFromCopyIfSilent).
     private var readingFromCopy = false
     /// On a page that is not answering, `body` runs inside the copy, where every question is answered from what was
@@ -483,6 +483,10 @@ public final class BrowseModeDocument: ScriptableObject {
     public var rootObject: WebArea { WebArea(element: webArea) }
     public func makeTextInfo(_ p: TextPosition) -> TextInfo? { try? rootObject.makeTextInfo(p) }
     public var isAlive: Bool { webArea.role != "?" }
+    /// Whether the handler keeps this page: alive, or not answering. A page that does not answer is not gone: while it
+    /// is silent its role is not asked at all, and taking that for a page gone dropped browse mode on a focus change
+    /// inside it, which nothing brought back when the page answered again (a third review, 12 Nov 2026).
+    var isKept: Bool { pageSilent || isAlive }
 
     func caretInfo() -> TextInfo? { makeTextInfo(.caret) }
 

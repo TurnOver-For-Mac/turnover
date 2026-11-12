@@ -167,6 +167,45 @@ func silentAppTests() {
         }
     }
 
+    test("browse mode: a press on a page that is not answering goes to the control the reader means, or nowhere") {
+        func press(_ byAccessibility: Bool, _ role: String?, atPosition: Bool, movedAfter: Bool) -> BrowseModeDocument.SilentPress {
+            BrowseModeDocument.silentPress(byAccessibility: byAccessibility, focusRole: role, focusAtReadingPosition: atPosition, keyboardMovedAfterPosition: movedAfter)
+        }
+        expect(press(false, "AXButton", atPosition: true, movedAfter: false), .sendKey, "the button at the reading position has the keyboard")
+        expect(press(false, "AXLink", atPosition: false, movedAfter: true), .sendKey, "Tab took the keyboard to a link after the reading position last moved")
+        expect(press(false, "AXButton", atPosition: false, movedAfter: false), .notTried, "a button left behind, the reader since on another: the key would press it as the page woke")
+        expect(press(true, "AXButton", atPosition: true, movedAfter: true), .notTried, "VO-Space presses through accessibility, which needs the page")
+        expect(press(false, "AXTextField", atPosition: true, movedAfter: true), .notTried, "a text field: Return would send its form")
+        expect(press(false, nil, atPosition: true, movedAfter: true), .notTried, "the keyboard is not on this page")
+    }
+
+    test("browse mode: a page that is not answering keeps its document when the focus moves inside it") {
+        withCheck(appAnswers: { true }, elementAnswers: { false }) {
+            let handler = BrowseModeHandler.shared
+            // Stands for a control inside the page, in a process of its own here; also never asked anything.
+            let otherPid = pid - 1
+            let control = AXUIElementCreateApplication(otherPid)
+            defer { handler.forget(pid: pid); AXHealth.forget(pid: otherPid) }
+            _ = ask(.cannotComplete, took: 2 * second, of: page)
+            var ticks: [UInt64] = [100, 100 + 2 * second]
+            _ = AXHealth.query(pid: otherPid, element: control, clock: { ticks.removeFirst() }) { .cannotComplete }
+            check(AXHealth.isSilent(page), "the page is silent")
+            let document = handler.document(root: page)
+            check(document.pageSilent, "and its document knows it")
+            // Its role is not asked while it is silent, so it does not say it is a web area.
+            let pageObject = ObjectFactory.make(page)
+            check(pageObject.axRole != "AXWebArea", "the silent page does not say what it is (\(pageObject.axRole))")
+            check(handler.knownSilentPage(among: [pageObject]) === document, "it is found by identity among the ancestors")
+            check(handler.document(for: ObjectFactory.make(control), ancestors: [pageObject]) === document,
+                  "a control inside it took the focus: still the page's document, so browse mode stays")
+            check(handler.document(for: pageObject, ancestors: []) === document, "the focus on the page itself: the same")
+            // Once it answers, only a page that is alive is kept: a silent one is no longer kept for being silent.
+            AXHealth.forget(pid: pid)
+            check(!document.pageSilent, "the page answers again")
+            check(handler.knownSilentPage(among: [pageObject]) == nil, "it is no longer kept for being silent")
+        }
+    }
+
     test("browse mode: the rule for saying nothing on this page yet again is two seconds") {
         let said = Date(timeIntervalSinceReferenceDate: 1000)
         check(!BrowseModeDocument.nothingYetDue(last: said, now: said.addingTimeInterval(0.001)), "a key queued behind the first")
