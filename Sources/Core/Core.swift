@@ -17,6 +17,9 @@ public enum Core {
     nonisolated(unsafe) public static var lendToVoiceOver: ((TimeInterval) -> Void)?   // main thread only
     /// When "please wait" was last said for an app that stopped answering (main thread).
     static var lastWaitSpoken = Date.distantPast
+    /// The apps "is not responding" has been said of, until each answers again, and whether it was said of the page
+    /// alone: said once a stall, and "responding again" only after it.
+    static var saidNotResponding: [pid_t: Bool] = [:]
     /// Written once, on the main thread, as the start ends; read by the start watchdog's own thread (a single flag).
     nonisolated(unsafe) public private(set) static var started = false
     public private(set) static var active = false
@@ -39,12 +42,16 @@ public enum Core {
         AXHealth.onSlowRest = { pid in DispatchQueue.main.async { Log.info("pid \(pid) slow to answer; resting it 1.5 s") } }
         AXHealth.onUnresponsive = { pid in
             DispatchQueue.main.async {
+                // A new stall starts clean: what was said of an earlier one that was never heard to end (forgotten
+                // after ten minutes) is not held against this one.
+                Core.saidNotResponding[pid] = nil
                 guard let app = NSRunningApplication(processIdentifier: pid) ?? NSWorkspace.shared.frontmostApplication,
                       NSWorkspace.shared.frontmostApplication.map({ $0.processIdentifier == pid || app.bundleIdentifier?.hasPrefix("com.apple.WebKit") == true }) ?? false else {
                     Log.info("pid \(pid) not answering (in the background)"); return
                 }
                 let name = app.bundleIdentifier?.hasPrefix("com.apple.WebKit") == true ? (NSWorkspace.shared.frontmostApplication?.localizedName ?? "the page") : (app.localizedName ?? "the application")
                 Log.error("\(name) (pid \(pid)) not answering; leaving it for 3 s")
+                StallSample.take(pid: pid, name: name, bundleID: app.bundleIdentifier, logPath: Log.path)
                 // "Please wait", not "not responding": a slow answer is usually the app busy (a page loading), and
                 // "not responding" alarmed for something that came right a moment later (5 Oct 2026). Once in 10 s.
                 // When it answers again, look at the focus afresh: the stall can leave TurnOver on a focus that went
@@ -64,6 +71,61 @@ public enum Core {
                 guard InputManager.directPid != pid else { return }
                 Core.lastWaitSpoken = Date()
                 Speech.speakMessage(String(localized: "please wait", comment: "Spoken message"))
+            }
+        }
+        // An app that stays silent is asked again in the background, at growing gaps (AXHealth.check), and no key
+        // waits on it meanwhile. "Please wait" was all that was ever said, however long the wait: Safari hung for
+        // good, and the reader was told to wait for seven minutes (11 Nov 2026). Once the first look back finds it
+        // still silent it is said to be not responding, once; and when it answers, that it is responding again.
+        // Where the app answers and only its page does not, it is the page that is said not to respond.
+        // Only for the app in front: one that recovers in the background is simply usable when it is come back to.
+        AXHealth.onStillSilent = { pid, seconds, appAnswers in
+            DispatchQueue.main.async {
+                Log.io("pid \(pid) still not answering after \(Int(seconds)) s (\(appAnswers ? "the app answers, something in it does not" : "the app itself"))")
+                Core.saidNotResponding = Core.saidNotResponding.filter { NSRunningApplication(processIdentifier: $0.key) != nil }
+                guard Core.active else { return }
+                guard seconds >= 4.5 else { return }
+                guard Core.saidNotResponding[pid] == nil else { return }
+                guard InputManager.directPid != pid else { return }
+                guard let front = NSWorkspace.shared.frontmostApplication, front.processIdentifier == pid else { return }
+                let pageAlone = appAnswers && API.focusTreeInterceptor?.webArea.pid == pid
+                Core.saidNotResponding[pid] = pageAlone
+                if pageAlone {
+                    Speech.speakMessage(String(localized: "the page is not responding", comment: "Spoken message: a web page has stopped answering"))
+                } else {
+                    let name = front.localizedName ?? String(localized: "the application", comment: "An app whose name is not known")
+                    Speech.speakMessage(String(localized: "\(name) is not responding", comment: "Spoken message: an app has stopped answering"))
+                }
+            }
+        }
+        AXHealth.onAnsweringAgain = { pid, seconds in
+            DispatchQueue.main.async {
+                Log.io("pid \(pid) answering again after \(Int(seconds)) s")
+                let said = Core.saidNotResponding.removeValue(forKey: pid)
+                guard Core.active else { return }
+                guard let front = NSWorkspace.shared.frontmostApplication, front.processIdentifier == pid else { return }
+                // The page may have moved on while it was silent. Its copy is read again in the background, where a
+                // page that answers for its role and still not for its address harms nobody; a new address found
+                // there is followed from there. Nothing is asked of it here, on the main thread.
+                // The app may also have replaced the page while it was silent: a dead page's read fails and keeps its
+                // old copy, so the window's current page is looked for first, in the background, and followed if it
+                // is another one (a fourth review, 12 Nov 2026).
+                if let document = API.focusTreeInterceptor, document.webArea.pid == pid {
+                    document.followCurrentRoot(requireEmpty: false) { followed in
+                        guard !followed else { return }
+                        document.buffer.isDirty = true
+                        document.buffer.build()
+                    }
+                } else if API.focusObject.map({ $0.axRole == "AXGroup" && $0.name.isEmpty }) ?? true {
+                    AXHandler.shared.refocus(pid: pid)
+                }
+                guard let pageAlone = said else { return }
+                if pageAlone {
+                    Speech.speakMessage(String(localized: "the page is responding again", comment: "Spoken message: a web page that had stopped answering answers again"))
+                } else {
+                    let name = front.localizedName ?? String(localized: "the application", comment: "An app whose name is not known")
+                    Speech.speakMessage(String(localized: "\(name) is responding again", comment: "Spoken message: an app that had stopped answering answers again"))
+                }
             }
         }
         startStep = "the audio engine"

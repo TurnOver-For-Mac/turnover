@@ -31,6 +31,7 @@ extension BrowseModeDocument {
     ]
 
     func quickNav(_ q: QuickNavType, forward: Bool, afterRefresh: Bool = false) {
+        if readFromCopyIfSilent({ quickNav(q, forward: forward, afterRefresh: afterRefresh) }) { return }
         positionMovedAt = Date()
         refreshIfNavigated()
         clearSelection()
@@ -123,7 +124,8 @@ extension BrowseModeDocument {
             return
         }
         // VoiceOver's D with no WebKit search: the next line that is a different kind of thing from this one.
-        if q.name == "DifferentItem", !hasWebKitSearch {
+        // (A silent page first: finding out whether WebKit's search is there asks the page.)
+        if q.name == "DifferentItem", pageSilent || !hasWebKitSearch {
             let different = buffer.withSnapshot {
                 let here = buffer.lineIndex(at: position).flatMap { buffer.lines[$0].element?.role }
                 let order = forward ? Array(((buffer.lineIndex(at: position) ?? 0) + 1)..<buffer.lines.count) : Array((0..<(buffer.lineIndex(at: position) ?? 0)).reversed())
@@ -138,6 +140,8 @@ extension BrowseModeDocument {
             return
         }
         // Kinds WebKit's search has no key for (list items, separators, embedded objects, annotations, headings 7 to 9).
+        // A page that is not answering: its own search would not answer either. The copy has the headings.
+        if pageSilent { bufferSearch(); return }
         if !hasWebKitSearch || q.searchKey.isEmpty { bufferSearch(); return }
         let startEl = (try? rootObject.makeTextInfo(.caret) as? BufferTextInfo)?.element(at: position) ?? webArea
         let raw = bridge.search(key: q.searchKey, from: startEl, forward: forward, limit: q.roles == nil ? 1 : 25)
@@ -220,6 +224,8 @@ extension BrowseModeDocument {
     /// link or control after (before) it; the focus event then reads it. Otherwise the browser's own Tab.
     func focusFromCaret(forward: Bool) -> Bool {
         guard position != positionAtFocus else { return false }
+        // Putting the keyboard on a control asks the page, some of it by calls that wait out the timeout each time.
+        guard !pageSilent else { return false }
         let roles: Set<String> = ["AXLink", "AXButton", "AXTextField", "AXTextArea", "AXCheckBox", "AXRadioButton", "AXPopUpButton", "AXComboBox", "AXSlider", "AXMenuButton", "AXDisclosureTriangle"]
         var from = position
         for _ in 0..<30 {

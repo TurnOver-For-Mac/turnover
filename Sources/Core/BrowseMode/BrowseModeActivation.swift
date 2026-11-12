@@ -21,6 +21,30 @@ extension BrowseModeDocument {
     /// `byAccessibility`: VO-Space. The control with the keyboard is pressed through accessibility, as VoiceOver's
     /// VO-Space presses it, where Enter and Space send the real key (below): a page that ignores one answers the other.
     func activate(_ gesture: KeyboardGesture, byAccessibility: Bool = false) {
+        // A press needs the page itself, and asks it by calls that wait out the timeout each time: on a page that is
+        // not answering it is not tried, and that is said (a review, 11 Nov 2026).
+        if pageSilent {
+            // A control that already has the keyboard still gets the real key: that asks the page nothing, and a
+            // page that is not answering accessibility may yet take a key (a review, 11 Nov 2026). Only the control
+            // the reader means, as the live path below decides it: the item at the reading position, or one the
+            // keyboard moved to after the reading position last moved. Any control with the keyboard was given the
+            // key, so a button left behind, the reader since on another, would have been pressed as the page woke (a
+            // third review, 12 Nov 2026). What TurnOver already knows of the focus, and the copy of the page, say so;
+            // nothing is asked to find out.
+            let focus = API.focusObject
+            let choice = Self.silentPress(byAccessibility: byAccessibility,
+                                          focusRole: focus.flatMap { $0.pid == webArea.pid ? $0.axRole : nil },
+                                          focusAtReadingPosition: focus.map { isAtReadingPositionInCopy($0) } ?? false,
+                                          keyboardMovedAfterPosition: Speech.sinceFocusSpoken < Date().timeIntervalSince(positionMovedAt))
+            if choice == .sendKey {
+                Log.io("browse mode: \(gesture.keyName) sent to the control with the keyboard; the page is not answering, so nothing is asked of it")
+                gesture.send()
+                return
+            }
+            Log.io("browse mode: \(gesture.keyName) not tried: the page is not answering")
+            sayPageNotResponding()
+            return
+        }
         var e: AXUIElement? = nil
         if let t = lastQuickNavTarget, buffer.offset(of: t) == position {
             e = BrowseModeDocument.actionable(t) ? t : t.firstDescendant(role: "AXLink", maxVisited: 60) ?? t.firstDescendant(role: "AXButton", maxVisited: 60) ?? t
@@ -81,6 +105,28 @@ extension BrowseModeDocument {
         while let y = x, d < 6 { chain.append("\(y.role) \"\((y.string(kAXTitleAttribute) ?? y.string(kAXValueAttribute) ?? "").prefix(30))\""); x = y.element(kAXParentAttribute); d += 1 }
         Log.io("browse mode: nothing to activate at \"\(Log.words(String(text.prefix(40))))\"; buffer element: \(chain.isEmpty ? "none" : Log.words(chain.joined(separator: " < "))); live page: \(text.isEmpty ? "not searched" : "no link or button with that text")")
         Speech.speakMessage(String(localized: "nothing to activate", comment: "Spoken message"))
+    }
+
+    /// What a press does on a page that is not answering (a review, 11 Nov 2026; a third, 12 Nov 2026): the real key,
+    /// for a control on this page that has the keyboard and is the one the reader means, the item at the reading
+    /// position or a control the keyboard moved to after the reading position last moved; otherwise nothing is tried.
+    /// VO-Space presses through accessibility, which needs the page, and is never tried. Never a text field, where
+    /// Return would send its form.
+    nonisolated package enum SilentPress: Equatable { case sendKey, notTried }
+    /// The controls a real key presses.
+    package nonisolated static let pressedByAKey: Set<String> = ["AXButton", "AXLink", "AXCheckBox", "AXRadioButton", "AXMenuButton", "AXPopUpButton", "AXMenuItem", "AXTab", "AXDisclosureTriangle", "AXSwitch"]
+    /// `focusRole`: the role of the control with the keyboard, nil when the keyboard is not on this page.
+    package nonisolated static func silentPress(byAccessibility: Bool, focusRole: String?, focusAtReadingPosition: Bool, keyboardMovedAfterPosition: Bool) -> SilentPress {
+        guard !byAccessibility, let role = focusRole, pressedByAKey.contains(role) else { return .notTried }
+        return focusAtReadingPosition || keyboardMovedAfterPosition ? .sendKey : .notTried
+    }
+
+    /// Whether `f` is the item at the reading position, by the copy of the page alone (identity, nothing asked): the
+    /// text's own element, its line's, or a container the copy holds around the position.
+    func isAtReadingPositionInCopy(_ f: TurnOverObject) -> Bool {
+        if let s = buffer.segment(at: position), f.isSameElement(as: s.element) { return true }
+        if let i = buffer.lineIndex(at: position), let e = buffer.lines[i].element, f.isSameElement(as: e) { return true }
+        return buffer.containers.contains { $0.start <= position && position < $0.end && f.isSameElement(as: $0.element) }
     }
 
     /// Whether a control's value is a check state, by TurnOver's own role (the subrole counts: a web switch is an
@@ -300,10 +346,14 @@ extension BrowseModeDocument {
         lastQuickNavTarget = el
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
             guard let self else { return }
-            if BrowseModeDocument.controlRoles.contains(el.role), !(el.role == "AXLink" && buffer.linkEnd(at: position) != nil) {
-                Speech.speakMessage(Speech.objectPropertiesSpeech(ObjectFactory.make(el), reason: .focus).joined(separator: ", "))
-                lastChain = []
-            } else { speakQuickNavText(at: position, link: el.role == "AXLink") }
+            let read = { [self] in
+                if BrowseModeDocument.controlRoles.contains(el.role), !(el.role == "AXLink" && buffer.linkEnd(at: position) != nil) {
+                    Speech.speakMessage(Speech.objectPropertiesSpeech(ObjectFactory.make(el), reason: .focus).joined(separator: ", "))
+                    lastChain = []
+                } else { speakQuickNavText(at: position, link: el.role == "AXLink") }
+            }
+            // Later than the key that chose it: on a page that is not answering, read from the copy like the key.
+            if !readFromCopyIfSilent(read) { read() }
         }
     }
 
@@ -408,6 +458,7 @@ extension BrowseModeDocument {
     /// right-clicked: a link's menu has Open in New Tab, Copy Link and the rest. False when there is nothing that
     /// takes one there (plain text keeps the page's own menu).
     func showContextMenuAtCaret() -> Bool {
+        guard !pageSilent else { return false }
         refreshIfNavigated()
         guard let start = (try? rootObject.makeTextInfo(.caret) as? BufferTextInfo)?.element(at: position) else { return false }
         let wanted: Set<String> = ["AXLink", "AXButton", "AXImage", "AXTextField", "AXTextArea", "AXCheckBox", "AXRadioButton", "AXPopUpButton", "AXComboBox", "AXMenuButton"]

@@ -8,6 +8,10 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 - "Nothing in this window can be read", with the keys for screen recognition, is a hint now: turning off Hints after
   a pause turns it off too. It is no longer said in Steam's Big Picture while TurnOver is reading it.
+- When a web page, or the app showing it, stops answering, as Safari sometimes does just after a page loads, browse
+  mode keeps the page it has read and your place on it, and the keys go on reading without waiting. TurnOver says
+  once that the page or the app is not responding, and again when it answers. Keys used to freeze for two seconds at
+  a time, each said "nothing on this page yet", and the page was read again from the top once it answered.
 
 ## 2.0, build 24
 
