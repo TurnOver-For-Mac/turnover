@@ -21,12 +21,23 @@ public enum ClipboardAnnouncer {
         default: kind = nil
         }
         guard let kind else { return }
+        let withShift = mods.contains(.shift)
         let before = NSPasteboard.general.changeCount
         DispatchQueue.main.asyncAfter(deadline: .now() + (kind == "pasted" ? 0.15 : 0.3)) {
             if kind != "pasted", NSPasteboard.general.changeCount == before { return }   // nothing was copied
             guard kind == "pasted" else { Speech.speakMessage(spoken(kind), remember: false); return }
+            guard announcesPaste(withShift: withShift, focusRole: API.focusObject?.role) else { Log.io("clipboard: a Shift paste key away from text; not announced"); return }
             Speech.asPrivate { Speech.speakMessage(pastedSpeech(), remember: false) }   // a pasted token or password never reaches the history (code review, 16 Oct 2026)
         }
+    }
+
+    /// Command-V pastes wherever the focus is (files in Finder too). The keys with Shift are "paste and match style",
+    /// which only a place to type has; elsewhere they are the application's own: Command-Shift-V starts and stops
+    /// the video in Zoom, and was said as "pasted" with the clipboard's text (13 Nov 2026).
+    public static func announcesPaste(withShift: Bool, focusRole: Role?) -> Bool {
+        guard withShift else { return true }
+        guard let focusRole else { return false }
+        return Role.withNavigableText.contains(focusRole)
     }
 
     /// "pasted, " and the text (VoiceOver reads it; it was silent in Safari's fields, 3 Oct 2026). Terminal echoes a

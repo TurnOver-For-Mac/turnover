@@ -1513,4 +1513,12 @@ func browseTextNavTests() {
         check(!AXHandler.servesPanel(helperBundle: svc, helperName: nil, frontName: "TextEdit"), "a service without a name")
         check(!AXHandler.servesPanel(helperBundle: svc, helperName: "Open and Save Panel Service ()", frontName: ""), "no app in front")
     }
+    test("clipboard: a paste key with Shift is announced only in a place to type") {
+        check(ClipboardAnnouncer.announcesPaste(withShift: false, focusRole: .list), "Command-V is announced anywhere: files paste in a list")
+        check(ClipboardAnnouncer.announcesPaste(withShift: false, focusRole: nil), "Command-V with no focus known")
+        check(ClipboardAnnouncer.announcesPaste(withShift: true, focusRole: .editableText), "paste and match style in a text field")
+        check(ClipboardAnnouncer.announcesPaste(withShift: true, focusRole: .document), "and in a document")
+        check(!ClipboardAnnouncer.announcesPaste(withShift: true, focusRole: .button), "Command-Shift-V on a button is the application's own key")
+        check(!ClipboardAnnouncer.announcesPaste(withShift: true, focusRole: nil), "and with no focus known it is not called a paste")
+    }
 }
