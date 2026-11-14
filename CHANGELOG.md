@@ -11,6 +11,7 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 - Quick navigation onto an editable field says "browse mode" after the field when typing would still navigate.
 - Returning to a page retains its mode: a field left in focus mode is read as the focus, with selection following;
   browse mode keeps its reading position.
+- Claude's sidebar session status waits until keys and speech are quiet, keeping each session's newest notice.
 - Safari no longer says "please wait" when it answers a focus check without moving the focus.
 - At the bottom of a changing page, repeated forward keys answer from the copy once its end has been checked.
 - Claude's progress lines wait for speech to finish as well as quiet keys, keeping each conversation's newest

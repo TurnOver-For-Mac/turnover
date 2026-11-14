@@ -12,12 +12,12 @@ private final class ClaudeProgressTrial {
     var said: [String] = []
     var forwarded = 0
 
-    func load(_ session: String, alpha: String = "Public task Alpha progress", groupTail: String = "Public group detail") {
+    func load(_ session: String, alpha: String = "Public task Alpha progress", groupTail: String = "Public group detail", live: String = "polite") {
         AXReplay.load(.init(app: "Public progress sample", bundle: "test.claude-progress", recorded: "synthetic",
                             root: 0, application: 1, focus: 0, nodes: [
             .init(id: 0, attrs: ["AXRole": .string("AXWebArea"), "AXURL": .url(session), "AXParent": .element(1)]),
             .init(id: 1, attrs: ["AXRole": .string("AXApplication")]),
-            .init(id: 2, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string(alpha), "AXARIALive": .string("polite")]),
+            .init(id: 2, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string(alpha), "AXARIALive": .string(live)]),
             .init(id: 3, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("Public task Beta progress"), "AXARIALive": .string("polite")]),
             .init(id: 5, attrs: ["AXRole": .string("AXGroup"), "AXTitle": .string("Progress label"), "AXValue": .string("Progress value"),
                                  "AXChildren": .elements([6, 7]), "AXARIALive": .string("polite")]),
@@ -72,6 +72,47 @@ private func withClaudeProgress(overrideSpeechBusy: Bool = true, _ body: (Claude
 }
 
 func progressOutputTests() {
+    // 14 Nov 2026: sidebar notices were sent through the assertive bypass and interrupted reading.
+    test("Claude progress: named sidebar status waits for speech and keys and keeps the newest per session") {
+        withClaudeProgress { trial, module in
+            let openSession = "https://example.com/progress-a"
+            trial.load(openSession, alpha: "Public Alpha task. Running", live: "assertive")
+            trial.event(2, module: module)
+            check(trial.said.isEmpty, "busy speech holds the sidebar notice")
+            expect(trial.forwarded, 0, "a sidebar assertive notice cannot bypass the quiet rule")
+            trial.poll(after: 2)
+            check(trial.said.isEmpty, "quiet keys alone do not release sidebar status")
+            trial.load(openSession, alpha: "Public Alpha task. Awaiting input", live: "assertive")
+            trial.event(2, module: module)
+            trial.poll(after: 0.1)
+            trial.load(openSession, alpha: "Public Beta task. Unread response", live: "assertive")
+            trial.event(2, module: module)
+            trial.speechBusy = false
+            InputManager.lastKeyDownAt = trial.now
+            trial.poll(after: 1)
+            check(trial.said.isEmpty, "idle speech alone does not release while keys are recent")
+            trial.poll(after: 0.5)
+            expect(trial.said, ["Public Alpha task. Awaiting input"], "only Alpha's newest status is released on the still-open page")
+            trial.speechBusy = true
+            trial.poll(after: 2)
+            expect(trial.said.count, 1, "the next session cannot interrupt speech that started after the first release")
+            trial.speechBusy = false
+            trial.poll(after: 0.5)
+            expect(trial.said, ["Public Alpha task. Awaiting input", "Public Beta task. Unread response"], "Beta retains its own newest status")
+            check(trial.callbacks.isEmpty, "each session status is consumed once")
+            trial.load(openSession, alpha: "Claude finished the response", live: "assertive")
+            trial.event(2, module: module)
+            expect(trial.forwarded, 1, "the open conversation's assertive notice keeps its ordinary delivery")
+        }
+    }
+
+    test("Claude progress: sidebar classification uses only measured complete status suffixes") {
+        expect(ClaudeAppModule.sidebarStatusSession("Public task. Part two. Running"), "claude-sidebar-status:Public task. Part two")
+        for text in ["Running", "Claude is responding", "Claude finished the response", "Public task. Running a command", ". Awaiting input"] {
+            check(ClaudeAppModule.sidebarStatusSession(text) == nil, "ordinary conversation text is not a sidebar status: \(text)")
+        }
+    }
+
     test("Claude progress: default busy provider follows the real player's pending queue") {
         let savedPlayer = Speech.player
         defer { Speech.player = savedPlayer }

@@ -177,17 +177,21 @@ package final class ClaudeAppModule: AppModule {
             // Claude's own status counters ("History 518/518", "Running", "Running agent") are noise, not news (the code review, 17 Oct 2026).
             let t = (event.obj.value ?? event.obj.name).trimmingCharacters(in: .whitespacesAndNewlines)
             if t.range(of: #"^(History \d+/\d+|Running( agent)?|Working…?)$"#, options: .regularExpression) != nil { Log.io("Claude: status \"\(t)\" not said"); startWatching(); return }
-            // Assertive notices retain their immediate delivery through the ordinary live-region path.
-            if event.obj.element.string("AXARIALive") == "assertive" {
+            // 14 Nov 2026: Claude's sidebar emits "session title. status" (the trial log).
+            // These notices can be assertive too; identify them before the ordinary assertive path.
+            // Read descendants too: a named group can contain several static-text lines.
+            let text = ClaudeTranscript.text(of: event.obj.element, skipHidden: false)
+            let sidebarSession = Self.sidebarStatusSession(text)
+            let isOpenConversationNotice = sidebarSession == nil
+            let isAssertiveNotice = event.obj.element.string("AXARIALive") == "assertive"
+            if isOpenConversationNotice,
+               isAssertiveNotice {
                 heldProgress.removeValue(forKey: currentConversation())
                 next()
                 startWatching()
                 return
             }
-            // Match the ordinary live-region reader: a named group can contain several static text
-            // descendants. Its name/value is useful for status filtering, not a replacement for those words.
-            let text = ClaudeTranscript.text(of: event.obj.element, skipHidden: false)
-            let session = currentConversation()
+            let session = sidebarSession ?? currentConversation()
             guard !text.isEmpty else { return }
             if deliveredProgress[session] == String(text.prefix(500)) {
                 // 14 Nov 2026 (third review): the line already said is the newest again, so a held,
@@ -216,6 +220,21 @@ package final class ClaudeAppModule: AppModule {
         default:
             next()
         }
+    }
+
+    private static let sidebarSessionPrefix = "claude-sidebar-status:"
+
+    /// 14 Nov 2026: the log records named sidebar notices ending in these three states.
+    /// Match the complete suffix, retaining titles with periods; ordinary conversation lines stay unchanged.
+    package static func sidebarStatusSession(_ text: String) -> String? {
+        for status in ["Running", "Awaiting input", "Unread response"] {
+            let suffix = ". " + status
+            guard text.hasSuffix(suffix) else { continue }
+            let title = String(text.dropLast(suffix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !title.isEmpty else { return nil }
+            return sidebarSessionPrefix + title
+        }
+        return nil
     }
 
     /// When the prompt last emptied: a message was sent.
@@ -292,9 +311,17 @@ package final class ClaudeAppModule: AppModule {
                 Log.io("claude: progress waited a minute; retained until keys and speech are idle")
             }
         }
-        // Keep other apps' and conversations' notices pending, rather than speaking them over the active page.
+        // Keep Claude's notices pending while another app is active.
         guard AXHandler.shared.activePid == pid else { return }
-        let session = currentConversation()
+        let openSession = currentConversation()
+        // 14 Nov 2026: sidebar status belongs to another session and is eligible without opening it.
+        // Open-conversation progress retains its existing page-address ownership rule.
+        let sidebarSession = heldProgress.keys
+            .filter { $0.hasPrefix(Self.sidebarSessionPrefix) }
+            .sorted { (heldProgress[$0]?.since ?? .distantFuture) < (heldProgress[$1]?.since ?? .distantFuture) }
+            .first
+        let session = heldProgress[openSession] == nil ? sidebarSession : openSession
+        guard let session else { return }
         guard let pending = heldProgress[session] else { return }
         let readiness = ClaudeProgressReadiness.decision(
             keyQuietFor: now.timeIntervalSince(InputManager.lastKeyDownAt),
