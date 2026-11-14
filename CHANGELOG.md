@@ -9,7 +9,7 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 - Safari no longer says "please wait" when it answers a focus check without moving the focus.
 - At the bottom of a changing page, repeated forward keys answer from the copy once its end has been checked.
 - Claude's progress lines wait for speech to finish as well as quiet keys, keeping each conversation's newest
-  waiting notice until it can be said, even after a minute.
+  waiting notice until it can be said, even after a minute, without repeating its last delivered line.
 - Claude's conversation shortcuts say the new name promptly without holding up the keys; waiting page commands
   run once after a short settle if the conversation stays the same, or when the wait reaches its limit,
   while Claude stays focused. Leaving Claude discards those waiting commands.
