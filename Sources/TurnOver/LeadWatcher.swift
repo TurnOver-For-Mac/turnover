@@ -499,7 +499,7 @@ final class LeadWatcher {
     /// Each change of reader by hand (a mode, Switch reader): a hand-over or word queued for later is dropped when a
     /// newer change has come since (code review, 13 Oct: A pressed twice, or Command Tab within the second, turned
     /// VoiceOver on over TurnOver).
-    private var choiceGeneration = 0 {
+    var choiceGeneration = 0 {
         didSet {
             cancelWakeRestoration()
             Self.nextTakeoverWords = nil
@@ -547,10 +547,10 @@ final class LeadWatcher {
         }
     }
 
-    private let modeDelivery = ModeSpeechDelivery()
-    private var spokenModeGeneration: Int?
+    let modeDelivery = ModeSpeechDelivery()
+    var spokenModeGeneration: Int?
 
-    private func readyModeReader(generation: Int) -> ModeSpeechPolicy.Reader? {
+    func readyModeReader(generation: Int) -> ModeSpeechPolicy.Reader? {
         let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
         let reader: ModeSpeechPolicy.Reader = shouldLead(front) ? .turnOver : .voiceOver
         let voiceOverRunning = HandOver.voiceOverRunning
@@ -565,29 +565,8 @@ final class LeadWatcher {
         return reader
     }
 
-    private func sayModeWhenReady(_ text: String, generation: Int) {
-        modeDelivery.announce(text, now: { ProcessInfo.processInfo.systemUptime },
-                              schedule: { delay, action in
-                                  DispatchQueue.main.asyncAfter(deadline: .now() + delay) { action() }
-                              }, current: { [weak self] in
-                                  guard let self else { return false }
-                                  return self.choiceGeneration == generation && self.spokenModeGeneration != generation
-                              },
-                              readyReader: { [weak self] in self?.readyModeReader(generation: generation) },
-                              output: { [weak self] text, reader in
-                                  guard let self else { return }
-                                  self.spokenModeGeneration = generation
-                                  Self.nextTakeoverWords = nil
-                                  // The readiness snapshot selected this reader; do not route it again by a different flag.
-                                  if reader == .turnOver { Speech.speakMessage(text) }
-                                  else {
-                                      // Submit synchronously to the selected reader. The generic helper also launches
-                                      // an asynchronous AppleScript fallback, which could speak after another handover.
-                                      NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
-                                                           userInfo: [.announcement: text,
-                                                                      .priority: NSAccessibilityPriorityLevel.high.rawValue])
-                                  }
-                              })
+    func scheduleModeSpeech(after delay: Double, action: @escaping @MainActor () -> Void) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { action() }
     }
 
     func announceTakeoverMode(_ words: String) {

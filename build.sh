@@ -81,6 +81,7 @@ set -e
 # The unit tests (Sources/TurnOverTests): a failing test stops the install (8 Oct 2026). TURNOVER_SKIP_TESTS=1 to skip.
 if [ "$TURNOVER_SKIP_TESTS" != 1 ]; then
   "$BUILD/release/turnover-tests" || { echo "build.sh: tests failed; not installing"; exit 1; }
+  bash Tools/tests/mode-wiring-test.sh "$BUILD"
   bash Tools/tests/braille-thread-test.sh
 fi
 

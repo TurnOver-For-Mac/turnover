@@ -137,10 +137,11 @@ func policyTests() {
             }.joined(separator: "\n")
         }
         let lead = source("Sources/TurnOver/LeadWatcher.swift")
+        let output = source("Sources/TurnOver/LeadWatcherModeSpeech.swift")
         let app = source("Sources/TurnOver/TurnOverApp.swift")
         let menu = source("Sources/TurnOver/MenuAnywhere.swift")
-        check(lead.contains("modeDelivery.announce(text"), "production calls the tested delivery loop")
-        check(lead.contains("self?.readyModeReader(generation: generation)"), "production supplies live foreground readiness")
+        check(output.contains("modeDelivery.announce(text"), "production calls the tested delivery loop")
+        check(output.contains("self?.readyModeReader(generation: generation)"), "production supplies live foreground readiness")
         check(lead.contains("let reader: ModeSpeechPolicy.Reader = shouldLead(front)"), "foreground app selects the receiving reader")
         check(lead.contains("self.sayModeWhenReady(voiceOverWords, generation: generation)"), "settled handback schedules the mode words")
         check(app.contains("MenuAnywhere.shared.cycleLeadMode =") && app.contains("self?.lead.cycleMode()"), "the actual layer callback reaches the mode change")
