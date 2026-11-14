@@ -818,6 +818,39 @@ func focusRuleTests() {
         } catch { Harness.fail("caret setting Codable: \(error)") }
     }
 
+    test("caret focus: saved-copy arrows and quick navigation make no provider calls") {
+        withModeWords { trial, page in
+            config.virtualBuffers = Config.VirtualBuffers()
+            let schedules = AXHealth.schedulesChecks
+            let unresponsive = AXHealth.onUnresponsive
+            AXHealth.schedulesChecks = false
+            AXHealth.onUnresponsive = nil
+            defer {
+                AXReplay.reads = nil
+                AXHealth.forget(pid: page.webArea.pid)
+                AXHealth.schedulesChecks = schedules
+                AXHealth.onUnresponsive = unresponsive
+            }
+            var ticks: [UInt64] = [100, 2_000_000_100]
+            _ = AXHealth.query(pid: page.webArea.pid, element: page.webArea,
+                               clock: { ticks.removeFirst() }) { .cannotComplete }
+            check(page.pageSilent, "the page has entered timeout backoff")
+            page.position = 0
+            let arrow = KeyboardGesture(identifier: "kb:downArrow")!
+            guard let command = page.script(for: arrow) else { Harness.fail("saved-copy arrow"); return }
+            AXReplay.reads = [] // The shim counts raw calls too, which AXStats cannot see.
+            ScriptHandler.executeScript(command, gesture: arrow)
+            check(trial.words.joined().contains("The reading stopped on this line"), "text inside a group is read from the copy")
+            let quick = KeyboardGesture(identifier: "kb:f")!
+            guard let find = page.script(for: quick) else { Harness.fail("saved-copy field command"); return }
+            ScriptHandler.executeScript(find, gesture: quick)
+            check(trial.words.joined().contains("Prompt"), "quick navigation reads the saved field")
+            expect(AXReplay.reads?.count, 0, "no raw count query or other provider read escapes the snapshot")
+            check(!AXReplay.sets.contains { $0.attribute == kAXFocusedAttribute }, "a saved field never requests native focus")
+            check(!page.passThrough, "reading the copy stays in browse mode")
+        }
+    }
+
     test("caret focus: manual browse override prevents a real arrow requesting focus") {
         for manual in [false, true] {
             withModeWords { trial, page in

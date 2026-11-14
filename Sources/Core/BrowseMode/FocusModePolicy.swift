@@ -86,6 +86,9 @@ extension BrowseModeDocument {
     /// uses this same arrival policy here so a field is ready for typing after its words (14 Nov 2026).
     func caretArrived(_ object: TurnOverObject) {
         caretFocusRequest = nil
+        // 14 Nov 2026: the saved copy can be read while its provider is unresponsive. Caret policy
+        // includes live player/menu queries and native focus writes, so none is safe on that path.
+        guard !pageSilent else { return }
         guard config.virtualBuffers.autoPassThroughOnCaretMove, !disableAutoPassThrough,
               API.focusTreeInterceptor === self, AXHandler.shared.activePid == webArea.pid else { return }
         guard shouldPassThrough(object, caret: true) else { setPassThrough(false, announce: true); return }
