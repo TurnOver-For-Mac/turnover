@@ -368,6 +368,7 @@ public final class BrowseModeDocument: ScriptableObject {
     }
 
     let activationRecovery = BrowseActivationRecovery()
+    var caretFocusRequest: CaretFocusRequest?
     /// NVDA's passThrough: true is focus mode (keys go to the application).
     public var passThrough = false
     /// NVDA+Shift+Space: single-letter navigation on or off for this page (off: the letters go to the page).
@@ -456,7 +457,7 @@ public final class BrowseModeDocument: ScriptableObject {
         script("copySelection", String(localized: "Copies what is selected in the document; with nothing selected, the application's own copy", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+c"], category: sel) { [weak self] g in
             self?.copySelection(g)
         }
-        script("topOfDocument", String(localized: "Moves to the top of the document", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+upArrow", "kb:control+home"], category: nav, resumesSayAll: true) { [weak self] _ in guard let self else { return }; position = 0; speakUnit(.line) }
+        script("topOfDocument", String(localized: "Moves to the top of the document", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+upArrow", "kb:control+home"], category: nav, resumesSayAll: true) { [weak self] _ in guard let self else { return }; position = 0; speakUnit(.line, caretMoved: true) }
         script("bottomOfDocument", String(localized: "Moves to the bottom of the document", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+downArrow", "kb:control+end"], category: nav) { [weak self] _ in guard let self else { return }; toBottom() }
         script("activatePosition", String(localized: "Activates the element at the caret", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:enter", "kb:numpadEnter", "kb:space"], category: nav) { [weak self] g in guard let self else { return }; activate(g) }
         // NVDA+F7 in the Windows style (the parity audit, 13 Oct 2026: it did nothing on a page); in the Mac style
@@ -472,7 +473,7 @@ public final class BrowseModeDocument: ScriptableObject {
             if AppModuleHandler.shared.appModule(for: webArea.pid).browseTabMovesReadingPosition {
                 guard ensureContent() else { return }
                 let roles: Set<String> = ["AXLink", "AXButton", "AXTextField", "AXTextArea", "AXCheckBox", "AXRadioButton", "AXPopUpButton", "AXComboBox", "AXSlider"]
-                if let (at, _) = buffer.find(from: position, forward: !g.modifiers.contains(.shift), roles: roles) { position = at; speakUnit(.line) }
+                if let (at, _) = buffer.find(from: position, forward: !g.modifiers.contains(.shift), roles: roles) { position = at; speakUnit(.line, caretMoved: true) }
                 else { Tones.edge() }
                 return
             }
@@ -602,11 +603,11 @@ public final class BrowseModeDocument: ScriptableObject {
 
     func caretInfo() -> TextInfo? { makeTextInfo(.caret) }
 
-    func speakUnit(_ unit: TextUnit) {
+    func speakUnit(_ unit: TextUnit, caretMoved: Bool = false) {
         guard let info = caretInfo() else { return }
         info.expand(unit)
         speak(info, unit: unit)
-        ModeAnnouncement.readingReported(self)
+        ModeAnnouncement.readingReported(self, caretMoved: caretMoved)
     }
 
     /// Find (NVDA's browse-mode find, VoiceOver's VO-F): the next or previous match from the reading position,
@@ -922,7 +923,7 @@ public final class BrowseModeDocument: ScriptableObject {
     func toBottom() {
         func land() {
             position = max(0, buffer.text.length - 1)
-            speakUnit(.line)
+            speakUnit(.line, caretMoved: true)
         }
         guard buffer.canReadOn else { land(); return }
         readOnUntil({ false }) { [weak self] _ in
@@ -963,6 +964,11 @@ public final class BrowseModeDocument: ScriptableObject {
     /// that keeps growing is not read again and again for one key (review of #219, point 5).
     func move(_ unit: TextUnit, _ direction: Int, afterRefresh: Bool = false) {
         if readFromCopyIfSilent({ move(unit, direction, afterRefresh: afterRefresh) }) { return }
+        if passThrough, config.virtualBuffers.autoPassThroughOnCaretMove, !disableAutoPassThrough,
+           let segment = buffer.segment(at: position) {
+            position = direction > 0 ? max(segment.start, segment.end - 1) : segment.start
+            setPassThrough(false, announce: true)
+        }
         positionMovedAt = Date()
         refreshIfNavigated()
         clearSelection()
@@ -1008,7 +1014,7 @@ public final class BrowseModeDocument: ScriptableObject {
         // Say all carries on from here and reads this line itself (NVDA's willSayAllResume).
         if SayAll.resuming { return }
         announcePageIfChanged()
-        speakUnit(unit == .character ? .character : unit)
+        speakUnit(unit == .character ? .character : unit, caretMoved: moved != 0)
         if unit == .line || unit == .paragraph { sayMarksOnLine() }
     }
 

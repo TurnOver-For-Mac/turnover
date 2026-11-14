@@ -616,6 +616,7 @@ struct WebPagesView: View {
     var body: some View {
         Form {
             Toggle("Type into a field as soon as it has the focus", isOn: model.bool("virtualBuffers", "autoFocusMode"))
+            Toggle("Automatic focus mode for caret movement", isOn: model.bool("virtualBuffers", "autoPassThroughOnCaretMove"))
             Toggle("Read a page through as it opens", isOn: model.bool("virtualBuffers", "autoSayAllOnPageLoad"))
             Toggle("Single-letter keys go round the page", isOn: model.bool("virtualBuffers", "wrapQuickNav"))
             Toggle("Links and buttons in the line, as on screen", isOn: model.bool("virtualBuffers", "screenLayout"))

@@ -37,6 +37,7 @@ final class ModeWordsTrial {
         BrowseModeDocument.modeSound = { [weak self] in self?.sound.append($0) }
         config.general.navigationSounds = false
         config.virtualBuffers.autoFocusMode = true
+        config.virtualBuffers.autoPassThroughOnCaretMove = false
         ModeAnnouncement.now = { [weak self] in self?.now ?? .distantPast }
         ModeAnnouncement.schedule = { [weak self] delay, action in
             guard let self else { return }

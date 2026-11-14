@@ -761,13 +761,34 @@ func focusRuleTests() {
     }
 
     // 14 Nov 2026: these assertions observe output after Speech.enqueue's real gates, not Speech.sink.
-    func withModeWords(_ body: (ModeWordsTrial, BrowseModeDocument) -> Void) {
-        AXReplay.load(conversation())
+    func withModeWords(role: String = "AXTextArea", value: String = "", trailing: Bool = false, detachedApp: Bool = false, _ body: (ModeWordsTrial, BrowseModeDocument) -> Void) {
+        var fixture = conversation()
+        let field = fixture.nodes.firstIndex { $0.id == 66 }!
+        fixture.nodes[field].attrs["AXRole"] = .string(role)
+        fixture.nodes[field].attrs["AXValue"] = .string(value)
+        if trailing {
+            let root = fixture.nodes.firstIndex { $0.id == 60 }!
+            fixture.nodes[root].attrs["AXChildren"] = .elements([61, 63, 65, 66, 67])
+            fixture.nodes.append(.init(id: 67, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("After the field"), "AXParent": .element(60), "AXWindow": .element(59)]))
+        }
+        if detachedApp {
+            let window = fixture.nodes.firstIndex { $0.id == 59 }!
+            fixture.nodes[window].attrs.removeValue(forKey: "AXParent")
+            // Each replay node has its own fake pid. Seed that fake application focus directly;
+            // AXReplay.set deliberately does not persist scalar AXUIElement writes.
+            fixture.nodes[field].attrs[kAXFocusedUIElementAttribute] = .element(66)
+            let root = fixture.nodes.firstIndex { $0.id == 60 }!
+            fixture.nodes[root].attrs["AXReplayReadOnlyAttributes"] = .strings([kAXValueAttribute])
+        }
+        AXReplay.load(fixture)
+        let activePidBefore = AXHandler.shared.activePid
+        AXHandler.shared.activePid = 900_060
         let trial = ModeWordsTrial()
         let page = BrowseModeHandler.shared.document(root: AXReplay.element(60))
         defer {
             API.setFocusObject(nil, ancestors: [])
             BrowseModeHandler.shared.forget(pid: 900_060)
+            AXHandler.shared.activePid = activePidBefore
             AXReplay.unload()
             trial.restore()
         }
@@ -783,6 +804,156 @@ func focusRuleTests() {
         API.setFocusObject(field, ancestors: [], interceptor: page)
         EventHandler.execute(.gainFocus, on: field)
         RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+    }
+
+    test("caret focus: old configuration defaults on and explicit off round trips") {
+        check(Config.VirtualBuffers().autoPassThroughOnCaretMove, "new configuration defaults on")
+        do {
+            let old = try JSONDecoder().decode(Config.VirtualBuffers.self, from: Data("{}".utf8))
+            check(old.autoPassThroughOnCaretMove, "older saved settings enable caret focus")
+            var changed = old
+            changed.autoPassThroughOnCaretMove = false
+            let decoded = try JSONDecoder().decode(Config.VirtualBuffers.self, from: JSONEncoder().encode(changed))
+            check(!decoded.autoPassThroughOnCaretMove, "explicit off is preserved")
+        } catch { Harness.fail("caret setting Codable: \(error)") }
+    }
+
+    test("caret focus: manual browse override prevents a real arrow requesting focus") {
+        for manual in [false, true] {
+            withModeWords { trial, page in
+                config.virtualBuffers.autoPassThroughOnCaretMove = true
+                page.disableAutoPassThrough = manual
+                page.position = page.buffer.offset(of: AXReplay.element(65)) ?? 0
+                guard let command = page.script(for: KeyboardGesture(identifier: "kb:downArrow")!) else { Harness.fail("arrow command"); return }
+                ScriptHandler.executeScript(command, gesture: KeyboardGesture(identifier: "kb:downArrow")!)
+                check(trial.words.joined().contains("Prompt"), "real arrow reports the field")
+                expect(AXReplay.sets.contains { $0.id == 66 && $0.attribute == kAXFocusedAttribute }, !manual, "only automatic browse mode requests keyboard focus")
+                check(!page.passThrough, "browse mode remains until native focus confirms entry")
+            }
+        }
+    }
+
+    test("caret focus: silent native focus confirms once and VO Right leaves multiline text") {
+        withModeWords(value: "First line\nSecond line", trailing: true, detachedApp: true) { trial, page in
+            config.virtualBuffers.autoPassThroughOnCaretMove = true
+            config.virtualBuffers.autoFocusMode = false
+            page.position = page.buffer.offset(of: AXReplay.element(65)) ?? 0
+            ObjectNavigator.shared.toFocus()
+            trial.queued = []
+            // The fixture seeded native provider focus without sending a reader focus event.
+            check(AXReplay.element(66).element(kAXFocusedUIElementAttribute)?.isSame(AXReplay.element(66)) == true, "silent native focus fixture is readable before the command")
+            check(!EditableWebArea.isEditable(AXReplay.element(60)), "native focus adoption sees a browse page")
+            let plugin = VoiceOverKeysPlugin()
+            guard let find = plugin.script(named: "vo_nextFormField"), let next = plugin.script(named: "vo_next") else { Harness.fail("VO commands"); return }
+            ScriptHandler.executeScript(find, gesture: KeyboardGesture(identifier: "kb:turnover+command+j")!)
+            trial.advance(0.1)
+            check(page.passThrough, "confirmed native focus enables typing without an event")
+            check(API.focusObject?.isSameElement(as: AXReplay.element(66)) == true, "normal focus adoption updates the actual reader owner")
+            expect(trial.words.filter { $0 == "focus mode" }.count, 1)
+            check(trial.words.dropLast().joined().contains("Prompt"), "field words precede focus mode")
+            let beforeEvent = trial.words
+            AXHandler.shared.focusChanged(AXReplay.element(66), pid: 900_060)
+            trial.advance(0.1)
+            expect(trial.words, beforeEvent, "delayed matching native event repeats neither field nor mode")
+            ScriptHandler.executeScript(next, gesture: KeyboardGesture(identifier: "kb:turnover+rightArrow")!)
+            trial.advance(0.1)
+            check(!page.passThrough, "VO Right leaves multiline edit in browse mode")
+            check(trial.words.joined().contains("After the field"), "VO Right crosses the whole field")
+        }
+    }
+
+    test("caret focus: arrival on the reader's already-focused field queues mode after its words") {
+        withModeWords { trial, page in
+            config.virtualBuffers.autoPassThroughOnCaretMove = true
+            config.virtualBuffers.autoFocusMode = false
+            API.setFocusObject(ObjectFactory.make(AXReplay.element(66)), ancestors: [], interceptor: page)
+            page.position = page.buffer.offset(of: AXReplay.element(65)) ?? 0
+            let plugin = VoiceOverKeysPlugin()
+            guard let command = plugin.script(named: "vo_nextFormField") else { Harness.fail("VO form command"); return }
+            ScriptHandler.executeScript(command, gesture: KeyboardGesture(identifier: "kb:turnover+command+j")!)
+            trial.advance(0.1)
+            check(page.passThrough, "already-focused field is ready for typing")
+            expect(trial.words.filter { $0 == "focus mode" }.count, 1)
+            expect(trial.words.last, "focus mode")
+            check(trial.words.dropLast().joined().contains("Prompt"), "field words precede mode")
+            check(!AXReplay.sets.contains { $0.id == 66 && $0.attribute == kAXFocusedAttribute }, "already-adopted focus needs no extra native request")
+        }
+    }
+
+    test("caret focus: a superseding command invalidates delayed native entry") {
+        withModeWords { trial, page in
+            config.virtualBuffers.autoPassThroughOnCaretMove = true
+            config.virtualBuffers.autoFocusMode = false
+            page.position = page.buffer.offset(of: AXReplay.element(65)) ?? 0
+            guard let command = page.script(for: KeyboardGesture(identifier: "kb:downArrow")!) else { Harness.fail("arrow command"); return }
+            ScriptHandler.executeScript(command, gesture: KeyboardGesture(identifier: "kb:downArrow")!)
+            check(AXReplay.sets.contains { $0.id == 66 && $0.attribute == kAXFocusedAttribute }, "first command requested focus")
+            _ = page.script(for: KeyboardGesture(identifier: "kb:upArrow")!)
+            modeFocus(66, page: page)
+            trial.advance(0.4)
+            check(!page.passThrough, "later command retires old caret intent")
+            check(!trial.words.contains("focus mode"), "stale entry has no mode announcement")
+        }
+    }
+
+    test("caret focus: app departure invalidates delayed native entry") {
+        withModeWords { trial, page in
+            config.virtualBuffers.autoPassThroughOnCaretMove = true
+            config.virtualBuffers.autoFocusMode = false
+            page.position = page.buffer.offset(of: AXReplay.element(65)) ?? 0
+            guard let command = page.script(for: KeyboardGesture(identifier: "kb:downArrow")!) else { Harness.fail("arrow command"); return }
+            ScriptHandler.executeScript(command, gesture: KeyboardGesture(identifier: "kb:downArrow")!)
+            check(AXReplay.sets.contains { $0.id == 66 && $0.attribute == kAXFocusedAttribute }, "command requested focus")
+            AXHandler.shared.activePid = 900_999
+            modeFocus(66, page: page)
+            trial.advance(0.4)
+            check(!page.passThrough, "lagging API focus does not authorize entry after app departure")
+            check(!trial.words.contains("focus mode"), "departed app has no caret mode announcement")
+        }
+    }
+
+    test("caret focus: menu items switch for focus changes but not caret moves") {
+        withModeWords(role: "AXMenuItem") { _, page in
+            config.virtualBuffers.autoPassThroughOnCaretMove = true
+            config.virtualBuffers.autoFocusMode = true
+            let item = ObjectFactory.make(AXReplay.element(66))
+            check(page.shouldPassThrough(item), "native menu focus uses focus policy")
+            check(!page.shouldPassThrough(item, caret: true), "caret excludes focus-only menu items")
+        }
+    }
+
+    test("caret focus: real arrows and quick navigation use the independent option") {
+        for enabled in [false, true] {
+            for kind in ["arrow", "vo", "quick"] {
+              for role in ["AXTextField", "AXTextArea", "AXComboBox"] {
+                withModeWords(role: role, value: role == "AXTextArea" ? "First line\nSecond line" : "") { trial, page in
+                    let quick = kind == "quick"
+                    config.virtualBuffers.autoPassThroughOnCaretMove = enabled
+                    config.virtualBuffers.autoFocusMode = false
+                    page.position = page.buffer.offset(of: AXReplay.element(65)) ?? 0
+                    ObjectNavigator.shared.toFocus()
+                    trial.queued = []
+                    let plugin = VoiceOverKeysPlugin()
+                    let command = quick ? plugin.script(named: "vo_nextFormField") : kind == "vo" ? plugin.script(named: "vo_next") : page.script(for: KeyboardGesture(identifier: "kb:downArrow")!)
+                    guard let command else { Harness.fail("real navigation command exists"); return }
+                    ScriptHandler.executeScript(command, gesture: KeyboardGesture(identifier: quick ? "kb:turnover+command+j" : "kb:downArrow")!)
+                    check(trial.words.joined().contains("Prompt"), "the command reads the field")
+                    expect(AXReplay.sets.contains { $0.id == 66 && $0.attribute == kAXFocusedAttribute }, enabled, "only caret option requests keyboard focus")
+                    check(!page.passThrough, "native focus must confirm entry")
+                    modeFocus(66, page: page)
+                    trial.advance(0.4)
+                    expect(page.passThrough, enabled, "focus setting off does not override caret intent")
+                    expect(trial.words.filter { $0 == "focus mode" }.count, enabled ? 1 : 0)
+                    if enabled {
+                        let next = plugin.script(named: "vo_previous")
+                        guard let next else { Harness.fail("VO previous command exists"); return }
+                        ScriptHandler.executeScript(next, gesture: KeyboardGesture(identifier: "kb:turnover+leftArrow")!)
+                        check(!page.passThrough, "VO leaves the field in browse mode")
+                    }
+                }
+              }
+            }
+        }
     }
 
     test("mode words: Enter waits for delayed native focus, with sounds on and off") {

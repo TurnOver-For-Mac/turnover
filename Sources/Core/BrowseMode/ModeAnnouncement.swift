@@ -100,10 +100,16 @@ package enum ModeAnnouncement {
         waitForItem()
     }
 
-    /// Arrows carry an existing mode obligation onto their spoken line, without creating a new one.
-    static func readingReported(_ document: BrowseModeDocument) {
+    /// Arrows apply caret mode policy after reading their line, then carry the mode obligation with it.
+    static func readingReported(_ document: BrowseModeDocument, caretMoved: Bool = false) {
+        guard !document.passThrough || config.virtualBuffers.autoPassThroughOnCaretMove else { return }
         guard API.focusTreeInterceptor === document else { return }
-        guard !document.passThrough, let field = document.elementAtPosition() else { return }
+        guard let field = document.elementAtPosition() else { return }
+        if caretMoved, config.virtualBuffers.autoPassThroughOnCaretMove {
+            begin()
+            document.caretArrived(ObjectFactory.make(field))
+            end()
+        }
         if navigation?.document === document { navigation = nil }
         reported = (document, field, true)
         if depth == 0 {
@@ -114,9 +120,14 @@ package enum ModeAnnouncement {
 
     /// The quick-navigation path uses this same owner, never an independent suffix.
     static func navigationReported(_ document: BrowseModeDocument, object: TurnOverObject) {
-        guard !document.passThrough else { return }
+        guard !document.passThrough || config.virtualBuffers.autoPassThroughOnCaretMove else { return }
+        if config.virtualBuffers.autoPassThroughOnCaretMove {
+            begin()
+            document.caretArrived(object)
+            end()
+        }
         if pending?.document !== document || pending?.mode != false {
-            if object.states.contains(.editable) { pending = Pending(document, sound: false) }
+            if !document.passThrough, document.caretFocusRequest == nil, object.states.contains(.editable) { pending = Pending(document, sound: false) }
         }
         document.lastQuickNavTarget = object.element
         reported = (document, object.element, true)

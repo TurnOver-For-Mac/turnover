@@ -40,9 +40,9 @@ extension BrowseModeDocument {
     }
 
     /// NVDA: shouldPassThrough — an editable or otherwise interactive focus means focus mode.
-    public func shouldPassThrough(_ obj: TurnOverObject) -> Bool {
+    public func shouldPassThrough(_ obj: TurnOverObject, caret: Bool = false) -> Bool {
         if disableAutoPassThrough { return passThrough }
-        if !config.virtualBuffers.autoFocusMode { return passThrough }   // NVDA: automatic focus mode off
+        if !(caret ? config.virtualBuffers.autoPassThroughOnCaretMove : config.virtualBuffers.autoFocusMode) { return passThrough }   // NVDA: automatic focus mode off
         if obj.axRole == "AXWebArea" { return false }
         if Self.inPlayerOrApplication(obj.element) { return true }
         let s = obj.states
@@ -53,12 +53,13 @@ extension BrowseModeDocument {
         // Model and Permissions buttons went to focus mode, and the F typed next to find the prompt went into it
         // (14 Nov 2026; both say AXPopupValue "menu" and hold no menu until opened).
         case .popUpButton: return !Self.isMenuButton(obj.element)
-        case .comboBox, .slider, .spinButton, .list, .table, .treeView, .menu, .menuItem, .tabControl, .tab: return true
+        case .menuItem, .tab: return !caret
+        case .comboBox, .slider, .spinButton, .list, .table, .treeView, .menu, .tabControl: return true
         case .listItem, .treeViewItem: return true   // NVDA's LISTITEM, TREEVIEWITEM
         default:
             // Focus on the text of an option (Safari focuses the text of a search box's suggestion as Down moves
             // through them): the list it is in decides, as if the option had the focus.
-            guard ["AXStaticText", "AXGroup", "AXUnknown"].contains(obj.axRole) else { return false }
+            guard !caret, ["AXStaticText", "AXGroup", "AXUnknown"].contains(obj.axRole) else { return false }
             var p = obj.element.element(kAXParentAttribute); var hops = 0
             while let x = p, hops < 6 {
                 let r = x.role
@@ -68,6 +69,70 @@ extension BrowseModeDocument {
             }
             return false
         }
+    }
+
+    struct CaretFocusRequest {
+        let element: AXUIElement
+        let position: Int
+        let page: Int
+        let intent: Int
+        let keys: Int
+        let focusBefore: AXUIElement?
+        let expires: Date
+        var confirmed = false
+    }
+
+    /// NVDA separates CARET from FOCUS settings and honours a manual mode override. Quick navigation
+    /// uses this same arrival policy here so a field is ready for typing after its words (14 Nov 2026).
+    func caretArrived(_ object: TurnOverObject) {
+        caretFocusRequest = nil
+        guard config.virtualBuffers.autoPassThroughOnCaretMove, !disableAutoPassThrough,
+              API.focusTreeInterceptor === self, AXHandler.shared.activePid == webArea.pid else { return }
+        guard shouldPassThrough(object, caret: true) else { setPassThrough(false, announce: true); return }
+        if API.focusObject?.isSameElement(as: object.element) == true {
+            setPassThrough(true, announce: true)
+            return
+        }
+        caretFocusRequest = CaretFocusRequest(element: object.element, position: position, page: pageGeneration,
+            intent: bufferIntent, keys: ScriptHandler.keysArrivedCount, focusBefore: API.focusObject?.element,
+            expires: Date().addingTimeInterval(0.5))
+        Self.confirmFocus(object.element) { [weak self] confirmed in
+            guard let self, let request = caretFocusRequest,
+                  request.element.isSame(object.element), !request.confirmed else { return }
+            guard confirmed, caretFocusIsCurrent(request) else { caretFocusRequest = nil; return }
+            // Some providers update native focus without posting AXFocusedUIElementChanged.
+            // Attach to the already-spoken virtual item; a later native event is consumed once below.
+            caretFocusRequest?.confirmed = true
+            AXHandler.shared.focusChanged(object.element, pid: webArea.pid)
+            // Adopt through the normal focus rules: an ignored or redirected native focus cannot enable typing.
+            guard API.focusTreeInterceptor === self,
+                  API.focusObject?.isSameElement(as: object.element) == true,
+                  let adopted = caretFocusRequest, caretFocusIsCurrent(adopted) else { caretFocusRequest = nil; return }
+            setPassThrough(true, announce: true)
+            ModeAnnouncement.readingReported(self)
+        }
+    }
+
+    private func caretFocusIsCurrent(_ request: CaretFocusRequest) -> Bool {
+        guard API.focusTreeInterceptor === self, AXHandler.shared.activePid == webArea.pid,
+              request.page == pageGeneration,
+              request.position == position, request.intent == bufferIntent,
+              request.keys == ScriptHandler.keysArrivedCount, Date() < request.expires,
+              config.virtualBuffers.autoPassThroughOnCaretMove, !disableAutoPassThrough else { return false }
+        if let current = API.focusObject?.element,
+           !current.isSame(request.element), request.focusBefore?.isSame(current) != true { return false }
+        return true
+    }
+
+    func acceptCaretFocus(_ object: TurnOverObject) -> Bool {
+        guard let request = caretFocusRequest else { return false }
+        caretFocusRequest = nil
+        guard request.element.isSame(object.element), caretFocusIsCurrent(request) else { return false }
+        setPassThrough(shouldPassThrough(object, caret: true), announce: true)
+        lastFocusElement = object.element
+        positionAtFocus = position
+        if let field = object as? EditableText { field.initAutoSelectDetection() }
+        return true
     }
 
     /// A pop up button that opens a menu or a dialog, not a list of choices of its own: its AXPopupValue says "menu",

@@ -309,7 +309,7 @@ extension BrowseModeDocument {
         } else {
             position = c.start
         }
-        speakUnit(.line)
+        speakUnit(.line, caretMoved: true)
     }
 
     /// The heading level a quick key wants: "Heading3" is 3; VoiceOver's M is the level of the heading the caret is

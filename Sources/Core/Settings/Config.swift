@@ -303,11 +303,13 @@ public struct Config: Codable {
         /// NVDA's "Automatic focus mode for focus changes": a field taking the focus switches to focus mode by itself;
         /// off, only TurnOver Space does (a tester, 6 Oct 2026).
         public var autoFocusMode = true
+        /// Automatic focus mode when the virtual reading cursor reaches an interactive field.
+        public var autoPassThroughOnCaretMove = true
         /// A picture with no description is read by its file name ("graphic, sunset beach"), as JAWS can; off, just
         /// "graphic" (a tester, AppleVis, 9 Oct 2026).
         public var imageFileNames = false
         public init() {}
-        enum Keys: String, CodingKey { case maxLineLength, autoSayAllOnPageLoad, wrapQuickNav, screenLayout, autoFocusMode, imageFileNames }
+        enum Keys: String, CodingKey { case maxLineLength, autoSayAllOnPageLoad, wrapQuickNav, screenLayout, autoFocusMode, autoPassThroughOnCaretMove, imageFileNames }
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: Keys.self)
             maxLineLength = (try? c.decodeIfPresent(Int.self, forKey: .maxLineLength)) ?? 100
@@ -315,6 +317,7 @@ public struct Config: Codable {
             wrapQuickNav = (try? c.decodeIfPresent(Bool.self, forKey: .wrapQuickNav)) ?? true
             screenLayout = (try? c.decodeIfPresent(Bool.self, forKey: .screenLayout)) ?? true
             autoFocusMode = (try? c.decodeIfPresent(Bool.self, forKey: .autoFocusMode)) ?? true
+            autoPassThroughOnCaretMove = (try? c.decodeIfPresent(Bool.self, forKey: .autoPassThroughOnCaretMove)) ?? true
             imageFileNames = (try? c.decodeIfPresent(Bool.self, forKey: .imageFileNames)) ?? false
         }
         public func encode(to encoder: Encoder) throws {
@@ -324,6 +327,7 @@ public struct Config: Codable {
             try c.encode(wrapQuickNav, forKey: .wrapQuickNav)
             try c.encode(screenLayout, forKey: .screenLayout)
             try c.encode(autoFocusMode, forKey: .autoFocusMode)
+            try c.encode(autoPassThroughOnCaretMove, forKey: .autoPassThroughOnCaretMove)
             try c.encode(imageFileNames, forKey: .imageFileNames)
         }
     }

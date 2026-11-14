@@ -12,6 +12,11 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ## 2.0, build 24.1
 
+### New to try
+
+- Automatic focus mode for caret movement is on by default. Arrows, quick navigation and VoiceOver's keys put
+  the keyboard in the field you reach; VO-Left and VO-Right can move on. Turn it off in Settings, Web pages.
+
 ### Fixed
 
 - A button replaced since the page was copied can be found near its old position or at the end of a long page,
