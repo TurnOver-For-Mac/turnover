@@ -55,8 +55,9 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 - Quick navigation onto an editable field plays the browse-mode sound after the field when typing would still navigate.
 - The manual mode toggle and Escape keep the mode words, or the sound with navigation sounds on.
 - Command F in Maps says "search" followed by the focus-mode sound.
-- Returning to a page retains its mode: a field left in focus mode is read as the focus, with selection following;
-  browse mode keeps its reading position.
+- Returning to a page with the keyboard in a text field reads that field and resumes focus mode when automatic
+  focus mode is on. Space after pasting stays in the field instead of pressing another control. A manual browse
+  mode override, automatic focus mode off, and returns to other controls keep the saved reading position.
 - Claude's sidebar session status waits until keys and speech are quiet, keeping each session's newest notice
   through title changes. The open conversation's own assertive notices keep their ordinary delivery.
 - The command layer is audible while VoiceOver leads. Reading-mode changes wait for the reader of the current

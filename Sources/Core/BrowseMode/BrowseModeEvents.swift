@@ -30,18 +30,21 @@ extension BrowseModeDocument {
                 reportFocus = accepted
                 return
             }
-            // Back from outside the document (another app) onto the control that had the focus when it left: the reading
-            // position and the mode stay as they were, and the line there is read (NVDA: entering from outside onto its
-            // last focus object, browseMode.py, #3145). Command-Tab gives that control the focus again; followed, it took
-            // the reading position back to the Claude app's prompt, and focus mode with it (macOS 27.0.1, 28 Oct 2026), and
-            // to Wikipedia's search field in Safari 27.2 (29 Oct 2026), at every return.
+            // Returning to the last focused control normally keeps the saved browse position (NVDA #3145).
+            // But an automatically focused edit must use the ordinary field event below: Claude's Prompt had
+            // the keyboard while the saved position said Hide sidebar, and Space after a paste pressed it
+            // (14 Nov 2026, turnover-2026-11-14T145341Z.log, 16388.7 s). Honour explicit browse overrides.
             let fromOutside = focusFromOutside
             focusFromOutside = false
+            let returningToEdit = fromOutside
+                && event.obj.states.contains(.editable)
+                && shouldPassThrough(event.obj)
             // 14 Nov 2026: mode lives on this page across app departure and unlock. Only browse mode
             // ignores the repeated focus; in focus mode the ordinary field event below must run (NVDA).
             if fromOutside,
                !navigated,
                !passThrough,
+               !returningToEdit,
                let last = lastFocusElement,
                event.obj.isSameElement(as: last) {
                 Log.io("browse mode: back from outside onto the \(event.obj.axRole) that had the focus; the reading position stays at \(position)")

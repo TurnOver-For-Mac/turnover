@@ -857,8 +857,10 @@ func focusRuleTests() {
     }
 
     // 14 Nov 2026: these assertions observe output after Speech.enqueue's real gates, not Speech.sink.
-    func withModeWords(role: String = "AXTextArea", value: String = "", trailing: Bool = false, detachedApp: Bool = false, automatic: Bool = true, _ body: (ModeWordsTrial, BrowseModeDocument) -> Void) {
+    func withModeWords(role: String = "AXTextArea", buttonTitle: String = "Copy", value: String = "", trailing: Bool = false, detachedApp: Bool = false, automatic: Bool = true, _ body: (ModeWordsTrial, BrowseModeDocument) -> Void) {
         var fixture = conversation()
+        let button = fixture.nodes.firstIndex { $0.id == 65 }!
+        fixture.nodes[button].attrs["AXTitle"] = .string(buttonTitle)
         let field = fixture.nodes.firstIndex { $0.id == 66 }!
         fixture.nodes[field].attrs["AXRole"] = .string(role)
         fixture.nodes[field].attrs["AXValue"] = .string(value)
@@ -1478,10 +1480,115 @@ func focusRuleTests() {
         }
     }
 
-    // Command-Tab away and back: the Claude app and Safari give the focus back to the control that had it, and the
-    // reading position went there too, into focus mode on the prompt (28 and 29 Oct 2026). NVDA leaves the reading
-    // position and the mode as they were, and reads the line there.
-    test("browse mode: back from another app onto the control that had the focus, the reading position and the mode stay") {
+    // 14 Nov 2026: replay the app-switch transition from present(), then use real event and key paths.
+    func returnToPrompt(_ page: BrowseModeDocument) {
+        API.setFocusObject(nil, ancestors: [])
+        let field = ObjectFactory.make(AXReplay.element(66))
+        page.focusFromOutside = page !== API.focusTreeInterceptor
+        API.setFocusObject(field, ancestors: [], interceptor: page)
+        waitForBuffer(page.buffer)
+        EventHandler.execute(.gainFocus, on: field)
+    }
+
+    test("app return: Prompt replaces the saved button position and accepts paste and Space") {
+        for initialFocusMode in [false, true] {
+            withModeWords(buttonTitle: "Hide sidebar") { trial, page in
+                modeFocus(66, page: page)
+                page.setPassThrough(initialFocusMode, announce: false)
+                page.position = page.buffer.offset(of: AXReplay.element(65)) ?? 0
+                trial.events = []
+                trial.queued = []
+                Speech.testResetFocusTiming()
+                let actions = AXReplay.actions.count
+                returnToPrompt(page)
+                trial.advance(0.4)
+                check(page.passThrough, "return to Prompt enters focus mode from either saved mode")
+                expect(page.position, page.buffer.offset(of: AXReplay.element(66)), "reading position follows Prompt rather than Hide sidebar")
+                check(trial.words.joined().contains("Prompt"), "return reports the focused Prompt")
+                check(!trial.words.joined().contains("Hide sidebar"), "return does not report the saved button")
+                check((API.focusObject as? EditableText)?.isFollowingSelection == true, "returned Prompt follows selection")
+                let paste = KeyboardGesture(identifier: "kb:command+v")!
+                check(ScriptHandler.findScript(for: paste) == nil, "paste belongs to the application after return")
+                // Native paste changes the provider value and posts its normal text/caret events.
+                _ = AXReplay.element(66).set(kAXValueAttribute, "Public pasted sample" as CFString)
+                if let field = API.focusObject {
+                    EventHandler.execute(.valueChange, on: field)
+                    EventHandler.execute(.caret, on: field)
+                }
+                trial.drain()
+                check(page.passThrough, "native paste notifications preserve focus mode")
+                expect(page.position, page.buffer.offset(of: AXReplay.element(66)), "native paste keeps reading aligned with Prompt")
+                let space = KeyboardGesture(identifier: "kb:space")!
+                let script = ScriptHandler.findScript(for: space)
+                check(script == nil, "Space belongs to the application after paste")
+                // A failed assertion must never repost a key to the developer's real frontmost app.
+                if script == nil {
+                    let keyBefore = InputManager.lastKeyIdentifier
+                    let timeBefore = InputManager.lastKeyDownAt
+                    defer {
+                        InputManager.lastKeyIdentifier = keyBefore
+                        InputManager.lastKeyDownAt = timeBefore
+                    }
+                    check(!InputManager.handleKeyDown(space), "Space passes through the real input manager after paste")
+                    trial.drain()
+                }
+                expect(AXReplay.actions.count, actions, "paste and Space never activate the saved button")
+            }
+        }
+    }
+
+    test("app return: pending and obsolete automatic caret focus cannot consume Prompt return") {
+        for obsolete in [false, true] {
+            withModeWords(trailing: true) { trial, page in
+                modeFocus(66, page: page)
+                page.setPassThrough(false, announce: false)
+                API.setFocusObject(ObjectFactory.make(AXReplay.element(65)), ancestors: [], interceptor: page)
+                config.virtualBuffers.autoPassThroughOnCaretMove = true
+                page.position = page.buffer.offset(of: AXReplay.element(65)) ?? 0
+                let down = KeyboardGesture(identifier: "kb:downArrow")!
+                guard let command = page.script(for: down) else { Harness.fail("caret navigation command exists"); return }
+                ScriptHandler.executeScript(command, gesture: down)
+                check(AXReplay.sets.contains { $0.id == 66 && $0.attribute == kAXFocusedAttribute }, "caret arrival requested native Prompt focus")
+                if obsolete {
+                    let up = KeyboardGesture(identifier: "kb:upArrow")!
+                    guard let command = page.script(for: up) else { Harness.fail("superseding navigation exists"); return }
+                    ScriptHandler.executeScript(command, gesture: up)
+                    page.position = page.buffer.offset(of: AXReplay.element(65)) ?? 0
+                }
+                trial.events = []
+                trial.queued = []
+                Speech.testResetFocusTiming()
+                returnToPrompt(page)
+                trial.advance(0.4)
+                check(page.passThrough, "fresh app return owns focus despite an unanswered caret request")
+                expect(page.position, page.buffer.offset(of: AXReplay.element(66)), "fresh return aligns the caret with Prompt")
+                check(trial.words.joined().contains("Prompt"), "fresh return reports Prompt")
+                check((API.focusObject as? EditableText)?.isFollowingSelection == true, "fresh return follows selection")
+            }
+        }
+    }
+
+    test("app return: manual browse mode and disabled automatic focus preserve the saved position") {
+        for manual in [false, true] {
+            withModeWords { trial, page in
+                modeFocus(66, page: page)
+                page.setPassThrough(false, announce: false)
+                page.disableAutoPassThrough = manual
+                config.virtualBuffers.autoFocusMode = manual
+                let saved = page.buffer.offset(of: AXReplay.element(65)) ?? 0
+                page.position = saved
+                returnToPrompt(page)
+                trial.advance(0.4)
+                check(!page.passThrough, "return respects manual browse mode or disabled automatic focus")
+                expect(page.position, saved, "explicit preference preserves the saved reading position")
+                check((API.focusObject as? EditableText)?.isFollowingSelection == true, "selection following resumes even in browse mode")
+            }
+        }
+    }
+
+    // Saved browse positions still survive returns to buttons and an explicit manual browse override.
+    // Automatic field returns use the regression above; an already active focus mode still resumes below.
+    test("browse mode: returning to a button or manually overridden Prompt preserves the reading position") {
         AXReplay.load(conversation())
         let saved = config, keep = Speech.sink
         var said = ""
@@ -1521,6 +1628,7 @@ func focusRuleTests() {
         check(focus(66, fromOutside: false), "into the prompt from inside the page, the focus is followed")
         check(page.passThrough && page.position != stopped, "focus mode on the prompt, the reading position on it")
         page.setPassThrough(false, announce: false)
+        page.disableAutoPassThrough = true
         page.position = stopped
         check(!focus(66, fromOutside: true), "back onto the prompt, it is not read itself")
         check((API.focusObject as? EditableText)?.isFollowingSelection == true,
@@ -1532,6 +1640,7 @@ func focusRuleTests() {
         check(focus(65, fromOutside: true), "back onto Copy while the prompt had the focus, it is followed")
         check(page.position != stopped, "the reading position went to Copy")
 
+        page.disableAutoPassThrough = false
         // Typing in the prompt (focus mode), another app, back: typing still.
         check(focus(66, fromOutside: false) && page.passThrough, "into the prompt, focus mode")
         // 14 Nov 2026: API departure cancels collection, but the document retains its focus mode.
