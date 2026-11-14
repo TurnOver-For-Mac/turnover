@@ -6207,6 +6207,9 @@
         }
       }
     },
+    "Chooses a Claude menu item" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
     "Claude" : {
       "comment" : "A group of commands in the key list",
       "localizations" : {
@@ -18666,6 +18669,9 @@
           }
         }
       }
+    },
+    "Reads the selected Claude command" : {
+      "comment" : "A command, as the key list and keyboard help say it"
     },
     "Reads the selected item (VO-F6)" : {
       "comment" : "A command, as the key list and keyboard help say it",

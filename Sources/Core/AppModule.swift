@@ -31,6 +31,9 @@ open class AppModule: ScriptableObject {
     /// The app supplies its own spelling corrections and dictionary through its native context menu.
     open var usesNativeSpellingMenu: Bool { false }
 
+    /// Group-based popups remain app-owned; they must not enter native menu tracking.
+    open var handlesGroupMenus: Bool { false }
+
     /// The app owns formatting-shortcut feedback, including when a shortcut passes through without a script.
     open var handlesNativeFormattingShortcuts: Bool { false }
 

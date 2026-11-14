@@ -33,16 +33,108 @@ package final class ClaudeAppModule: AppModule {
             self?.prepareConversationSwitch(gesture)
             gesture.send()
         }
+        for arrow in ["upArrow", "downArrow"] {
+            script("claude_popup_" + arrow, String(localized: "Reads the selected Claude command", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:" + arrow], category: "Claude") { [weak self] key in
+                key.send()
+                self?.refreshPopup(after: 0.04)
+            }.isAvailable = { [weak self] in self?.popup != nil && API.focusObject?.axRole == "AXTextArea" }
+        }
+        script("claude_chooseMenuItem", String(localized: "Chooses a Claude menu item", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:enter", "kb:space"], category: "Claude") { [weak self] key in
+            guard let self, let focus = API.focusObject else { return }
+            rememberChoice(focus)
+            key.send()
+        }.isAvailable = { [weak self] in self?.popup != nil && API.focusObject?.axRole == "AXMenuItem" }
         // 14 Nov 2026: focused session menu items exposed no AXPress/AXConfirm; VO-Space
         // only refocused them. Native Return opened the confirmation dialog in the same log.
         script("vo_defaultAction", String(localized: "Activates Claude's focused menu item", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+space"], category: "Claude") { [weak self] _ in
-            guard self?.canActivateFocusedMenuItem == true else { return }
+            guard let self, canActivateFocusedMenuItem else { return }
+            if let focus = API.focusObject { rememberChoice(focus) }
             KeyboardGesture(identifier: "kb:enter")?.send()
         }.isAvailable = { [weak self] in self?.canActivateFocusedMenuItem == true }
         script("claude_readLatest", String(localized: "Reads Claude's latest reply", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+shift+r"], category: "Claude") { [weak self] _ in
             guard let self, let chat = ClaudeTranscript.chat(pid: self.pid) else { Speech.speakMessage(String(localized: "no conversation", comment: "Spoken message")); return }
             let reply = ClaudeTranscript.latestReply(chat: chat)
             Speech.speakText(reply.isEmpty ? String(localized: "no reply yet", comment: "Spoken message") : reply)
+        }
+    }
+
+    package override var handlesGroupMenus: Bool { true }
+    private var popup: AXUIElement?
+    private var popupGeneration = 0
+    private var popupSpoken = ""
+    private var pendingChoice: (String, Date)?
+    private let popupReader = AXWalkRunner<PopupReading>()
+    package struct PopupReading: Sendable {
+        let selected: String
+        let first: String
+    }
+
+    // The log proves AXGroup menu notifications, but does not record descendants. Accept only
+    // semantic options/menu items; unfamiliar groups stay silent rather than reading a transcript.
+    // All provider reads run off main, bounded by nodes, time, depth and the worker cancellation.
+    private func rememberChoice(_ focus: TurnOverObject) {
+        guard popup != nil else { return }
+        pendingChoice = (focus.name, Date())
+    }
+
+    nonisolated private static func readPopup(_ root: AXUIElement, field: AXUIElement?, request: AXWalkRequest) -> PopupReading {
+        let deadline = Date().addingTimeInterval(0.15)
+        var pending = [(root, 0)], seen = Set<ElementKey>()
+        var first = "", selected = ""
+        var selectedElements = Set<ElementKey>()
+        if let field {
+            AXUIElementSetMessagingTimeout(field, 0.03)
+            if let active = field.element("AXActiveDescendant") { selectedElements.insert(ElementKey(active)) }
+        }
+        while let (node, depth) = pending.popLast(), seen.count < 96, Date() < deadline {
+            guard !request.isCancelled else { break }
+            guard seen.insert(ElementKey(node)).inserted else { continue }
+            AXUIElementSetMessagingTimeout(node, 0.03)
+            let attrs = node.attrs([kAXRoleAttribute, kAXSubroleAttribute, kAXTitleAttribute, kAXDescriptionAttribute,
+                                    kAXValueAttribute, kAXChildrenAttribute, kAXSelectedAttribute, kAXFocusedAttribute,
+                                    "AXSelectedChildren", "AXActiveDescendant"])
+            let role = attrs[kAXRoleAttribute] as? String ?? ""
+            let subrole = attrs[kAXSubroleAttribute] as? String ?? ""
+            for choice in attrs["AXSelectedChildren"] as? [AXUIElement] ?? [] { selectedElements.insert(ElementKey(choice)) }
+            if let choice = axElement(attrs["AXActiveDescendant"]) { selectedElements.insert(ElementKey(choice)) }
+            if role == "AXMenuItem" || role == "AXOption" || subrole == "AXListBoxOption" || role == "AXButton" {
+                var label = (attrs[kAXTitleAttribute] as? String) ?? (attrs[kAXDescriptionAttribute] as? String) ?? ""
+                if label.isEmpty { label = attrs[kAXValueAttribute] as? String ?? "" }
+                if label.isEmpty {
+                    // Chromium often places an option's name in its static-text child.
+                    label = (attrs[kAXChildrenAttribute] as? [AXUIElement] ?? []).prefix(4).compactMap {
+                        $0.string(kAXValueAttribute) ?? $0.string(kAXTitleAttribute)
+                    }.filter { !$0.isEmpty }.joined(separator: " ")
+                }
+                if first.isEmpty { first = label }
+                if selectedElements.contains(ElementKey(node)) || attrs[kAXSelectedAttribute] as? Bool == true || attrs[kAXFocusedAttribute] as? Bool == true { selected = label }
+            }
+            if depth < 6 { pending.append(contentsOf: (attrs[kAXChildrenAttribute] as? [AXUIElement] ?? []).reversed().map { ($0, depth + 1) }) }
+        }
+        return PopupReading(selected: selected, first: first)
+    }
+
+    private func refreshPopup(after delay: TimeInterval = 0, opening: Bool = false) {
+        guard let root = popup, API.focusObject?.axRole == "AXTextArea" else { return }
+        popupGeneration += 1
+        let generation = popupGeneration
+        let field = API.focusObject?.axRole == "AXTextArea" ? API.focusObject?.element : nil
+        popupReader.cancel()
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self, popupGeneration == generation, popup != nil else { return }
+            popupReader.submit(collect: { request in AXReadScope.with(while: { !request.isCancelled }) { Self.readPopup(root, field: field, request: request) } }, publish: { [weak self] reading in
+                guard let self, popupGeneration == generation, popup != nil,
+                      API.focusTreeInterceptor?.webArea.pid == pid,
+                      API.focusObject?.axRole == "AXTextArea" else { return }
+                let label = reading.selected.isEmpty && (opening || popupSpoken.isEmpty) ? reading.first : reading.selected
+                guard !label.isEmpty else {
+                    Log.io("claude: group popup has no named semantic selection; awaiting focus or selection news")
+                    return
+                }
+                guard label != popupSpoken else { return }
+                popupSpoken = label
+                Speech.speakMessage(label)
+            })
         }
     }
 
@@ -339,6 +431,33 @@ package final class ClaudeAppModule: AppModule {
         if event.kind == .gainFocus,
            API.focusTreeInterceptor?.navigationWaiting == true { return }
         switch event.kind {
+        case .menuStart where event.obj.axRole == "AXGroup":
+            popup = event.obj.element
+            popupSpoken = ""
+            refreshPopup(opening: true)
+            return
+        case .menuEnd where event.obj.axRole == "AXGroup":
+            if popup?.isSame(event.obj.element) == true {
+                popup = nil
+                popupGeneration += 1
+                popupReader.cancel()
+            }
+            return
+        case .gainFocus where pendingChoice != nil && event.obj.axRole == "AXTextArea":
+            let choice = pendingChoice!
+            pendingChoice = nil
+            next()
+            if Date().timeIntervalSince(choice.1) < 1 { Speech.speakMessage(choice.0) }
+            return
+        case .selection where popup != nil, .valueChange where popup != nil, .caret where popup != nil:
+            refreshPopup()
+            next()
+        case .appModuleLoseFocus:
+            popup = nil
+            pendingChoice = nil
+            popupGeneration += 1
+            popupReader.cancel()
+            next()
         case .gainFocus where event.obj.element.string(kAXRoleDescriptionAttribute) == "article":
             // A message: its text, with "You said" or "Claude responded" from its hidden heading.
             let t = ClaudeTranscript.text(of: event.obj.element, skipHidden: false)

@@ -19,6 +19,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- Claude’s slash-command suggestions speak when opened and as Up and Down change the choice. Choosing an Effort menu item confirms the choice after focus returns to the Prompt.
+
 - Finder says “opening” immediately when Command Down opens a selected application, while the application starts.
 
 - Claude's conversation shortcuts say only the destination title once, without the " - Claude Code" suffix or
