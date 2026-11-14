@@ -73,6 +73,24 @@ extension BrowseModeDocument {
                 announcePage()
                 return
             }
+            // Back on the page after Return in the address field: a new page is most likely on its way, and the page
+            // being left was read meanwhile ("I agree", from the page left, on three of five loads, 13 Nov 2026). The new
+            // page announces itself when it comes; if none has come in a second and a half, and no key since, the line.
+            if event.obj.isSameElement(as: webArea), let back = BrowseModeHandler.backFromAddressField,
+               Date().timeIntervalSince(back.at) < 0.5, back.page.isSame(webArea) {
+                BrowseModeHandler.backFromAddressField = nil
+                setPassThrough(false, announce: false)
+                positionAtFocus = position
+                lastChain = []
+                Log.io("browse mode: back on the page after Return in the address field; its line waits for the new page")
+                let waiting = url, epoch = pageGeneration, keys = ScriptHandler.keysArrivedCount
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                    guard let self, API.focusTreeInterceptor === self, pageGeneration == epoch, url == waiting else { return }
+                    guard ScriptHandler.keysArrivedCount == keys else { return }
+                    speakUnit(.line)
+                }
+                return
+            }
             // Into a player, say so (a page that puts the focus on its player by itself must not leave the letters
             // silently going to the page).
             let wanted = shouldPassThrough(event.obj)

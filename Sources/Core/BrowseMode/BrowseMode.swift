@@ -121,8 +121,16 @@ public final class BrowseModeDocument: ScriptableObject {
         return (value as? URL)?.absoluteString ?? (value as? String) ?? ""
     }
     var lastURL = ""
+    /// When a letter with no command was last kept from the page in browse mode (any page).
+    static var lastLetterKeptAt = Date.distantPast
     var pageGeneration = 0
     var bufferIntent = 0
+    /// The page (by its generation) whose end was seen to load more when it was reached, such as a feed or a cinema's
+    /// showtimes: quick navigation waits there for the end to be read again before it wraps (quickWrapWaits).
+    package var loadsMoreAtItsEnd: Int?
+    /// The page (by its generation) whose end has been scrolled into view and read again in the background after a
+    /// quick wrap: once a page, to find out whether it loads more at its end.
+    package var endReachedInBackground: Int?
     var publicationWasEmpty = false
     var publicationAnchor: BrowseModeHandler.Saved?
     var announceWhenReady = false
@@ -141,6 +149,7 @@ public final class BrowseModeDocument: ScriptableObject {
         buffer.newPage()
         pageGeneration += 1
         buffer.build()
+        watchWhileFilling()
         if !first {
             // A new page starts in browse mode, as NVDA's new document does. Focus mode carried over from the page
             // before (Google's search box) kept the new page from being announced, and its keys went to the page
@@ -180,8 +189,17 @@ public final class BrowseModeDocument: ScriptableObject {
     /// its first line (or the line it resumes at).
     func announcePage() {
         announcedURL = lastURL
-        let title = buffer.withSnapshot {
-            (webArea.string(kAXDescriptionAttribute) ?? webArea.element(kAXWindowAttribute)?.string(kAXTitleAttribute) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        // The first of these that says something. Claude's page has its conversation's name as its title and an empty
+        // description, and an empty description was taken as the answer: switching conversations never said which
+        // one, and Oliver read two headings to find he was in the wrong one (14 Nov 2026).
+        // The page's own title is used only there: with no description at all, the window's title, as before.
+        let title = buffer.withSnapshot { () -> String in
+            let description = webArea.string(kAXDescriptionAttribute)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let description, !description.isEmpty { return description }
+            let own = (webArea.string(kAXTitleAttribute) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !own.isEmpty { return own }
+            guard description == nil else { return "" }
+            return (webArea.element(kAXWindowAttribute)?.string(kAXTitleAttribute) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         }
         if !title.isEmpty { Speech.speakMessage(title) }
         if config.virtualBuffers.autoSayAllOnPageLoad {
@@ -327,6 +345,7 @@ public final class BrowseModeDocument: ScriptableObject {
                 return
             }
             g.send(); PageWatch.keySent(to: webArea.pid)
+            askFocusIfNoNews()
         }
         script("disablePassThrough", String(localized: "Switches back to browse mode", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:escape"], category: nav) { [weak self] g in
             guard let self else { return }
@@ -461,10 +480,24 @@ public final class BrowseModeDocument: ScriptableObject {
         let text = buffer.text, n = text.length
         guard n > 0, !s.isEmpty else { return false }
         let from = min(position + 1, n)
-        let r = forward
+        let here = min(position, n)
+        var r = forward
             ? text.range(of: s, options: .caseInsensitive, range: NSRange(location: from, length: n - from))
-            : text.range(of: s, options: [.caseInsensitive, .backwards], range: NSRange(location: 0, length: min(position, n)))
+            : text.range(of: s, options: [.caseInsensitive, .backwards], range: NSRange(location: 0, length: here))
+        // Round the page, as Safari's own Find goes, and said as quick navigation says it: from the last line "sub" was
+        // not found, and the same search from the top found Submit (14 Nov 2026).
+        var wrapped = false
+        if r.location == NSNotFound {
+            r = forward
+                ? text.range(of: s, options: .caseInsensitive, range: NSRange(location: 0, length: from))
+                : text.range(of: s, options: [.caseInsensitive, .backwards], range: NSRange(location: here, length: n - here))
+            wrapped = r.location != NSNotFound
+        }
         guard r.location != NSNotFound else { return false }
+        if wrapped {
+            Tones.edge()
+            Speech.speakMessage(forward ? String(localized: "wrapped to the top", comment: "Spoken message") : String(localized: "wrapped to the bottom", comment: "Spoken message"))
+        }
         position = r.location
         guard let info = makeTextInfo(.bookmark(Bookmark(start: r.location, end: r.location))) else { return true }
         info.expand(.line)
@@ -553,6 +586,76 @@ public final class BrowseModeDocument: ScriptableObject {
             completion(buffer.text.length > before)
         }
         return true
+    }
+
+    /// A page still filling in when it was first read is read again, quietly, keeping the place: at 1, 2, 4 and 8 s
+    /// after it came, while its copy is small. App Store Connect's pages were read with their header and footer only
+    /// (10 to 49 elements); the rest came with no news of it, so Tab went straight to the footer and H said "no next
+    /// heading", until Oliver had tabbed round Safari's tool bar and back, four times in a morning (14 Nov 2026).
+    func watchWhileFilling() {
+        let epoch = pageGeneration
+        for delay in [1.0, 2.0, 4.0, 8.0] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self, pageGeneration == epoch, API.focusTreeInterceptor === self else { return }
+                guard !buffer.isLoading, buffer.text.length < Self.smallPage else { return }
+                Log.io("browse mode: the page is small (\(buffer.text.length) characters) \(Int(delay)) s after it came; read again in case it is still filling in")
+                buffer.build()
+            }
+        }
+    }
+    /// A copy shorter than this, in characters, may be a page still filling in.
+    static let smallPage = 1500
+
+    /// Tab sent to the page, and no news of the focus a third of a second later: the page is asked where its focus is,
+    /// and that is read if it moved. On App Store Connect's menu every other Tab said nothing (14 Nov 2026): the focus
+    /// went on each time, but Safari sent news of only every other move. If the focus is where it was, nothing is said.
+    func askFocusIfNoNews() {
+        let sentAt = Date(), pid = webArea.pid, keys = ScriptHandler.keysArrivedCount
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            guard let self, API.focusTreeInterceptor === self, ScriptHandler.keysArrivedCount == keys else { return }
+            if let (_, at) = AXHandler.shared.lastGainFocus, at >= sentAt { return }
+            // A quarter of a second at most: a page that has stopped answering must not hold the keys.
+            let app = AXUIElementCreateApplication(pid)
+            AXUIElementSetMessagingTimeout(app, 0.25)
+            guard let f = app.element(kAXFocusedUIElementAttribute) else { return }
+            if let current = API.focusObject?.element, f.isSame(current) {
+                Log.io("browse mode: Tab brought no news of the focus, and it is where it was")
+                return
+            }
+            Log.io("browse mode: Tab brought no news of the focus; the page's focus is on \(f.role), read from there")
+            AXHandler.shared.focusChanged(f, pid: f.pid)
+        }
+    }
+
+    /// Whether quick navigation, finding nothing more ahead, waits for the page's end to be read again before it wraps.
+    /// NVDA wraps at once. TurnOver waited every time: a whole read of the page before "wrapped to the top", about 260 ms
+    /// and up to 625 on a big page, against 20 ms for any other heading (63 of 71 wraps in Oliver's log of 13 and 14 Nov
+    /// 2026: "wrapping on a webpage feels a bit sticky"). In the logs of 20 Oct to 9 Nov 2026, 84 of 1,142 such reads
+    /// found something new to go to: a chat's new reply, or a page that loads more as its end comes into view.
+    /// So it waits only where that can be so: the page has changed since it was read, the copy is in part, or this page
+    /// has shown that its end loads more. Otherwise the wrap is at once, from the copy, and the end is reached in the
+    /// background (reachEndInBackground), once a page, to find out whether it loads more.
+    package func quickWrapWaits() -> Bool {
+        if buffer.isDirty { return true }
+        if buffer.isPartial { return true }
+        if loadsMoreAtItsEnd == pageGeneration { return true }
+        return false
+    }
+
+    /// The page's end scrolled into view and the page read again, without anything waiting on it: once a page. If more
+    /// came, the page is one that loads more at its end, and quick navigation waits for it there from now on.
+    func reachEndInBackground() {
+        guard endReachedInBackground != pageGeneration else { return }
+        guard !buffer.isLoading else { return }
+        endReachedInBackground = pageGeneration
+        let before = buffer.text.length
+        let epoch = pageGeneration
+        buffer.build(scrollTo: buffer.lines.last?.element) { [weak self] in
+            guard let self, pageGeneration == epoch else { return }
+            guard buffer.text.length > before else { return }
+            loadsMoreAtItsEnd = epoch
+            Log.io("browse mode: the page's end loaded more (\(buffer.text.length - before) characters); quick navigation waits for it on this page")
+        }
     }
 
     /// A page read only in part (a long chat, issue 227): read on in the background, pass after pass, until `found`
@@ -686,6 +789,13 @@ public final class BrowseModeDocument: ScriptableObject {
         if inBrowseMode, lettersAreCommands, isLetterOrDigit, isPlainKey {
             return Script(name: "browseModeTrap", description: String(localized: "A letter or digit with no command in browse mode: nothing", comment: "A command, as the key list and keyboard help say it"), category: "navigation", owner: self) { _ in
                 Log.io("browse mode: a letter or digit with no command; kept from the page")
+                // Said once a run: typing into a field TurnOver was still in browse mode on, "Okay" went nowhere without
+                // a sound, and the message went with only the comma and what followed it (13 Nov 2026). The word, not
+                // a sound: it says why the letters were not typed. Again after three seconds without one.
+                if Date().timeIntervalSince(BrowseModeDocument.lastLetterKeptAt) > 3 {
+                    Speech.speakMessage(String(localized: "browse mode", comment: "Spoken message"))
+                }
+                BrowseModeDocument.lastLetterKeptAt = Date()
             }
         }
         return nil

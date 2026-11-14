@@ -6,6 +6,33 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- Wrapping round a page with the heading, link and other single-letter keys is immediate again: at the end of a page
+  TurnOver no longer reads the whole page again before "wrapped to the top", unless the page has changed. Previous
+  heading at the top of a page wraps to the bottom even while the page is being read again, instead of saying "top".
+- After the Mac sleeps, VoiceOver is no longer turned on and straight off again for the lock screen, and after the
+  unlock TurnOver takes the keys if neither reader is on.
+- Speech that gets stuck just after an unlock, such as when the sound moves to other headphones, recovers within
+  seconds instead of staying silent.
+- Typing in a field on a page whose form is in a frame of its own, with Safari's AutoFill, no longer drops back to
+  browse mode, so the letters go into the field.
+- Buttons that open a menu, such as the Claude app's model and permissions buttons, stay in browse mode when Tab
+  reaches them, as in NVDA.
+- In browse mode, a letter that is not a command says "browse mode", so letters that were not typed are not lost
+  without a sound.
+- Pressing a button that opens or closes something says expanded or collapsed straight away.
+- Tab on a page reads where the focus went, even when the page sends no news of it.
+- A page that fills in after it first appears is read again, so Tab and the quick keys find all of it.
+- After Return in Safari's address bar, a line of the page being left is no longer read before the new page.
+- Find in browse mode goes round the page, and says so.
+- Secure input left on after a password is told sooner when you are pressing keys TurnOver can't hear.
+- Claude app: a reply is no longer read just after you send a message while Claude is working; Claude Code's plan is
+  left out of the reply that is read; a reply you are already reading is not started again from its top; progress
+  lines wait until you stop pressing keys; switching conversations says which one.
+- Mail: switching mailboxes with Command and a number reads the new mailbox, not a row of the old one.
+- Up and Down in an empty list say "empty" at once. Backspace in an empty field, and Up and Down in a box of one line,
+  answer at once.
+- The link sound plays once for a line, not once for each link on it.
+- The app you are leaving is no longer read over the Command Tab app switcher.
 - "Nothing in this window can be read", with the keys for screen recognition, is a hint now: turning off Hints after
   a pause turns it off too. It is no longer said in Steam's Big Picture while TurnOver is reading it.
 

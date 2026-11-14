@@ -654,6 +654,24 @@ public final class WebBuffer {
     private var profiled = false
     /// Siblings whose text a plugin label took (so "Open Project" is not read twice).
     private var consumed: [AXUIElement] = []
+    /// The label of the control read last, until text follows it: a status region repeating it is an echo.
+    private var lastControlLabel: String?
+
+    /// Whether a status region's text is the start of the control just read (eight characters at least, so a short
+    /// word that happens to match is still read).
+    private func echoesLastControl(_ region: AXUIElement) -> Bool {
+        guard let label = lastControlLabel, !label.isEmpty else { return false }
+        var parts: [String] = []
+        var queue = [region]; var n = 0
+        while !queue.isEmpty, n < 12 {
+            let e = queue.removeFirst(); n += 1
+            if e.role == "AXStaticText", let v = e.string(kAXValueAttribute) { parts.append(v) }
+            queue.append(contentsOf: e.elements(kAXChildrenAttribute))
+        }
+        let text = parts.joined().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.count >= 8 else { return false }
+        return label.hasPrefix(text)
+    }
 
     private func visit(_ el: AXUIElement, depth: Int) {
         guard depth < 60 else { return }
@@ -716,6 +734,7 @@ public final class WebBuffer {
                 append(v, el, space: space)
                 if iosContent { flush() }
                 lastTextEnd = r.location != NSNotFound ? r.location + r.length : nil
+                lastControlLabel = nil
             }
         case "AXGenericElement" where iosContent:
             // A book's page in Kindle: the whole page as one value, with no lines or paragraphs given (probe, 18 Oct
@@ -761,6 +780,7 @@ public final class WebBuffer {
             currentElement = el
             addPiece(label.isEmpty ? obj.role.displayString : label, el, false)
             flush(control: true, fields: fields)
+            lastControlLabel = label
         case "AXHeading" where el.elements(kAXChildrenAttribute).isEmpty:
             // A heading with no text children (SwiftUI content in Music) is its own title.
             flush()
@@ -768,6 +788,10 @@ public final class WebBuffer {
             if let t = el.string(kAXDescriptionAttribute) ?? el.string(kAXTitleAttribute) ?? el.string(kAXValueAttribute), !t.isEmpty { currentElement = el; append(t, el) }
             flush()
             pendingEntering.removeAll { $0.isSame(el) }
+        case "AXGroup" where sub == "AXApplicationStatus" && echoesLastControl(el):
+            // A status region that repeats the control just before it is not read twice: the Claude app's tool rows were
+            // read as "Ran 2 commands, button", then "Ran 2 commands" again from the status beside it (13 Nov 2026).
+            break
         default:
             let isLandmark = sub.hasPrefix("AXLandmark") || sub == "AXDocumentArticle" || sub == "AXBlockQuote"
             let announced = Self.announcedContainers.contains(role) || isLandmark || Self.announcedSubroles.contains(sub)

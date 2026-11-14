@@ -17,6 +17,18 @@ public enum TurnOverSounds {
         return Set(list.filter { $0.hasSuffix(".wav") }.map { String($0.dropLast(4)) })
     }()
 
+    private static var lastPlayed: [String: Date] = [:]
+    /// A sound asked for again within a tenth of a second of the last time: logged, at most once a second.
+    private static var repeatLoggedAt = Date.distantPast
+    private static func noteRepeat(_ name: String) {
+        let now = Date()
+        if let last = lastPlayed[name], now.timeIntervalSince(last) < 0.1, now.timeIntervalSince(repeatLoggedAt) > 1 {
+            repeatLoggedAt = now
+            Log.io("sound: \(name) played again \(Int(now.timeIntervalSince(last) * 1000)) ms after the last")
+        }
+        lastPlayed[name] = now
+    }
+
     /// Plays one of TurnOver's sounds by name ("link"); false if there is no such file.
     @discardableResult
     public static func play(_ name: String, volume: Float = 0.8) -> Bool {
@@ -29,7 +41,13 @@ public enum TurnOverSounds {
         guard let p = players[name] else { return false }
         p.volume = volume * min(1.5, max(0.2, Float(config.speech.volume) / 100))   // with TurnOver's own volume
         p.currentTime = 0
+        let started = Date()
         p.play()
+        // Oliver, 14 Nov 2026: on MacRumors "the link sound hangs". Sounds were not logged, so the log could not say
+        // how. One that is slow to start, or played again before it ended, is logged now.
+        let ms = Int(Date().timeIntervalSince(started) * 1000)
+        if ms >= 50 { Log.io("sound: \(name) took \(ms) ms to start") }
+        noteRepeat(name)
         return true
     }
 }

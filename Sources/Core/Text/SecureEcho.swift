@@ -111,6 +111,10 @@ public enum SecureInputWatch {
     private static var timer: Timer?
     private static var looks = 0
     private static var warned = false
+    /// While secure input is on outside a password field: when that began, the focus last seen, and how often it moved.
+    private static var onSince: Date?
+    private static var focusSeen: AXUIElement?
+    private static var focusMoves = 0
     /// Secure input came on or went off while TurnOver leads (the app lifts VoiceOver's mute for a password field).
     public static var onChange: ((Bool) -> Void)?
     private static var wasOn = false
@@ -127,9 +131,20 @@ public enum SecureInputWatch {
         let other = on ? SecureEcho.otherProcessField(of: AXHandler.shared.activePid) : nil
         SecureEcho.watch(other)
         let inPassword = API.focusObject?.role == .passwordEdit || other != nil
-        guard on, !inPassword else { looks = 0; warned = false; return }
+        guard on, !inPassword else { looks = 0; warned = false; onSince = nil; focusSeen = nil; focusMoves = 0; return }
+        if onSince == nil { onSince = Date() }
         looks += 1
-        guard looks >= 40, !warned else { return }
+        if let f = API.focusObject?.element, !(focusSeen.map { CFEqual($0, f) } ?? false) {
+            if focusSeen != nil { focusMoves += 1 }
+            focusSeen = f
+        }
+        // The focus moving again and again while no key reaches TurnOver: someone is pressing keys it cannot hear, and
+        // is told at once, not after ten seconds. Signing in to App Store Connect in the Claude app, the focus moved 15
+        // times in the 9.8 s before the warning came (14 Nov 2026). Chrome's "Show password" box after its field is
+        // one move, and goes on waiting the ten seconds (31 Oct 2026).
+        let since = onSince ?? Date()
+        let keysUnheard = focusMoves >= 3 && InputManager.lastKeyDownAt < since && Date().timeIntervalSince(since) >= 2
+        guard looks >= 40 || keysUnheard, !warned else { return }
         warned = true
         let holder = (CGSessionCopyCurrentDictionary() as? [String: Any])?["kCGSSessionSecureInputPID"] as? Int
         let name = holder.flatMap { NSRunningApplication(processIdentifier: pid_t($0))?.localizedName } ?? holder.map { "pid \($0)" } ?? "an application"

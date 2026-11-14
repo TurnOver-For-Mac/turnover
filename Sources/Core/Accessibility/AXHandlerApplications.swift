@@ -186,7 +186,19 @@ extension AXHandler {
         Log.info("observing pid \(pid)\(ForeignChildren.contains(pid) ? "; its windows list each other's elements (Qt Quick): filtered" : "")")
     }
 
+    /// The Docks (by process) whose refusals have been logged once.
+    static var dockRefusalsNoted: Set<pid_t> = []
+
     func retryNotifications(pid: pid_t, obs: AXObserver, names: [String], delays: [Double]) {
+        // The Dock always refuses most of them (24 of 27) and never comes to the front: asking again changes nothing. It
+        // was asked five times at every start and unlock, each ending in an error line, and the error read as a fault
+        // in every log (13 and 14 Nov 2026). Said once, as what it is.
+        if NSRunningApplication(processIdentifier: pid)?.bundleIdentifier == "com.apple.dock" {
+            if Self.dockRefusalsNoted.insert(pid).inserted {
+                Log.info("pid \(pid) is the Dock: \(names.count) notifications refused, as it always does; not asked again")
+            }
+            return
+        }
         guard let delay = delays.first else {
             // Not given up for good: an app held at launch by a system prompt (Audacity 4 asks for the microphone
             // before it answers anything) was never heard from again (parts sweep, 14 Oct 2026). The observer goes,

@@ -30,6 +30,7 @@ extension AXHandler {
     typealias FocusRule = (AXUIElement, pid_t, AXUIElement) -> FocusVerdict
     var focusRules: [(String, FocusRule)] {[
         ("not an application", ruleNotAnApplication),
+        ("behind the app switcher", ruleBehindTheSwitcher),
         ("background application", ruleBackgroundApplication),
         ("set aside after a settings Tab", ruleSetAside),
         ("untitled window", ruleUntitledWindow),
@@ -77,6 +78,18 @@ extension AXHandler {
             return .ignore
         }
         return .go(target)
+    }
+
+    /// While Command Tab's app switcher has the focus, the app it was opened over can still report a focus of its own:
+    /// Mail's message pane was read over the switcher ("Claude", then a PayPal message), and the next two Command Tabs
+    /// said nothing (13 Nov 2026). Set aside while the switcher is there; once Command is let go it is gone, and the
+    /// app that comes to the front is followed as ever.
+    func ruleBehindTheSwitcher(_ target: AXUIElement, _ pid: pid_t, _ element: AXUIElement) -> FocusVerdict {
+        // Only the app it was opened over (still the active one): the app coming to the front is never held back.
+        guard let f = API.focusObject, f is AppSwitcherList, f.pid != pid, pid == activePid else { return .go(target) }
+        guard (f.element.attr(kAXRoleAttribute) as? String) == "AXList" else { return .go(target) }   // closed
+        Log.io("focus from pid \(pid) while the app switcher is up; set aside")
+        return .ignore
     }
 
     /// An ordinary application in the background (Safari's page reloading behind Mail, 2 Oct 2026) can post focus
@@ -347,6 +360,15 @@ extension AXHandler {
         }
         if let web = target.firstDescendant(role: "AXWebArea", maxVisited: 300) {
             if sameWindow, axRole == "AXUnknown" { Log.io("focus on a nameless \(axRole) in the same window; ignored"); return .ignore }
+            // A text field TurnOver is on still says it has the keyboard: the report is Safari's, around the page, not a
+            // move. On a page whose form is in a frame of its own (a Wix site, 14 Nov 2026), each focus on the Email
+            // field brought Safari's AutoFill list and, 190 ms later, focus on the page's nameless group. TurnOver went
+            // back to browse mode, the address typed became commands, and Oliver switched to VoiceOver to fill it in.
+            // The frame runs in a process of its own, so the same-app check above never applied.
+            if Self.fieldHoldsKeyboard(current.element, target, page: web) {
+                Log.io("focus on a nameless \(axRole) while the field \"\(Log.words(current.name))\" still reports focus; ignored")
+                return .ignore
+            }
             // A list or table in the same window still says it has the keyboard: the report is the app announcing a
             // pane it loaded, not a move. Outlook does it for its reading pane each time a message loads, half a
             // second after Down, and the next Down moved by line in the message (parts request #2, written by an AI
@@ -375,6 +397,24 @@ extension AXHandler {
             Log.io("focus on a nameless AXUnknown with no document inside; ignored"); return .ignore
         }
         return .go(target)
+    }
+
+    /// Whether `field`, where the focus is, is a text field in `page` that still says it has the keyboard, so a report
+    /// of focus on `reported` (a nameless container around that page) is not a move. Asked of the field itself: a
+    /// frame of the page can run in a process of its own, with no window of its own to compare. A field outside the
+    /// page (Safari's address field, after Return) that lets the page have the keys is a move, and is followed.
+    package static func fieldHoldsKeyboard(_ field: AXUIElement, _ reported: AXUIElement, page: AXUIElement) -> Bool {
+        guard ["AXTextField", "AXTextArea", "AXComboBox"].contains(field.role) else { return false }
+        guard !field.isSame(reported) else { return false }
+        guard (field.attr(kAXFocusedAttribute) as? Bool) == true else { return false }
+        // TurnOver's document for that page holds the field, or the field is inside the page.
+        if let d = API.focusTreeInterceptor, d.webArea.isSame(page) { return true }
+        var x = field.element(kAXParentAttribute); var hops = 0
+        while let y = x, hops < 60 {
+            if y.isSame(page) { return true }
+            x = y.element(kAXParentAttribute); hops += 1
+        }
+        return false
     }
 
     /// The list, table or outline the focus is in (the focus itself, or a row or cell of it), if it still says it
@@ -461,6 +501,9 @@ extension AXHandler {
         }
         if let web = target.firstWebArea() {
             Log.io("focus to the window \"\(Log.words(name))\" after \(f.axRole) let go; to its page")
+            if f.axRole == "AXTextField", InputManager.lastKeyIdentifier == "kb:enter", Date().timeIntervalSince(InputManager.lastKeyDownAt) < 1 {
+                BrowseModeHandler.backFromAddressField = (Date(), web)
+            }
             return .follow(web)
         }
         // The control let go, but the app may only be passing the focus through its window on the way to the next

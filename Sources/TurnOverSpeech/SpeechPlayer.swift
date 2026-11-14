@@ -739,7 +739,15 @@ public final class SpeechPlayer: @unchecked Sendable {
         guard !node.isPlaying else { return }
         var reason: NSString?
         doing("node play")
+        let started = Self.outputClock
         if !TOCatch({ node.play() }, &reason) { NSLog("speech: the audio device went as a node was played (%@); the next speech starts it again", (reason ?? "") as String) }
+        // The play that held the speech queue for 13 s after the sound moved to AirPods Max (14 Nov 2026, cause not
+        // known): how long a slow one took, and on which output, so the next one shows where the time goes.
+        let ms = Int((Self.outputClock - started) * 1000)
+        if ms >= 200 {
+            let name = Self.stringProperty(engineDevice, kAudioObjectPropertyName) ?? "device \(engineDevice)"
+            onOutputChange?("speech: starting playback took \(ms) ms (output \(name))")
+        }
     }
 
     /// A new player with this one's voice, settings and callbacks, for when this one's queue is stuck in Apple's audio

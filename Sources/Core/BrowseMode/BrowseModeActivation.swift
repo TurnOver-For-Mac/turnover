@@ -171,7 +171,10 @@ extension BrowseModeDocument {
                 let prefix = said.isEmpty ? "" : "\(said), "
                 if checkable, let v = now.value, v != before.value {
                     if !Speech.checkStateSpoken(of: element, since: pressedAt) { Speech.speakCheckState(of: element, named: movedOn) }
-                } else if let e = now.expanded, e != before.expanded, !isFocus {
+                } else if let e = now.expanded, e != before.expanded, !(isFocus && Speech.stateSaid(of: element, since: pressedAt)) {
+                    // The focus too, unless the page's own event has said it: AppleVis's "Filter posts" sent none, and
+                    // "expanded" came a second later, after Oliver had moved on with Tab (14 Nov 2026).
+                    Speech.noteStateSaid(of: element)
                     Speech.speakMessage(prefix + (e ? State.expanded.displayString : State.collapsed.displayString))
                 } else if let sel = now.selected, sel != before.selected, !isFocus {
                     Speech.speakMessage(prefix + (sel ? State.selected.displayString : State.selected.negativeDisplayString))
@@ -182,7 +185,7 @@ extension BrowseModeDocument {
                 self.finishWatch(watch, element, changed: true, movedOn: movedOn)
             }
         }
-        look([0.25, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0][...])
+        look([0.1, 0.25, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0][...])
     }
     /// The watch over. The buffer is read again now if the control changed, or if this was the last watch running
     /// (one read for several presses, not one each: six builds in a row stalled the keys; a code review, 25 Oct

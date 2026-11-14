@@ -247,6 +247,19 @@ package final class MailAppModule: AppModule {
             DispatchQueue.main.async { [pid] in AXHandler.shared.focusChanged(web, pid: pid) }
             return
         }
+        // Another mailbox by Command and a number: the list takes the focus before Mail has filled it with the new
+        // mailbox, and its old row was read under the new mailbox's name ("Amazon.co.uk, Delivered…", then "Junk –
+        // Personal", three times in twelve on 13 Nov 2026). The list is read a moment later, as it then is.
+        if event.kind == .gainFocus, event.obj.element.role == "AXTable", event.obj.element.string(kAXDescriptionAttribute) == "messages",
+           Self.switchedMailboxRecently {
+            let table = event.obj.element
+            Log.io("mail: another mailbox; its list is read once Mail has filled it")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                guard API.focusObject?.element.isSame(table) == true else { return }
+                Speech.speakObject(ObjectFactory.make(table), reason: .focus)
+            }
+            return
+        }
         next()
         // A message opened in its own window (Return with the preview pane hidden, a tester): the reading starts in
         // the message, not on the window's toolbar.
@@ -258,6 +271,14 @@ package final class MailAppModule: AppModule {
             let table = MailMessageRow.isMessageRow(el) ? el.element(kAXParentAttribute) : (el.string(kAXDescriptionAttribute) == "messages" ? el : nil)
             if let table { MailUnread.snapshot(table) }
         }
+    }
+
+    /// The last key, a moment ago, was Command and a number: Mail's keys for its mailboxes.
+    static var switchedMailboxRecently: Bool {
+        guard Date().timeIntervalSince(InputManager.lastKeyDownAt) < 1 else { return false }
+        let key = InputManager.lastKeyIdentifier
+        guard key.hasPrefix("kb:command+"), let last = key.last, last.isNumber else { return false }
+        return key.count == "kb:command+1".count
     }
 
     package override func objectClass(for element: AXUIElement, role: Role, subrole: String?) -> TurnOverObject.Type? {
