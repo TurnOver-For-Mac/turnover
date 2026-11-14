@@ -229,6 +229,10 @@ public final class BrowseModeDocument: ScriptableObject {
     /// Where the page's end was last scrolled into view and read again in the background after a quick wrap: the page
     /// (by its generation) and the copy's length then. Looked at again only once the page or its copy has changed.
     package var endReachedInBackground: (generation: Int, text: Int)?
+    /// 14 Nov 2026: a complete end reread that found no growth lets later forward keys answer from the copy.
+    /// Preview replacements may dirty that copy without making it an infinite feed. Any later publication
+    /// longer than this certified copy must have its end checked again, even if another owner refreshed it.
+    package var endReadWithoutGrowth: (generation: Int, length: Int)?
     var publicationWasEmpty = false
     var publicationAnchor: BrowseModeHandler.Saved?
     var announceWhenReady = false
@@ -682,10 +686,31 @@ public final class BrowseModeDocument: ScriptableObject {
     /// The continuation belongs to this document generation and reading position; another key or focus change makes
     /// it obsolete. False when there is nothing to reach for, and `completion` is not called.
     @discardableResult
-    func reachForMore(_ completion: @escaping (Bool) -> Void) -> Bool {
+    func reachForMore(fromCopyIfConfirmed: Bool = false, _ completion: @escaping (Bool) -> Void) -> Bool {
         // A page that is not answering has no more to give for now; and the answer would come later, outside the copy.
         guard !pageSilent else { return false }
-        guard buffer.isDirty || buffer.isPartial || buffer.lastBuildMs >= 250 || Date().timeIntervalSince(buffer.builtAt) > 1 else { return false }
+        if fromCopyIfConfirmed,
+           let end = endReadWithoutGrowth,
+           end.generation == pageGeneration,
+           buffer.text.length <= end.length,
+           !buffer.isPartial,
+           loadsMoreAtItsEnd != pageGeneration {
+            // 14 Nov 2026: new AX news can dirty an otherwise identical published copy after its end was checked.
+            // The forward edge still answers at once, but that new news must get a fresh background check.
+            if buffer.isDirty { endReachedInBackground = nil }
+            reachEndInBackground()
+            return false
+        }
+        let outgrewConfirmedEnd = endReadWithoutGrowth.map {
+            $0.generation == pageGeneration &&
+            buffer.text.length > $0.length
+        } ?? false
+        guard buffer.isDirty ||
+              buffer.isPartial ||
+              loadsMoreAtItsEnd == pageGeneration ||
+              outgrewConfirmedEnd ||
+              buffer.lastBuildMs >= 250 ||
+              Date().timeIntervalSince(buffer.builtAt) > 1 else { return false }
         let before = buffer.text.length
         if buffer.canReadOn {
             readOnUntil({ [weak self] in (self?.buffer.text.length ?? 0) > before }) { [weak self] more in
@@ -699,9 +724,19 @@ public final class BrowseModeDocument: ScriptableObject {
         let epoch = pageGeneration
         let movedAt = positionMovedAt
         let intent = bufferIntent
+        let keys = ScriptHandler.keysArrivedCount
         buffer.build(scrollTo: last) { [weak self] in
-            guard let self, pageGeneration == epoch, bufferIntent == intent, positionMovedAt == movedAt, API.focusTreeInterceptor === self else { return }
-            completion(buffer.text.length > before)
+            guard let self,
+                  pageGeneration == epoch,
+                  bufferIntent == intent,
+                  positionMovedAt == movedAt,
+                  ScriptHandler.keysArrivedCount == keys,
+                  API.focusTreeInterceptor === self else { return }
+            let more = buffer.text.length > before
+            if more { loadsMoreAtItsEnd = epoch }
+            else if buffer.status == .complete,
+                    !buffer.lines.isEmpty { endReadWithoutGrowth = (epoch, buffer.text.length) }
+            completion(more)
         }
         return true
     }
@@ -792,7 +827,12 @@ public final class BrowseModeDocument: ScriptableObject {
         guard !pageSilent else { return }   // a page not answering is asked nothing (the look in the background says when it is back)
         endReachedInBackground = (epoch, seen)
         func grew() -> Bool {
-            guard pageGeneration == epoch, buffer.text.length > before else { return false }
+            guard pageGeneration == epoch else { return false }
+            guard buffer.text.length > before else {
+                if buffer.status == .complete,
+                   !buffer.lines.isEmpty { endReadWithoutGrowth = (epoch, buffer.text.length) }
+                return false
+            }
             loadsMoreAtItsEnd = epoch
             Log.io("browse mode: the page's end loaded more (\(buffer.text.length - before) characters); quick navigation waits for it on this page")
             return true
@@ -819,8 +859,15 @@ public final class BrowseModeDocument: ScriptableObject {
     /// says yes, the page's end, or two seconds of passes; then `done`, on main, if this is still the key's reading.
     func readOnUntil(_ found: @escaping () -> Bool, _ done: @escaping (Bool) -> Void) {
         let epoch = pageGeneration, intent = bufferIntent, movedAt = positionMovedAt
+        let keys = ScriptHandler.keysArrivedCount
         let until = Date().addingTimeInterval(2)
-        func current() -> Bool { pageGeneration == epoch && bufferIntent == intent && positionMovedAt == movedAt && API.focusTreeInterceptor === self }
+        func current() -> Bool {
+            pageGeneration == epoch &&
+            bufferIntent == intent &&
+            positionMovedAt == movedAt &&
+            ScriptHandler.keysArrivedCount == keys &&
+            API.focusTreeInterceptor === self
+        }
         func pass() {
             guard current() else { return }
             // A refresh under way: its publication comes first, then the reading on.
@@ -908,13 +955,23 @@ public final class BrowseModeDocument: ScriptableObject {
             }
             if hops > 0 { moved += hops * (direction > 0 ? 1 : -1) }
         }
-        if moved == 0, direction > 0, !afterRefresh, reachForMore({ [weak self] more in
+        if moved == 0,
+           direction > 0,
+           !afterRefresh,
+           reachForMore(fromCopyIfConfirmed: true, { [weak self] more in
             guard let self else { return }
             if more { move(unit, direction, afterRefresh: true) }
             else { reportBufferEnd(forward: true) }
         }) { return }
         // Not "bottom" with more of a long page still to read (its reading on ran out of time): reportBufferEnd says so.
-        if moved == 0 { reportBufferEnd(forward: direction > 0) }
+        if moved == 0 {
+            let fromCopy = direction > 0 &&
+                endReadWithoutGrowth?.generation == pageGeneration &&
+                buffer.text.length <= (endReadWithoutGrowth?.length ?? -1) &&
+                !buffer.isPartial &&
+                loadsMoreAtItsEnd != pageGeneration
+            reportBufferEnd(forward: direction > 0, fromCopy: fromCopy)
+        }
         position = info.start
         // Say all carries on from here and reads this line itself (NVDA's willSayAllResume).
         if SayAll.resuming { return }
