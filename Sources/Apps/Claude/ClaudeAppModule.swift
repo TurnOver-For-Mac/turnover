@@ -57,7 +57,7 @@ package final class ClaudeAppModule: AppModule {
     }
 
     /// Claude's native conversation keys hold page commands until a reply identifies the page. An unchanged,
-    /// non-busy address releases immediately, keeping its copy and reading position (review, 14 Nov 2026).
+    /// non-busy address settles briefly, keeping its copy and reading position (review, 14 Nov 2026).
     package func prepareConversationSwitch() {
         guard let page = API.focusTreeInterceptor,
               page.webArea.pid == pid else { return }
@@ -72,6 +72,9 @@ package final class ClaudeAppModule: AppModule {
         let title = page.buffer.withSnapshot { root.string(kAXTitleAttribute) ?? "" }
         var titleAnnounced = false
         var releasedContent = false
+        var unchangedAnswers = 0
+        var observedAddressChange = false
+        let settleUntil = ProcessInfo.processInfo.systemUptime + 0.25
         page.beginNavigationWait()
 
         func finish() {
@@ -108,14 +111,21 @@ package final class ClaudeAppModule: AppModule {
                     let changed = now != address
                     let busy = snapshot.with { root.attr("AXElementBusy") as? Bool == true }
                     if !changed,
-                       !busy {
-                        // Keep watching for a delayed address change, but the answered, unchanged page is usable now.
-                        page.finishNavigationWait(title: nil, announce: false)
-                        releasedContent = true
+                       !observedAddressChange {
+                        // The shortcut has no verified target identity. A first old-page answer can precede
+                        // Claude's actual switch; require several answers and a short settle before reuse.
+                        unchangedAnswers = busy ? 0 : unchangedAnswers + 1
+                        if unchangedAnswers >= 3,
+                           ProcessInfo.processInfo.systemUptime >= settleUntil,
+                           !releasedContent {
+                            page.finishNavigationWait(title: nil, announce: false)
+                            releasedContent = true
+                        }
                         look()
                         return
                     }
                     if changed {
+                        observedAddressChange = true
                         if releasedContent,
                            page.lastURL != now {
                             page.beginNavigationWait()

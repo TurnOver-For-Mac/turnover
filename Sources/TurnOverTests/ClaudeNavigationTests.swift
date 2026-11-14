@@ -229,6 +229,21 @@ func claudeNavigationTests() {
         expect(sent.value, ["kb:command+3"], "return does not replay the discarded Tab")
     }
 
+    test("Claude navigation: an address change during settle keeps commands for the new copy") {
+        withConversationTest { page, module, _ in
+            let shortcut = KeyboardGesture(identifier: "kb:command+2")!
+            module.script(for: shortcut)?.handler(shortcut)
+            var completed: [String] = []
+            check(page.deferInitialContent { completed.append(page.buffer.text as String) }, "navigation waits")
+            RunLoop.current.run(until: Date().addingTimeInterval(0.12))
+            expect(completed, [], "old-page polls do not consume navigation")
+            AXReplay.load(conversationPage("New settled conversation", address: "https://example.com/new-settled"))
+            waitForConversation { completed.count == 1 }
+            check(completed.first?.contains("New settled conversation") == true, "the queued command reads the new copy")
+            check(completed.first?.contains("Old conversation") == false, "the old copy never receives the command")
+        }
+    }
+
     test("Claude navigation: departure before a held provider ceiling discards queued keys") {
         withConversationTest { page, module, sent in
             let entered = OSAllocatedUnfairLock(initialState: false)
@@ -279,6 +294,9 @@ func claudeNavigationTests() {
             let tab = KeyboardGesture(identifier: "kb:tab")!
             page.script(for: tab)?.handler(tab)
             expect(sent.value, ["kb:command+4"], "the intercepted Tab is initially held")
+            RunLoop.current.run(until: Date().addingTimeInterval(0.12))
+            expect(completed, [], "early old-page answers cannot release commands")
+            expect(sent.value, ["kb:command+4"], "Tab stays queued during the settle")
             waitForConversation { completed.count == 2 }
             expect(completed, [1, 2], "the unchanged answer releases both commands in order")
             expect(sent.value, ["kb:command+4", "kb:tab"], "the actual queued Tab is posted once")
