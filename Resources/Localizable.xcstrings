@@ -44388,6 +44388,15 @@
     "attachments browser" : {
       "comment" : "Notes view change"
     },
+    "cannot choose the folder: it is no longer available" : {
+      "comment" : "Spoken message"
+    },
+    "cannot choose the folder: the app refused selection and activation" : {
+      "comment" : "Spoken message"
+    },
+    "cannot confirm the folder selection" : {
+      "comment" : "Spoken message"
+    },
     "cannot leave the attachments browser" : {
       "comment" : "Spoken message"
     },

@@ -12,6 +12,8 @@ public final class PanesView {
     public let pid: pid_t
     public let parts: [RecipeView.Panes.Part]
     private var hinted = Set<Int>()
+    /// Parts whose held selection should be confirmed aloud, enabled by the owning app module.
+    public var announcesHeldChoices = Set<Int>()
     /// Elements found, kept for a moment: finding one walks the window.
     private var found: [Int: (AXUIElement, Date)] = [:]
 
@@ -104,7 +106,7 @@ public final class PanesView {
             // The focus event reads the element; the part's name first.
             Speech.speakMessage(part.name)
         } else if !e.elements(kAXRowsAttribute).isEmpty {
-            ObjectNavigator.shared.enterHold(e, name: part.name, onTab: { [weak self] forward in
+            ObjectNavigator.shared.enterHold(e, name: part.name, announceChoice: announcesHeldChoices.contains(i), onTab: { [weak self] forward in
                 guard let self, API.focusPid == self.pid else { return }
                 self.step(forward: forward, from: i)
             })

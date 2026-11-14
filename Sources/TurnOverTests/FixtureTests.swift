@@ -6,6 +6,82 @@ import TurnOverCore
 import AXFixtures
 
 func fixtureTests() {
+    func heldFolderFixture(rows: [Int] = [1, 2]) -> AXFixture {
+        .init(app: "Public Notes sample", bundle: "com.apple.Notes", recorded: "synthetic", root: 0, application: nil, focus: nil, nodes: [
+            .init(id: 0, attrs: ["AXRole": .string("AXOutline"), "AXRows": .elements(rows), "AXChildren": .elements(rows), "AXSelectedRows": .elements([1])]),
+            .init(id: 1, attrs: ["AXRole": .string("AXRow"), "AXTitle": .string("Sample folder"), "AXParent": .element(0)]),
+            .init(id: 2, attrs: ["AXRole": .string("AXRow"), "AXTitle": .string("Second folder"), "AXParent": .element(0)])
+        ])
+    }
+    test("Notes held folders: the app module enables choice feedback for its folder pane") {
+        AXReplay.load(notesPaneFixture())
+        let sink = Speech.sink
+        var said: [String] = []
+        Speech.sink = { said.append($0) }
+        defer { ObjectNavigator.shared.releaseHold(); API.setFocusObject(nil, ancestors: []); Speech.sink = sink; AXReplay.unload() }
+        API.setFocusObject(ObjectFactory.make(AXReplay.element(9)), ancestors: [])
+        let type = AppModuleHandler.shared.moduleType(for: "com.apple.Notes")!
+        let module = type.init(pid: 900_009, bundleIdentifier: "com.apple.Notes", appName: "Notes")
+        module.script(named: "panes_part1")?.handler(KeyboardGesture(identifier: "kb:control+command+1")!)
+        said.removeAll()
+        ObjectNavigator.shared.heldChoose()
+        expect(said, ["Sample folder, selected"], "real app wiring opts the Folders pane into spoken feedback")
+    }
+    test("Notes held folders: choosing a row selects it and announces the confirmed outcome") {
+        AXReplay.load(heldFolderFixture())
+        let navigator = ObjectNavigator.shared, sink = Speech.sink
+        var said: [String] = []
+        Speech.sink = { said.append($0) }
+        defer { navigator.releaseHold(); Speech.sink = sink; AXReplay.unload() }
+        navigator.enterHold(AXReplay.root!, name: "Folders", announceChoice: true)
+        navigator.heldMove(1)
+        said.removeAll()
+        navigator.heldChoose()
+        expect(AXReplay.root!.elements(kAXSelectedRowsAttribute).compactMap { AXReplay.id(of: $0) }, [2], "the chosen folder changes the provider selection")
+        expect(said, ["Second folder, selected"], "Return and Space share heldChoose and must provide spoken confirmation")
+    }
+    test("Notes held folders: a row that disappeared explains why it cannot be chosen") {
+        AXReplay.load(heldFolderFixture())
+        let navigator = ObjectNavigator.shared, sink = Speech.sink
+        var said: [String] = []
+        Speech.sink = { said.append($0) }
+        defer { navigator.releaseHold(); Speech.sink = sink; AXReplay.unload() }
+        navigator.enterHold(AXReplay.root!, name: "Folders", announceChoice: true)
+        AXReplay.load(heldFolderFixture(rows: [2]))
+        said.removeAll()
+        navigator.heldChoose()
+        expect(said, ["cannot choose the folder: it is no longer available"], "a stale folder must not silently swallow activation or claim success")
+        check(AXReplay.sets.isEmpty, "the vanished row is never selected")
+    }
+    test("Held lists: folder choice announcements are opt in and do not leak into another hold") {
+        AXReplay.load(heldFolderFixture())
+        let navigator = ObjectNavigator.shared, sink = Speech.sink
+        var said: [String] = []
+        Speech.sink = { said.append($0) }
+        defer { navigator.releaseHold(); Speech.sink = sink; AXReplay.unload() }
+        navigator.enterHold(AXReplay.root!, name: "Folders", announceChoice: true)
+        navigator.releaseHold()
+        navigator.enterHold(AXReplay.root!, name: "Other list")
+        said.removeAll()
+        navigator.heldChoose()
+        check(said.isEmpty, "existing Finder and plugin holds keep their existing feedback")
+    }
+    test("Held lists: part Tab callback survives release and cannot leak into the next hold") {
+        AXReplay.load(heldFolderFixture())
+        let navigator = ObjectNavigator.shared, sink = Speech.sink, oldTab = ObjectNavigator.shared.heldTab
+        Speech.sink = { _ in }
+        var directions: [Bool] = [], fallbackCount = 0
+        navigator.heldTab = { _ in fallbackCount += 1; return true }
+        defer { navigator.releaseHold(); navigator.heldTab = oldTab; Speech.sink = sink; AXReplay.unload() }
+        navigator.enterHold(AXReplay.root!, name: "Folders", onTab: { directions.append($0) })
+        navigator.leaveHold(forward: false)
+        expect(directions, [false], "the originating part handles Shift Tab after release")
+        expect(fallbackCount, 0, "the existing Finder hook is not overwritten or invoked")
+        navigator.enterHold(AXReplay.root!, name: "Other list")
+        navigator.leaveHold(forward: true)
+        expect(directions, [false], "the old part callback is retired")
+        expect(fallbackCount, 1, "the existing global fallback still handles another list")
+    }
     test("dialog: unnamed fields stay navigable without filling the opening or description") {
         let sink = Speech.sink
         var said: [String] = []

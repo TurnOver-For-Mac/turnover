@@ -14,6 +14,7 @@ final class PanesAppModule: AppModule {
         view = PanesView(pid: pid, panes: panes)
         if bundleIdentifier == "com.apple.Notes" {
             notes = NotesPaneNavigation(view: view)
+            view.announcesHeldChoices = [0]
         }
         let cat = appName
         // In this app, not in a menu or a dialog, and not while TurnOver's own menu is up.

@@ -95,7 +95,10 @@ public final class ObjectNavigator {
     /// A list that will not take the keyboard (Finder's sidebar: AXFocused cannot be set, and a click on it leaves
     /// the keyboard in the file list; 7 Oct 2026). TurnOver holds it: while the cursor is in it, Up and Down move
     /// through its rows, Return and Space choose one (as selecting it with the mouse), Left and Right close and open.
-    public private(set) var heldList: AXUIElement? { didSet { heldPartTab = nil } }
+    public private(set) var heldList: AXUIElement? {
+        didSet { announceHeldChoice = false; heldPartTab = nil }
+    }
+    private var announceHeldChoice = false
     private var heldPartTab: ((Bool) -> Void)?
     private func hold(_ list: AXUIElement) {
         if let h = heldList, CFEqual(h, list) { return }
@@ -162,25 +165,48 @@ public final class ObjectNavigator {
 
     /// Return or Space: choose the row, as clicking it would (Finder goes to that place).
     public func heldChoose() {
-        guard let list = heldList, let i = heldRowIndex else { return }
+        guard let list = heldList, let i = heldRowIndex else {
+            if announceHeldChoice { Speech.speakMessage(String(localized: "cannot choose the folder: it is no longer available", comment: "Spoken message")) }
+            return
+        }
         let rows = heldRows
-        guard rows.indices.contains(i) else { Tones.edge(); return }
+        guard rows.indices.contains(i) else {
+            if announceHeldChoice { Speech.speakMessage(String(localized: "cannot choose the folder: it is no longer available", comment: "Spoken message")) }
+            else { Tones.edge() }
+            return
+        }
         let row = rows[i]
+        func chosen() {
+            Tones.press()
+            keepHoldUntil = Date().addingTimeInterval(2)
+            guard announceHeldChoice else { return }
+            // Notes accepted AXSelectedRows without speaking in the 14 Nov 2026 trial. Read the selection
+            // back before claiming success; a successful write alone does not establish the selected folder.
+            if list.elements(kAXSelectedRowsAttribute).contains(where: { CFEqual($0, row) }) {
+                let object = ObjectFactory.make(row)
+                let name = object.name.isEmpty ? ElementMatcher.text(of: row) : object.name
+                Speech.speakOnly(name.isEmpty ? String(localized: "selected", comment: "Spoken state") : String(localized: "\(name), selected", comment: "The folder just selected in Notes"))
+            } else {
+                Speech.speakMessage(String(localized: "cannot confirm the folder selection", comment: "Spoken message"))
+            }
+        }
         let r = list.set(kAXSelectedRowsAttribute, [row] as CFArray)
         Log.io("review: held list, chose row \(i + 1) → \(r.rawValue)")
-        if r == .success { Tones.press(); keepHoldUntil = Date().addingTimeInterval(2); return }
+        if r == .success { chosen(); return }
         // No rows to select (a plugin's held grid): the row pressed, or else its first button.
-        if AXUIElementPerformAction(row, kAXPressAction as CFString) == .success { Tones.press(); keepHoldUntil = Date().addingTimeInterval(2); return }
+        if AXUIElementPerformAction(row, kAXPressAction as CFString) == .success { chosen(); return }
         var queue = row.elements(kAXChildrenAttribute); var seen = 0
         while !queue.isEmpty, seen < 60 {
             let x = queue.removeFirst(); seen += 1
             var acts: CFArray?; AXUIElementCopyActionNames(x, &acts)
             if ((acts as? [String]) ?? []).contains(kAXPressAction as String), AXUIElementPerformAction(x, kAXPressAction as CFString) == .success {
-                Log.io("review: held list, pressed row \(i + 1)'s \(x.role)"); Tones.press(); keepHoldUntil = Date().addingTimeInterval(2); return
+                Log.io("review: held list, pressed row \(i + 1)'s \(x.role)"); chosen(); return
             }
             queue += x.elements(kAXChildrenAttribute)
         }
-        Speech.speakMessage(String(localized: "cannot choose it", comment: "Spoken message"))
+        Speech.speakMessage(announceHeldChoice
+            ? String(localized: "cannot choose the folder: the app refused selection and activation", comment: "Spoken message")
+            : String(localized: "cannot choose it", comment: "Spoken message"))
     }
 
     /// Left and Right: close or open the row (a sidebar section).
@@ -198,13 +224,14 @@ public final class ObjectNavigator {
     public func releaseHold() { heldList = nil }
 
     /// Into a list TurnOver holds, on its selected row (Finder: Tab from the files to the sidebar).
-    public func enterHold(_ list: AXUIElement, name: String, onTab: ((Bool) -> Void)? = nil) {
+    public func enterHold(_ list: AXUIElement, name: String, announceChoice: Bool = false, onTab: ((Bool) -> Void)? = nil) {
         releaseHold()
         let rows = list.elements(kAXRowsAttribute)
         guard !rows.isEmpty else { return }
         let sel = list.elements(kAXSelectedRowsAttribute).first
         let i = sel.flatMap { s in rows.firstIndex { CFEqual($0, s) } } ?? 0
         heldList = list
+        announceHeldChoice = announceChoice
         heldPartTab = onTab
         Speech.speakMessage(name)
         landRow(rows[i], index: i, count: rows.count)

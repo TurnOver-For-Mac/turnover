@@ -19,6 +19,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- Notes: Return and Space in the held Folders list now announce the selected folder, or explain why it could not be chosen.
+
 - Notes: view shortcuts announce their destination and focus; Tab leaves attachments for folders and notes.
 
 - Notes: Tab and Shift-Tab reach folders, notes and the open note in list and gallery views.
