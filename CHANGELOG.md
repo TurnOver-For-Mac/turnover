@@ -11,7 +11,7 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 - Claude's progress lines wait for speech to finish as well as quiet keys, keeping each conversation's newest
   waiting notice until it can be said, even after a minute.
 - Claude's conversation shortcuts say the new name promptly without holding up the keys; waiting page commands
-  run once, including when the conversation stays the same or the wait reaches its limit,
+  run once after a short settle if the conversation stays the same, or when the wait reaches its limit,
   while Claude stays focused. Leaving Claude discards those waiting commands.
 - Wrapping round a page with the heading, link and other single-letter keys is immediate again: at the end of a page
   TurnOver no longer reads the whole page again before "wrapped to the top", unless the page has changed. Previous
