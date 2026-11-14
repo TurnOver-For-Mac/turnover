@@ -17,6 +17,9 @@ public final class PanesView {
 
     public init(pid: pid_t, panes: RecipeView.Panes) { self.pid = pid; parts = panes.parts }
 
+    /// A native view switch can leave a live accessibility element hidden in the old tree.
+    public func invalidate() { found.removeAll() }
+
     /// The element of a part, now. Parts are containers, so the search never goes into rows, cells, text and the
     /// like, and visits a few hundred elements at most: a search that walked Notes' 800-row list held the main
     /// thread for seconds and the watchdog handed over (8 Oct 2026). Kept for ten seconds once found.

@@ -66,6 +66,7 @@ let coreSources: [String] = [
     "Apps/Media/MediaSidebarSelection.swift",
     "Apps/Media/MediaView.swift",
     "Apps/Media/MediaWorkOwner.swift",
+    "Apps/Notes/NotesPaneNavigation.swift",
     "Apps/Numbers/NumbersAppModule.swift",
     "Apps/Pages/PagesAppModule.swift",
     "Apps/Panes/PanesAppModule.swift",

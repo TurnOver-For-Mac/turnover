@@ -44378,7 +44378,34 @@
     "Activates Claude's focused menu item" : {
       "comment" : "A command, as the key list and keyboard help say it"
     },
-    "Automatic focus mode for caret movement" : {}
+    "Automatic focus mode for caret movement" : {},
+    "%@: the view did not change" : {
+      "comment" : "Notes did not confirm the requested view"
+    },
+    "Changes the Notes view and reads the focus" : {
+      "comment" : "A command"
+    },
+    "attachments browser" : {
+      "comment" : "Notes view change"
+    },
+    "cannot leave the attachments browser" : {
+      "comment" : "Spoken message"
+    },
+    "folders hidden" : {
+      "comment" : "Notes view change"
+    },
+    "folders shown" : {
+      "comment" : "Notes view change"
+    },
+    "gallery view" : {
+      "comment" : "Notes view change"
+    },
+    "list view" : {
+      "comment" : "Notes view change"
+    },
+    "notes view" : {
+      "comment" : "Notes view change"
+    }
   },
   "version" : "1.0"
 }

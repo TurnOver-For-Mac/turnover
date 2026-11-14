@@ -27,6 +27,7 @@ Speech.sink = { _ in }
 
 pureTests()
 notesPaneTests()
+notesViewKeyTests()
 speechQueueWatchTests()
 speechRecoveryAttemptTests()
 recoveryWarningTests()

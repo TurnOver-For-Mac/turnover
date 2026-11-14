@@ -19,6 +19,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- Notes: view shortcuts announce their destination and focus; Tab leaves attachments for folders and notes.
+
 - Notes: Tab and Shift-Tab reach folders, notes and the open note in list and gallery views.
 
 - Unnamed controls say their known role or stay silent, instead of being called unknown.
