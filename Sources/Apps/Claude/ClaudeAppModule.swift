@@ -82,13 +82,20 @@ final class ClaudeAppModule: AppModule {
     /// after a line Oliver had just moved to, they sounded like part of it, and he went back to read the line again:
     /// ten in 38 s, three lines read twice (14 Nov 2026); eight more fell between the words he typed. The newest line
     /// is said once the keys have been quiet for a moment; older ones are out of date by then, and are not said.
+    /// The conversation open now, by its page's address, from the page browse mode already has: asked once, not by a
+    /// search of the window (a search of up to 3,000 elements on the main thread, every second; Codex's third review).
+    private func currentConversation() -> String {
+        guard let page = API.focusTreeInterceptor, page.webArea.pid == pid else { return "" }
+        return page.url
+    }
+
     /// The conversation the waiting line belongs to (a line from another one, after a switch, is not said).
     private var heldProgressSession = ""
 
     private func holdProgress(_ region: AXUIElement) {
         let first = heldProgress == nil
         heldProgress = region
-        heldProgressSession = ClaudeTranscript.chat(pid: pid).map(ClaudeTranscript.session(of:)) ?? ""
+        heldProgressSession = currentConversation()
         if first { Log.io("claude: a progress line waits while keys are pressed") }
         if first { releaseProgressWhenQuiet() }
     }
@@ -101,7 +108,7 @@ final class ClaudeAppModule: AppModule {
             guard Date().timeIntervalSince(InputManager.lastKeyDownAt) >= Self.quietForProgress else { releaseProgressWhenQuiet(); return }
             heldProgress = nil
             // Another conversation now: its line is not this one's.
-            let session = ClaudeTranscript.chat(pid: pid).map(ClaudeTranscript.session(of:)) ?? ""
+            let session = currentConversation()
             guard session == heldProgressSession else { Log.io("claude: another conversation now; the waiting line is dropped"); return }
             guard config.presentation.reportDynamicContentChanges else { return }
             let t = ClaudeTranscript.text(of: region, skipHidden: false)
@@ -117,7 +124,7 @@ final class ClaudeAppModule: AppModule {
     /// Only in its own conversation (`session`, its address): after a switch it is not said (Codex's second review).
     private func sayReply(_ reply: String, session: String, tries: Int) {
         if !session.isEmpty {
-            let now = ClaudeTranscript.chat(pid: pid).map(ClaudeTranscript.session(of:)) ?? ""
+            let now = currentConversation()
             guard now == session else { Log.io("claude: another conversation now; the finished reply is not read"); return }
         }
         guard let page = API.focusTreeInterceptor, page.webArea.pid == pid,
@@ -154,10 +161,10 @@ final class ClaudeAppModule: AppModule {
             // Two quiet looks in a row, so a pause between tool calls is not the end.
             if quietTicks < 1 { self.tick(chat: live, quietTicks: quietTicks + 1); return }
             self.watching = false
+            self.heldProgress = nil   // the reply is done, whatever it holds: a waiting "Running…" is out of date
             let reply = ClaudeTranscript.latestReply(chat: live)
             Log.io("claude: reply finished, \(reply.count) characters")
             guard !reply.isEmpty else { return }
-            self.heldProgress = nil   // the reply is done: a waiting "Running…" is out of date
             self.sayReply(reply, session: ClaudeTranscript.session(of: live), tries: 0)
         }
     }

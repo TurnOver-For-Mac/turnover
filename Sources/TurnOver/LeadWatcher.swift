@@ -183,27 +183,6 @@ final class LeadWatcher {
         lockTurnedVoiceOverOn = true
         lockRequest.start(now: ProcessInfo.processInfo.systemUptime)
         handOver(voiceOverOn: true, preservingWakeIntent: true, completion: { [weak self] _ in self?.lockRequest.answered() })
-        checkLockHasAReader(cycle: lockCycle, tries: 0)
-    }
-
-    /// The lock screen with no reader at all: a request for VoiceOver that was cancelled or failed after the last
-    /// notice is not followed by another notice to ask again (Codex's second review, 14 Nov 2026). Looked at 3 s after
-    /// the request, and twice more: still locked, VoiceOver still off, and nothing under way, it is asked for again.
-    private func checkLockHasAReader(cycle: Int, tries: Int) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
-            guard let self, self.lockCycle == cycle, self.locked, Self.screenIsLocked else { return }
-            guard !NSWorkspace.shared.isVoiceOverEnabled else { return }
-            guard !self.lockRequest.isUnderWay(now: ProcessInfo.processInfo.systemUptime) else {
-                if tries < 2 { self.checkLockHasAReader(cycle: cycle, tries: tries + 1) }
-                return
-            }
-            guard tries < 3 else { return }
-            Log.warning("lead watcher: the lock screen has no reader; VoiceOver asked for again")
-            self.lockTurnedVoiceOverOn = true
-            self.lockRequest.start(now: ProcessInfo.processInfo.systemUptime)
-            self.handOver(voiceOverOn: true, preservingWakeIntent: true, completion: { [weak self] _ in self?.lockRequest.answered() })
-            self.checkLockHasAReader(cycle: cycle, tries: tries + 1)
-        }
     }
 
     /// The Mac was unlocked and secure input is off: the app checks that a reader is on (TurnOverApp).
