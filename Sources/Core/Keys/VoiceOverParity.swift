@@ -655,7 +655,7 @@ public enum ArrowQuickNav {
         // TurnOver Space is VO-Space there (a contributor, 21 Oct 2026). The Quick Nav sound is kept alongside the mode words (14 Nov 2026).
         if config.general.macKeys, let d = API.focusTreeInterceptor {
             d.disableAutoPassThrough = !on
-            d.setPassThrough(!on, announce: true, playSound: false)
+            d.setPassThrough(!on, announce: true, playSound: false, manual: true)
         }
         // VoiceOver's follows: its own chord, posted where VoiceOver hears it. Only when it differs, so two out of step
         // come back into step. (Tried on 17 Oct 2026 and undone, because VoiceOver's Quick Nav then took the arrows

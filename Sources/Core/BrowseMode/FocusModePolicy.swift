@@ -25,11 +25,12 @@ extension BrowseModeDocument {
         if position > n { position = max(0, n - 1) }
     }
 
-    public func setPassThrough(_ on: Bool, announce: Bool, playSound: Bool = true) {
+    /// Automatic changes use a sound; explicit mode controls retain the navigation-sounds preference.
+    public func setPassThrough(_ on: Bool, announce: Bool, playSound: Bool = true, manual: Bool = false) {
         guard passThrough != on else { return }
         ModeAnnouncement.begin()
         defer { ModeAnnouncement.end() }
-        ModeAnnouncement.changed(self, from: passThrough, announce: announce, playSound: playSound)
+        ModeAnnouncement.changed(self, from: passThrough, announce: announce, playSound: playSound, manual: manual)
         passThrough = on
         Log.io("browse mode: \(on ? "focus mode" : "browse mode")\(announce ? "" : " (quietly)")")
     }

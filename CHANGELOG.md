@@ -44,12 +44,12 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   selection, with a modifier key or in a table cell.
 - Typing, VoiceOver's keys: with words spoken as you type, the word said as the space is typed is no longer followed by
   "space", as in VoiceOver. A space typed on its own is still said, and NVDA's and JAWS's keys say both.
-- Changes between browse mode and focus mode wait briefly for the destination field and say the mode after its
-  words. Ordinary keys, including a command replacing a page-loading wait, carry interrupted mode words to the
-  current field or reading position; Control stops them. Mode sounds remain, and brief changes within one key
-  or refresh stay silent.
-- Quick navigation onto an editable field says "browse mode" after the field when typing would still navigate.
-- Command F in Maps says "search, focus mode".
+- Automatic changes between browse mode and focus mode play the mode sound after the destination field’s words,
+  even with navigation sounds off. Ordinary keys carry an interrupted cue to the current field or reading
+  position; Control stops it. Brief changes within one key or refresh stay silent.
+- Quick navigation onto an editable field plays the browse-mode sound after the field when typing would still navigate.
+- The manual mode toggle and Escape keep the mode words, or the sound with navigation sounds on.
+- Command F in Maps says "search" followed by the focus-mode sound.
 - Returning to a page retains its mode: a field left in focus mode is read as the focus, with selection following;
   browse mode keeps its reading position.
 - Claude's sidebar session status waits until keys and speech are quiet, keeping each session's newest notice

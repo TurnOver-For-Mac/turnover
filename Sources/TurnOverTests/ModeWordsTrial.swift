@@ -9,7 +9,7 @@ final class ModeWordsTrial {
     var queued: [(String, (@Sendable (Bool) -> Void)?)] = []
     var sound: [Bool] = []
     var finish = true
-    var holdMode = false
+    var events: [String] = []
     let configBefore = config
     let modeBefore = Speech.mode
     let gateBefore = Speech.voiceOverEnabledForOutput
@@ -32,9 +32,13 @@ final class ModeWordsTrial {
         Speech.outputTestDriver = { [weak self] text, _, completion in
             guard let self else { return }
             queued.append((text, completion))
-            if finish && !(holdMode && ["focus mode", "browse mode"].contains(text)) { completion?(true) }
+            events.append(text)
+            if finish { completion?(true) }
         }
-        BrowseModeDocument.modeSound = { [weak self] in self?.sound.append($0) }
+        BrowseModeDocument.modeSound = { [weak self] focus in
+            self?.sound.append(focus)
+            self?.events.append(focus ? "focus sound" : "browse sound")
+        }
         config.general.navigationSounds = false
         config.virtualBuffers.autoFocusMode = true
         config.virtualBuffers.autoPassThroughOnCaretMove = false

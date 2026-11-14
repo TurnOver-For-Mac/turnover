@@ -367,7 +367,7 @@ public final class GlobalCommands: ScriptableObject {
             // 14 Nov 2026: retain the familiar Quick Nav sound, with the mode words after the key's speech.
             let browse = d.passThrough
             let sounded = VoiceOverSounds.play(browse ? "QuickNavOn.wav" : "QuickNavOff.wav")
-            d.setPassThrough(!d.passThrough, announce: true, playSound: !sounded)
+            d.setPassThrough(!d.passThrough, announce: true, playSound: !sounded, manual: true)
         }
         // Object navigation: everything in the window, whether or not the keyboard reaches it. TurnOver Left and Right
         // step through every item in reading order, going in and out of groups by themselves, as Narrator's Caps Lock

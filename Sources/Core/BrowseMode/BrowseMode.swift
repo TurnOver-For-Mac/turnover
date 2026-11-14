@@ -493,7 +493,7 @@ public final class BrowseModeDocument: ScriptableObject {
                     if let at { position = at }
                 }
                 disableAutoPassThrough = false   // Escape ends the by-hand choice too: the next field switches by itself again
-                setPassThrough(false, announce: true)
+                setPassThrough(false, announce: true, manual: true)
             } else { g.send() }
         }
         // NVDA's quick navigation keys. Shift goes backwards.

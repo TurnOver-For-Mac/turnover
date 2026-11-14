@@ -4,7 +4,8 @@ import ApplicationServices
 import TurnOverAX
 
 /// 14 Nov 2026: an operation can request native focus and return before its label arrives. Keep the
-/// mode as an obligation until that item is reported (350 ms ceiling), and until its words complete.
+/// mode as an obligation until that item is reported (350 ms ceiling), then deliver its cue after
+/// the item’s words complete.
 /// An ordinary speech cancellation transfers the obligation; Control explicitly retires it.
 package enum ModeAnnouncement {
     private struct Change {
@@ -12,6 +13,7 @@ package enum ModeAnnouncement {
         let before: Bool
         var announce: Bool
         var playSound: Bool
+        var manual: Bool
     }
     private final class Pending {
         weak var document: BrowseModeDocument?
@@ -26,14 +28,16 @@ package enum ModeAnnouncement {
         var retryAfter = Date.distantPast
         var revision = 0
         var sound: Bool
+        let manual: Bool
 
-        init(_ document: BrowseModeDocument, sound: Bool) {
+        init(_ document: BrowseModeDocument, sound: Bool, manual: Bool = false) {
             self.document = document
             page = document.pageGeneration
             mode = document.passThrough
             expires = now().addingTimeInterval(8)
             field = API.focusObject?.element
             self.sound = sound
+            self.manual = manual
         }
     }
     private static var depth = 0
@@ -50,12 +54,13 @@ package enum ModeAnnouncement {
 
     static func begin() { depth += 1 }
 
-    static func changed(_ document: BrowseModeDocument, from before: Bool, announce: Bool, playSound: Bool) {
+    static func changed(_ document: BrowseModeDocument, from before: Bool, announce: Bool, playSound: Bool, manual: Bool) {
         if let index = changes.firstIndex(where: { $0.document === document }) {
             changes[index].announce = changes[index].announce || announce
             changes[index].playSound = playSound
+            changes[index].manual = manual
         } else {
-            changes.append(Change(document: document, before: before, announce: announce, playSound: playSound))
+            changes.append(Change(document: document, before: before, announce: announce, playSound: playSound, manual: manual))
         }
     }
 
@@ -68,7 +73,7 @@ package enum ModeAnnouncement {
             guard API.focusTreeInterceptor === change.document else { continue }
             guard change.announce else { continue }
             guard change.before != change.document.passThrough else { continue }
-            pending = Pending(change.document, sound: change.playSound)
+            pending = Pending(change.document, sound: change.playSound, manual: change.manual)
             waitForItem()
         }
         if let (document, field, virtual) = reported {
@@ -217,17 +222,23 @@ package enum ModeAnnouncement {
         guard item.ready else { return }
         guard !item.queued else { return }
         guard now() >= item.retryAfter else { return }
-        // Keep mode words on main until preceding item speech finishes. They cannot sit in the player's
+        // Keep the mode cue on main until preceding item speech finishes. It cannot sit in the player's
         // audio queue behind a long field and begin on a later page (14 Nov 2026).
         guard !Speech.hasPendingOutput else { return }
         guard let field = item.field else { return }
         if item.virtual, item.document?.position != item.position { return }
         let current = item.virtual ? item.document?.elementAtPosition() : API.focusObject?.element
         guard current?.isSame(field) == true else { return }
+        // Oliver, 14 Nov 2026: automatic changes always use the sound, independent of navigationSounds.
+        // Retire before playing it so repeated reports or cancellation cannot replay a completed cue.
+        if !item.manual || config.general.navigationSounds {
+            retire(item)
+            if !item.manual || item.sound { BrowseModeDocument.modeSound(item.mode) }
+            return
+        }
         item.queued = true
         item.revision += 1
         let revision = item.revision
-        if item.sound, config.general.navigationSounds { BrowseModeDocument.modeSound(item.mode) }
         item.sound = false
         let words = item.mode ? String(localized: "focus mode", comment: "Spoken message") : String(localized: "browse mode", comment: "Spoken message")
         Speech.speakMessage(words, completion: { [weak item] completed in
