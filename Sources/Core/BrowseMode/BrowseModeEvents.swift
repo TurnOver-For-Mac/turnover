@@ -29,7 +29,13 @@ extension BrowseModeDocument {
             // to Wikipedia's search field in Safari 27.2 (29 Oct 2026), at every return.
             let fromOutside = focusFromOutside
             focusFromOutside = false
-            if fromOutside, !navigated, !passThrough, let last = lastFocusElement, event.obj.isSameElement(as: last) {
+            // 14 Nov 2026: mode lives on this page across app departure and unlock. Only browse mode
+            // ignores the repeated focus; in focus mode the ordinary field event below must run (NVDA).
+            if fromOutside,
+               !navigated,
+               !passThrough,
+               let last = lastFocusElement,
+               event.obj.isSameElement(as: last) {
                 Log.io("browse mode: back from outside onto the \(event.obj.axRole) that had the focus; the reading position stays at \(position)")
                 positionMovedAt = Date()   // Enter and Space are for the reading position again, not that control (activate)
                 // The control's own gain focus is not run here, and with it went the following of a text field's

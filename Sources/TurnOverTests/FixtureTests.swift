@@ -981,7 +981,10 @@ func focusRuleTests() {
             page.focusFromOutside = fromOutside
             said = ""
             var passed = false
-            page.handleEvent(Event(.gainFocus, f)) { passed = true }
+            page.handleEvent(Event(.gainFocus, f)) {
+                passed = true
+                f.handleEvent(Event(.gainFocus, f))
+            }
             return passed
         }
         let stopped = page.buffer.text.range(of: "The reading stopped").location
@@ -1011,8 +1014,17 @@ func focusRuleTests() {
 
         // Typing in the prompt (focus mode), another app, back: typing still.
         check(focus(66, fromOutside: false) && page.passThrough, "into the prompt, focus mode")
+        // 14 Nov 2026: API departure cancels collection, but the document retains its focus mode.
+        // Re-entry must say the field itself, never the old virtual reading line.
+        API.setFocusObject(nil, ancestors: [])
+        check(page.passThrough, "focus mode survives leaving the app (including the lock screen)")
+        check(BrowseModeHandler.shared.document(root: AXReplay.element(60)) === page, "re-entry reuses the page and its mode")
+        Speech.speakObject(ObjectFactory.make(AXReplay.element(65)), reason: .focus)
         check(focus(66, fromOutside: true), "back into the prompt in focus mode, the focus is followed as before")
         check(page.passThrough, "focus mode stays")
+        check(said.contains("Prompt"), "the field is said as an ordinary focus: \(said)")
+        check(!said.contains("The reading stopped"), "the old reading line is not said in focus mode")
+        check((API.focusObject as? EditableText)?.isFollowingSelection == true, "ordinary focus resumes selection following too")
     }
 }
 
