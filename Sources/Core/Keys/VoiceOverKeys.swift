@@ -133,7 +133,7 @@ public final class VoiceOverKeysPlugin: GlobalPlugin {
             // At the end of the text, VO-Right leaves the field for the next item, as VoiceOver's cursor does (it bumped
             // for 300 ms at the end of Claude's prompt, 17 Oct 2026).
             if Self.inTextArea(), let f = API.focusObject, let s = f.script(named: "caret_moveByCharacter") {
-                if let i = try? f.makeTextInfo(.caret), i.storyLength() > 0, i.start >= i.storyLength() { Log.io("VO-Right at the end of the text: the next item") }
+                if let i = try? f.makeTextInfo(.caret), i.start >= i.storyLength() { Log.io("VO-Right at the end of the text: the next item") }
                 else { s.handler(KeyboardGesture(identifier: "kb:rightArrow")!); return }
             }
             if config.general.navigateByGroups { ObjectNavigator.shared.groupStep(forward: true) } else { ObjectNavigator.shared.next() }

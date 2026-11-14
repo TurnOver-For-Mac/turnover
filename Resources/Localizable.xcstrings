@@ -44374,6 +44374,9 @@
     "Switches to a recent or new Claude conversation" : {
       "comment" : "A command, as the key list and keyboard help say it"
     },
+    "Activates Claude's focused menu item" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
     "Automatic focus mode for caret movement" : {}
   },
   "version" : "1.0"

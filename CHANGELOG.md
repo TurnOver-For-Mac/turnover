@@ -21,6 +21,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 - A button replaced since the page was copied can be found near its old position or at the end of a long page,
   including labels inside nested groups, with one bounded fresh-copy retry.
+- Claude's Command 5 to 9 use conversation-switch handling, dialog notices are immediate, VO-Right leaves an
+  empty Prompt, and session menu activation uses the keyboard when its accessibility press does nothing.
 - Typing: Left and Right bump at once at the edge of a text field with left-to-right text, where they used to wait
   for the caret first (over 300 ms in a web field). Not used where the line has right-to-left text, with a
   selection, with a modifier key or in a table cell.

@@ -29,15 +29,31 @@ package final class ClaudeAppModule: AppModule {
     package required init(pid: pid_t, bundleIdentifier: String, appName: String) {
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
         WebBuffer.statusEchoApps.insert(ClaudeTranscript.bundleID)   // its tool rows' status repeats the row's button
-        script("claude_switchConversation", String(localized: "Switches to a recent or new Claude conversation", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+1", "kb:command+2", "kb:command+3", "kb:command+4", "kb:command+n"], category: "Claude") { [weak self] gesture in
+        script("claude_switchConversation", String(localized: "Switches to a recent or new Claude conversation", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+1", "kb:command+2", "kb:command+3", "kb:command+4", "kb:command+5", "kb:command+6", "kb:command+7", "kb:command+8", "kb:command+9", "kb:command+n"], category: "Claude") { [weak self] gesture in
             self?.prepareConversationSwitch()
             gesture.send()
         }
+        // 14 Nov 2026: focused session menu items exposed no AXPress/AXConfirm; VO-Space
+        // only refocused them. Native Return opened the confirmation dialog in the same log.
+        script("claude_activateMenuItem", String(localized: "Activates Claude's focused menu item", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+space"], category: "Claude") { [weak self] _ in
+            guard self?.canActivateFocusedMenuItem == true else { return }
+            KeyboardGesture(identifier: "kb:enter")?.send()
+        }.isAvailable = { [weak self] in self?.canActivateFocusedMenuItem == true }
         script("claude_readLatest", String(localized: "Reads Claude's latest reply", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+shift+r"], category: "Claude") { [weak self] _ in
             guard let self, let chat = ClaudeTranscript.chat(pid: self.pid) else { Speech.speakMessage(String(localized: "no conversation", comment: "Spoken message")); return }
             let reply = ClaudeTranscript.latestReply(chat: chat)
             Speech.speakText(reply.isEmpty ? String(localized: "no reply yet", comment: "Spoken message") : reply)
         }
+    }
+
+    private var canActivateFocusedMenuItem: Bool {
+        guard API.focusPid == pid,
+              API.focusObject?.element.role == "AXMenuItem",
+              API.focusTreeInterceptor?.passThrough != false else { return false }
+        if let review = ObjectNavigator.shared.reviewElement {
+            return API.focusObject?.element.isSame(review) == true
+        }
+        return true
     }
 
     private var conversationSwitch = 0
@@ -169,7 +185,9 @@ package final class ClaudeAppModule: AppModule {
     /// 5.1231.2, macOS 27.2) and on the sidebar's session rows (8 and 9 Nov 2026). Return on the same button, once
     /// Tab had put the keyboard on it, worked at once each time. Other presses of the same kind of button went
     /// through the same day ("Yes, add it"), so the press is ignored some of the time; why is not known.
-    package override var rolesPressedByKeyboard: Set<String> { ["AXButton"] }
+    // The session menu's AXPress likewise reported success without an observable effect on
+    // 14 Nov 2026; native Return opened its dialog. Use one confirmed key, with no action retry.
+    package override var rolesPressedByKeyboard: Set<String> { ["AXButton", "AXMenuItem"] }
 
     package override func handleEvent(_ event: Event, next: () -> Void) {
         if event.kind == .gainFocus,
@@ -195,6 +213,14 @@ package final class ClaudeAppModule: AppModule {
                 heldProgress.removeValue(forKey: currentConversation())
                 next()
                 startWatching()
+                return
+            }
+            // Dialog notices are immediate news, never background task progress (14 Nov 2026).
+            // Chromium exposes these as AXGroup with AXApplicationDialog subrole, including descendants.
+            if sidebarSession == nil,
+               Self.isDialogNotice(event.obj.element) {
+                heldProgress.removeValue(forKey: currentConversation())
+                next()
                 return
             }
             // Match the ordinary live-region reader: a named group can contain several static text
@@ -229,6 +255,19 @@ package final class ClaudeAppModule: AppModule {
         default:
             next()
         }
+    }
+
+    private static func isDialogNotice(_ element: AXUIElement) -> Bool {
+        var ancestor: AXUIElement? = element
+        var seen: Set<ElementKey> = []
+        for _ in 0..<16 {
+            guard let current = ancestor, seen.insert(ElementKey(current)).inserted else { return false }
+            let role = Role.from(axRole: current.role, subrole: current.string(kAXSubroleAttribute))
+            if role == .dialog || role == .sheet { return true }
+            if current.role == "AXWebArea" || current.role == "AXApplication" { return false }
+            ancestor = current.element(kAXParentAttribute)
+        }
+        return false
     }
 
     private static let sidebarSessionPrefix = "claude-sidebar-status:"
