@@ -542,43 +542,58 @@ final class LeadWatcher {
             let turnOverReading = Coexist.on ? self.turnOverActive() : !NSWorkspace.shared.isVoiceOverEnabled
             if turnOver != turnOverReading { self.handOver(voiceOverOn: !turnOver) }
             if let voiceOverWords {
-                self.sayModeWhenReady(voiceOverWords, reader: .voiceOver, generation: generation)
+                self.sayModeWhenReady(voiceOverWords, generation: generation)
             }
         }
     }
 
-    private func modeSpeechReady(_ reader: ModeSpeechPolicy.Reader, generation: Int) -> Bool {
-        ModeSpeechPolicy.canAnnounce(reader: reader, generation: generation, currentGeneration: choiceGeneration,
-                                    coexisting: Coexist.on, turnOverActive: Core.active,
-                                    voiceOverEnabled: NSWorkspace.shared.isVoiceOverEnabled,
-                                    voiceOverSilent: VoiceOverTap.wantedSilent)
+    private let modeDelivery = ModeSpeechDelivery()
+    private var spokenModeGeneration: Int?
+
+    private func readyModeReader(generation: Int) -> ModeSpeechPolicy.Reader? {
+        let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
+        let reader: ModeSpeechPolicy.Reader = shouldLead(front) ? .turnOver : .voiceOver
+        let voiceOverRunning = HandOver.voiceOverRunning
+        let confirmation = voiceOverRunning ? VoiceOverTap.announcementConfirmation : false
+        guard ModeSpeechPolicy.canAnnounce(reader: reader, generation: generation,
+                                          currentGeneration: choiceGeneration,
+                                          coexisting: Coexist.on, turnOverActive: Core.active,
+                                          voiceOverEnabled: NSWorkspace.shared.isVoiceOverEnabled,
+                                          voiceOverSilent: confirmation == true,
+                                          voiceOverRunning: voiceOverRunning,
+                                          voiceOverMuteKnown: confirmation != nil) else { return nil }
+        return reader
     }
 
-    private func sayModeWhenReady(_ text: String, reader: ModeSpeechPolicy.Reader, generation: Int) {
-        // 14 Nov 2026: the mode belongs to the reader after handover. Activation and VoiceOver's mute request
-        // settle separately; posting before them can discard the label or send it to the outgoing reader.
-        let end = Date().addingTimeInterval(16)
-        func check() {
-            guard generation == choiceGeneration else { return }
-            if modeSpeechReady(reader, generation: generation) {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
-                    guard let self else { return }
-                    guard self.modeSpeechReady(reader, generation: generation) else { return }
-                    self.say(text)
-                }
-                return
-            }
-            if Date() < end {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { check() }
-            }
-        }
-        check()
+    private func sayModeWhenReady(_ text: String, generation: Int) {
+        modeDelivery.announce(text, now: { ProcessInfo.processInfo.systemUptime },
+                              schedule: { delay, action in
+                                  DispatchQueue.main.asyncAfter(deadline: .now() + delay) { action() }
+                              }, current: { [weak self] in
+                                  guard let self else { return false }
+                                  return self.choiceGeneration == generation && self.spokenModeGeneration != generation
+                              },
+                              readyReader: { [weak self] in self?.readyModeReader(generation: generation) },
+                              output: { [weak self] text, reader in
+                                  guard let self else { return }
+                                  self.spokenModeGeneration = generation
+                                  Self.nextTakeoverWords = nil
+                                  // The readiness snapshot selected this reader; do not route it again by a different flag.
+                                  if reader == .turnOver { Speech.speakMessage(text) }
+                                  else {
+                                      // Submit synchronously to the selected reader. The generic helper also launches
+                                      // an asynchronous AppleScript fallback, which could speak after another handover.
+                                      NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
+                                                           userInfo: [.announcement: text,
+                                                                      .priority: NSAccessibilityPriorityLevel.high.rawValue])
+                                  }
+                              })
     }
 
     func announceTakeoverMode(_ words: String) {
         // 14 Nov 2026: finishActivation used to consume the label immediately, even if speech still rejected
         // it because VoiceOver's flag was on. Keep normal swap and Coexist on the same readiness check.
-        sayModeWhenReady(words, reader: .turnOver, generation: choiceGeneration)
+        sayModeWhenReady(words, generation: choiceGeneration)
     }
 
     /// Command Control Comma, A: the next of the three modes, said, saved, and the app in front given to its reader.
@@ -604,7 +619,8 @@ final class LeadWatcher {
             let turnOverWasSpeaking = Coexist.on ? Core.active : !NSWorkspace.shared.isVoiceOverEnabled
             if !turnOverWasSpeaking { Self.nextTakeoverWords = words }
             handOver(voiceOverOn: false)
-            if turnOverWasSpeaking { sayModeWhenReady(words, reader: .turnOver, generation: generation) }
+            // Track the choice even if activation never finishes because the user changes apps.
+            sayModeWhenReady(words, generation: generation)
         } else {
             settleReader(after: 1.2, generation: generation, voiceOverWords: words)
         }

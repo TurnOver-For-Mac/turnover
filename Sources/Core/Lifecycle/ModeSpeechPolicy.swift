@@ -6,17 +6,18 @@ nonisolated public enum ModeSpeechPolicy {
 
     public static func canAnnounce(reader: Reader, generation: Int, currentGeneration: Int,
                                    coexisting: Bool, turnOverActive: Bool,
-                                   voiceOverEnabled: Bool, voiceOverSilent: Bool) -> Bool {
+                                   voiceOverEnabled: Bool, voiceOverSilent: Bool,
+                                   voiceOverRunning: Bool, voiceOverMuteKnown: Bool) -> Bool {
         guard generation == currentGeneration else { return false }
         switch reader {
         case .turnOver:
             guard turnOverActive else { return false }
-            guard !voiceOverEnabled || coexisting else { return false }
-            guard !coexisting || !voiceOverEnabled || voiceOverSilent else { return false }
+            guard coexisting || (!voiceOverEnabled && !voiceOverRunning) else { return false }
+            guard !voiceOverRunning || (voiceOverMuteKnown && voiceOverSilent) else { return false }
         case .voiceOver:
-            guard voiceOverEnabled else { return false }
+            guard voiceOverEnabled, voiceOverRunning else { return false }
             guard !turnOverActive else { return false }
-            guard !coexisting || !voiceOverSilent else { return false }
+            guard voiceOverMuteKnown, !voiceOverSilent else { return false }
         }
         return true
     }
