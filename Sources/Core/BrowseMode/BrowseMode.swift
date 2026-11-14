@@ -238,7 +238,8 @@ public final class BrowseModeDocument: ScriptableObject {
             // before (Google's search box) kept the new page from being announced, and its keys went to the page
             // (a tester, 12 Oct 2026). A page that puts the focus in a field switches again by itself.
             if passThrough { Log.io("browse mode: a new page; focus mode from the last one ended") }
-            passThrough = false; disableAutoPassThrough = false
+            setPassThrough(false, announce: true)
+            disableAutoPassThrough = false
         }
         let saved = BrowseModeHandler.cameBackByHistory ? BrowseModeHandler.shared.savedPosition(for: now) : nil
         let at = resumeOffset(saved)

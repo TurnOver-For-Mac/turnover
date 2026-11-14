@@ -58,6 +58,8 @@ public enum EventHandler {
 
     /// Run one event through the chain now (NVDA: executeEvent).
     public static func execute(_ event: Event) {
+        ModeAnnouncement.begin()
+        defer { ModeAnnouncement.end() }
         if InputManager.isAsleep(event.obj.pid) { return }   // NVDA's sleep mode: nothing said for this app
         if InputManager.directPid == event.obj.pid { return }   // a direct app: nothing said (it speaks for itself)
         // Google Docs: a focus move starts or stops the reading of Google's announcements; a caret move in the editor

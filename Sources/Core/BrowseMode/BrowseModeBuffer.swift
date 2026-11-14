@@ -56,7 +56,7 @@ extension BrowseModeDocument {
         earlyTitleURL = nil
         lastQuickNavTarget = nil
         lastChain = []
-        passThrough = false
+        setPassThrough(false, announce: true)
     }
 
     package func finishNavigationWait(title: String?, announce: Bool = true) {

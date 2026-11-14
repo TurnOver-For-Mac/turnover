@@ -25,14 +25,25 @@ extension BrowseModeDocument {
         if position > n { position = max(0, n - 1) }
     }
 
-    public func setPassThrough(_ on: Bool, announce: Bool) {
+    public func setPassThrough(_ on: Bool, announce: Bool, playSound: Bool = true) {
         guard passThrough != on else { return }
+        ModeAnnouncement.changed(self, from: passThrough, announce: announce, playSound: playSound)
         passThrough = on
         Log.io("browse mode: \(on ? "focus mode" : "browse mode")\(announce ? "" : " (quietly)")")
-        guard announce else { return }
-        // NVDA: with its audio indication on, a sound says it and the words are left out.
-        if config.general.navigationSounds { on ? Tones.focusMode() : Tones.browseMode() }
-        else { Speech.speakMessage(on ? String(localized: "focus mode", comment: "Spoken message") : String(localized: "browse mode", comment: "Spoken message")) }
+        if !ModeAnnouncement.isCollecting, announce { announceMode(playSound: playSound) }
+    }
+
+    func announceMode(playSound: Bool = true) {
+        // 14 Nov 2026: a tone alone left the destination of typed letters unclear. Say the words as well.
+        if config.general.navigationSounds,
+           playSound { Self.modeSound(passThrough) }
+        let words = passThrough ? String(localized: "focus mode", comment: "Spoken message") : String(localized: "browse mode", comment: "Spoken message")
+        ModeAnnouncement.sayWords(words, document: self)
+    }
+
+    // 14 Nov 2026: observe the sound request in regression tests without playing audio.
+    package static var modeSound: (Bool) -> Void = { focus in
+        focus ? Tones.focusMode() : Tones.browseMode()
     }
 
     /// NVDA: shouldPassThrough — an editable or otherwise interactive focus means focus mode.

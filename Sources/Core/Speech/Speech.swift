@@ -53,8 +53,11 @@ public enum Speech {
 
     /// Stop now (NVDA: cancelSpeech). Every gesture does this before its script runs.
     public static func cancel() {
+        explicitCancellationGeneration &+= 1
         player?.cancel()
     }
+    // 14 Nov 2026: a deliberate stop after a focus cancellation also retires its delayed mode retry.
+    package private(set) static var explicitCancellationGeneration: UInt64 = 0
 
     /// Control alone: pause speech, or carry on if it is paused (VoiceOver's way). Say All waits with it.
     public static func togglePause() {
@@ -201,6 +204,8 @@ public enum Speech {
     /// (speakObject, reason focus). A nameless pane or a blip the module ignores on the way to a control used to cut
     /// the control's speech and say nothing in its place (code review, 16 Oct 2026).
     private static var dropForFocusUntil: Date?
+    // 14 Nov 2026: only a newer focus's words may retry mode feedback they displaced. Explicit silence does not.
+    package private(set) static var focusCancellationGeneration: UInt64 = 0
     /// For the tests: whether a drop is waiting for the next focus's words, and whether a capital's pitch is pending.
     public static var testDropForFocusPending: Bool { dropForFocusUntil != nil }
     public static var testPitchPending: Bool { pitchNext != nil }
@@ -213,8 +218,12 @@ public enum Speech {
 
     /// A message from the reader itself (NVDA: speakMessage / ui.message).
     public static func speakMessage(_ text: String) {
+        speakMessage(text, completion: nil)
+    }
+
+    package static func speakMessage(_ text: String, completion: (@Sendable (Bool) -> Void)?) {
         lastRaw = text; rawPending = true
-        enqueue(text)
+        enqueue(text, completion: completion)
         if Thread.isMainThread { Braille.message(text) } else { DispatchQueue.main.async { Braille.message(text) } }
     }
 
@@ -339,7 +348,12 @@ public enum Speech {
         }
         if reason == .focus, let until = dropForFocusUntil {
             dropForFocusUntil = nil
-            if Date() < until, !words.isEmpty { cancel(); Log.io("focus moved on at once: the speech for the focus before it dropped") }
+            if Date() < until,
+               !words.isEmpty {
+                focusCancellationGeneration &+= 1
+                player?.cancel()
+                Log.io("focus moved on at once: the speech for the focus before it dropped")
+            }
         }
         enqueue(words)
         if reason == .focus { Hints.schedule(Hints.forObject(obj)) }

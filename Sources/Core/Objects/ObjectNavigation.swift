@@ -1100,7 +1100,7 @@ public final class ObjectNavigator {
                     API.setFocusObject(page, ancestors: pageAncestors, interceptor: d)
                     Log.io("review: the reading goes into the page round the landing")
                 }
-                if d.passThrough { d.setPassThrough(false, announce: false) }
+                if d.passThrough { d.setPassThrough(false, announce: true) }
                 if d.buffer.lines.isEmpty { d.buffer.build() }
                 if let o = d.buffer.offset(of: target) { d.position = o }
                 return
