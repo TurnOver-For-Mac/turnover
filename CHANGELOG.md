@@ -6,6 +6,7 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- Safari no longer says "please wait" when it answers a focus check without moving the focus.
 - Wrapping round a page with the heading, link and other single-letter keys is immediate again: at the end of a page
   TurnOver no longer reads the whole page again before "wrapped to the top", unless the page has changed. Previous
   heading at the top of a page wraps to the bottom even while the page is being read again, instead of saying "top".
