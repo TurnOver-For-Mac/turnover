@@ -291,7 +291,6 @@ package final class ClaudeAppModule: AppModule {
                     let changed = !now.isEmpty && now != address
                     let busy = snapshot.with { root.attr("AXElementBusy") as? Bool == true }
                     let name = snapshot.with { Self.switchTitle(root.string(kAXTitleAttribute) ?? "") }
-                    let titleIsReady = !busy && !name.isEmpty && name != title
                     if changed {
                         observedAddressChange = true
                         let needsNavigationWait = releasedContent || !page.navigationWaiting
@@ -303,6 +302,16 @@ package final class ClaudeAppModule: AppModule {
                         // The scope covers URL/role reads too; no provider query is made on main.
                         _ = snapshot.with { page.refreshIfNavigated() }
                     }
+                    let destinationLoaded = changed && page.lastURL == now && !page.buffer.isLoading && !page.buffer.lines.isEmpty
+                    let matchesTarget: Bool
+                    if case .other(let expectedTitle) = target {
+                        matchesTarget = name == expectedTitle
+                    } else {
+                        matchesTarget = true
+                    }
+                    // A changed URL and its completed copy establish arrival even for equal titles.
+                    // If the sidebar named a different destination, its old title is still stale.
+                    let titleIsReady = !busy && !name.isEmpty && (name != title || (destinationLoaded && matchesTarget))
                     // Claude can change AXTitle while keeping AXURL (or temporarily omitting it).
                     // Do not gate that evidence on a changed address, or speak a pre-switch title.
                     if titleIsReady,
@@ -336,7 +345,7 @@ package final class ClaudeAppModule: AppModule {
         look()
     }
 
-    private enum SwitchTarget { case current, other, missing, unknown }
+    private enum SwitchTarget: Equatable { case current, other(String), missing, unknown }
 
     /// Claude 5.1231.2, macOS 27.2, 14 Nov 2026: the complementary sidebar's Recents section has
     /// a heading group followed by session groups, each with a title button and a popup menu. Use
@@ -422,7 +431,7 @@ package final class ClaudeAppModule: AppModule {
             let target = switchTitle(titles[number - 1])
             if target == title,
                titles.filter({ switchTitle($0) == title }).count == 1 { return .current }
-            return .other
+            return .other(target)
         }
         return .unknown
     }

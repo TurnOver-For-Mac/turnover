@@ -19,6 +19,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- Claude conversations with identical titles announce their destination once it has loaded, without waiting for the eight-second ceiling.
+
 - Missing Claude conversation numbers preserve the Prompt’s mode; an unavailable sidebar waits for an unchanged URL at the ceiling instead of reading the current title.
 
 - Repeating a Claude conversation shortcut while the page rebuilds says only the final destination.

@@ -162,8 +162,8 @@ func claudeNavigationTests() {
         }
     }
 
-    test("Claude navigation: completed content waits for its late title without repeating the old title") {
-        AXReplay.load(conversationPage("Old conversation", address: "https://example.com/old"))
+    test("Claude navigation: completed content waits for its known late title without repeating the old title") {
+        AXReplay.load(conversationPage("Old conversation", address: "https://example.com/old", recents: ["Old conversation", "Late new title"]))
         let root = AXReplay.element(0)
         let buffer = WebBuffer(webArea: root)
         let page = BrowseModeDocument(webArea: root, buffer: buffer)
@@ -481,6 +481,34 @@ func claudeNavigationTests() {
                     expect(sent.value, [shortcut], "the real conversation script delivers its native key once")
                     check(!page.buffer.isLoading, "the copy is settled before the final speech assertion")
                 }
+            }
+        }
+    }
+
+    for knownSidebar in [false, true] {
+        test("Claude navigation: equal destination titles announce after loading with \(knownSidebar ? "duplicate sidebar rows" : "a hidden sidebar")") {
+            withConversationTest(recents: knownSidebar ? ["Old conversation", "Old conversation"] : nil) { page, module, sent in
+                let savedSink = Speech.sink
+                var said: [String] = []
+                Speech.sink = { said.append($0) }
+                defer { Speech.sink = savedSink }
+                let key = KeyboardGesture(identifier: "kb:command+2")!
+                module.script(for: key)?.handler(key)
+                expect(said, [], "duplicate labels cannot prove that the selected conversation is already open")
+                var destination = conversationPage("Old conversation", address: "https://example.com/equal-title", body: "Different public destination body")
+                destination.nodes[0].attrs["AXElementBusy"] = .bool(true)
+                AXReplay.load(destination)
+                waitForConversation { (page.buffer.text as String).contains("Different public destination body") }
+                waitForBuffer(page.buffer)
+                RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+                expect(said, [], "a busy destination with the old label must not announce early")
+                destination.nodes[0].attrs["AXElementBusy"] = .bool(false)
+                AXReplay.load(destination)
+                waitForConversation { said == ["Old conversation"] }
+                RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+                expect(said, ["Old conversation"], "the loaded destination is heard once, before the eight-second ceiling")
+                check(!page.navigationTitleOwned, "arrival has completed rather than waiting for the ceiling")
+                expect(sent.value, ["kb:command+2"])
             }
         }
     }
