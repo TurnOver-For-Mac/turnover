@@ -35,7 +35,7 @@ package final class ClaudeAppModule: AppModule {
         }
         // 14 Nov 2026: focused session menu items exposed no AXPress/AXConfirm; VO-Space
         // only refocused them. Native Return opened the confirmation dialog in the same log.
-        script("claude_activateMenuItem", String(localized: "Activates Claude's focused menu item", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+space"], category: "Claude") { [weak self] _ in
+        script("vo_defaultAction", String(localized: "Activates Claude's focused menu item", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+space"], category: "Claude") { [weak self] _ in
             guard self?.canActivateFocusedMenuItem == true else { return }
             KeyboardGesture(identifier: "kb:enter")?.send()
         }.isAvailable = { [weak self] in self?.canActivateFocusedMenuItem == true }

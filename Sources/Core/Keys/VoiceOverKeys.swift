@@ -110,6 +110,14 @@ public final class VoiceOverKeysPlugin: GlobalPlugin {
             else { ArrowQuickNav.toggle() }   // outside a document VoiceOver's Quick Nav toggles all the same (the code review, 17 Oct 2026)
         }
         add("defaultAction", String(localized: "Activates the item under the VoiceOver cursor (VO-Space)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+space"]) { g in
+            // 14 Nov 2026: this global binding wins before app scripts. Let an app's available
+            // implementation of this command handle its own activation exception (Claude's menu).
+            if let pid = API.focusPid,
+               let action = AppModuleHandler.shared.appModule(for: pid).script(named: "vo_defaultAction"),
+               action.isAvailableNow {
+                action.handler(g)
+                return
+            }
             // By accessibility's press, as VoiceOver's VO-Space is: a page that ignores the real key (Squarespace's
             // switches are links styled as switches; Space scrolls, Enter and a click work, 25 Oct 2026) still answers
             // the press. Enter and Space themselves go to the page as real keys (activatePosition).

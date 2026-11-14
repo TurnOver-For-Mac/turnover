@@ -70,37 +70,55 @@ func claudeTrialFollowupTests() {
         check(module.progressHeldSince(session: "https://example.com/dialog") == nil, "dialog text is never stored as progress")
     }
 
-    test("Claude trial: focused session menu activates once with Return rather than refocusing") {
+    test("Claude trial: ScriptHandler activates focused Delete through the global VoiceOver plugin") {
         let savedFocus = API.focusObject, savedAncestors = API.focusAncestors, savedPage = API.focusTreeInterceptor
-        let savedPoster = KeyboardGesture.poster
+        let savedPoster = KeyboardGesture.poster, savedConfig = config
+        let savedPluginTypes = GlobalPluginHandler.shared.plugins.map { type(of: $0) }
         AXReplay.load(.init(app: "Public menu trial", bundle: "test.claude-trial", recorded: "synthetic", root: 0, application: 1, focus: 2, nodes: [
-            .init(id: 0, attrs: ["AXRole": .string("AXWindow"), "AXParent": .element(1), "AXChildren": .elements([2])]),
+            .init(id: 0, attrs: ["AXRole": .string("AXWindow"), "AXParent": .element(1), "AXChildren": .elements([2, 3])]),
             .init(id: 1, attrs: ["AXRole": .string("AXApplication")]),
-            .init(id: 2, attrs: ["AXRole": .string("AXMenuItem"), "AXTitle": .string("Delete"), "AXParent": .element(0)], actions: [])
+            .init(id: 2, attrs: ["AXRole": .string("AXMenuItem"), "AXTitle": .string("Delete"), "AXParent": .element(0)], actions: []),
+            .init(id: 3, attrs: ["AXRole": .string("AXButton"), "AXTitle": .string("Public button"), "AXParent": .element(0)], actions: ["AXPress"])
         ]))
         let item = AXReplay.element(2)
+        let moduleID = "pid.\(item.pid)"
+        let previousType = AppModuleHandler.shared.moduleType(for: moduleID)
+        AppModuleHandler.shared.register(ClaudeAppModule.self, for: moduleID)
+        config.general.keyboardStyle = "mac"
+        GlobalPluginHandler.shared.terminateAll()
+        GlobalPluginHandler.shared.register(VoiceOverKeysPlugin.self)
         API.setFocusObject(ObjectFactory.make(item), ancestors: [], interceptor: nil)
         ObjectNavigator.shared.focusMoved(to: item, pid: item.pid)
-        let module = ClaudeAppModule(pid: item.pid, bundleIdentifier: "com.anthropic.claudefordesktop", appName: "Claude")
+        let module = AppModuleHandler.shared.appModule(for: item.pid)
         let sent = Locked<[String]>([])
         KeyboardGesture.poster = { sent.value.append($0.identifier) }
         defer {
             KeyboardGesture.poster = savedPoster
+            config = savedConfig
+            GlobalPluginHandler.shared.terminateAll()
+            for pluginType in savedPluginTypes { GlobalPluginHandler.shared.register(pluginType) }
+            if let previousType { AppModuleHandler.shared.register(previousType, for: moduleID) }
+            else { AppModuleHandler.shared.unregister(bundleIdentifier: moduleID) }
             API.setFocusObject(savedFocus, ancestors: savedAncestors, interceptor: savedPage)
             if let focus = savedFocus { ObjectNavigator.shared.focusMoved(to: focus.element, pid: focus.element.pid) }
             AXReplay.unload()
         }
         let key = KeyboardGesture(identifier: "kb:turnover+space")!
-        guard let command = module.script(for: key) else { Harness.fail("Claude menu activation is registered"); return }
-        check(command.isAvailable?() == true, "focused menu item opts into native activation")
-        command.handler(key)
-        expect(sent.value, ["kb:enter"], "exactly one native activation is sent, without retrying Delete")
+        guard let command = ScriptHandler.findScript(for: key) else { Harness.fail("VO-Space resolves through ScriptHandler"); return }
+        check(command.owner is VoiceOverKeysPlugin, "the production global plugin wins gesture lookup")
+        ScriptHandler.executeScript(command, gesture: key)
+        expect(sent.value, ["kb:enter"], "the winning global command sends exactly one native Return to Delete")
         expect(BrowseModeDocument.keyboardPress(role: "AXMenuItem", moduleRoles: module.rolesPressedByKeyboard), .returnKey,
                "browse activation uses the same existing confirmed-focus Return mechanism")
-        API.setFocusObject(ObjectFactory.make(AXReplay.element(0)), ancestors: [], interceptor: nil)
-        check(command.isAvailable?() == false, "the exception cannot take VO-Space for other controls")
-        command.handler(key)
+
+        let button = AXReplay.element(3)
+        API.setFocusObject(ObjectFactory.make(button), ancestors: [], interceptor: nil)
+        ObjectNavigator.shared.focusMoved(to: button, pid: button.pid)
+        // A command resolved before the focus moved must recheck the app exception at execution.
+        ScriptHandler.executeScript(command, gesture: key)
         expect(sent.value, ["kb:enter"], "a queued activation cannot send Return after focus moves")
+        expect(AXReplay.actions.filter { $0.action == "AXPress" }.map(\.id), [3],
+               "an unavailable app action falls back to the ordinary button press")
     }
 
     test("Claude trial: browse VO-Space routes a session menu item through confirmed native Return") {
