@@ -22,22 +22,63 @@ enum VoiceOverTap {
     private static var confirmation = VoiceOverMuteConfirmation()
     private static var lastProbe = -Double.infinity
     private static var probeSequence = 0
+    // Only the isolated executable-source harness installs this boundary driver. The
+    // actual getter and final confirmation read remain under test, without a helper.
+    private static var announcementTestDriver: (() -> Void)?
     static var announcementConfirmation: Bool? {
-        guard on else {
+        guard announcementTestDriver != nil || on else {
             if process?.isRunning == true { return nil }
             return wantedSilent ? nil : false
         }
-        let now = ProcessInfo.processInfo.systemUptime
-        let pid = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.VoiceOver").first?.processIdentifier ?? 0
-        let value = confirmation.value(pid: pid, wanted: wantedSilent, now: now)
-        if now - lastProbe >= 0.1, let input = ensureHelper() {
-            lastProbe = now
-            probeSequence += 1
-            let token = String(probeSequence)
-            confirmation.expect(token)
-            send("status " + token, to: input)
+        let now = announcementTestDriver == nil ? ProcessInfo.processInfo.systemUptime : 1
+        let pid = announcementTestDriver == nil ? NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.VoiceOver").first?.processIdentifier ?? 0 : 123
+        if let announcementTestDriver { announcementTestDriver() }
+        else if let input = ensureHelper() {
+            // Reuse an unexpired acknowledgement while the helper remains alive. Probing
+            // every readiness check would revoke it again before the settling delay ends.
+            if now - lastProbe >= 0.1, confirmation.value(pid: pid, wanted: wantedSilent, now: now) == nil {
+                lastProbe = now
+                probeSequence += 1
+                let token = String(probeSequence)
+                confirmation.expect(token)
+                send("status " + token, to: input)
+            }
         }
-        return value
+        // Restarting, requesting status, or a failed pipe write can invalidate the old reply.
+        return confirmation.value(pid: pid, wanted: wantedSilent, now: now)
+    }
+    /// Exercises this getter after each operation that can revoke a previously good reply.
+    static func testAnnouncementInvalidation() -> Bool {
+        let saved = confirmation
+        let savedWanted = wantedSilent
+        defer { confirmation = saved; wantedSilent = savedWanted; announcementTestDriver = nil }
+        wantedSilent = true
+        func seed() {
+            confirmation.reset()
+            confirmation.expect("a")
+            _ = confirmation.consume(Data("status 123 on a\n".utf8), now: 1)
+        }
+        seed()
+        announcementTestDriver = {}
+        guard announcementConfirmation == true else { return false }
+        // Helper restart, new status probe, and a failed pipe write all revoke the reply.
+        let invalidations: [() -> Void] = [
+            { confirmation.reset() },
+            { confirmation.expect("b") },
+            {
+                // A read-only descriptor produces a real failed write without SIGPIPE,
+                // launching a helper, or changing the Mac's VoiceOver state.
+                let handle = FileHandle(forReadingAtPath: "/dev/null")!
+                defer { try? handle.close() }
+                send("status b", to: handle)
+            }
+        ]
+        for invalidate in invalidations {
+            seed()
+            announcementTestDriver = invalidate
+            guard announcementConfirmation == nil else { return false }
+        }
+        return true
     }
     private static var said: Bool?
     /// The helper's errors in a row ("VoiceOver isn't running", "no sound yet"): asked again a few times, not forever.
@@ -85,6 +126,7 @@ enum VoiceOverTap {
     /// The helper, started on first need; a fresh one if the last ended.
     private static func ensureHelper() -> FileHandle? {
         if let p = process, p.isRunning, let input { return input }
+        confirmation.reset()
         guard let url = helperURL else { Log.warning("VoiceOver quiet: the helper is missing"); return nil }
         let p = Process()
         p.executableURL = url
