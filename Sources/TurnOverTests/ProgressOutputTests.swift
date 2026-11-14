@@ -3,6 +3,7 @@ import Foundation
 import ApplicationServices
 import TurnOverCore
 import TurnOverSpeech
+import TurnOverAX
 import AXFixtures
 
 private final class ClaudeProgressTrial {
@@ -15,7 +16,7 @@ private final class ClaudeProgressTrial {
     func load(_ session: String, alpha: String = "Public task Alpha progress", groupTail: String = "Public group detail", live: String = "polite", sidebar: Int? = nil, sidebarURLs: Bool = true) {
         AXReplay.load(.init(app: "Public progress sample", bundle: "test.claude-progress", recorded: "synthetic",
                             root: 0, application: 1, focus: 0, nodes: [
-            .init(id: 0, attrs: ["AXRole": .string("AXWebArea"), "AXURL": .url(session), "AXParent": .element(1)]),
+            .init(id: 0, attrs: ["AXRole": .string("AXWebArea"), "AXURL": .url(session), "AXParent": .element(1), "AXChildren": .elements([12, 2])]),
             .init(id: 1, attrs: ["AXRole": .string("AXApplication")]),
             .init(id: 2, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string(alpha), "AXARIALive": .string(live), "AXParent": .element(sidebar ?? 0)]),
             .init(id: 3, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("Public task Beta progress"), "AXARIALive": .string("polite")]),
@@ -23,11 +24,15 @@ private final class ClaudeProgressTrial {
                                  "AXChildren": .elements([6, 7]), "AXARIALive": .string("polite")]),
             .init(id: 6, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("Public group summary. ")]),
             .init(id: 7, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string(groupTail)]),
-            .init(id: 10, attrs: ["AXRole": .string("AXLink"), "AXParent": .element(12), "AXURL": .string(sidebarURLs ? "https://example.com/sidebar-a" : "")]),
-            .init(id: 11, attrs: ["AXRole": .string("AXLink"), "AXParent": .element(12), "AXURL": .string(sidebarURLs ? "https://example.com/sidebar-b" : "")]),
-            .init(id: 12, attrs: ["AXRole": .string("AXGroup"), "AXSubrole": .string("AXLandmarkNavigation")]),
+            .init(id: 10, attrs: ["AXRole": .string("AXLink"), "AXParent": .element(12), "AXChildren": .elements(sidebar == 10 ? [2] : []), "AXURL": .string(sidebarURLs ? "https://example.com/sidebar-a" : "")]),
+            .init(id: 11, attrs: ["AXRole": .string("AXLink"), "AXParent": .element(12), "AXChildren": .elements(sidebar == 11 ? [2] : []), "AXURL": .string(sidebarURLs ? "https://example.com/sidebar-b" : "")]),
+            .init(id: 12, attrs: ["AXRole": .string("AXGroup"), "AXSubrole": .string("AXLandmarkNavigation"), "AXChildren": .elements([10, 11])]),
             .init(id: 4, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("Public task Gamma progress"), "AXARIALive": .string("polite")]),
         ]))
+        if sidebar != nil, let page = API.focusTreeInterceptor {
+            // The production module must classify from the real buffer publication, not a test lookup.
+            page.buffer.buildForInspection()
+        }
     }
 
     func event(_ id: Int, module: ClaudeAppModule) {
@@ -80,7 +85,11 @@ func progressOutputTests() {
         withClaudeProgress { trial, module in
             let openSession = "https://example.com/progress-a"
             trial.load(openSession, alpha: "Public Alpha task. Running", live: "assertive", sidebar: 10)
+            AXReplay.reads = []
             trial.event(2, module: module)
+            expect(AXReplay.reads?.filter { $0.attribute == "AXParent" }.count, 0,
+                   "captured structural sidebar identity needs no live ancestor queries")
+            AXReplay.reads = nil
             check(trial.said.isEmpty, "busy speech holds the sidebar notice")
             expect(trial.forwarded, 0, "a sidebar assertive notice cannot bypass the quiet rule")
             trial.poll(after: 2)
@@ -152,6 +161,8 @@ func progressOutputTests() {
                 object.event_liveRegionChange()
             }
             expect(trial.forwarded, 1, "matching words in the conversation are ordinary assertive news")
+            expect(AXReplay.reads?.filter { $0.attribute == "AXParent" }.count, 0,
+                   "an uncaptured status-like notice never queries its ancestors on main")
             expect(AXReplay.reads?.filter { $0.id == 2 && $0.attribute == "AXValue" }.count, 1,
                    "the object reads the transcript once; its cached value needs no preliminary transcript walk")
             check(trial.callbacks.isEmpty, "ordinary assertive text is never held as sidebar status")
