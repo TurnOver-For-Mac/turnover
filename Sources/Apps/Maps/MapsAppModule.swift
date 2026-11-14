@@ -8,11 +8,11 @@
 import Foundation
 import ApplicationServices
 
-final class MapsAppModule: AppModule {
+package final class MapsAppModule: AppModule {
     static let bundleID = "com.apple.Maps"
     static let contentSubrole = "iOSContentGroup"
 
-    required init(pid: pid_t, bundleIdentifier: String, appName: String) {
+    package required init(pid: pid_t, bundleIdentifier: String, appName: String) {
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
         WebBuffer.iosSkippedSubroles.insert("AXMapArea")
         // Command F: Maps puts the keyboard in its search field at once; TurnOver goes to typing with it, or the first
@@ -20,12 +20,15 @@ final class MapsAppModule: AppModule {
         script("maps_search", String(localized: "Search Maps; typing goes into the search field", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+f"], category: "Maps") { [weak self] g in
             g.send()
             guard let self, let doc = API.focusTreeInterceptor, doc.webArea.pid == self.pid else { return }
+            // Said here, not by the deferred mode words: the search field is outside browse mode, so its focus
+            // leaves no interceptor and the deferred words were dropped (review, 14 Nov 2026).
             doc.setPassThrough(true, announce: false)
             Speech.speakMessage(String(localized: "search", comment: "Spoken message"))
+            Speech.speakMessage(String(localized: "focus mode", comment: "Spoken message"))
         }
     }
 
-    override func browseRoot(for element: AXUIElement, ancestors: [TurnOverObject]) -> AXUIElement? {
+    package override func browseRoot(for element: AXUIElement, ancestors: [TurnOverObject]) -> AXUIElement? {
         // Not while typing in the search field: that stays a field.
         if element.string(kAXSubroleAttribute) == "AXSearchField" { return nil }
         if element.string(kAXSubroleAttribute) == Self.contentSubrole { return element }

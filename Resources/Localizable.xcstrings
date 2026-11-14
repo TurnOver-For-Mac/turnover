@@ -498,7 +498,8 @@
             "value" : "%@ столбцов"
           }
         }
-      }
+      },
+      "extractionState" : "stale"
     },
     "%lld columns" : {
       "comment" : "A table's size",
@@ -737,7 +738,8 @@
             "value" : "%@ часов"
           }
         }
-      }
+      },
+      "extractionState" : "stale"
     },
     "%lld hours" : {
       "comment" : "A battery's time: hours",
@@ -795,7 +797,8 @@
             "value" : "%@ часов назад"
           }
         }
-      }
+      },
+      "extractionState" : "stale"
     },
     "%lld hours ago" : {
       "comment" : "When a notification came",
@@ -979,6 +982,9 @@
         }
       }
     },
+    "%@ is not responding" : {
+      "comment" : "Spoken message: an app has stopped answering"
+    },
     "%@ is now %@" : {
       "comment" : "A piece of the reading order moved: its name, then its new place (2nd)",
       "localizations" : {
@@ -1080,6 +1086,9 @@
           }
         }
       }
+    },
+    "%@ is responding again" : {
+      "comment" : "Spoken message: an app that had stopped answering answers again"
     },
     "%@ isn't available in TurnOver" : {
       "comment" : "A VoiceOver feature TurnOver lacks: %@ is the feature",
@@ -1357,7 +1366,8 @@
             "value" : "%@ минут"
           }
         }
-      }
+      },
+      "extractionState" : "stale"
     },
     "%lld minutes" : {
       "comment" : "A battery's time: minutes",
@@ -1415,7 +1425,8 @@
             "value" : "%@ минут назад"
           }
         }
-      }
+      },
+      "extractionState" : "stale"
     },
     "%lld minutes ago" : {
       "comment" : "When a notification came",
@@ -1725,7 +1736,8 @@
             "value" : "%@ процентов"
           }
         }
-      }
+      },
+      "extractionState" : "stale"
     },
     "%@ plugins loaded" : {
       "comment" : "Plugins reloaded",
@@ -1984,7 +1996,7 @@
       }
     },
     "%@ seconds" : {
-      "comment" : "A time\nBraille auto scroll's speed: %@ is seconds",
+      "comment" : "Braille auto scroll's speed: %@ is seconds",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -2440,7 +2452,8 @@
             "value" : "%1$@, %2$@ %%"
           }
         }
-      }
+      },
+      "extractionState" : "stale"
     },
     "%@, %lld percent" : {
       "comment" : "A download's progress: the app, then the percentage",
@@ -3597,7 +3610,8 @@
             }
           }
         }
-      }
+      },
+      "comment" : "A percentage: 45 percent\nA slider's value"
     },
     ", a %@ view" : {
       "comment" : "A plugin's kind of view (chat, media)",
@@ -28854,12 +28868,7 @@
         }
       }
     },
-    "With mouse tracking, a sound when the pointer leaves an item for a blank place" : {
-
-    },
-    "With mouse tracking, an app that holds the lookup for over a second is left behind so the pointer is read again" : {
-
-    },
+    "With mouse tracking, the pointer also cuts off other speech, such as notifications; off, only the pointer's own speech gives way" : {},
     "With mouse tracking, the review cursor goes to what the pointer is over; the keyboard focus never does" : {
 
     },
@@ -29690,7 +29699,8 @@
             "value" : "заряд батареи %@ процентов"
           }
         }
-      }
+      },
+      "extractionState" : "stale"
     },
     "battery %lld percent" : {
       "comment" : "The battery's charge: %lld is the percentage",
@@ -42780,7 +42790,7 @@
       }
     },
     "the application" : {
-      "comment" : "An application with no name",
+      "comment" : "An app whose name is not known\nAn application with no name",
       "localizations" : {
         "tr" : {
           "stringUnit" : {
@@ -42897,6 +42907,12 @@
           }
         }
       }
+    },
+    "the page is not responding" : {
+      "comment" : "Spoken message: a web page has stopped answering"
+    },
+    "the page is responding again" : {
+      "comment" : "Spoken message: a web page that had stopped answering answers again"
     },
     "the picture could not be captured. TurnOver needs Screen Recording, in System Settings, Privacy and Security" : {
       "comment" : "Spoken message",
@@ -43967,7 +43983,8 @@
             "value" : "громкость: %@ процентов"
           }
         }
-      }
+      },
+      "extractionState" : "stale"
     },
     "volume %lld percent" : {
       "comment" : "The speech volume changed: %lld is the percentage",

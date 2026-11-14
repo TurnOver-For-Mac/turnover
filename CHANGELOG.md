@@ -19,6 +19,18 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   selection, with a modifier key or in a table cell.
 - Typing, VoiceOver's keys: with words spoken as you type, the word said as the space is typed is no longer followed by
   "space", as in VoiceOver. A space typed on its own is still said, and NVDA's and JAWS's keys say both.
+- Changes between browse mode and focus mode wait briefly for the destination field and say the mode after its
+  words. Ordinary keys, including a command replacing a page-loading wait, carry interrupted mode words to the
+  current field or reading position; Control stops them. Mode sounds remain, and brief changes within one key
+  or refresh stay silent.
+- Quick navigation onto an editable field says "browse mode" after the field when typing would still navigate.
+- Command F in Maps says "search, focus mode".
+- Returning to a page retains its mode: a field left in focus mode is read as the focus, with selection following;
+  browse mode keeps its reading position.
+- Claude's sidebar session status waits until keys and speech are quiet, keeping each session's newest notice
+  through title changes. The open conversation's own assertive notices keep their ordinary delivery.
+- The command layer is audible while VoiceOver leads. Reading-mode changes wait for the reader of the current
+  app to be ready, including confirmed VoiceOver muting when TurnOver speaks while VoiceOver is running.
 - Safari no longer says "please wait" when it answers a focus check without moving the focus.
 - At the bottom of a changing page, repeated forward keys answer from the copy once its end has been checked.
 - Claude's progress lines wait for speech to finish as well as quiet keys, keeping each conversation's newest

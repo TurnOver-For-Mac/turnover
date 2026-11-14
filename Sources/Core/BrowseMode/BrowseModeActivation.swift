@@ -364,6 +364,7 @@ extension BrowseModeDocument {
             let read = { [self] in
                 if BrowseModeDocument.controlRoles.contains(el.role), !(el.role == "AXLink" && buffer.linkEnd(at: position) != nil) {
                     Speech.speakMessage(Speech.objectPropertiesSpeech(ObjectFactory.make(el), reason: .focus).joined(separator: ", "))
+                    ModeAnnouncement.navigationReported(self, object: ObjectFactory.make(el))
                     lastChain = []
                 } else { speakQuickNavText(at: position, link: el.role == "AXLink") }
             }

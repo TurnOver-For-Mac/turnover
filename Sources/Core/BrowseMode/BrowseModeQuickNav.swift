@@ -32,14 +32,22 @@ extension BrowseModeDocument {
 
     package func quickNav(_ q: QuickNavType, forward: Bool, afterRefresh: Bool = false) {
         if readFromCopyIfSilent({ quickNav(q, forward: forward, afterRefresh: afterRefresh) }) { return }
+        let navigationTicket = ModeAnnouncement.navigationStarted(self)
+        ModeAnnouncement.begin()
+        var waitingForResult = false
+        defer {
+            if !waitingForResult { ModeAnnouncement.navigationFinished(self, ticket: navigationTicket) }
+            ModeAnnouncement.end()
+        }
         positionMovedAt = Date()
         refreshIfNavigated()
         clearSelection()
-        guard ensureContent({ [weak self] in self?.quickNav(q, forward: forward, afterRefresh: afterRefresh) }) else { return }
+        guard ensureContent({ [weak self] in self?.quickNav(q, forward: forward, afterRefresh: afterRefresh) }) else { waitingForResult = true; return }
         refreshBufferIfNeeded(stale: 20)
         /// Search the buffer by role (headings, buttons, links…): no WebKit to ask, or WebKit's answer is unusable.
         /// Nothing further this way: from the other end of the page (wrapping on), or "no next heading".
         func wrapOrStop() {
+            defer { ModeAnnouncement.navigationFinished(self, ticket: navigationTicket) }
             // A copy read in part is not wrapped past its unread rest. A page being read again is wrapped from the copy
             // held, as the arrows read it: previous heading said only "top", five times on 13 Nov 2026, while a
             // refresh was under way (MacRumors: two presses running, during a read of 933 ms).
@@ -62,6 +70,7 @@ extension BrowseModeDocument {
             if BrowseModeDocument.controlRoles.contains(el.role), !(el.role == "AXLink" && buffer.linkEnd(at: at) != nil) {
                 let obj = ObjectFactory.make(el)
                 Speech.speakMessage(Speech.objectPropertiesSpeech(obj, reason: .focus).joined(separator: ", "))
+                ModeAnnouncement.navigationReported(self, object: obj)
                 lastChain = []
             } else { speakQuickNavText(at: at, link: q.name.contains("Link"), element: el) }
         }
@@ -72,12 +81,13 @@ extension BrowseModeDocument {
             // A long page read only in part (a long chat, issue 227): read on first; with more still not read, said,
             // rather than wrapping to the top past it.
             if hit == nil, forward, buffer.canReadOn {
+                waitingForResult = true
                 readOnUntil({ [weak self] in
                     guard let self else { return true }
                     return buffer.find(from: position, forward: forward, roles: roles, headingLevel: level) != nil
                 }) { [weak self] found in
                     guard let self else { return }
-                    if !found, buffer.stoppedAtLimit { Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")); return }
+                    if !found, buffer.stoppedAtLimit { ModeAnnouncement.navigationFinished(self, ticket: navigationTicket); Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")); return }
                     quickNav(q, forward: forward, afterRefresh: afterRefresh)
                 }
                 return
@@ -90,7 +100,7 @@ extension BrowseModeDocument {
             if atTheEnd, quickWrapWaits(), reachForMore({ [weak self] more in
                 guard let self else { return }
                 if more { quickNav(q, forward: forward, afterRefresh: true) } else { wrapOrStop() }
-            }) { return }
+            }) { waitingForResult = true; return }
             guard let (at, el) = hit else {
                 wrapOrStop(); return
             }
@@ -100,6 +110,7 @@ extension BrowseModeDocument {
             if BrowseModeDocument.controlRoles.contains(el.role), !(el.role == "AXLink" && buffer.linkEnd(at: at) != nil) {
                 let obj = ObjectFactory.make(el)
                 Speech.speakMessage(Speech.objectPropertiesSpeech(obj, reason: .focus).joined(separator: ", "))
+                ModeAnnouncement.navigationReported(self, object: obj)
                 lastChain = []
             } else { speakQuickNavText(at: at, link: q.name.contains("Link"), element: el) }
         }
@@ -110,12 +121,13 @@ extension BrowseModeDocument {
             var hit = buffer.findText(from: position, forward: forward, kind: kind)
             // The rest of a long page read on first (issue 227); with more still not read, said rather than wrapping.
             if hit == nil, forward, buffer.canReadOn {
+                waitingForResult = true
                 readOnUntil({ [weak self] in
                     guard let self else { return true }
                     return buffer.findText(from: position, forward: forward, kind: kind) != nil
                 }) { [weak self] found in
                     guard let self else { return }
-                    if !found, buffer.stoppedAtLimit { Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")); return }
+                    if !found, buffer.stoppedAtLimit { ModeAnnouncement.navigationFinished(self, ticket: navigationTicket); Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")); return }
                     quickNav(q, forward: forward, afterRefresh: afterRefresh)
                 }
                 return
@@ -172,8 +184,13 @@ extension BrowseModeDocument {
         if found == nil {
             if afterRefresh { bufferSearch(); return }
             let epoch = pageGeneration, intent = bufferIntent, movedAt = positionMovedAt
+            waitingForResult = true
             buffer.build { [weak self] in
-                guard let self, pageGeneration == epoch, bufferIntent == intent, positionMovedAt == movedAt, API.focusTreeInterceptor === self else { return }
+                guard let self else { return }
+                guard pageGeneration == epoch, bufferIntent == intent, positionMovedAt == movedAt, API.focusTreeInterceptor === self else {
+                    ModeAnnouncement.navigationFinished(self, ticket: navigationTicket)
+                    return
+                }
                 if let at = buffer.offset(of: target), at != position { land(at, target) } else { bufferSearch() }
             }
             return
@@ -193,6 +210,7 @@ extension BrowseModeDocument {
         if BrowseModeDocument.controlRoles.contains(target.role), !(target.role == "AXLink" && buffer.linkEnd(at: r.0) != nil) {
             let obj = ObjectFactory.make(target)
             Speech.speakMessage(Speech.objectPropertiesSpeech(obj, reason: .focus).joined(separator: ", ") + (obj.value.map { _ in "" } ?? ((obj.hasNavigableText && ((try? obj.makeTextInfo(.all))?.text.isEmpty ?? true)) ? ", " + Phrases.blank : "")))
+            ModeAnnouncement.navigationReported(self, object: obj)
             lastChain = []
         } else {
             speakQuickNavText(at: r.0, link: q.name.contains("Link"))
@@ -225,6 +243,7 @@ extension BrowseModeDocument {
             info.end = min(info.end, end)
         }
         speak(info, unit: .line)
+        if let element = element ?? lastQuickNavTarget { ModeAnnouncement.navigationReported(self, object: ObjectFactory.make(element)) }
     }
 
     static func isInside(_ x: AXUIElement, _ root: AXUIElement) -> Bool {

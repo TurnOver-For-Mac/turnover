@@ -184,8 +184,14 @@ package final class ClaudeAppModule: AppModule {
             // Claude's own status counters ("History 518/518", "Running", "Running agent") are noise, not news (the code review, 17 Oct 2026).
             let t = (event.obj.value ?? event.obj.name).trimmingCharacters(in: .whitespacesAndNewlines)
             if t.range(of: #"^(History \d+/\d+|Running( agent)?|Working…?)$"#, options: .regularExpression) != nil { Log.io("Claude: status \"\(t)\" not said"); startWatching(); return }
-            // Assertive notices retain their immediate delivery through the ordinary live-region path.
-            if event.obj.element.string("AXARIALive") == "assertive" {
+            // 14 Nov 2026 review: locate the session structurally before reading descendants.
+            // Ordinary assertive events reach the object's handler with no preliminary text walk.
+            let isSidebarStatus = [". Running", ". Awaiting input", ". Unread response"].contains { suffix in
+                t.hasSuffix(suffix) && !t.dropLast(suffix.count).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
+            let sidebarSession = isSidebarStatus ? capturedSidebarStatusSession(event.obj.element) : nil
+            if sidebarSession == nil,
+               event.obj.element.string("AXARIALive") == "assertive" {
                 heldProgress.removeValue(forKey: currentConversation())
                 next()
                 startWatching()
@@ -194,7 +200,7 @@ package final class ClaudeAppModule: AppModule {
             // Match the ordinary live-region reader: a named group can contain several static text
             // descendants. Its name/value is useful for status filtering, not a replacement for those words.
             let text = ClaudeTranscript.text(of: event.obj.element, skipHidden: false)
-            let session = currentConversation()
+            let session = sidebarSession ?? currentConversation()
             guard !text.isEmpty else { return }
             if deliveredProgress[session] == String(text.prefix(500)) {
                 // 14 Nov 2026 (third review): the line already said is the newest again, so a held,
@@ -223,6 +229,51 @@ package final class ClaudeAppModule: AppModule {
         default:
             next()
         }
+    }
+
+    private static let sidebarSessionPrefix = "claude-sidebar-status:"
+
+    private var sidebarSessions: [ElementKey: String] = [:]
+
+    /// Interpret only the already collected page. A status-like conversation notice must not
+    /// perform up to twelve provider parent queries on the main actor (review, 14 Nov 2026).
+    /// A missing or incomplete copy leaves ordinary assertive delivery in charge.
+    private func capturedSidebarStatusSession(_ element: AXUIElement) -> String? {
+        guard let page = API.focusTreeInterceptor,
+              page.webArea.pid == pid else { return nil }
+        return page.buffer.withSnapshot { sidebarStatusSession(element) }
+    }
+
+    /// 14 Nov 2026 review: a session link/row inside navigation owns the status, never its title.
+    /// Unknown structures fall through to ordinary delivery. The bounded parent chain cannot walk a
+    /// conversation's descendants, even if its words happen to end in a sidebar status suffix.
+    private func sidebarStatusSession(_ element: AXUIElement) -> String? {
+        var node: AXUIElement? = element
+        var owner: AXUIElement?
+        var seen = Set<ElementKey>()
+        for _ in 0..<12 {
+            guard let current = node,
+                  AXSnapshot.holds(current),
+                  seen.insert(ElementKey(current)).inserted else { return nil }
+            let role = current.role
+            if role == "AXWebArea" || role == "AXWindow" || role == "AXApplication" { return nil }
+            if owner == nil,
+               role == "AXLink" || role == "AXRow" { owner = current }
+            if current.string(kAXSubroleAttribute) == "AXLandmarkNavigation"
+                || current.string("AXARIARole") == "navigation" {
+                guard let owner else { return nil }
+                let rawAddress = owner.attr("AXURL")
+                let address = (rawAddress as? URL)?.absoluteString ?? (rawAddress as? String) ?? ""
+                if !address.isEmpty { return Self.sidebarSessionPrefix + address }
+                let key = ElementKey(owner)
+                if let session = sidebarSessions[key] { return session }
+                let session = Self.sidebarSessionPrefix + "element:\(sidebarSessions.count)"
+                sidebarSessions[key] = session
+                return session
+            }
+            node = current.element(kAXParentAttribute)
+        }
+        return nil
     }
 
     /// When the prompt last emptied: a message was sent.
@@ -299,9 +350,17 @@ package final class ClaudeAppModule: AppModule {
                 Log.io("claude: progress waited a minute; retained until keys and speech are idle")
             }
         }
-        // Keep other apps' and conversations' notices pending, rather than speaking them over the active page.
+        // Keep Claude's notices pending while another app is active.
         guard AXHandler.shared.activePid == pid else { return }
-        let session = currentConversation()
+        let openSession = currentConversation()
+        // 14 Nov 2026: sidebar status belongs to another session and is eligible without opening it.
+        // Open-conversation progress retains its existing page-address ownership rule.
+        let sidebarSession = heldProgress.keys
+            .filter { $0.hasPrefix(Self.sidebarSessionPrefix) }
+            .sorted { (heldProgress[$0]?.since ?? .distantFuture) < (heldProgress[$1]?.since ?? .distantFuture) }
+            .first
+        let session = heldProgress[openSession] == nil ? sidebarSession : openSession
+        guard let session else { return }
         guard let pending = heldProgress[session] else { return }
         let readiness = ClaudeProgressReadiness.decision(
             keyQuietFor: now.timeIntervalSince(InputManager.lastKeyDownAt),

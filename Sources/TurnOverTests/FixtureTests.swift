@@ -760,6 +760,368 @@ func focusRuleTests() {
         return f
     }
 
+    // 14 Nov 2026: these assertions observe output after Speech.enqueue's real gates, not Speech.sink.
+    func withModeWords(_ body: (ModeWordsTrial, BrowseModeDocument) -> Void) {
+        AXReplay.load(conversation())
+        let trial = ModeWordsTrial()
+        let page = BrowseModeHandler.shared.document(root: AXReplay.element(60))
+        defer {
+            API.setFocusObject(nil, ancestors: [])
+            BrowseModeHandler.shared.forget(pid: 900_060)
+            AXReplay.unload()
+            trial.restore()
+        }
+        API.setFocusObject(ObjectFactory.make(AXReplay.element(65)), ancestors: [], interceptor: page)
+        page.refreshIfNavigated()
+        waitForBuffer(page.buffer)
+        page.hasWebKitSearch = false
+        trial.queued = []
+        body(trial, page)
+    }
+    func modeFocus(_ id: Int, page: BrowseModeDocument) {
+        let field = ObjectFactory.make(AXReplay.element(id))
+        API.setFocusObject(field, ancestors: [], interceptor: page)
+        EventHandler.execute(.gainFocus, on: field)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+    }
+
+    test("mode words: Enter waits for delayed native focus, with sounds on and off") {
+        for sounds in [false, true] {
+            withModeWords { trial, page in
+                config.general.navigationSounds = sounds
+                page.position = page.buffer.offset(of: AXReplay.element(66)) ?? 0
+                guard let enter = page.script(named: "activatePosition") else { Harness.fail("Enter script exists"); return }
+                ScriptHandler.executeScript(enter, gesture: KeyboardGesture(identifier: "kb:enter")!)
+                check(page.passThrough, "real Enter changes mode")
+                check(!trial.words.contains("focus mode"), "no mode at synchronous key return")
+                trial.advance(0.2)
+                check(!trial.words.contains("focus mode"), "still awaiting the field")
+                modeFocus(66, page: page)
+                trial.drain()
+                check(trial.words.dropLast().joined().contains("Prompt"), "native field words precede mode: \(trial.words)")
+                expect(trial.words.last, "focus mode")
+                trial.advance(0.4)
+                expect(trial.words.filter { $0 == "focus mode" }.count, 1)
+                expect(trial.sound, sounds ? [true] : [])
+            }
+        }
+    }
+
+    test("mode words: an absent focus has a short ceiling after key speech") {
+        withModeWords { trial, page in
+            let key = Script(name: "modeWords", description: "", category: "", owner: nil) { _ in
+                page.setPassThrough(true, announce: true)
+                Speech.speakMessage("key words")
+            }
+            ScriptHandler.executeScript(key, gesture: KeyboardGesture(identifier: "kb:enter")!)
+            expect(trial.words, ["key words"])
+            trial.advance(0.36)
+            expect(trial.words, ["key words", "focus mode"])
+        }
+    }
+
+    test("mode words: ordinary cancellation transfers to a newer field and Control retires it") {
+        withModeWords { trial, page in
+            trial.holdMode = true
+            modeFocus(66, page: page)
+            expect(trial.words.last, "focus mode")
+            let old = trial.queued.last?.1
+            // This is the ordinary key path used by InputManager, not Control-to-stop.
+            Speech.cancel()
+            old?(false)
+            trial.drain()
+            let newer = ObjectFactory.make(AXReplay.element(66))
+            // A second editable field, with a distinct element and label.
+            var fixture = conversation()
+            fixture.nodes.append(.init(id: 100, attrs: ["AXRole": .string("AXTextField"), "AXTitle": .string("Next field"), "AXValue": .string(""), "AXParent": .element(60)]))
+            AXReplay.load(fixture)
+            modeFocus(100, page: page)
+            old?(false)
+            trial.drain()
+            expect(trial.words.last, "focus mode", "the newer field carries unchanged focus mode")
+            check(trial.words.dropLast().last?.contains("Next field") == true, "new label precedes transferred mode")
+            expect(trial.words.filter { $0 == "focus mode" }.count, 2, "one cancelled request, one replacement")
+            let stopped = trial.queued.last?.1
+            Speech.cancel(explicit: true)
+            let count = trial.queued.count
+            stopped?(false)
+            API.setFocusObject(newer, ancestors: [], interceptor: page)
+            modeFocus(66, page: page)
+            trial.advance(0.5)
+            expect(trial.words.filter { $0 == "focus mode" }.count, 2, "Control prevents resurrection")
+            check(trial.queued.count >= count, "ordinary field speech still works")
+        }
+    }
+
+    test("mode words: stale callbacks cannot retry on a later page, field, return or after expiry") {
+        for change in ["page", "field", "return", "expiry"] {
+            withModeWords { trial, page in
+                trial.holdMode = true
+                modeFocus(66, page: page)
+                expect(trial.words.last, "focus mode", "the production path submitted a mode before testing its stale callback")
+                let completion = trial.queued.last?.1
+                switch change {
+                case "page":
+                    var fixture = conversation()
+                    let root = fixture.nodes.firstIndex { $0.id == 60 }!
+                    fixture.nodes[root].attrs["AXURL"] = .url("https://example.com/a-new-page")
+                    AXReplay.load(fixture)
+                    page.refreshIfNavigated()
+                case "field": API.setFocusObject(ObjectFactory.make(AXReplay.element(65)), ancestors: [], interceptor: page)
+                case "return":
+                    API.setFocusObject(nil, ancestors: [])
+                    API.setFocusObject(ObjectFactory.make(AXReplay.element(66)), ancestors: [], interceptor: page)
+                default: trial.advance(8.1)
+                }
+                let count = trial.words.filter { $0 == "focus mode" }.count
+                completion?(false)
+                trial.drain()   // The real completion returns to main before scheduling its retry.
+                trial.advance(0.2)
+                expect(trial.words.filter { $0 == "focus mode" }.count, count, "old mode cannot retry after \(change)")
+            }
+        }
+    }
+
+    test("mode words: real output gate blocks and later admits the current field mode") {
+        withModeWords { trial, page in
+            Speech.voiceOverEnabledForOutput = { true }
+            modeFocus(66, page: page)
+            trial.drain()
+            check(trial.words.isEmpty, "VoiceOver's production output gate prevents TurnOver output")
+            Speech.voiceOverEnabledForOutput = { false }
+            trial.advance(0.1)
+            expect(trial.words, ["focus mode"], "mode reaches the output handoff once allowed")
+        }
+    }
+
+    test("mode words: forty fields retain focus mode and a menu button returns to browse mode") {
+        withModeWords { trial, page in
+            var fixture = conversation()
+            for id in 100..<140 {
+                fixture.nodes.append(.init(id: id, attrs: ["AXRole": .string("AXTextField"), "AXTitle": .string("Field \(id)"), "AXValue": .string(""), "AXParent": .element(60)]))
+            }
+            let button = fixture.nodes.firstIndex { $0.id == 65 }!
+            fixture.nodes[button].attrs["AXRole"] = .string("AXPopUpButton")
+            fixture.nodes[button].attrs["AXPopupValue"] = .string("menu")
+            AXReplay.load(fixture)
+            for id in 100..<140 {
+                modeFocus(id, page: page)
+                check(page.passThrough, "each field keeps focus mode")
+            }
+            expect(trial.words.filter { $0 == "focus mode" }.count, 1, "completed unchanged mode is not repeated")
+            modeFocus(65, page: page)
+            trial.drain()
+            check(!page.passThrough, "menu button stays in browse mode")
+            expect(trial.words.last, "browse mode")
+        }
+    }
+
+    test("mode words: temporary same-key transitions stay silent") {
+        withModeWords { trial, page in
+            page.passThrough = true
+            let refresh = Script(name: "modeWordsRefresh", description: "", category: "", owner: nil) { _ in
+                page.setPassThrough(false, announce: true)
+                page.setPassThrough(true, announce: true)
+                Speech.speakMessage("Prompt, edit")
+            }
+            ScriptHandler.executeScript(refresh, gesture: KeyboardGesture(identifier: "kb:enter")!)
+            trial.advance(0.4)
+            expect(trial.words, ["Prompt, edit"])
+        }
+    }
+
+    test("mode words: a long field completes before mode submission, and a departed page never submits it") {
+        for leave in [false, true] {
+            withModeWords { trial, page in
+                trial.finish = false
+                modeFocus(66, page: page)
+                check(!trial.words.contains("focus mode"), "mode is not in the audio queue behind a long label")
+                let label = trial.queued.last?.1
+                trial.advance(0.6)
+                check(!trial.words.contains("focus mode"), "the focus ceiling cannot overtake outstanding field speech")
+                if leave { API.setFocusObject(nil, ancestors: []) }
+                label?(true)
+                trial.drain()
+                expect(trial.words.contains("focus mode"), !leave, "only the current page submits mode after label playback")
+            }
+        }
+    }
+
+    test("quick navigation: the real VoiceOver command waits for deferred content and says mode once") {
+        AXReplay.load(conversation())
+        let trial = ModeWordsTrial()
+        let entered = DispatchSemaphore(value: 0), release = DispatchSemaphore(value: 0)
+        let buffer = WebBuffer(webArea: AXReplay.element(60), collect: { root, focus, request in
+            entered.signal()
+            _ = release.wait(timeout: .now() + 3)
+            return WebBufferCollection.collect(root: root, focus: focus, request: request)
+        })
+        let page = BrowseModeDocument(webArea: AXReplay.element(60), buffer: buffer)
+        defer {
+            release.signal()
+            API.setFocusObject(nil, ancestors: [])
+            waitForBuffer(buffer)
+            AXReplay.unload()
+            trial.restore()
+        }
+        API.setFocusObject(ObjectFactory.make(AXReplay.element(65)), ancestors: [], interceptor: page)
+        page.refreshIfNavigated()
+        check(entered.wait(timeout: .now() + 1) == .success, "real collection held on its worker")
+        page.passThrough = true
+        page.hasWebKitSearch = false
+        let plugin = VoiceOverKeysPlugin()
+        guard let command = plugin.script(named: "vo_nextFormField") else { Harness.fail("real VoiceOver form-field command"); return }
+        ScriptHandler.executeScript(command, gesture: KeyboardGesture(identifier: "kb:turnover+command+j")!)
+        trial.advance(0.5)
+        check(!trial.words.contains("browse mode"), "deferred navigation cannot announce before its item, even beyond focus ceiling")
+        release.signal()
+        waitForBuffer(buffer)
+        trial.advance(0.1)
+        check(trial.words.dropLast().joined().contains("Prompt"), "the real deferred command reported the field: \(trial.words)")
+        expect(trial.words.last, "browse mode")
+        expect(trial.words.filter { $0 == "browse mode" }.count, 1)
+    }
+
+    test("mode words: superseded deferred quick navigation releases its ticket for the newer command") {
+        for arrow in [false, true] {
+            var fixture = conversation()
+            let root = fixture.nodes.firstIndex { $0.id == 60 }!
+            fixture.nodes[root].attrs["AXURL"] = .url("https://example.com/deferred-mode-\(arrow)")
+            AXReplay.load(fixture)
+            let trial = ModeWordsTrial()
+            let entered = DispatchSemaphore(value: 0), release = DispatchSemaphore(value: 0)
+            let buffer = WebBuffer(webArea: AXReplay.element(60), collect: { root, focus, request in
+                entered.signal()
+                _ = release.wait(timeout: .now() + 3)
+                return WebBufferCollection.collect(root: root, focus: focus, request: request)
+            })
+            let page = BrowseModeDocument(webArea: AXReplay.element(60), buffer: buffer)
+            BrowseModeHandler.shared.adopt(page)
+            let savedStuck = ScriptHandler.mainStuck
+            defer {
+                ScriptHandler.mainStuck = savedStuck
+                release.signal()
+                API.setFocusObject(nil, ancestors: [])
+                waitForBuffer(buffer)
+                BrowseModeHandler.shared.forget(pid: 900_060)
+                AXReplay.unload()
+                trial.restore()
+            }
+            let focus = ObjectFactory.make(AXReplay.element(65))
+            API.setFocusObject(focus, ancestors: [], interceptor: page)
+            ObjectNavigator.shared.toFocus()
+            trial.queued = []
+            page.refreshIfNavigated()
+            check(entered.wait(timeout: .now() + 1) == .success, "collection is held off main")
+            page.passThrough = true
+            page.hasWebKitSearch = false
+            let plugin = VoiceOverKeysPlugin()
+            let gesture = KeyboardGesture(identifier: "kb:turnover+command+j")!
+            guard let command = plugin.script(named: "vo_nextFormField") else { Harness.fail("form-field command"); continue }
+            ScriptHandler.executeScript(command, gesture: gesture)
+            trial.advance(0.5)
+            check(!trial.words.contains("browse mode"), "the original command still owns its wait")
+            // Exercise the real key-arrival counter without posting keys or running InputManager.
+            ScriptHandler.mainStuck = { true }
+            _ = ScriptHandler.askMain(gesture)
+            ScriptHandler.mainStuck = savedStuck
+            Speech.cancel()
+            let newer = arrow ? plugin.script(named: "vo_next") : GlobalCommands.shared.script(named: "reportCurrentFocus")
+            guard let newer else { Harness.fail("replacement command"); continue }
+            ScriptHandler.executeScript(newer, gesture: KeyboardGesture(identifier: "kb:turnover+rightArrow")!)
+            trial.advance(0.5)
+            if arrow { check(!trial.words.contains("browse mode"), "a deferred line cannot be overtaken by its mode") }
+            release.signal()
+            waitForBuffer(buffer)
+            trial.advance(0.4)
+            check(trial.words.contains("browse mode"), "the newer command carries the mode when the old callback is discarded: \(trial.words)")
+            expect(trial.words.filter { $0 == "browse mode" }.count, 1)
+            if arrow {
+                let modeIndex = trial.words.firstIndex(of: "browse mode") ?? 0
+                check(trial.words.prefix(modeIndex).joined().contains("The reading stopped on this line."), "VO-Right reads its line before the mode: \(trial.words)")
+                check(!trial.words.joined().contains("Prompt"), "the obsolete quick-navigation callback never runs")
+            }
+        }
+    }
+
+    test("mode words: a virtual retry follows the actual reading position, not the last quick target") {
+        withModeWords { trial, page in
+            trial.holdMode = true
+            page.position = page.buffer.offset(of: AXReplay.element(65)) ?? 0
+            let navigation = BrowseModeDocument.quickNav.first { $0.name == "Edit" }!
+            page.quickNav(navigation, forward: true)
+            trial.drain()
+            expect(trial.words.last, "browse mode")
+            let completion = trial.queued.last?.1
+            // Arrows update this same caret without replacing lastQuickNavTarget. No new item has
+            // been reported yet: an interrupted field's retry must not use that stale target.
+            page.position = page.buffer.offset(of: AXReplay.element(64)) ?? 0
+            completion?(false)
+            trial.drain()
+            trial.advance(0.2)
+            expect(trial.words.filter { $0 == "browse mode" }.count, 1, "the old virtual field cannot retry elsewhere")
+        }
+    }
+
+    test("mode words: a heading container reports mode at its captured text-child position") {
+        withModeWords { trial, page in
+            var fixture = conversation()
+            let heading = fixture.nodes.firstIndex { $0.id == 63 }!
+            fixture.nodes[heading].attrs["AXRole"] = .string("AXHeading")
+            AXReplay.load(fixture)
+            page.buffer.buildForInspection()
+            page.position = page.buffer.offset(of: AXReplay.element(65)) ?? 0
+            page.passThrough = true
+            trial.queued = []
+            let plugin = VoiceOverKeysPlugin()
+            guard let command = plugin.script(named: "vo_previousHeading") else { Harness.fail("heading command"); return }
+            ScriptHandler.executeScript(command, gesture: KeyboardGesture(identifier: "kb:turnover+command+shift+h")!)
+            trial.advance(0.4)
+            check(page.elementAtPosition()?.isSame(AXReplay.element(64)) == true, "the actual position is the heading's text child")
+            expect(trial.words.last, "browse mode", "a container target does not fail the current-position check")
+            expect(trial.words.filter { $0 == "browse mode" }.count, 1)
+        }
+    }
+
+    test("Maps: Command F reports focus mode after search and the destination field") {
+        withModeWords { trial, page in
+            let poster = KeyboardGesture.poster
+            let skipped = WebBuffer.iosSkippedSubroles
+            KeyboardGesture.poster = nil
+            defer { KeyboardGesture.poster = poster; WebBuffer.iosSkippedSubroles = skipped }
+            let module = MapsAppModule(pid: page.webArea.pid, bundleIdentifier: "com.apple.Maps", appName: "Maps")
+            guard let command = module.script(named: "maps_search") else { Harness.fail("Maps search command"); return }
+            ScriptHandler.executeScript(command, gesture: KeyboardGesture(identifier: "kb:command+f")!)
+            expect(trial.words, ["search", "focus mode"], "the real Maps command says search, then focus mode")
+            // The search field is outside browse mode: its focus leaves no interceptor, and no second mode word follows.
+            let field = ObjectFactory.make(AXReplay.element(66))
+            API.setFocusObject(field, ancestors: [], interceptor: nil)
+            EventHandler.execute(.gainFocus, on: field)
+            trial.advance(0.4)
+            expect(trial.words.filter { $0 == "focus mode" }.count, 1)
+        }
+    }
+
+    test("quick navigation: editable targets name browse mode once; arrows do not") {
+        withModeWords { trial, page in
+            for kind in ["FormField", "Edit", "TextField", "Control"] {
+                guard let navigation = (BrowseModeDocument.quickNav + BrowseModeDocument.voiceOverQuickNav).first(where: { $0.name == kind }) else { Harness.fail("quick navigation exists"); return }
+                page.position = page.buffer.offset(of: AXReplay.element(65)) ?? 0
+                trial.queued = []
+                page.quickNav(navigation, forward: true)
+                trial.advance(0.4)
+                check(trial.words.dropLast().joined().contains("Prompt"), "field before mode")
+                expect(trial.words.last, "browse mode")
+                expect(trial.words.filter { $0 == "browse mode" }.count, 1)
+            }
+            trial.queued = []
+            page.position = max(0, (page.buffer.offset(of: AXReplay.element(66)) ?? 1) - 1)
+            page.script(named: "moveByLine_forward")?.handler(KeyboardGesture(identifier: "kb:downArrow")!)
+            trial.advance(0.4)
+            check(!trial.words.contains("browse mode"), "arrows do not add mode words")
+        }
+    }
+
     // Command-Tab away and back: the Claude app and Safari give the focus back to the control that had it, and the
     // reading position went there too, into focus mode on the prompt (28 and 29 Oct 2026). NVDA leaves the reading
     // position and the mode as they were, and reads the line there.
@@ -783,7 +1145,10 @@ func focusRuleTests() {
             page.focusFromOutside = fromOutside
             said = ""
             var passed = false
-            page.handleEvent(Event(.gainFocus, f)) { passed = true }
+            page.handleEvent(Event(.gainFocus, f)) {
+                passed = true
+                f.handleEvent(Event(.gainFocus, f))
+            }
             return passed
         }
         let stopped = page.buffer.text.range(of: "The reading stopped").location
@@ -813,8 +1178,17 @@ func focusRuleTests() {
 
         // Typing in the prompt (focus mode), another app, back: typing still.
         check(focus(66, fromOutside: false) && page.passThrough, "into the prompt, focus mode")
+        // 14 Nov 2026: API departure cancels collection, but the document retains its focus mode.
+        // Re-entry must say the field itself, never the old virtual reading line.
+        API.setFocusObject(nil, ancestors: [])
+        check(page.passThrough, "focus mode survives leaving the app (including the lock screen)")
+        check(BrowseModeHandler.shared.document(root: AXReplay.element(60)) === page, "re-entry reuses the page and its mode")
+        Speech.speakObject(ObjectFactory.make(AXReplay.element(65)), reason: .focus)
         check(focus(66, fromOutside: true), "back into the prompt in focus mode, the focus is followed as before")
         check(page.passThrough, "focus mode stays")
+        check(said.contains("Prompt"), "the field is said as an ordinary focus: \(said)")
+        check(!said.contains("The reading stopped"), "the old reading line is not said in focus mode")
+        check((API.focusObject as? EditableText)?.isFollowingSelection == true, "ordinary focus resumes selection following too")
     }
 }
 

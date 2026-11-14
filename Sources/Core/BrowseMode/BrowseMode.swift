@@ -277,7 +277,8 @@ public final class BrowseModeDocument: ScriptableObject {
             // before (Google's search box) kept the new page from being announced, and its keys went to the page
             // (a tester, 12 Oct 2026). A page that puts the focus in a field switches again by itself.
             if passThrough { Log.io("browse mode: a new page; focus mode from the last one ended") }
-            passThrough = false; disableAutoPassThrough = false
+            setPassThrough(false, announce: true)
+            disableAutoPassThrough = false
         }
         let saved = BrowseModeHandler.cameBackByHistory ? BrowseModeHandler.shared.savedPosition(for: now) : nil
         let at = resumeOffset(saved)
@@ -604,6 +605,7 @@ public final class BrowseModeDocument: ScriptableObject {
         guard let info = caretInfo() else { return }
         info.expand(unit)
         speak(info, unit: unit)
+        ModeAnnouncement.readingReported(self)
     }
 
     /// Find (NVDA's browse-mode find, VoiceOver's VO-F): the next or previous match from the reading position,
@@ -660,8 +662,11 @@ public final class BrowseModeDocument: ScriptableObject {
         // and every key said "no next heading").
         guard buffer.lines.isEmpty, url != "about:blank" else { return true }
         let epoch = pageGeneration, movedAt = positionMovedAt, intent = bufferIntent, keys = ScriptHandler.keysArrivedCount
+        let ticket = ModeAnnouncement.navigationStarted(self)
         buffer.build { [weak self] in
-            guard let self, pageGeneration == epoch, positionMovedAt == movedAt, bufferIntent == intent,
+            guard let self else { return }
+            defer { ModeAnnouncement.navigationFinished(self, ticket: ticket) }
+            guard pageGeneration == epoch, positionMovedAt == movedAt, bufferIntent == intent,
                   ScriptHandler.keysArrivedCount == keys, API.focusTreeInterceptor === self, !passThrough else { return }
             if buffer.lines.isEmpty {
                 sayNothingOnPageYet()

@@ -27,6 +27,10 @@ public struct Event {
 }
 
 public enum EventHandler {
+    // Replay elements use one fake pid per node. Override only this native identity boundary in
+    // event-chain tests; the module, document, object and output dispatch stay real (14 Nov 2026).
+    package static var sameDocumentProcess: (pid_t, pid_t) -> Bool = { $0 == $1 }
+
     /// The run loop mode notifications are also delivered in, so a waiting script can pump them.
     public static let runLoopMode = CFRunLoopMode("turnover.events" as CFString)
     private static var pending: [Event] = []
@@ -58,6 +62,8 @@ public enum EventHandler {
 
     /// Run one event through the chain now (NVDA: executeEvent).
     public static func execute(_ event: Event) {
+        ModeAnnouncement.begin()
+        defer { ModeAnnouncement.end() }
         if InputManager.isAsleep(event.obj.pid) { return }   // NVDA's sleep mode: nothing said for this app
         if InputManager.directPid == event.obj.pid { return }   // a direct app: nothing said (it speaks for itself)
         // Google Docs: a focus move starts or stops the reading of Google's announcements; a caret move in the editor
@@ -89,7 +95,7 @@ public enum EventHandler {
                 event.obj.appModule.handleEvent(event, next: next)
             } else if index == plugins.count + 1 {
                 index += 1
-                if let d = API.focusTreeInterceptor, event.obj.pid == d.webArea.pid { d.handleEvent(event, next: next) } else { next() }
+                if let d = API.focusTreeInterceptor, sameDocumentProcess(event.obj.pid, d.webArea.pid) { d.handleEvent(event, next: next) } else { next() }
             } else if index == plugins.count + 2 {
                 index += 1
                 event.obj.handleEvent(event)

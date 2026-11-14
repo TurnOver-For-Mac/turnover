@@ -17,6 +17,11 @@ import TurnOverAX
 // Browse mode: events for objects inside the document (NVDA: tree interceptor event handling).
 extension BrowseModeDocument {
     public func handleEvent(_ event: Event, next: () -> Void) {
+        ModeAnnouncement.begin()
+        defer {
+            if event.kind == .gainFocus { ModeAnnouncement.focusReported(self, field: event.obj.element) }
+            ModeAnnouncement.end()
+        }
         switch event.kind {
         case .gainFocus:
             let navigated = refreshIfNavigated()
@@ -27,7 +32,13 @@ extension BrowseModeDocument {
             // to Wikipedia's search field in Safari 27.2 (29 Oct 2026), at every return.
             let fromOutside = focusFromOutside
             focusFromOutside = false
-            if fromOutside, !navigated, !passThrough, let last = lastFocusElement, event.obj.isSameElement(as: last) {
+            // 14 Nov 2026: mode lives on this page across app departure and unlock. Only browse mode
+            // ignores the repeated focus; in focus mode the ordinary field event below must run (NVDA).
+            if fromOutside,
+               !navigated,
+               !passThrough,
+               let last = lastFocusElement,
+               event.obj.isSameElement(as: last) {
                 Log.io("browse mode: back from outside onto the \(event.obj.axRole) that had the focus; the reading position stays at \(position)")
                 positionMovedAt = Date()   // Enter and Space are for the reading position again, not that control (activate)
                 // The control's own gain focus is not run here, and with it went the following of a text field's
@@ -73,7 +84,7 @@ extension BrowseModeDocument {
             // A page reached for the first time (a new page, Back, a reload): NVDA's first gain focus, the title and then
             // the reading (say all, or the line).
             if event.obj.isSameElement(as: webArea), !passThrough, url != announcedURL, !buffer.lines.isEmpty {
-                setPassThrough(false, announce: false)
+                setPassThrough(false, announce: true)
                 positionAtFocus = position
                 lastChain = []
                 announcePage()
@@ -85,7 +96,7 @@ extension BrowseModeDocument {
             if event.obj.isSameElement(as: webArea), let back = BrowseModeHandler.backFromAddressField,
                Date().timeIntervalSince(back.at) < 0.5, back.page.isSame(webArea) {
                 BrowseModeHandler.backFromAddressField = nil
-                setPassThrough(false, announce: false)
+                setPassThrough(false, announce: true)
                 positionAtFocus = position
                 lastChain = []
                 Log.io("browse mode: back on the page after Return in the address field; its line waits for the new page")
@@ -113,7 +124,7 @@ extension BrowseModeDocument {
             Log.io("browse mode: focus on \(event.obj.axRole) wants \(wanted ? "focus" : "browse") mode (editable \(event.obj.states.contains(.editable)), manual \(disableAutoPassThrough))")
             // Said (or its sound) whenever TurnOver switches by itself, as NVDA: a silent switch on a list or table left
             // H and K doing nothing (8 Oct 2026).
-            setPassThrough(wanted, announce: wanted != passThrough)   // both ways, as NVDA: back to browse mode had no sound (a tester, 12 Oct 2026)
+            setPassThrough(wanted, announce: true)
             // Follow the focus with the virtual caret.
             if !event.obj.isSameElement(as: webArea) {
                 lastFocusElement = event.obj.element

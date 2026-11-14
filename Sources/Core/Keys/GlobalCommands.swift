@@ -364,10 +364,10 @@ public final class GlobalCommands: ScriptableObject {
         script("toggleVirtualBufferPassThrough", String(localized: "Switches between browse mode and focus mode in a document", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+space"], category: "Browse mode") { _ in
             guard let d = API.focusTreeInterceptor else { Speech.speakMessage(String(localized: "not in a document", comment: "Browse mode is only in documents")); return }
             d.disableAutoPassThrough = !d.passThrough   // NVDA: a manual switch to focus mode sticks until focus leaves
-            // By hand: VoiceOver's own Quick Nav sounds (its single-key Quick Nav is browse mode's twin); the automatic
-            // switch as a field takes the focus stays silent, as VoiceOver's is (17 Oct 2026).
-            let browse = d.passThrough   // about to be
-            d.setPassThrough(!d.passThrough, announce: !VoiceOverSounds.play(browse ? "QuickNavOn.wav" : "QuickNavOff.wav"))
+            // 14 Nov 2026: retain the familiar Quick Nav sound, with the mode words after the key's speech.
+            let browse = d.passThrough
+            let sounded = VoiceOverSounds.play(browse ? "QuickNavOn.wav" : "QuickNavOff.wav")
+            d.setPassThrough(!d.passThrough, announce: true, playSound: !sounded)
         }
         // Object navigation: everything in the window, whether or not the keyboard reaches it. TurnOver Left and Right
         // step through every item in reading order, going in and out of groups by themselves, as Narrator's Caps Lock
