@@ -913,19 +913,56 @@ func focusRuleTests() {
         }
     }
 
-    test("caret focus: a superseding command invalidates delayed native entry") {
-        withModeWords { trial, page in
-            config.virtualBuffers.autoPassThroughOnCaretMove = true
-            config.virtualBuffers.autoFocusMode = false
-            page.position = page.buffer.offset(of: AXReplay.element(65)) ?? 0
-            guard let command = page.script(for: KeyboardGesture(identifier: "kb:downArrow")!) else { Harness.fail("arrow command"); return }
-            ScriptHandler.executeScript(command, gesture: KeyboardGesture(identifier: "kb:downArrow")!)
-            check(AXReplay.sets.contains { $0.id == 66 && $0.attribute == kAXFocusedAttribute }, "first command requested focus")
-            _ = page.script(for: KeyboardGesture(identifier: "kb:upArrow")!)
-            modeFocus(66, page: page)
-            trial.advance(0.4)
-            check(!page.passThrough, "later command retires old caret intent")
-            check(!trial.words.contains("focus mode"), "stale entry has no mode announcement")
+    test("caret focus: default settings reject delayed entry after VO Right or another command") {
+        for vo in [false, true] {
+            for delay in [0.0, 0.55] {
+                withModeWords(trailing: true) { trial, page in
+                    config.virtualBuffers = Config.VirtualBuffers()
+                    check(config.virtualBuffers.autoFocusMode, "native automatic focus uses its default")
+                    check(config.virtualBuffers.autoPassThroughOnCaretMove, "caret automatic focus uses its default")
+                    page.position = page.buffer.offset(of: AXReplay.element(65)) ?? 0
+                    let down = KeyboardGesture(identifier: "kb:downArrow")!
+                    guard let command = page.script(for: down) else { Harness.fail("arrow command"); return }
+                    ScriptHandler.executeScript(command, gesture: down)
+                    check(AXReplay.sets.contains { $0.id == 66 && $0.attribute == kAXFocusedAttribute }, "first command requested focus")
+                    let nextKey = KeyboardGesture(identifier: vo ? "kb:turnover+rightArrow" : "kb:upArrow")!
+                    let next = vo ? VoiceOverKeysPlugin().script(named: "vo_next") : page.script(for: nextKey)
+                    guard let next else { Harness.fail("superseding command"); return }
+                    ScriptHandler.executeScript(next, gesture: nextKey)
+                    let movedTo = page.position
+                    check(movedTo != page.buffer.offset(of: AXReplay.element(66)), "the command really left the field")
+                    // Also deliver after confirmFocus has timed out and discarded its active callback.
+                    if delay > 0 { RunLoop.current.run(until: Date().addingTimeInterval(delay)) }
+                    trial.advance(0.1)
+                    let before = trial.words
+                    modeFocus(66, page: page)
+                    trial.advance(0.4)
+                    check(!page.passThrough, "obsolete native entry cannot restore focus mode with defaults")
+                    expect(page.position, movedTo, "obsolete event cannot restore the old reading position")
+                    expect(trial.words, before, "obsolete event repeats neither the field nor its mode")
+                    modeFocus(66, page: page)
+                    check(page.passThrough, "a later ordinary focus event is still followed")
+                    // A missing notification must not swallow a fresh intentional Tab or click.
+                    for click in [false, true] {
+                        page.setPassThrough(false, announce: false)
+                        API.setFocusObject(ObjectFactory.make(AXReplay.element(65)), ancestors: [], interceptor: page)
+                        page.position = page.buffer.offset(of: AXReplay.element(65)) ?? 0
+                        ScriptHandler.executeScript(command, gesture: down)
+                        let oldKey = InputManager.lastKeyIdentifier, oldTime = InputManager.lastKeyDownAt
+                        let oldClicks = BrowseModeDocument.caretFocusClicks
+                        if click { BrowseModeDocument.caretFocusClicks = { [UInt32.max, UInt32.max, UInt32.max] } }
+                        else {
+                            InputManager.lastKeyIdentifier = "kb:tab"
+                            InputManager.lastKeyDownAt = Date()
+                        }
+                        modeFocus(66, page: page)
+                        check(page.passThrough, "a fresh native Tab or click owns its focus even without the old event")
+                        InputManager.lastKeyIdentifier = oldKey
+                        InputManager.lastKeyDownAt = oldTime
+                        BrowseModeDocument.caretFocusClicks = oldClicks
+                    }
+                }
+            }
         }
     }
 

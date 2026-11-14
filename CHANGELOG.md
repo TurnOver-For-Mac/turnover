@@ -20,6 +20,7 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 ### Fixed
 
 - Reading the saved copy of an unresponsive page no longer asks the page about automatic caret focus.
+- A delayed automatic field-focus event no longer pulls the reading position back after another command.
 - A button replaced since the page was copied can be found near its old position or at the end of a long page,
   including labels inside nested groups, with one bounded fresh-copy retry.
 - Claude's Command 5 to 9 use conversation-switch handling, dialog notices are immediate, VO-Right leaves an

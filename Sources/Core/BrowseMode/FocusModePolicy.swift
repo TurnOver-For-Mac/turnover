@@ -72,6 +72,9 @@ extension BrowseModeDocument {
     }
 
     struct CaretFocusRequest {
+        let id = UUID()
+        let started = Date()
+        let clicks = caretFocusClicks()
         let element: AXUIElement
         let position: Int
         let page: Int
@@ -80,6 +83,12 @@ extension BrowseModeDocument {
         let focusBefore: AXUIElement?
         let expires: Date
         var confirmed = false
+    }
+
+    package static var caretFocusClicks: () -> [UInt32] = {
+        [CGEventType.leftMouseDown, .rightMouseDown, .otherMouseDown].map {
+            CGEventSource.counterForEventType(.combinedSessionState, eventType: $0)
+        }
     }
 
     /// NVDA separates CARET from FOCUS settings and honours a manual mode override. Quick navigation
@@ -96,12 +105,15 @@ extension BrowseModeDocument {
             setPassThrough(true, announce: true)
             return
         }
-        caretFocusRequest = CaretFocusRequest(element: object.element, position: position, page: pageGeneration,
+        let request = CaretFocusRequest(element: object.element, position: position, page: pageGeneration,
             intent: bufferIntent, keys: ScriptHandler.keysArrivedCount, focusBefore: API.focusObject?.element,
             expires: Date().addingTimeInterval(0.5))
+        caretFocusRequest = request
+        outstandingCaretFocus = outstandingCaretFocus.filter { $0.value.page == pageGeneration }
+        outstandingCaretFocus[ElementKey(object.element)] = request
         Self.confirmFocus(object.element) { [weak self] confirmed in
-            guard let self, let request = caretFocusRequest,
-                  request.element.isSame(object.element), !request.confirmed else { return }
+            guard let self, let active = caretFocusRequest,
+                  active.id == request.id, !active.confirmed else { return }
             guard confirmed, caretFocusIsCurrent(request) else { caretFocusRequest = nil; return }
             // Some providers update native focus without posting AXFocusedUIElementChanged.
             // Attach to the already-spoken virtual item; a later native event is consumed once below.
@@ -127,10 +139,19 @@ extension BrowseModeDocument {
         return true
     }
 
-    func acceptCaretFocus(_ object: TurnOverObject) -> Bool {
-        guard let request = caretFocusRequest else { return false }
-        caretFocusRequest = nil
-        guard request.element.isSame(object.element), caretFocusIsCurrent(request) else { return false }
+    /// nil is ordinary native focus; false consumes an obsolete caret request without following or reporting it.
+    func acceptCaretFocus(_ object: TurnOverObject) -> Bool? {
+        guard let request = outstandingCaretFocus.removeValue(forKey: ElementKey(object.element)) else { return nil }
+        if caretFocusRequest?.id == request.id { caretFocusRequest = nil }
+        guard request.page == pageGeneration else { return nil }
+        // A provider may never post the requested event. A later deliberate native focus move owns
+        // its own event; do not swallow that Tab/click/app return as the old caret's reply. Merely
+        // waiting is not a new intent: a late obsolete reply must still leave the reading place alone.
+        let nativeTab = InputManager.lastKeyDownAt > request.started &&
+            ["kb:tab", "kb:shift+tab"].contains(InputManager.lastKeyIdentifier)
+        if nativeTab || Self.lastTabFromCaretAt > request.started ||
+           Self.caretFocusClicks() != request.clicks || focusFromOutside { return nil }
+        guard caretFocusIsCurrent(request) else { return false }
         setPassThrough(shouldPassThrough(object, caret: true), announce: true)
         lastFocusElement = object.element
         positionAtFocus = position

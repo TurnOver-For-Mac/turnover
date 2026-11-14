@@ -369,6 +369,8 @@ public final class BrowseModeDocument: ScriptableObject {
 
     let activationRecovery = BrowseActivationRecovery()
     var caretFocusRequest: CaretFocusRequest?
+    // Retain requested native events after their caret intent is superseded, until delivered or the page changes.
+    var outstandingCaretFocus: [ElementKey: CaretFocusRequest] = [:]
     /// NVDA's passThrough: true is focus mode (keys go to the application).
     public var passThrough = false
     /// NVDA+Shift+Space: single-letter navigation on or off for this page (off: the letters go to the page).
