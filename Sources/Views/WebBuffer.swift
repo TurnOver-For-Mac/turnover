@@ -60,6 +60,21 @@ public final class WebBuffer {
     public var lines: [Line] { snapshot.lines }
     public var segments: [Segment] { snapshot.segments }
     public var containers: [(start: Int, end: Int, element: AXUIElement)] { snapshot.containers }
+    /// The old copy still knows the parents of an element the app has destroyed. Never ask the dead element
+    /// for them live (Claude rebuilt its answer buttons, 14 Nov 2026).
+    func activationAncestors(of element: AXUIElement) -> [AXUIElement] {
+        inPublication {
+            var result: [AXUIElement] = []
+            var seen: Set<ElementKey> = [ElementKey(element)]
+            var parent = element.element(kAXParentAttribute)
+            while let current = parent, result.count < 16, seen.insert(ElementKey(current)).inserted {
+                if current.isSame(webArea) { break }
+                result.append(current)
+                parent = current.element(kAXParentAttribute)
+            }
+            return result
+        }
+    }
     public private(set) var builtAt = Date.distantPast
     public var isDirty = true { didSet { if isDirty { dirtyRevision += 1 } } }
     private var dirtyRevision = 0

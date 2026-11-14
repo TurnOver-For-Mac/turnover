@@ -367,6 +367,7 @@ public final class BrowseModeDocument: ScriptableObject {
         buffer.build()
     }
 
+    let activationRecovery = BrowseActivationRecovery()
     /// NVDA's passThrough: true is focus mode (keys go to the application).
     public var passThrough = false
     /// NVDA+Shift+Space: single-letter navigation on or off for this page (off: the letters go to the page).

@@ -96,20 +96,19 @@ extension BrowseModeDocument {
             }
         }
         if press(nearestTo: e) { if let e { enterPlayer(e) }; return }
-        // The page rebuilt that part of itself after the buffer was read (AppleVis's Main Menu: its items are made
-        // anew when it opens, so "Log out" in the buffer pointed at an element that no longer exists, 3 Oct 2026).
-        // Find the live link or button with the line's text and press that.
         let text = lineText(at: position).trimmingCharacters(in: .whitespacesAndNewlines)
-        if !text.isEmpty, let live = Self.liveActionable(named: text, in: webArea) {
-            Log.io("browse mode: \"\(Log.words(text))\" was stale in the buffer; pressing the page's own \(live.role)")
-            if press(nearestTo: live) { buffer.build(); return }
-        }
         // Text the page itself takes clicks on, with no link or button made of it: a questionnaire's "Yes" and "No"
         // were plain text in three groups, and Enter, Space and VO-Space all said "nothing to activate"; the form
         // could only be filled in with VoiceOver (Cloud Pharmacy's assessment, 11 Nov 2026). Safari lists a press
         // among the actions of text that is listened to for clicks, on it or on what holds it, and of no other text
         // (Safari 27.2, a test page, 11 Nov 2026), so text nothing listens to still says there is nothing there.
         if pressClickableText(from: e) { return }
+        // 14 Nov 2026, Claude: the dead button can be beyond thousands of older messages. Search its cached
+        // ancestors and the page's end off main; a single fresh-copy retry shares the key's short deadline.
+        if let e, !text.isEmpty {
+            activationRecovery.start(document: self, element: e, name: text)
+            return
+        }
         // What was there, for the log: the buffer's element and its ancestors (alive or gone).
         var chain: [String] = []; var x = e; var d = 0
         while let y = x, d < 6 { chain.append("\(y.role) \"\((y.string(kAXTitleAttribute) ?? y.string(kAXValueAttribute) ?? "").prefix(30))\""); x = y.element(kAXParentAttribute); d += 1 }
@@ -392,7 +391,8 @@ extension BrowseModeDocument {
     }
 
     /// The element or its nearest actionable ancestor is pressed (a text field is entered instead). False if none.
-    func press(nearestTo start: AXUIElement?) -> Bool {
+    func press(nearestTo start: AXUIElement?, valid: @escaping () -> Bool = { true }) -> Bool {
+        guard valid() else { return false }
         var e = start
         // The element at the caret or its nearest actionable ancestor; a static text or group is never it.
         var depth = 0
@@ -402,6 +402,7 @@ extension BrowseModeDocument {
             AXUIElementIsAttributeSettable(x, kAXFocusedAttribute as CFString, &settable)
             let focusable = settable.boolValue
             if role == "AXTextField" || role == "AXTextArea" || role == "AXComboBox" || (focusable && role == "AXGroup" && (x.attr("AXEditableAncestor") != nil)) {
+                guard valid() else { return false }
                 // (The module first: Kindle's fields answer the request with success and do nothing.)
                 if !AppModuleHandler.shared.appModule(for: x.pid).takeFocus(x) { _ = x.set(kAXFocusedAttribute, kCFBooleanTrue) }
                 setPassThrough(true, announce: true)
@@ -422,9 +423,11 @@ extension BrowseModeDocument {
                     let name = Log.words(x.string(kAXTitleAttribute) ?? x.string(kAXDescriptionAttribute) ?? "")
                     let asked = Date()
                     let focusBefore = API.focusObject?.element
+                    guard valid() else { return false }
                     Self.confirmFocus(x) { [weak self] confirmed in
                         guard let self, Self.watching(activation), API.focusTreeInterceptor === self else { Self.endWatch(activation); return }
                         Self.endWatch(activation)   // the press watch below is its own entry; none left behind on the ways out
+                        guard valid() else { return }
                         // Moved on while the keyboard was being put there (Tab, or the reading position): nothing pressed.
                         let focusNow = API.focusObject?.element
                         let focusMovedElsewhere = focusNow.map { now in !now.isSame(x) && !(focusBefore.map { now.isSame($0) } ?? false) } ?? false
@@ -451,6 +454,7 @@ extension BrowseModeDocument {
                     }
                     return true
                 }
+                guard valid() else { return false }
                 let r = AXUIElementPerformAction(x, kAXPressAction as CFString)
                 Log.io("browse mode: press \(role) \"\(Log.words(x.string(kAXTitleAttribute) ?? x.string(kAXDescriptionAttribute) ?? ""))\" → \(describeError(r))")
                 if r == .success {
@@ -497,23 +501,6 @@ extension BrowseModeDocument {
         Tones.press()
         watchStateChange(x, before: before)   // the page is read again: a chosen answer often changes what follows
         return true
-    }
-
-    /// A link or button on the live page whose text is `name`.
-    static func liveActionable(named name: String, in root: AXUIElement) -> AXUIElement? {   // bounded: it runs only when the buffer failed
-        let wanted = name.lowercased()
-        var queue = [root]; var visited = 0
-        while !queue.isEmpty, visited < 3000 {
-            let e = queue.removeFirst(); visited += 1
-            let role = e.role
-            if ["AXLink", "AXButton", "AXMenuItem", "AXCheckBox", "AXRadioButton", "AXPopUpButton"].contains(role) {
-                let own = [e.string(kAXTitleAttribute), e.string(kAXDescriptionAttribute)].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
-                let inner = e.elements(kAXChildrenAttribute).compactMap { $0.string(kAXValueAttribute)?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }.joined(separator: " ")
-                if own.contains(wanted) || inner == wanted { return e }
-            }
-            queue.append(contentsOf: e.elements(kAXChildrenAttribute))
-        }
-        return nil
     }
 
     static func actionable(_ x: AXUIElement) -> Bool {

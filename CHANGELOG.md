@@ -14,6 +14,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- A button replaced since the page was copied can be found near its old position or at the end of a long page,
+  including labels inside nested groups, with one bounded fresh-copy retry.
 - Typing: Left and Right bump at once at the edge of a text field with left-to-right text, where they used to wait
   for the caret first (over 300 ms in a web field). Not used where the line has right-to-left text, with a
   selection, with a modifier key or in a table cell.
