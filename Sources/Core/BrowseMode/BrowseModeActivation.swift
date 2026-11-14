@@ -21,6 +21,10 @@ extension BrowseModeDocument {
     /// `byAccessibility`: VO-Space. The control with the keyboard is pressed through accessibility, as VoiceOver's
     /// VO-Space presses it, where Enter and Space send the real key (below): a page that ignores one answers the other.
     func activate(_ gesture: KeyboardGesture, byAccessibility: Bool = false) {
+        if navigationWaiting ||
+           earlyTitleURL != nil {
+            if deferInitialContent({ [weak self] in self?.activate(gesture, byAccessibility: byAccessibility) }) { return }
+        }
         var e: AXUIElement? = nil
         if let t = lastQuickNavTarget, buffer.offset(of: t) == position {
             e = BrowseModeDocument.actionable(t) ? t : t.firstDescendant(role: "AXLink", maxVisited: 60) ?? t.firstDescendant(role: "AXButton", maxVisited: 60) ?? t

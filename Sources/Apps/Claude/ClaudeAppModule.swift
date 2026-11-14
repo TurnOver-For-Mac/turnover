@@ -23,13 +23,17 @@ public enum ClaudeProgressReadiness {
     }
 }
 
-final class ClaudeAppModule: AppModule {
+package final class ClaudeAppModule: AppModule {
     private var watching = false
     private var readReplies: Bool { config.appSetting(ClaudeTranscript.bundleID, "readReplies", default: "on") == "on" }
 
-    required init(pid: pid_t, bundleIdentifier: String, appName: String) {
+    package required init(pid: pid_t, bundleIdentifier: String, appName: String) {
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
         WebBuffer.statusEchoApps.insert(ClaudeTranscript.bundleID)   // its tool rows' status repeats the row's button
+        script("claude_switchConversation", String(localized: "Switches to a recent or new Claude conversation", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+1", "kb:command+2", "kb:command+3", "kb:command+4", "kb:command+n"], category: "Claude") { [weak self] gesture in
+            self?.prepareConversationSwitch()
+            gesture.send()
+        }
         script("claude_readLatest", String(localized: "Reads Claude's latest reply", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+shift+r"], category: "Claude") { [weak self] _ in
             guard let self, let chat = ClaudeTranscript.chat(pid: self.pid) else { Speech.speakMessage(String(localized: "no conversation", comment: "Spoken message")); return }
             let reply = ClaudeTranscript.latestReply(chat: chat)
@@ -37,13 +41,74 @@ final class ClaudeAppModule: AppModule {
         }
     }
 
-    override func menuItems() -> [MenuItem] {
+    private var conversationSwitch = 0
+
+    /// 14 Nov 2026: Command 1–4 waited for a whole-page read before naming the conversation; Command N
+    /// sent only live-region-created notices and left Tab using the previous page. Watch just these native
+    /// Claude shortcuts. Each look asks the existing root for its address and title, never walks the window.
+    package func prepareConversationSwitch() {
+        guard let page = API.focusTreeInterceptor,
+              page.webArea.pid == pid else { return }
+        conversationSwitch += 1
+        let request = conversationSwitch
+        let address = page.url
+        let title = page.webArea.string(kAXTitleAttribute) ?? ""
+        let started = Date()
+        var releasedContent = false
+        page.beginNavigationWait()
+        func look() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self, weak page] in
+                guard let self,
+                      let page,
+                      conversationSwitch == request else { return }
+                guard API.focusTreeInterceptor === page else {
+                    page.abandonNavigationWait()
+                    return
+                }
+                let now = page.url
+                let changed = !now.isEmpty &&
+                    now != address
+                if changed { page.refreshIfNavigated() }
+                let name = (page.webArea.string(kAXTitleAttribute) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                let titleIsReady = !name.isEmpty &&
+                    name != title
+                let copyIsReady = !page.buffer.isLoading &&
+                    !page.buffer.lines.isEmpty
+                if changed,
+                   titleIsReady {
+                    Log.io("claude: the new conversation is shown; its name is said before its page is read")
+                    if releasedContent { page.announceNavigationTitle(name) }
+                    else { page.finishNavigationWait(title: name) }
+                    return
+                }
+                if changed,
+                   copyIsReady,
+                   !releasedContent {
+                    // The content can precede its new title. Keys may use that content, but the old title is not news.
+                    releasedContent = true
+                    page.finishNavigationWait(title: nil)
+                }
+                let elapsed = Date().timeIntervalSince(started)
+                if elapsed >= 8 {
+                    Log.io("claude: conversation switch still loading after eight seconds; no old line is read")
+                    page.abandonNavigationWait()
+                    return
+                }
+                look()
+            }
+        }
+        look()
+    }
+
+    package override func menuItems() -> [MenuItem] {
         [MenuItem("Read replies when they finish", .toggle(
             get: { [weak self] in self?.readReplies ?? true },
             set: { config.setAppSetting(ClaudeTranscript.bundleID, "readReplies", $0 ? "on" : "off") }))]
     }
 
-    override func handleEvent(_ event: Event, next: () -> Void) {
+    package override func handleEvent(_ event: Event, next: () -> Void) {
+        if event.kind == .gainFocus,
+           API.focusTreeInterceptor?.navigationWaiting == true { return }
         switch event.kind {
         case .gainFocus where event.obj.element.string(kAXRoleDescriptionAttribute) == "article":
             // A message: its text, with "You said" or "Claude responded" from its hidden heading.

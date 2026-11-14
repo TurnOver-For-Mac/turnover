@@ -7,7 +7,21 @@ extension BrowseModeDocument {
     /// A command that arrived during the first collection runs once its content is available. A later key,
     /// navigation or focus departure retires it; the event-tap decision still returns immediately.
     package func deferInitialContent(_ action: @escaping () -> Void) -> Bool {
+        if navigationWaiting {
+            let intent = bufferIntent
+            let keys = ScriptHandler.keysArrivedCount
+            navigationHadCommand = true
+            navigationRetry = { [weak self] in
+                guard let self,
+                      bufferIntent == intent,
+                      ScriptHandler.keysArrivedCount == keys,
+                      API.focusTreeInterceptor === self else { return }
+                if !deferInitialContent(action) { action() }
+            }
+            return true
+        }
         guard buffer.lines.isEmpty, buffer.isLoading else { return false }
+        if earlyTitleURL == lastURL { navigationHadCommand = true }
         let epoch = pageGeneration, intent = bufferIntent, keys = ScriptHandler.keysArrivedCount
         buffer.build { [weak self] in
             guard let self, pageGeneration == epoch, bufferIntent == intent, ScriptHandler.keysArrivedCount == keys, API.focusTreeInterceptor === self, !passThrough else { return }
@@ -21,7 +35,11 @@ extension BrowseModeDocument {
     }
 
     func contentScript(_ script: Script) -> Script {
-        guard !passThrough, buffer.lines.isEmpty, buffer.isLoading else { return script }
+        let firstContentIsLoading = !passThrough &&
+            buffer.lines.isEmpty &&
+            buffer.isLoading
+        guard navigationWaiting ||
+              firstContentIsLoading else { return script }
         let deferred = Script(name: script.name, description: script.description, category: script.category, owner: self) { [weak self] gesture in
             guard let self else { return }
             if !deferInitialContent({ script.handler(gesture) }) { script.handler(gesture) }
@@ -31,6 +49,47 @@ extension BrowseModeDocument {
         deferred.resumesSayAll = script.resumesSayAll
         deferred.isAvailable = script.isAvailable
         return deferred
+    }
+
+    /// 14 Nov 2026: Claude's Command N left Tab using an offset in the previous conversation.
+    /// Only its module opts in. Retire the copy now; its URL/title watcher starts the new collection.
+    package func beginNavigationWait() {
+        cancelBuffer()
+        buffer.newPage()
+        bufferIntent += 1
+        navigationWaiting = true
+        navigationRetry = nil
+        navigationHadCommand = false
+        earlyTitleURL = nil
+        passThrough = false
+        lastQuickNavTarget = nil
+        lastChain = []
+        position = 0
+    }
+
+    package func finishNavigationWait(title: String?) {
+        navigationWaiting = false
+        earlyTitleURL = lastURL
+        if let title,
+           !title.isEmpty {
+            announceNavigationTitle(title)
+        }
+        let retry = navigationRetry
+        navigationRetry = nil
+        if !buffer.lines.isEmpty { announcePage() }
+        retry?()
+    }
+
+    func announceNavigationTitle(_ title: String) {
+        earlyTitleURL = lastURL
+        Speech.speakMessage(title)
+    }
+
+    func abandonNavigationWait() {
+        navigationWaiting = false
+        navigationRetry = nil
+        navigationHadCommand = false
+        earlyTitleURL = nil
     }
 
     func configureBuffer() {

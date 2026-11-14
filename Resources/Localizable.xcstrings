@@ -44302,6 +44302,9 @@
     },
     "Write code: TurnOver is on GitHub, and CONTRIBUTING.md there is the place to start." : {
       "comment" : "Help make TurnOver: contributing code"
+    },
+    "Switches to a recent or new Claude conversation" : {
+      "comment" : "A command, as the key list and keyboard help say it"
     }
   },
   "version" : "1.0"

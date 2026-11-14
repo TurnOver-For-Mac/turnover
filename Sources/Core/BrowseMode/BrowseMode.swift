@@ -206,6 +206,11 @@ public final class BrowseModeDocument: ScriptableObject {
     var publicationWasEmpty = false
     var publicationAnchor: BrowseModeHandler.Saved?
     var announceWhenReady = false
+    // Opted into only by Claude's session shortcuts (14 Nov 2026): the old page must not answer the next key.
+    var navigationWaiting = false
+    var navigationRetry: (() -> Void)?
+    var navigationHadCommand = false
+    var earlyTitleURL: String?
     let rootRunner = AXWalkRunner<BrowseRootCollection>()
     var discoveringRoot = false
     var followingRootFailure = false
@@ -216,6 +221,10 @@ public final class BrowseModeDocument: ScriptableObject {
         let now = url
         guard now != lastURL else { return false }
         let first = lastURL.isEmpty
+        if !navigationWaiting {
+            earlyTitleURL = nil
+            navigationHadCommand = false
+        }
         lastURL = now
         rootRunner.cancel(); discoveringRoot = false; followingRootFailure = false; watchingFor = nil
         buffer.newPage()
@@ -260,6 +269,7 @@ public final class BrowseModeDocument: ScriptableObject {
     /// NVDA: a page arriving says its title, then is read (automatic say all, on by default), or, with that off,
     /// its first line (or the line it resumes at).
     func announcePage() {
+        guard !navigationWaiting else { return }
         announcedURL = lastURL
         // The first of these that says something. Claude's page has its conversation's name as its title and an empty
         // description, and an empty description was taken as the answer: switching conversations never said which
@@ -274,7 +284,13 @@ public final class BrowseModeDocument: ScriptableObject {
             // An empty description: the page's own title (Claude's conversation), where it used to say nothing.
             return (webArea.string(kAXTitleAttribute) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         }
-        if !title.isEmpty { Speech.speakMessage(title) }
+        if !title.isEmpty,
+           earlyTitleURL != lastURL { Speech.speakMessage(title) }
+        // A command held for Claude's new page owns its reading; automatic first-line speech would pile onto it.
+        if navigationHadCommand {
+            navigationHadCommand = false
+            return
+        }
         if config.virtualBuffers.autoSayAllOnPageLoad {
             // Not a page the focus only passes through: Mail's message pane, on the way to the search field, had the
             // whole message read out (8 Oct 2026).
@@ -587,6 +603,10 @@ public final class BrowseModeDocument: ScriptableObject {
     /// `retry`: the key, done again once the page has come, if it is still the latest key. Until 10 Nov 2026 a key on
     /// a page whose first read was still under way was dropped without a word (review of #219, point 1).
     func ensureContent(_ retry: (() -> Void)? = nil) -> Bool {
+        if navigationWaiting {
+            if let retry { _ = deferInitialContent(retry) }
+            return false
+        }
         // An empty address too: Safari not answering reports none (6 Oct 2026, playtestcloud: "page  —", 0 lines,
         // and every key said "no next heading").
         guard buffer.lines.isEmpty, url != "about:blank" else { return true }
@@ -930,6 +950,15 @@ public final class BrowseModeDocument: ScriptableObject {
     }
 
     // (An override cannot live in an extension: the pass-through decision itself is in FocusModePolicy.swift.)
+    public override func script(named name: String) -> Script? {
+        guard let script = super.script(named: name) else { return nil }
+        // VoiceOver's arrows resolve browse commands by name, rather than by gesture.
+        guard navigationWaiting ||
+              earlyTitleURL != nil else { return script }
+        bufferIntent += 1
+        return contentScript(script)
+    }
+
     /// Scripts answer only in browse mode (NVDA: passThrough filters the tree interceptor's scripts).
     public override func script(for gesture: KeyboardGesture) -> Script? {
         bufferIntent += 1
