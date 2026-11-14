@@ -27,6 +27,8 @@ open class EditableText: TurnOverObject {
 
     private var lastSelection: TextInfo?
     private var autoSelectDetection = false
+    /// Whether this field's selection is followed (from its gain focus until it loses the focus). For the tests.
+    package var isFollowingSelection: Bool { autoSelectDetection }
     public var hasContentChangedSinceLastSelection = false
 
     open override func initOverlay() {
@@ -239,7 +241,16 @@ open class EditableText: TurnOverObject {
     /// caret is for a plain arrow); if it hasn't changed within the caret's patience, the app's own notice reads it.
     func selectionScript(_ gesture: KeyboardGesture) {
         if GoogleDocs.isEditor(element) { gesture.send(); return }
-        guard autoSelectDetection, let old = try? makeTextInfo(.selection) else { gesture.send(); return }
+        // Each way out without reading says why in the log: this one was silent, and a selection that said nothing
+        // could not be told apart from a key that changed nothing (11 Nov 2026).
+        guard autoSelectDetection else {
+            Log.io("selection: not read, this field's selection is not being followed")
+            gesture.send(); return
+        }
+        guard let old = try? makeTextInfo(.selection) else {
+            Log.io("selection: not read, the field gave no selection")
+            gesture.send(); return
+        }
         gesture.send()
         let began = Date()
         let patience = caretMoveTimeout * (isInWebContent ? 3 : 1)

@@ -59,6 +59,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 - In the Claude app, VO-Space, Return and Space press the button the reading position is on. Some buttons, such as
   the answers offered under a reply and the sessions in the sidebar, made the pressed sound and did nothing until
   Tab had put the keyboard on them.
+- Selecting with Shift and the arrows is read again in the Claude app's prompt, or a page's text field, after coming
+  back from another app. It said nothing until the focus moved.
 
 ## 2.0, build 24
 
