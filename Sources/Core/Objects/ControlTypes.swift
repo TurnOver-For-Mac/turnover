@@ -22,7 +22,7 @@ public enum Role: String, Codable, CaseIterable {
     /// What the role is called (NVDA: Role.displayString).
     nonisolated public var displayString: String {
         switch self {
-        case .unknown: return String(localized: "unknown", comment: "A role, spoken after an item's name")
+        case .unknown: return ""
         case .window: return String(localized: "window", comment: "A role, spoken after an item's name")
         case .dialog: return String(localized: "dialog", comment: "A role, spoken after an item's name")
         case .sheet: return String(localized: "sheet", comment: "A role, spoken after an item's name")

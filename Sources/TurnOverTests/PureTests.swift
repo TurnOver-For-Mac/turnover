@@ -232,6 +232,11 @@ func pureTests() {
         expect(Speech.withoutIconGlyphs("\u{F02DC}"), ""); expect(Speech.withoutIconGlyphs("Send \u{E001}"), "Send")
         expect(Role.from(axRole: "AXListMarker", subrole: nil), .staticText)
     }
+    test("roles: an unrecognised control is silent; a known control keeps its role") {
+        expect(Role.unknown.displayString, "", "an unnamed control must not fall back to saying unknown")
+        expect(Role.from(axRole: "AXUnrecognisedControl", subrole: nil).displayString, "", "an unrecognised AX role has no spoken fallback")
+        expect(Role.from(axRole: "AXButton", subrole: nil).displayString, "button", "a known control still says its actual role")
+    }
     test("roles: Preview's pages and tool groups are named; a disabled container is not said to be unavailable") {
         expect(Role.from(axRole: "AXPage", subrole: nil), .page)
         expect(Role.from(axRole: "AXRadioGroup", subrole: nil), .groupBox)

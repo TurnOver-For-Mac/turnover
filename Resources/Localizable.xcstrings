@@ -43646,6 +43646,7 @@
     },
     "unknown" : {
       "comment" : "A role, spoken after an item's name",
+      "extractionState" : "stale",
       "localizations" : {
         "tr" : {
           "stringUnit" : {

@@ -19,6 +19,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- Unnamed controls say their known role or stay silent, instead of being called unknown.
+
 - Claude's Command 1 to 9 say the conversation title even when that conversation is already open.
 
 - Dialogs open with their text and focused control, without listing unnamed fields; explicit descriptions keep named choices.
