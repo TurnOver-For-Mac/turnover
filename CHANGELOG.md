@@ -19,6 +19,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- Notes: Tab and Shift-Tab reach folders, notes and the open note in list and gallery views.
+
 - Unnamed controls say their known role or stay silent, instead of being called unknown.
 
 - Claude's Command 1 to 9 say the conversation title even when that conversation is already open.

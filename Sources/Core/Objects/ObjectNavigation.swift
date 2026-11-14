@@ -95,7 +95,8 @@ public final class ObjectNavigator {
     /// A list that will not take the keyboard (Finder's sidebar: AXFocused cannot be set, and a click on it leaves
     /// the keyboard in the file list; 7 Oct 2026). TurnOver holds it: while the cursor is in it, Up and Down move
     /// through its rows, Return and Space choose one (as selecting it with the mouse), Left and Right close and open.
-    public private(set) var heldList: AXUIElement?
+    public private(set) var heldList: AXUIElement? { didSet { heldPartTab = nil } }
+    private var heldPartTab: ((Bool) -> Void)?
     private func hold(_ list: AXUIElement) {
         if let h = heldList, CFEqual(h, list) { return }
         heldList = list
@@ -197,12 +198,14 @@ public final class ObjectNavigator {
     public func releaseHold() { heldList = nil }
 
     /// Into a list TurnOver holds, on its selected row (Finder: Tab from the files to the sidebar).
-    public func enterHold(_ list: AXUIElement, name: String) {
+    public func enterHold(_ list: AXUIElement, name: String, onTab: ((Bool) -> Void)? = nil) {
+        releaseHold()
         let rows = list.elements(kAXRowsAttribute)
         guard !rows.isEmpty else { return }
         let sel = list.elements(kAXSelectedRowsAttribute).first
         let i = sel.flatMap { s in rows.firstIndex { CFEqual($0, s) } } ?? 0
         heldList = list
+        heldPartTab = onTab
         Speech.speakMessage(name)
         landRow(rows[i], index: i, count: rows.count)
     }
@@ -211,7 +214,9 @@ public final class ObjectNavigator {
     /// else back to the keyboard focus. The app's own Tab would act on the focus, not here (it chose the next file).
     public var heldTab: ((_ forward: Bool) -> Bool)?
     public func leaveHold(forward: Bool) {
-        heldList = nil
+        let partTab = heldPartTab
+        releaseHold()
+        if let partTab { partTab(forward); return }
         if let h = heldTab, h(forward) { return }
         current = nil
         if let f = API.focusObject { Speech.speakObject(f, reason: .focus) }

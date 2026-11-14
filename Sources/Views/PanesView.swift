@@ -56,6 +56,10 @@ public final class PanesView {
     /// Which part the user is in: the one holding the keyboard focus, or TurnOver's cursor.
     public func currentIndex() -> Int? {
         let nav = ObjectNavigator.shared
+        // A held pane owns navigation even while the editor or notes retain the keyboard.
+        if nav.isHolding, let h = nav.heldList {
+            for i in parts.indices { if let e = element(of: i), h.isSame(e) { return i } }
+        }
         for i in parts.indices {
             guard let e = element(of: i) else { continue }
             // (element(of:) is bounded and cached, so this is a few calls per part.)
@@ -73,9 +77,9 @@ public final class PanesView {
     }
 
     /// Tab and Shift Tab: the next or previous part, round the end.
-    public func step(forward: Bool) {
+    public func step(forward: Bool, from index: Int? = nil) {
         guard !parts.isEmpty else { return }
-        let cur = currentIndex()
+        let cur = index ?? currentIndex()
         var i = cur.map { ($0 + (forward ? 1 : -1) + parts.count) % parts.count } ?? (forward ? 0 : parts.count - 1)
         // A part not on screen now (a hidden sidebar) is skipped.
         var tries = 0
@@ -97,7 +101,10 @@ public final class PanesView {
             // The focus event reads the element; the part's name first.
             Speech.speakMessage(part.name)
         } else if !e.elements(kAXRowsAttribute).isEmpty {
-            ObjectNavigator.shared.enterHold(e, name: part.name)
+            ObjectNavigator.shared.enterHold(e, name: part.name, onTab: { [weak self] forward in
+                guard let self, API.focusPid == self.pid else { return }
+                self.step(forward: forward, from: i)
+            })
         } else {
             Speech.speakMessage(part.name)
             ObjectNavigator.shared.focusMoved(to: e, pid: pid)
