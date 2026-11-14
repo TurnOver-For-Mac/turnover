@@ -68,7 +68,8 @@ public enum PageWatch {
             return unanswered
         }
     }
-    private static var waiting = WaitingKeys()
+    // Package visibility lets replay tests inspect the production focus-reply integration without activating an app.
+    package static var waiting = WaitingKeys()
 
     static func focusQueryReturned(_ status: AXQueryStatus, by pid: pid_t) {
         waiting.focusQueryReturned(status, by: pid)
