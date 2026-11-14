@@ -239,6 +239,8 @@ public final class BrowseModeDocument: ScriptableObject {
     var announceWhenReady = false
     // Opted into only by Claude's session shortcuts (14 Nov 2026): the old page must not answer the next key.
     var navigationWaiting = false
+    // Claude owns automatic switch speech even after queued content commands have been released.
+    package var navigationTitleOwned = false
     var navigationRetries: [() -> Void] = []
     var navigationReplaying = false
     var navigationHadCommand = false
@@ -311,7 +313,7 @@ public final class BrowseModeDocument: ScriptableObject {
     /// NVDA: a page arriving says its title, then is read (automatic say all, on by default), or, with that off,
     /// its first line (or the line it resumes at).
     func announcePage() {
-        guard !navigationWaiting else { return }
+        guard !navigationWaiting, !navigationTitleOwned else { return }
         announcedURL = lastURL
         // The first of these that says something. Claude's page has its conversation's name as its title and an empty
         // description, and an empty description was taken as the answer: switching conversations never said which

@@ -35796,6 +35796,9 @@
         }
       }
     },
+    "no conversation %lld" : {
+      "comment" : "Spoken when Claude has no conversation at this shortcut number"
+    },
     "no conversation open" : {
       "comment" : "Spoken message",
       "localizations" : {

@@ -30,7 +30,7 @@ package final class ClaudeAppModule: AppModule {
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
         WebBuffer.statusEchoApps.insert(ClaudeTranscript.bundleID)   // its tool rows' status repeats the row's button
         script("claude_switchConversation", String(localized: "Switches to a recent or new Claude conversation", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+1", "kb:command+2", "kb:command+3", "kb:command+4", "kb:command+5", "kb:command+6", "kb:command+7", "kb:command+8", "kb:command+9", "kb:command+n"], category: "Claude") { [weak self] gesture in
-            self?.prepareConversationSwitch()
+            self?.prepareConversationSwitch(gesture)
             gesture.send()
         }
         // 14 Nov 2026: focused session menu items exposed no AXPress/AXConfirm; VO-Space
@@ -72,81 +72,116 @@ package final class ClaudeAppModule: AppModule {
         return AXSnapshot(nodes: [ElementKey(root): .init(attributes: values)])
     }
 
-    /// Claude's native conversation keys hold page commands until a reply identifies the page. An unchanged,
-    /// non-busy address settles briefly, keeping its copy and reading position (review, 14 Nov 2026).
-    package func prepareConversationSwitch() {
+    /// Only the destination owns switch speech. An unchanged poll can release queued keys after the
+    /// existing settle, but cannot establish that the shortcut chose the already-open conversation.
+    package func prepareConversationSwitch(_ gesture: KeyboardGesture) {
         guard let page = API.focusTreeInterceptor,
               page.webArea.pid == pid else { return }
         if let previous = conversationPage,
-           previous !== page { previous.finishNavigationWait(title: nil, announce: false) }
+           previous !== page {
+            previous.navigationTitleOwned = false
+            previous.finishNavigationWait(title: nil, announce: false)
+        }
         conversationPage = page
         conversationSwitch += 1
         conversationReader.cancel()
         let request = conversationSwitch
         let root = page.webArea
         let address = page.lastURL
-        let title = page.buffer.withSnapshot { root.string(kAXTitleAttribute) ?? "" }
+        let title = page.buffer.withSnapshot { Self.switchTitle(root.string(kAXTitleAttribute) ?? "") }
+        let number = Int(gesture.identifier.components(separatedBy: "+").last ?? "")
+        let target = page.buffer.withSnapshot { () -> SwitchTarget in
+            guard page.url == address, !address.isEmpty else { return .unknown }
+            return Self.switchTarget(number: number, root: root, title: title)
+        }
+        // Resolve a verified no-op before beginning the wait: beginNavigationWait changes mode, which
+        // would add a sound to a missing shortcut and disturb the already-open conversation's position.
+        if target == .missing || target == .current {
+            page.navigationTitleOwned = false
+            page.finishNavigationWait(title: nil, announce: false)
+            if target == .missing, let number {
+                Speech.speakMessage(String(localized: "no conversation \(number)", comment: "Spoken when Claude has no conversation at this shortcut number"))
+            } else {
+                page.announceNavigationTitle(title)
+            }
+            return
+        }
         var titleAnnounced = false
-        var currentTitleAnnounced = false
+        var ceilingReached = false
         var releasedContent = false
         var unchangedAnswers = 0
         var observedAddressChange = false
         let settleUntil = ProcessInfo.processInfo.systemUptime + 0.25
+        page.navigationTitleOwned = true
         page.beginNavigationWait()
 
-        func finish() {
-            conversationSwitch += 1
-            conversationReader.cancel()
+        func releaseContent() {
+            page.announcedURL = page.lastURL
+            page.announceWhenReady = false
             page.finishNavigationWait(title: nil, announce: false)
         }
-        // Independent of the provider: even a call that fails to respect its timeout cannot hold a key.
+        func finish() {
+            guard conversationSwitch == request else { return }
+            conversationSwitch += 1
+            conversationReader.cancel()
+            page.navigationTitleOwned = false
+            releaseContent()
+        }
+        // The deadline releases keys independently of the provider. Its announcement comes from a NEW
+        // worker read, never the captured pre-key title or an in-flight answer from before the deadline.
         DispatchQueue.main.asyncAfter(deadline: .now() + conversationWaitLimit) { [weak self, weak page] in
             guard let self,
                   let page,
                   conversationSwitch == request else { return }
-            Log.io("claude: conversation switch wait ended at its ceiling")
-            conversationSwitch += 1
+            ceilingReached = true
+            Log.io("claude: conversation switch ceiling; addressChanged=\(observedAddressChange), titleAnnounced=\(titleAnnounced)")
             conversationReader.cancel()
-            page.finishNavigationWait(title: nil, announce: false)
+            releaseContent()
+            guard conversationSwitch == request else { return }
+            guard API.focusTreeInterceptor === page,
+                  AXHandler.shared.activePid == pid,
+                  !titleAnnounced else { finish(); return }
+            // A timed-out provider may also block this serial lane. The final read gets a bounded
+            // grace period; it must never leave automatic page speech owned by a dead switch.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                guard let self, conversationSwitch == request else { return }
+                Log.io("claude: no current title reply at switch ceiling")
+                finish()
+            }
+            let read = conversationRead
+            conversationReader.submit(collect: { _ in read(root) }, publish: { [weak self, weak page] snapshot in
+                guard let self,
+                      let page,
+                      conversationSwitch == request else { return }
+                if API.focusTreeInterceptor === page,
+                   AXHandler.shared.activePid == pid {
+                    let name = snapshot.with { Self.switchTitle(root.string(kAXTitleAttribute) ?? "") }
+                    if !name.isEmpty { page.announceNavigationTitle(name) }
+                }
+                finish()
+            })
         }
         func look() {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self, weak page] in
                 guard let self,
                       let page,
-                      conversationSwitch == request else { return }
+                      conversationSwitch == request,
+                      !ceilingReached else { return }
                 guard API.focusTreeInterceptor === page,
                       AXHandler.shared.activePid == pid else { finish(); return }
                 let read = conversationRead
                 conversationReader.submit(collect: { _ in read(root) }, publish: { [weak self, weak page] snapshot in
                     guard let self,
                           let page,
-                          conversationSwitch == request else { return }
+                          conversationSwitch == request,
+                          !ceilingReached else { return }
                     guard API.focusTreeInterceptor === page,
                           AXHandler.shared.activePid == pid else { finish(); return }
                     let now = snapshot.with { page.url }
-                    guard !now.isEmpty else { look(); return }
-                    let changed = now != address
+                    let changed = !now.isEmpty && now != address
                     let busy = snapshot.with { root.attr("AXElementBusy") as? Bool == true }
-                    if !changed,
-                       !observedAddressChange {
-                        // The shortcut has no verified target identity. A first old-page answer can precede
-                        // Claude's actual switch; require several answers and a short settle before reuse.
-                        unchangedAnswers = busy ? 0 : unchangedAnswers + 1
-                        if unchangedAnswers >= 3,
-                           ProcessInfo.processInfo.systemUptime >= settleUntil {
-                            let name = snapshot.with { (root.string(kAXTitleAttribute) ?? "").trimmingCharacters(in: .whitespacesAndNewlines) }
-                            if !currentTitleAnnounced, !name.isEmpty {
-                                currentTitleAnnounced = true
-                                page.announceNavigationTitle(name)
-                            }
-                            if !releasedContent {
-                                page.finishNavigationWait(title: nil, announce: false)
-                                releasedContent = true
-                            }
-                        }
-                        look()
-                        return
-                    }
+                    let name = snapshot.with { Self.switchTitle(root.string(kAXTitleAttribute) ?? "") }
+                    let titleIsReady = !busy && !name.isEmpty && name != title
                     if changed {
                         observedAddressChange = true
                         if releasedContent,
@@ -154,31 +189,135 @@ package final class ClaudeAppModule: AppModule {
                             page.beginNavigationWait()
                             releasedContent = false
                         }
-                        // refreshIfNavigated also asks for URL/role. The captured scope prevents any live main read.
+                        // The scope covers URL/role reads too; no provider query is made on main.
                         _ = snapshot.with { page.refreshIfNavigated() }
                     }
-                    let name = snapshot.with { (root.string(kAXTitleAttribute) ?? "").trimmingCharacters(in: .whitespacesAndNewlines) }
-                    let titleIsReady = !name.isEmpty && name != title
-                    if changed,
-                       titleIsReady,
+                    // Claude can change AXTitle while keeping AXURL (or temporarily omitting it).
+                    // Do not gate that evidence on a changed address, or speak a pre-switch title.
+                    if titleIsReady,
                        !titleAnnounced {
                         titleAnnounced = true
                         page.announceNavigationTitle(name)
                     }
-                    let copyIsReady = !page.buffer.isLoading && !page.buffer.lines.isEmpty
-                    if changed,
-                       copyIsReady,
-                       !releasedContent {
+                    if !changed,
+                       !observedAddressChange {
+                        unchangedAnswers = busy ? 0 : unchangedAnswers + 1
+                        if unchangedAnswers >= 3,
+                           ProcessInfo.processInfo.systemUptime >= settleUntil,
+                           !releasedContent {
+                            releaseContent()
+                            releasedContent = true
+                        }
+                    } else if !page.buffer.isLoading,
+                              !page.buffer.lines.isEmpty,
+                              !releasedContent {
                         releasedContent = true
-                        page.finishNavigationWait(title: nil)
+                        // A switch says just its title, not the page's first "Claude Code" line as well.
+                        releaseContent()
                     }
                     if titleAnnounced,
-                       releasedContent { finish(); return }
+                       releasedContent,
+                       observedAddressChange { finish(); return }
                     look()
                 })
             }
         }
         look()
+    }
+
+    private enum SwitchTarget { case current, other, missing, unknown }
+
+    /// Claude 5.1231.2, macOS 27.2, 14 Nov 2026: the complementary sidebar's Recents section has
+    /// a heading group followed by session groups, each with a title button and a popup menu. Use
+    /// only the captured tree; an absent, collapsed, clipped or unfamiliar section proves nothing.
+    private static func switchTarget(number: Int?, root: AXUIElement, title: String) -> SwitchTarget {
+        guard let number, (1...9).contains(number) else { return .unknown }
+        var remaining = 512
+        var complete = true
+        var seen: Set<ElementKey> = []
+        func descendants(_ element: AXUIElement) -> [AXUIElement] {
+            var result: [AXUIElement] = []
+            func walk(_ node: AXUIElement) {
+                guard remaining > 0,
+                      AXSnapshot.holds(node),
+                      seen.insert(ElementKey(node)).inserted else { complete = false; return }
+                remaining -= 1
+                result.append(node)
+                for child in node.elements(kAXChildrenAttribute) { walk(child) }
+            }
+            walk(element)
+            return result
+        }
+        // Find the sidebar without traversing the transcript, then work only inside that landmark.
+        var pending = [root]
+        var sidebar: AXUIElement?
+        var searched: Set<ElementKey> = []
+        while let node = pending.popLast(), searched.count < 256 {
+            guard AXSnapshot.holds(node), searched.insert(ElementKey(node)).inserted else { continue }
+            if node.string(kAXSubroleAttribute) == "AXLandmarkComplementary" {
+                sidebar = node
+                break
+            }
+            pending.append(contentsOf: node.elements(kAXChildrenAttribute).reversed())
+        }
+        guard let sidebar else { return .unknown }
+        let nodes = descendants(sidebar)
+        guard complete else { return .unknown }
+        func label(_ node: AXUIElement) -> String {
+            for attribute in [kAXTitleAttribute, kAXValueAttribute, kAXDescriptionAttribute] {
+                if let text = node.string(attribute), !text.isEmpty { return text }
+            }
+            return ""
+        }
+        func subtree(_ node: AXUIElement) -> [AXUIElement] {
+            // Already validated and bounded above. Fresh local visited sets also reject malformed cycles.
+            var result: [AXUIElement] = [], queue = [node]
+            var visited: Set<ElementKey> = []
+            while let next = queue.popLast(), visited.insert(ElementKey(next)).inserted {
+                result.append(next)
+                queue.append(contentsOf: next.elements(kAXChildrenAttribute).reversed())
+            }
+            return result
+        }
+        for section in nodes where section.role == "AXGroup" {
+            let children = section.elements(kAXChildrenAttribute)
+            guard let header = children.first else { continue }
+            let headerNodes = subtree(header)
+            let headings = headerNodes.filter { $0.role == "AXHeading" }
+            let headerButtons = headerNodes.filter { $0.role == "AXButton" }
+            // The actual header has one heading/button. An outer wrapper containing all of Recents
+            // also contains its session buttons, and must not be mistaken for the row container.
+            guard headings.count == 1,
+                  headerButtons.count == 1,
+                  subtree(headings[0]).contains(where: { label($0) == "Recents" }) else { continue }
+            if headerNodes.contains(where: { ($0.attr("AXExpanded") as? Bool) == false }) { return .unknown }
+            var titles: [String] = []
+            for row in children.dropFirst() {
+                let rowNodes = subtree(row)
+                let buttons = rowNodes.filter { $0.role == "AXButton" }
+                guard buttons.count == 1,
+                      rowNodes.contains(where: { $0.role == "AXPopUpButton" }),
+                      let text = subtree(buttons[0]).first(where: { $0.role == "AXStaticText" }),
+                      !label(text).isEmpty else { return .unknown }
+                titles.append(label(text))
+            }
+            // With no rows, require explicit expansion rather than guessing about a collapsed list.
+            if titles.isEmpty {
+                return headerNodes.contains(where: { ($0.attr("AXExpanded") as? Bool) == true }) ? .missing : .unknown
+            }
+            if number > titles.count { return .missing }
+            let target = switchTitle(titles[number - 1])
+            if target == title,
+               titles.filter({ switchTitle($0) == title }).count == 1 { return .current }
+            return .other
+        }
+        return .unknown
+    }
+
+    private static func switchTitle(_ raw: String) -> String {
+        raw.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: #"(?:\s+- Claude Code)+(?:\s+Claude Code)*$"#,
+                                 with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     package override func menuItems() -> [MenuItem] {

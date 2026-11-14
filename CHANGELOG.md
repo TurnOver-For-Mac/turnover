@@ -19,6 +19,11 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- Claude's conversation shortcuts say only the destination title once, without the " - Claude Code" suffix or
+  an extra first-line announcement. Title-only changes are recognised, and the wait's ceiling reads the current
+  title afresh. A verified already-open conversation answers immediately; a number beyond the sidebar's
+  conversations says "no conversation" and its number without changing mode.
+
 - Notes: Return and Space in the held Folders list now announce the selected folder, or explain why it could not be chosen.
 
 - Notes: view shortcuts announce their destination and focus; Tab leaves attachments for folders and notes.

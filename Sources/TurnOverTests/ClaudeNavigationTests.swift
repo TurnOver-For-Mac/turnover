@@ -6,21 +6,49 @@ import TurnOverAX
 import AXFixtures
 import os
 
-private func conversationPage(_ name: String, address: String, body: String? = nil) -> AXFixture {
-    .init(app: "Public conversations", bundle: "test.claude-navigation", recorded: "", root: 0, application: 1, focus: 0, nodes: [
+private func conversationPage(_ name: String, address: String, body: String? = nil, recents: [String]? = nil) -> AXFixture {
+    var fixture = AXFixture(app: "Public conversations", bundle: "test.claude-navigation", recorded: "", root: 0, application: 1, focus: 0, nodes: [
         .init(id: 0, attrs: ["AXRole": .string("AXWebArea"), "AXTitle": .string(name), "AXDescription": .string(""),
                              "AXURL": .url(address), "AXParent": .element(1), "AXChildren": .elements([2, 3])]),
         .init(id: 1, attrs: ["AXRole": .string("AXApplication"), "AXChildren": .elements([0])]),
         .init(id: 2, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string(String(repeating: (body ?? name) + " public text. ", count: 100)), "AXParent": .element(0)]),
         .init(id: 3, attrs: ["AXRole": .string("AXTextArea"), "AXTitle": .string(name + " prompt"), "AXParent": .element(0)]),
     ])
+    if let recents {
+        fixture.nodes[0].attrs["AXChildren"] = .elements([10, 2, 3])
+        fixture.nodes += [
+            .init(id: 10, attrs: ["AXRole": .string("AXGroup"), "AXSubrole": .string("AXLandmarkComplementary"), "AXParent": .element(0), "AXChildren": .elements([11])]),
+            .init(id: 11, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(10), "AXChildren": .elements([12] + recents.indices.map { 20 + $0 * 10 })]),
+            .init(id: 12, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(11), "AXChildren": .elements([13])]),
+            .init(id: 13, attrs: ["AXRole": .string("AXHeading"), "AXParent": .element(12), "AXChildren": .elements([14])]),
+            .init(id: 14, attrs: ["AXRole": .string("AXButton"), "AXTitle": .string("Recents"), "AXExpanded": .bool(true), "AXParent": .element(13)]),
+        ]
+        for (index, title) in recents.enumerated() {
+            let row = 20 + index * 10
+            fixture.nodes += [
+                .init(id: row, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(11), "AXChildren": .elements([row + 1, row + 6])]),
+                .init(id: row + 1, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(row), "AXChildren": .elements([row + 2])]),
+                .init(id: row + 2, attrs: ["AXRole": .string("AXButton"), "AXParent": .element(row + 1), "AXChildren": .elements([row + 3])]),
+                .init(id: row + 3, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(row + 2), "AXChildren": .elements([row + 4, row + 5])]),
+                .init(id: row + 4, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string(title), "AXParent": .element(row + 3)]),
+                .init(id: row + 5, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("Idle"), "AXParent": .element(row + 3)]),
+                .init(id: row + 6, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(row), "AXChildren": .elements([row + 7])]),
+                .init(id: row + 7, attrs: ["AXRole": .string("AXPopUpButton"), "AXTitle": .string("More options for session"), "AXParent": .element(row + 6)]),
+            ]
+        }
+    }
+    return fixture
 }
 
 
-private func withConversationTest(_ body: (BrowseModeDocument, ClaudeAppModule, Locked<[String]>) -> Void) {
+private func withConversationTest(recents: [String]? = nil, truncatedRecents: Bool = false, _ body: (BrowseModeDocument, ClaudeAppModule, Locked<[String]>) -> Void) {
     let savedPid = AXHandler.shared.activePid
     defer { AXHandler.shared.activePid = savedPid }
-    AXReplay.load(conversationPage("Old conversation", address: "https://example.com/old"))
+    var fixture = conversationPage("Old conversation", address: "https://example.com/old", recents: recents)
+    if truncatedRecents, let index = fixture.nodes.firstIndex(where: { $0.id == 42 }) {
+        fixture.nodes[index].attrs["AXChildren"] = .elements([])
+    }
+    AXReplay.load(fixture)
     let root = AXReplay.element(0)
     let page = BrowseModeDocument(webArea: root)
     waitForBuffer(page.buffer)
@@ -279,36 +307,26 @@ func claudeNavigationTests() {
         }
     }
 
-    test("Claude navigation: unchanged answered address preserves the copy and releases every queued command") {
-        withConversationTest { page, module, sent in
+    test("Claude navigation: verified current fourth row preserves the copy and speaks immediately") {
+        withConversationTest(recents: ["Public first", "Public second", "Public third", "Old conversation"]) { page, module, sent in
             let savedSink = Speech.sink
             var said: [String] = []
             Speech.sink = { said.append($0) }
             defer { Speech.sink = savedSink }
             page.position = page.buffer.text.length - 1
             let position = page.position
-            let text = (page.buffer.text as String)
+            let text = page.buffer.text as String
             let shortcut = KeyboardGesture(identifier: "kb:command+4")!
             let before = AXStats.calls
             module.script(for: shortcut)?.handler(shortcut)
-            expect(AXStats.calls, before, "the initial shortcut does no live accessibility work on main")
-            var completed: [Int] = []
-            check(page.deferInitialContent { completed.append(1) }, "first command waits for a provider answer")
-            check(page.deferInitialContent { completed.append(2) }, "a newer command preserves the first")
-            let tab = KeyboardGesture(identifier: "kb:tab")!
-            page.script(for: tab)?.handler(tab)
-            expect(sent.value, ["kb:command+4"], "the intercepted Tab is initially held")
-            RunLoop.current.run(until: Date().addingTimeInterval(0.12))
-            expect(completed, [], "early old-page answers cannot release commands")
-            expect(sent.value, ["kb:command+4"], "Tab stays queued during the settle")
-            waitForConversation { completed.count == 2 }
-            expect(completed, [1, 2], "the unchanged answer releases both commands in order")
-            expect(sent.value, ["kb:command+4", "kb:tab"], "the actual queued Tab is posted once")
-            expect((page.buffer.text as String), text, "the existing copy survives an unchanged address")
+            expect(AXStats.calls, before, "the captured sidebar requires no live provider calls on main")
+            expect(said, ["Old conversation"], "the verified current row speaks immediately once")
+            check(!page.deferInitialContent({}), "a verified current target does not start a navigation wait")
+            expect(page.buffer.text as String, text, "the existing copy survives")
             expect(page.position, position, "the existing reading position survives")
-            expect(said.filter { $0 == "Old conversation" }, ["Old conversation"], "choosing the current conversation says its title once")
-            RunLoop.current.run(until: Date().addingTimeInterval(0.15))
-            expect(said.filter { $0 == "Old conversation" }.count, 1, "further unchanged answers do not repeat it")
+            expect(sent.value, ["kb:command+4"])
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+            expect(said, ["Old conversation"], "there is no delayed duplicate")
         }
     }
 
@@ -391,6 +409,308 @@ func claudeNavigationTests() {
             expect(completed, [1, 2], "the latest reply drains commands from both shortcuts exactly once")
             expect(sent.value, ["kb:command+1", "kb:command+2"], "both native shortcuts were posted once")
             check((page.buffer.text as String).contains("Latest conversation"), "the current provider result selects the final conversation copy")
+        }
+    }
+
+    test("Claude navigation: Command 2 keeps watching beyond the unchanged settle without old speech") {
+        withConversationTest { page, module, sent in
+            let savedSink = Speech.sink
+            var said: [String] = []
+            Speech.sink = { said.append($0) }
+            defer { Speech.sink = savedSink }
+            let key = KeyboardGesture(identifier: "kb:command+2")!
+            module.script(for: key)?.handler(key)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.34))
+            expect(said, [], "the unchanged pre-switch title stays silent beyond the settle")
+            AXReplay.load(conversationPage("Delayed public destination", address: "https://example.com/delayed"))
+            waitForConversation { said.contains("Delayed public destination") }
+            waitForBuffer(page.buffer)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+            expect(said, ["Delayed public destination"], "only the destination is spoken, exactly once after collection")
+            expect(sent.value, ["kb:command+2"], "the real script posts the shortcut once")
+        }
+    }
+
+    for shortcut in ["kb:command+3", "kb:command+4", "kb:command+5"] {
+        for missingURL in [false, true] {
+            test("Claude navigation: \(shortcut) announces a changed title with \(missingURL ? "missing" : "unchanged") URL") {
+                withConversationTest { page, module, sent in
+                    let savedSink = Speech.sink
+                    var said: [String] = []
+                    Speech.sink = { said.append($0) }
+                    defer { Speech.sink = savedSink }
+                    let key = KeyboardGesture(identifier: shortcut)!
+                    module.script(for: key)?.handler(key)
+                    RunLoop.current.run(until: Date().addingTimeInterval(0.34))
+                    expect(said, [], "unchanged old title stays silent before the title-only destination arrives")
+                    var destination = conversationPage("Title-only public destination", address: "https://example.com/old")
+                    if missingURL { destination.nodes[0].attrs.removeValue(forKey: "AXURL") }
+                    AXReplay.load(destination)
+                    waitForConversation { said.contains("Title-only public destination") }
+                    RunLoop.current.run(until: Date().addingTimeInterval(0.35))
+                    expect(said, ["Title-only public destination"], "title evidence announces once independently of the URL")
+                    expect(sent.value, [shortcut], "the real conversation script delivers its native key once")
+                    check(!page.buffer.isLoading, "the copy is settled before the final speech assertion")
+                }
+            }
+        }
+    }
+
+    test("Claude navigation: repeated Claude Code title suffixes and first body line do not add speech") {
+        withConversationTest { page, module, sent in
+            let savedSink = Speech.sink
+            var said: [String] = []
+            Speech.sink = { said.append($0) }
+            defer { Speech.sink = savedSink }
+            let key = KeyboardGesture(identifier: "kb:command+2")!
+            module.script(for: key)?.handler(key)
+            var destination = conversationPage("Public destination - Claude Code - Claude Code", address: "https://example.com/clean")
+            destination.nodes[2].attrs["AXValue"] = .string("Claude Code\n" + String(repeating: "Public destination body. ", count: 100))
+            AXReplay.load(destination)
+            waitForConversation { said.contains("Public destination") }
+            waitForBuffer(page.buffer)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+            expect(said, ["Public destination"], "the exact speech after collection contains just the cleaned title")
+            expect(sent.value, ["kb:command+2"])
+        }
+    }
+
+    test("Claude navigation: ceiling speaks a fresh provider read and ignores the held stale result") {
+        withConversationTest { page, module, sent in
+            page.position = page.buffer.text.length - 1
+            let savedSink = Speech.sink
+            var said: [String] = []
+            Speech.sink = { said.append($0) }
+            defer { Speech.sink = savedSink }
+            let entered = OSAllocatedUnfairLock(initialState: 0)
+            let returned = OSAllocatedUnfairLock(initialState: false)
+            let release = DispatchSemaphore(value: 0)
+            let read = module.conversationRead
+            module.conversationRead = { root in
+                let index = entered.withLock { value in let old = value; value += 1; return old }
+                let snapshot = read(root)
+                if index == 0 {
+                    _ = release.wait(timeout: .now() + 2)
+                    returned.withLock { $0 = true }
+                }
+                return snapshot
+            }
+            module.conversationWaitLimit = 0.15
+            defer {
+                release.signal()
+                waitForConversation { returned.withLock { $0 } }
+            }
+            let key = KeyboardGesture(identifier: "kb:command+5")!
+            module.script(for: key)?.handler(key)
+            var completed: [Int] = []
+            check(page.deferInitialContent { completed.append(1) }, "the first command queues behind the real script")
+            check(page.deferInitialContent { completed.append(2) }, "the second command queues in order")
+            let tab = KeyboardGesture(identifier: "kb:tab")!
+            page.script(for: tab)?.handler(tab)
+            waitForConversation { entered.withLock { $0 } == 1 }
+            waitForConversation { completed.count == 2 }
+            expect(completed, [1, 2], "the ceiling releases commands while the provider remains held")
+            expect(sent.value, ["kb:command+5", "kb:tab"], "the queued native key is delivered once independently of speech")
+            AXReplay.load(conversationPage("Fresh ceiling destination", address: "https://example.com/fresh"))
+            release.signal()
+            waitForConversation { said.contains("Fresh ceiling destination") }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+            check(entered.withLock { $0 } >= 2, "the deadline submits a new provider read")
+            expect(said, ["Fresh ceiling destination"], "the stale pre-deadline answer is ignored and fresh speech occurs once")
+            expect(completed, [1, 2], "the late worker cannot replay queued commands")
+            expect(sent.value, ["kb:command+5", "kb:tab"], "the late worker cannot repost Tab")
+        }
+    }
+
+    for number in 4...9 {
+        test("Claude navigation: verified three-row sidebar rejects missing conversation \(number) without changing mode") {
+            withConversationTest(recents: ["Public first", "Public second", "Old conversation"]) { page, module, sent in
+                let savedSink = Speech.sink
+                var said: [String] = []
+                Speech.sink = { said.append($0) }
+                defer { Speech.sink = savedSink }
+                page.passThrough = true
+                let key = KeyboardGesture(identifier: "kb:command+\(number)")!
+                let before = AXStats.calls
+                module.script(for: key)?.handler(key)
+                expect(AXStats.calls, before, "missing-target handling uses only the captured sidebar")
+                expect(said, ["no conversation \(number)"], "the missing target is announced immediately with its number")
+                check(page.passThrough, "focus mode remains unchanged, avoiding a mode sound")
+                check(!page.deferInitialContent({}), "a missing target does not begin a wait")
+                expect(sent.value, ["kb:command+\(number)"])
+            }
+        }
+    }
+
+    test("Claude navigation: verified current third row speaks immediately") {
+        withConversationTest(recents: ["Public first", "Public second", "Old conversation"]) { page, module, _ in
+            let savedSink = Speech.sink
+            var said: [String] = []
+            Speech.sink = { said.append($0) }
+            defer { Speech.sink = savedSink }
+            let key = KeyboardGesture(identifier: "kb:command+3")!
+            let before = AXStats.calls
+            module.script(for: key)?.handler(key)
+            expect(AXStats.calls, before)
+            expect(said, ["Old conversation"])
+            check(!page.deferInitialContent({}), "the captured current row does not wait")
+        }
+    }
+
+    test("Claude navigation: an existing second row still waits for a delayed destination") {
+        withConversationTest(recents: ["Public first", "New public destination", "Old conversation"]) { page, module, _ in
+            let savedSink = Speech.sink
+            var said: [String] = []
+            Speech.sink = { said.append($0) }
+            defer { Speech.sink = savedSink }
+            let key = KeyboardGesture(identifier: "kb:command+2")!
+            module.script(for: key)?.handler(key)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.34))
+            expect(said, [], "an existing different row cannot announce the current title or claim to be missing")
+            AXReplay.load(conversationPage("New public destination", address: "https://example.com/new"))
+            waitForConversation { said.contains("New public destination") }
+            waitForBuffer(page.buffer)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+            expect(said, ["New public destination"])
+        }
+    }
+
+    for truncated in [false, true] {
+        test("Claude navigation: \(truncated ? "truncated" : "absent") sidebar cannot prove a missing target") {
+            withConversationTest(recents: truncated ? ["Public first", "Public second", "Old conversation"] : nil, truncatedRecents: truncated) { _, module, _ in
+                let savedSink = Speech.sink
+                var said: [String] = []
+                Speech.sink = { said.append($0) }
+                defer { Speech.sink = savedSink }
+                let key = KeyboardGesture(identifier: "kb:command+9")!
+                module.script(for: key)?.handler(key)
+                expect(said, [], "an unknown sidebar cannot claim no conversation 9")
+                RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+                check(!said.contains("no conversation 9"), "unchanged provider answers do not turn unknown structure into missing-target evidence")
+            }
+        }
+    }
+
+    test("Claude navigation: title preceding a late URL stays the sole announcement after publication") {
+        withConversationTest { page, module, _ in
+            let savedSink = Speech.sink
+            var said: [String] = []
+            Speech.sink = { said.append($0) }
+            defer { Speech.sink = savedSink }
+            let key = KeyboardGesture(identifier: "kb:command+2")!
+            module.script(for: key)?.handler(key)
+            var destination = conversationPage("Public early title - Claude Code - Claude Code", address: "https://example.com/old")
+            destination.nodes[2].attrs["AXValue"] = .string("Claude Code\n" + String(repeating: "Public destination text. ", count: 100))
+            AXReplay.load(destination)
+            waitForConversation { said.contains("Public early title") }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+            expect(said, ["Public early title"], "the title alone is spoken before the delayed URL")
+            destination.nodes[0].attrs["AXURL"] = .url("https://example.com/early-title")
+            AXReplay.load(destination)
+            waitForConversation { (page.buffer.text as String).contains("Public destination text.") }
+            waitForBuffer(page.buffer)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+            expect(said, ["Public early title"], "late URL collection cannot repeat the title or announce the Claude Code body line")
+        }
+    }
+
+    test("Claude navigation: external publication before a watcher reply leaves destination speech to the watcher") {
+        withConversationTest { page, module, _ in
+            let savedSink = Speech.sink
+            var said: [String] = []
+            Speech.sink = { said.append($0) }
+            defer { Speech.sink = savedSink }
+            let key = KeyboardGesture(identifier: "kb:command+2")!
+            module.script(for: key)?.handler(key)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.34))
+            expect(said, [], "the old copy remains silent through the unchanged settle")
+            let entered = OSAllocatedUnfairLock(initialState: false)
+            let returned = OSAllocatedUnfairLock(initialState: false)
+            let release = DispatchSemaphore(value: 0)
+            let read = module.conversationRead
+            module.conversationRead = { root in
+                entered.withLock { $0 = true }
+                _ = release.wait(timeout: .now() + 2)
+                let snapshot = read(root)
+                returned.withLock { $0 = true }
+                return snapshot
+            }
+            defer {
+                release.signal()
+                waitForConversation { returned.withLock { $0 } }
+            }
+            waitForConversation { entered.withLock { $0 } }
+            var destination = conversationPage("Public external destination - Claude Code", address: "https://example.com/external")
+            destination.nodes[2].attrs["AXValue"] = .string("Claude Code\n" + String(repeating: "Public external body. ", count: 100))
+            AXReplay.load(destination)
+            check(page.refreshIfNavigated(), "an external navigation event starts destination collection before the watcher returns")
+            waitForBuffer(page.buffer)
+            expect(said, [], "natural buffer publication cannot speak the title or first body line while the watcher owns speech")
+            module.conversationRead = read
+            release.signal()
+            waitForConversation { said.contains("Public external destination") }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+            expect(said, ["Public external destination"], "the released watcher supplies exactly the cleaned destination title")
+        }
+    }
+
+    test("Claude navigation: a provider stuck beyond the ceiling grace relinquishes speech ownership") {
+        withConversationTest { page, module, sent in
+            let savedSink = Speech.sink
+            var said: [String] = []
+            Speech.sink = { said.append($0) }
+            defer { Speech.sink = savedSink }
+            let entered = OSAllocatedUnfairLock(initialState: false)
+            let returned = OSAllocatedUnfairLock(initialState: false)
+            let release = DispatchSemaphore(value: 0)
+            let read = module.conversationRead
+            module.conversationRead = { root in
+                let snapshot = read(root)
+                entered.withLock { $0 = true }
+                _ = release.wait(timeout: .now() + 2)
+                returned.withLock { $0 = true }
+                return snapshot
+            }
+            module.conversationWaitLimit = 0.1
+            defer {
+                release.signal()
+                waitForConversation { returned.withLock { $0 } }
+            }
+            let key = KeyboardGesture(identifier: "kb:command+2")!
+            module.script(for: key)?.handler(key)
+            var completed = 0
+            check(page.deferInitialContent { completed += 1 }, "the command initially waits behind the switch")
+            waitForConversation { entered.withLock { $0 } }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.4))
+            check(!page.navigationTitleOwned, "the independent grace ends speech ownership even while the provider is stuck")
+            check(!page.deferInitialContent({}), "the ceiling has released the command queue")
+            expect(completed, 1, "the original queued command was released exactly once")
+            expect(said, [], "neither the stale title nor a fabricated destination is spoken")
+            AXReplay.load(conversationPage("Public too-late destination", address: "https://example.com/too-late"))
+            module.conversationRead = read
+            release.signal()
+            waitForConversation { returned.withLock { $0 } }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+            expect(said, [], "a result after the grace cannot revive switch speech")
+            expect(completed, 1, "a late result cannot replay commands")
+            expect(sent.value, ["kb:command+2"])
+        }
+    }
+
+    test("Claude navigation: an expanded empty Recents section proves conversation 1 is missing") {
+        withConversationTest(recents: []) { page, module, _ in
+            let savedSink = Speech.sink
+            var said: [String] = []
+            Speech.sink = { said.append($0) }
+            defer { Speech.sink = savedSink }
+            page.passThrough = true
+            let key = KeyboardGesture(identifier: "kb:command+1")!
+            let before = AXStats.calls
+            module.script(for: key)?.handler(key)
+            expect(AXStats.calls, before, "the expanded empty section is read from the captured tree")
+            expect(said, ["no conversation 1"])
+            check(page.passThrough, "the empty section leaves focus mode unchanged")
+            check(!page.deferInitialContent({}), "a proven absent first row does not wait")
         }
     }
 
