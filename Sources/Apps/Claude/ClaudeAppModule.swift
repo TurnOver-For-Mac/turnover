@@ -111,7 +111,7 @@ package final class ClaudeAppModule: AppModule {
     /// 5.1231.2, macOS 27.2) and on the sidebar's session rows (8 and 9 Nov 2026). Return on the same button, once
     /// Tab had put the keyboard on it, worked at once each time. Other presses of the same kind of button went
     /// through the same day ("Yes, add it"), so the press is ignored some of the time; why is not known.
-    override var rolesPressedByKeyboard: Set<String> { ["AXButton"] }
+    package override var rolesPressedByKeyboard: Set<String> { ["AXButton"] }
 
     package override func handleEvent(_ event: Event, next: () -> Void) {
         if event.kind == .gainFocus,
