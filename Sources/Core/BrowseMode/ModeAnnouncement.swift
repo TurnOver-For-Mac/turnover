@@ -25,6 +25,14 @@ enum ModeAnnouncement {
         }
     }
 
+    static func willAnnounce(_ document: BrowseModeDocument) -> Bool {
+        changes.contains { change in
+            guard change.document === document else { return false }
+            guard change.announce else { return false }
+            return change.before != document.passThrough
+        }
+    }
+
     static func end() {
         depth -= 1
         guard depth == 0 else { return }

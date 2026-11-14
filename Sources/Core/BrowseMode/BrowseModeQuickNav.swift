@@ -60,7 +60,7 @@ extension BrowseModeDocument {
             lastQuickNavTarget = el
             if BrowseModeDocument.controlRoles.contains(el.role), !(el.role == "AXLink" && buffer.linkEnd(at: at) != nil) {
                 let obj = ObjectFactory.make(el)
-                Speech.speakMessage(Speech.objectPropertiesSpeech(obj, reason: .focus).joined(separator: ", "))
+                Speech.speakMessage(Speech.objectPropertiesSpeech(obj, reason: .focus).joined(separator: ", ") + quickNavModeSuffix(obj))
                 lastChain = []
             } else { speakQuickNavText(at: at, link: q.name.contains("Link"), element: el) }
         }
@@ -98,7 +98,7 @@ extension BrowseModeDocument {
             // A link with text in the buffer is read as text (with the link reported as the user set it), like the arrows.
             if BrowseModeDocument.controlRoles.contains(el.role), !(el.role == "AXLink" && buffer.linkEnd(at: at) != nil) {
                 let obj = ObjectFactory.make(el)
-                Speech.speakMessage(Speech.objectPropertiesSpeech(obj, reason: .focus).joined(separator: ", "))
+                Speech.speakMessage(Speech.objectPropertiesSpeech(obj, reason: .focus).joined(separator: ", ") + quickNavModeSuffix(obj))
                 lastChain = []
             } else { speakQuickNavText(at: at, link: q.name.contains("Link"), element: el) }
         }
@@ -188,7 +188,7 @@ extension BrowseModeDocument {
         // text is read with what it is inside of.
         if BrowseModeDocument.controlRoles.contains(target.role), !(target.role == "AXLink" && buffer.linkEnd(at: r.0) != nil) {
             let obj = ObjectFactory.make(target)
-            Speech.speakMessage(Speech.objectPropertiesSpeech(obj, reason: .focus).joined(separator: ", ") + (obj.value.map { _ in "" } ?? ((obj.hasNavigableText && ((try? obj.makeTextInfo(.all))?.text.isEmpty ?? true)) ? ", " + Phrases.blank : "")))
+            Speech.speakMessage(Speech.objectPropertiesSpeech(obj, reason: .focus).joined(separator: ", ") + (obj.value.map { _ in "" } ?? ((obj.hasNavigableText && ((try? obj.makeTextInfo(.all))?.text.isEmpty ?? true)) ? ", " + Phrases.blank : "")) + quickNavModeSuffix(obj))
             lastChain = []
         } else {
             speakQuickNavText(at: r.0, link: q.name.contains("Link"))
@@ -221,6 +221,19 @@ extension BrowseModeDocument {
             info.end = min(info.end, end)
         }
         speak(info, unit: .line)
+        if let element {
+            let suffix = quickNavModeSuffix(ObjectFactory.make(element))
+            if !suffix.isEmpty { Speech.speakMessage(String(suffix.dropFirst(2))) }
+        }
+    }
+
+    /// 14 Nov 2026: quick navigation only moves the reading position. The field's label must tell the
+    /// listener that typing still navigates; arrow-key reading does not use this suffix.
+    func quickNavModeSuffix(_ object: TurnOverObject) -> String {
+        guard !passThrough else { return "" }
+        guard object.states.contains(.editable) else { return "" }
+        guard !ModeAnnouncement.willAnnounce(self) else { return "" }
+        return ", " + String(localized: "browse mode", comment: "Spoken message")
     }
 
     static func isInside(_ x: AXUIElement, _ root: AXUIElement) -> Bool {

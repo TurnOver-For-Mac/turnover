@@ -310,7 +310,7 @@ extension BrowseModeDocument {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
             guard let self else { return }
             if BrowseModeDocument.controlRoles.contains(el.role), !(el.role == "AXLink" && buffer.linkEnd(at: position) != nil) {
-                Speech.speakMessage(Speech.objectPropertiesSpeech(ObjectFactory.make(el), reason: .focus).joined(separator: ", "))
+                Speech.speakMessage(Speech.objectPropertiesSpeech(ObjectFactory.make(el), reason: .focus).joined(separator: ", ") + quickNavModeSuffix(ObjectFactory.make(el)))
                 lastChain = []
             } else { speakQuickNavText(at: position, link: el.role == "AXLink") }
         }

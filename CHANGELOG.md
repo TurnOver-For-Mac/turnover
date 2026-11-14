@@ -8,6 +8,7 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 - Changes between browse mode and focus mode say the mode in words after the field or key, with the mode sound
   retained when sounds are on; brief changes within one key or refresh stay silent.
+- Quick navigation onto an editable field says "browse mode" after the field when typing would still navigate.
 - Safari no longer says "please wait" when it answers a focus check without moving the focus.
 - At the bottom of a changing page, repeated forward keys answer from the copy once its end has been checked.
 - Claude's progress lines wait for speech to finish as well as quiet keys, keeping each conversation's newest

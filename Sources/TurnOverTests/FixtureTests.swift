@@ -925,6 +925,39 @@ func focusRuleTests() {
         expect(said, ["another app"], "a focus departure retires the old page's mode words")
     }
 
+    test("quick navigation: F and VoiceOver form control say browse mode on an edit; arrows do not") {
+        AXReplay.load(conversation())
+        let saved = config, sink = Speech.sink
+        var said: [String] = []
+        Speech.sink = { said.append($0) }
+        let page = BrowseModeHandler.shared.document(root: AXReplay.element(60))
+        defer {
+            API.setFocusObject(nil, ancestors: []); BrowseModeHandler.shared.forget(pid: 900_060)
+            AXReplay.unload(); config = saved; Speech.sink = sink
+        }
+        API.setFocusObject(ObjectFactory.make(AXReplay.element(65)), ancestors: [], interceptor: page)
+        page.refreshIfNavigated(); waitForBuffer(page.buffer)
+        page.hasWebKitSearch = false
+        for kind in ["FormField", "Edit", "TextField", "Control"] {
+            guard let navigation = (BrowseModeDocument.quickNav + BrowseModeDocument.voiceOverQuickNav).first(where: { $0.name == kind }) else {
+                check(false, "the quick navigation kind \(kind) exists"); continue
+            }
+            page.position = page.buffer.offset(of: AXReplay.element(65)) ?? 0
+            said = []
+            page.quickNav(navigation, forward: true)
+            check(!page.passThrough, "quick navigation leaves typing in browse mode")
+            let words = said.joined(separator: ", ")
+            check(words.contains("Prompt"), "the field is read: \(words)")
+            check(words.hasSuffix("browse mode"), "browse mode follows the field: \(words)")
+        }
+        said = []
+        if let arrow = page.script(named: "moveByLine_forward") {
+            page.position = max(0, (page.buffer.offset(of: AXReplay.element(66)) ?? 1) - 1)
+            arrow.handler(KeyboardGesture(identifier: "kb:downArrow")!)
+        } else { check(false, "the arrow script exists") }
+        check(!said.joined().contains("browse mode"), "arrow reading over an edit does not add mode words")
+    }
+
     // Command-Tab away and back: the Claude app and Safari give the focus back to the control that had it, and the
     // reading position went there too, into focus mode on the prompt (28 and 29 Oct 2026). NVDA leaves the reading
     // position and the mode as they were, and reads the line there.
