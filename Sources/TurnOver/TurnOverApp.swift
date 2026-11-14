@@ -400,8 +400,11 @@ final class TurnOverApp {
                 // Off while the Mac is still locked or asleep, TurnOver may not take the keys (activate refuses behind
                 // the lock): it stays held, and takes them once the Mac is unlocked (readerAfterUnlock). Cleared here,
                 // nothing brought it back at the unlock (13 Nov 2026: no reader for 16 s, until Oliver restarted it).
-                if lead.locked {
+                // The lock screen still up, by the session too (the watcher's flag clears at the unlock notice, before the
+                // lock screen has gone; Codex's second review, 14 Nov 2026): the keys wait for readerAfterUnlock's checks.
+                if lead.locked || LeadWatcher.screenIsLocked {
                     Log.info("VoiceOver off while the Mac is locked; TurnOver takes the keys once it is unlocked")
+                    readerAfterUnlock()
                     return
                 }
                 heldForVoiceOver = false
@@ -416,6 +419,12 @@ final class TurnOverApp {
         if on, !starting, !lead.isOurChange, !lead.locked, !byLock, !byInputRecovery {
             lead.yieldedToVoiceOverByHand = true
             Log.info("VoiceOver turned on by hand: TurnOver steps back until it goes off or TurnOver's key")
+        }
+        // VoiceOver off with the lock screen still up: TurnOver's keys wait for the lock screen to go (readerAfterUnlock).
+        if !on, lead.locked || LeadWatcher.screenIsLocked {
+            Log.info("VoiceOver off while the Mac is locked; TurnOver takes the keys once it is unlocked")
+            readerAfterUnlock()
+            return
         }
         if on { deactivate() } else { activate() }
     }

@@ -114,18 +114,24 @@ final class ClaudeAppModule: AppModule {
     /// is reading it: it is not read again from its top over him (twice on 14 Nov 2026). Moving about elsewhere is
     /// not: the reply waits until the reading has been still for two seconds, then it is read (Codex's review: it was
     /// dropped for good). Claude's own "finished" notice still says it is done either way.
-    private func sayReply(_ reply: String, tries: Int) {
+    /// Only in its own conversation (`session`, its address): after a switch it is not said (Codex's second review).
+    private func sayReply(_ reply: String, session: String, tries: Int) {
+        if !session.isEmpty {
+            let now = ClaudeTranscript.chat(pid: pid).map(ClaudeTranscript.session(of:)) ?? ""
+            guard now == session else { Log.io("claude: another conversation now; the finished reply is not read"); return }
+        }
         guard let page = API.focusTreeInterceptor, page.webArea.pid == pid,
               Date().timeIntervalSince(page.positionMovedAt) < 2 else { Speech.speakNews(reply); return }
         let line = page.lineText(at: page.position).trimmingCharacters(in: .whitespacesAndNewlines)
-        if line.count >= 12, reply.contains(line) {
+        // A line of some length, so a short line found in many replies ("Done.") is not taken for this one.
+        if line.count >= 24, reply.contains(line) {
             Log.io("claude: the reply is being read already; not read from its start")
             return
         }
-        guard tries < 30 else { return }
+        guard tries < 60 else { Log.io("claude: the reading did not settle for a minute; the finished reply is not read"); return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
             guard let self, AXHandler.shared.activePid == pid else { return }
-            sayReply(reply, tries: tries + 1)
+            sayReply(reply, session: session, tries: tries + 1)
         }
     }
 
@@ -151,7 +157,8 @@ final class ClaudeAppModule: AppModule {
             let reply = ClaudeTranscript.latestReply(chat: live)
             Log.io("claude: reply finished, \(reply.count) characters")
             guard !reply.isEmpty else { return }
-            self.sayReply(reply, tries: 0)
+            self.heldProgress = nil   // the reply is done: a waiting "Running…" is out of date
+            self.sayReply(reply, session: ClaudeTranscript.session(of: live), tries: 0)
         }
     }
 }

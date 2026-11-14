@@ -674,12 +674,19 @@ public final class WebBuffer {
         while !queue.isEmpty {
             guard n < 40 else { return false }   // not looked at whole: read it
             let e = queue.removeFirst(); n += 1
-            if e.role == "AXStaticText", let v = e.string(kAXValueAttribute) { parts.append(v) }
+            let r = e.role
+            // Anything but text and groups in it (a button of its own, a picture) is content: read it.
+            guard r == "AXStaticText" || r == "AXGroup" else { return false }
+            if r == "AXStaticText" {
+                guard let v = e.string(kAXValueAttribute) else { return false }   // text that can't be read: read it
+                parts.append(v)
+            }
             queue.append(contentsOf: e.elements(kAXChildrenAttribute))
         }
         let text = parts.joined().trimmingCharacters(in: .whitespacesAndNewlines)
         guard text.count >= 8 else { return false }
-        return label.hasPrefix(text)
+        // Exactly the control's label: a part of it is not proof (Codex's second review, 14 Nov 2026).
+        return text == label.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func visit(_ el: AXUIElement, depth: Int) {

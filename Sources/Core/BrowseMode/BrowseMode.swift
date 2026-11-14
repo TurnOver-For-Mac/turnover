@@ -125,10 +125,17 @@ public final class BrowseModeDocument: ScriptableObject {
     static var lastLetterKeptAt = Date.distantPast
     /// "browse mode", a third of a second after the last of a run of letters kept from the page (or at once if the run
     /// goes on for more than two seconds), so a fast run of keys does not cancel it.
+    /// Only for the page the letters were kept on, and only while it is still in browse mode: Space after a kept letter
+    /// can switch to focus mode first (Codex's second review, 14 Nov 2026). Given up after three seconds of keys.
     static func sayBrowseModeWhenLettersStop(waited: Double = 0) {
+        let page = API.focusTreeInterceptor
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            guard let page, API.focusTreeInterceptor === page, !page.passThrough else { return }
             let quiet = Date().timeIntervalSince(lastLetterKeptAt) >= 0.35 && Date().timeIntervalSince(InputManager.lastKeyDownAt) >= 0.35
-            guard quiet || waited >= 2 else { sayBrowseModeWhenLettersStop(waited: waited + 0.15); return }
+            guard quiet else {
+                if waited < 3 { sayBrowseModeWhenLettersStop(waited: waited + 0.15) }
+                return
+            }
             Speech.speakMessage(String(localized: "browse mode", comment: "Spoken message"))
         }
     }
@@ -139,7 +146,7 @@ public final class BrowseModeDocument: ScriptableObject {
     package var loadsMoreAtItsEnd: Int?
     /// Where the page's end was last scrolled into view and read again in the background after a quick wrap: the page
     /// (by its generation) and the copy's length then. Looked at again only once the page or its copy has changed.
-    package var endReachedInBackground: (generation: Int, length: Int)?
+    package var endReachedInBackground: (generation: Int, text: Int)?
     var publicationWasEmpty = false
     var publicationAnchor: BrowseModeHandler.Saved?
     var announceWhenReady = false
@@ -662,26 +669,34 @@ public final class BrowseModeDocument: ScriptableObject {
     /// a second and a half later (Codex's review, 14 Nov 2026).
     func reachEndInBackground() {
         let before = buffer.text.length
+        // The copy's text by its hash: a feed that replaces its items keeps its length and is still a change (Codex's
+        // second review, 14 Nov 2026).
+        let seen = buffer.text.hash
         let epoch = pageGeneration
-        if let last = endReachedInBackground, last.generation == epoch, last.length == before { return }
+        if let last = endReachedInBackground, last.generation == epoch, last.text == seen { return }
         guard !buffer.isLoading else { return }
-        endReachedInBackground = (epoch, before)
+        endReachedInBackground = (epoch, seen)
         func grew() -> Bool {
             guard pageGeneration == epoch, buffer.text.length > before else { return false }
             loadsMoreAtItsEnd = epoch
             Log.io("browse mode: the page's end loaded more (\(buffer.text.length - before) characters); quick navigation waits for it on this page")
             return true
         }
-        buffer.build(scrollTo: buffer.lines.last?.element) { [weak self] in
-            guard let self, pageGeneration == epoch, !grew() else { return }
+        // The second look, 1.5 s on, waits for a read already running (up to three times), rather than being dropped.
+        func secondLook(_ tries: Int) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-                guard let self, pageGeneration == epoch, !buffer.isLoading else { return }
+                guard let self, pageGeneration == epoch else { return }
+                guard !buffer.isLoading else { if tries < 3 { secondLook(tries + 1) }; return }
                 buffer.build { [weak self] in
                     guard let self else { return }
                     _ = grew()
-                    endReachedInBackground = (epoch, buffer.text.length)
+                    endReachedInBackground = (epoch, buffer.text.hash)
                 }
             }
+        }
+        buffer.build(scrollTo: buffer.lines.last?.element) { [weak self] in
+            guard let self, pageGeneration == epoch, !grew() else { return }
+            secondLook(0)
         }
     }
 

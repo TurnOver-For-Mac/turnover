@@ -198,6 +198,8 @@ extension AXHandler {
                 // fault, though it read as one in every log (13 and 14 Nov 2026). Any other app's refusal is an error.
                 if NSRunningApplication(processIdentifier: pid)?.bundleIdentifier == "com.apple.dock" {
                     Log.info("pid \(pid), the Dock: \(names.count) notifications refused, as it always does; the rest kept")
+                } else if names.count <= Self.notifications.count / 2 {
+                    Log.info("pid \(pid): \(names.count) notifications not registered after the retries; the rest kept")
                 } else {
                     Log.error("pid \(pid): \(names.count) notifications never registered; the rest kept")
                 }
@@ -231,7 +233,9 @@ extension AXHandler {
             let settle: @MainActor @Sendable ([String]) -> Void = { [weak self] still in
                 guard let self, let current = self.observers[pid], current === obs else { return }
                 Log.info("pid \(pid): \(names.count - still.count) of \(names.count) notifications registered on retry, in \(Int(Date().timeIntervalSince(started) * 1000)) ms off the main thread")
-                if still.count > Self.notifications.count / 2 { self.retryNotifications(pid: pid, obs: obs, names: still, delays: Array(delays.dropFirst())) }
+                // Any that still failed, now that the unsupported ones are set aside: one missing focus notification
+                // matters (Codex's second review, 14 Nov 2026). The schedule stays bounded.
+                if !still.isEmpty { self.retryNotifications(pid: pid, obs: obs, names: still, delays: Array(delays.dropFirst())) }
             }
             DispatchQueue.global(qos: .userInitiated).async {
                 let still = register(names)

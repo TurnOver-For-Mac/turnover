@@ -364,14 +364,15 @@ public enum Speech {
         statesSaid.append((element, words, Date()))
         if statesSaid.count > 8 { statesSaid.removeFirst() }
     }
-    /// Said since `date`: the same states, or some of them (the page's event can name more states than the press's
-    /// look did, "expanded" among them). States are compared whole: "not pressed" is not "pressed".
+    /// Said since `date`: these states, every one of them (the press's look said "expanded", and the page's event says
+    /// "expanded" too). One state more is news, and is said ("expanded, unavailable"; Codex's second review, 14 Nov
+    /// 2026). States are compared whole: "not pressed" is not "pressed".
     public static func stateSaid(_ words: String, of element: AXUIElement, since date: Date) -> Bool {
         guard let last = statesSaid.last(where: { CFEqual($0.element, element) }), last.at >= date else { return false }
         let now = Set(words.components(separatedBy: ", ").filter { !$0.isEmpty })
         let then = Set(last.words.components(separatedBy: ", ").filter { !$0.isEmpty })
-        guard !now.isEmpty, !then.isEmpty else { return false }
-        return now.isSubset(of: then) || then.isSubset(of: now)
+        guard !now.isEmpty else { return false }
+        return now.isSubset(of: then)
     }
 
     /// A check box or radio button just pressed: "checked", "not checked" or "half checked", read fresh.

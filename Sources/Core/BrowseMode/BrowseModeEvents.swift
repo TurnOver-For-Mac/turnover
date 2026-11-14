@@ -92,6 +92,9 @@ extension BrowseModeDocument {
                         guard ScriptHandler.keysArrivedCount == keys else { return }
                         let busy = (webArea.attr("AXElementBusy") as? Bool) == true
                         if waited < 1.5 || (busy && waited < 8) { readIfStayed(waited + 0.5); return }
+                        // Still loading after eight seconds: the new page announces itself when it comes; the old one's
+                        // line is not read (Codex's second review, 14 Nov 2026).
+                        if busy { Log.io("browse mode: the page is still loading; the old page's line is not read"); return }
                         speakUnit(.line)
                     }
                 }
