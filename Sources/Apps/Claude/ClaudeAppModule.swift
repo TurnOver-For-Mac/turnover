@@ -84,7 +84,7 @@ package final class ClaudeAppModule: AppModule {
             guard let self,
                   let page,
                   conversationSwitch == request else { return }
-            Log.io("claude: conversation switch wait ended at its ceiling; waiting commands run once")
+            Log.io("claude: conversation switch wait ended at its ceiling")
             conversationSwitch += 1
             conversationReader.cancel()
             page.finishNavigationWait(title: nil, announce: false)
@@ -94,13 +94,15 @@ package final class ClaudeAppModule: AppModule {
                 guard let self,
                       let page,
                       conversationSwitch == request else { return }
-                guard API.focusTreeInterceptor === page else { finish(); return }
+                guard API.focusTreeInterceptor === page,
+                      AXHandler.shared.activePid == pid else { finish(); return }
                 let read = conversationRead
                 conversationReader.submit(collect: { _ in read(root) }, publish: { [weak self, weak page] snapshot in
                     guard let self,
                           let page,
                           conversationSwitch == request else { return }
-                    guard API.focusTreeInterceptor === page else { finish(); return }
+                    guard API.focusTreeInterceptor === page,
+                          AXHandler.shared.activePid == pid else { finish(); return }
                     let now = snapshot.with { page.url }
                     guard !now.isEmpty else { look(); return }
                     let changed = now != address

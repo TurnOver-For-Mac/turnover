@@ -20,7 +20,8 @@ extension BrowseModeDocument {
     }
 
     /// A command that arrived during the first collection runs once its content is available. A later key,
-    /// navigation or focus departure retires it, except Claude's explicit switch queue, which drains every key.
+    /// navigation or focus departure retires it. Claude's explicit switch queue retains every key while
+    /// its page stays focused.
     /// The event-tap decision still returns immediately.
     package func deferInitialContent(_ action: @escaping () -> Void) -> Bool {
         if navigationReplaying { return false }
@@ -92,17 +93,25 @@ extension BrowseModeDocument {
         guard navigationWaiting else { return }
         navigationWaiting = false
         earlyTitleURL = lastURL
-        if let title,
-           !title.isEmpty { announceNavigationTitle(title) }
         let retries = navigationRetries
         navigationRetries = []
+        // Retire the queue on departure, including a blocked provider's independent deadline.
+        // A fallback such as Tab posts to the system's focused app, so it must never replay there.
+        guard API.focusTreeInterceptor === self,
+              AXHandler.shared.activePid == webArea.pid else { return }
+        if let title,
+           !title.isEmpty { announceNavigationTitle(title) }
         if announce,
            !buffer.lines.isEmpty { announcePage() }
-        // Drain once on every exit, including the ceiling and focus departure. Replayed commands cannot
+        // Drain once while still focused, including at the ceiling. Replayed commands cannot
         // fall back into first-content deferral and silently expire behind a later key (14 Nov 2026 review).
         navigationReplaying = true
         defer { navigationReplaying = false }
-        for retry in retries { retry() }
+        for retry in retries {
+            guard API.focusTreeInterceptor === self,
+                  AXHandler.shared.activePid == webArea.pid else { return }
+            retry()
+        }
     }
 
     func announceNavigationTitle(_ title: String) {
