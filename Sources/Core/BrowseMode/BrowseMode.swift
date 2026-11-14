@@ -18,17 +18,69 @@ import TurnOverAX
 /// tests, 4 Oct 2026: runs of silent Tabs). Says "page not responding", at most every 5 s.
 public enum PageWatch {
     static var lastSpoken = Date.distantPast
-    /// The first key since the page last sent news, and how many have gone unanswered since. One key alone can be
-    /// dropped by a page that is fine (a false "not responding", 4 Oct 2026): two in a row, with no news, is stuck.
-    static var waitingSince: Date?
-    static var unanswered = 0
+    package struct WaitingKeys {
+        private var pid: pid_t?
+        private var waitingSince: Date?
+        private var unanswered = 0
+        private var generation = 0
+
+        package init() {}
+
+        package mutating func keySent(to pid: pid_t, at now: Date, lastNews: Date) -> Int {
+            let continuingSilence = self.pid == pid
+                && waitingSince.map { lastNews < $0 } == true
+            if continuingSilence {
+                unanswered += 1
+            } else {
+                generation += 1
+                self.pid = pid
+                waitingSince = now
+                unanswered = 1
+            }
+            return generation
+        }
+
+        package mutating func focusAnswered(by pid: pid_t) {
+            guard self.pid == pid else { return }
+            generation += 1
+            waitingSince = nil
+            unanswered = 0
+        }
+
+        package mutating func focusQueryReturned(_ status: AXQueryStatus, by pid: pid_t) {
+            switch status {
+            case .returned(.success),
+                 .returned(.noValue),
+                 .returned(.attributeUnsupported),
+                 .returned(.notImplemented):
+                focusAnswered(by: pid)
+            default:
+                break
+            }
+        }
+
+        package func unansweredKeys(for pid: pid_t, generation: Int, lastNews: Date) -> Int? {
+            guard self.pid == pid,
+                  self.generation == generation,
+                  let waitingSince,
+                  lastNews < waitingSince,
+                  unanswered >= 2 else { return nil }
+            return unanswered
+        }
+    }
+    private static var waiting = WaitingKeys()
+
+    static func focusQueryReturned(_ status: AXQueryStatus, by pid: pid_t) {
+        waiting.focusQueryReturned(status, by: pid)
+    }
+
     public static func keySent(to pid: pid_t) {
         let now = Date()
         let news = AXHandler.shared.lastNewsAt[pid] ?? .distantPast
-        if let since = waitingSince, news < since { unanswered += 1 } else { waitingSince = now; unanswered = 1 }
-        let since = waitingSince ?? now
+        let generation = waiting.keySent(to: pid, at: now, lastNews: news)
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-            guard unanswered >= 2, (AXHandler.shared.lastNewsAt[pid] ?? .distantPast) < since,
+            let latestNews = AXHandler.shared.lastNewsAt[pid] ?? .distantPast
+            guard let unanswered = waiting.unansweredKeys(for: pid, generation: generation, lastNews: latestNews),
                   NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
                   Date().timeIntervalSince(lastSpoken) > 5 else { return }
             lastSpoken = Date()
@@ -677,17 +729,30 @@ public final class BrowseModeDocument: ScriptableObject {
     /// and that is read if it moved. On App Store Connect's menu every other Tab said nothing (14 Nov 2026): the focus
     /// went on each time, but Safari sent news of only every other move. If the focus is where it was, nothing is said.
     func askFocusIfNoNews() {
-        let sentAt = Date(), pid = webArea.pid, keys = ScriptHandler.keysArrivedCount
+        let sentAt = Date()
+        let pid = webArea.pid
+        let keys = ScriptHandler.keysArrivedCount
+        let epoch = pageGeneration
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
-            guard let self, API.focusTreeInterceptor === self, ScriptHandler.keysArrivedCount == keys else { return }
+            guard let self,
+                  API.focusTreeInterceptor === self,
+                  pageGeneration == epoch,
+                  ScriptHandler.keysArrivedCount == keys else { return }
             guard !pageSilent else { return }
             if let (_, at) = AXHandler.shared.lastGainFocus, at >= sentAt { return }
             // A quarter of a second at most: a page that has stopped answering must not hold the keys.
             let app = AXUIElementCreateApplication(pid)
             AXUIElementSetMessagingTimeout(app, 0.25)
-            guard let f = app.element(kAXFocusedUIElementAttribute) else { return }
+            let answer = app.attributeResult(kAXFocusedUIElementAttribute)
+            // 14 Nov 2026: Safari on meshy.ai answered with unchanged focus but sent no notification.
+            // The reply is news even if another key arrived during the question; only following its focus expires.
+            // An explicit no-focus or unsupported answer is news too; a timeout or client backoff is not.
+            PageWatch.focusQueryReturned(answer.status, by: pid)
+            guard let f = axElement(answer.value) else { return }
             // Still this key's: no newer key, and still this page (the question itself can take its quarter second).
-            guard ScriptHandler.keysArrivedCount == keys, API.focusTreeInterceptor === self else { return }
+            guard ScriptHandler.keysArrivedCount == keys,
+                  API.focusTreeInterceptor === self,
+                  pageGeneration == epoch else { return }
             if let current = API.focusObject?.element, f.isSame(current) {
                 Log.io("browse mode: Tab brought no news of the focus, and it is where it was")
                 return
