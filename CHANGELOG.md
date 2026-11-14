@@ -19,6 +19,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- A waiting system dialog reminds you once, with at most one further reminder after five minutes, instead of repeating on every application switch.
+
 - Claude's conversation shortcuts return to focus mode when the destination Prompt has keyboard focus, so typing goes into the Prompt after the page changes.
 
 - Claude conversations with identical titles announce their destination once it has loaded, without waiting for the eight-second ceiling.
