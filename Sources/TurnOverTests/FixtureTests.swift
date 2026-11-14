@@ -802,6 +802,8 @@ func focusRuleTests() {
         page.setPassThrough(false, announce: false)
         page.position = stopped
         check(!focus(66, fromOutside: true), "back onto the prompt, it is not read itself")
+        check((API.focusObject as? EditableText)?.isFollowingSelection == true,
+              "back onto the prompt, its selection is followed again, so Shift and the arrows are read")
         check(!page.passThrough, "browse mode stays, though the prompt has the focus")
         expect(page.position, stopped, "the reading position stays where the reading stopped")
 
