@@ -186,19 +186,7 @@ extension AXHandler {
         Log.info("observing pid \(pid)\(ForeignChildren.contains(pid) ? "; its windows list each other's elements (Qt Quick): filtered" : "")")
     }
 
-    /// The Docks (by process) whose refusals have been logged once.
-    static var dockRefusalsNoted: Set<pid_t> = []
-
     func retryNotifications(pid: pid_t, obs: AXObserver, names: [String], delays: [Double]) {
-        // The Dock always refuses most of them (24 of 27) and never comes to the front: asking again changes nothing. It
-        // was asked five times at every start and unlock, each ending in an error line, and the error read as a fault
-        // in every log (13 and 14 Nov 2026). Said once, as what it is.
-        if NSRunningApplication(processIdentifier: pid)?.bundleIdentifier == "com.apple.dock" {
-            if Self.dockRefusalsNoted.insert(pid).inserted {
-                Log.info("pid \(pid) is the Dock: \(names.count) notifications refused, as it always does; not asked again")
-            }
-            return
-        }
         guard let delay = delays.first else {
             // Not given up for good: an app held at launch by a system prompt (Audacity 4 asks for the microphone
             // before it answers anything) was never heard from again (parts sweep, 14 Oct 2026). The observer goes,
@@ -206,7 +194,14 @@ extension AXHandler {
             // Only an app that took none of them: the Dock always refuses most (24 of 27) and never comes to the front,
             // and dropping it silenced the Command Tab switcher (15 Oct 2026).
             guard names.count >= Self.notifications.count else {
-                Log.error("pid \(pid): \(names.count) notifications never registered; the rest kept"); return
+                // The Dock always refuses most of them (24 of 27) and never comes to the front: what it is, not a
+                // fault, though it read as one in every log (13 and 14 Nov 2026). Any other app's refusal is an error.
+                if NSRunningApplication(processIdentifier: pid)?.bundleIdentifier == "com.apple.dock" {
+                    Log.info("pid \(pid), the Dock: \(names.count) notifications refused, as it always does; the rest kept")
+                } else {
+                    Log.error("pid \(pid): \(names.count) notifications never registered; the rest kept")
+                }
+                return
             }
             Log.error("pid \(pid): no notifications registered; trying again when it next comes to the front")
             if let current = observers[pid], current === obs { removeSource(obs); observers[pid] = nil }
@@ -224,10 +219,12 @@ extension AXHandler {
             // closure holds the observer).
             nonisolated(unsafe) let refcon = Unmanaged.passUnretained(self).toOpaque()
             nonisolated(unsafe) let observer = obs
+            // A notification the app says it does not support is not asked for again: no retry changes that (Codex's
+            // review, 14 Nov 2026: only real failures are worth the retries).
             let register: @Sendable ([String]) -> [String] = { some in
                 some.filter { n in
                     let r = AXObserverAddNotification(observer, app, n as CFString, refcon)
-                    return r != .success && r != .notificationAlreadyRegistered
+                    return r != .success && r != .notificationAlreadyRegistered && r != .notificationUnsupported
                 }
             }
             let started = Date()

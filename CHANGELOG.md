@@ -42,8 +42,7 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   left out of the reply that is read; a reply you are already reading is not started again from its top; progress
   lines wait until you stop pressing keys; switching conversations says which one.
 - Mail: switching mailboxes with Command and a number reads the new mailbox, not a row of the old one.
-- Up and Down in an empty list say "empty" at once. Backspace in an empty field, and Up and Down in a box of one line,
-  answer at once.
+- Up and Down in an empty list say "empty" at once, and Backspace in an empty field answers at once.
 - The link sound plays once for a line, not once for each link on it.
 - The app you are leaving is no longer read over the Command Tab app switcher.
 - "Nothing in this window can be read", with the keys for screen recognition, is a hint now: turning off Hints after

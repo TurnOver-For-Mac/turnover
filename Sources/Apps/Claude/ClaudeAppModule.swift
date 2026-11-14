@@ -13,6 +13,7 @@ final class ClaudeAppModule: AppModule {
 
     required init(pid: pid_t, bundleIdentifier: String, appName: String) {
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
+        WebBuffer.statusEchoApps.insert(ClaudeTranscript.bundleID)   // its tool rows' status repeats the row's button
         script("claude_readLatest", String(localized: "Reads Claude's latest reply", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+shift+r"], category: "Claude") { [weak self] _ in
             guard let self, let chat = ClaudeTranscript.chat(pid: self.pid) else { Speech.speakMessage(String(localized: "no conversation", comment: "Spoken message")); return }
             let reply = ClaudeTranscript.latestReply(chat: chat)
@@ -50,6 +51,7 @@ final class ClaudeAppModule: AppModule {
                 startWatching()
                 return
             }
+            heldProgress = nil   // a newer line is said now: the one waiting is out of date
             next()
             startWatching()
         case .valueChange where event.obj.role == .editableText && event.obj.name == "Prompt":
@@ -87,9 +89,13 @@ final class ClaudeAppModule: AppModule {
     /// after a line Oliver had just moved to, they sounded like part of it, and he went back to read the line again:
     /// ten in 38 s, three lines read twice (14 Nov 2026); eight more fell between the words he typed. The newest line
     /// is said once the keys have been quiet for a moment; older ones are out of date by then, and are not said.
+    /// The conversation the waiting line belongs to (a line from another one, after a switch, is not said).
+    private var heldProgressSession = ""
+
     private func holdProgress(_ region: AXUIElement) {
         let first = heldProgress == nil
         heldProgress = region
+        heldProgressSession = ClaudeTranscript.chat(pid: pid).map(ClaudeTranscript.session(of:)) ?? ""
         if first { Log.io("claude: a progress line waits while keys are pressed") }
         if first { releaseProgressWhenQuiet() }
     }
@@ -101,10 +107,32 @@ final class ClaudeAppModule: AppModule {
             guard AXHandler.shared.activePid == pid else { heldProgress = nil; return }
             guard Date().timeIntervalSince(InputManager.lastKeyDownAt) >= Self.quietForProgress else { releaseProgressWhenQuiet(); return }
             heldProgress = nil
+            // Another conversation now: its line is not this one's.
+            let session = ClaudeTranscript.chat(pid: pid).map(ClaudeTranscript.session(of:)) ?? ""
+            guard session == heldProgressSession else { Log.io("claude: another conversation now; the waiting line is dropped"); return }
             guard config.presentation.reportDynamicContentChanges else { return }
             let t = ClaudeTranscript.text(of: region, skipHidden: false)
             guard !t.isEmpty else { return }
             LiveRegions.speak(t, from: region, assertive: false)
+        }
+    }
+
+    /// A finished reply, read unless Oliver is reading it already. The reading position on a line of the reply itself
+    /// is reading it: it is not read again from its top over him (twice on 14 Nov 2026). Moving about elsewhere is
+    /// not: the reply waits until the reading has been still for two seconds, then it is read (Codex's review: it was
+    /// dropped for good). Claude's own "finished" notice still says it is done either way.
+    private func sayReply(_ reply: String, tries: Int) {
+        guard let page = API.focusTreeInterceptor, page.webArea.pid == pid,
+              Date().timeIntervalSince(page.positionMovedAt) < 2 else { Speech.speakNews(reply); return }
+        let line = page.lineText(at: page.position).trimmingCharacters(in: .whitespacesAndNewlines)
+        if line.count >= 12, reply.contains(line) {
+            Log.io("claude: the reply is being read already; not read from its start")
+            return
+        }
+        guard tries < 30 else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+            guard let self, AXHandler.shared.activePid == pid else { return }
+            sayReply(reply, tries: tries + 1)
         }
     }
 
@@ -130,13 +158,7 @@ final class ClaudeAppModule: AppModule {
             let reply = ClaudeTranscript.latestReply(chat: live)
             Log.io("claude: reply finished, \(reply.count) characters")
             guard !reply.isEmpty else { return }
-            // Oliver already reading it (the reading position moved in the last 3 s): not read again from its top over
-            // him (twice on 14 Nov 2026). Claude's own "finished" notice still says it is done.
-            if let page = API.focusTreeInterceptor, Date().timeIntervalSince(page.positionMovedAt) < 3 {
-                Log.io("claude: the reply is being read already; not read from its start")
-                return
-            }
-            Speech.speakNews(reply)
+            self.sayReply(reply, tries: 0)
         }
     }
 }

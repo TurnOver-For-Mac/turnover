@@ -121,9 +121,13 @@ public enum SecureInputWatch {
 
     public static func start() {
         timer?.invalidate()
+        onSince = nil; focusSeen = nil; focusMoves = 0
         timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { _ in MainActor.assumeIsolated { check() } }
     }
-    public static func stop() { timer?.invalidate(); timer = nil; looks = 0; warned = false; SecureEcho.watch(nil) }
+    public static func stop() {
+        timer?.invalidate(); timer = nil; looks = 0; warned = false; SecureEcho.watch(nil)
+        onSince = nil; focusSeen = nil; focusMoves = 0
+    }
 
     private static func check() {
         let on = IsSecureEventInputEnabled()
@@ -151,6 +155,7 @@ public enum SecureInputWatch {
         // The session's "holder" is not reliable (a test program holding it was reported as Mail, 4 Oct 2026): logged,
         // not spoken.
         Log.error("secure input: on outside a password field (session names \(name)); TurnOver cannot hear the keys")
+        Speech.cancel()   // before anything waiting to be said: the keys are what matter now (it came after "Loading...", 14 Nov 2026)
         Speech.speakMessage(String(localized: "Secure input is on, so TurnOver cannot hear your keys. Press Command Tab twice to get them back.", comment: "Spoken message"))
     }
 }

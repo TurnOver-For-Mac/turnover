@@ -223,11 +223,13 @@ extension BrowseModeDocument {
                 let prefix = said.isEmpty ? "" : "\(said), "
                 if checkable, let v = now.value, v != before.value {
                     if !Speech.checkStateSpoken(of: element, since: pressedAt) { Speech.speakCheckState(of: element, named: movedOn) }
-                } else if let e = now.expanded, e != before.expanded, !(isFocus && Speech.stateSaid(of: element, since: pressedAt)) {
+                } else if let e = now.expanded, e != before.expanded,
+                          !(isFocus && Speech.stateSaid(e ? State.expanded.displayString : State.collapsed.displayString, of: element, since: pressedAt)) {
                     // The focus too, unless the page's own event has said it: AppleVis's "Filter posts" sent none, and
                     // "expanded" came a second later, after Oliver had moved on with Tab (14 Nov 2026).
-                    Speech.noteStateSaid(of: element)
-                    Speech.speakMessage(prefix + (e ? State.expanded.displayString : State.collapsed.displayString))
+                    let word = e ? State.expanded.displayString : State.collapsed.displayString
+                    Speech.noteStateSaid(word, of: element)
+                    Speech.speakMessage(prefix + word)
                 } else if let sel = now.selected, sel != before.selected, !isFocus {
                     Speech.speakMessage(prefix + (sel ? State.selected.displayString : State.selected.negativeDisplayString))
                 } else {

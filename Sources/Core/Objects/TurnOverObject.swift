@@ -483,9 +483,11 @@ open class TurnOverObject: ScriptableObject {
     }
     open func event_stateChange() {
         guard API.focusObject?.isSameElement(as: self) == true else { return }
-        // A press's own look at the control said its new state a moment ago (BrowseModeDocument.watchStateChange).
-        if Speech.stateSaid(of: element, since: Date().addingTimeInterval(-1.5)) { return }
-        Speech.noteStateSaid(of: element)
+        // The same words a press's own look at the control said a moment ago (BrowseModeDocument.watchStateChange) are
+        // not said again; a different state is.
+        let words = statesSpeech(role: role, states: states, reason: .change).joined(separator: ", ")
+        if Speech.stateSaid(words, of: element, since: Date().addingTimeInterval(-1.5)) { return }
+        Speech.noteStateSaid(words, of: element)
         Speech.speakObjectProperty(self, states: true)
     }
     open func event_descriptionChange() {}

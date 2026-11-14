@@ -28,6 +28,7 @@ final class DockAppModule: AppModule {
 
     override func handleEvent(_ event: Event, next: () -> Void) {
         if event.kind == .gainFocus, event.obj is AppSwitcherList {
+            AppSwitcherList.openedOver = AXHandler.shared.activePid   // the app the switcher came up over (focus rules)
             // As VoiceOver does: just the highlighted application's name, not "application switcher, list" first.
             // (The first highlighted item is marked before the list reports focus.)
             if let item = event.obj.element.elements(kAXChildrenAttribute).first(where: { ($0.attr(kAXFocusedAttribute) as? Bool) == true }) {
@@ -55,6 +56,8 @@ final class DockList: TurnOverObject {
 }
 
 final class AppSwitcherList: TurnOverObject {
+    /// The app that was active when the switcher came up: its own focus news is set aside while the switcher is up.
+    static var openedOver: pid_t?
     override var role: Role { .list }
     override var name: String { "application switcher" }
 }

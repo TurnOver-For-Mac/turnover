@@ -109,11 +109,17 @@ public final class WebBuffer {
     package init(webArea: AXUIElement, collect: @escaping @Sendable (AXUIElement, AXUIElement?, AXWalkRequest) -> WebBufferCollection) {
         self.collect = collect
         self.webArea = webArea
-        decorativeImages = NSRunningApplication(processIdentifier: webArea.pid)?.bundleIdentifier.map { Self.decorativeImageApps.contains($0) } ?? false
+        let bundle = NSRunningApplication(processIdentifier: webArea.pid)?.bundleIdentifier
+        decorativeImages = bundle.map { Self.decorativeImageApps.contains($0) } ?? false
+        skipsStatusEchoes = bundle.map { Self.statusEchoApps.contains($0) } ?? false
     }
     /// Apps (set by their modules) whose pictures are icons only, left out of the copy.
     public static var decorativeImageApps: Set<String> = []
     private let decorativeImages: Bool
+    /// Apps (set by their modules) whose status regions repeat the control just before them: read once (the Claude
+    /// app's tool rows, 13 Nov 2026).
+    public static var statusEchoApps: Set<String> = []
+    private let skipsStatusEchoes: Bool
     /// Subroles of an iOS screen's parts left out of its copy (set by app modules).
     public static var iosSkippedSubroles: Set<String> = []
     /// Identifiers of an iOS screen's parts read before their siblings (set by app modules).
@@ -296,6 +302,7 @@ public final class WebBuffer {
             iosContent = webArea.string(kAXSubroleAttribute) == "iOSContentGroup"
             profiled = !ProfileStore.shared.profiles(for: ProfileStore.shared.bundle(of: webArea.pid)).isEmpty
             consumed = []
+            lastControlLabel = nil
             docText = collection.documentText as NSString
             docCursor = 0; lastTextEnd = nil
             visit(webArea, depth: 0)
@@ -657,13 +664,15 @@ public final class WebBuffer {
     /// The label of the control read last, until text follows it: a status region repeating it is an echo.
     private var lastControlLabel: String?
 
-    /// Whether a status region's text is the start of the control just read (eight characters at least, so a short
-    /// word that happens to match is still read).
+    /// Whether a status region holds nothing but the start of the control just read: in an app that does this
+    /// (statusEchoApps), with the whole region looked at (a region with more in it, or too big to look at whole, is
+    /// read), and eight characters at least, so a short word that happens to match is read (Codex's review, 14 Nov 2026).
     private func echoesLastControl(_ region: AXUIElement) -> Bool {
-        guard let label = lastControlLabel, !label.isEmpty else { return false }
+        guard skipsStatusEchoes, let label = lastControlLabel, !label.isEmpty else { return false }
         var parts: [String] = []
         var queue = [region]; var n = 0
-        while !queue.isEmpty, n < 12 {
+        while !queue.isEmpty {
+            guard n < 40 else { return false }   // not looked at whole: read it
             let e = queue.removeFirst(); n += 1
             if e.role == "AXStaticText", let v = e.string(kAXValueAttribute) { parts.append(v) }
             queue.append(contentsOf: e.elements(kAXChildrenAttribute))
@@ -945,7 +954,7 @@ public final class WebBuffer {
     }
 
     private init(copying source: WebBuffer) {
-        webArea = source.webArea; collect = source.collect; decorativeImages = source.decorativeImages
+        webArea = source.webArea; collect = source.collect; decorativeImages = source.decorativeImages; skipsStatusEchoes = source.skipsStatusEchoes
         snapshot = source.snapshot; revision = source.revision; lastStop = source.lastStop
         builtAt = source.builtAt; status = source.status; isDirty = source.isDirty; lastBuildMs = source.lastBuildMs
     }

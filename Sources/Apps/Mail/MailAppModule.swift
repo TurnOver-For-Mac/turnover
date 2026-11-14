@@ -305,11 +305,25 @@ package final class MailAppModule: AppModule {
         if event.kind == .gainFocus, event.obj.element.role == "AXTable", event.obj.element.string(kAXDescriptionAttribute) == "messages",
            Self.switchedMailboxRecently {
             let table = event.obj.element
-            Log.io("mail: another mailbox; its list is read once Mail has filled it")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                guard API.focusObject?.element.isSame(table) == true else { return }
-                Speech.speakObject(ObjectFactory.make(table), reason: .focus)
+            notePlace(table)
+            MailUnread.snapshot(table)   // as for any focus on the list, before Mail marks a row read
+            Log.io("mail: another mailbox; its list is read once Mail shows it")
+            let window = table.element(kAXWindowAttribute)
+            let titleThen = window?.string(kAXTitleAttribute) ?? ""
+            let keys = ScriptHandler.keysArrivedCount
+            // The window's title names the new mailbox once Mail has switched ("Junk – Personal"): looked at every tenth of
+            // a second for a second and a half, then the list is read as it is (Codex's review, 14 Nov 2026: a fixed
+            // wait could read the old list on a slow switch). Not after another key, nor once the focus has moved.
+            func readWhenShown(_ tries: Int) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    guard API.focusObject?.element.isSame(table) == true, ScriptHandler.keysArrivedCount == keys else { return }
+                    let titleNow = window?.string(kAXTitleAttribute) ?? ""
+                    guard titleNow != titleThen || tries >= 15 else { readWhenShown(tries + 1); return }
+                    MailUnread.snapshot(table)
+                    Speech.speakObject(ObjectFactory.make(table), reason: .focus)
+                }
             }
+            readWhenShown(0)
             return
         }
         next()

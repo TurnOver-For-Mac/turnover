@@ -316,19 +316,6 @@ open class EditableText: TurnOverObject {
             caretMoved(speak: unit == .line && readsLineAtEdge ? .line : nil, gesture: gesture, info: info)
             return
         }
-        // A box of one line on a web page (its whole text is the caret's line): Up goes to its start and Down to its end,
-        // so the line is read at once, not after the caret's patience. AppleVis's comment box took 390 to 440 ms a
-        // press, the caret's news arriving only after the wait (14 Nov 2026). Web pages only: Word leaves the caret
-        // where it is on its first line (its boundary tests).
-        let oneLine = collapsed && !inCell && !gesture.modifiers.contains(.shift) && unit == .line
-            && (key == "upArrow" || key == "downArrow") && length > 0 && oldLine.start <= 0 && oldLine.end >= length
-            && element.enclosingWebArea() != nil
-        if oneLine {
-            Log.io("a box of one line: \(key) goes to its \(backwards ? "start" : "end"); the line read at once")
-            gesture.send()
-            caretMoved(speak: .line, gesture: gesture, info: info)
-            return
-        }
         gesture.send()
         var (moved, newInfo) = hasCaretMoved(from: bookmark)
         // A selection collapsed by the key is a move, though the caret's end stays put (Command-A then Right: the
