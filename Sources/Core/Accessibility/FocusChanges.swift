@@ -93,7 +93,25 @@ extension AXHandler {
         let commandHeld = CGEventSource.flagsState(.combinedSessionState).contains(.maskCommand)
         guard commandHeld else { return .go(target) }
         Log.io("focus from pid \(pid) while the app switcher is up; set aside")
+        // Escape can close the switcher with Command still held, and the app's focus then comes back with no further
+        // news (Codex's second review, 14 Nov 2026): once Command is let go, if the switcher is still what TurnOver
+        // has as the focus, the app's own focus is asked for and read.
+        reconcileAfterSwitcher(pid: pid, waited: 0)
         return .ignore
+    }
+
+    func reconcileAfterSwitcher(pid: pid_t, waited: Double) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            guard let self, API.focusObject is AppSwitcherList else { return }
+            let commandHeld = CGEventSource.flagsState(.combinedSessionState).contains(.maskCommand)
+            if commandHeld, waited < 10 { self.reconcileAfterSwitcher(pid: pid, waited: waited + 0.2); return }
+            guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { return }
+            let app = AXUIElementCreateApplication(pid)
+            AXUIElementSetMessagingTimeout(app, 0.25)
+            guard let f = app.element(kAXFocusedUIElementAttribute) else { return }
+            Log.io("focus: the app switcher went without news; the app's own focus, \(f.role)")
+            self.focusChanged(f, pid: pid)
+        }
     }
 
     /// An ordinary application in the background (Safari's page reloading behind Mail, 2 Oct 2026) can post focus

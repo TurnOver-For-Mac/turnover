@@ -319,7 +319,8 @@ package final class MailAppModule: AppModule {
                     guard API.focusObject?.element.isSame(table) == true, ScriptHandler.keysArrivedCount == keys else { return }
                     let titleNow = window?.string(kAXTitleAttribute) ?? ""
                     guard titleNow != titleThen || tries >= 15 else { readWhenShown(tries + 1); return }
-                    MailUnread.snapshot(table)
+                    // (No snapshot again here: by now Mail may have marked the row read, and a fresh snapshot would lose
+                    // its "unread"; Codex's second review, 14 Nov 2026.)
                     Speech.speakObject(ObjectFactory.make(table), reason: .focus)
                 }
             }

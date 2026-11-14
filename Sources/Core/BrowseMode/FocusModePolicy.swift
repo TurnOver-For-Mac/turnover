@@ -70,14 +70,26 @@ extension BrowseModeDocument {
     /// "dialog" or "true", and it holds no options. A <select> holds them: as a menu in WebKit, and as menu items
     /// straight inside it in Chromium, which also says "menu" for it (Codex's review, 14 Nov 2026, from Chromium's
     /// own Mac fixture). Claude's buttons hold their label's text and a picture, or nothing.
+    /// Only on what can be read: a button whose children can't be counted, or one of whose children answers no role,
+    /// stays a choice list (Codex's second review, 14 Nov 2026).
     package static func isMenuButton(_ e: AXUIElement) -> Bool {
         guard let value = (e.attr("AXPopupValue") as? String)?.lowercased() else { return false }
         guard ["menu", "dialog", "true"].contains(value) else { return false }
-        let holdsOptions = e.elements(kAXChildrenAttribute).contains { child in
-            let r = child.role
-            return r == "AXMenu" || r == "AXMenuItem"
+        var count: CFIndex = 0
+        switch AXUIElementGetAttributeValueCount(e, kAXChildrenAttribute as CFString, &count) {
+        case .success: break
+        case .noValue, .attributeUnsupported: count = 0   // no children, as the button says
+        default: return false   // not answered: not known
         }
-        return !holdsOptions
+        if count == 0 { return true }
+        let kids = e.elements(kAXChildrenAttribute)
+        guard kids.count == count else { return false }
+        for child in kids {
+            let r = child.role
+            if r == "?" || r.isEmpty { return false }
+            if r == "AXMenu" || r == "AXMenuItem" { return false }
+        }
+        return true
     }
 
     /// A video player, or an ARIA application, holds the element (WebKit: subrole AXVideo, AXWebApplication; YouTube's

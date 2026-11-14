@@ -41,11 +41,11 @@ private func threeHeadingsPage() -> AXFixture {
 func webBufferTests() {
     test("focus mode: a pop up button that opens a menu stays in browse mode; a choice list goes to focus mode (14 Nov 2026)") {
         AXReplay.load(AXFixture(app: "Public sample", bundle: "test.popup", recorded: "", root: 0, application: nil, focus: nil, nodes: [
-            .init(id: 0, attrs: ["AXRole": .string("AXPopUpButton"), "AXTitle": .string("Model"), "AXPopupValue": .string("menu")]),
+            .init(id: 0, attrs: ["AXRole": .string("AXPopUpButton"), "AXTitle": .string("Model"), "AXPopupValue": .string("menu"), "AXChildren": .elements([])]),
             .init(id: 1, attrs: ["AXRole": .string("AXPopUpButton"), "AXTitle": .string("Country"), "AXPopupValue": .string("menu"), "AXChildren": .elements([2])]),
             .init(id: 2, attrs: ["AXRole": .string("AXMenu"), "AXParent": .element(1)]),
             .init(id: 3, attrs: ["AXRole": .string("AXPopUpButton"), "AXTitle": .string("Size")]),
-            .init(id: 4, attrs: ["AXRole": .string("AXPopUpButton"), "AXTitle": .string("Usage"), "AXPopupValue": .string("dialog")]),
+            .init(id: 4, attrs: ["AXRole": .string("AXPopUpButton"), "AXTitle": .string("Usage"), "AXPopupValue": .string("dialog"), "AXChildren": .elements([])]),
             // Chromium's <select>: "menu", with its options as menu items straight inside it.
             .init(id: 5, attrs: ["AXRole": .string("AXPopUpButton"), "AXTitle": .string("Colour"), "AXPopupValue": .string("menu"), "AXChildren": .elements([6, 7])]),
             .init(id: 6, attrs: ["AXRole": .string("AXMenuItem"), "AXTitle": .string("Red"), "AXParent": .element(5)]),
