@@ -204,6 +204,7 @@ package final class ClaudeAppModule: AppModule {
             }
             return
         }
+        let unresolvedNumber = target == .unknown ? number : nil
         var titleAnnounced = false
         var ceilingReached = false
         var releasedContent = false
@@ -211,7 +212,9 @@ package final class ClaudeAppModule: AppModule {
         var observedAddressChange = false
         let settleUntil = ProcessInfo.processInfo.systemUptime + 0.25
         page.navigationTitleOwned = true
-        page.beginNavigationWait()
+        // An unavailable sidebar cannot prove that a numbered shortcut will navigate. Keep typing
+        // in the Prompt until navigation is observed; an ignored key must not enable browse commands.
+        if unresolvedNumber == nil || !page.passThrough { page.beginNavigationWait() }
 
         func releaseContent() {
             page.announcedURL = page.lastURL
@@ -253,8 +256,17 @@ package final class ClaudeAppModule: AppModule {
                       conversationSwitch == request else { return }
                 if API.focusTreeInterceptor === page,
                    AXHandler.shared.activePid == pid {
+                    let now = snapshot.with { page.url }
                     let name = snapshot.with { Self.switchTitle(root.string(kAXTitleAttribute) ?? "") }
-                    if !name.isEmpty { page.announceNavigationTitle(name) }
+                    if let number = unresolvedNumber,
+                       !observedAddressChange,
+                       now == address {
+                        Speech.speakMessage(String(localized: "no conversation \(number)", comment: "Spoken when Claude has no conversation at this shortcut number"))
+                    } else if !name.isEmpty {
+                        // A missing URL is not evidence that an unknown numbered target was reached.
+                        let destinationKnown = unresolvedNumber == nil || observedAddressChange || (!now.isEmpty && now != address)
+                        if destinationKnown { page.announceNavigationTitle(name) }
+                    }
                 }
                 finish()
             })
@@ -282,8 +294,9 @@ package final class ClaudeAppModule: AppModule {
                     let titleIsReady = !busy && !name.isEmpty && name != title
                     if changed {
                         observedAddressChange = true
-                        if releasedContent,
-                           page.lastURL != now {
+                        let needsNavigationWait = releasedContent || !page.navigationWaiting
+                        if page.lastURL != now,
+                           needsNavigationWait {
                             page.beginNavigationWait()
                             releasedContent = false
                         }
@@ -327,7 +340,8 @@ package final class ClaudeAppModule: AppModule {
 
     /// Claude 5.1231.2, macOS 27.2, 14 Nov 2026: the complementary sidebar's Recents section has
     /// a heading group followed by session groups, each with a title button and a popup menu. Use
-    /// only the captured tree; an absent, collapsed, clipped or unfamiliar section proves nothing.
+    /// only the captured tree; an absent, clipped or unfamiliar section proves nothing. A collapsed
+    /// section can still expose its complete rows; without those rows its count is unknown.
     private static func switchTarget(number: Int?, root: AXUIElement, title: String) -> SwitchTarget {
         guard let number, (1...9).contains(number) else { return .unknown }
         var remaining = 512
@@ -388,7 +402,7 @@ package final class ClaudeAppModule: AppModule {
             guard headings.count == 1,
                   headerButtons.count == 1,
                   subtree(headings[0]).contains(where: { label($0) == "Recents" }) else { continue }
-            if headerNodes.contains(where: { ($0.attr("AXExpanded") as? Bool) == false }) { return .unknown }
+            let collapsed = headerNodes.contains(where: { ($0.attr("AXExpanded") as? Bool) == false })
             var titles: [String] = []
             for row in children.dropFirst() {
                 let rowNodes = subtree(row)
@@ -401,6 +415,7 @@ package final class ClaudeAppModule: AppModule {
             }
             // With no rows, require explicit expansion rather than guessing about a collapsed list.
             if titles.isEmpty {
+                if collapsed { return .unknown }
                 return headerNodes.contains(where: { ($0.attr("AXExpanded") as? Bool) == true }) ? .missing : .unknown
             }
             if number > titles.count { return .missing }

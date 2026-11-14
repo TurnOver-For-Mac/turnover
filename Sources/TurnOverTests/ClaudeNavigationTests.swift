@@ -41,12 +41,15 @@ private func conversationPage(_ name: String, address: String, body: String? = n
 }
 
 
-private func withConversationTest(recents: [String]? = nil, truncatedRecents: Bool = false, _ body: (BrowseModeDocument, ClaudeAppModule, Locked<[String]>) -> Void) {
+private func withConversationTest(recents: [String]? = nil, truncatedRecents: Bool = false, collapsedRecents: Bool = false, _ body: (BrowseModeDocument, ClaudeAppModule, Locked<[String]>) -> Void) {
     let savedPid = AXHandler.shared.activePid
     defer { AXHandler.shared.activePid = savedPid }
     var fixture = conversationPage("Old conversation", address: "https://example.com/old", recents: recents)
     if truncatedRecents, let index = fixture.nodes.firstIndex(where: { $0.id == 42 }) {
         fixture.nodes[index].attrs["AXChildren"] = .elements([])
+    }
+    if collapsedRecents, let index = fixture.nodes.firstIndex(where: { $0.id == 14 }) {
+        fixture.nodes[index].attrs["AXExpanded"] = .bool(false)
     }
     AXReplay.load(fixture)
     let root = AXReplay.element(0)
@@ -564,6 +567,68 @@ func claudeNavigationTests() {
                 check(page.passThrough, "focus mode remains unchanged, avoiding a mode sound")
                 check(!page.deferInitialContent({}), "a missing target does not begin a wait")
                 expect(sent.value, ["kb:command+\(number)"])
+            }
+        }
+    }
+
+    test("Claude navigation: collapsed Recents with captured rows rejects a missing number immediately") {
+        withConversationTest(recents: ["Public first", "Public second", "Old conversation"], collapsedRecents: true) { page, module, sent in
+            let savedSink = Speech.sink
+            var said: [String] = []
+            Speech.sink = { said.append($0) }
+            defer { Speech.sink = savedSink }
+            page.passThrough = true
+            let key = KeyboardGesture(identifier: "kb:command+9")!
+            let before = AXStats.calls
+            module.script(for: key)?.handler(key)
+            expect(AXStats.calls, before, "the collapsed count comes only from complete captured rows")
+            expect(said, ["no conversation 9"], "known missing numbers do not wait for a ceiling")
+            check(page.passThrough, "the Prompt stays in focus mode")
+            check(!page.deferInitialContent({}), "a known missing number never starts a navigation wait")
+            expect(sent.value, ["kb:command+9"])
+        }
+    }
+
+    for collapsed in [false, true] {
+        for focusMode in [false, true] {
+            test("Claude navigation: \(collapsed ? "collapsed" : "hidden") unknown number preserves \(focusMode ? "focus" : "browse") mode and reports missing only at the ceiling") {
+                withConversationTest(recents: collapsed ? [] : nil, collapsedRecents: collapsed) { page, module, sent in
+                    let savedSink = Speech.sink
+                    var said: [String] = []
+                    Speech.sink = { said.append($0) }
+                    defer { Speech.sink = savedSink }
+                    page.passThrough = focusMode
+                    module.conversationWaitLimit = 0.45
+                    let key = KeyboardGesture(identifier: "kb:command+9")!
+                    module.script(for: key)?.handler(key)
+                    expect(said, [], "the unavailable count cannot immediately prove a missing number")
+                    expect(page.passThrough, focusMode, "the shortcut preserves the Prompt's current mode")
+                    RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+                    expect(said, [], "unchanged early polls cannot speak the old title or claim a missing number")
+                    expect(page.passThrough, focusMode, "the unchanged settle preserves mode too")
+                    waitForConversation { said.contains("no conversation 9") }
+                    expect(said, ["no conversation 9"], "the unchanged URL at the ceiling reports only the missing number")
+                    expect(page.passThrough, focusMode, "the ceiling leaves the Prompt's mode unchanged")
+                    expect(sent.value, ["kb:command+9"])
+                }
+            }
+        }
+        test("Claude navigation: \(collapsed ? "collapsed" : "hidden") unknown number with a changed URL announces its destination") {
+            withConversationTest(recents: collapsed ? [] : nil, collapsedRecents: collapsed) { page, module, _ in
+                let savedSink = Speech.sink
+                var said: [String] = []
+                Speech.sink = { said.append($0) }
+                defer { Speech.sink = savedSink }
+                page.passThrough = true
+                module.conversationWaitLimit = 0.7
+                let key = KeyboardGesture(identifier: "kb:command+9")!
+                module.script(for: key)?.handler(key)
+                check(page.passThrough, "an unknown target keeps the Prompt in focus mode until its URL changes")
+                AXReplay.load(conversationPage("Public hidden-sidebar destination", address: "https://example.com/hidden-destination"))
+                waitForConversation { said.contains("Public hidden-sidebar destination") }
+                waitForBuffer(page.buffer)
+                RunLoop.current.run(until: Date().addingTimeInterval(0.75))
+                expect(said, ["Public hidden-sidebar destination"], "a changed URL must never be reported as a missing number")
             }
         }
     }
