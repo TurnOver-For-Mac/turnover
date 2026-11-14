@@ -21,6 +21,7 @@ public enum SpeechMode { case off, talk, onDemand, beeps }
 public enum Speech {
     public static var player: SpeechPlayer! {
         didSet {
+            outputSubmissions.removeAll()
             oldValue?.monitorRequiredOutput(false)
             SpeechPlayer.current = player
             player?.monitorRequiredOutput(mode == .talk || mode == .onDemand)
@@ -52,15 +53,14 @@ public enum Speech {
     // MARK: - Primitives
 
     /// Stop now (NVDA: cancelSpeech). Every gesture does this before its script runs.
-    public static func cancel() {
-        explicitCancellationGeneration &+= 1
+    public static func cancel(explicit: Bool = false) {
+        ModeAnnouncement.cancelled(explicit: explicit)
         player?.cancel()
     }
-    // 14 Nov 2026: a deliberate stop after a focus cancellation also retires its delayed mode retry.
-    package private(set) static var explicitCancellationGeneration: UInt64 = 0
 
     /// Control alone: pause speech, or carry on if it is paused (VoiceOver's way). Say All waits with it.
     public static func togglePause() {
+        if player?.isPaused != true { ModeAnnouncement.cancelled(explicit: true) }
         guard let p = player else { return }
         if p.isPaused { p.resume() } else if p.isBusy { p.pause() }
     }
@@ -71,6 +71,15 @@ public enum Speech {
     /// An in-memory speech queue for lifecycle tests; production leaves this nil. Tests hold the real
     /// onStart/completion callbacks and deliver them through their existing return-to-main path.
     package static var enqueueTestDriver: ((String, (@Sendable () -> Void)?, (@Sendable (Bool) -> Void)?) -> Void)?
+
+    // 14 Nov 2026: this seam is after the production output gates; no audio device is opened in tests.
+    package static var outputTestDriver: ((String, (@Sendable () -> Void)?, (@Sendable (Bool) -> Void)?) -> Void)?
+    // Main owns submissions from admission through the player's completion. isBusy alone is updated
+    // asynchronously on the speech queue and can still be false immediately after enqueue (14 Nov 2026).
+    private static var outputSubmissions: Set<UUID> = []
+    static var hasPendingOutput: Bool { !outputSubmissions.isEmpty }
+    package static var voiceOverEnabledForOutput: () -> Bool = { NSWorkspace.shared.isVoiceOverEnabled }
+    package static var coexistingForOutput: () -> Bool = { Coexist.on }
 
     /// TurnOver's own words inside text being read ("link", "heading level 2"): marked, so that on a page in another
     /// language they are said by the reader's own voice, not by the page's ("link" read by the Arabic voice as a
@@ -140,11 +149,22 @@ public enum Speech {
         }
         // While VoiceOver is on it does the talking: TurnOver speaking too (its own menu-bar menu, read item by
         // item over VoiceOver, 3 Oct 2026) is two voices at once.
-        if NSWorkspace.shared.isVoiceOverEnabled, !Coexist.on { completion?(false); return }   // (coexisting, VoiceOver is on and silent in TurnOver's apps)
+        if voiceOverEnabledForOutput(), !coexistingForOutput() { completion?(false); return }   // (coexisting, VoiceOver is on and silent in TurnOver's apps)
         let s = cleaned(text)
         // Nothing left to say (zero-width marks, a bidi mark): it still "starts", or say all's count of queued
         // chunks never came down and three such lines stopped it for good (a code review, 14 Oct 2026).
         guard !s.isEmpty else { onStart?(); completion?(true); return }
+        let submission = UUID()
+        outputSubmissions.insert(submission)
+        let finished: @Sendable (Bool) -> Void = { done in
+            // Preserve the caller's speech-queue completion contract; only admission bookkeeping returns to main.
+            completion?(done)
+            onMain {
+                outputSubmissions.remove(submission)
+                ModeAnnouncement.outputFinished()
+            }
+        }
+        if let outputTestDriver { outputTestDriver(s, onStart, finished); return }
         lastSpoken = s
         // Speech that came with its text as written (a message, text from the screen) keeps it for "copy last
         // spoken"; anything else (an object: "alert, dialog") is copied as spoken.
@@ -163,8 +183,8 @@ public enum Speech {
         let kokoro: String? = voice == nil && pitch == nil && (!privateNext || KokoroVoice.helperTrusted.value) && KokoroVoice.wanted(reading: readingNow) ? "external:" + KokoroVoice.voice : nil
         // No player (the plugin tool and the tests start no speech): nothing to say it with (a plugin list crashed
         // here, 13 Oct 2026).
-        guard player != nil else { completion?(false); return }
-        player.speak(s, interrupt: false, voice: kokoro ?? voice, rate: voice == nil ? nil : Languages.rate(for: language), pitch: pitch, onStart: onStart, completion: completion)
+        guard player != nil else { finished(false); return }
+        player.speak(s, interrupt: false, voice: kokoro ?? voice, rate: voice == nil ? nil : Languages.rate(for: language), pitch: pitch, onStart: onStart, completion: finished)
     }
     private static var pitchNext: Float?
     /// Set by say all while it queues its text: Kokoro's "for reading" takes it.
@@ -204,12 +224,10 @@ public enum Speech {
     /// (speakObject, reason focus). A nameless pane or a blip the module ignores on the way to a control used to cut
     /// the control's speech and say nothing in its place (code review, 16 Oct 2026).
     private static var dropForFocusUntil: Date?
-    // 14 Nov 2026: only a newer focus's words may retry mode feedback they displaced. Explicit silence does not.
-    package private(set) static var focusCancellationGeneration: UInt64 = 0
     /// For the tests: whether a drop is waiting for the next focus's words, and whether a capital's pitch is pending.
     public static var testDropForFocusPending: Bool { dropForFocusUntil != nil }
     public static var testPitchPending: Bool { pitchNext != nil }
-    public static func testResetFocusTiming() { lastFocusAt = .distantPast; dropForFocusUntil = nil }
+    public static func testResetFocusTiming() { lastFocusAt = .distantPast; dropForFocusUntil = nil; lastFocusWords = ""; lastFocusWordsAt = .distantPast }
     public static func focusMoving() {
         Tones.focusTick()
         if Date().timeIntervalSince(lastFocusAt) < 0.4 { dropForFocusUntil = Date().addingTimeInterval(0.5) }
@@ -350,7 +368,7 @@ public enum Speech {
             dropForFocusUntil = nil
             if Date() < until,
                !words.isEmpty {
-                focusCancellationGeneration &+= 1
+                ModeAnnouncement.cancelled(explicit: false)
                 player?.cancel()
                 Log.io("focus moved on at once: the speech for the focus before it dropped")
             }

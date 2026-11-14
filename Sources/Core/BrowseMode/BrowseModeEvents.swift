@@ -18,7 +18,10 @@ import TurnOverAX
 extension BrowseModeDocument {
     public func handleEvent(_ event: Event, next: () -> Void) {
         ModeAnnouncement.begin()
-        defer { ModeAnnouncement.end() }
+        defer {
+            if event.kind == .gainFocus { ModeAnnouncement.focusReported(self, field: event.obj.element) }
+            ModeAnnouncement.end()
+        }
         switch event.kind {
         case .gainFocus:
             let navigated = refreshIfNavigated()

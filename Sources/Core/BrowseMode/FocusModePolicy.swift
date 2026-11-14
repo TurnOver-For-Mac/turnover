@@ -27,18 +27,11 @@ extension BrowseModeDocument {
 
     public func setPassThrough(_ on: Bool, announce: Bool, playSound: Bool = true) {
         guard passThrough != on else { return }
+        ModeAnnouncement.begin()
+        defer { ModeAnnouncement.end() }
         ModeAnnouncement.changed(self, from: passThrough, announce: announce, playSound: playSound)
         passThrough = on
         Log.io("browse mode: \(on ? "focus mode" : "browse mode")\(announce ? "" : " (quietly)")")
-        if !ModeAnnouncement.isCollecting, announce { announceMode(playSound: playSound) }
-    }
-
-    func announceMode(playSound: Bool = true) {
-        // 14 Nov 2026: a tone alone left the destination of typed letters unclear. Say the words as well.
-        if config.general.navigationSounds,
-           playSound { Self.modeSound(passThrough) }
-        let words = passThrough ? String(localized: "focus mode", comment: "Spoken message") : String(localized: "browse mode", comment: "Spoken message")
-        ModeAnnouncement.sayWords(words, document: self)
     }
 
     // 14 Nov 2026: observe the sound request in regression tests without playing audio.

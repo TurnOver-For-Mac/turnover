@@ -431,7 +431,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
                     // NVDA's stop (Shift pauses there, below) (12 Oct 2026).
                     controlAlone = false
                     let stop = settings.windowsKeys
-                    if !InputManager.isInputHelpActive { onMain { if stop { SayAll.stop(); Speech.cancel() } else { Speech.togglePause() } } }
+                    if !InputManager.isInputHelpActive { onMain { if stop { SayAll.stop(); Speech.cancel(explicit: true) } else { Speech.togglePause() } } }
                 }
             } else { controlAlone = false }
             // While secure input is on no key between is heard, so Shift, Command and Option are not pressed alone then

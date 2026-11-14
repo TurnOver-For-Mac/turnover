@@ -43,6 +43,7 @@ public final class VoiceOverKeysPlugin: GlobalPlugin {
             if let s = ScriptHandler.findScript(named: scriptName) { s.handler(g); return }
             // The keys were going to the page (focus mode, Claude's prompt): move to the heading, and read on from it.
             if let d = API.focusTreeInterceptor, let s = d.script(named: scriptName) {
+                ModeAnnouncement.navigationStarted(d)
                 if d.passThrough { d.setPassThrough(false, announce: true) }
                 s.handler(g); return
             }
