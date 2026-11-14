@@ -42,6 +42,64 @@ func claudeTrialFollowupTests() {
         expect(sent.value, (5...9).map { "kb:command+\($0)" }, "each native switch is posted once")
     }
 
+    test("Claude trial: real F routing leaves letters and Space native before and after Backspace") {
+        let savedFocus = API.focusObject, savedAncestors = API.focusAncestors, savedPage = API.focusTreeInterceptor
+        let savedPid = AXHandler.shared.activePid, savedPoster = KeyboardGesture.poster
+        let savedPluginTypes = GlobalPluginHandler.shared.plugins.map { type(of: $0) }
+        let trial = ModeWordsTrial()
+        AXReplay.load(.init(app: "Public typing trial", bundle: "test.claude-typing", recorded: "synthetic", root: 0, application: 1, focus: 3, nodes: [
+            .init(id: 0, attrs: ["AXRole": .string("AXWebArea"), "AXURL": .url("https://example.com/typing"), "AXParent": .element(1), "AXChildren": .elements([2, 3])]),
+            .init(id: 1, attrs: ["AXRole": .string("AXApplication"), "AXFocusedUIElement": .element(3)]),
+            .init(id: 2, attrs: ["AXRole": .string("AXButton"), "AXTitle": .string("Copy"), "AXParent": .element(0)]),
+            .init(id: 3, attrs: ["AXRole": .string("AXTextArea"), "AXTitle": .string("Prompt"), "AXValue": .string(""), "AXSelectedTextRange": .range(0, 0), "AXParent": .element(0)])
+        ]))
+        let root = AXReplay.element(0), field = AXReplay.element(3)
+        let page = BrowseModeDocument(webArea: root)
+        page.buffer.buildForInspection()
+        waitForBuffer(page.buffer)
+        config.general.keyboardStyle = "mac"
+        config.virtualBuffers.autoPassThroughOnCaretMove = true
+        GlobalPluginHandler.shared.terminateAll()
+        GlobalPluginHandler.shared.register(VoiceOverKeysPlugin.self)
+        AXHandler.shared.activePid = root.pid
+        // Claude can already have native focus in Prompt while the reader is still browsing the reply.
+        API.setFocusObject(ObjectFactory.make(field), ancestors: [], interceptor: page)
+        page.position = page.buffer.offset(of: AXReplay.element(2)) ?? 0
+        page.passThrough = false
+        let sent = Locked<[String]>([])
+        KeyboardGesture.poster = { sent.value.append($0.identifier) }
+        defer {
+            API.setFocusObject(savedFocus, ancestors: savedAncestors, interceptor: savedPage)
+            AXHandler.shared.activePid = savedPid
+            KeyboardGesture.poster = savedPoster
+            GlobalPluginHandler.shared.terminateAll()
+            for pluginType in savedPluginTypes { GlobalPluginHandler.shared.register(pluginType) }
+            AXReplay.unload()
+            trial.restore()
+        }
+        let find = KeyboardGesture(identifier: "kb:f")!
+        expect(ScriptHandler.findScript(for: find)?.name, "vo_nextTextField", "bare F resolves through production gesture lookup")
+        check(InputManager.handleKeyDown(find), "F is handled as field navigation")
+        trial.drain()
+        check(page.passThrough, "F enters the field before the next key")
+        check(trial.words.contains { $0.contains("Prompt") }, "F speaks the field")
+        for stage in ["after F", "after Backspace"] {
+            if stage == "after Backspace" {
+                _ = InputManager.handleKeyDown(KeyboardGesture(identifier: "kb:backspace")!)
+                trial.drain()
+                check(page.passThrough, "Backspace preserves focus mode in the empty Prompt")
+            }
+            for identifier in ["kb:i", "kb:t", "kb:f", "kb:space"] {
+                check(ScriptHandler.findScript(for: KeyboardGesture(identifier: identifier)!) == nil,
+                      "\(identifier) has no browse trap, quick navigation or activation script \(stage)")
+                check(!InputManager.handleKeyDown(KeyboardGesture(identifier: identifier)!),
+                      "\(identifier) goes directly to the application \(stage)")
+            }
+        }
+        check(!sent.value.contains("kb:space"), "Space is never reposted as control activation")
+        check(!AXReplay.actions.contains { $0.action == "AXPress" }, "typing does not activate a page control")
+    }
+
     test("Claude trial: dialog live regions and descendants bypass held progress immediately") {
         let savedFocus = API.focusObject, savedAncestors = API.focusAncestors, savedPage = API.focusTreeInterceptor
         AXReplay.load(.init(app: "Public dialog trial", bundle: "test.claude-trial", recorded: "synthetic", root: 0, application: 1, focus: 2, nodes: [

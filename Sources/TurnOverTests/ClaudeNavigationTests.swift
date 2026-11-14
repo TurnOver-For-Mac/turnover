@@ -431,7 +431,7 @@ func claudeNavigationTests() {
         }
     }
 
-    for shortcut in ["kb:command+3", "kb:command+4", "kb:command+5"] {
+    for shortcut in ["kb:command+3", "kb:command+4", "kb:command+5", "kb:command+6"] {
         for missingURL in [false, true] {
             test("Claude navigation: \(shortcut) announces a changed title with \(missingURL ? "missing" : "unchanged") URL") {
                 withConversationTest { page, module, sent in
