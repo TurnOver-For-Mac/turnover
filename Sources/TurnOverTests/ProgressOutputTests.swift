@@ -1,29 +1,206 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import Foundation
+import ApplicationServices
 import TurnOverCore
 import AXFixtures
 
+private final class ClaudeProgressTrial {
+    var now = Date(timeIntervalSince1970: 1000)
+    var speechBusy = true
+    var callbacks: [@MainActor () -> Void] = []
+    var said: [String] = []
+    var forwarded = 0
+
+    func load(_ session: String, alpha: String = "Public task Alpha progress") {
+        AXReplay.load(.init(app: "Public progress sample", bundle: "test.claude-progress", recorded: "synthetic",
+                            root: 0, application: 1, focus: 0, nodes: [
+            .init(id: 0, attrs: ["AXRole": .string("AXWebArea"), "AXURL": .url(session), "AXParent": .element(1)]),
+            .init(id: 1, attrs: ["AXRole": .string("AXApplication")]),
+            .init(id: 2, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string(alpha), "AXARIALive": .string("polite")]),
+            .init(id: 3, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("Public task Beta progress"), "AXARIALive": .string("polite")]),
+            .init(id: 4, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("Public task Gamma progress"), "AXARIALive": .string("polite")]),
+        ]))
+    }
+
+    func event(_ id: Int, module: ClaudeAppModule) {
+        module.handleEvent(Event(.liveRegionChange, ObjectFactory.make(AXReplay.element(id)))) { self.forwarded += 1 }
+    }
+
+    func poll(after seconds: TimeInterval) {
+        now = now.addingTimeInterval(seconds)
+        let ready = callbacks
+        callbacks = []
+        for callback in ready { callback() }
+    }
+}
+
+private func withClaudeProgress(_ body: (ClaudeProgressTrial, ClaudeAppModule) -> Void) {
+    let savedConfig = config, savedSink = Speech.sink, savedMode = Speech.mode
+    let savedKey = InputManager.lastKeyDownAt, savedPid = AXHandler.shared.activePid
+    let savedFocus = API.focusObject, savedAncestors = API.focusAncestors, savedPage = API.focusTreeInterceptor
+    let trial = ClaudeProgressTrial()
+    trial.load("https://example.com/progress-a")
+    let root = AXReplay.element(0)
+    let page = BrowseModeDocument(webArea: root, buffer: WebBuffer(webArea: root))
+    API.setFocusObject(ObjectFactory.make(root), ancestors: [], interceptor: page)
+    AXHandler.shared.activePid = root.pid
+    config.presentation.reportDynamicContentChanges = true
+    Speech.mode = .off
+    Speech.sink = { trial.said.append($0) }
+    InputManager.lastKeyDownAt = trial.now.addingTimeInterval(-10)
+    let module = ClaudeAppModule(pid: root.pid, bundleIdentifier: "com.anthropic.claudefordesktop", appName: "Claude")
+    module.progressNow = { trial.now }
+    module.progressSpeechBusy = { trial.speechBusy }
+    module.progressScheduler = { delay, callback in
+        expect(delay, 0.5, "quiet is checked promptly even after the ceiling")
+        trial.callbacks.append(callback)
+    }
+    defer {
+        trial.callbacks = []
+        API.setFocusObject(savedFocus, ancestors: savedAncestors, interceptor: savedPage)
+        AXHandler.shared.activePid = savedPid
+        InputManager.lastKeyDownAt = savedKey
+        Speech.sink = savedSink; Speech.mode = savedMode; config = savedConfig
+        AXReplay.unload()
+    }
+    body(trial, module)
+}
+
 func progressOutputTests() {
     test("Claude progress: quiet keys do not interrupt long reading") {
-        expect(ClaudeProgressReadiness.decision(keyQuietFor: 1.5, speechBusy: true, heldFor: 2), .wait)
-        expect(ClaudeProgressReadiness.decision(keyQuietFor: 20, speechBusy: true, heldFor: 30), .wait)
+        expect(ClaudeProgressReadiness.decision(keyQuietFor: 1.5, speechBusy: true), .wait)
+        expect(ClaudeProgressReadiness.decision(keyQuietFor: 20, speechBusy: true), .wait)
     }
 
     test("Claude progress: speech becoming idle releases the held line") {
-        expect(ClaudeProgressReadiness.decision(keyQuietFor: 2, speechBusy: true, heldFor: 3), .wait)
-        expect(ClaudeProgressReadiness.decision(keyQuietFor: 2.5, speechBusy: false, heldFor: 3.5), .release)
+        expect(ClaudeProgressReadiness.decision(keyQuietFor: 2, speechBusy: true), .wait)
+        expect(ClaudeProgressReadiness.decision(keyQuietFor: 2.5, speechBusy: false), .release)
     }
 
     test("Claude progress: renewed key activity waits even when speech is idle") {
-        expect(ClaudeProgressReadiness.decision(keyQuietFor: 1.49, speechBusy: false, heldFor: 10), .wait)
-        expect(ClaudeProgressReadiness.decision(keyQuietFor: 0, speechBusy: false, heldFor: 11), .wait)
-        expect(ClaudeProgressReadiness.decision(keyQuietFor: 1.5, speechBusy: false, heldFor: 12.5), .release)
+        expect(ClaudeProgressReadiness.decision(keyQuietFor: 1.49, speechBusy: false), .wait)
+        expect(ClaudeProgressReadiness.decision(keyQuietFor: 0, speechBusy: false), .wait)
+        expect(ClaudeProgressReadiness.decision(keyQuietFor: 1.5, speechBusy: false), .release)
     }
 
-    test("Claude progress: a forever busy reader expires without interrupting speech") {
-        expect(ClaudeProgressReadiness.decision(keyQuietFor: 59.5, speechBusy: true, heldFor: 59.5), .wait)
-        expect(ClaudeProgressReadiness.decision(keyQuietFor: 60, speechBusy: true, heldFor: 60), .expired)
-        expect(ClaudeProgressReadiness.decision(keyQuietFor: 0, speechBusy: false, heldFor: 60), .expired)
+    test("Claude progress: ceiling retains a real event until speech and keys are quiet, once") {
+        withClaudeProgress { trial, module in
+            trial.event(2, module: module)
+            expect(trial.forwarded, 0, "busy speech holds the production live-region event")
+            trial.poll(after: 59)
+            trial.poll(after: 1)
+            check(trial.said.isEmpty, "the ceiling cannot interrupt reading")
+            check(module.progressHeldSince(session: "https://example.com/progress-a") != nil, "the line survives its ceiling")
+            trial.speechBusy = false
+            InputManager.lastKeyDownAt = trial.now
+            trial.poll(after: 1)
+            check(trial.said.isEmpty, "idle speech alone cannot release while keys are active")
+            trial.poll(after: 0.5)
+            expect(trial.said, ["Public task Alpha progress"])
+            trial.poll(after: 5)
+            expect(trial.said, ["Public task Alpha progress"], "no duplicate release")
+            check(trial.callbacks.isEmpty, "the polling chain ends after delivery")
+        }
+    }
+
+    test("Claude progress: speech becoming idle exactly at the ceiling releases the notice") {
+        withClaudeProgress { trial, module in
+            trial.event(2, module: module)
+            trial.poll(after: 59)
+            trial.speechBusy = false
+            trial.poll(after: 1)
+            expect(trial.said, ["Public task Alpha progress"])
+            check(trial.callbacks.isEmpty, "the deadline neither drops the notice nor schedules another release")
+        }
+    }
+
+    test("Claude progress: a newer same-conversation line replaces the waiting line without resetting its clock") {
+        withClaudeProgress { trial, module in
+            trial.event(2, module: module)
+            let first = module.progressHeldSince(session: "https://example.com/progress-a")
+            trial.poll(after: 61)
+            trial.event(4, module: module)
+            expect(module.progressHeldSince(session: "https://example.com/progress-a"), first)
+            expect(trial.callbacks.count, 1, "replacement does not start a second polling chain")
+            trial.speechBusy = false
+            trial.poll(after: 0.5)
+            expect(trial.said, ["Public task Gamma progress"], "only the newest notice is delivered")
+        }
+    }
+
+    test("Claude progress: conversation B gets its own clock after A waits 59 seconds, and A survives returning") {
+        withClaudeProgress { trial, module in
+            trial.event(2, module: module)
+            let firstA = module.progressHeldSince(session: "https://example.com/progress-a")
+            trial.poll(after: 59)
+            trial.load("https://example.com/progress-b")
+            trial.event(3, module: module)
+            expect(module.progressHeldSince(session: "https://example.com/progress-b"), trial.now, "B starts its own hold")
+            expect(module.progressHeldSince(session: "https://example.com/progress-a"), firstA, "A keeps its own clock")
+            trial.poll(after: 1)
+            trial.speechBusy = false
+            trial.poll(after: 0.5)
+            expect(trial.said, ["Public task Beta progress"], "only the current conversation speaks")
+            trial.load("https://example.com/progress-a")
+            trial.poll(after: 0.5)
+            expect(trial.said, ["Public task Beta progress", "Public task Alpha progress"], "A was retained beyond its ceiling")
+            check(trial.callbacks.isEmpty, "all notices delivered once")
+        }
+    }
+
+    test("Claude progress: identical notices in different conversations are each delivered once") {
+        withClaudeProgress { trial, module in
+            let same = "Public identical progress in two conversations"
+            trial.load("https://example.com/progress-a", alpha: same)
+            trial.event(2, module: module)
+            trial.load("https://example.com/progress-b", alpha: same)
+            trial.event(2, module: module)
+            trial.speechBusy = false
+            trial.poll(after: 0.5)
+            expect(trial.said, [same], "B's notice is delivered first")
+            trial.load("https://example.com/progress-a", alpha: same)
+            trial.poll(after: 0.5)
+            expect(trial.said, [same, same], "global live-region deduplication cannot discard A's held notice")
+            check(trial.callbacks.isEmpty, "both waiting notices are consumed once")
+        }
+    }
+
+    for changedText in ["", "A different region now uses this element"] {
+        test("Claude progress: event text survives its live region being removed or reused: \(changedText.isEmpty ? "removed" : "reused")") {
+            withClaudeProgress { trial, module in
+                let original = changedText.isEmpty ? "Public saved notice before removal" : "Public saved notice before reuse"
+                trial.load("https://example.com/progress-a", alpha: original)
+                trial.event(2, module: module)
+                // No new live-region event arrived. Provider churn must not replace an undelivered notice.
+                AXReplay.load(.init(app: "Public progress sample", bundle: "test.claude-progress", recorded: "synthetic",
+                                    root: 0, application: 1, focus: 0, nodes: [
+                    .init(id: 0, attrs: ["AXRole": .string("AXWebArea"), "AXURL": .url("https://example.com/progress-a"), "AXParent": .element(1)]),
+                    .init(id: 1, attrs: ["AXRole": .string("AXApplication")]),
+                ] + (changedText.isEmpty ? [] : [
+                    .init(id: 2, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string(changedText)]),
+                ])))
+                trial.speechBusy = false
+                trial.poll(after: 61)
+                expect(trial.said, [original], "the event's original words survive provider churn")
+                trial.poll(after: 1)
+                expect(trial.said.count, 1, "the saved notice is released once")
+            }
+        }
+    }
+
+    test("Claude progress: release still checks speech after an event was held only by recent keys") {
+        withClaudeProgress { trial, module in
+            trial.speechBusy = false
+            InputManager.lastKeyDownAt = trial.now
+            trial.event(4, module: module)
+            expect(trial.forwarded, 0)
+            trial.speechBusy = true
+            trial.poll(after: 2)
+            check(trial.said.isEmpty, "speech beginning during key quiet still holds the line")
+            trial.speechBusy = false
+            trial.poll(after: 0.5)
+            expect(trial.said, ["Public task Gamma progress"])
+        }
     }
 
     test("progress output: NVDA's pitch, 110 Hz at 0 percent, an octave each 25, 1760 Hz at 100") {
