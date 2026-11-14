@@ -6,6 +6,7 @@
 // responded"). See ClaudeTranscript for the measured structure.
 import Foundation
 import ApplicationServices
+import TurnOverAX
 
 /// Claude's nonassertive progress must not cut off a line still being read.
 public enum ClaudeProgressReadiness {
@@ -42,59 +43,106 @@ package final class ClaudeAppModule: AppModule {
     }
 
     private var conversationSwitch = 0
+    private weak var conversationPage: BrowseModeDocument?
+    private let conversationReader = AXWalkRunner<AXSnapshot>()
+    /// The production reader is replaceable so a held provider can be tested without opening Claude.
+    package var conversationRead: @Sendable (AXUIElement) -> AXSnapshot = ClaudeAppModule.readConversation
+    package var conversationWaitLimit: TimeInterval = 8
 
-    /// 14 Nov 2026: Command 1–4 waited for a whole-page read before naming the conversation; Command N
-    /// sent only live-region-created notices and left Tab using the previous page. Watch just these native
-    /// Claude shortcuts. Each look asks the existing root for its address and title, never walks the window.
+    nonisolated private static func readConversation(_ root: AXUIElement) -> AXSnapshot {
+        // 14 Nov 2026 review: timer callbacks still queried Claude on main. Every provider read now runs
+        // on the AX worker, with a timeout on this exact reference, and returns only captured values.
+        AXUIElementSetMessagingTimeout(root, 0.05)
+        let names = ["AXURL", kAXTitleAttribute, kAXRoleAttribute, "AXElementBusy"]
+        let values = root.attrs(names).compactMapValues { AXSnapshotValue($0) }
+        return AXSnapshot(nodes: [ElementKey(root): .init(attributes: values)])
+    }
+
+    /// Claude's native conversation keys hold page commands until a reply identifies the page. An unchanged,
+    /// non-busy address releases immediately, keeping its copy and reading position (review, 14 Nov 2026).
     package func prepareConversationSwitch() {
         guard let page = API.focusTreeInterceptor,
               page.webArea.pid == pid else { return }
+        if let previous = conversationPage,
+           previous !== page { previous.finishNavigationWait(title: nil, announce: false) }
+        conversationPage = page
         conversationSwitch += 1
+        conversationReader.cancel()
         let request = conversationSwitch
-        let address = page.url
-        let title = page.webArea.string(kAXTitleAttribute) ?? ""
-        let started = Date()
+        let root = page.webArea
+        let address = page.lastURL
+        let title = page.buffer.withSnapshot { root.string(kAXTitleAttribute) ?? "" }
+        var titleAnnounced = false
         var releasedContent = false
         page.beginNavigationWait()
+
+        func finish() {
+            conversationSwitch += 1
+            conversationReader.cancel()
+            page.finishNavigationWait(title: nil, announce: false)
+        }
+        // Independent of the provider: even a call that fails to respect its timeout cannot hold a key.
+        DispatchQueue.main.asyncAfter(deadline: .now() + conversationWaitLimit) { [weak self, weak page] in
+            guard let self,
+                  let page,
+                  conversationSwitch == request else { return }
+            Log.io("claude: conversation switch wait ended at its ceiling; waiting commands run once")
+            conversationSwitch += 1
+            conversationReader.cancel()
+            page.finishNavigationWait(title: nil, announce: false)
+        }
         func look() {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self, weak page] in
                 guard let self,
                       let page,
                       conversationSwitch == request else { return }
-                guard API.focusTreeInterceptor === page else {
-                    page.abandonNavigationWait()
-                    return
-                }
-                let now = page.url
-                let changed = !now.isEmpty &&
-                    now != address
-                if changed { page.refreshIfNavigated() }
-                let name = (page.webArea.string(kAXTitleAttribute) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-                let titleIsReady = !name.isEmpty &&
-                    name != title
-                let copyIsReady = !page.buffer.isLoading &&
-                    !page.buffer.lines.isEmpty
-                if changed,
-                   titleIsReady {
-                    Log.io("claude: the new conversation is shown; its name is said before its page is read")
-                    if releasedContent { page.announceNavigationTitle(name) }
-                    else { page.finishNavigationWait(title: name) }
-                    return
-                }
-                if changed,
-                   copyIsReady,
-                   !releasedContent {
-                    // The content can precede its new title. Keys may use that content, but the old title is not news.
-                    releasedContent = true
-                    page.finishNavigationWait(title: nil)
-                }
-                let elapsed = Date().timeIntervalSince(started)
-                if elapsed >= 8 {
-                    Log.io("claude: conversation switch still loading after eight seconds; no old line is read")
-                    page.abandonNavigationWait()
-                    return
-                }
-                look()
+                guard API.focusTreeInterceptor === page else { finish(); return }
+                let read = conversationRead
+                conversationReader.submit(collect: { _ in read(root) }, publish: { [weak self, weak page] snapshot in
+                    guard let self,
+                          let page,
+                          conversationSwitch == request else { return }
+                    guard API.focusTreeInterceptor === page else { finish(); return }
+                    let now = snapshot.with { page.url }
+                    guard !now.isEmpty else { look(); return }
+                    let changed = now != address
+                    let busy = snapshot.with { root.attr("AXElementBusy") as? Bool == true }
+                    if !changed,
+                       !busy {
+                        // Keep watching for a delayed address change, but the answered, unchanged page is usable now.
+                        page.finishNavigationWait(title: nil, announce: false)
+                        releasedContent = true
+                        look()
+                        return
+                    }
+                    if changed {
+                        if releasedContent,
+                           page.lastURL != now {
+                            page.beginNavigationWait()
+                            releasedContent = false
+                        }
+                        // refreshIfNavigated also asks for URL/role. The captured scope prevents any live main read.
+                        _ = snapshot.with { page.refreshIfNavigated() }
+                    }
+                    let name = snapshot.with { (root.string(kAXTitleAttribute) ?? "").trimmingCharacters(in: .whitespacesAndNewlines) }
+                    let titleIsReady = !name.isEmpty && name != title
+                    if changed,
+                       titleIsReady,
+                       !titleAnnounced {
+                        titleAnnounced = true
+                        page.announceNavigationTitle(name)
+                    }
+                    let copyIsReady = !page.buffer.isLoading && !page.buffer.lines.isEmpty
+                    if changed,
+                       copyIsReady,
+                       !releasedContent {
+                        releasedContent = true
+                        page.finishNavigationWait(title: nil)
+                    }
+                    if titleAnnounced,
+                       releasedContent { finish(); return }
+                    look()
+                })
             }
         }
         look()

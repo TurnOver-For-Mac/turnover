@@ -238,7 +238,8 @@ public final class BrowseModeDocument: ScriptableObject {
     var announceWhenReady = false
     // Opted into only by Claude's session shortcuts (14 Nov 2026): the old page must not answer the next key.
     var navigationWaiting = false
-    var navigationRetry: (() -> Void)?
+    var navigationRetries: [() -> Void] = []
+    var navigationReplaying = false
     var navigationHadCommand = false
     var earlyTitleURL: String?
     let rootRunner = AXWalkRunner<BrowseRootCollection>()
@@ -646,6 +647,10 @@ public final class BrowseModeDocument: ScriptableObject {
     /// `retry`: the key, done again once the page has come, if it is still the latest key. Until 10 Nov 2026 a key on
     /// a page whose first read was still under way was dropped without a word (review of #219, point 1).
     func ensureContent(_ retry: (() -> Void)? = nil) -> Bool {
+        if navigationReplaying, buffer.lines.isEmpty {
+            reportBufferEnd(forward: true)
+            return false
+        }
         if navigationWaiting {
             if let retry { _ = deferInitialContent(retry) }
             return false
