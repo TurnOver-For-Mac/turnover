@@ -281,6 +281,10 @@ func claudeNavigationTests() {
 
     test("Claude navigation: unchanged answered address preserves the copy and releases every queued command") {
         withConversationTest { page, module, sent in
+            let savedSink = Speech.sink
+            var said: [String] = []
+            Speech.sink = { said.append($0) }
+            defer { Speech.sink = savedSink }
             page.position = page.buffer.text.length - 1
             let position = page.position
             let text = (page.buffer.text as String)
@@ -302,6 +306,9 @@ func claudeNavigationTests() {
             expect(sent.value, ["kb:command+4", "kb:tab"], "the actual queued Tab is posted once")
             expect((page.buffer.text as String), text, "the existing copy survives an unchanged address")
             expect(page.position, position, "the existing reading position survives")
+            expect(said.filter { $0 == "Old conversation" }, ["Old conversation"], "choosing the current conversation says its title once")
+            RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+            expect(said.filter { $0 == "Old conversation" }.count, 1, "further unchanged answers do not repeat it")
         }
     }
 

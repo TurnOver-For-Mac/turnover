@@ -87,6 +87,7 @@ package final class ClaudeAppModule: AppModule {
         let address = page.lastURL
         let title = page.buffer.withSnapshot { root.string(kAXTitleAttribute) ?? "" }
         var titleAnnounced = false
+        var currentTitleAnnounced = false
         var releasedContent = false
         var unchangedAnswers = 0
         var observedAddressChange = false
@@ -132,10 +133,16 @@ package final class ClaudeAppModule: AppModule {
                         // Claude's actual switch; require several answers and a short settle before reuse.
                         unchangedAnswers = busy ? 0 : unchangedAnswers + 1
                         if unchangedAnswers >= 3,
-                           ProcessInfo.processInfo.systemUptime >= settleUntil,
-                           !releasedContent {
-                            page.finishNavigationWait(title: nil, announce: false)
-                            releasedContent = true
+                           ProcessInfo.processInfo.systemUptime >= settleUntil {
+                            let name = snapshot.with { (root.string(kAXTitleAttribute) ?? "").trimmingCharacters(in: .whitespacesAndNewlines) }
+                            if !currentTitleAnnounced, !name.isEmpty {
+                                currentTitleAnnounced = true
+                                page.announceNavigationTitle(name)
+                            }
+                            if !releasedContent {
+                                page.finishNavigationWait(title: nil, announce: false)
+                                releasedContent = true
+                            }
                         }
                         look()
                         return

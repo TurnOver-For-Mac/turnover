@@ -19,6 +19,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- Claude's Command 1 to 9 say the conversation title even when that conversation is already open.
+
 - Dialogs open with their text and focused control, without listing unnamed fields; explicit descriptions keep named choices.
 
 - Reading the saved copy of an unresponsive page no longer asks the page about automatic caret focus.
