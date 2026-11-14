@@ -178,7 +178,7 @@ final class TurnOverApp {
         }
         MenuAnywhere.shared.cycleLeadMode = { [weak self] in
             self?.inputActivation.readerSelected()
-            guard config.applications.perAppReaders else { Speech.speakMessage(String(localized: "Readers per app are off: TurnOver reads everywhere while it is on. Settings, Screen reader behaviour, turns them on.", comment: "Spoken message")); return }
+            guard config.applications.perAppReaders else { MenuAnywhere.say(String(localized: "Readers per app are off: TurnOver reads everywhere while it is on. Settings, Screen reader behaviour, turns them on.", comment: "Spoken message")); return }
             self?.lead.cycleMode()
         }
         TurnOverMenu.shared.leadModeChanged = { [weak self] in self?.lead.refreshAfterModeChange() }
@@ -546,7 +546,7 @@ final class TurnOverApp {
         // Started by Command+Control+T: TurnOver Key has just said "TurnOver on"; the first take-over is not said again.
         // At launch TurnOver names itself ("TurnOver on"); later take-overs say the usual "TurnOver on" or play the chime.
         let atLaunch = Date().timeIntervalSince(launchedAt) < 10
-        if let words = LeadWatcher.nextTakeoverWords { LeadWatcher.nextTakeoverWords = nil; Speech.speakMessage(words) }   // a mode's name, once
+        if let words = LeadWatcher.nextTakeoverWords { LeadWatcher.nextTakeoverWords = nil; lead.announceTakeoverMode(words) }   // a mode's name, once
         else if config.general.handOverNothing { if atLaunch { announcedAtLaunch = false } }   // nothing, by choice
         else if announcedAtLaunch, atLaunch { announcedAtLaunch = false; Speech.speakMessage(Edition.editionName) }
         else if atLaunch { Speech.speakMessage(String(localized: "TurnOver on", comment: "Spoken message")) }

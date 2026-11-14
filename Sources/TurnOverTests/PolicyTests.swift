@@ -8,6 +8,38 @@ import TurnOverControl
 import AXFixtures
 
 func policyTests() {
+    test("mode speech: only the ready reader can announce the current choice") {
+        for coexisting in [false, true] {
+            for active in [false, true] {
+                for voiceOver in [false, true] {
+                    for silent in [false, true] {
+                        func ready(_ reader: ModeSpeechPolicy.Reader, generation: Int = 7) -> Bool {
+                            ModeSpeechPolicy.canAnnounce(reader: reader, generation: generation, currentGeneration: 7,
+                                                        coexisting: coexisting, turnOverActive: active,
+                                                        voiceOverEnabled: voiceOver, voiceOverSilent: silent)
+                        }
+                        let turnOverReady = ready(.turnOver)
+                        let voiceOverReady = ready(.voiceOver)
+                        check(!(turnOverReady && voiceOverReady), "a mode never goes to both readers")
+                        check(!ready(.turnOver, generation: 6), "an old TurnOver choice is discarded")
+                        check(!ready(.voiceOver, generation: 6), "an old VoiceOver choice is discarded")
+                        if !coexisting && voiceOver { check(!turnOverReady, "normal swap waits until VoiceOver is off") }
+                        if !active { check(!turnOverReady, "an activation request is not speech readiness") }
+                        if coexisting && silent { check(!voiceOverReady, "VoiceOver waits until the mute request is lifted") }
+                    }
+                }
+            }
+        }
+        check(ModeSpeechPolicy.canAnnounce(reader: .turnOver, generation: 7, currentGeneration: 7,
+                                          coexisting: false, turnOverActive: true,
+                                          voiceOverEnabled: false, voiceOverSilent: false), "normal swap announces after activation with VoiceOver off")
+        check(ModeSpeechPolicy.canAnnounce(reader: .turnOver, generation: 7, currentGeneration: 7,
+                                          coexisting: true, turnOverActive: true,
+                                          voiceOverEnabled: true, voiceOverSilent: true), "Coexist announces through TurnOver after muting VoiceOver")
+        check(ModeSpeechPolicy.canAnnounce(reader: .voiceOver, generation: 7, currentGeneration: 7,
+                                          coexisting: true, turnOverActive: false,
+                                          voiceOverEnabled: true, voiceOverSilent: false), "handback announces through VoiceOver after unmuting")
+    }
     test("one app: the full reader, CoExist off unless turned on, plugins on unless turned off") {
         check(Edition.editionName == "TurnOver", "named TurnOver")
         check(Edition.includesPlugins == ((UserDefaults.standard.object(forKey: "plugins") as? Bool) ?? true), "plugins on unless the default turns them off")

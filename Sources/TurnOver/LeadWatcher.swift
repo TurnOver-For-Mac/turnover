@@ -500,7 +500,10 @@ final class LeadWatcher {
     /// newer change has come since (code review, 13 Oct: A pressed twice, or Command Tab within the second, turned
     /// VoiceOver on over TurnOver).
     private var choiceGeneration = 0 {
-        didSet { cancelWakeRestoration() }
+        didSet {
+            cancelWakeRestoration()
+            Self.nextTakeoverWords = nil
+        }
     }
 
     /// Said by whichever reader is talking: TurnOver's speech is muted while VoiceOver is on, so then it goes through
@@ -526,18 +529,56 @@ final class LeadWatcher {
     }
 
     /// After `delay`, gives the app in front then (not the one in front now) to its reader, if no newer choice came.
-    private func settleReader(after delay: Double, generation: Int) {
+    private func settleReader(after delay: Double, generation: Int, voiceOverWords: String? = nil) {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            guard let self, generation == self.choiceGeneration else { return }
+            guard let self else { return }
+            guard generation == self.choiceGeneration else { return }
             // The menu still open: wait for it (VoiceOver coming on mid-menu silenced it).
-            if TurnOverMenu.shared.isOpen { self.settleReader(after: 0.3, generation: generation); return }
+            if TurnOverMenu.shared.isOpen { self.settleReader(after: 0.3, generation: generation, voiceOverWords: voiceOverWords); return }
             let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
             let turnOver = self.shouldLead(front)
             // Coexisting, VoiceOver is always on: who reads is TurnOver's own state. (Compared with VoiceOver's flag,
             // T gave TextEdit to VoiceOver and nothing handed over; each T after said "VoiceOver's" again: 18 Oct 2026.)
             let turnOverReading = Coexist.on ? self.turnOverActive() : !NSWorkspace.shared.isVoiceOverEnabled
             if turnOver != turnOverReading { self.handOver(voiceOverOn: !turnOver) }
+            if let voiceOverWords {
+                self.sayModeWhenReady(voiceOverWords, reader: .voiceOver, generation: generation)
+            }
         }
+    }
+
+    private func modeSpeechReady(_ reader: ModeSpeechPolicy.Reader, generation: Int) -> Bool {
+        ModeSpeechPolicy.canAnnounce(reader: reader, generation: generation, currentGeneration: choiceGeneration,
+                                    coexisting: Coexist.on, turnOverActive: Core.active,
+                                    voiceOverEnabled: NSWorkspace.shared.isVoiceOverEnabled,
+                                    voiceOverSilent: VoiceOverTap.wantedSilent)
+    }
+
+    private func sayModeWhenReady(_ text: String, reader: ModeSpeechPolicy.Reader, generation: Int) {
+        // 14 Nov 2026: the mode belongs to the reader after handover. Activation and VoiceOver's mute request
+        // settle separately; posting before them can discard the label or send it to the outgoing reader.
+        let end = Date().addingTimeInterval(16)
+        func check() {
+            guard generation == choiceGeneration else { return }
+            if modeSpeechReady(reader, generation: generation) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+                    guard let self else { return }
+                    guard self.modeSpeechReady(reader, generation: generation) else { return }
+                    self.say(text)
+                }
+                return
+            }
+            if Date() < end {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { check() }
+            }
+        }
+        check()
+    }
+
+    func announceTakeoverMode(_ words: String) {
+        // 14 Nov 2026: finishActivation used to consume the label immediately, even if speech still rejected
+        // it because VoiceOver's flag was on. Keep normal swap and Coexist on the same readiness check.
+        sayModeWhenReady(words, reader: .turnOver, generation: choiceGeneration)
     }
 
     /// Command Control Comma, A: the next of the three modes, said, saved, and the app in front given to its reader.
@@ -553,16 +594,19 @@ final class LeadWatcher {
         Log.info("lead mode: \(next)")
         choiceGeneration += 1
         let generation = choiceGeneration
+        let words = Config.Applications.leadModeName(next)
+        // 14 Nov 2026: discard a previous mode's pending takeover words when A is pressed again.
+        Self.nextTakeoverWords = nil
         let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
         if shouldLead(front) {
             // TurnOver takes over for the new mode: the mode's name in place of "TurnOver on", then the app as usual.
             // Said after it, the name ran into "TurnOver on" and the app ("a bit of a mouthful", 15 Oct 2026).
-            if NSWorkspace.shared.isVoiceOverEnabled { Self.nextTakeoverWords = Config.Applications.leadModeName(next) }
+            let turnOverWasSpeaking = Coexist.on ? Core.active : !NSWorkspace.shared.isVoiceOverEnabled
+            if !turnOverWasSpeaking { Self.nextTakeoverWords = words }
             handOver(voiceOverOn: false)
-            if !NSWorkspace.shared.isVoiceOverEnabled { sayWhenTurnOverIsUp(Config.Applications.leadModeName(next), generation: generation) }
+            if turnOverWasSpeaking { sayModeWhenReady(words, reader: .turnOver, generation: generation) }
         } else {
-            say(Config.Applications.leadModeName(next))
-            settleReader(after: 1.2, generation: generation)
+            settleReader(after: 1.2, generation: generation, voiceOverWords: words)
         }
     }
 
