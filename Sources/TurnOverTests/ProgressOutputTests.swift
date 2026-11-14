@@ -4,6 +4,28 @@ import TurnOverCore
 import AXFixtures
 
 func progressOutputTests() {
+    test("Claude progress: quiet keys do not interrupt long reading") {
+        expect(ClaudeProgressReadiness.decision(keyQuietFor: 1.5, speechBusy: true, heldFor: 2), .wait)
+        expect(ClaudeProgressReadiness.decision(keyQuietFor: 20, speechBusy: true, heldFor: 30), .wait)
+    }
+
+    test("Claude progress: speech becoming idle releases the held line") {
+        expect(ClaudeProgressReadiness.decision(keyQuietFor: 2, speechBusy: true, heldFor: 3), .wait)
+        expect(ClaudeProgressReadiness.decision(keyQuietFor: 2.5, speechBusy: false, heldFor: 3.5), .release)
+    }
+
+    test("Claude progress: renewed key activity waits even when speech is idle") {
+        expect(ClaudeProgressReadiness.decision(keyQuietFor: 1.49, speechBusy: false, heldFor: 10), .wait)
+        expect(ClaudeProgressReadiness.decision(keyQuietFor: 0, speechBusy: false, heldFor: 11), .wait)
+        expect(ClaudeProgressReadiness.decision(keyQuietFor: 1.5, speechBusy: false, heldFor: 12.5), .release)
+    }
+
+    test("Claude progress: a forever busy reader expires without interrupting speech") {
+        expect(ClaudeProgressReadiness.decision(keyQuietFor: 59.5, speechBusy: true, heldFor: 59.5), .wait)
+        expect(ClaudeProgressReadiness.decision(keyQuietFor: 60, speechBusy: true, heldFor: 60), .expired)
+        expect(ClaudeProgressReadiness.decision(keyQuietFor: 0, speechBusy: false, heldFor: 60), .expired)
+    }
+
     test("progress output: NVDA's pitch, 110 Hz at 0 percent, an octave each 25, 1760 Hz at 100") {
         expect(Tones.progressFrequency(0), 110)
         expect(Tones.progressFrequency(25), 220)

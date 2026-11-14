@@ -7,6 +7,22 @@
 import Foundation
 import ApplicationServices
 
+/// Claude's nonassertive progress must not cut off a line still being read.
+public enum ClaudeProgressReadiness {
+    public enum Decision: Equatable { case wait, release, expired }
+    public static let quietInterval: TimeInterval = 1.5
+    public static let maximumHold: TimeInterval = 60
+
+    public static func decision(keyQuietFor: TimeInterval, speechBusy: Bool, heldFor: TimeInterval) -> Decision {
+        let holdExpired = heldFor >= maximumHold
+        if holdExpired { return .expired }
+        let keysAreQuiet = keyQuietFor >= quietInterval
+        guard keysAreQuiet else { return .wait }
+        guard !speechBusy else { return .wait }
+        return .release
+    }
+}
+
 final class ClaudeAppModule: AppModule {
     private var watching = false
     private var readReplies: Bool { config.appSetting(ClaudeTranscript.bundleID, "readReplies", default: "on") == "on" }
@@ -38,8 +54,14 @@ final class ClaudeAppModule: AppModule {
             // Claude's own status counters ("History 518/518", "Running", "Running agent") are noise, not news (the code review, 17 Oct 2026).
             let t = (event.obj.value ?? event.obj.name).trimmingCharacters(in: .whitespacesAndNewlines)
             if t.range(of: #"^(History \d+/\d+|Running( agent)?|Working…?)$"#, options: .regularExpression) != nil { Log.io("Claude: status \"\(t)\" not said"); startWatching(); return }
-            // A progress line while keys are being pressed waits (holdProgress).
-            if Date().timeIntervalSince(InputManager.lastKeyDownAt) < Self.quietForProgress, event.obj.element.string("AXARIALive") != "assertive" {
+            // Assertive notices retain their immediate delivery.
+            let isAssertive = event.obj.element.string("AXARIALive") == "assertive"
+            let progressReadiness = ClaudeProgressReadiness.decision(
+                keyQuietFor: Date().timeIntervalSince(InputManager.lastKeyDownAt),
+                speechBusy: Speech.player?.isBusy ?? false,
+                heldFor: 0)
+            if !isAssertive,
+               progressReadiness == .wait {
                 holdProgress(event.obj.element)
                 startWatching()
                 return
@@ -73,15 +95,18 @@ final class ClaudeAppModule: AppModule {
         tick(chat: chat, quietTicks: 0)
     }
 
-    /// How long the keys must have been quiet before a held progress line is said.
-    static let quietForProgress: TimeInterval = 1.5
-    /// The live region whose newest line waits for the keys to be quiet.
+    /// The live region whose newest line waits for quiet keys and idle speech.
     private var heldProgress: AXUIElement?
+    /// First hold time survives newer progress lines so a busy reader cannot keep this pending forever.
+    private var heldProgressSince = Date.distantPast
 
     /// Claude's progress lines ("Running a command", "Ran 2 commands") wait while keys are being pressed. Said straight
     /// after a line Oliver had just moved to, they sounded like part of it, and he went back to read the line again:
     /// ten in 38 s, three lines read twice (14 Nov 2026); eight more fell between the words he typed. The newest line
-    /// is said once the keys have been quiet for a moment; older ones are out of date by then, and are not said.
+    /// waits for both quiet keys and idle speech; older lines are out of date by then, and are not said.
+    /// 14 Nov 2026: the trial log showed held progress released after 1.5 seconds of key quiet while a long
+    /// line was still being read. SpeechPlayer's locked isBusy includes queued speech, not just current audio.
+    /// Reuse the finished-reply minute ceiling: drop progress rather than interrupt reading or retry forever.
     /// The conversation open now, by its page's address, from the page browse mode already has: asked once, not by a
     /// search of the window (a search of up to 3,000 elements on the main thread, every second; Codex's third review).
     private func currentConversation() -> String {
@@ -96,7 +121,10 @@ final class ClaudeAppModule: AppModule {
         let first = heldProgress == nil
         heldProgress = region
         heldProgressSession = currentConversation()
-        if first { Log.io("claude: a progress line waits while keys are pressed") }
+        if first {
+            heldProgressSince = Date()
+            Log.io("claude: a progress line waits for quiet keys and idle speech")
+        }
         if first { releaseProgressWhenQuiet() }
     }
 
@@ -105,8 +133,21 @@ final class ClaudeAppModule: AppModule {
             guard let self, let region = heldProgress else { return }
             // Left the app: the line is not said over another app.
             guard AXHandler.shared.activePid == pid else { heldProgress = nil; return }
-            guard Date().timeIntervalSince(InputManager.lastKeyDownAt) >= Self.quietForProgress else { releaseProgressWhenQuiet(); return }
-            heldProgress = nil
+            let readiness = ClaudeProgressReadiness.decision(
+                keyQuietFor: Date().timeIntervalSince(InputManager.lastKeyDownAt),
+                speechBusy: Speech.player?.isBusy ?? false,
+                heldFor: Date().timeIntervalSince(heldProgressSince))
+            switch readiness {
+            case .wait:
+                releaseProgressWhenQuiet()
+                return
+            case .expired:
+                heldProgress = nil
+                Log.io("claude: progress waited a minute; the waiting line is dropped")
+                return
+            case .release:
+                heldProgress = nil
+            }
             // Another conversation now: its line is not this one's.
             let session = currentConversation()
             guard session == heldProgressSession else { Log.io("claude: another conversation now; the waiting line is dropped"); return }
