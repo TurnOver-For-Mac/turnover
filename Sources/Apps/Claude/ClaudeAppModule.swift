@@ -184,19 +184,29 @@ package final class ClaudeAppModule: AppModule {
             // Claude's own status counters ("History 518/518", "Running", "Running agent") are noise, not news (the code review, 17 Oct 2026).
             let t = (event.obj.value ?? event.obj.name).trimmingCharacters(in: .whitespacesAndNewlines)
             if t.range(of: #"^(History \d+/\d+|Running( agent)?|Working…?)$"#, options: .regularExpression) != nil { Log.io("Claude: status \"\(t)\" not said"); startWatching(); return }
-            // Assertive notices retain their immediate delivery.
-            let isAssertive = event.obj.element.string("AXARIALive") == "assertive"
-            let progressReadiness = ClaudeProgressReadiness.decision(
-                keyQuietFor: progressNow().timeIntervalSince(InputManager.lastKeyDownAt),
-                speechBusy: progressSpeechBusy())
-            if !isAssertive,
-               progressReadiness == .wait {
-                holdProgress(event.obj.element, text: t)
+            // Assertive notices retain their immediate delivery through the ordinary live-region path.
+            if event.obj.element.string("AXARIALive") == "assertive" {
+                heldProgress.removeValue(forKey: currentConversation())
+                next()
                 startWatching()
                 return
             }
-            heldProgress.removeValue(forKey: currentConversation())   // only this conversation has a newer line
-            next()
+            // Match the ordinary live-region reader: a named group can contain several static text
+            // descendants. Its name/value is useful for status filtering, not a replacement for those words.
+            let text = ClaudeTranscript.text(of: event.obj.element, skipHidden: false)
+            let session = currentConversation()
+            guard !text.isEmpty,
+                  deliveredProgress[session] != String(text.prefix(500)) else { return }
+            let progressReadiness = ClaudeProgressReadiness.decision(
+                keyQuietFor: progressNow().timeIntervalSince(InputManager.lastKeyDownAt),
+                speechBusy: progressSpeechBusy())
+            if progressReadiness == .wait {
+                holdProgress(text, session: session)
+                startWatching()
+                return
+            }
+            heldProgress.removeValue(forKey: session)   // only this conversation has a newer line
+            deliverProgress(text, session: session)
             startWatching()
         case .valueChange where event.obj.role == .editableText && event.obj.name == "Prompt":
             // The prompt emptied: a message was sent. Look for the reply starting shortly.
@@ -231,6 +241,7 @@ package final class ClaudeAppModule: AppModule {
     }
     /// 14 Nov 2026: one clock per conversation; a switch must not age or discard another conversation's notice.
     private var heldProgress: [String: PendingProgress] = [:]
+    private var deliveredProgress: [String: String] = [:]
     private var progressReleaseScheduled = false
     /// Tests advance the real event/release path without waiting a minute or running Claude.
     package var progressSpeechBusy: () -> Bool = { Speech.player?.isBusy ?? false }
@@ -249,15 +260,14 @@ package final class ClaudeAppModule: AppModule {
     /// 14 Nov 2026: quiet keys released progress over a long spoken line in the trial log. Both keys and
     /// SpeechPlayer's locked busy count must be quiet. The minute ceiling is logged once, but the notice
     /// stays pending: neither elapsed time nor switching conversations permits interruption or loss.
-    private func holdProgress(_ region: AXUIElement, text: String) {
+    private func holdProgress(_ text: String, session: String) {
         // Keep the words received with the event: Claude can remove or reuse this region before speech is idle.
-        let snapshot = text.isEmpty ? ClaudeTranscript.text(of: region, skipHidden: false) : text
-        guard !snapshot.isEmpty else { return }
-        let session = currentConversation()
+        guard !text.isEmpty else { return }
+        guard deliveredProgress[session] != String(text.prefix(500)) else { return }
         if let pending = heldProgress[session] {
-            heldProgress[session] = PendingProgress(text: snapshot, since: pending.since, reachedCeiling: pending.reachedCeiling)
+            heldProgress[session] = PendingProgress(text: text, since: pending.since, reachedCeiling: pending.reachedCeiling)
         } else {
-            heldProgress[session] = PendingProgress(text: snapshot, since: progressNow())
+            heldProgress[session] = PendingProgress(text: text, since: progressNow())
             Log.io("claude: a progress line waits for quiet keys and idle speech")
         }
         releaseProgressWhenQuiet()
@@ -294,9 +304,18 @@ package final class ClaudeAppModule: AppModule {
         guard readiness == .release else { return }
         guard config.presentation.reportDynamicContentChanges else { return }
         heldProgress.removeValue(forKey: session)
-        // This module already coalesced the notice. Global live-region deduplication must not discard
-        // another conversation's identical words after its waiting notice has been consumed.
-        Speech.speakNews(String(pending.text.prefix(500)))
+        deliverProgress(pending.text, session: session)
+    }
+
+    private func deliverProgress(_ text: String, session: String) {
+        let spoken = String(text.prefix(500))
+        guard !spoken.isEmpty,
+              config.presentation.reportDynamicContentChanges,
+              deliveredProgress[session] != spoken else { return }
+        deliveredProgress[session] = spoken
+        // Conversation-local deduplication applies equally to immediate and held notices; global
+        // live-region suppression could otherwise discard another conversation's identical words.
+        Speech.speakNews(spoken)
     }
 
     /// A finished reply, read unless Oliver is reading it already. The reading position on a line of the reply itself

@@ -11,13 +11,17 @@ private final class ClaudeProgressTrial {
     var said: [String] = []
     var forwarded = 0
 
-    func load(_ session: String, alpha: String = "Public task Alpha progress") {
+    func load(_ session: String, alpha: String = "Public task Alpha progress", groupTail: String = "Public group detail") {
         AXReplay.load(.init(app: "Public progress sample", bundle: "test.claude-progress", recorded: "synthetic",
                             root: 0, application: 1, focus: 0, nodes: [
             .init(id: 0, attrs: ["AXRole": .string("AXWebArea"), "AXURL": .url(session), "AXParent": .element(1)]),
             .init(id: 1, attrs: ["AXRole": .string("AXApplication")]),
             .init(id: 2, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string(alpha), "AXARIALive": .string("polite")]),
             .init(id: 3, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("Public task Beta progress"), "AXARIALive": .string("polite")]),
+            .init(id: 5, attrs: ["AXRole": .string("AXGroup"), "AXTitle": .string("Progress label"), "AXValue": .string("Progress value"),
+                                 "AXChildren": .elements([6, 7]), "AXARIALive": .string("polite")]),
+            .init(id: 6, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("Public group summary. ")]),
+            .init(id: 7, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string(groupTail)]),
             .init(id: 4, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("Public task Gamma progress"), "AXARIALive": .string("polite")]),
         ]))
     }
@@ -67,6 +71,61 @@ private func withClaudeProgress(_ body: (ClaudeProgressTrial, ClaudeAppModule) -
 }
 
 func progressOutputTests() {
+    test("Claude progress: a delivered line repeated during speech is not queued again") {
+        withClaudeProgress { trial, module in
+            trial.event(2, module: module)
+            trial.speechBusy = false
+            trial.poll(after: 0.5)
+            expect(trial.said, ["Public task Alpha progress"])
+            trial.speechBusy = true
+            trial.event(2, module: module)
+            trial.speechBusy = false
+            trial.poll(after: 1)
+            expect(trial.said, ["Public task Alpha progress"], "an identical event while speaking cannot repeat after idle")
+            check(trial.callbacks.isEmpty, "the delivered duplicate starts no release chain")
+            trial.event(4, module: module)
+            expect(trial.said.last, "Public task Gamma progress", "different progress remains eligible for immediate delivery")
+        }
+    }
+
+    test("Claude progress: immediate delivery deduplicates per conversation and permits changed lines") {
+        withClaudeProgress { trial, module in
+            trial.speechBusy = false
+            trial.event(2, module: module)
+            trial.event(2, module: module)
+            trial.event(3, module: module)
+            trial.event(2, module: module)
+            expect(trial.said, ["Public task Alpha progress", "Public task Beta progress", "Public task Alpha progress"], "X then Y then X are distinct updates")
+            trial.load("https://example.com/progress-b")
+            trial.event(2, module: module)
+            expect(trial.said.count, 4, "identical words in another conversation are delivered immediately")
+            trial.load("https://example.com/progress-a")
+            trial.event(2, module: module)
+            expect(trial.said.count, 4, "returning remembers this conversation's delivered line")
+        }
+    }
+
+    for initiallyBusy in [false, true] {
+        test("Claude progress: a named group's descendant words survive \(initiallyBusy ? "held" : "immediate") delivery") {
+            withClaudeProgress { trial, module in
+                trial.speechBusy = initiallyBusy
+                trial.event(5, module: module)
+                if initiallyBusy {
+                    check(trial.said.isEmpty, "the aggregate notice waits while busy")
+                    trial.speechBusy = false
+                    trial.poll(after: 0.5)
+                }
+                expect(trial.said, ["Public group summary. Public group detail"], "both children are spoken instead of the group's label or value")
+                trial.event(5, module: module)
+                expect(trial.said.count, 1, "the complete aggregate is deduplicated")
+                trial.load("https://example.com/progress-a", groupTail: "Public changed detail")
+                trial.event(5, module: module)
+                expect(trial.said.last, "Public group summary. Public changed detail", "changed children remain news despite unchanged group label and value")
+                expect(trial.said.count, 2)
+            }
+        }
+    }
+
     test("Claude progress: quiet keys do not interrupt long reading") {
         expect(ClaudeProgressReadiness.decision(keyQuietFor: 1.5, speechBusy: true), .wait)
         expect(ClaudeProgressReadiness.decision(keyQuietFor: 20, speechBusy: true), .wait)
