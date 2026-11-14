@@ -463,6 +463,124 @@ func webBufferTests() {
         check(buffer.text.length == 0 && buffer.status == .idle, "none of that page was published as the old document")
     }
 
+    test("browse boundary: a dirty same-length replacement answers from a confirmed complete copy (14 Nov 2026)") {
+        AXReplay.load(threeHeadingsPage())
+        defer { AXReplay.unload() }
+        guard let root = AXReplay.root else { return check(false, "fixture root") }
+        let state = OSAllocatedUnfairLock(initialState: (text: String(repeating: "Public text. ", count: 160), hold: false, stop: Optional<AXWalkStop>.none))
+        let entered = DispatchSemaphore(value: 0), release = DispatchSemaphore(value: 0)
+        let buffer = WebBuffer(webArea: root, collect: { root, _, _ in
+            let next = state.withLock { $0 }
+            if next.hold { entered.signal(); _ = release.wait(timeout: .now() + 3) }
+            return sampleCollection(root, text: next.text, stop: next.stop)
+        })
+        let page = BrowseModeDocument(webArea: root, buffer: buffer)
+        BrowseModeHandler.shared.adopt(page)
+        let saved = config, sink = Speech.sink
+        var said: [String] = []
+        config.general.keyboardStyle = "windows"
+        Speech.sink = { said.append($0) }
+        API.setFocusObject(nil, ancestors: [], interceptor: page)
+        defer {
+            release.signal()
+            API.setFocusObject(nil, ancestors: [])
+            BrowseModeHandler.shared.forget(pid: root.pid)
+            config = saved
+            Speech.sink = sink
+        }
+        page.refreshIfNavigated(); waitForBuffer(buffer)
+        page.passThrough = false
+        let key = KeyboardGesture(identifier: "kb:rightArrow")!
+        @MainActor func forward() {
+            page.position = buffer.text.length
+            said = []
+            guard let command = page.script(for: key) else { return check(false, "forward command") }
+            command.handler(key)
+        }
+        // The first dirty end must be checked before it is called complete.
+        state.withLock { $0.hold = true }
+        buffer.isDirty = true
+        forward()
+        check(entered.wait(timeout: .now() + 2) == .success, "the first end reread is held")
+        check(!said.contains("bottom"), "the first dirty end waits")
+        release.signal(); waitForBuffer(buffer)
+        check(said.contains("bottom"), "the complete reread found no growth")
+        check(page.endReadWithoutGrowth != nil, "this page has a confirmed end")
+
+        // A changed link preview can replace text without adding any content after the reader.
+        state.withLock { $0.text = String(repeating: "Other text!. ", count: 160) }
+        buffer.isDirty = true
+        forward()
+        check(said.contains("bottom"), "the repeated forward edge answers immediately from its copy")
+        check(!said.contains("loading page"), "its background reread does not change the edge answer")
+        check(entered.wait(timeout: .now() + 2) == .success, "the dirty copy is checked in the background")
+        release.signal(); waitForBuffer(buffer)
+        expect(page.loadsMoreAtItsEnd, nil, "same-length replacement does not mark a growing feed")
+
+        // A completed background check can have recorded this exact copy before later AX news arrives.
+        // Even when nothing has changed in the published text, that news must request another background read.
+        page.endReachedInBackground = (page.endReadWithoutGrowth?.generation ?? -1, buffer.text.hash)
+        buffer.isDirty = true
+        forward()
+        check(said.contains("bottom"), "fresh AX news on an identical copy still answers immediately")
+        check(entered.wait(timeout: .now() + 2) == .success, "the dirty identical copy gets a new background check")
+        release.signal(); waitForBuffer(buffer)
+        expect(page.loadsMoreAtItsEnd, nil, "another no-growth check does not classify a feed")
+
+        // An ordinary refresh can grow the page without going through either end-reading helper.
+        // Its longer publication invalidates the old length certification even when freshly built and clean.
+        state.withLock { $0.hold = false; $0.text += " Added by an ordinary refresh." }
+        buffer.build(); waitForBuffer(buffer)
+        check(buffer.text.length > (page.endReadWithoutGrowth?.length ?? Int.max), "the ordinary publication outgrew the certified copy")
+        state.withLock { $0.hold = true }
+        forward()
+        check(!said.contains("bottom"), "a longer ordinary publication invalidates the old confirmed end")
+        check(entered.wait(timeout: .now() + 2) == .success, "the newly extended end is checked before answering")
+        release.signal(); waitForBuffer(buffer)
+        check(said.contains("bottom"), "the longer copy can certify its end after its own complete reread")
+
+        // The same dirty-copy path must discover genuinely longer content that arrived after its last check.
+        page.endReachedInBackground = (page.endReadWithoutGrowth?.generation ?? -1, buffer.text.hash)
+        state.withLock { $0.text += " Newly arrived content after the prior end." }
+        buffer.isDirty = true
+        forward()
+        check(said.contains("bottom"), "the dirty edge answers from the confirmed copy before new content arrives")
+        check(entered.wait(timeout: .now() + 2) == .success, "new AX news checks the provider despite the matching copy hash")
+        release.signal(); waitForBuffer(buffer)
+        check(page.loadsMoreAtItsEnd != nil, "the background check classifies actual text-length growth")
+
+        // A known feed still waits, including when the current copy is freshly built.
+        state.withLock { $0.text += " New content after the end." }
+        forward()
+        check(!said.contains("bottom"), "a known growing feed waits for its new content")
+        check(entered.wait(timeout: .now() + 2) == .success, "the feed end reread is held")
+        release.signal(); waitForBuffer(buffer)
+        check(page.loadsMoreAtItsEnd != nil, "real growth retains the feed classification")
+
+        // A newer executed key owns the reading position; the older edge must not say bottom later.
+        forward()
+        check(entered.wait(timeout: .now() + 2) == .success, "another feed end reread is held")
+        let left = KeyboardGesture(identifier: "kb:leftArrow")!
+        guard let back = page.script(for: left) else { return check(false, "backward command") }
+        back.handler(left)
+        said = []
+        release.signal(); waitForBuffer(buffer)
+        check(!said.contains("bottom"), "a newer backward key retires the pending forward edge answer")
+
+        // A complete end certified earlier cannot certify a later truncated copy as the page's bottom.
+        state.withLock { $0.hold = false; $0.stop = .visits }
+        buffer.build(); waitForBuffer(buffer)
+        check(buffer.stoppedAtLimit, "the provider returned an incomplete huge-page prefix")
+        page.loadsMoreAtItsEnd = nil
+        state.withLock { $0.hold = true }
+        forward()
+        check(!said.contains("bottom"), "a partial copy bypasses the confirmed-end fast path")
+        check(entered.wait(timeout: .now() + 2) == .success, "the partial copy is read again before reporting its edge")
+        release.signal(); waitForBuffer(buffer)
+        check(said.contains("page read in part, it is very long"), "a still-partial huge page is reported as incomplete")
+        check(!said.contains("bottom"), "the huge-page prefix is never reported as a complete bottom")
+    }
+
     test("document snapshot: one heading command cannot scroll an infinite feed indefinitely") {
         let root = AXUIElementCreateApplication(910_000)
         let calls = OSAllocatedUnfairLock(initialState: 0)
