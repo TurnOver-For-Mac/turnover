@@ -23,6 +23,7 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 - At the bottom of a changing page, repeated forward keys answer from the copy once its end has been checked.
 - Claude's progress lines wait for speech to finish as well as quiet keys; notices still waiting after a minute
   expire.
+- Claude's conversation shortcuts say the new name promptly, and page commands wait for the new conversation.
 - Wrapping round a page with the heading, link and other single-letter keys is immediate again: at the end of a page
   TurnOver no longer reads the whole page again before "wrapped to the top", unless the page has changed. Previous
   heading at the top of a page wraps to the bottom even while the page is being read again, instead of saying "top".

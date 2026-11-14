@@ -21,6 +21,10 @@ extension BrowseModeDocument {
     /// `byAccessibility`: VO-Space. The control with the keyboard is pressed through accessibility, as VoiceOver's
     /// VO-Space presses it, where Enter and Space send the real key (below): a page that ignores one answers the other.
     func activate(_ gesture: KeyboardGesture, byAccessibility: Bool = false) {
+        if navigationWaiting ||
+           earlyTitleURL != nil {
+            if deferInitialContent({ [weak self] in self?.activate(gesture, byAccessibility: byAccessibility) }) { return }
+        }
         // A press needs the page itself, and asks it by calls that wait out the timeout each time: on a page that is
         // not answering it is not tried, and that is said (a review, 11 Nov 2026).
         if pageSilent {
