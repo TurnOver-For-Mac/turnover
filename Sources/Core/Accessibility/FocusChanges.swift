@@ -85,9 +85,13 @@ extension AXHandler {
     /// said nothing (13 Nov 2026). Set aside while the switcher is there; once Command is let go it is gone, and the
     /// app that comes to the front is followed as ever.
     func ruleBehindTheSwitcher(_ target: AXUIElement, _ pid: pid_t, _ element: AXUIElement) -> FocusVerdict {
-        // Only the app it was opened over (still the active one): the app coming to the front is never held back.
-        guard let f = API.focusObject, f is AppSwitcherList, f.pid != pid, pid == activePid else { return .go(target) }
-        guard (f.element.attr(kAXRoleAttribute) as? String) == "AXList" else { return .go(target) }   // closed
+        guard let f = API.focusObject, f is AppSwitcherList else { return .go(target) }
+        // Only the app the switcher came up over; the app being switched to is never held back (Codex's review, 14 Nov
+        // 2026: the active app changes to it before its focus is read).
+        guard let over = AppSwitcherList.openedOver, pid == over else { return .go(target) }
+        // Only while Command is still held: the switcher closes when it is let go, whatever its element still answers.
+        let commandHeld = CGEventSource.flagsState(.combinedSessionState).contains(.maskCommand)
+        guard commandHeld else { return .go(target) }
         Log.io("focus from pid \(pid) while the app switcher is up; set aside")
         return .ignore
     }
@@ -367,6 +371,7 @@ extension AXHandler {
             // The frame runs in a process of its own, so the same-app check above never applied.
             if Self.fieldHoldsKeyboard(current.element, target, page: web) {
                 Log.io("focus on a nameless \(axRole) while the field \"\(Log.words(current.name))\" still reports focus; ignored")
+                recheckFieldFocus(current.element, pid: pid)
                 return .ignore
             }
             // A list or table in the same window still says it has the keyboard: the report is the app announcing a
@@ -415,6 +420,24 @@ extension AXHandler {
             x = y.element(kAXParentAttribute); hops += 1
         }
         return false
+    }
+
+    /// A field's own word that it is focused is not proof that its frame still has the keys (WebKit answers it from
+    /// the field's document; Codex's review, 14 Nov 2026). Looked at again a moment later: if the field no longer says
+    /// so, or the app's focus is now a control of another kind, that is followed; the nameless group alone is not.
+    func recheckFieldFocus(_ field: AXUIElement, pid: pid_t) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+            guard let self, API.focusObject?.element.isSame(field) == true else { return }
+            let app = AXUIElementCreateApplication(pid)
+            AXUIElementSetMessagingTimeout(app, 0.25)
+            let fieldStillSays = (field.attr(kAXFocusedAttribute) as? Bool) == true
+            guard let now = app.element(kAXFocusedUIElementAttribute), !now.isSame(field) else { return }
+            let containers: Set<String> = ["AXGroup", "AXWebArea", "AXUnknown", "AXScrollArea"]
+            let elsewhere = !containers.contains(now.role)
+            guard !fieldStillSays || elsewhere else { return }
+            Log.io("focus: the field let go after all; the app's focus is on \(now.role)")
+            self.focusChanged(now, pid: pid)
+        }
     }
 
     /// The list, table or outline the focus is in (the focus itself, or a row or cell of it), if it still says it

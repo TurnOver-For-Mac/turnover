@@ -84,11 +84,18 @@ extension BrowseModeDocument {
                 lastChain = []
                 Log.io("browse mode: back on the page after Return in the address field; its line waits for the new page")
                 let waiting = url, epoch = pageGeneration, keys = ScriptHandler.keysArrivedCount
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-                    guard let self, API.focusTreeInterceptor === self, pageGeneration == epoch, url == waiting else { return }
-                    guard ScriptHandler.keysArrivedCount == keys else { return }
-                    speakUnit(.line)
+                // While the page says it is busy (loading), up to eight seconds: a slow load is not a page that stayed
+                // (Codex's review, 14 Nov 2026).
+                func readIfStayed(_ waited: Double) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                        guard let self, API.focusTreeInterceptor === self, pageGeneration == epoch, url == waiting else { return }
+                        guard ScriptHandler.keysArrivedCount == keys else { return }
+                        let busy = (webArea.attr("AXElementBusy") as? Bool) == true
+                        if waited < 1.5 || (busy && waited < 8) { readIfStayed(waited + 0.5); return }
+                        speakUnit(.line)
+                    }
                 }
+                readIfStayed(0)
                 return
             }
             // Into a player, say so (a page that puts the focus on its player by itself must not leave the letters

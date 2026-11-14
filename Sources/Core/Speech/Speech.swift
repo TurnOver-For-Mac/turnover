@@ -355,16 +355,23 @@ public enum Speech {
         enqueue(joined(parts))
     }
 
-    /// When a state of each control was last said (the newest eight): the page's own state event and a press's look at
-    /// the control share it, so a change is said once (14 Nov 2026).
-    private static var statesSaid: [(element: AXUIElement, at: Date)] = []
-    public static func noteStateSaid(of element: AXUIElement) {
+    /// What was last said of each control's state, and when (the newest eight): the page's own state event and a
+    /// press's look at the control share it, so the same change is said once, and a different one is said at once
+    /// (expanded, then collapsed a moment later; Codex's review, 14 Nov 2026).
+    private static var statesSaid: [(element: AXUIElement, words: String, at: Date)] = []
+    public static func noteStateSaid(_ words: String, of element: AXUIElement) {
         statesSaid.removeAll { CFEqual($0.element, element) }
-        statesSaid.append((element, Date()))
+        statesSaid.append((element, words, Date()))
         if statesSaid.count > 8 { statesSaid.removeFirst() }
     }
-    public static func stateSaid(of element: AXUIElement, since date: Date) -> Bool {
-        statesSaid.last { CFEqual($0.element, element) }.map { $0.at >= date } ?? false
+    /// Said since `date`: the same states, or some of them (the page's event can name more states than the press's
+    /// look did, "expanded" among them). States are compared whole: "not pressed" is not "pressed".
+    public static func stateSaid(_ words: String, of element: AXUIElement, since date: Date) -> Bool {
+        guard let last = statesSaid.last(where: { CFEqual($0.element, element) }), last.at >= date else { return false }
+        let now = Set(words.components(separatedBy: ", ").filter { !$0.isEmpty })
+        let then = Set(last.words.components(separatedBy: ", ").filter { !$0.isEmpty })
+        guard !now.isEmpty, !then.isEmpty else { return false }
+        return now.isSubset(of: then) || then.isSubset(of: now)
     }
 
     /// A check box or radio button just pressed: "checked", "not checked" or "half checked", read fresh.

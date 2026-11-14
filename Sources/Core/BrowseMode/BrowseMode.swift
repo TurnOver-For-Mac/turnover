@@ -123,14 +123,23 @@ public final class BrowseModeDocument: ScriptableObject {
     var lastURL = ""
     /// When a letter with no command was last kept from the page in browse mode (any page).
     static var lastLetterKeptAt = Date.distantPast
+    /// "browse mode", a third of a second after the last of a run of letters kept from the page (or at once if the run
+    /// goes on for more than two seconds), so a fast run of keys does not cancel it.
+    static func sayBrowseModeWhenLettersStop(waited: Double = 0) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            let quiet = Date().timeIntervalSince(lastLetterKeptAt) >= 0.35 && Date().timeIntervalSince(InputManager.lastKeyDownAt) >= 0.35
+            guard quiet || waited >= 2 else { sayBrowseModeWhenLettersStop(waited: waited + 0.15); return }
+            Speech.speakMessage(String(localized: "browse mode", comment: "Spoken message"))
+        }
+    }
     var pageGeneration = 0
     var bufferIntent = 0
     /// The page (by its generation) whose end was seen to load more when it was reached, such as a feed or a cinema's
     /// showtimes: quick navigation waits there for the end to be read again before it wraps (quickWrapWaits).
     package var loadsMoreAtItsEnd: Int?
-    /// The page (by its generation) whose end has been scrolled into view and read again in the background after a
-    /// quick wrap: once a page, to find out whether it loads more at its end.
-    package var endReachedInBackground: Int?
+    /// Where the page's end was last scrolled into view and read again in the background after a quick wrap: the page
+    /// (by its generation) and the copy's length then. Looked at again only once the page or its copy has changed.
+    package var endReachedInBackground: (generation: Int, length: Int)?
     var publicationWasEmpty = false
     var publicationAnchor: BrowseModeHandler.Saved?
     var announceWhenReady = false
@@ -192,14 +201,15 @@ public final class BrowseModeDocument: ScriptableObject {
         // The first of these that says something. Claude's page has its conversation's name as its title and an empty
         // description, and an empty description was taken as the answer: switching conversations never said which
         // one, and Oliver read two headings to find he was in the wrong one (14 Nov 2026).
-        // The page's own title is used only there: with no description at all, the window's title, as before.
         let title = buffer.withSnapshot { () -> String in
             let description = webArea.string(kAXDescriptionAttribute)?.trimmingCharacters(in: .whitespacesAndNewlines)
-            if let description, !description.isEmpty { return description }
-            let own = (webArea.string(kAXTitleAttribute) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            if !own.isEmpty { return own }
-            guard description == nil else { return "" }
-            return (webArea.element(kAXWindowAttribute)?.string(kAXTitleAttribute) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            // No description at all: the window's title, as before.
+            guard let description else {
+                return (webArea.element(kAXWindowAttribute)?.string(kAXTitleAttribute) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            if !description.isEmpty { return description }
+            // An empty description: the page's own title (Claude's conversation), where it used to say nothing.
+            return (webArea.string(kAXTitleAttribute) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         }
         if !title.isEmpty { Speech.speakMessage(title) }
         if config.virtualBuffers.autoSayAllOnPageLoad {
@@ -488,9 +498,11 @@ public final class BrowseModeDocument: ScriptableObject {
         // not found, and the same search from the top found Submit (14 Nov 2026).
         var wrapped = false
         if r.location == NSNotFound {
+            // The whole text, from the other end: a match the reading position was in, or at, is found too ("Submit" from
+            // its own first letter; Codex's review, 14 Nov 2026).
             r = forward
-                ? text.range(of: s, options: .caseInsensitive, range: NSRange(location: 0, length: from))
-                : text.range(of: s, options: [.caseInsensitive, .backwards], range: NSRange(location: here, length: n - here))
+                ? text.range(of: s, options: .caseInsensitive, range: NSRange(location: 0, length: n))
+                : text.range(of: s, options: [.caseInsensitive, .backwards], range: NSRange(location: 0, length: n))
             wrapped = r.location != NSNotFound
         }
         guard r.location != NSNotFound else { return false }
@@ -618,6 +630,8 @@ public final class BrowseModeDocument: ScriptableObject {
             let app = AXUIElementCreateApplication(pid)
             AXUIElementSetMessagingTimeout(app, 0.25)
             guard let f = app.element(kAXFocusedUIElementAttribute) else { return }
+            // Still this key's: no newer key, and still this page (the question itself can take its quarter second).
+            guard ScriptHandler.keysArrivedCount == keys, API.focusTreeInterceptor === self else { return }
             if let current = API.focusObject?.element, f.isSame(current) {
                 Log.io("browse mode: Tab brought no news of the focus, and it is where it was")
                 return
@@ -644,17 +658,30 @@ public final class BrowseModeDocument: ScriptableObject {
 
     /// The page's end scrolled into view and the page read again, without anything waiting on it: once a page. If more
     /// came, the page is one that loads more at its end, and quick navigation waits for it there from now on.
+    /// A page that loads late (its new items come a second after the scroll, with no news) is looked at once more,
+    /// a second and a half later (Codex's review, 14 Nov 2026).
     func reachEndInBackground() {
-        guard endReachedInBackground != pageGeneration else { return }
-        guard !buffer.isLoading else { return }
-        endReachedInBackground = pageGeneration
         let before = buffer.text.length
         let epoch = pageGeneration
-        buffer.build(scrollTo: buffer.lines.last?.element) { [weak self] in
-            guard let self, pageGeneration == epoch else { return }
-            guard buffer.text.length > before else { return }
+        if let last = endReachedInBackground, last.generation == epoch, last.length == before { return }
+        guard !buffer.isLoading else { return }
+        endReachedInBackground = (epoch, before)
+        func grew() -> Bool {
+            guard pageGeneration == epoch, buffer.text.length > before else { return false }
             loadsMoreAtItsEnd = epoch
             Log.io("browse mode: the page's end loaded more (\(buffer.text.length - before) characters); quick navigation waits for it on this page")
+            return true
+        }
+        buffer.build(scrollTo: buffer.lines.last?.element) { [weak self] in
+            guard let self, pageGeneration == epoch, !grew() else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                guard let self, pageGeneration == epoch, !buffer.isLoading else { return }
+                buffer.build { [weak self] in
+                    guard let self else { return }
+                    _ = grew()
+                    endReachedInBackground = (epoch, buffer.text.length)
+                }
+            }
         }
     }
 
@@ -791,11 +818,11 @@ public final class BrowseModeDocument: ScriptableObject {
                 Log.io("browse mode: a letter or digit with no command; kept from the page")
                 // Said once a run: typing into a field TurnOver was still in browse mode on, "Okay" went nowhere without
                 // a sound, and the message went with only the comma and what followed it (13 Nov 2026). The word, not
-                // a sound: it says why the letters were not typed. Again after three seconds without one.
-                if Date().timeIntervalSince(BrowseModeDocument.lastLetterKeptAt) > 3 {
-                    Speech.speakMessage(String(localized: "browse mode", comment: "Spoken message"))
-                }
+                // a sound: it says why the letters were not typed. Said once the letters stop, so the next key does not
+                // cut it off (Codex's review, 14 Nov 2026); again after three seconds without one.
+                let startsRun = Date().timeIntervalSince(BrowseModeDocument.lastLetterKeptAt) > 3
                 BrowseModeDocument.lastLetterKeptAt = Date()
+                if startsRun { BrowseModeDocument.sayBrowseModeWhenLettersStop() }
             }
         }
         return nil

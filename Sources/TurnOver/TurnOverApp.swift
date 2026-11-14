@@ -424,10 +424,20 @@ final class TurnOverApp {
     /// go off behind the lock, where TurnOver may not start, and no change of VoiceOver's follows the unlock to bring
     /// TurnOver back: the Mac had no reader at all for 16 s after an unlock (13 Nov 2026, 20:24:46). TurnOver turned off
     /// by its own key (suspended) is the user's choice and is left alone.
-    private func readerAfterUnlock() {
+    /// Only once the Mac is ready for it, looked at again every half second for 30 s: the lock screen gone (by the
+    /// session, not the watcher's own flag), secure input off, an ordinary app in front and TurnOver's input allowed
+    /// (Codex's review, 14 Nov 2026: the wait for secure input gives up after 15 s, and the flag is cleared at the unlock).
+    private func readerAfterUnlock(tries: Int = 0) {
         guard !NSWorkspace.shared.isVoiceOverEnabled else { return }
         guard activation == nil, !active else { return }
         guard !lead.suspended else { return }
+        let ready = !LeadWatcher.screenIsLocked && !IsSecureEventInputEnabled()
+            && NSWorkspace.shared.frontmostApplication?.activationPolicy == .regular && InputAccess.granted
+        guard ready else {
+            if tries < 60 { DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.readerAfterUnlock(tries: tries + 1) } }
+            else { Log.warning("unlocked with neither reader on, and the Mac not ready for TurnOver's keys after 30 s") }
+            return
+        }
         heldForVoiceOver = false
         Log.warning("unlocked with neither reader on; TurnOver takes the keys")
         activate()

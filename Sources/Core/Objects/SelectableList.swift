@@ -133,7 +133,8 @@ open class SelectableList: TurnOverObject {
         // An empty list: nothing to move to, so nothing to wait for, and said at once. In Mail's empty Junk list each Up
         // and Down waited 300 ms for a selection that could not come, and "empty" was said after the next key
         // (13 Nov 2026).
-        if g.modifiers.isEmpty, key == "upArrow" || key == "downArrow", rowsAndKey.0.isEmpty {
+        let plainUpOrDown = g.modifiers.isEmpty && (key == "upArrow" || key == "downArrow")
+        if plainUpOrDown, rowsAndKey.0.isEmpty {
             g.send()
             Log.io("list: empty")
             Speech.speakMessage(String(localized: "empty", comment: "Spoken message"))

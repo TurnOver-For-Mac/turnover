@@ -35,7 +35,9 @@ final class Watchdog: @unchecked Sendable {   // its state is under `lock`
     /// TurnOver is reading (VoiceOver off): set by the app, read by the watch.
     /// No fresh player and no relaunch while the Mac is asleep or locked, nor for 30 s after it wakes: the audio
     /// system is away then, speech sticks for a while by rights, and a relaunch at the lock screen made copy after copy
-    /// of TurnOver (a tester, 20 Oct 2026: "many instances", speech as an echo, VoiceOver unstartable).
+    /// of TurnOver (a tester, 20 Oct 2026: "many instances", speech as an echo, VoiceOver unstartable). Since 14 Nov
+    /// 2026 a queue that got stuck later than 3 s after the wake, with the lock screen gone, gets its fresh player
+    /// within the 30 s (graceCovers); the relaunch still waits out the whole grace.
     nonisolated(unsafe) private var graceUntil = Date.distantPast
     /// When the Mac last woke or was unlocked (nil while it is asleep or locked). Under `lock`.
     nonisolated(unsafe) private var awakeAt: Date?
@@ -48,10 +50,18 @@ final class Watchdog: @unchecked Sendable {   // its state is under `lock`
     /// was no speech until Oliver restarted TurnOver 13 s later (14 Nov 2026). Such a queue gets its fresh player at once;
     /// the relaunch keeps the whole grace (`inGrace`), for the lock screen's sake.
     nonisolated func graceCovers(stallBegan began: Date) -> Bool {
+        // The lock screen itself, asked of the session, whatever the notices said: "session active" can come while it is
+        // still up (Codex's review, 14 Nov 2026), and the lock screen keeps the whole grace.
+        if Self.sessionLocked { return true }
         lock.lock(); defer { lock.unlock() }
         guard Date() < graceUntil else { return false }
         guard let awakeAt else { return true }   // asleep or locked
         return began.timeIntervalSince(awakeAt) < 3
+    }
+    /// The session says its screen is locked (any thread; the same question as LeadWatcher.screenIsLocked).
+    nonisolated static var sessionLocked: Bool {
+        guard let d = CGSessionCopyCurrentDictionary() as? [String: Any] else { return false }
+        return (d["CGSSessionScreenIsLocked"] as? Bool) ?? (d["CGSSessionScreenIsLocked"] as? Int).map { $0 != 0 } ?? false
     }
 
     nonisolated var active: Bool {

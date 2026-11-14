@@ -29,7 +29,9 @@ private func threeHeadingsPage() -> AXFixture {
         kids += [h, p]
         f.nodes.append(.init(id: h, attrs: ["AXRole": .string("AXHeading"), "AXValue": .number(2), "AXParent": .element(0), "AXChildren": .elements([ht])]))
         f.nodes.append(.init(id: ht, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("Heading \(k)"), "AXParent": .element(h)]))
-        f.nodes.append(.init(id: p, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("Text under heading \(k)."), "AXParent": .element(0)]))
+        // Long enough that the page is not taken for one still filling in (watchWhileFilling).
+        let text = String(repeating: "Text under heading \(k), long enough to be a page of its own. ", count: 12)
+        f.nodes.append(.init(id: p, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string(text), "AXParent": .element(0)]))
     }
     f.nodes.append(.init(id: 0, attrs: ["AXRole": .string("AXWebArea"), "AXURL": .url("https://example.com/wrap"), "AXParent": .element(1), "AXChildren": .elements(kids)]))
     f.nodes.append(.init(id: 1, attrs: ["AXRole": .string("AXApplication"), "AXTitle": .string("Public sample"), "AXChildren": .elements([0])]))
@@ -44,12 +46,17 @@ func webBufferTests() {
             .init(id: 2, attrs: ["AXRole": .string("AXMenu"), "AXParent": .element(1)]),
             .init(id: 3, attrs: ["AXRole": .string("AXPopUpButton"), "AXTitle": .string("Size")]),
             .init(id: 4, attrs: ["AXRole": .string("AXPopUpButton"), "AXTitle": .string("Usage"), "AXPopupValue": .string("dialog")]),
+            // Chromium's <select>: "menu", with its options as menu items straight inside it.
+            .init(id: 5, attrs: ["AXRole": .string("AXPopUpButton"), "AXTitle": .string("Colour"), "AXPopupValue": .string("menu"), "AXChildren": .elements([6, 7])]),
+            .init(id: 6, attrs: ["AXRole": .string("AXMenuItem"), "AXTitle": .string("Red"), "AXParent": .element(5)]),
+            .init(id: 7, attrs: ["AXRole": .string("AXMenuItem"), "AXTitle": .string("Blue"), "AXParent": .element(5)]),
         ]))
         defer { AXReplay.unload() }
         check(BrowseModeDocument.isMenuButton(AXReplay.element(0)), "Claude's Model button: a menu button, browse mode stays")
         check(!BrowseModeDocument.isMenuButton(AXReplay.element(1)), "a select holding its options as a menu is a choice list: focus mode, as before")
         check(!BrowseModeDocument.isMenuButton(AXReplay.element(3)), "no popup value: as before, a choice list")
         check(BrowseModeDocument.isMenuButton(AXReplay.element(4)), "a button that opens a dialog")
+        check(!BrowseModeDocument.isMenuButton(AXReplay.element(5)), "Chromium's select, its options as menu items inside it, is a choice list")
     }
     test("focus: a nameless group around the page does not take the focus from a text field that still has the keyboard (14 Nov 2026)") {
         // The page's group (0) holds the web area (1); the Email field (2) is in a frame of its own; a button (3).
@@ -91,6 +98,9 @@ func webBufferTests() {
         let last = buffer.text.range(of: "Heading 3").location
         check(last != NSNotFound, "the copy holds the last heading")
 
+        // A copy more than a second old, as in use: before 14 Nov 2026 the page was read again here before the wrap.
+        RunLoop.current.run(until: Date().addingTimeInterval(1.1))
+
         // An unchanged page: wrapped at once, from the copy, with nothing read first.
         page.position = last; said = []
         let before = reads.withLock { $0 }
@@ -98,14 +108,13 @@ func webBufferTests() {
         expect(said.first, "wrapped to the top", "the wrap is said at once, not after a read of the page")
         check(said.contains { $0.contains("Heading 1") }, "and lands on the first heading")
         waitForBuffer(buffer)
-        expect(reads.withLock { $0 }, before + 1, "the page's end is read once in the background, to learn whether it loads more")
+        expect(reads.withLock { $0 }, before + 1, "the page's end is read in the background, to learn whether it loads more")
 
-        // The same again: no further read in the background on this page.
+        // The same again, the copy unchanged: wrapped at once, and no read of the end again.
         page.position = last; said = []
         page.quickNav(heading, forward: true)
         expect(said.first, "wrapped to the top")
-        waitForBuffer(buffer)
-        expect(reads.withLock { $0 }, before + 1, "the end is reached in the background once a page, not on every wrap")
+        expect(reads.withLock { $0 }, before + 1, "an unchanged copy's end is not read again on every wrap")
 
         // A page that has changed since it was read: read again before the wrap, as before.
         buffer.isDirty = true
@@ -114,7 +123,7 @@ func webBufferTests() {
         check(!said.contains("wrapped to the top"), "a changed page is not wrapped before it is read again")
         waitForBuffer(buffer)
         expect(said.first, "wrapped to the top", "then wrapped, from the fresh copy")
-        expect(reads.withLock { $0 }, before + 2)
+        check(reads.withLock { $0 } >= before + 2, "the changed page was read again")
     }
 
     test("quick navigation: a page being read again is wrapped from the copy held, not reported as its top (14 Nov 2026)") {

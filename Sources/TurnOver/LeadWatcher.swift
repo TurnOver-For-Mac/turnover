@@ -82,6 +82,9 @@ final class LeadWatcher {
     private func retireWakeHandover() {
         if wakeHandoverGeneration == handOverGeneration { handOverGeneration &+= 1 }
         wakeHandoverGeneration = nil
+        // A retired request is no longer under way: a later lock notice asks again (Codex's review, 14 Nov 2026: the
+        // abandoned poll never answers, and the next notice would have stood down for nothing).
+        lockRequest.answered()
     }
 
     private func cancelWakeRestoration() {
