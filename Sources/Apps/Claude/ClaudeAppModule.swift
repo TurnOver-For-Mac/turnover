@@ -148,6 +148,7 @@ package final class ClaudeAppModule: AppModule {
         return true
     }
 
+    private var conversationStartingTitle = ""
     private var conversationSwitch = 0
     private weak var conversationPage: BrowseModeDocument?
     private let conversationReader = AXWalkRunner<AXSnapshot>()
@@ -169,6 +170,7 @@ package final class ClaudeAppModule: AppModule {
     package func prepareConversationSwitch(_ gesture: KeyboardGesture) {
         guard let page = API.focusTreeInterceptor,
               page.webArea.pid == pid else { return }
+        let previousTitle = conversationPage === page && page.navigationTitleOwned ? conversationStartingTitle : ""
         if let previous = conversationPage,
            previous !== page {
             previous.navigationTitleOwned = false
@@ -180,7 +182,11 @@ package final class ClaudeAppModule: AppModule {
         let request = conversationSwitch
         let root = page.webArea
         let address = page.lastURL
-        let title = page.buffer.withSnapshot { Self.switchTitle(root.string(kAXTitleAttribute) ?? "") }
+        let capturedTitle = page.buffer.withSnapshot { Self.switchTitle(root.string(kAXTitleAttribute) ?? "") }
+        // newPage empties the snapshot while collecting. A repeated shortcut still starts from the
+        // title owned by the pending switch, never that temporarily empty copy (14 Nov 2026 review).
+        let title = capturedTitle.isEmpty ? previousTitle : capturedTitle
+        conversationStartingTitle = title
         let number = Int(gesture.identifier.components(separatedBy: "+").last ?? "")
         let target = page.buffer.withSnapshot { () -> SwitchTarget in
             guard page.url == address, !address.isEmpty else { return .unknown }

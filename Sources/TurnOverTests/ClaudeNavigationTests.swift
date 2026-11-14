@@ -412,6 +412,32 @@ func claudeNavigationTests() {
         }
     }
 
+    test("Claude navigation: shortcut during rebuilding keeps the starting title and says only the final destination") {
+        withConversationTest { page, module, sent in
+            let savedSink = Speech.sink
+            var said: [String] = []
+            Speech.sink = { said.append($0) }
+            defer { Speech.sink = savedSink }
+            let first = KeyboardGesture(identifier: "kb:command+1")!
+            module.script(for: first)?.handler(first)
+            // Reproduce newPage clearing the snapshot between shortcuts, before the provider title changes.
+            page.buffer.newPage()
+            page.buffer.build()
+            check(page.buffer.isLoading, "collection has started between the two shortcuts")
+            check(page.buffer.lines.isEmpty, "the rebuild has emptied the captured title before the second key")
+            let second = KeyboardGesture(identifier: "kb:command+2")!
+            module.script(for: second)?.handler(second)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.34))
+            expect(said, [], "an unchanged provider title cannot announce the conversation being left")
+            AXReplay.load(conversationPage("Final public destination", address: "https://example.com/final"))
+            waitForConversation { said.contains("Final public destination") }
+            waitForBuffer(page.buffer)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+            expect(said, ["Final public destination"], "only the last shortcut's destination is announced")
+            expect(sent.value, ["kb:command+1", "kb:command+2"])
+        }
+    }
+
     test("Claude navigation: Command 2 keeps watching beyond the unchanged settle without old speech") {
         withConversationTest { page, module, sent in
             let savedSink = Speech.sink
