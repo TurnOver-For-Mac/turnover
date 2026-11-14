@@ -151,6 +151,18 @@ public final class SpeechPlayer: @unchecked Sendable {
         engine.outputNode.presentationLatency + Double(bufferFrames) / format.sampleRate
     }
 
+    /// 14 Nov 2026: exercise clients' connection to the real locked busy count without starting audio,
+    /// changing the device buffer size or registering watches. Seed the queue-owned state before this
+    /// instance is shared; tests only read isBusy and replace the instance to model completion.
+    package init(pendingSpeechForTesting: Bool) {
+        _voiceIdentifier = ""
+        _rate = 0.55
+        bufferFrames = 128
+        format = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 1)!
+        if pendingSpeechForTesting { pending.append(UtteranceState(completion: nil)) }
+        noteBusy()
+    }
+
     public init(voice: String, rate: Float = 0.55, bufferFrames: UInt32 = 128) throws {
         self._voiceIdentifier = voice
         self._rate = rate

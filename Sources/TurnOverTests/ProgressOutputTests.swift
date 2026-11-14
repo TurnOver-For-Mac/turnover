@@ -2,6 +2,7 @@
 import Foundation
 import ApplicationServices
 import TurnOverCore
+import TurnOverSpeech
 import AXFixtures
 
 private final class ClaudeProgressTrial {
@@ -38,7 +39,7 @@ private final class ClaudeProgressTrial {
     }
 }
 
-private func withClaudeProgress(_ body: (ClaudeProgressTrial, ClaudeAppModule) -> Void) {
+private func withClaudeProgress(overrideSpeechBusy: Bool = true, _ body: (ClaudeProgressTrial, ClaudeAppModule) -> Void) {
     let savedConfig = config, savedSink = Speech.sink, savedMode = Speech.mode
     let savedKey = InputManager.lastKeyDownAt, savedPid = AXHandler.shared.activePid
     let savedFocus = API.focusObject, savedAncestors = API.focusAncestors, savedPage = API.focusTreeInterceptor
@@ -54,7 +55,7 @@ private func withClaudeProgress(_ body: (ClaudeProgressTrial, ClaudeAppModule) -
     InputManager.lastKeyDownAt = trial.now.addingTimeInterval(-10)
     let module = ClaudeAppModule(pid: root.pid, bundleIdentifier: "com.anthropic.claudefordesktop", appName: "Claude")
     module.progressNow = { trial.now }
-    module.progressSpeechBusy = { trial.speechBusy }
+    if overrideSpeechBusy { module.progressSpeechBusy = { trial.speechBusy } }
     module.progressScheduler = { delay, callback in
         expect(delay, 0.5, "quiet is checked promptly even after the ceiling")
         trial.callbacks.append(callback)
@@ -71,6 +72,29 @@ private func withClaudeProgress(_ body: (ClaudeProgressTrial, ClaudeAppModule) -
 }
 
 func progressOutputTests() {
+    test("Claude progress: default busy provider follows the real player's pending queue") {
+        let savedPlayer = Speech.player
+        defer { Speech.player = savedPlayer }
+        withClaudeProgress(overrideSpeechBusy: false) { trial, module in
+            Speech.player = SpeechPlayer(pendingSpeechForTesting: true)
+            check(Speech.player.isBusy, "a pending utterance sets the production busy count")
+            trial.event(2, module: module)
+            check(trial.said.isEmpty, "the default busy provider cannot deliver immediately")
+            check(module.progressHeldSince(session: "https://example.com/progress-a") != nil, "the busy player admits a pending notice")
+            expect(trial.forwarded, 0, "the default provider must hold an event while the actual player is busy")
+            trial.poll(after: 2)
+            check(trial.said.isEmpty, "quiet keys cannot release over the busy player's queue")
+            Speech.player = SpeechPlayer(pendingSpeechForTesting: false)
+            check(!Speech.player.isBusy, "an empty production queue is idle")
+            trial.poll(after: 0.5)
+            expect(trial.said, ["Public task Alpha progress"])
+            Speech.player = nil
+            check(!module.progressSpeechBusy(), "no player is idle")
+            trial.poll(after: 1)
+            expect(trial.said.count, 1, "the notice was delivered once")
+        }
+    }
+
     test("Claude progress: a delivered line repeated during speech is not queued again") {
         withClaudeProgress { trial, module in
             trial.event(2, module: module)
