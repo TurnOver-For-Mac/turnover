@@ -6,7 +6,7 @@ import TurnOverAX
 import AXFixtures
 import os
 
-private func activationPage(live: Bool, near: Bool = false, tail: Int = 0, duplicate: Bool = false) -> AXFixture {
+private func activationPage(live: Bool, near: Bool = false, tail: Int = 0, duplicate: Bool = false, nativeFocus: Int = 0) -> AXFixture {
     let fillers = Array(100..<3300)
     let button = live ? 20 : 10
     var children = near ? [2] + fillers : fillers + [button]
@@ -14,7 +14,7 @@ private func activationPage(live: Bool, near: Bool = false, tail: Int = 0, dupli
     if duplicate { children.append(30) }
     var nodes: [AXFixture.Node] = [
         .init(id: 0, attrs: ["AXRole": .string("AXWebArea"), "AXURL": .url("https://example.com/activation"), "AXChildren": .elements(children), "AXParent": .element(1)]),
-        .init(id: 1, attrs: ["AXRole": .string("AXApplication")]),
+        .init(id: 1, attrs: ["AXRole": .string("AXApplication"), "AXFocusedUIElement": .element(nativeFocus)]),
         .init(id: 2, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(0), "AXChildren": .elements([button])]),
     ]
     nodes += fillers.map { .init(id: $0, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("Public older message \($0)"), "AXParent": .element(0)]) }
@@ -88,6 +88,57 @@ func activationRecoveryTests() {
                 expect(AXReplay.actions.filter { $0.action == "AXPress" }.map(\.id), [20], "exactly the live replacement is pressed")
                 check(!words().contains("nothing to activate"), "the successful repair is not reported as failure")
             }
+        }
+    }
+    test("activation recovery: Claude keyboard confirmation completes before recovery succeeds") {
+        withActivationPage { page, words in
+            let moduleID = "pid.900020"
+            let previousType = AppModuleHandler.shared.moduleType(for: moduleID)
+            let previousPoster = KeyboardGesture.poster
+            AppModuleHandler.shared.register(ClaudeAppModule.self, for: moduleID)
+            let sent = Locked<[String]>([])
+            KeyboardGesture.poster = { sent.value.append($0.identifier) }
+            defer {
+                KeyboardGesture.poster = previousPoster
+                if let previousType { AppModuleHandler.shared.register(previousType, for: moduleID) }
+                else { AppModuleHandler.shared.unregister(bundleIdentifier: moduleID) }
+            }
+            let revision = page.buffer.revision
+            pressDeadButton(page, vo: true)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.06))
+            check(AXReplay.sets.contains { $0.id == 20 && $0.attribute == kAXFocusedAttribute }, "Claude's keyboard path requested the recovered button")
+            expect(sent.value, [], "no Return before native focus confirms")
+            expect(page.buffer.revision, revision, "recovery cannot publish success while its press is pending")
+            AXReplay.load(activationPage(live: true, nativeFocus: 20))
+            awaitRecovery()
+            expect(sent.value, ["kb:enter"], "exactly one Return after native focus confirms within the shared deadline")
+            check(AXReplay.actions.filter { $0.action == "AXPress" }.isEmpty, "the keyboard path never also presses through AX")
+            check(!words().contains("nothing to activate"), "a completed key cancels the failure announcement")
+        }
+    }
+    test("activation recovery: Claude keyboard deadline reports failure and never presses late") {
+        withActivationPage { page, words in
+            let moduleID = "pid.900020"
+            let previousType = AppModuleHandler.shared.moduleType(for: moduleID)
+            let previousPoster = KeyboardGesture.poster
+            AppModuleHandler.shared.register(ClaudeAppModule.self, for: moduleID)
+            let sent = Locked<[String]>([])
+            KeyboardGesture.poster = { sent.value.append($0.identifier) }
+            defer {
+                KeyboardGesture.poster = previousPoster
+                if let previousType { AppModuleHandler.shared.register(previousType, for: moduleID) }
+                else { AppModuleHandler.shared.unregister(bundleIdentifier: moduleID) }
+            }
+            pressDeadButton(page)
+            awaitRecovery()
+            check(AXReplay.sets.contains { $0.id == 20 && $0.attribute == kAXFocusedAttribute }, "the real keyboard confirmation was attempted")
+            expect(words().filter { $0 == "nothing to activate" }.count, 1, "a missing keyboard confirmation gives one failure by the recovery deadline")
+            expect(sent.value, [], "no unconfirmed Return")
+            AXReplay.load(activationPage(live: true, nativeFocus: 20))
+            awaitRecovery()
+            expect(sent.value, [], "focus arriving after the shared deadline cannot press")
+            check(AXReplay.actions.filter { $0.action == "AXPress" }.isEmpty, "no late AX fallback either")
+            expect(words().filter { $0 == "nothing to activate" }.count, 1, "failure is announced only once")
         }
     }
     test("activation recovery: cached surviving ancestor finds a replacement far from the page end") {

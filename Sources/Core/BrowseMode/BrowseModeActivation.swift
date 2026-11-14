@@ -146,14 +146,16 @@ extension BrowseModeDocument {
 
     /// The keyboard put on `e`, then `done(true)` once the app's own focused element is it, or `done(false)` after a
     /// fifth of a second; looked at by timer, never by holding the main thread (a code review, 25 Oct 2026).
-    static func confirmFocus(_ e: AXUIElement, done: @escaping (Bool) -> Void) {
+    static func confirmFocus(_ e: AXUIElement, deadline: Date = Date().addingTimeInterval(0.2), done: @escaping (Bool) -> Void) {
+        guard Date() < deadline else { done(false); return }
         guard e.set(kAXFocusedAttribute, kCFBooleanTrue) == .success else { done(false); return }
         let app = AXUIElementCreateApplication(e.pid)
-        let end = Date().addingTimeInterval(0.2)
         func check() {
-            if let f = app.element(kAXFocusedUIElementAttribute), f.isSame(e) { done(true); return }
-            if Date() > end { done(false); return }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) { check() }
+            guard Date() < deadline else { done(false); return }
+            let focused = app.element(kAXFocusedUIElementAttribute)?.isSame(e) == true
+            guard Date() < deadline else { done(false); return }
+            if focused { done(true); return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + min(0.02, max(0, deadline.timeIntervalSinceNow))) { check() }
         }
         check()
     }
@@ -390,8 +392,10 @@ extension BrowseModeDocument {
         return nil
     }
 
-    /// The element or its nearest actionable ancestor is pressed (a text field is entered instead). False if none.
-    func press(nearestTo start: AXUIElement?, valid: @escaping () -> Bool = { true }) -> Bool {
+    /// True means an activation started; completion reports whether it actually sent a key or pressed.
+    /// Recovery supplies its absolute deadline, shared by focus confirmation and the final action.
+    func press(nearestTo start: AXUIElement?, deadline: Date? = nil, valid: @escaping () -> Bool = { true },
+               completion: @escaping (Bool) -> Void = { _ in }) -> Bool {
         guard valid() else { return false }
         var e = start
         // The element at the caret or its nearest actionable ancestor; a static text or group is never it.
@@ -406,6 +410,7 @@ extension BrowseModeDocument {
                 // (The module first: Kindle's fields answer the request with success and do nothing.)
                 if !AppModuleHandler.shared.appModule(for: x.pid).takeFocus(x) { _ = x.set(kAXFocusedAttribute, kCFBooleanTrue) }
                 setPassThrough(true, announce: true)
+                completion(true)
                 return true
             }
             if BrowseModeDocument.actionable(x) || (focusable && !["AXStaticText", "AXGroup", "AXWebArea", "AXScrollArea", "AXHeading", "AXList", "AXTable", "AXRow", "AXCell"].contains(role)) {
@@ -424,16 +429,19 @@ extension BrowseModeDocument {
                     let asked = Date()
                     let focusBefore = API.focusObject?.element
                     guard valid() else { return false }
-                    Self.confirmFocus(x) { [weak self] confirmed in
-                        guard let self, Self.watching(activation), API.focusTreeInterceptor === self else { Self.endWatch(activation); return }
+                    Self.confirmFocus(x, deadline: deadline ?? Date().addingTimeInterval(0.2)) { [weak self] confirmed in
+                        guard let self, Self.watching(activation), API.focusTreeInterceptor === self else {
+                            Self.endWatch(activation); completion(false); return
+                        }
                         Self.endWatch(activation)   // the press watch below is its own entry; none left behind on the ways out
-                        guard valid() else { return }
+                        guard valid() else { completion(false); return }
                         // Moved on while the keyboard was being put there (Tab, or the reading position): nothing pressed.
                         let focusNow = API.focusObject?.element
                         let focusMovedElsewhere = focusNow.map { now in !now.isSame(x) && !(focusBefore.map { now.isSame($0) } ?? false) } ?? false
                         let onIt = self.buffer.segment(at: self.position)?.element.isSame(x) ?? false
                         if focusMovedElsewhere || (self.positionMovedAt > asked && !onIt) {
                             Log.io("browse mode: moved on before \(role) \"\(name)\" could be pressed; not pressed")
+                            completion(false)
                             return
                         }
                         if confirmed {
@@ -448,9 +456,11 @@ extension BrowseModeDocument {
                         } else {
                             let r = AXUIElementPerformAction(x, kAXPressAction as CFString)
                             Log.io("browse mode: \(role) \"\(name)\": the keyboard didn't reach it; pressed → \(describeError(r))")
+                            guard r == .success else { completion(false); return }
                         }
                         Tones.press()
                         self.watchStateChange(x, before: before)
+                        completion(true)
                     }
                     return true
                 }
@@ -464,6 +474,7 @@ extension BrowseModeDocument {
                     // reads it again, and says the control's new state (a check box pressed from the page gets no
                     // state event, as it isn't the focus).
                     watchStateChange(x, before: before)
+                    completion(true)
                     return true
                 }
             }

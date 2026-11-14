@@ -21,6 +21,7 @@ final class BrowseActivationRecovery {
         let deadline = Date().addingTimeInterval(0.15)
         let root = document.webArea
         let ancestors = document.buffer.activationAncestors(of: element)
+        var pendingTarget: AXUIElement?
         // Repeated labels need the fresh copy's positional match. Choosing the last "Delete" on the page
         // could otherwise activate another message's control.
         let wanted = Self.nameKey(name)
@@ -30,7 +31,8 @@ final class BrowseActivationRecovery {
         func current() -> Bool {
             operation == generation && document.pageGeneration == page && document.bufferIntent == intent &&
             ScriptHandler.keysArrivedCount == keys && document.positionMovedAt == moved &&
-            (focus.map { API.focusObject?.element.isSame($0) == true } ?? (API.focusObject == nil)) &&
+            ((focus.map { API.focusObject?.element.isSame($0) == true } ?? (API.focusObject == nil)) ||
+             pendingTarget.map { API.focusObject?.element.isSame($0) == true } == true) &&
             AXHandler.shared.activePid == root.pid &&
             API.focusTreeInterceptor === document && !document.passThrough
         }
@@ -44,18 +46,23 @@ final class BrowseActivationRecovery {
         func press(_ live: AXUIElement) -> Bool {
             guard current(), Date() < deadline else { return false }
             guard !document.refreshIfNavigated() else { return false }
-            guard document.press(nearestTo: live, valid: {
-                Date() < deadline && ScriptHandler.keysArrivedCount == keys && document.pageGeneration == page &&
+            pendingTarget = live
+            let started = document.press(nearestTo: live, deadline: deadline, valid: {
+                operation == self.generation && Date() < deadline && ScriptHandler.keysArrivedCount == keys && document.pageGeneration == page &&
                 document.bufferIntent == intent && API.focusTreeInterceptor === document &&
                 AXHandler.shared.activePid == root.pid && !document.passThrough
-            }) else { return false }
-            generation += 1
-            runner.cancel()
-            Log.io("browse mode: recovered the live control for \"\(Log.words(name))\"")
-            document.buffer.build()
-            return true
+            }, completion: { pressed in
+                guard current() else { return }
+                guard pressed else { finish("the recovered control was not pressed"); return }
+                self.generation += 1
+                self.runner.cancel()
+                Log.io("browse mode: recovered the live control for \"\(Log.words(name))\"")
+                document.buffer.build()
+            })
+            if !started { pendingTarget = nil }
+            return started
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self, weak document] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + max(0, deadline.timeIntervalSinceNow)) { [weak self, weak document] in
             guard self != nil, document != nil else { return }
             finish("the 150 ms recovery deadline expired")
         }
