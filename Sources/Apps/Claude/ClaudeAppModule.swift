@@ -188,8 +188,13 @@ package final class ClaudeAppModule: AppModule {
             // descendants. Its name/value is useful for status filtering, not a replacement for those words.
             let text = ClaudeTranscript.text(of: event.obj.element, skipHidden: false)
             let session = currentConversation()
-            guard !text.isEmpty,
-                  deliveredProgress[session] != String(text.prefix(500)) else { return }
+            guard !text.isEmpty else { return }
+            if deliveredProgress[session] == String(text.prefix(500)) {
+                // 14 Nov 2026 (third review): the line already said is the newest again, so a held,
+                // older line is out of date. Drop it rather than say it later.
+                heldProgress.removeValue(forKey: session)
+                return
+            }
             let progressReadiness = ClaudeProgressReadiness.decision(
                 keyQuietFor: progressNow().timeIntervalSince(InputManager.lastKeyDownAt),
                 speechBusy: progressSpeechBusy())
