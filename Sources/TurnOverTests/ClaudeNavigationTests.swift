@@ -18,11 +18,14 @@ private func conversationPage(_ name: String, address: String, body: String? = n
 
 
 private func withConversationTest(_ body: (BrowseModeDocument, ClaudeAppModule, Locked<[String]>) -> Void) {
+    let savedPid = AXHandler.shared.activePid
+    defer { AXHandler.shared.activePid = savedPid }
     AXReplay.load(conversationPage("Old conversation", address: "https://example.com/old"))
     let root = AXReplay.element(0)
     let page = BrowseModeDocument(webArea: root)
     waitForBuffer(page.buffer)
     BrowseModeHandler.shared.adopt(page)
+    AXHandler.shared.activePid = root.pid
     API.setFocusObject(ObjectFactory.make(root), ancestors: [], interceptor: page)
     let module = ClaudeAppModule(pid: root.pid, bundleIdentifier: "com.anthropic.claudefordesktop", appName: "Claude")
     let savedSink = Speech.sink
@@ -50,6 +53,8 @@ private func waitForConversation(_ condition: () -> Bool) {
 }
 
 func claudeNavigationTests() {
+    let savedPid = AXHandler.shared.activePid
+    defer { AXHandler.shared.activePid = savedPid }
     for shortcut in ["kb:command+4", "kb:command+n"] {
         test("Claude navigation: \(shortcut) announces before collection and defers old-page keys") {
             AXReplay.load(conversationPage("Old conversation", address: "https://example.com/old"))
@@ -66,6 +71,7 @@ func claudeNavigationTests() {
             })
             let page = BrowseModeDocument(webArea: root, buffer: buffer)
             BrowseModeHandler.shared.adopt(page)
+            AXHandler.shared.activePid = root.pid
             API.setFocusObject(ObjectFactory.make(root), ancestors: [], interceptor: page)
             let module = ClaudeAppModule(pid: root.pid, bundleIdentifier: "com.anthropic.claudefordesktop", appName: "Claude")
             let savedSink = Speech.sink
@@ -131,6 +137,7 @@ func claudeNavigationTests() {
         let buffer = WebBuffer(webArea: root)
         let page = BrowseModeDocument(webArea: root, buffer: buffer)
         BrowseModeHandler.shared.adopt(page)
+        AXHandler.shared.activePid = root.pid
         API.setFocusObject(ObjectFactory.make(root), ancestors: [], interceptor: page)
         let module = ClaudeAppModule(pid: root.pid, bundleIdentifier: "com.anthropic.claudefordesktop", appName: "Claude")
         let savedSink = Speech.sink
@@ -175,12 +182,13 @@ func claudeNavigationTests() {
         check(!said.contains("Old conversation"), "the old title was never announced during the switch")
     }
 
-    test("Claude navigation: focus departure drains held commands once and returning can navigate") {
+    test("Claude navigation: focus departure discards held commands and returning can navigate") {
         AXReplay.load(conversationPage("Old conversation", address: "https://example.com/old"))
         let root = AXReplay.element(0)
         let buffer = WebBuffer(webArea: root)
         let page = BrowseModeDocument(webArea: root, buffer: buffer)
         BrowseModeHandler.shared.adopt(page)
+        AXHandler.shared.activePid = root.pid
         API.setFocusObject(ObjectFactory.make(root), ancestors: [], interceptor: page)
         let module = ClaudeAppModule(pid: root.pid, bundleIdentifier: "com.anthropic.claudefordesktop", appName: "Claude")
         let savedSink = Speech.sink
@@ -206,10 +214,11 @@ func claudeNavigationTests() {
         page.script(for: tab)?.handler(tab)
         API.setFocusObject(nil, ancestors: [])
         RunLoop.current.run(until: Date().addingTimeInterval(0.15))
-        expect(sent.value, ["kb:command+3", "kb:tab"], "departure drains the waiting Tab once")
+        expect(sent.value, ["kb:command+3"], "departure must not post the waiting Tab into another app")
         check(!said.contains("Old conversation"), "the watcher does not announce a stale title after focus leaves")
 
         AXReplay.load(conversationPage("Returned conversation", address: "https://example.com/returned"))
+        AXHandler.shared.activePid = root.pid
         API.setFocusObject(ObjectFactory.make(root), ancestors: [], interceptor: page)
         page.refreshIfNavigated()
         waitForBuffer(buffer)
@@ -217,7 +226,42 @@ func claudeNavigationTests() {
         let right = KeyboardGesture(identifier: "kb:rightArrow")!
         page.script(for: right)?.handler(right)
         check(page.position > 0, "returning to the cached page does not leave navigation permanently deferred")
-        expect(sent.value, ["kb:command+3", "kb:tab"], "return does not replay the already drained Tab")
+        expect(sent.value, ["kb:command+3"], "return does not replay the discarded Tab")
+    }
+
+    test("Claude navigation: departure before a held provider ceiling discards queued keys") {
+        withConversationTest { page, module, sent in
+            let entered = OSAllocatedUnfairLock(initialState: false)
+            let returned = OSAllocatedUnfairLock(initialState: false)
+            let release = DispatchSemaphore(value: 0)
+            let read = module.conversationRead
+            module.conversationRead = { root in
+                let snapshot = read(root)
+                entered.withLock { $0 = true }
+                _ = release.wait(timeout: .now() + 2)
+                returned.withLock { $0 = true }
+                return snapshot
+            }
+            module.conversationWaitLimit = 0.2
+            defer { release.signal(); waitForConversation { returned.withLock { $0 } } }
+            page.position = page.buffer.text.length - 1
+            let shortcut = KeyboardGesture(identifier: "kb:command+1")!
+            module.script(for: shortcut)?.handler(shortcut)
+            var completed = 0
+            check(page.deferInitialContent { completed += 1 }, "the command is queued")
+            let tab = KeyboardGesture(identifier: "kb:tab")!
+            page.script(for: tab)?.handler(tab)
+            waitForConversation { entered.withLock { $0 } }
+            AXHandler.shared.activePid = -1   // The interceptor can lag native app activation.
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+            expect(completed, 0, "the independent ceiling discards departed-page commands")
+            expect(sent.value, ["kb:command+1"], "the deadline cannot send Tab to another app")
+            release.signal()
+            waitForConversation { returned.withLock { $0 } }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+            expect(completed, 0, "a late worker cannot revive discarded commands")
+            expect(sent.value, ["kb:command+1"])
+        }
     }
 
     test("Claude navigation: unchanged answered address preserves the copy and releases every queued command") {
