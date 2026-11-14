@@ -1092,12 +1092,13 @@ func focusRuleTests() {
             let module = MapsAppModule(pid: page.webArea.pid, bundleIdentifier: "com.apple.Maps", appName: "Maps")
             guard let command = module.script(named: "maps_search") else { Harness.fail("Maps search command"); return }
             ScriptHandler.executeScript(command, gesture: KeyboardGesture(identifier: "kb:command+f")!)
-            expect(trial.words, ["search"], "the real Maps command waits briefly for its field")
-            modeFocus(66, page: page)
+            expect(trial.words, ["search", "focus mode"], "the real Maps command says search, then focus mode")
+            // The search field is outside browse mode: its focus leaves no interceptor, and no second mode word follows.
+            let field = ObjectFactory.make(AXReplay.element(66))
+            API.setFocusObject(field, ancestors: [], interceptor: nil)
+            EventHandler.execute(.gainFocus, on: field)
             trial.advance(0.4)
-            expect(trial.words.last, "focus mode")
             expect(trial.words.filter { $0 == "focus mode" }.count, 1)
-            check(trial.words.dropLast().last?.contains("Prompt") == true, "destination field precedes mode")
         }
     }
 

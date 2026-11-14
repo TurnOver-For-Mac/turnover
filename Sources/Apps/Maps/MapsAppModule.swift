@@ -20,8 +20,11 @@ package final class MapsAppModule: AppModule {
         script("maps_search", String(localized: "Search Maps; typing goes into the search field", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+f"], category: "Maps") { [weak self] g in
             g.send()
             guard let self, let doc = API.focusTreeInterceptor, doc.webArea.pid == self.pid else { return }
-            doc.setPassThrough(true, announce: true)
+            // Said here, not by the deferred mode words: the search field is outside browse mode, so its focus
+            // leaves no interceptor and the deferred words were dropped (review, 14 Nov 2026).
+            doc.setPassThrough(true, announce: false)
             Speech.speakMessage(String(localized: "search", comment: "Spoken message"))
+            Speech.speakMessage(String(localized: "focus mode", comment: "Spoken message"))
         }
     }
 

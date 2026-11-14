@@ -65,7 +65,7 @@ for mutant in no-turnover no-voiceover stale-confirmation; do
         echo "mode wiring: mutation survived: $mutant"
         exit 1
     fi
-    if ! rg -q '^mode wiring: [1-9][0-9]* failed$' "$TESTDIR/$mutant.log"; then
+    if ! grep -Eq '^mode wiring: [1-9][0-9]* failed$' "$TESTDIR/$mutant.log"; then
         cat "$TESTDIR/$mutant.log"
         echo "mode wiring: mutation did not fail through a regression assertion: $mutant"
         exit 1
