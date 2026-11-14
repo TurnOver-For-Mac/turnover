@@ -5,19 +5,14 @@ import TurnOverAX
 
 extension BrowseModeDocument {
     /// A command that arrived during the first collection runs once its content is available. A later key,
-    /// navigation or focus departure retires it; the event-tap decision still returns immediately.
+    /// navigation or focus departure retires it, except Claude's explicit switch queue, which drains every key.
+    /// The event-tap decision still returns immediately.
     package func deferInitialContent(_ action: @escaping () -> Void) -> Bool {
+        if navigationReplaying { return false }
         if navigationWaiting {
-            let intent = bufferIntent
-            let keys = ScriptHandler.keysArrivedCount
+            // 14 Nov 2026 review: neither a newer key nor the switch ceiling may throw a held key away.
             navigationHadCommand = true
-            navigationRetry = { [weak self] in
-                guard let self,
-                      bufferIntent == intent,
-                      ScriptHandler.keysArrivedCount == keys,
-                      API.focusTreeInterceptor === self else { return }
-                if !deferInitialContent(action) { action() }
-            }
+            navigationRetries.append(action)
             return true
         }
         guard buffer.lines.isEmpty, buffer.isLoading else { return false }
@@ -51,45 +46,38 @@ extension BrowseModeDocument {
         return deferred
     }
 
-    /// 14 Nov 2026: Claude's Command N left Tab using an offset in the previous conversation.
-    /// Only its module opts in. Retire the copy now; its URL/title watcher starts the new collection.
+    /// Only Claude opts in. Preserve the copy until its address changes: choosing the current conversation
+    /// must keep its reading position. refreshIfNavigated retires the copy when a new address is observed.
     package func beginNavigationWait() {
-        cancelBuffer()
-        buffer.newPage()
         bufferIntent += 1
         navigationWaiting = true
-        navigationRetry = nil
-        navigationHadCommand = false
+        if navigationRetries.isEmpty { navigationHadCommand = false }
         earlyTitleURL = nil
-        passThrough = false
         lastQuickNavTarget = nil
         lastChain = []
-        position = 0
+        passThrough = false
     }
 
-    package func finishNavigationWait(title: String?) {
+    package func finishNavigationWait(title: String?, announce: Bool = true) {
+        guard navigationWaiting else { return }
         navigationWaiting = false
         earlyTitleURL = lastURL
         if let title,
-           !title.isEmpty {
-            announceNavigationTitle(title)
-        }
-        let retry = navigationRetry
-        navigationRetry = nil
-        if !buffer.lines.isEmpty { announcePage() }
-        retry?()
+           !title.isEmpty { announceNavigationTitle(title) }
+        let retries = navigationRetries
+        navigationRetries = []
+        if announce,
+           !buffer.lines.isEmpty { announcePage() }
+        // Drain once on every exit, including the ceiling and focus departure. Replayed commands cannot
+        // fall back into first-content deferral and silently expire behind a later key (14 Nov 2026 review).
+        navigationReplaying = true
+        defer { navigationReplaying = false }
+        for retry in retries { retry() }
     }
 
     func announceNavigationTitle(_ title: String) {
         earlyTitleURL = lastURL
         Speech.speakMessage(title)
-    }
-
-    func abandonNavigationWait() {
-        navigationWaiting = false
-        navigationRetry = nil
-        navigationHadCommand = false
-        earlyTitleURL = nil
     }
 
     func configureBuffer() {
