@@ -12,17 +12,20 @@ private final class ClaudeProgressTrial {
     var said: [String] = []
     var forwarded = 0
 
-    func load(_ session: String, alpha: String = "Public task Alpha progress", groupTail: String = "Public group detail", live: String = "polite") {
+    func load(_ session: String, alpha: String = "Public task Alpha progress", groupTail: String = "Public group detail", live: String = "polite", sidebar: Int? = nil, sidebarURLs: Bool = true) {
         AXReplay.load(.init(app: "Public progress sample", bundle: "test.claude-progress", recorded: "synthetic",
                             root: 0, application: 1, focus: 0, nodes: [
             .init(id: 0, attrs: ["AXRole": .string("AXWebArea"), "AXURL": .url(session), "AXParent": .element(1)]),
             .init(id: 1, attrs: ["AXRole": .string("AXApplication")]),
-            .init(id: 2, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string(alpha), "AXARIALive": .string(live)]),
+            .init(id: 2, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string(alpha), "AXARIALive": .string(live), "AXParent": .element(sidebar ?? 0)]),
             .init(id: 3, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("Public task Beta progress"), "AXARIALive": .string("polite")]),
             .init(id: 5, attrs: ["AXRole": .string("AXGroup"), "AXTitle": .string("Progress label"), "AXValue": .string("Progress value"),
                                  "AXChildren": .elements([6, 7]), "AXARIALive": .string("polite")]),
             .init(id: 6, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("Public group summary. ")]),
             .init(id: 7, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string(groupTail)]),
+            .init(id: 10, attrs: ["AXRole": .string("AXLink"), "AXParent": .element(12), "AXURL": .string(sidebarURLs ? "https://example.com/sidebar-a" : "")]),
+            .init(id: 11, attrs: ["AXRole": .string("AXLink"), "AXParent": .element(12), "AXURL": .string(sidebarURLs ? "https://example.com/sidebar-b" : "")]),
+            .init(id: 12, attrs: ["AXRole": .string("AXGroup"), "AXSubrole": .string("AXLandmarkNavigation")]),
             .init(id: 4, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("Public task Gamma progress"), "AXARIALive": .string("polite")]),
         ]))
     }
@@ -76,16 +79,16 @@ func progressOutputTests() {
     test("Claude progress: named sidebar status waits for speech and keys and keeps the newest per session") {
         withClaudeProgress { trial, module in
             let openSession = "https://example.com/progress-a"
-            trial.load(openSession, alpha: "Public Alpha task. Running", live: "assertive")
+            trial.load(openSession, alpha: "Public Alpha task. Running", live: "assertive", sidebar: 10)
             trial.event(2, module: module)
             check(trial.said.isEmpty, "busy speech holds the sidebar notice")
             expect(trial.forwarded, 0, "a sidebar assertive notice cannot bypass the quiet rule")
             trial.poll(after: 2)
             check(trial.said.isEmpty, "quiet keys alone do not release sidebar status")
-            trial.load(openSession, alpha: "Public Alpha task. Awaiting input", live: "assertive")
+            trial.load(openSession, alpha: "Public Alpha task. Awaiting input", live: "assertive", sidebar: 10)
             trial.event(2, module: module)
             trial.poll(after: 0.1)
-            trial.load(openSession, alpha: "Public Beta task. Unread response", live: "assertive")
+            trial.load(openSession, alpha: "Public Beta task. Unread response", live: "assertive", sidebar: 11)
             trial.event(2, module: module)
             trial.speechBusy = false
             InputManager.lastKeyDownAt = trial.now
@@ -106,10 +109,90 @@ func progressOutputTests() {
         }
     }
 
-    test("Claude progress: sidebar classification uses only measured complete status suffixes") {
-        expect(ClaudeAppModule.sidebarStatusSession("Public task. Part two. Running"), "claude-sidebar-status:Public task. Part two")
-        for text in ["Running", "Claude is responding", "Claude finished the response", "Public task. Running a command", ". Awaiting input"] {
-            check(ClaudeAppModule.sidebarStatusSession(text) == nil, "ordinary conversation text is not a sidebar status: \(text)")
+    test("Claude progress: identical sidebar titles retain separate sessions") {
+        withClaudeProgress { trial, module in
+            let page = "https://example.com/progress-a"
+            trial.load(page, alpha: "Same title. Running", live: "assertive", sidebar: 10)
+            trial.event(2, module: module)
+            trial.load(page, alpha: "Same title. Unread response", live: "assertive", sidebar: 11)
+            trial.event(2, module: module)
+            trial.speechBusy = false
+            trial.poll(after: 2)
+            trial.poll(after: 0.5)
+            expect(Set(trial.said), Set(["Same title. Running", "Same title. Unread response"]))
+            expect(trial.said.count, 2, "identical titles do not overwrite separate sessions")
+        }
+    }
+
+    test("Claude progress: a sidebar rename replaces its pending notice with URL or element identity") {
+        for hasURL in [false, true] {
+            withClaudeProgress { trial, module in
+                let page = "https://example.com/progress-a"
+                trial.load(page, alpha: "Old title. Running", live: "assertive", sidebar: 10, sidebarURLs: hasURL)
+                trial.event(2, module: module)
+                trial.load(page, alpha: "Renamed title. Awaiting input", live: "assertive", sidebar: 10, sidebarURLs: hasURL)
+                trial.event(2, module: module)
+                trial.speechBusy = false
+                trial.poll(after: 2)
+                trial.poll(after: 0.5)
+                expect(trial.said, ["Renamed title. Awaiting input"], "renaming leaves no obsolete pending title")
+            }
+        }
+    }
+
+    test("Claude progress: current conversation suffix keeps assertive delivery without a duplicate text walk") {
+        withClaudeProgress { trial, module in
+            trial.load("https://example.com/progress-a", alpha: "Public task. Running", live: "assertive")
+            let object = ObjectFactory.make(AXReplay.element(2))
+            _ = object.value
+            AXReplay.reads = []
+            defer { AXReplay.reads = nil }
+            module.handleEvent(Event(.liveRegionChange, object)) {
+                trial.forwarded += 1
+                object.event_liveRegionChange()
+            }
+            expect(trial.forwarded, 1, "matching words in the conversation are ordinary assertive news")
+            expect(AXReplay.reads?.filter { $0.id == 2 && $0.attribute == "AXValue" }.count, 1,
+                   "the object reads the transcript once; its cached value needs no preliminary transcript walk")
+            check(trial.callbacks.isEmpty, "ordinary assertive text is never held as sidebar status")
+        }
+    }
+
+    test("Claude progress: unrelated assertive text inside sidebar navigation keeps ordinary delivery") {
+        withClaudeProgress { trial, module in
+            trial.load("https://example.com/progress-a", alpha: "Public sidebar command completed", live: "assertive", sidebar: 10)
+            trial.event(2, module: module)
+            expect(trial.forwarded, 1, "structural location alone does not identify session status")
+            check(trial.callbacks.isEmpty, "unrelated sidebar news has no held progress")
+        }
+    }
+
+    test("Claude progress: a large ordinary assertive region is traversed only once by the production object handler") {
+        withClaudeProgress { trial, module in
+            let children = Array(100..<1100)
+            var nodes: [AXFixture.Node] = [
+                .init(id: 0, attrs: ["AXRole": .string("AXWebArea"), "AXURL": .url("https://example.com/progress-a")]),
+                .init(id: 1, attrs: ["AXRole": .string("AXApplication")]),
+                .init(id: 5, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(0),
+                                      "AXARIALive": .string("assertive"), "AXChildren": .elements(children)])
+            ]
+            nodes += children.map { .init(id: $0, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("Public progress. ")]) }
+            AXReplay.load(.init(app: "Public progress sample", bundle: "test.claude-progress", recorded: "synthetic",
+                                root: 0, application: 1, focus: 0, nodes: nodes))
+            let object = ObjectFactory.make(AXReplay.element(5))
+            _ = object.value
+            _ = object.name
+            AXReplay.reads = []
+            defer { AXReplay.reads = nil }
+            module.handleEvent(Event(.liveRegionChange, object)) {
+                trial.forwarded += 1
+                object.event_liveRegionChange()
+            }
+            expect(trial.forwarded, 1)
+            expect(AXReplay.reads?.filter { children.contains($0.id) && $0.attribute == "AXValue" }.count, 1000,
+                   "each child is read once across module and object dispatch")
+            check((AXReplay.reads?.count ?? Int.max) < 2100, "AX calls grow with one traversal, not two")
+            check(!trial.said.isEmpty, "the real object handler reaches speech output")
         }
     }
 

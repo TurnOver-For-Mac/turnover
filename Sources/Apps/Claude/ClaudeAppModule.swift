@@ -177,20 +177,20 @@ package final class ClaudeAppModule: AppModule {
             // Claude's own status counters ("History 518/518", "Running", "Running agent") are noise, not news (the code review, 17 Oct 2026).
             let t = (event.obj.value ?? event.obj.name).trimmingCharacters(in: .whitespacesAndNewlines)
             if t.range(of: #"^(History \d+/\d+|Running( agent)?|Working…?)$"#, options: .regularExpression) != nil { Log.io("Claude: status \"\(t)\" not said"); startWatching(); return }
-            // 14 Nov 2026: Claude's sidebar emits "session title. status" (the trial log).
-            // These notices can be assertive too; identify them before the ordinary assertive path.
-            // Read descendants too: a named group can contain several static-text lines.
-            let text = ClaudeTranscript.text(of: event.obj.element, skipHidden: false)
-            let sidebarSession = Self.sidebarStatusSession(text)
-            let isOpenConversationNotice = sidebarSession == nil
-            let isAssertiveNotice = event.obj.element.string("AXARIALive") == "assertive"
-            if isOpenConversationNotice,
-               isAssertiveNotice {
+            // 14 Nov 2026 review: locate the session structurally before reading descendants.
+            // Ordinary assertive events reach the object's handler with no preliminary text walk.
+            let isSidebarStatus = [". Running", ". Awaiting input", ". Unread response"].contains { suffix in
+                t.hasSuffix(suffix) && !t.dropLast(suffix.count).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
+            let sidebarSession = isSidebarStatus ? sidebarStatusSession(event.obj.element) : nil
+            if sidebarSession == nil,
+               event.obj.element.string("AXARIALive") == "assertive" {
                 heldProgress.removeValue(forKey: currentConversation())
                 next()
                 startWatching()
                 return
             }
+            let text = ClaudeTranscript.text(of: event.obj.element, skipHidden: false)
             let session = sidebarSession ?? currentConversation()
             guard !text.isEmpty else { return }
             if deliveredProgress[session] == String(text.prefix(500)) {
@@ -224,15 +224,35 @@ package final class ClaudeAppModule: AppModule {
 
     private static let sidebarSessionPrefix = "claude-sidebar-status:"
 
-    /// 14 Nov 2026: the log records named sidebar notices ending in these three states.
-    /// Match the complete suffix, retaining titles with periods; ordinary conversation lines stay unchanged.
-    package static func sidebarStatusSession(_ text: String) -> String? {
-        for status in ["Running", "Awaiting input", "Unread response"] {
-            let suffix = ". " + status
-            guard text.hasSuffix(suffix) else { continue }
-            let title = String(text.dropLast(suffix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !title.isEmpty else { return nil }
-            return sidebarSessionPrefix + title
+    private var sidebarSessions: [ElementKey: String] = [:]
+
+    /// 14 Nov 2026 review: a session link/row inside navigation owns the status, never its title.
+    /// Unknown structures fall through to ordinary delivery. The bounded parent chain cannot walk a
+    /// conversation's descendants, even if its words happen to end in a sidebar status suffix.
+    private func sidebarStatusSession(_ element: AXUIElement) -> String? {
+        var node: AXUIElement? = element
+        var owner: AXUIElement?
+        var seen = Set<ElementKey>()
+        for _ in 0..<12 {
+            guard let current = node,
+                  seen.insert(ElementKey(current)).inserted else { return nil }
+            let role = current.role
+            if role == "AXWebArea" || role == "AXWindow" || role == "AXApplication" { return nil }
+            if owner == nil,
+               role == "AXLink" || role == "AXRow" { owner = current }
+            if current.string(kAXSubroleAttribute) == "AXLandmarkNavigation"
+                || current.string("AXARIARole") == "navigation" {
+                guard let owner else { return nil }
+                let rawAddress = owner.attr("AXURL")
+                let address = (rawAddress as? URL)?.absoluteString ?? (rawAddress as? String) ?? ""
+                if !address.isEmpty { return Self.sidebarSessionPrefix + address }
+                let key = ElementKey(owner)
+                if let session = sidebarSessions[key] { return session }
+                let session = Self.sidebarSessionPrefix + "element:\(sidebarSessions.count)"
+                sidebarSessions[key] = session
+                return session
+            }
+            node = current.element(kAXParentAttribute)
         }
         return nil
     }
