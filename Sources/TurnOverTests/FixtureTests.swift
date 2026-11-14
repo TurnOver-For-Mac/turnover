@@ -1083,6 +1083,24 @@ func focusRuleTests() {
         }
     }
 
+    test("Maps: Command F reports focus mode after search and the destination field") {
+        withModeWords { trial, page in
+            let poster = KeyboardGesture.poster
+            let skipped = WebBuffer.iosSkippedSubroles
+            KeyboardGesture.poster = nil
+            defer { KeyboardGesture.poster = poster; WebBuffer.iosSkippedSubroles = skipped }
+            let module = MapsAppModule(pid: page.webArea.pid, bundleIdentifier: "com.apple.Maps", appName: "Maps")
+            guard let command = module.script(named: "maps_search") else { Harness.fail("Maps search command"); return }
+            ScriptHandler.executeScript(command, gesture: KeyboardGesture(identifier: "kb:command+f")!)
+            expect(trial.words, ["search"], "the real Maps command waits briefly for its field")
+            modeFocus(66, page: page)
+            trial.advance(0.4)
+            expect(trial.words.last, "focus mode")
+            expect(trial.words.filter { $0 == "focus mode" }.count, 1)
+            check(trial.words.dropLast().last?.contains("Prompt") == true, "destination field precedes mode")
+        }
+    }
+
     test("quick navigation: editable targets name browse mode once; arrows do not") {
         withModeWords { trial, page in
             for kind in ["FormField", "Edit", "TextField", "Control"] {

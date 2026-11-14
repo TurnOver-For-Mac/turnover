@@ -11,6 +11,7 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   current field or reading position; Control stops them. Mode sounds remain, and brief changes within one key
   or refresh stay silent.
 - Quick navigation onto an editable field says "browse mode" after the field when typing would still navigate.
+- Command F in Maps says "focus mode" after entering search.
 - Returning to a page retains its mode: a field left in focus mode is read as the focus, with selection following;
   browse mode keeps its reading position.
 - Claude's sidebar session status waits until keys and speech are quiet, keeping each session's newest notice
