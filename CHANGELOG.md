@@ -19,6 +19,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- Finder says “opening” immediately when Command Down opens a selected application, while the application starts.
+
 - Claude's conversation shortcuts say only the destination title once, without the " - Claude Code" suffix or
   an extra first-line announcement. Title-only changes are recognised, and the wait's ceiling reads the current
   title afresh. A verified already-open conversation answers immediately; a number beyond the sidebar's

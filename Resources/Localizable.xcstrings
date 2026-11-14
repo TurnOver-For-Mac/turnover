@@ -37927,6 +37927,9 @@
         }
       }
     },
+    "opening" : {
+      "comment" : "Spoken message"
+    },
     "opening %@" : {
       "comment" : "An app being opened: %@ is its name\nSpoken message",
       "localizations" : {

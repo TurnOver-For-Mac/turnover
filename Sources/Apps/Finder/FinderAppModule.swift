@@ -30,7 +30,10 @@ final class FinderAppModule: AppModule {
         // A symptom fix, the cause in Finder unknown: the key is sent on, and if nothing changes within 350 ms it is
         // sent once more. Down only for a folder (a file would open twice), and only while Finder is still in front.
         script("finder_openSelected", String(localized: "Opens the selected item (Command Down); a folder is asked for again if Finder ignored it", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+downArrow"], category: cat) { [weak self] g in
-            self?.sendAgainIfIgnored(g, what: "Command Down", foldersOnly: true)
+            guard let self else { g.send(); return }
+            FinderRows.openSelection(in: API.focusObject?.element) {
+                self.sendAgainIfIgnored(g, what: "Command Down", foldersOnly: true)
+            }
         }.isAvailable = { [weak self] in
             guard let self, inFileView(), let f = API.focusObject else { return false }
             return !(f.element.elements(kAXSelectedRowsAttribute) + f.element.elements(kAXSelectedChildrenAttribute)).isEmpty
@@ -264,6 +267,32 @@ final class FinderColumnItem: TurnOverObject {
 
 /// Finder's list rows as text, for the rules above and their tests.
 public enum FinderRows {
+    /// Acknowledge an application before sending its open key or waiting for Finder's retry.
+    /// The 14 Nov 2026 Mail launch took 2.4 s to announce. AXURL on the selected item's
+    /// name cell identifies app bundles without disk I/O or relying on a translated Kind column.
+    public static func openSelection(in view: AXUIElement?, send: () -> Void) {
+        if let view, selectedApplication(in: view) {
+            Speech.speakMessage(String(localized: "opening", comment: "Spoken message"))
+        }
+        send()
+    }
+
+    private static func selectedApplication(in view: AXUIElement) -> Bool {
+        let selected = view.elements(kAXSelectedRowsAttribute) + view.elements(kAXSelectedChildrenAttribute)
+        // Inspect at most 32 nodes across selected items and their cells/name fields, never the whole file list.
+        var remaining = 32
+        func isApplication(_ item: AXUIElement, depth: Int) -> Bool {
+            guard remaining > 0 else { return false }
+            remaining -= 1
+            if let url = FinderItem.fileURL(of: item) {
+                return url.pathExtension.lowercased() == "app"
+            }
+            guard depth < 2 else { return false }
+            return item.elements(kAXChildrenAttribute).prefix(32).contains { isApplication($0, depth: depth + 1) }
+        }
+        return selected.prefix(32).contains { isApplication($0, depth: 0) }
+    }
+
     /// A folder: the Kind cell says Folder, or the Size cell holds the folder's dashes (the Kind column may be hidden).
     nonisolated public static func isFolderRow(cellTexts: [String]) -> Bool {
         cellTexts.contains("Folder") || (cellTexts.count >= 3 && cellTexts[2] == "--")

@@ -6,6 +6,33 @@ import TurnOverCore
 import AXFixtures
 
 func fixtureTests() {
+    test("Finder open: applications say opening before sending; documents, folders and no selection stay silent") {
+        let sink = Speech.sink, poster = KeyboardGesture.poster, heldTab = ObjectNavigator.shared.heldTab
+        KeyboardGesture.poster = nil
+        defer {
+            Speech.sink = sink; KeyboardGesture.poster = poster
+            ObjectNavigator.shared.heldTab = heldTab
+            API.setFocusObject(nil, ancestors: []); AXReplay.unload()
+        }
+        for (filename, selected) in [("Mail.app", true), ("Public.txt", true), ("Documents", true), ("Mail.app", false)] {
+            var events: [String] = []
+            Speech.sink = { events.append($0) }
+            AXReplay.load(.init(app: "Finder", bundle: "com.apple.finder", recorded: "synthetic", root: 0, application: nil, focus: 0, nodes: [
+                .init(id: 0, attrs: ["AXRole": .string("AXOutline"), "AXSelectedRows": .elements(selected ? [1] : []), "AXChildren": .elements([1])]),
+                .init(id: 1, attrs: ["AXRole": .string("AXRow"), "AXChildren": .elements([2])]),
+                .init(id: 2, attrs: ["AXRole": .string("AXCell"), "AXChildren": .elements([3])]),
+                .init(id: 3, attrs: ["AXRole": .string("AXTextField"), "AXURL": .url("file:///System/Applications/" + filename)])
+            ]))
+            FinderRows.openSelection(in: AXReplay.root) { events.append("sent") }
+            expect(events, selected && filename == "Mail.app" ? ["opening", "sent"] : ["sent"], "acknowledgement precedes dispatch only for a selected application")
+            events.removeAll()
+            API.setFocusObject(ObjectFactory.make(AXReplay.root!), ancestors: [])
+            let type = AppModuleHandler.shared.moduleType(for: "com.apple.finder")!
+            let module = type.init(pid: 900_019, bundleIdentifier: "com.apple.finder", appName: "Finder")
+            module.script(named: "finder_openSelected")?.handler(KeyboardGesture(identifier: "kb:command+downArrow")!)
+            expect(events, selected && filename == "Mail.app" ? ["opening"] : [], "the actual Command Down handler is wired to the immediate acknowledgement")
+        }
+    }
     func heldFolderFixture(rows: [Int] = [1, 2]) -> AXFixture {
         .init(app: "Public Notes sample", bundle: "com.apple.Notes", recorded: "synthetic", root: 0, application: nil, focus: nil, nodes: [
             .init(id: 0, attrs: ["AXRole": .string("AXOutline"), "AXRows": .elements(rows), "AXChildren": .elements(rows), "AXSelectedRows": .elements([1])]),
