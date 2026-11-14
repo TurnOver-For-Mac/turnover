@@ -31,10 +31,11 @@ extension BrowseModeDocument {
     ]
 
     package func quickNav(_ q: QuickNavType, forward: Bool, afterRefresh: Bool = false) {
+        let navigationTicket = ModeAnnouncement.navigationStarted(self)
         ModeAnnouncement.begin()
         var waitingForResult = false
         defer {
-            if !waitingForResult { ModeAnnouncement.navigationFinished(self) }
+            if !waitingForResult { ModeAnnouncement.navigationFinished(self, ticket: navigationTicket) }
             ModeAnnouncement.end()
         }
         positionMovedAt = Date()
@@ -45,7 +46,7 @@ extension BrowseModeDocument {
         /// Search the buffer by role (headings, buttons, links…): no WebKit to ask, or WebKit's answer is unusable.
         /// Nothing further this way: from the other end of the page (wrapping on), or "no next heading".
         func wrapOrStop() {
-            defer { ModeAnnouncement.navigationFinished(self) }
+            defer { ModeAnnouncement.navigationFinished(self, ticket: navigationTicket) }
             // A copy read in part is not wrapped past its unread rest. A page being read again is wrapped from the copy
             // held, as the arrows read it: previous heading said only "top", five times on 13 Nov 2026, while a
             // refresh was under way (MacRumors: two presses running, during a read of 933 ms).
@@ -85,7 +86,7 @@ extension BrowseModeDocument {
                     return buffer.find(from: position, forward: forward, roles: roles, headingLevel: level) != nil
                 }) { [weak self] found in
                     guard let self else { return }
-                    if !found, buffer.stoppedAtLimit { ModeAnnouncement.navigationFinished(self); Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")); return }
+                    if !found, buffer.stoppedAtLimit { ModeAnnouncement.navigationFinished(self, ticket: navigationTicket); Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")); return }
                     quickNav(q, forward: forward, afterRefresh: afterRefresh)
                 }
                 return
@@ -125,7 +126,7 @@ extension BrowseModeDocument {
                     return buffer.findText(from: position, forward: forward, kind: kind) != nil
                 }) { [weak self] found in
                     guard let self else { return }
-                    if !found, buffer.stoppedAtLimit { ModeAnnouncement.navigationFinished(self); Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")); return }
+                    if !found, buffer.stoppedAtLimit { ModeAnnouncement.navigationFinished(self, ticket: navigationTicket); Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")); return }
                     quickNav(q, forward: forward, afterRefresh: afterRefresh)
                 }
                 return
@@ -181,7 +182,11 @@ extension BrowseModeDocument {
             let epoch = pageGeneration, intent = bufferIntent, movedAt = positionMovedAt
             waitingForResult = true
             buffer.build { [weak self] in
-                guard let self, pageGeneration == epoch, bufferIntent == intent, positionMovedAt == movedAt, API.focusTreeInterceptor === self else { return }
+                guard let self else { return }
+                guard pageGeneration == epoch, bufferIntent == intent, positionMovedAt == movedAt, API.focusTreeInterceptor === self else {
+                    ModeAnnouncement.navigationFinished(self, ticket: navigationTicket)
+                    return
+                }
                 if let at = buffer.offset(of: target), at != position { land(at, target) } else { bufferSearch() }
             }
             return

@@ -7,8 +7,9 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 ### Fixed
 
 - Changes between browse mode and focus mode wait briefly for the destination field and say the mode after its
-  words. Ordinary keys carry interrupted mode words to the newer field; Control stops them. Mode sounds remain,
-  and brief changes within one key or refresh stay silent.
+  words. Ordinary keys, including a command replacing a page-loading wait, carry interrupted mode words to the
+  current field or reading position; Control stops them. Mode sounds remain, and brief changes within one key
+  or refresh stay silent.
 - Quick navigation onto an editable field says "browse mode" after the field when typing would still navigate.
 - Returning to a page retains its mode: a field left in focus mode is read as the focus, with selection following;
   browse mode keeps its reading position.

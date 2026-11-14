@@ -982,6 +982,107 @@ func focusRuleTests() {
         expect(trial.words.filter { $0 == "browse mode" }.count, 1)
     }
 
+    test("mode words: superseded deferred quick navigation releases its ticket for the newer command") {
+        for arrow in [false, true] {
+            var fixture = conversation()
+            let root = fixture.nodes.firstIndex { $0.id == 60 }!
+            fixture.nodes[root].attrs["AXURL"] = .url("https://example.com/deferred-mode-\(arrow)")
+            AXReplay.load(fixture)
+            let trial = ModeWordsTrial()
+            let entered = DispatchSemaphore(value: 0), release = DispatchSemaphore(value: 0)
+            let buffer = WebBuffer(webArea: AXReplay.element(60), collect: { root, focus, request in
+                entered.signal()
+                _ = release.wait(timeout: .now() + 3)
+                return WebBufferCollection.collect(root: root, focus: focus, request: request)
+            })
+            let page = BrowseModeDocument(webArea: AXReplay.element(60), buffer: buffer)
+            BrowseModeHandler.shared.adopt(page)
+            let savedStuck = ScriptHandler.mainStuck
+            defer {
+                ScriptHandler.mainStuck = savedStuck
+                release.signal()
+                API.setFocusObject(nil, ancestors: [])
+                waitForBuffer(buffer)
+                BrowseModeHandler.shared.forget(pid: 900_060)
+                AXReplay.unload()
+                trial.restore()
+            }
+            let focus = ObjectFactory.make(AXReplay.element(65))
+            API.setFocusObject(focus, ancestors: [], interceptor: page)
+            ObjectNavigator.shared.toFocus()
+            trial.queued = []
+            page.refreshIfNavigated()
+            check(entered.wait(timeout: .now() + 1) == .success, "collection is held off main")
+            page.passThrough = true
+            page.hasWebKitSearch = false
+            let plugin = VoiceOverKeysPlugin()
+            let gesture = KeyboardGesture(identifier: "kb:turnover+command+j")!
+            guard let command = plugin.script(named: "vo_nextFormField") else { Harness.fail("form-field command"); continue }
+            ScriptHandler.executeScript(command, gesture: gesture)
+            trial.advance(0.5)
+            check(!trial.words.contains("browse mode"), "the original command still owns its wait")
+            // Exercise the real key-arrival counter without posting keys or running InputManager.
+            ScriptHandler.mainStuck = { true }
+            _ = ScriptHandler.askMain(gesture)
+            ScriptHandler.mainStuck = savedStuck
+            Speech.cancel()
+            let newer = arrow ? plugin.script(named: "vo_next") : GlobalCommands.shared.script(named: "reportCurrentFocus")
+            guard let newer else { Harness.fail("replacement command"); continue }
+            ScriptHandler.executeScript(newer, gesture: KeyboardGesture(identifier: "kb:turnover+rightArrow")!)
+            trial.advance(0.5)
+            if arrow { check(!trial.words.contains("browse mode"), "a deferred line cannot be overtaken by its mode") }
+            release.signal()
+            waitForBuffer(buffer)
+            trial.advance(0.4)
+            check(trial.words.contains("browse mode"), "the newer command carries the mode when the old callback is discarded: \(trial.words)")
+            expect(trial.words.filter { $0 == "browse mode" }.count, 1)
+            if arrow {
+                let modeIndex = trial.words.firstIndex(of: "browse mode") ?? 0
+                check(trial.words.prefix(modeIndex).joined().contains("The reading stopped on this line."), "VO-Right reads its line before the mode: \(trial.words)")
+                check(!trial.words.joined().contains("Prompt"), "the obsolete quick-navigation callback never runs")
+            }
+        }
+    }
+
+    test("mode words: a virtual retry follows the actual reading position, not the last quick target") {
+        withModeWords { trial, page in
+            trial.holdMode = true
+            page.position = page.buffer.offset(of: AXReplay.element(65)) ?? 0
+            let navigation = BrowseModeDocument.quickNav.first { $0.name == "Edit" }!
+            page.quickNav(navigation, forward: true)
+            trial.drain()
+            expect(trial.words.last, "browse mode")
+            let completion = trial.queued.last?.1
+            // Arrows update this same caret without replacing lastQuickNavTarget. No new item has
+            // been reported yet: an interrupted field's retry must not use that stale target.
+            page.position = page.buffer.offset(of: AXReplay.element(64)) ?? 0
+            completion?(false)
+            trial.drain()
+            trial.advance(0.2)
+            expect(trial.words.filter { $0 == "browse mode" }.count, 1, "the old virtual field cannot retry elsewhere")
+        }
+    }
+
+    test("mode words: a heading container reports mode at its captured text-child position") {
+        withModeWords { trial, page in
+            var fixture = conversation()
+            let heading = fixture.nodes.firstIndex { $0.id == 63 }!
+            fixture.nodes[heading].attrs["AXRole"] = .string("AXHeading")
+            AXReplay.load(fixture)
+            page.buffer.buildForInspection()
+            page.position = page.buffer.offset(of: AXReplay.element(65)) ?? 0
+            page.passThrough = true
+            trial.queued = []
+            let plugin = VoiceOverKeysPlugin()
+            guard let command = plugin.script(named: "vo_previousHeading") else { Harness.fail("heading command"); return }
+            ScriptHandler.executeScript(command, gesture: KeyboardGesture(identifier: "kb:turnover+command+shift+h")!)
+            trial.advance(0.4)
+            check(page.elementAtPosition()?.isSame(AXReplay.element(64)) == true, "the actual position is the heading's text child")
+            expect(trial.words.last, "browse mode", "a container target does not fail the current-position check")
+            expect(trial.words.filter { $0 == "browse mode" }.count, 1)
+        }
+    }
+
     test("quick navigation: editable targets name browse mode once; arrows do not") {
         withModeWords { trial, page in
             for kind in ["FormField", "Edit", "TextField", "Control"] {

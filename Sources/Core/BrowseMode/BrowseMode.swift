@@ -562,6 +562,7 @@ public final class BrowseModeDocument: ScriptableObject {
         guard let info = caretInfo() else { return }
         info.expand(unit)
         speak(info, unit: unit)
+        ModeAnnouncement.readingReported(self)
     }
 
     /// Find (NVDA's browse-mode find, VoiceOver's VO-F): the next or previous match from the reading position,
@@ -618,8 +619,11 @@ public final class BrowseModeDocument: ScriptableObject {
         // and every key said "no next heading").
         guard buffer.lines.isEmpty, url != "about:blank" else { return true }
         let epoch = pageGeneration, movedAt = positionMovedAt, intent = bufferIntent, keys = ScriptHandler.keysArrivedCount
+        let ticket = ModeAnnouncement.navigationStarted(self)
         buffer.build { [weak self] in
-            guard let self, pageGeneration == epoch, positionMovedAt == movedAt, bufferIntent == intent,
+            guard let self else { return }
+            defer { ModeAnnouncement.navigationFinished(self, ticket: ticket) }
+            guard pageGeneration == epoch, positionMovedAt == movedAt, bufferIntent == intent,
                   ScriptHandler.keysArrivedCount == keys, API.focusTreeInterceptor === self, !passThrough else { return }
             if buffer.lines.isEmpty {
                 Speech.speakMessage(String(localized: "nothing on this page yet; it may still be loading", comment: "Spoken message"))

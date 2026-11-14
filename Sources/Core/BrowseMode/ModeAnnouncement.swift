@@ -20,6 +20,7 @@ package enum ModeAnnouncement {
         let expires: Date
         var field: AXUIElement?
         var virtual = false
+        var position: Int?
         var ready = false
         var queued = false
         var retryAfter = Date.distantPast
@@ -40,7 +41,8 @@ package enum ModeAnnouncement {
     private static var reported: (BrowseModeDocument, AXUIElement, Bool)?
     private static var pending: Pending?
     // A deferred quick-navigation result owns its mode until it reports the actual item.
-    private static var navigation: (document: BrowseModeDocument, page: Int, intent: Int)?
+    private static var navigation: (document: BrowseModeDocument, page: Int, intent: Int, ticket: Int)?
+    private static var nextNavigationTicket = 0
     package static var now: () -> Date = { Date() }
     package static var schedule: (TimeInterval, @escaping @MainActor () -> Void) -> Void = { delay, action in
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: action)
@@ -84,14 +86,30 @@ package enum ModeAnnouncement {
         }
     }
 
-    static func navigationStarted(_ document: BrowseModeDocument) {
-        navigation = (document, document.pageGeneration, document.bufferIntent)
+    @discardableResult
+    static func navigationStarted(_ document: BrowseModeDocument) -> Int {
+        nextNavigationTicket += 1
+        navigation = (document, document.pageGeneration, document.bufferIntent, nextNavigationTicket)
+        return nextNavigationTicket
     }
 
-    static func navigationFinished(_ document: BrowseModeDocument) {
+    static func navigationFinished(_ document: BrowseModeDocument, ticket: Int) {
         guard navigation?.document === document else { return }
+        guard navigation?.ticket == ticket else { return }
         navigation = nil
         waitForItem()
+    }
+
+    /// Arrows carry an existing mode obligation onto their spoken line, without creating a new one.
+    static func readingReported(_ document: BrowseModeDocument) {
+        guard API.focusTreeInterceptor === document else { return }
+        guard !document.passThrough, let field = document.elementAtPosition() else { return }
+        if navigation?.document === document { navigation = nil }
+        reported = (document, field, true)
+        if depth == 0 {
+            reported = nil
+            attach(document, field: field, virtual: true)
+        }
     }
 
     /// The quick-navigation path uses this same owner, never an independent suffix.
@@ -113,8 +131,11 @@ package enum ModeAnnouncement {
         guard let item = pending else { return }
         guard item.document === document else { return }
         guard valid(item) else { retire(item); return }
-        item.field = field
+        // A heading/link can own the quick-navigation result while its text child owns the
+        // buffer offset. Bind the retry to what actually occupies that reading position.
+        item.field = virtual ? document.elementAtPosition() : field
         item.virtual = virtual
+        item.position = virtual ? document.position : nil
         item.ready = true
         deliver(item)
     }
@@ -122,9 +143,11 @@ package enum ModeAnnouncement {
     /// A cancellation callback can arrive after a newer focus. Retire its revision immediately, before
     /// that focus is reported, so it cannot requeue the old field's words over the new one.
     static func cancelled(explicit: Bool) {
+        // Each ordinary key supersedes any deferred navigation, even when its discarded
+        // callback never runs. A newer deferred command acquires its own ticket.
+        navigation = nil
         if explicit {
             pending = nil
-            navigation = nil
             changes = []
             reported = nil
             return
@@ -187,7 +210,8 @@ package enum ModeAnnouncement {
         // audio queue behind a long field and begin on a later page (14 Nov 2026).
         guard !Speech.hasPendingOutput else { return }
         guard let field = item.field else { return }
-        let current = item.virtual ? item.document?.lastQuickNavTarget : API.focusObject?.element
+        if item.virtual, item.document?.position != item.position { return }
+        let current = item.virtual ? item.document?.elementAtPosition() : API.focusObject?.element
         guard current?.isSame(field) == true else { return }
         item.queued = true
         item.revision += 1

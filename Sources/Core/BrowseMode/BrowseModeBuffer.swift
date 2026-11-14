@@ -19,8 +19,12 @@ extension BrowseModeDocument {
         guard buffer.lines.isEmpty, buffer.isLoading else { return false }
         if earlyTitleURL == lastURL { navigationHadCommand = true }
         let epoch = pageGeneration, intent = bufferIntent, keys = ScriptHandler.keysArrivedCount
+        let ticket = ModeAnnouncement.navigationStarted(self)
         buffer.build { [weak self] in
-            guard let self, pageGeneration == epoch, bufferIntent == intent, ScriptHandler.keysArrivedCount == keys, API.focusTreeInterceptor === self, !passThrough else { return }
+            guard let self else { return }
+            // A discarded callback releases only its own wait, never a newer command's ticket.
+            defer { ModeAnnouncement.navigationFinished(self, ticket: ticket) }
+            guard pageGeneration == epoch, bufferIntent == intent, ScriptHandler.keysArrivedCount == keys, API.focusTreeInterceptor === self, !passThrough else { return }
             if !buffer.lines.isEmpty { action() }
             else {
                 Speech.speakMessage(String(localized: "nothing on this page yet; it may still be loading", comment: "Spoken message"))
