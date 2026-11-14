@@ -112,6 +112,23 @@ func progressOutputTests() {
         }
     }
 
+    // 14 Nov 2026 (third review): X said, Y held, X again: Y is out of date and must not be said later.
+    test("Claude progress: a repeat of the spoken line drops an older held line") {
+        withClaudeProgress { trial, module in
+            trial.speechBusy = false
+            trial.event(2, module: module)
+            expect(trial.said, ["Public task Alpha progress"])
+            trial.speechBusy = true
+            trial.event(3, module: module)
+            check(module.progressHeldSince(session: "https://example.com/progress-a") != nil, "Beta waits while speech is busy")
+            trial.event(2, module: module)
+            check(module.progressHeldSince(session: "https://example.com/progress-a") == nil, "the repeated Alpha drops the held Beta")
+            trial.speechBusy = false
+            trial.poll(after: 2)
+            expect(trial.said, ["Public task Alpha progress"], "the out-of-date Beta is never said")
+        }
+    }
+
     test("Claude progress: immediate delivery deduplicates per conversation and permits changed lines") {
         withClaudeProgress { trial, module in
             trial.speechBusy = false
