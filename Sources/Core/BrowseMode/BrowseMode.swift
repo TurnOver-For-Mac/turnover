@@ -645,6 +645,7 @@ public final class BrowseModeDocument: ScriptableObject {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
                 guard let self, pageGeneration == epoch, API.focusTreeInterceptor === self else { return }
                 guard !buffer.isLoading, buffer.text.length < Self.smallPage else { return }
+                guard !pageSilent else { return }
                 Log.io("browse mode: the page is small (\(buffer.text.length) characters) \(Int(delay)) s after it came; read again in case it is still filling in")
                 buffer.build()
             }
@@ -660,6 +661,7 @@ public final class BrowseModeDocument: ScriptableObject {
         let sentAt = Date(), pid = webArea.pid, keys = ScriptHandler.keysArrivedCount
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
             guard let self, API.focusTreeInterceptor === self, ScriptHandler.keysArrivedCount == keys else { return }
+            guard !pageSilent else { return }
             if let (_, at) = AXHandler.shared.lastGainFocus, at >= sentAt { return }
             // A quarter of a second at most: a page that has stopped answering must not hold the keys.
             let app = AXUIElementCreateApplication(pid)
@@ -694,6 +696,7 @@ public final class BrowseModeDocument: ScriptableObject {
     func reachEndInBackground() {
         guard endReachedInBackground != pageGeneration else { return }
         guard !buffer.isLoading else { return }
+        guard !pageSilent else { return }   // a page not answering is asked nothing (the look in the background says when it is back)
         endReachedInBackground = pageGeneration
         let before = buffer.text.length
         let epoch = pageGeneration
