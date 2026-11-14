@@ -6,6 +6,26 @@ import TurnOverCore
 import AXFixtures
 
 func fixtureTests() {
+    test("dialog: unnamed fields stay navigable without filling the opening or description") {
+        let sink = Speech.sink
+        var said: [String] = []
+        Speech.sink = { said.append($0) }
+        AXReplay.load(.init(app: "Public open panel", bundle: "test.dialog-summary", recorded: "synthetic", root: 0, application: nil, focus: 1, nodes: [
+            .init(id: 0, attrs: ["AXRole": .string("AXSheet"), "AXTitle": .string("Open"), "AXChildren": .elements([1, 2, 3, 4])]),
+            .init(id: 1, attrs: ["AXRole": .string("AXTextField"), "AXParent": .element(0)]),
+            .init(id: 2, attrs: ["AXRole": .string("AXTextField"), "AXDescription": .string(""), "AXParent": .element(0)]),
+            .init(id: 3, attrs: ["AXRole": .string("AXTextField"), "AXSubrole": .string("AXSearchField"), "AXPlaceholderValue": .string("Search"), "AXParent": .element(0)]),
+            .init(id: 4, attrs: ["AXRole": .string("AXButton"), "AXTitle": .string("Cancel"), "AXParent": .element(0)])
+        ]))
+        defer { Speech.sink = sink; AXReplay.unload() }
+        let dialog = Dialog(element: AXReplay.element(0))
+        expect(dialog.choices.count, 4, "unnamed fields are still reachable with dialog navigation")
+        expect(dialog.description, "2 choices: Search, Cancel", "only actual names describe the choices")
+        dialog.event_gainFocus()
+        expect(said, ["Open, dialog"], "opening the panel does not enumerate fields")
+        Speech.speakObject(ObjectFactory.make(AXReplay.element(3)), reason: .focus)
+        check(said.last?.contains("Search") == true, "the focused field is still read separately")
+    }
     test("navigation: flattened segments can be crossed in both directions without interacting") {
         let saved = config, sink = Speech.sink
         config.general.focusFollowsCursor = "off"

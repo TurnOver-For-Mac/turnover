@@ -19,6 +19,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- Dialogs open with their text and focused control, without listing unnamed fields; explicit descriptions keep named choices.
+
 - Reading the saved copy of an unresponsive page no longer asks the page about automatic caret focus.
 - A delayed automatic field-focus event no longer pulls the reading position back after another command.
 - Recovered button presses wait for keyboard activation to finish, or report failure at the shared focus deadline.
