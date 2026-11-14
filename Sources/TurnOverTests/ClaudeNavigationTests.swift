@@ -86,6 +86,46 @@ private func waitForConversation(_ condition: () -> Bool) {
 func claudeNavigationTests() {
     let savedPid = AXHandler.shared.activePid
     defer { AXHandler.shared.activePid = savedPid }
+    for initialFocusMode in [false, true] {
+        for focusInPrompt in [false, true] {
+            test("Claude navigation: changed page restores Prompt focus \(initialFocusMode) \(focusInPrompt) without focus news") {
+                withConversationTest { page, module, _ in
+                    page.passThrough = initialFocusMode
+                    let key = KeyboardGesture(identifier: "kb:command+3")!
+                    module.script(for: key)?.handler(key)
+                    var destination = conversationPage("Public destination", address: "https://example.com/destination")
+                    destination.nodes[3].attrs["AXTitle"] = .string("Prompt")
+                    destination.nodes[1].attrs["AXFocusedUIElement"] = .element(focusInPrompt ? 3 : 0)
+                    AXReplay.load(destination)
+                    // No gainFocus event: the native field retained focus across the URL reset.
+                    waitForConversation { !page.navigationTitleOwned }
+                    expect(page.passThrough, focusInPrompt, "only a natively focused Prompt receives typing after the reset")
+                    if focusInPrompt {
+                        let letter = KeyboardGesture(identifier: "kb:s")!
+                        check(page.script(for: letter) == nil, "typing is no longer trapped by browse mode")
+                    } else {
+                        let field = ObjectFactory.make(AXReplay.element(3))
+                        API.setFocusObject(field, ancestors: field.ancestors, interceptor: page)
+                        page.handleEvent(Event(.gainFocus, field)) {}
+                        check(page.passThrough, "Prompt focus landing after the switch enters focus mode too")
+                    }
+                }
+            }
+        }
+    }
+    test("Claude navigation: queued browse intent survives Prompt mode restoration") {
+        withConversationTest { page, module, _ in
+            let key = KeyboardGesture(identifier: "kb:command+3")!
+            module.script(for: key)?.handler(key)
+            check(page.deferInitialContent { page.setPassThrough(false, announce: false) }, "browse command waits for the destination")
+            var destination = conversationPage("Public destination", address: "https://example.com/destination")
+            destination.nodes[3].attrs["AXTitle"] = .string("Prompt")
+            destination.nodes[1].attrs["AXFocusedUIElement"] = .element(3)
+            AXReplay.load(destination)
+            waitForConversation { !page.navigationTitleOwned }
+            check(!page.passThrough, "finishing the switch cannot override a replayed browse command")
+        }
+    }
     for shortcut in ["kb:command+4", "kb:command+n"] {
         test("Claude navigation: \(shortcut) announces before collection and defers old-page keys") {
             AXReplay.load(conversationPage("Old conversation", address: "https://example.com/old"))

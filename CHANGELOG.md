@@ -19,6 +19,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- Claude's conversation shortcuts return to focus mode when the destination Prompt has keyboard focus, so typing goes into the Prompt after the page changes.
+
 - Claude conversations with identical titles announce their destination once it has loaded, without waiting for the eight-second ceiling.
 
 - Missing Claude conversation numbers preserve the Prompt’s mode; an unavailable sidebar waits for an unchanged URL at the ceiling instead of reading the current title.

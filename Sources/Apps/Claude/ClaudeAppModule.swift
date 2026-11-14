@@ -162,7 +162,25 @@ package final class ClaudeAppModule: AppModule {
         AXUIElementSetMessagingTimeout(root, 0.05)
         let names = ["AXURL", kAXTitleAttribute, kAXRoleAttribute, "AXElementBusy"]
         let values = root.attrs(names).compactMapValues { AXSnapshotValue($0) }
-        return AXSnapshot(nodes: [ElementKey(root): .init(attributes: values)])
+        var nodes: [ElementKey: AXSnapshot.Node] = [ElementKey(root): .init(attributes: values)]
+        let app = AXUIElementCreateApplication(root.pid)
+        AXUIElementSetMessagingTimeout(app, 0.05)
+        if let focus = app.element(kAXFocusedUIElementAttribute) {
+            // 14 Nov 2026: Claude can retain Prompt focus without posting focus news after a switch.
+            // Capture it on the worker, bounded to this page; the new-page reset runs before it is applied.
+            var appValues = nodes[ElementKey(app)]?.attributes ?? [:]
+            appValues[kAXFocusedUIElementAttribute] = .element(focus)
+            nodes[ElementKey(app)] = .init(attributes: appValues)
+            var current: AXUIElement? = focus
+            for _ in 0..<20 {
+                guard let element = current, !element.isSame(root) else { break }
+                AXUIElementSetMessagingTimeout(element, 0.05)
+                let attrs = element.attrs([kAXRoleAttribute, kAXTitleAttribute, kAXParentAttribute])
+                nodes[ElementKey(element)] = .init(attributes: attrs.compactMapValues { AXSnapshotValue($0) })
+                current = element.element(kAXParentAttribute)
+            }
+        }
+        return AXSnapshot(nodes: nodes)
     }
 
     /// Only the destination owns switch speech. An unchanged poll can release queued keys after the
@@ -210,6 +228,10 @@ package final class ClaudeAppModule: AppModule {
         var releasedContent = false
         var unchangedAnswers = 0
         var observedAddressChange = false
+        var latestSnapshot: AXSnapshot?
+        var latestFocus: TurnOverObject?
+        var latestKeys = 0
+        var restoredFocusURL: String?
         let settleUntil = ProcessInfo.processInfo.systemUptime + 0.25
         page.navigationTitleOwned = true
         // An unavailable sidebar cannot prove that a numbered shortcut will navigate. Keep typing
@@ -219,6 +241,33 @@ package final class ClaudeAppModule: AppModule {
         func releaseContent() {
             page.announcedURL = page.lastURL
             page.announceWhenReady = false
+            // Restore after the URL reset, once per destination and before queued commands run.
+            // A later key/focus change supersedes the worker's captured keyboard focus.
+            if observedAddressChange,
+               restoredFocusURL != page.lastURL,
+               API.focusObject === latestFocus,
+               ScriptHandler.keysArrivedCount == latestKeys,
+               API.focusTreeInterceptor === page,
+               AXHandler.shared.activePid == pid,
+               let snapshot = latestSnapshot {
+                restoredFocusURL = page.lastURL
+                snapshot.with {
+                    let app = AXUIElementCreateApplication(root.pid)
+                    if let focus = app.element(kAXFocusedUIElementAttribute),
+                       focus.role == "AXTextArea",
+                       focus.string(kAXTitleAttribute) == "Prompt" {
+                        var ancestor = focus.element(kAXParentAttribute)
+                        for _ in 0..<20 {
+                            guard let element = ancestor else { break }
+                            if element.isSame(root) {
+                                page.setPassThrough(true, announce: true)
+                                break
+                            }
+                            ancestor = element.element(kAXParentAttribute)
+                        }
+                    }
+                }
+            }
             page.finishNavigationWait(title: nil, announce: false)
         }
         func finish() {
@@ -280,6 +329,8 @@ package final class ClaudeAppModule: AppModule {
                 guard API.focusTreeInterceptor === page,
                       AXHandler.shared.activePid == pid else { finish(); return }
                 let read = conversationRead
+                let focus = API.focusObject
+                let keys = ScriptHandler.keysArrivedCount
                 conversationReader.submit(collect: { _ in read(root) }, publish: { [weak self, weak page] snapshot in
                     guard let self,
                           let page,
@@ -287,6 +338,9 @@ package final class ClaudeAppModule: AppModule {
                           !ceilingReached else { return }
                     guard API.focusTreeInterceptor === page,
                           AXHandler.shared.activePid == pid else { finish(); return }
+                    latestSnapshot = snapshot
+                    latestFocus = focus
+                    latestKeys = keys
                     let now = snapshot.with { page.url }
                     let changed = !now.isEmpty && now != address
                     let busy = snapshot.with { root.attr("AXElementBusy") as? Bool == true }
