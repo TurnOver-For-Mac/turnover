@@ -20,7 +20,139 @@ nonisolated private func sampleCollection(_ root: AXUIElement, text: String, sto
     ]), documentText: text, focusedPart: nil, stop: stop, elapsedMs: 10)
 }
 
+/// A page of three headings, each followed by a line of text, for quick navigation (14 Nov 2026). Web area 0.
+private func threeHeadingsPage() -> AXFixture {
+    var f = AXFixture(app: "Public sample", bundle: "test.wrap", recorded: "", root: 0, application: 1, focus: 0, nodes: [])
+    var kids: [Int] = []
+    for k in 1...3 {
+        let h = 100 + 4 * k, ht = h + 1, p = h + 2
+        kids += [h, p]
+        f.nodes.append(.init(id: h, attrs: ["AXRole": .string("AXHeading"), "AXValue": .number(2), "AXParent": .element(0), "AXChildren": .elements([ht])]))
+        f.nodes.append(.init(id: ht, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("Heading \(k)"), "AXParent": .element(h)]))
+        f.nodes.append(.init(id: p, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("Text under heading \(k)."), "AXParent": .element(0)]))
+    }
+    f.nodes.append(.init(id: 0, attrs: ["AXRole": .string("AXWebArea"), "AXURL": .url("https://example.com/wrap"), "AXParent": .element(1), "AXChildren": .elements(kids)]))
+    f.nodes.append(.init(id: 1, attrs: ["AXRole": .string("AXApplication"), "AXTitle": .string("Public sample"), "AXChildren": .elements([0])]))
+    return f
+}
+
 func webBufferTests() {
+    test("focus mode: a pop up button that opens a menu stays in browse mode; a choice list goes to focus mode (14 Nov 2026)") {
+        AXReplay.load(AXFixture(app: "Public sample", bundle: "test.popup", recorded: "", root: 0, application: nil, focus: nil, nodes: [
+            .init(id: 0, attrs: ["AXRole": .string("AXPopUpButton"), "AXTitle": .string("Model"), "AXPopupValue": .string("menu")]),
+            .init(id: 1, attrs: ["AXRole": .string("AXPopUpButton"), "AXTitle": .string("Country"), "AXPopupValue": .string("menu"), "AXChildren": .elements([2])]),
+            .init(id: 2, attrs: ["AXRole": .string("AXMenu"), "AXParent": .element(1)]),
+            .init(id: 3, attrs: ["AXRole": .string("AXPopUpButton"), "AXTitle": .string("Size")]),
+            .init(id: 4, attrs: ["AXRole": .string("AXPopUpButton"), "AXTitle": .string("Usage"), "AXPopupValue": .string("dialog")]),
+        ]))
+        defer { AXReplay.unload() }
+        check(BrowseModeDocument.isMenuButton(AXReplay.element(0)), "Claude's Model button: a menu button, browse mode stays")
+        check(!BrowseModeDocument.isMenuButton(AXReplay.element(1)), "a select holding its options as a menu is a choice list: focus mode, as before")
+        check(!BrowseModeDocument.isMenuButton(AXReplay.element(3)), "no popup value: as before, a choice list")
+        check(BrowseModeDocument.isMenuButton(AXReplay.element(4)), "a button that opens a dialog")
+    }
+    test("focus: a nameless group around the page does not take the focus from a text field that still has the keyboard (14 Nov 2026)") {
+        // The page's group (0) holds the web area (1); the Email field (2) is in a frame of its own; a button (3).
+        AXReplay.load(AXFixture(app: "Public sample", bundle: "test.field", recorded: "", root: 0, application: nil, focus: 2, nodes: [
+            .init(id: 0, attrs: ["AXRole": .string("AXGroup"), "AXChildren": .elements([1])]),
+            .init(id: 1, attrs: ["AXRole": .string("AXWebArea"), "AXParent": .element(0), "AXChildren": .elements([2, 3])]),
+            .init(id: 2, attrs: ["AXRole": .string("AXTextField"), "AXTitle": .string("Email"), "AXFocused": .bool(true), "AXParent": .element(1)]),
+            .init(id: 3, attrs: ["AXRole": .string("AXButton"), "AXTitle": .string("Submit"), "AXFocused": .bool(true), "AXParent": .element(1)]),
+            .init(id: 4, attrs: ["AXRole": .string("AXTextField"), "AXTitle": .string("Name"), "AXFocused": .bool(false), "AXParent": .element(1)]),
+        ]))
+        defer { AXReplay.unload() }
+        let group = AXReplay.element(0)
+        let page = AXReplay.element(1)
+        check(AXHandler.fieldHoldsKeyboard(AXReplay.element(2), group, page: page), "a focused text field in the page keeps the keyboard: the group's report is ignored")
+        check(!AXHandler.fieldHoldsKeyboard(AXReplay.element(4), group, page: page), "a field that no longer says it is focused does not")
+        check(!AXHandler.fieldHoldsKeyboard(AXReplay.element(3), group, page: page), "nor does a control that is not a text field (other rules decide)")
+        check(!AXHandler.fieldHoldsKeyboard(AXReplay.element(0), group, page: page), "the group itself is not a field holding the keyboard")
+    }
+    test("quick navigation: at the end of a page that has not changed, the wrap is at once; a changed page is read first (14 Nov 2026)") {
+        AXReplay.load(threeHeadingsPage())
+        defer { AXReplay.unload() }
+        guard let root = AXReplay.root else { return check(false, "fixture root") }
+        let reads = OSAllocatedUnfairLock(initialState: 0)
+        let buffer = WebBuffer(webArea: root, collect: { root, focus, request in
+            reads.withLock { $0 += 1 }
+            return WebBufferCollection.collect(root: root, focus: focus, request: request)
+        })
+        let page = BrowseModeDocument(webArea: root, buffer: buffer)
+        BrowseModeHandler.shared.adopt(page)   // the page's lines are read from this copy
+        API.setFocusObject(nil, ancestors: [], interceptor: page)
+        var said: [String] = []
+        let savedSink = Speech.sink, savedEdge = Tones.edgeSound
+        Speech.sink = { said.append($0) }
+        Tones.edgeSound = { _ in }
+        defer { Speech.sink = savedSink; Tones.edgeSound = savedEdge; API.setFocusObject(nil, ancestors: []); BrowseModeHandler.shared.forget(pid: root.pid) }
+        page.hasWebKitSearch = false   // the copy's own search, as in Chromium and when WebKit's answers nothing
+        page.refreshIfNavigated(); waitForBuffer(buffer)
+        guard let heading = BrowseModeDocument.quickNav.first(where: { $0.name == "Heading" }) else { return check(false, "the heading key") }
+        let last = buffer.text.range(of: "Heading 3").location
+        check(last != NSNotFound, "the copy holds the last heading")
+
+        // An unchanged page: wrapped at once, from the copy, with nothing read first.
+        page.position = last; said = []
+        let before = reads.withLock { $0 }
+        page.quickNav(heading, forward: true)
+        expect(said.first, "wrapped to the top", "the wrap is said at once, not after a read of the page")
+        check(said.contains { $0.contains("Heading 1") }, "and lands on the first heading")
+        waitForBuffer(buffer)
+        expect(reads.withLock { $0 }, before + 1, "the page's end is read once in the background, to learn whether it loads more")
+
+        // The same again: no further read in the background on this page.
+        page.position = last; said = []
+        page.quickNav(heading, forward: true)
+        expect(said.first, "wrapped to the top")
+        waitForBuffer(buffer)
+        expect(reads.withLock { $0 }, before + 1, "the end is reached in the background once a page, not on every wrap")
+
+        // A page that has changed since it was read: read again before the wrap, as before.
+        buffer.isDirty = true
+        page.position = last; said = []
+        page.quickNav(heading, forward: true)
+        check(!said.contains("wrapped to the top"), "a changed page is not wrapped before it is read again")
+        waitForBuffer(buffer)
+        expect(said.first, "wrapped to the top", "then wrapped, from the fresh copy")
+        expect(reads.withLock { $0 }, before + 2)
+    }
+
+    test("quick navigation: a page being read again is wrapped from the copy held, not reported as its top (14 Nov 2026)") {
+        AXReplay.load(threeHeadingsPage())
+        defer { AXReplay.unload() }
+        guard let root = AXReplay.root else { return check(false, "fixture root") }
+        let hold = OSAllocatedUnfairLock(initialState: false)
+        let entered = DispatchSemaphore(value: 0), release = DispatchSemaphore(value: 0)
+        let buffer = WebBuffer(webArea: root, collect: { root, focus, request in
+            if hold.withLock({ $0 }) { entered.signal(); _ = release.wait(timeout: .now() + 3) }
+            return WebBufferCollection.collect(root: root, focus: focus, request: request)
+        })
+        let page = BrowseModeDocument(webArea: root, buffer: buffer)
+        BrowseModeHandler.shared.adopt(page)
+        API.setFocusObject(nil, ancestors: [], interceptor: page)
+        var said: [String] = []
+        let savedSink = Speech.sink, savedEdge = Tones.edgeSound
+        Speech.sink = { said.append($0) }
+        Tones.edgeSound = { _ in }
+        defer { release.signal(); Speech.sink = savedSink; Tones.edgeSound = savedEdge; API.setFocusObject(nil, ancestors: []); BrowseModeHandler.shared.forget(pid: root.pid) }
+        page.hasWebKitSearch = false
+        page.refreshIfNavigated(); waitForBuffer(buffer)
+        guard let heading = BrowseModeDocument.quickNav.first(where: { $0.name == "Heading" }) else { return check(false, "the heading key") }
+        let first = buffer.text.range(of: "Heading 1").location
+
+        // A read of the page under way (a refresh), the copy kept meanwhile.
+        hold.withLock { $0 = true }
+        buffer.build()
+        check(entered.wait(timeout: .now() + 2) == .success, "the read is under way")
+        check(buffer.isLoading && !buffer.lines.isEmpty, "the copy is kept while it is read again")
+        page.position = first; said = []
+        page.quickNav(heading, forward: false)
+        expect(said.first, "wrapped to the bottom", "previous heading at the first heading wraps, rather than saying top")
+        check(said.contains { $0.contains("Heading 3") }, "to the last heading")
+        hold.withLock { $0 = false }
+        release.signal(); waitForBuffer(buffer)
+    }
+
     test("document snapshot: interpretation and navigation never fall back to live AX") {
         let root = AXUIElementCreateApplication(910_000)
         let entered = DispatchSemaphore(value: 0), release = DispatchSemaphore(value: 0), collected = DispatchSemaphore(value: 0)

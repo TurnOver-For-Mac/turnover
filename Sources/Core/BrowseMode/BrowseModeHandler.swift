@@ -23,6 +23,9 @@ public final class BrowseModeHandler {
     /// apple.com and AppleVis opened part way down, where he had last been).
     nonisolated(unsafe) public static var historyKeyAt = Date.distantPast   // main thread only
     static var cameBackByHistory: Bool { Date().timeIntervalSince(historyKeyAt) < 10 }
+    /// Return in an address field outside the page gave the keys back to the page (Safari's, after it is typed): when,
+    /// and to which page. A new page is most likely on its way (BrowseModeDocument's gain focus).
+    static var backFromAddressField: (at: Date, page: AXUIElement)?
     var documents: [BrowseModeDocument] = []
     let lock = NSLock()
 
@@ -39,6 +42,9 @@ public final class BrowseModeHandler {
         lock.unlock()
         return known.first { $0.pageSilent }
     }
+
+    /// A document made elsewhere (a test's, over a recorded page with a collection of its own), kept as if made here.
+    package func adopt(_ d: BrowseModeDocument) { lock.lock(); documents.append(d); lock.unlock() }
 
     /// A document over any element an app module nominates (Music's content pane), made once per root.
     public func document(root: AXUIElement) -> BrowseModeDocument {

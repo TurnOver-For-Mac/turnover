@@ -30,7 +30,7 @@ extension BrowseModeDocument {
         "Control": ["AXButton", "AXTextField", "AXTextArea", "AXCheckBox", "AXRadioButton", "AXPopUpButton", "AXComboBox", "AXSlider", "AXMenuButton", "AXDisclosureTriangle"],
     ]
 
-    func quickNav(_ q: QuickNavType, forward: Bool, afterRefresh: Bool = false) {
+    package func quickNav(_ q: QuickNavType, forward: Bool, afterRefresh: Bool = false) {
         if readFromCopyIfSilent({ quickNav(q, forward: forward, afterRefresh: afterRefresh) }) { return }
         positionMovedAt = Date()
         refreshIfNavigated()
@@ -40,7 +40,10 @@ extension BrowseModeDocument {
         /// Search the buffer by role (headings, buttons, links…): no WebKit to ask, or WebKit's answer is unusable.
         /// Nothing further this way: from the other end of the page (wrapping on), or "no next heading".
         func wrapOrStop() {
-            if buffer.isPartial || buffer.isLoading { reportBufferEnd(forward: forward); return }
+            // A copy read in part is not wrapped past its unread rest. A page being read again is wrapped from the copy
+            // held, as the arrows read it: previous heading said only "top", five times on 13 Nov 2026, while a
+            // refresh was under way (MacRumors: two presses running, during a read of 933 ms).
+            if !canWrapFromCopy { reportBufferEnd(forward: forward); return }
             guard config.virtualBuffers.wrapQuickNav, let roles = BrowseModeDocument.quickNavRoles[q.name] else {
                 Speech.speakMessage(Phrases.noNext(q.spoken, forward: forward)); return
             }
@@ -79,8 +82,12 @@ extension BrowseModeDocument {
                 }
                 return
             }
-            // Nothing ahead on a page that may have more below: once, the page read again from its end.
-            if hit == nil, forward, !afterRefresh, reachForMore({ [weak self] more in
+            // Nothing ahead on a page that may have more below: once, the page read again from its end. Only where that
+            // can find something (quickWrapWaits); elsewhere the wrap is at once, as NVDA's, and the end is looked at in
+            // the background.
+            let atTheEnd = hit == nil && forward && !afterRefresh
+            if atTheEnd, !quickWrapWaits() { reachEndInBackground() }
+            if atTheEnd, quickWrapWaits(), reachForMore({ [weak self] more in
                 guard let self else { return }
                 if more { quickNav(q, forward: forward, afterRefresh: true) } else { wrapOrStop() }
             }) { return }
@@ -113,11 +120,11 @@ extension BrowseModeDocument {
                 }
                 return
             }
-            if hit == nil, !buffer.isPartial, !buffer.isLoading, config.virtualBuffers.wrapQuickNav,
+            if hit == nil, canWrapFromCopy, config.virtualBuffers.wrapQuickNav,
                let w = buffer.findText(from: forward ? -1 : buffer.text.length + 1, forward: forward, kind: kind), w.offset != position {
                 Tones.edge(); Speech.speakMessage(forward ? String(localized: "wrapped to the top", comment: "Spoken message") : String(localized: "wrapped to the bottom", comment: "Spoken message")); hit = w
             }
-            guard let (at, el) = hit else { if buffer.isPartial || buffer.isLoading { reportBufferEnd(forward: forward) } else { Speech.speakMessage(Phrases.noNext(q.spoken, forward: forward)) }; return }
+            guard let (at, el) = hit else { if !canWrapFromCopy { reportBufferEnd(forward: forward) } else { Speech.speakMessage(Phrases.noNext(q.spoken, forward: forward)) }; return }
             position = at
             if let el { lastQuickNavTarget = el }
             speakQuickNavText(at: at, link: false, element: el)
@@ -190,6 +197,14 @@ extension BrowseModeDocument {
         } else {
             speakQuickNavText(at: r.0, link: q.name.contains("Link"))
         }
+    }
+
+    /// Whether quick navigation may wrap round from the copy held: it is not read in part, and it holds the page (a
+    /// read again keeps the copy until it is done, and the arrows read it meanwhile).
+    var canWrapFromCopy: Bool {
+        if buffer.isPartial { return false }
+        if buffer.lines.isEmpty { return false }
+        return true
     }
 
     /// NVDA's TextInfoQuickNavItem.report: the line from the item, but no further than the item's end — a link

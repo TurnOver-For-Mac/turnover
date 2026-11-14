@@ -13,6 +13,18 @@ public enum VoiceOverSounds {
     private static var players: [String: AVAudioPlayer] = [:]
     public static var available: Bool { FileManager.default.fileExists(atPath: folder.appendingPathComponent("LinkBegin.aiff").path) }
 
+    private static var lastPlayed: [String: Date] = [:]
+    /// A sound asked for again within a tenth of a second of the last time: logged, at most once a second.
+    private static var repeatLoggedAt = Date.distantPast
+    private static func noteRepeat(_ name: String) {
+        let now = Date()
+        if let last = lastPlayed[name], now.timeIntervalSince(last) < 0.1, now.timeIntervalSince(repeatLoggedAt) > 1 {
+            repeatLoggedAt = now
+            Log.io("sound: \(name) played again \(Int(now.timeIntervalSince(last) * 1000)) ms after the last")
+        }
+        lastPlayed[name] = now
+    }
+
     /// Plays one of VoiceOver's sounds by file name ("LinkBegin.aiff"), or TurnOver's own for it with TurnOver's set
     /// chosen or the file missing; false where there is neither, so the caller's old tone plays.
     @discardableResult
@@ -26,7 +38,13 @@ public enum VoiceOverSounds {
         guard let p = players[name] else { return ownTone(for: name) }
         p.volume = volume * min(1.5, max(0.2, Float(config.speech.volume) / 100))   // with TurnOver's own volume
         p.currentTime = 0
+        let started = Date()
         p.play()
+        // Oliver, 14 Nov 2026: on MacRumors "the link sound hangs". Sounds were not logged, so the log could not say
+        // how. One that is slow to start, or played again before it ended, is logged now.
+        let ms = Int(Date().timeIntervalSince(started) * 1000)
+        if ms >= 50 { Log.io("sound: \(name) took \(ms) ms to start") }
+        noteRepeat(name)
         return true
     }
 

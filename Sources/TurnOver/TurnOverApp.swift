@@ -153,6 +153,7 @@ final class TurnOverApp {
         }
         TurnOverMenu.shared.quit = { [weak self] in self?.quitRestoringVoiceOver() ?? NSApp.terminate(nil) }
         lead.onCoexistLead = { [weak self] turnOver in if turnOver { self?.activate() } else { self?.deactivate() } }
+        lead.onUnlockedAndFree = { [weak self] in self?.readerAfterUnlock() }
         MenuAnywhere.shared.turnOverActive = { [weak self] in self?.active ?? false }
         Speech.player?.onQueueStuck = { stall in Watchdog.shared.speechStuck(stall) }
         Speech.player?.onOutputUnavailable = { [weak self] source, failure in
@@ -396,6 +397,13 @@ final class TurnOverApp {
                     deactivate()
                 }
             } else if heldForVoiceOver {
+                // Off while the Mac is still locked or asleep, TurnOver may not take the keys (activate refuses behind
+                // the lock): it stays held, and takes them once the Mac is unlocked (readerAfterUnlock). Cleared here,
+                // nothing brought it back at the unlock (13 Nov 2026: no reader for 16 s, until Oliver restarted it).
+                if lead.locked {
+                    Log.info("VoiceOver off while the Mac is locked; TurnOver takes the keys once it is unlocked")
+                    return
+                }
                 heldForVoiceOver = false
                 Log.info("VoiceOver off; TurnOver speaks again (the swap is off)")
                 activate()
@@ -410,6 +418,19 @@ final class TurnOverApp {
             Log.info("VoiceOver turned on by hand: TurnOver steps back until it goes off or TurnOver's key")
         }
         if on { deactivate() } else { activate() }
+    }
+
+    /// Once the Mac is unlocked and secure input is off: if neither reader is on, TurnOver takes the keys. VoiceOver can
+    /// go off behind the lock, where TurnOver may not start, and no change of VoiceOver's follows the unlock to bring
+    /// TurnOver back: the Mac had no reader at all for 16 s after an unlock (13 Nov 2026, 20:24:46). TurnOver turned off
+    /// by its own key (suspended) is the user's choice and is left alone.
+    private func readerAfterUnlock() {
+        guard !NSWorkspace.shared.isVoiceOverEnabled else { return }
+        guard activation == nil, !active else { return }
+        guard !lead.suspended else { return }
+        heldForVoiceOver = false
+        Log.warning("unlocked with neither reader on; TurnOver takes the keys")
+        activate()
     }
 
     /// "NVDA and JAWS keys where VoiceOver reads too": the small key layer runs while VoiceOver leads (TurnOver's own

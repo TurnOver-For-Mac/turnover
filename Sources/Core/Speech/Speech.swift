@@ -386,6 +386,18 @@ public enum Speech {
         enqueue(joined(parts))
     }
 
+    /// When a state of each control was last said (the newest eight): the page's own state event and a press's look at
+    /// the control share it, so a change is said once (14 Nov 2026).
+    private static var statesSaid: [(element: AXUIElement, at: Date)] = []
+    public static func noteStateSaid(of element: AXUIElement) {
+        statesSaid.removeAll { CFEqual($0.element, element) }
+        statesSaid.append((element, Date()))
+        if statesSaid.count > 8 { statesSaid.removeFirst() }
+    }
+    public static func stateSaid(of element: AXUIElement, since date: Date) -> Bool {
+        statesSaid.last { CFEqual($0.element, element) }.map { $0.at >= date } ?? false
+    }
+
     /// A check box or radio button just pressed: "checked", "not checked" or "half checked", read fresh.
     /// What was last said for each box (the newest eight): the page's event and TurnOver's own look at a pressed box
     /// share these, and several boxes pressed in a row each keep their own (a code review, 25 Oct 2026).

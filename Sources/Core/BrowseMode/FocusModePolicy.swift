@@ -44,7 +44,12 @@ extension BrowseModeDocument {
         let s = obj.states
         if s.contains(.editable) && !s.contains(.unavailable) { return true }
         switch obj.role {
-        case .comboBox, .popUpButton, .slider, .spinButton, .list, .table, .treeView, .menu, .menuItem, .tabControl, .tab: return true
+        // A button that opens a menu or a dialog (aria-haspopup) is a button to NVDA, and stays in browse mode; a choice
+        // list (a <select>, its options a menu inside it) is a combo box, and goes to focus mode. Tab onto Claude's
+        // Model and Permissions buttons went to focus mode, and the F typed next to find the prompt went into it
+        // (14 Nov 2026; both say AXPopupValue "menu" and hold no menu until opened).
+        case .popUpButton: return !Self.isMenuButton(obj.element)
+        case .comboBox, .slider, .spinButton, .list, .table, .treeView, .menu, .menuItem, .tabControl, .tab: return true
         case .listItem, .treeViewItem: return true   // NVDA's LISTITEM, TREEVIEWITEM
         default:
             // Focus on the text of an option (Safari focuses the text of a search box's suggestion as Down moves
@@ -59,6 +64,14 @@ extension BrowseModeDocument {
             }
             return false
         }
+    }
+
+    /// A pop up button that opens a menu or a dialog, not a list of choices of its own: its AXPopupValue says "menu",
+    /// "dialog" or "true", and it holds no menu (a <select> holds its options as a menu, in WebKit and Chromium alike).
+    package static func isMenuButton(_ e: AXUIElement) -> Bool {
+        guard let value = (e.attr("AXPopupValue") as? String)?.lowercased() else { return false }
+        guard ["menu", "dialog", "true"].contains(value) else { return false }
+        return !e.elements(kAXChildrenAttribute).contains { $0.role == "AXMenu" }
     }
 
     /// A video player, or an ARIA application, holds the element (WebKit: subrole AXVideo, AXWebApplication; YouTube's

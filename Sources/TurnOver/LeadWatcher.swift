@@ -158,7 +158,16 @@ final class LeadWatcher {
         return true
     }
 
+    /// The lock screen's request for VoiceOver: made once for a burst of sleep and lock notices.
+    private var lockRequest = LockVoiceOverRequest()
+
     private func goingAway(_ why: String) {
+        // Sleep's second notice, while the first one's request for VoiceOver is under way: toggled again, VoiceOver went
+        // on and straight off behind the lock (13 Nov 2026). It leaves the first request, and its checks, to finish.
+        if locked, lockRequest.isUnderWay(now: ProcessInfo.processInfo.systemUptime) {
+            Log.info("lead watcher: \(why); VoiceOver is already being turned on for the lock screen")
+            return
+        }
         locked = true
         lockCycle += 1
         // Retire a pending off-toggle even if VoiceOver is already on and the early return below is taken.
@@ -169,8 +178,12 @@ final class LeadWatcher {
         guard !NSWorkspace.shared.isVoiceOverEnabled else { Log.info("lead watcher: \(why); VoiceOver already on"); return }
         Log.info("lead watcher: \(why); VoiceOver on for the lock screen")
         lockTurnedVoiceOverOn = true
-        handOver(voiceOverOn: true, preservingWakeIntent: true)
+        lockRequest.start(now: ProcessInfo.processInfo.systemUptime)
+        handOver(voiceOverOn: true, preservingWakeIntent: true, completion: { [weak self] _ in self?.lockRequest.answered() })
     }
+
+    /// The Mac was unlocked and secure input is off: the app checks that a reader is on (TurnOverApp).
+    var onUnlockedAndFree: (() -> Void)?
 
     private func back(_ why: String) {
         Watchdog.shared.noteAwake()
@@ -202,6 +215,7 @@ final class LeadWatcher {
                 return
             }
             Log.info("lead watcher: secure input \(secure ? "still on after 15 s" : "off") \(Int(Date().timeIntervalSince(started) * 1000)) ms after \(why)")
+            self.onUnlockedAndFree?()
             // The app in front decides; while it is still the login window or another agent (no ordinary app has come
             // to the front yet), looked at again every half second for ten seconds, since no app switch may follow.
             // A newer lock, or secure input back on (a second lock screen): this wait stands down; the next unlock

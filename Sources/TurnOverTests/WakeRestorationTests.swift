@@ -155,3 +155,22 @@ func wakeRestorationTests() {
         check(state.beginAttempt(readiness: readiness(), now: 3) == nil, "a late failure cannot turn a success into another toggle")
     }
 }
+
+func lockVoiceOverRequestTests() {
+    test("lock screen: sleep's second notice stands down while the first one's request for VoiceOver is under way (13 Nov 2026)") {
+        var request = LockVoiceOverRequest()
+        check(!request.isUnderWay(now: 100), "the first notice asks")
+        request.start(now: 100)
+        check(request.isUnderWay(now: 100.086), "display sleep, 86 ms after sleep, leaves the request to finish")
+        check(request.isUnderWay(now: 100.9), "and so does the lock, a second later")
+        request.answered()
+        check(!request.isUnderWay(now: 101), "once answered, a later notice is looked at afresh")
+    }
+    test("lock screen: a request whose answer never comes does not hold back the next lock") {
+        var request = LockVoiceOverRequest()
+        request.start(now: 50)
+        check(request.isUnderWay(now: 52.9), "under way within the window")
+        check(!request.isUnderWay(now: 53), "given up after the window")
+        check(!request.isUnderWay(now: 600), "the next lock, minutes later, asks again")
+    }
+}

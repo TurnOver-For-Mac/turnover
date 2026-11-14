@@ -64,7 +64,12 @@ public enum EventHandler {
         // starts it too (after a restart the focus is already there, and no focus event comes, 12 Oct 2026).
         if event.kind == .gainFocus { GoogleDocs.focusMoved(to: event.obj.element) }
         else if event.kind == .caret, GoogleDocs.isEditor(event.obj.element) { GoogleDocs.focusMoved(to: event.obj.element) }
-        Log.io("event \(event.kind.rawValue): \(event.obj.axRole) \"\(Log.words(String(event.obj.name.prefix(40))))\"")   // never the typed character
+        // A password field's typing is not logged event by event: one value change and caret move a key told the
+        // password's length, 16, in Oliver's log (14 Nov 2026). Its focus and other events still are.
+        let typingInPassword = event.obj.role == .passwordEdit && [.valueChange, .caret, .typedCharacter, .textChange].contains(event.kind)
+        if !typingInPassword {
+            Log.io("event \(event.kind.rawValue): \(event.obj.axRole) \"\(Log.words(String(event.obj.name.prefix(40))))\"")   // never the typed character
+        }
         if [.gainFocus, .foreground, .focusEntered, .valueChange, .menuEnd].contains(event.kind) { ObjectNavigator.forgetGroupItems() }
         // Not for a menu taking the focus as it opens: macOS moves the focus onto the menu a few milliseconds after its
         // name is said ("Edit menu, 4 of 8"), and that dropped the name (Finder, moving along the menu bar, 6 Oct 2026).

@@ -316,6 +316,19 @@ open class EditableText: TurnOverObject {
             caretMoved(speak: unit == .line && readsLineAtEdge ? .line : nil, gesture: gesture, info: info)
             return
         }
+        // A box of one line on a web page (its whole text is the caret's line): Up goes to its start and Down to its end,
+        // so the line is read at once, not after the caret's patience. AppleVis's comment box took 390 to 440 ms a
+        // press, the caret's news arriving only after the wait (14 Nov 2026). Web pages only: Word leaves the caret
+        // where it is on its first line (its boundary tests).
+        let oneLine = collapsed && !inCell && !gesture.modifiers.contains(.shift) && unit == .line
+            && (key == "upArrow" || key == "downArrow") && length > 0 && oldLine.start <= 0 && oldLine.end >= length
+            && element.enclosingWebArea() != nil
+        if oneLine {
+            Log.io("a box of one line: \(key) goes to its \(backwards ? "start" : "end"); the line read at once")
+            gesture.send()
+            caretMoved(speak: .line, gesture: gesture, info: info)
+            return
+        }
         gesture.send()
         var (moved, newInfo) = hasCaretMoved(from: bookmark)
         // A selection collapsed by the key is a move, though the caret's end stays put (Command-A then Right: the
@@ -464,7 +477,8 @@ open class EditableText: TurnOverObject {
         }
         let test = old.copy()
         var chunk = ""
-        if test.move(.character, -1) < 0 {
+        let movedBack = test.move(.character, -1)
+        if movedBack < 0 {
             if unit == .line { let l = old.copy(); l.expand(.line); l.setEndPoint(old, .endToStart); chunk = l.text }
             else if unit == .word {
                 // The word before the caret, past any spaces: Option Backspace takes it and the spaces after it. The
@@ -479,6 +493,16 @@ open class EditableText: TurnOverObject {
             else { test.expand(unit); chunk = test.text }
         }
         gesture.send()
+        // An empty field: nothing to delete, and nothing to wait for. The wait was 300 ms of silence a press in
+        // an empty prompt (Claude's: 127 times on 13 Nov 2026), and the next key waited behind it. A bump, as at any edge.
+        // (An empty field only, by its own value, white space aside: Claude's empty prompt holds a line break. Where
+        // the caret's place can't be read, it says 0 with text before it.)
+        let blank = (element.attr(kAXValueAttribute) as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true
+        if movedBack == 0, blank {
+            Log.io("edge: an empty field, nothing to delete; sent unwaited")
+            Tones.edge(keySent: true, sound: appModule.playsNativeCaretBoundarySound)
+            return
+        }
         Speech.speakTypedCharacter("\u{8}", inEditable: true)
         let c = chunk.replacingOccurrences(of: "\r\n", with: "\n")
         // Said at once, before the caret is waited for: with something before the caret the deletion is certain, and

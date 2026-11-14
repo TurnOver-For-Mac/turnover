@@ -168,6 +168,7 @@ public final class BufferTextInfo: TextInfo {
         let linkMode = config.documentFormatting.links
         var pieces: [String] = []
         var lastLink: AXUIElement?
+        var linkToneQueued = false
         var cursor = start
         for s in buffer.segments where s.end > start && s.start < end {
             if s.start > cursor { pieces.append(textRange(cursor, s.start)) }
@@ -180,7 +181,9 @@ public final class BufferTextInfo: TextInfo {
             if s.isLink, !insideEarlierLink, lastLink.map({ !$0.isSame(s.element) }) ?? true {
                 switch linkMode {
                 case .speech: if !after { pieces.append(" " + Speech.ui(Role.link.displayString) + " ") }
-                case .tone: pendingTones.append { Tones.link() }
+                // Once a line: the sounds all play together, before the words, so a line of ten links restarted the
+                // same sound ten times at once (MacRumors' lines, where "the link sound hangs", 14 Nov 2026).
+                case .tone: if !linkToneQueued { pendingTones.append { Tones.link() }; linkToneQueued = true }
                 case .off: break
                 }
             }
