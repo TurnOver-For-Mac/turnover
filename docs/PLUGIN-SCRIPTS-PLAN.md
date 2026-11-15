@@ -90,7 +90,7 @@ A plugin, with or without a script, can never:
 
 A script can, only where its manifest asks and the user agreed:
 - `read`: the names, roles and values of items in its apps;
-- `say`: speak, and play TurnOver's own sounds;
+- `say`: speak, change or silence what TurnOver says for an item in its apps, and play TurnOver's own sounds;
 - `press`: press an item;
 - `focus`: move the keyboard focus to an item;
 - `menu`: choose a command from its app's menus;
@@ -134,26 +134,27 @@ Measured on this Mac, macOS 27.2, 14 Nov 2026 (a throwaway test program, not kep
 
 - A script runs only if TurnOver holds a receipt for it: the plugin's id, the SHA-256 of its files, its apps and
   its abilities, and when it was approved.
-- Receipts live in `plugin-trust.json` in TurnOver's support folder, sealed with an HMAC-SHA256. The key is in the
-  Keychain. A developer build, whose signature changes with each build, keeps the key in a file beside it and
-  says so in the log: weaker, and only on a developer's Mac.
-- What the seal stops: a plugin that arrives as files (downloaded, unzipped, synced, restored from a backup,
-  dropped by an installer) cannot bring an approval with it; an approval cannot be copied from another Mac; and a
-  plugin changed after it was approved no longer matches. Deleting the file only means every script needs
-  approving again.
-- What the seal does not stop (reviewed 15 Nov 2026): a program already running as the person, attacking TurnOver
-  on purpose, can replace the key in the Keychain and seal a file of its own. The Keychain keeps a secret from
-  other programs; it does not stop them deleting an item and putting another in its place, and TurnOver cannot
-  tell whose item it reads. Nothing TurnOver can store today is out of such a program's reach. Three things limit
-  it. TurnOver reads the trust file once, when it starts, so a file replaced while TurnOver runs changes nothing
-  until the next start. Each time TurnOver starts with scripts on, it says how many scripts are on, and that
-  developer mode is on if it is, so an approval the person never gave is heard. And a place for receipts that
-  another program cannot write is a decision for the maintainer, below.
+- Receipts are kept by the keeper (see "The keeper"), in every build that is not a developer build. A developer
+  build, whose signature may be ad hoc and changes with each build, keeps them in `plugin-trust.json` in TurnOver's
+  support folder, sealed with an HMAC-SHA256 whose key is in a file beside it, and says so in the log: weaker, and
+  only on a developer's Mac. The Keychain is not used.
+- What the keeper stops: a plugin that arrives as files (downloaded, unzipped, synced, restored from a backup,
+  dropped by an installer) cannot bring an approval with it; an approval cannot be copied from another Mac; a plugin
+  changed after it was approved no longer matches; and another program running as the person cannot write a receipt,
+  because the file is in the keeper's own container and the keeper answers only the signed TurnOver. Deleting
+  receipts only means every script needs approving again. How far the container is out of reach rests on what
+  macOS documents for macOS 14 and later; writing it directly was not tried (see "The keeper").
+- What the sealed file of a developer build does not stop (reviewed 15 Nov 2026): a program already running as the
+  person, attacking TurnOver on purpose, can read the key file and seal a file of its own. Three things limit it.
+  TurnOver reads the trust file once, when it starts, so a file replaced while TurnOver runs changes nothing until the
+  next start. Each time TurnOver starts with scripts on, it says how many scripts are on, and that developer mode is
+  on if it is, so an approval the person never gave is heard. And every build that is not a developer build has the
+  keeper.
 - A script with no receipt, or whose files have changed, does not start. TurnOver says once that the plugin has a
   script waiting for approval, and the Plugins menu offers it.
 - Approving speaks what the plugin is for (the author's words, marked as the author's) and what it can do
   (TurnOver's own words, generated from the manifest, with the fixed list of what it cannot do).
-- Developer mode, a switch in the Plugins menu kept in the sealed file: a draft's receipt then holds as long as
+- Developer mode, a switch in the Plugins menu kept with the receipts: a draft's receipt then holds as long as
   its apps and abilities do not grow, so saving `main.js` reloads it without a question. A receipt is a draft's
   only if developer mode was on when the person approved it; any other receipt is for exactly the files approved,
   whatever developer mode is later. TurnOver says that developer mode is on each time it starts.

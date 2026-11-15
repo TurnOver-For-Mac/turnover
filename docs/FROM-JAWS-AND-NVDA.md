@@ -3,15 +3,15 @@
 This is for people who have written JAWS scripts or NVDA add-ons. It maps each idea you know to TurnOver's, says
 plainly where there is no equivalent and why, and shows two small jobs written all three ways.
 
-Scripts in TurnOver are designed (docs/PLUGIN-SCRIPTS-PLAN.md) and are off until the maintainer switches on
-`pluginScripts`. The author's guide is [PLUGIN-SCRIPTS.md](PLUGIN-SCRIPTS.md); what a plugin can never do is in
+Scripts in TurnOver are built (docs/PLUGIN-SCRIPTS-PLAN.md) and are off until the maintainer switches on
+`pluginScripts` (15 Nov 2026). The author's guide is [PLUGIN-SCRIPTS.md](PLUGIN-SCRIPTS.md); what a plugin can never do is in
 [PLUGIN-SECURITY.md](PLUGIN-SECURITY.md).
 
 ## The main difference
 
 JAWS scripts and NVDA add-ons run inside the screen reader, with everything it can reach. A TurnOver script runs in
 a separate, sandboxed program with no files, no network and no other programs. It cannot see a key or a typed
-character. It asks TurnOver for things, and TurnOver checks each request against what the user agreed to when
+character, though with the `read` ability it can read what a field holds, and never a password. It asks TurnOver for things, and TurnOver checks each request against what the user agreed to when
 they approved the script on their Mac. Most of what is different below follows from that.
 
 ## JAWS, idea by idea
@@ -28,7 +28,8 @@ they approved the script on their Mac. Most of what is different below follows f
 - `FocusChangedEvent`: `turnover.on("focus", handler)`. The handler may replace what is said for the item with
   `event.say`, say nothing with `event.silence`, or do neither and TurnOver reads it as usual. A focus event never
   stops other handling.
-- `SayString`: `turnover.say(text)`, needs the `say` ability.
+- `SayString`: `turnover.say(text)`, needs the `say` ability. It adds to what TurnOver says; to change the words for
+  the item in focus, use `event.say`.
 - `PerformScript`: no equivalent. One command cannot call another by name, and a script cannot call a key
   command. Put shared steps in an ordinary JavaScript function and call it from both handlers. Reason: a script
   never sees keys, and commands are declared in the manifest.
@@ -36,9 +37,9 @@ they approved the script on their Mac. Most of what is different below follows f
   role, identifier, title and so on. Many JAWS label jobs need no script.
 - Dictionary files (`.jdf`): no equivalent. TurnOver's pronunciation settings are the user's own, and a plugin cannot
   change TurnOver's settings. Reason: the clear line in PLUGIN-SECURITY.md.
-- Script Manager (write, compile, try): a text editor, `turnover-plugin check` and `test`, and developer mode in
-  the Plugins menu, where saving `main.js` reloads the script and TurnOver says "reloaded" or the first error
-  with its line.
+- Script Manager (write, compile, try): a text editor, `turnover-plugin new` to start, `check` and `test` to try it
+  without the app, and developer mode in the Plugins menu, where saving `main.js` reloads the script and TurnOver says
+  "reloaded" or the first error with its line.
 - Scripts that reach every app: no equivalent in this version. A plugin names its apps. Scripts for every app
   at once are listed as not in this version.
 - Scripts that call Windows or the system, read files, or use the network: no equivalent, and never. Reason: the
@@ -62,7 +63,8 @@ they approved the script on their Mac. Most of what is different below follows f
 - `ui.message(text)`: `turnover.say(text)`.
 - `obj.name`, `obj.role`, `obj.value`, `obj.states`, `obj.parent`, `obj.children`: the fields of an item and the calls
   `item.parent()` and `item.children()`. An item is a copy, and the calls need the `read` ability and are
-  asynchronous: `await item.parent()`.
+  asynchronous: `await item.parent()`. `item.role` is the word a `profile.json` match uses ("button", "textField"),
+  not NVDA's role constant; `item.axRole` is the accessibility role with its `AX`.
 - Overlay classes (`chooseNVDAObjectOverlayClasses`): no equivalent. A plugin cannot change what kind of object
   TurnOver makes. A label rule in `profile.json` can name or re-role one.
 - Settings panels and `config.conf`: no equivalent in this version. Reason: a plugin never changes TurnOver's
@@ -70,7 +72,8 @@ they approved the script on their Mac. Most of what is different below follows f
 - Drivers (speech, braille): no equivalent. Those stay TurnOver's own.
 - Calling Windows or system APIs, files, network, `subprocess`: no equivalent, and never. Reason: the sandbox. A
   script has no `require`, no `fetch` and no file object.
-- Scratchpad folder with reload: developer mode. Save `main.js` and it reloads.
+- Scratchpad folder with reload: developer mode. Approve the script once with it on, then save `main.js` and it
+  reloads without a question, as long as the apps and abilities do not grow.
 - Python console: no equivalent. Use `console.log` to TurnOver's log, and the test runner.
 - Developer information (NVDA+F1): "What is this?" in TurnOver's maker (VO-Slash) says and copies an item's role,
   name, identifier and the match TurnOver would use for it. The tool `turnover-plugin snapshot <app>` gives the
@@ -89,8 +92,9 @@ they approved the script on their Mac. Most of what is different below follows f
 ## Example one: a key that reads a status line
 
 The JAWS and NVDA code is short and conventional, and is an illustration, not tested code. The TurnOver version
-follows the plan's interface; the match in it is an example, and its fields would be taken from a snapshot of the
-real app.
+is a complete plugin that passes `turnover-plugin check <folder> --listing` (15 Nov 2026); the match in it is an
+example, and its fields would be taken from a snapshot of the real app. A plugin kept on your own Mac needs only the
+manifest fields down to `commands`; the last five fields are the library's listing.
 
 ### JAWS
 
@@ -135,6 +139,15 @@ manifest.json:
   "script": "main.js",
   "commands": [
     { "id": "readStatus", "description": "Read the status line", "key": "turnover+shift+s", "letter": "s" }
+  ],
+  "description": "Reads the status line of Example on a key.",
+  "author": "Example Author",
+  "summary": "Reads the status line on a key.",
+  "contact": "https://example.org/contact",
+  "privacy": "Reads the status line only; nothing leaves your Mac.",
+  "license": "MIT",
+  "changes": [
+    { "version": "1.0", "notes": "First version." }
   ]
 }
 ```

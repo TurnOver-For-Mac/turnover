@@ -48,8 +48,10 @@ The listing (needed to be in the plugin library; a plugin without it still insta
 - `summary`: one line (120 characters at most), spoken at install and in the library.
 - `description`, `author`, and `contact` (an email address or web page for problems).
 - `abilities`: what it does, in these words: `read` (its app's window: labels, watching, silencing),
-  `press`, `focus`, `menu`, `keys` (sending key combinations), `say`. The check compares them with what the
-  profile does: something used but not declared must be added; something declared but not used is noted.
+  `press`, `focus`, `menu`, `keys` (sending key combinations), `say`. Two more are for scripts only: `edit`
+  (change an item's text or value) and `clipboard` (put text on the clipboard, never read it). The check compares
+  them with what the profile does: something used but not declared must be added; something declared but not used
+  is noted. For a script the check cannot tell, so the abilities are what its author asks for.
 - `privacy`: what it reads and where anything goes.
 - `license`: an open licence by its SPDX name. The library's own is `MIT`; also `Apache-2.0`, `BSD-2-Clause`,
   `BSD-3-Clause`, `ISC`, `MPL-2.0`, `CC0-1.0`, `Unlicense`.
@@ -418,7 +420,9 @@ can be tried without a new TurnOver.
 A plugin can read the apps it names and speak what it reads; label, silence and watch their
 elements; and bind TurnOver keys that press an element, move focus, read, choose a menu item, say
 something, or send a key combination to the app. It cannot run code, read or write files, use the
-network, touch any other app, change TurnOver's settings, or stop VoiceOver coming back.
+network, touch any other app, change TurnOver's settings, or stop VoiceOver coming back. (A plugin with a script is
+the one case where code runs, and then only in a sandbox with no files, no network and no other programs: see
+Scripts below.)
 
 Sending keys and choosing menu items are the only ways a plugin can act on an app, so the installer
 says each one in words before installing ("TurnOver Shift P sends Command Delete to Mail"), and a
@@ -447,11 +451,26 @@ sidecar files rather than restored as Finder attributes or resource forks.
 
 A plugin that needs to make a decision, rather than only name, key or watch things, can have one script, `main.js`,
 in JavaScript (15 Nov 2026). It is off unless the `pluginScripts` setting is switched on
-(`defaults write com.turnover.reader pluginScripts -bool true`); until then every script is ignored and plugins stay
-data. A script runs in a separate sandboxed program with no files, no network and no other programs, asks TurnOver
-for what it needs, and runs only after the user has approved it on their own Mac. A plugin with a script uses
-`formatVersion` 2.
+(`defaults write com.turnover.reader pluginScripts -bool true`, then restart TurnOver); until then every script is
+ignored and plugins stay data. A script runs in a separate sandboxed program with no files, no network and no other
+programs, asks TurnOver for what it needs, and runs only after the user has approved it on their own Mac, having
+heard in plain words what it can do. A changed script needs approving again. A plugin with a script uses
+`formatVersion` 2, names its apps exactly (no wildcard), and lists its `abilities`, `script` and `commands` in
+`manifest.json`.
+
+Every ability a script may have, and what the person hears for each: `read` (the names, roles and values of items in
+its apps), `say` (speak, change or silence what TurnOver says, and play TurnOver's own sounds), `press`, `focus`,
+`menu`, `keys`, `edit` (change an item's text or value) and `clipboard` (put text on the clipboard, never read it).
+
+Start with `turnover-plugin new <folder> --app <bundle id> --script`. Then `turnover-plugin check <folder> --listing`
+checks the manifest and loads the script, `turnover-plugin consent <folder>` prints what the person will hear at
+approval, and `turnover-plugin test <folder>` runs `tests/script/*.json` with no app. `keygen`, `sign` and `verify`
+sign a plugin with your own key.
 
 - [docs/PLUGIN-SCRIPTS.md](docs/PLUGIN-SCRIPTS.md): the author's guide and the interface.
 - [docs/PLUGIN-SECURITY.md](docs/PLUGIN-SECURITY.md): what a plugin can never do, the threats, the reviewer's checklist.
 - [docs/FROM-JAWS-AND-NVDA.md](docs/FROM-JAWS-AND-NVDA.md): for people who have written JAWS scripts or NVDA add-ons.
+- [Resources/plugin-schema/turnover.d.ts](Resources/plugin-schema/turnover.d.ts): the interface as TypeScript
+  declarations, for editors and AI assistants.
+- [plugins/examples/sample-script-calculator](plugins/examples/sample-script-calculator): a complete example with a
+  command, an event and a test.
