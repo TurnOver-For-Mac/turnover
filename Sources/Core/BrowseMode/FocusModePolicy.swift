@@ -27,6 +27,11 @@ extension BrowseModeDocument {
 
     /// Automatic changes use a sound; explicit mode controls retain the navigation-sounds preference.
     public func setPassThrough(_ on: Bool, announce: Bool, playSound: Bool = true, manual: Bool = false) {
+        // A by-hand choice of focus mode (Quick Nav off, TurnOver Space) sticks only while focus mode lasts. Leaving it
+        // by any other way (a heading key) left the flag set, so F onto the Prompt next switched to nothing and the
+        // letters typed were kept from the page (15 Nov 2026, log 2074 to 2082). Every by-hand switch to browse mode
+        // already sets it false first; a switch to focus mode sets it itself after this.
+        if !on { disableAutoPassThrough = false }
         guard passThrough != on else { return }
         ModeAnnouncement.begin()
         defer { ModeAnnouncement.end() }

@@ -24,6 +24,9 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   the files, in System Settings the pane or the sidebar). A text field in the toolbar keeps its own keys. Up, Down,
   Tab and Shift+Tab are unchanged. Reaching a toolbar now says "tool bar", even where the kind of an item is left out
   of what is said.
+
+- Browse mode: after you turned Quick Nav off and then left focus mode with a heading key, F onto a text field no longer failed to switch to focus mode (the letters you typed were kept from the page). Leaving focus mode now ends the by-hand choice.
+
 - Quick Nav no longer switches itself on: Left and Right arrows count as the turn-on chord only when pressed within 150 milliseconds of each other, and a half-seen first arrow is forgotten when the keyboard connection restarts or you change application.
 
 - Heading and link keys say "application switcher is open" in your language too, not only in English.

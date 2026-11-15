@@ -6,6 +6,20 @@ import TurnOverAX
 import AXFixtures
 
 func claudeTrialFollowupTests() {
+    test("Claude trial: leaving focus mode ends the by-hand choice, so the next field switches by itself") {
+        AXReplay.load(.init(app: "Public trial", bundle: "test.claude-trial", recorded: "synthetic", root: 0, application: 1, focus: 0, nodes: [
+            .init(id: 0, attrs: ["AXRole": .string("AXWebArea"), "AXURL": .url("https://example.com/trial"), "AXParent": .element(1)]),
+            .init(id: 1, attrs: ["AXRole": .string("AXApplication")])
+        ]))
+        defer { AXReplay.unload() }
+        let page = BrowseModeDocument(webArea: AXReplay.element(0))
+        // Quick Nav off: focus mode by hand, sticky; then a heading key goes back to browse mode (log 2074 to 2077, 15 Nov 2026).
+        page.disableAutoPassThrough = true
+        page.setPassThrough(true, announce: false, manual: true)
+        check(page.disableAutoPassThrough, "the by-hand choice holds while focus mode lasts")
+        page.setPassThrough(false, announce: false)
+        check(!page.disableAutoPassThrough, "leaving focus mode by a heading key ends it, so F onto the Prompt switches")
+    }
     test("Claude trial: recent shortcuts five through nine enter the production navigation wait") {
         let savedFocus = API.focusObject, savedAncestors = API.focusAncestors, savedPage = API.focusTreeInterceptor
         let savedPid = AXHandler.shared.activePid, savedPoster = KeyboardGesture.poster
