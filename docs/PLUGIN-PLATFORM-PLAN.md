@@ -66,3 +66,16 @@ are in the study of twelve add-ons made the same day (kept outside the repositor
 
 Stage A is built first because it was asked for first. It lands add-ons on what scripts can do today and names,
 in each report, which stage B piece would carry the rest.
+
+## Who looks after a plugin (decided 16 Nov 2026)
+
+A plugin's author is responsible for it, and TurnOver makes that visible.
+- The manifest gains `support`: a web address or an email for reporting a problem. Needed for the library; a
+  converted add-on's is the converter's, with the creator named beside it.
+- Each plugin in the Plugins menu gets "Report a problem with this plugin": it says who looks after it and copies
+  the address with the plugin's name and version and TurnOver's build.
+- TurnOver's own problem report lists the plugins that were on.
+- One menu item turns every plugin off until TurnOver starts again, so a person can tell whether a fault is
+  TurnOver's or a plugin's.
+- The library can mark a plugin as unmaintained and let someone else take it over.
+- CONTRIBUTING.md says what belongs in the core and what is a plugin.

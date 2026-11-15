@@ -105,3 +105,18 @@ in the next release after they're merged.
 
 Be kind and be specific. Many people here use a screen reader every day and depend on it; a report that says exactly
 what was heard is worth more than one that says it's broken. See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+
+## A change to TurnOver, or a plugin? (16 Nov 2026)
+
+TurnOver's core is what every user needs and what reaches inside the screen reader: reading text, focus, speech,
+braille, the hand-over to VoiceOver, and support for the apps nearly everyone has (Apple's own, and the browsers).
+That is Swift, in this repository, by pull request.
+
+Support for one particular app, a favourite shortcut, or a tool some people want and others do not is a plugin:
+rules, and a script if rules are not enough. It is installed by choice, it says who made it and what it may do,
+and its author looks after it. See PLUGIN-GUIDE.md and docs/PLUGIN-SCRIPTS.md.
+
+Ask of any piece of work: does TurnOver work properly without it? Could a user reasonably want it off, or want a
+different one? If yes to both, it is a plugin. A request to work on an app that is not one everybody has (the
+"Work on an app" issues) is best answered with a plugin. A plugin that many people come to rely on can be adopted
+as an official plugin, and one that everyone needs can be taken into the core.
