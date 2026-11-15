@@ -42,7 +42,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         \"\"\"Says hello\"\"\"
         ui.message(_("Hello there"))
 
-    @script(description=_("Copies a greeting"), gesture="kb:NVDA+control+g")
+    @script(description=_("Copies a greeting"), gesture="kb:NVDA+windows+g")
     def script_copyGreeting(self, gesture):
         api.copyToClip("Greetings")
         count = len("abc")
@@ -108,7 +108,7 @@ func scriptConvertTests() {
         check(js.contains("// Dropped") && !js.contains("\n  nextHandler"), "nextHandler is dropped, not translated: \(js)")
         let manifest = try JSONDecoder().decode(PluginManifest.self, from: Data(file(r, "manifest.json").utf8))
         expect(manifest.commands?.map(\.id) ?? [], ["hello", "copyGreeting"], "command ids")
-        expect(manifest.commands?.compactMap(\.key) ?? [], ["turnover+shift+h", "turnover+control+g"], "kb:NVDA+x becomes turnover+x")
+        expect(manifest.commands?.compactMap(\.key) ?? [], ["turnover+shift+h", "turnover+command+g"], "kb:NVDA+x becomes turnover+x")
         expect(manifest.apps, ["*"], "a global plugin works in every app, so apps is [\"*\"] (stage B)")
         expect(manifest.convertedFrom?.abilities ?? [], ["clipboard", "everywhere", "read", "say"], "recorded")
         expect(manifest.convertedFrom?.apps ?? [], ["*"], "and so is the app")

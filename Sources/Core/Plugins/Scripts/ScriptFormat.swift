@@ -83,6 +83,10 @@ nonisolated extension PluginFormat {
             } else if !seen.insert(c.id).inserted {
                 manifestProblem(["commands", String(i), "id"], "command \(i + 1): the id \"\(c.id)\" is used twice")
             }
+            if let letter = c.letter?.lowercased(), PluginCommands.reservedLetters.contains(letter) {
+                out.append(Problem(file: "manifest.json", line: line(of: ["commands", String(i), "letter"], in: text) ?? line(of: ["commands", String(i)], in: text) ?? 1,
+                                   message: "command \(i + 1) (\(c.id)): the letter \"\(letter)\" is one the TurnOver layer keeps for its own command, so the letter will do nothing; choose another letter (not M, N, S, R, T, D, A, K, J, H, I, C, G, V, E or the slash)", isError: false))
+            }
             if c.description.trimmingCharacters(in: .whitespaces).isEmpty {
                 manifestProblem(["commands", String(i), "description"], "command \(i + 1) (\(c.id)) needs a description: it is what input help reads")
             }

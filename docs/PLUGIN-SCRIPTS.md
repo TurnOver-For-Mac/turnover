@@ -68,7 +68,7 @@ makes a plugin of rules only. You can also make the files by hand, as below.
   "abilities": ["read", "say"],
   "script": "main.js",
   "commands": [
-    { "id": "readResult", "description": "Read the result", "key": "turnover+control+shift+r", "letter": "r" }
+    { "id": "readResult", "description": "Read the result", "key": "turnover+command+shift+a", "letter": "o" }
   ],
   "summary": "Reads Calculator's result on a key, and names its Clear button.",
   "contact": "https://github.com/TurnOver-For-Mac/turnover/issues",
@@ -93,6 +93,18 @@ What matters here:
   anything, checks each key against its policy and against other plugins, and lets the user rebind the key. The
   script never sees a key. It is told that its command was chosen. A command's `id` is letters and digits only,
   and it needs a `description`, which input help reads. `key` and `letter` are optional.
+- A command's `key` is written with `turnover` for the TurnOver key, plus Shift or Command, for example
+  `turnover+command+shift+n`. Never add Control or Option to `turnover`: most people's TurnOver key is Control and
+  Option together (the VoiceOver keys), and those two are used up making it, so Control+Option+Shift+B arrives as
+  `turnover+shift+b` and `turnover+control+shift+b` can never be pressed. TurnOver refuses a command whose key does
+  that (and one that is Control and Option together), says why in plain words, and the plugin does not load until it
+  is fixed. Shift and Command with `turnover` work with every TurnOver key setting (Caps Lock, Control and Option, or
+  both). `turnover-plugin check` also notes a key that is already a built-in TurnOver key.
+- A command's `letter` is one letter or digit, pressed after the TurnOver layer (Command Control Comma) while the
+  plugin's app is in front: the letter runs the command, and the layer's list (Down Arrow) names it. The layer keeps
+  these letters for itself, so a plugin cannot have them: M, N, S, R, T, D, A, K, J, H, I, C, G, V, E and the
+  slash. `turnover-plugin check` warns about one of them. The first command with a letter takes it, so give each
+  command its own.
 - `description` is the sentence the user hears at approval, marked as your words.
 - The last five fields (`summary`, `contact`, `privacy`, `license`, `changes`) are the listing. A plugin that stays
   on your own Mac does not need them; `turnover-plugin check <folder> --listing` asks for them.

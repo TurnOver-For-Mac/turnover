@@ -13,7 +13,7 @@
   },
   "script": "main.js",
   "commands": [
-    { "id": "chooseButton", "description": "Choose a button in this window from a list and press it", "key": "turnover+control+shift+b", "letter": "b" }
+    { "id": "chooseButton", "description": "Choose a button in this window from a list and press it", "key": "turnover+command+shift+n", "letter": "b" }
   ],
   "options": [
     { "id": "includeDisabled", "label": "List buttons that are switched off too", "kind": "switch", "default": false },

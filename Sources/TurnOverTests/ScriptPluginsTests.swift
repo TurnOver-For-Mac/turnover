@@ -774,7 +774,7 @@ func scriptPluginsTests() {
     test("script plugins: commands are carried as scripts and listed in the plugin layer, and one chosen too early says so") {
         let mac = Mac()
         mac.limits.eventDeadline = 0.5
-        let commands = "[{ \"id\": \"readResult\", \"description\": \"Read the result\", \"key\": \"turnover+control+shift+r\", \"letter\": \"r\" }, { \"id\": \"quiet\", \"description\": \"No key\" }]"
+        let commands = "[{ \"id\": \"readResult\", \"description\": \"Read the result\", \"key\": \"turnover+command+shift+a\", \"letter\": \"o\" }, { \"id\": \"quiet\", \"description\": \"No key\" }]"
         let plugin = makePlugin(script: "turnover.command('readResult', function (c) { turnover.say('The result is 42'); });", commands: commands)
         let trust = store()
         try? trust.approve(plugin, origin: .file)
@@ -787,14 +787,36 @@ func scriptPluginsTests() {
         expect(plugins.script(named: "plugin_script-test_script_quiet") == nil, true, "a command with no key has no script")
         let list = plugins.commandList(for: "com.example.app")
         expect(list.map { $0.title }, ["Read the result", "No key"], "both are in the plugin layer's list")
-        expect(list.first?.letter ?? nil, "r", "with its letter, in small")
+        expect(list.first?.letter ?? nil, "o", "with its letter, in small")
         expect(plugins.commandList(for: "com.other.app").count, 0, "only for its own app")
+        // The layer: the declared letter runs the command, and the list names it (15 Nov 2026: the letters reached nothing).
+        expect(PluginCommands.command(letter: "o", in: list)?.title, "Read the result", "the letter finds the command in its app")
+        expect(PluginCommands.command(letter: "O", in: list)?.title, "Read the result", "in either case")
+        check(PluginCommands.command(letter: "o", in: plugins.commandList(for: "com.other.app")) == nil, "not in another app")
+        check(PluginCommands.command(letter: "x", in: list) == nil, "not for a letter no command has")
+        expect(PluginCommands.layerCommands(in: list).map { "\($0.letter) \($0.title)" }, ["o Read the result"], "the layer's list has it, the command with no letter left out")
         list.first?.run()
         expect(mac.spoken.filter { $0.contains("not ready") }.count, 1, "chosen before the host is ready, it says so in a few words")
         fire(plugins, .gainFocus, el(button))
         check(waitFor { ready(plugins.entries["script-test"]) }, "the host starts")
         list.first?.run()
         check(waitFor { mac.scriptSaid == ["The result is 42"] }, "chosen when ready, the script runs and says its words")
+    }
+
+    test("script plugins: a letter the layer keeps for itself never reaches a plugin, and the first command with a letter keeps it") {
+        let mac = Mac()
+        let commands = "[{ \"id\": \"a\", \"description\": \"Take R\", \"letter\": \"r\" }, { \"id\": \"b\", \"description\": \"First B\", \"letter\": \"b\" }, { \"id\": \"c\", \"description\": \"Second B\", \"letter\": \"B\" }]"
+        let plugin = makePlugin(script: "turnover.command('a', function () {}); turnover.command('b', function () {}); turnover.command('c', function () {});", commands: commands)
+        let trust = store()
+        try? trust.approve(plugin, origin: .file)
+        mac.plugins = [plugin]
+        let plugins = ScriptPlugins(trust: trust, environment: mac.environment())
+        defer { plugins.terminate() }
+        let list = plugins.commandList(for: "com.example.app")
+        expect(list.count, 3, "all three are the plugin's")
+        check(PluginCommands.command(letter: "r", in: list) == nil, "R is the layer's screen recognition")
+        expect(PluginCommands.command(letter: "b", in: list)?.title, "First B", "the first command with a letter has it")
+        expect(PluginCommands.layerCommands(in: list).map(\.letter), ["b"], "the list has B once and no R")
     }
 
     test("script plugins: the approval question carries the approval lines, answers Not now and Approve, and a script is heard by no one while it is open") {

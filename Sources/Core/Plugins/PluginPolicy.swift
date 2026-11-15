@@ -168,8 +168,31 @@ public enum PluginPolicy {
                 out.append("a script may only read and speak in \(closedApps[app] ?? app) (\(app)): take \(acting.joined(separator: ", ")) out of abilities, or leave that app out")
             }
         }
-        for c in m.commands ?? [] { if let key = c.key { out += triggerRefusals(key).map { "command \(c.id): " + $0 } } }
+        for c in m.commands ?? [] {
+            guard let key = c.key else { continue }
+            var why = triggerRefusals(key)
+            if let unpressable = unpressableKey(key) { why.append(unpressable) }
+            out += why.map { "command \(c.id): " + $0 }
+        }
         return out
+    }
+
+    /// Why a key can never be pressed, if it can't: when Control and Option together are the TurnOver key (the VoiceOver
+    /// keys, the default), the keyboard tap takes both away and puts "turnover" in their place (KeyboardHandler, "VoiceOver's
+    /// VO keys as the TurnOver key"). So Control+Option+Shift+B is turnover+shift+b, and a key written turnover+control+shift+b,
+    /// or turnover+option+..., or with Control and Option both, never arrives (15 Nov 2026: the sample plugins' keys never fired).
+    /// Caps Lock as the TurnOver key would allow Control alone, but a key must work with every setting. Nil when it can be pressed.
+    nonisolated public static func unpressableKey(_ key: String) -> String? {
+        guard let g = KeyboardGesture(identifier: normalizeGestureIdentifier(key.hasPrefix("kb:") ? key : "kb:" + key)) else { return nil }
+        let m = g.modifiers
+        if m.contains(.turnover), m.contains(.control) || m.contains(.option) {
+            let which = m.contains(.control) && m.contains(.option) ? "Control and Option" : m.contains(.control) ? "Control" : "Option"
+            return "\(key) adds \(which) to the TurnOver key, so it can never be pressed: the TurnOver key is Control and Option together for most people, and those two keys are used up making it. Use turnover with shift or command instead, for example turnover+command+shift+n"
+        }
+        if m.contains(.control), m.contains(.option) {
+            return "\(key) is Control and Option together, which TurnOver reads as its own key (the VoiceOver keys), so it can never be pressed as written. Write it with turnover, for example turnover+command+shift+n"
+        }
+        return nil
     }
 
     /// The built-in features an official plugin may switch on (PluginManifest.provides).

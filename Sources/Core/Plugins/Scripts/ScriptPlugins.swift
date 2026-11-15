@@ -406,6 +406,7 @@ package final class ScriptPlugins: GlobalPlugin {
                 guard let key = command.key else { continue }
                 let name = "plugin_\(manifest.id)_script_\(command.id)"
                 let id = key.hasPrefix("kb") ? key : "kb:" + key
+                noteKey(id, plugin: manifest.id, command: command.id)
                 script(name, command.description, gestures: [id], category: manifest.name) { [weak self, weak entry] _ in
                     if let self, let entry { self.run(command.id, of: entry) }
                 }.isAvailable = { API.focusPid.map { pid in
@@ -414,6 +415,24 @@ package final class ScriptPlugins: GlobalPlugin {
                 } ?? false }
                 commandNames.append(name)
             }
+        }
+    }
+
+    /// What the log says, once per key, about a command's key at load: one TurnOver cannot read, one that can never be pressed, or one a
+    /// built-in key already has (the plugin's comes first, in its apps). Before this the log said nothing, and a key that never fired
+    /// looked like a key that was never bound (15 Nov 2026).
+    private var notedKeys = Set<String>()
+    private func noteKey(_ id: String, plugin: String, command: String) {
+        let normal = normalizeGestureIdentifier(id)
+        guard notedKeys.insert("\(plugin) \(command) \(normal)").inserted else { return }
+        guard let g = KeyboardGesture(identifier: normal) else {
+            return Log.warning("script \(plugin): the key \(Log.words(id)) of command \(command) is not a key TurnOver can read, so it is not bound (its letter in the layer still works)")
+        }
+        if let why = PluginPolicy.unpressableKey(id) { Log.warning("script \(plugin): the key of command \(command) can never be pressed: \(Log.words(why))") }
+        // TurnOver's own keys and VoiceOver's (not other plugins': a plugin's own key is in the installed list too).
+        let builtIn = GlobalCommands.shared.everyBinding + VoiceOverKeysPlugin().everyBinding
+        for (other, scripts) in builtIn where normalizeGestureIdentifier(other) == normal {
+            Log.info("script \(plugin): the key \(g.displayName) of command \(command) is also TurnOver's \(Log.words(scripts.first?.description ?? "own command")); the plugin's comes first where the plugin works")
         }
     }
 
