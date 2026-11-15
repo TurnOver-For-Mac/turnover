@@ -10,6 +10,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   copies of one message in Mail's list. The second was not spoken.
 - "Nothing in this window can be read", with the keys for screen recognition, is a hint now: turning off Hints after
   a pause turns it off too. It is no longer said in Steam's Big Picture while TurnOver is reading it.
+- Selecting with Shift and the arrows is read again in the Claude app's prompt, or a page's text field, after coming
+  back from another app. It said nothing until the focus moved.
 
 ## 2.0, build 24
 

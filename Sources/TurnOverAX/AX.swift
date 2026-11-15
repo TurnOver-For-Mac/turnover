@@ -167,10 +167,12 @@ extension AXValue: @unchecked @retroactive Sendable {}
 
 public extension AXUIElement {
     func attr(_ name: String) -> CFTypeRef? {
+        if let snapshot = AXSnapshot.current { return snapshot.attribute(name, of: self) }
         var v: CFTypeRef?
         return AXHealth.ask(self) { AXUIElementCopyAttributeValue(self, name as CFString, &v) } == .success ? v : nil
     }
     func attrError(_ name: String) -> (CFTypeRef?, AXError) {
+        if let snapshot = AXSnapshot.current { let v = snapshot.attribute(name, of: self); return (v, v == nil ? .noValue : .success) }
         var v: CFTypeRef?
         let e = AXHealth.ask(self) { AXUIElementCopyAttributeValue(self, name as CFString, &v) }
         return (v, e)
@@ -179,6 +181,7 @@ public extension AXUIElement {
     /// Several attributes in one question to the app (SwiftUI apps answer each question in about 4 ms: Contacts,
     /// 10 Oct 2026; one question for five is three times faster). Missing or failed ones are absent.
     func attrs(_ names: [String]) -> [String: AnyObject] {
+        if let snapshot = AXSnapshot.current { return Dictionary(uniqueKeysWithValues: names.compactMap { n in snapshot.attribute(n, of: self).map { (n, $0) } }) }
         var out: CFArray?
         guard AXHealth.ask(self, { AXUIElementCopyMultipleAttributeValues(self, names as CFArray, AXCopyMultipleAttributeOptions(rawValue: 0), &out) }) == .success,
               let values = out as? [AnyObject], values.count == names.count else { return [:] }
@@ -236,7 +239,7 @@ public extension AXUIElement {
 
 /// An element as a dictionary key or set member: equal when the accessibility API says the two refer to the same
 /// thing (CFEqual), which two `AXUIElement` objects for one control do.
-public struct ElementKey: Hashable {
+public struct ElementKey: Hashable, Sendable {
     public let element: AXUIElement
     public init(_ e: AXUIElement) { element = e }
     public static func == (a: ElementKey, b: ElementKey) -> Bool { CFEqual(a.element, b.element) }
