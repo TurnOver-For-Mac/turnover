@@ -102,7 +102,7 @@ nonisolated public struct StoreBrowser {
            let data = try? Data(contentsOf: file), !data.isEmpty { return data }
         guard let url = ConvertSource.httpsURL(ConvertSource.listAddress) else { throw ConvertFailure("The store's address is not https.") }
         let data: Data
-        do { data = try fetch(url, ConvertLimits.downloadBytes) } catch { throw ConvertFailure("The store's list could not be fetched: \(error).") }
+        do { data = try fetch(url, ConvertLimits.downloadBytes) } catch { throw ConvertFailure("The store's list could not be fetched: \(ConvertFailure.sentenceEnd("\(error)")).") }
         _ = try StoreEntry.parse(data)   // only a list that reads is kept
         try? FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
         try? data.write(to: file, options: .atomic)

@@ -113,8 +113,56 @@ nonisolated public enum NVDAStore {
         if r.couldNotStart { return Failure(String(localized: "TurnOver's plugin tool could not be started, so \(what) did not happen.", comment: "A store step could not start: %@ names the step")) }
         if r.timedOut { return Failure(String(localized: "NVDA's store did not answer in time, so \(what) did not happen. Nothing was changed. Try again later.", comment: "A store step took too long: %@ names the step")) }
         let first = plain(r.err.split(separator: "\n", omittingEmptySubsequences: true).first.map(String.init) ?? "", limit: 240)
+            .reversed().drop(while: { $0 == "." || $0 == " " }).reversed().map(String.init).joined()
         if first.isEmpty { return Failure(String(localized: "\(what) did not work, and the tool did not say why. Nothing was changed.", comment: "A store step failed with no reason: %@ names the step")) }
         return Failure(String(localized: "\(what) did not work: \(first). Nothing was changed.", comment: "A store step failed: %1$@ names the step, %2$@ is the tool's own reason"))
+    }
+
+    /// A download that failed, said in one plain sentence for the add-on's name: nil when the tool's words are not about a
+    /// download. The tool says "The download failed: <reason>." (or the SHA-256 or size refusals); the reason decides what is said.
+    public static func downloadFailure(_ err: String, name: String) -> Failure? {
+        let first = plain(err.split(separator: "\n", omittingEmptySubsequences: true).first.map(String.init) ?? "", limit: 300)
+        let lower = first.lowercased()
+        let who = name.isEmpty ? String(localized: "The add-on", comment: "Stands for an add-on's name in a failure sentence") : name
+        if lower.contains("sha-256 does not match") {
+            return Failure(String(localized: "\(who) was not used: its file is not the one NVDA's store listed, so nothing was read. That is at the store's or its author's end, not yours. Nothing was changed.", comment: "A download's checksum did not match; the placeholder is the add-on's name"))
+        }
+        if lower.contains("larger than 50 mb") {
+            return Failure(String(localized: "\(who) could not be fetched: its download is larger than TurnOver will read, 50 megabytes. Nothing was changed.", comment: "A download was too big; the placeholder is the add-on's name"))
+        }
+        guard lower.hasPrefix("the download failed") else { return nil }
+        let why: String
+        if let m = lower.range(of: #"answered (\d{3})"#, options: .regularExpression), let code = Int(lower[m].suffix(3)) {
+            switch code {
+            case 404, 410: why = String(localized: "its download address no longer exists. That is at its author's end, not yours", comment: "A download address gave 404 or 410")
+            case 401, 403: why = String(localized: "its download server refused the request (\(code)). That is at its author's end, not yours", comment: "A download gave 401 or 403: the placeholder is the number")
+            case 500...599: why = String(localized: "its download server had a problem (\(code)). Try again later", comment: "A download gave a server error: the placeholder is the number")
+            default: why = String(localized: "its download server answered \(code), not the file. Try again later", comment: "A download gave another status: the placeholder is the number")
+            }
+        } else if lower.contains("timed out") {
+            why = String(localized: "the download took too long. Try again later", comment: "A download timed out")
+        } else if ["offline", "internet connection", "network connection was lost", "could not connect", "cannot connect", "not connected"].contains(where: lower.contains) {
+            why = String(localized: "TurnOver could not reach the internet. Check the connection and try again", comment: "A download had no network")
+        } else if lower.contains("hostname") || lower.contains("cannot find host") || lower.contains("could not be found") {
+            why = String(localized: "its download server could not be found. That may be no internet connection, or an address that no longer exists", comment: "A download's host did not resolve")
+        } else if lower.contains("https") {
+            why = String(localized: "it would not be fetched safely, because its address is not a secure one", comment: "A download was not over https")
+        } else {
+            let reason = first.dropFirst("The download failed:".count).trimmingCharacters(in: CharacterSet(charactersIn: ". ")).trimmingCharacters(in: .whitespaces)
+            why = reason.isEmpty ? String(localized: "the download did not work", comment: "A download failed with no reason") : reason
+        }
+        return Failure(String(localized: "\(who) could not be fetched: \(why). Nothing was changed.", comment: "A download failed: the placeholders are the add-on's name and the reason, which has no full stop"))
+    }
+
+    /// What is said of an author: no addresses in angle brackets and no bare email addresses (the full string stays in the files
+    /// the converter writes). "Ann <a@x.org>, Bob <b@y.org>" is "Ann, Bob".
+    public static func speakableAuthor(_ s: String) -> String {
+        var t = s
+        for pattern in [#"<[^<>]*>"#, #"<[^<>]*$"#, #"[^\s<>(),;]+@[^\s<>(),;]+"#, #"\(\s*\)"#, #"\[\s*\]"#] {
+            t = t.replacingOccurrences(of: pattern, with: " ", options: .regularExpression)
+        }
+        let names = t.split(whereSeparator: { $0 == "," || $0 == ";" }).map { $0.split(whereSeparator: { $0 == " " }).joined(separator: " ") }.filter { !$0.isEmpty }
+        return names.joined(separator: ", ")
     }
 
     static func item(_ d: [String: Any]) -> Item? {
@@ -177,7 +225,10 @@ nonisolated public enum NVDAStore {
         let folder = conversionFolder(name: item.name, id: item.id, base: base, now: now)
         guard let args = convertArguments(id: item.id, folder: folder, convertedBy: convertedBy) else { return .failed(Failure(String(localized: "That add-on's id is not one TurnOver will use.", comment: "An add-on id with odd characters"))) }
         let r = run(args, 240)
-        guard r.status == 0, !r.timedOut, !r.couldNotStart else { return .failed(failure(r, what: String(localized: "converting the add-on", comment: "A step: converting an add-on"))) }
+        guard r.status == 0, !r.timedOut, !r.couldNotStart else {
+            if !r.timedOut, !r.couldNotStart, let f = downloadFailure(r.err, name: item.name) { return .failed(f) }
+            return .failed(failure(r, what: String(localized: "converting the add-on", comment: "A step: converting an add-on")))
+        }
         if FileManager.default.fileExists(atPath: folder.appendingPathComponent("manifest.json").path) { return .made(folder: folder) }
         if FileManager.default.fileExists(atPath: folder.appendingPathComponent("CONVERSION.md").path) { return .nothingToConvert(folder: folder) }
         return .failed(Failure(String(localized: "The conversion finished but wrote nothing. Nothing was changed.", comment: "A conversion wrote no files")))
@@ -188,7 +239,8 @@ nonisolated public enum NVDAStore {
     /// An add-on in a list: name, author, short description, and the verdict where it is known.
     public static func title(_ i: Item) -> String {
         var s = i.name
-        if !i.author.isEmpty { s += String(localized: ", by \(i.author)", comment: "An NVDA add-on in a list: its author, after its name") }
+        let author = speakableAuthor(i.author)
+        if !author.isEmpty { s += String(localized: ", by \(author)", comment: "An NVDA add-on in a list: its author, after its name") }
         if !i.description.isEmpty { s += ". " + (i.description.count > 140 ? String(i.description.prefix(139)) + "…" : i.description) }
         switch i.verdict {
         case .notForMac: s += String(localized: ". Not for the Mac\(i.reason.map { ": \($0)" } ?? "").", comment: "An NVDA add-on that cannot come across; the placeholder is the reason, with its colon, or empty")
@@ -202,7 +254,8 @@ nonisolated public enum NVDAStore {
     /// Everything the list says about one add-on, as one spoken passage.
     public static func facts(_ d: Detail) -> String {
         var parts = [d.item.name + (d.item.version.isEmpty ? "" : String(localized: ", version \(d.item.version)", comment: "An add-on's version after its name"))]
-        if !d.item.author.isEmpty { parts.append(String(localized: "By \(d.item.author).", comment: "An add-on's author")) }
+        let author = speakableAuthor(d.item.author)
+        if !author.isEmpty { parts.append(String(localized: "By \(author).", comment: "An add-on's author")) }
         if !d.item.description.isEmpty { parts.append(d.item.description) }
         parts.append(String(localized: "Licence: \(d.license ?? String(localized: "not given", comment: "A licence the store does not give")).", comment: "An add-on's licence"))
         if let s = d.sourceURL { parts.append(String(localized: "Source: \(s).", comment: "Where an add-on's source can be read")) }
