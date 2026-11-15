@@ -159,7 +159,13 @@ Measured on this Mac, macOS 27.2, 14 Nov 2026 (a throwaway test program, not kep
   only if developer mode was on when the person approved it; any other receipt is for exactly the files approved,
   whatever developer mode is later. TurnOver says that developer mode is on each time it starts.
 - A plugin's profile and its script share one approval: a script cannot reach past its abilities by leaving the
-  work to a key in `profile.json`, because the abilities are worked out from both.
+  work to a key in `profile.json`, because the abilities are worked out from both. Silences, watches and keys that
+  read count as `say` there, because they keep TurnOver quiet or speak for it.
+- A plugin that has a script is one thing (decided 16 Nov 2026, after the independent review). Until its script may
+  run, none of its profile is live either: no labels, keys, watches, silences, holds or view, and a plugin whose
+  files differ from the ones that may run is dark at once, before anything reloads. This holds only while
+  `pluginScripts` is on; with it off a plugin with a script behaves as a data plugin does today. A plugin without a
+  script is not touched.
 
 ## The keeper (decided and proven 15 Nov 2026)
 
@@ -233,7 +239,18 @@ Limits, all in one file (ScriptLimits.swift) with the reason beside each:
 - 3 s to start. 5 s for a command to finish or an event to be answered at all: after that the host is killed.
 - 128 MB of memory, or more than half a processor for ten seconds: killed.
 - 100 requests a second, and 150 ms of TurnOver's main thread in any second: further requests are refused.
-- 20 things said in two seconds, 500 characters each. 20 timers, none faster than 50 ms.
+- 20 things said in two seconds, 500 characters each. What a script says by replacing TurnOver's words for an event
+  and what `item.read` says count in the same twenty and the same 500 characters (silence is not counted). 20 timers,
+  none faster than 50 ms, kept by the host program in Swift as well as in the script's own bookkeeping.
+- 500 lines a second from the host, counted before any is read; past that they are thrown away unread, and more than
+  2,000 thrown away in ten seconds stops the host. Reasons are in ScriptLimits.swift. At most 64 requests waiting for
+  the main thread. Every message counts toward the 100 requests a second, whatever it asks.
+- A time spent on the main thread counts from when the call ended and by its whole length, so one long call counts
+  against the next ones. While a script is paused (its app is not in front) everything but its log and its own stored
+  data is refused on TurnOver's side.
+- A pattern with a `*` in a match is at most 200 characters and is compared with at most 10,000 (longer matches
+  nothing): the work is at most their product, never the exponential work a backtracking pattern can cost. A search
+  ends when its time is up even part-way through one item, and never matches on what a password field holds.
 - 256 KB for the script, for a message, and for the plugin's stored data.
 - Three strikes (a kill, a crash, a late answer) in ten minutes: the script is turned off for this run of
   TurnOver, and TurnOver says so once, by name.
@@ -336,6 +353,14 @@ Details settled while the documents were written (15 Nov 2026):
 - `turnover.sound` takes the name of one of TurnOver's own sound files; a name TurnOver does not have rejects.
 - The library's closed apps (PluginPolicy.closedApps) are closed to a plugin with a script as to any other. On any
   Mac, a script may not name the macOS password and permission dialogs, the login window, or TurnOver.
+- In a closed app (decided 16 Nov 2026), on any Mac, a script may read and speak and never act. `press`, `focus`,
+  `edit`, `menu` and `keys` are refused: at load, a manifest that names a closed app and asks for one of them is
+  refused with the reason, and again in the broker, against the app really in front. (An approved script that could
+  type in Terminal could run any program.) What the person hears at approval says so, in place of a warning:
+  "In <the apps> it can only read and speak: passwords, settings, terminals and browsers are like this. It can never
+  press, type or choose anything there, whatever else it is allowed to do."
+- A menu item is chosen with `menu`, which is checked against the policy, never pressed as an item: `item.press` on
+  a menu element is refused.
 - While a secure field has the focus, `keys` and `edit` requests are refused, as reading it always is.
 - `turnover-plugin verify <folder>` prints the hash and the signing key's fingerprint: what a reviewer records.
   An author's key is a file, `~/.turnover-plugin/author.key`, readable only by them.

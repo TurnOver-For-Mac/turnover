@@ -52,8 +52,11 @@ nonisolated public enum ScriptTrust {
         var files: [(name: String, data: Data)] = []
         for name in countedFiles {
             if name == PluginFormat.scriptName, let scriptData { files.append((name, scriptData)); continue }
-            guard let data = try? Data(contentsOf: folder.appendingPathComponent(name)) else {
-                if name == "profile.json" { continue }
+            // Read to one byte past what the loader reads, so a file that is too large is never taken whole into memory; a plugin
+            // with such a file has no hash (the loader would not have loaded it either).
+            let limit = name == PluginFormat.scriptName ? PluginFormat.scriptBytes : PluginFormat.fileBytes
+            guard let data = PluginFormat.readBounded(folder.appendingPathComponent(name), limit: limit), data.count <= limit else {
+                if name == "profile.json", !FileManager.default.fileExists(atPath: folder.appendingPathComponent(name).path) { continue }
                 return nil
             }
             files.append((name, data))
@@ -108,7 +111,7 @@ nonisolated public enum ScriptTrust {
     }
 
     public static func readSignature(in folder: URL) -> Signature? {
-        guard let data = try? Data(contentsOf: folder.appendingPathComponent("signature.json")) else { return nil }
+        guard let data = PluginFormat.readBounded(folder.appendingPathComponent("signature.json"), limit: 16 * 1024), data.count <= 16 * 1024 else { return nil }
         return try? JSONDecoder().decode(Signature.self, from: data)
     }
 
@@ -124,10 +127,39 @@ nonisolated public enum ScriptTrust {
         return verify(signature, digest: digest)
     }
 
+    /// The status of a folder's signature against the files a plugin was LOADED from, given as the hash the loader took of them
+    /// (LoadedPlugin.scriptHash), not against whatever is in the folder now. The approval question names the signer; it must
+    /// be the signer of the files the receipt will be for (the folder may have changed since, or been changed in between).
+    public static func signatureStatus(in folder: URL, loadedHash: String?) -> SignatureStatus {
+        guard FileManager.default.fileExists(atPath: folder.appendingPathComponent("signature.json").path) else { return .none }
+        guard let signature = readSignature(in: folder) else {
+            return .invalid(String(localized: "signature.json is not a signature TurnOver can read.", comment: "Said about a plugin's signature file that is damaged"))
+        }
+        guard let loadedHash, loadedHash.count == 64, let digest = Data(hexString: loadedHash) else {
+            return .invalid(String(localized: "The plugin's files cannot be read to check the signature.", comment: "Said when a signature cannot be checked"))
+        }
+        return verify(signature, digest: digest)
+    }
+
     public static func writeSignature(_ signature: Signature, to folder: URL) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try (encoder.encode(signature) + Data("\n".utf8)).write(to: folder.appendingPathComponent("signature.json"), options: .atomic)
+    }
+}
+
+nonisolated extension Data {
+    /// From lowercase or uppercase hex digits; nil for any other text or an odd length.
+    init?(hexString: String) {
+        let bytes = Array(hexString.utf8)
+        guard bytes.count % 2 == 0 else { return nil }
+        var out = Data(capacity: bytes.count / 2)
+        func nibble(_ c: UInt8) -> UInt8? { switch c { case 0x30...0x39: return c - 0x30; case 0x61...0x66: return c - 0x57; case 0x41...0x46: return c - 0x37; default: return nil } }
+        for i in stride(from: 0, to: bytes.count, by: 2) {
+            guard let hi = nibble(bytes[i]), let lo = nibble(bytes[i + 1]) else { return nil }
+            out.append(hi << 4 | lo)
+        }
+        self = out
     }
 }
 
@@ -472,12 +504,25 @@ public final class ScriptTrustStore {
         let before = receipts
         receipts.removeAll { $0.id == id }
         guard receipts != before else { return }
-        do { try save() } catch { receipts = before; throw error }
+        do { try save() } catch { latch(error); throw error }
     }
 
     public func setDeveloperMode(_ on: Bool) throws {
         let before = developerMode
         developerMode = on
-        do { try save() } catch { developerMode = before; throw error }
+        do { try save() } catch {
+            if on { developerMode = before } else { latch(error) }   // turning it off that could not be kept is a failure to take away
+            throw error
+        }
+    }
+
+    /// A change that was meant to take an approval away (or turn developer mode off) could not be kept. The receipts on disk are
+    /// still the old ones, so the store stops believing any of them: it is unavailable for the rest of this run, as if the keeper
+    /// could not be reached (docs/PLUGIN-SCRIPTS-PLAN.md, "The keeper"), and nothing that was approved runs. Putting the old
+    /// receipt back, as a failed approval does, would leave a script the person turned off running.
+    private func latch(_ error: Error) {
+        receipts = []; developerMode = false
+        unavailable = (error as? WriteFailure)?.description ?? error.localizedDescription
+        Log.warning("plugin trust: a change taking an approval away could not be kept (\(unavailable ?? "")); no script is approved in the rest of this run")
     }
 }

@@ -9,6 +9,10 @@ enum Prelude {
     (function (native, config) {
       "use strict";
       const globalObject = globalThis;
+      // Kept before the script runs, so a script that replaces JSON.stringify later does not change what these send. (Hardening
+      // only: TurnOver checks every message it gets, and the host refuses a message with a line break in it.)
+      const stringify = JSON.stringify.bind(JSON);
+      const parse = JSON.parse.bind(JSON);
       const events = new Map();
       const commands = new Map();
       const declared = new Set(config.commands);
@@ -24,7 +28,7 @@ enum Prelude {
         return String(error);
       }
       function send(message) {
-        if (!native.send(JSON.stringify(message))) {
+        if (!native.send(stringify(message))) {
           throw new RangeError("That message is larger than " + config.messageBytes + " bytes, so TurnOver refuses it.");
         }
       }
@@ -75,7 +79,11 @@ enum Prelude {
         say: function (text, options) {
           send({ t: "notify", op: "say", args: { text: String(text), interrupt: !!(options && options.interrupt) } });
         },
-        sound: function (name) { send({ t: "notify", op: "sound", args: { name: String(name) } }); },
+        sound: function (name) {
+          const wanted = String(name);
+          if (!config.sounds.includes(wanted)) throw new Error('TurnOver has no sound called "' + wanted + '".');
+          send({ t: "notify", op: "sound", args: { name: wanted } });
+        },
         focused: function () { return request("focused", {}).then(makeItem); },
         find: function (match, options) {
           const args = { match: match === undefined ? {} : match };
@@ -144,7 +152,7 @@ enum Prelude {
 
       const entry = {
         event: function (line) {
-          const message = JSON.parse(line);
+          const message = parse(line);
           const handler = events.get(message.name);
           const reply = { t: "eventDone", id: message.id, handled: false };
           if (handler) {
@@ -161,7 +169,7 @@ enum Prelude {
           send(reply);
         },
         command: function (line) {
-          const message = JSON.parse(line);
+          const message = parse(line);
           const handler = commands.get(message.command);
           const finish = function (error) { send({ t: "commandDone", id: message.id, error: error }); };
           if (!handler) { finish('The script has no handler for the command "' + message.command + '".'); return; }
@@ -171,7 +179,7 @@ enum Prelude {
           Promise.resolve(result).then(function () { finish(null); }, function (error) { finish(describe(error)); });
         },
         reply: function (line) {
-          const message = JSON.parse(line);
+          const message = parse(line);
           const waiting = pending.get(message.id);
           if (!waiting) return;
           pending.delete(message.id);
@@ -186,7 +194,7 @@ enum Prelude {
           catch (error) { log("error", "A timer failed: " + describe(error)); }
         },
         summary: function () {
-          return JSON.stringify({ events: Array.from(events.keys()), commands: Array.from(commands.keys()) });
+          return stringify({ events: Array.from(events.keys()), commands: Array.from(commands.keys()) });
         }
       };
       return entry;

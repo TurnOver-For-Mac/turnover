@@ -37,6 +37,10 @@ final class ScriptRuntime {
     private var repeating: Set<Int> = []
     private var dueWhilePaused: [Int] = []
     private var lastException: JSValue?
+    private var maxTimers = PluginWire.Limits.timers
+    private var minimumTimerMilliseconds = PluginWire.Limits.minimumTimerMilliseconds
+    /// The longest a timer may be set for: a day. A script's own number is never turned into a time unchecked.
+    private static let longestTimerMilliseconds = 86_400_000.0
 
     func handle(line: Data) {
         guard let object = (try? JSONSerialization.jsonObject(with: line)) as? [String: Any], let type = object["t"] as? String else { return }
@@ -67,6 +71,10 @@ final class ScriptRuntime {
         let limits = object["limits"] as? [String: Any] ?? [:]
         let source = object["source"] as? String ?? ""
         let commands = (object["commands"] as? [Any])?.compactMap { $0 as? String } ?? []
+        let sounds = (object["sounds"] as? [Any])?.compactMap { $0 as? String } ?? []
+        // TurnOver's numbers, from its hello, are the limits; a script cannot change them, whatever its own timers say.
+        maxTimers = min(PluginWire.Limits.timers, (limits["timers"] as? Int) ?? PluginWire.Limits.timers)
+        minimumTimerMilliseconds = max(PluginWire.Limits.minimumTimerMilliseconds, (limits["minimumTimerMilliseconds"] as? Int) ?? PluginWire.Limits.minimumTimerMilliseconds)
         guard let context = JSContext() else { fail("The script engine could not start."); return }
         self.context = context
         context.exceptionHandler = { [weak self] _, exception in self?.lastException = exception }
@@ -74,7 +82,8 @@ final class ScriptRuntime {
         let native = JSValue(newObjectIn: context)!
         let send: @convention(block) (String) -> Bool = { text in
             let data = Data(text.utf8)
-            guard data.count < PluginWire.Limits.messageBytes else { return false }
+            // One message per call, however the script made its text: a newline inside it would be a second message.
+            guard data.count < PluginWire.Limits.messageBytes, !data.contains(0x0A) else { return false }
             return Output.write(data + Data([0x0A]))
         }
         let timer: @convention(block) (Int, Double, Bool) -> Void = { [weak self] id, milliseconds, repeats in
@@ -94,6 +103,7 @@ final class ScriptRuntime {
                 "version": plugin["version"] as? String ?? "",
             ],
             "commands": commands,
+            "sounds": sounds,
             "eventNames": PluginWire.eventNames,
             "replaceableEvents": Array(PluginWire.replaceableEvents),
             "messageBytes": PluginWire.Limits.messageBytes,
@@ -134,7 +144,12 @@ final class ScriptRuntime {
 
     // Timers: JavaScript keeps the callbacks; here only the clock. A timer that comes due while paused waits, and fires
     // once when the script resumes.
-    private func startTimer(_ id: Int, milliseconds: Double, repeats: Bool) {
+    private func startTimer(_ id: Int, milliseconds requested: Double, repeats: Bool) {
+        // The limits are kept here, in Swift, not only in the script's own bookkeeping, which the script can change: at most
+        // `maxTimers` at once, none faster than the minimum, none longer than a day, and nothing from a number that is not one.
+        guard timers[id] != nil || timers.count < maxTimers else { return }
+        let milliseconds = requested.isFinite ? min(max(requested, Double(minimumTimerMilliseconds)), Self.longestTimerMilliseconds) : Double(minimumTimerMilliseconds)
+        timers.removeValue(forKey: id)?.cancel()
         let source = DispatchSource.makeTimerSource(queue: .main)
         let interval = DispatchTimeInterval.milliseconds(Int(milliseconds))
         source.schedule(deadline: .now() + interval, repeating: repeats ? interval : .never)

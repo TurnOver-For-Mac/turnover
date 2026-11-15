@@ -29,8 +29,8 @@ public final class TrustKeeperClient: @unchecked Sendable {
     public static let timeoutSeconds = 2.0
     public static let serviceSuffix = ".trust-keeper"
 
-    /// Who to connect to and the requirement on them, or why this client will not connect at all.
-    private let target: Result<(service: String, requirement: String), TrustKeeperFailure>
+    /// Who to connect to and the requirement on them (nil for `stranger`: none), or why this client will not connect at all.
+    private let target: Result<(service: String, requirement: String?), TrustKeeperFailure>
     // Safe because: `connection` is read and written only under `lock`; NSXPCConnection itself is thread-safe to message.
     private let lock = NSLock()
     private var connection: NSXPCConnection?
@@ -46,6 +46,22 @@ public final class TrustKeeperClient: @unchecked Sendable {
         }
         target = .success((bundleIdentifier + Self.serviceSuffix, requirement))
     }
+
+    /// The attacker's client, for the keeper check only (`turnover-trust-keeper --client check-as-stranger`): it connects to the
+    /// keeper of the app it runs in without the checks an honest client makes, a signing team of its own and a requirement on the
+    /// keeper, so that if a stranger is refused it is the keeper's own check that refused it. An ordinary client never gets this far:
+    /// with no team it will not connect at all, which proves nothing about the keeper.
+    public init(strangerOf bundleIdentifier: String?) {
+        guard let bundleIdentifier, CodeIdentity.isValidIdentifier(bundleIdentifier) else {
+            target = .failure(TrustKeeperFailure("this program has no usable bundle identifier to name the keeper by"))
+            return
+        }
+        target = .success((bundleIdentifier + Self.serviceSuffix, nil))
+    }
+
+    /// Whether this client would open a connection, and whether it would ask nothing of the keeper's own signature first.
+    public var connects: Bool { if case .success = target { return true } else { return false } }
+    public var requiresKeeperSignature: Bool { if case .success(let found) = target { return found.requirement != nil } else { return false } }
 
     /// The stored bytes, nil if nothing is stored yet.
     public func load() -> Result<Data?, TrustKeeperFailure> {
@@ -68,7 +84,7 @@ public final class TrustKeeperClient: @unchecked Sendable {
     }
 
     private func call<Value: Sendable>(_ ask: (TrustKeeperProtocol, @escaping @Sendable (Result<Value, TrustKeeperFailure>) -> Void) -> Void) -> Result<Value, TrustKeeperFailure> {
-        let service: (service: String, requirement: String)
+        let service: (service: String, requirement: String?)
         switch target { case .failure(let why): return .failure(why); case .success(let found): service = found }
         let pending = PendingAnswer<Value>()
         let connection = currentConnection(service)
@@ -83,12 +99,12 @@ public final class TrustKeeperClient: @unchecked Sendable {
         return result
     }
 
-    private func currentConnection(_ service: (service: String, requirement: String)) -> NSXPCConnection {
+    private func currentConnection(_ service: (service: String, requirement: String?)) -> NSXPCConnection {
         lock.lock(); defer { lock.unlock() }
         if let connection { return connection }
         let made = NSXPCConnection(serviceName: service.service)
         made.remoteObjectInterface = NSXPCInterface(with: TrustKeeperProtocol.self)
-        made.setCodeSigningRequirement(service.requirement)
+        if let requirement = service.requirement { made.setCodeSigningRequirement(requirement) }
         made.resume()
         connection = made
         return made

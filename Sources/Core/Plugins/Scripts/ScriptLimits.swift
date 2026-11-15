@@ -47,6 +47,23 @@ nonisolated public struct ScriptLimits: Sendable {
     /// slow app costs the script its turn, not the reader its voice).
     public var findLimit: Int = 50
     public var findBudget: TimeInterval = 0.15
+    /// Lines the host may write to TurnOver in a second, counted before any is parsed: past it they are thrown away unread, so
+    /// a flood costs TurnOver a count and not a parse, a log line and a queue entry each. Five times the requests a second a
+    /// script may make, which leaves room for the answers to events and commands.
+    public var messagesPerSecond: Int = 500
+    /// Lines thrown away for being past that rate, in `floodWindow` seconds, after which the host is stopped as abusive.
+    public var floodDropsAllowed: Int = 2_000
+    public var floodWindow: TimeInterval = 10
+    /// Requests accepted and waiting for TurnOver's main thread. Each is at most one message (256 KB), so this bounds what a
+    /// slow main thread can be made to hold for a script that asks faster than main answers.
+    public var mainQueueLimit: Int = 64
+    /// How often the same kind of refusal or complaint from the host is written to the log: once, then a count of the rest.
+    public var logInterval: TimeInterval = 1
+    /// What a glob (a `*` pattern in a match) may be and be matched against, in characters. Longer matches nothing. The work
+    /// is the two multiplied, so this is at most two million steps for one comparison: a long page's text is not a name,
+    /// and a pattern longer than a sentence is not one either. Fixed for a match in any plugin, a script's or not.
+    public static let globPatternCharacters = 200
+    public static let globTextCharacters = 10_000
     /// Strikes (a kill, a crash or a late answer) within `strikeWindow` that turn the script off for this run of
     /// TurnOver. Counting them is the next stage's; the numbers live here with the rest.
     public var strikesAllowed: Int = 3

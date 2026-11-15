@@ -65,7 +65,12 @@ extension ScriptAbilities {
     /// profile.json (docs/PLUGIN-SCRIPTS-PLAN.md, "Approval").
     public static func effective(for plugin: LoadedPlugin) -> Set<ScriptAbility> {
         var names = Set(plugin.manifest?.abilities ?? [])
-        if let profile = plugin.profile { names.formUnion(PluginListing.abilitiesUsed(by: profile)) }
+        if let profile = plugin.profile {
+            names.formUnion(PluginListing.abilitiesUsed(by: profile))
+            // What a profile rule says aloud or keeps quiet is speech control, whether or not the listing counts it so: a silence
+            // keeps TurnOver from saying something, a watch says what changed, and a key that reads speaks (16 Nov 2026 review).
+            if !(profile.silence ?? []).isEmpty || !(profile.watch ?? []).isEmpty || (profile.keys ?? []).contains(where: { $0.action == "read" }) { names.insert("say") }
+        }
         return Set(names.compactMap(ScriptAbility.init(rawValue:)))
     }
 
@@ -96,7 +101,7 @@ extension ScriptAbilities {
             var unique: [String] = []
             for name in closed where !unique.contains(name) { unique.append(name) }   // two names for one app (1Password) are said once
             let list = ListFormatter.localizedString(byJoining: unique)
-            lines.append(.init(kind: .closedAppWarning, text: String(localized: "Warning: this works in \(list), where a plugin can do more harm: passwords, settings, terminals and browsers are like this. Only the person who wrote it should approve it.", comment: "Said when asking a person to approve a plugin's script that works in a sensitive app; the placeholder is the app names")))
+            lines.append(.init(kind: .closedAppWarning, text: String(localized: "In \(list) it can only read and speak: passwords, settings, terminals and browsers are like this. It can never press, type or choose anything there, whatever else it is allowed to do.", comment: "Said when asking a person to approve a plugin's script that works in a sensitive app, where scripts may only read and speak; the placeholder is the app names")))
         }
         switch signature {
         case .valid(let fingerprint):

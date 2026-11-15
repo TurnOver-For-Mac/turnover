@@ -233,6 +233,24 @@ func scriptTrustTests() {
         try? ScriptTrust.writeSignature(ScriptTrust.Signature(key: "!!", signature: "!!"), to: folder)
         expect(ScriptTrust.signatureStatus(in: folder).isValid, false, "not base64")
     }
+    test("script trust: a signature is checked against the hash of the files that were loaded, not the folder as it is now") {
+        let folder = temp(); defer { try? fm.removeItem(at: folder) }
+        plugin(in: folder)
+        let first = Curve25519.Signing.PrivateKey(), second = Curve25519.Signing.PrivateKey()
+        try? ScriptTrust.writeSignature(try! ScriptTrust.sign(digest: ScriptTrust.digest(folder: folder)!, with: first), to: folder)
+        let loaded = ProfileStore.load(folder: folder)
+        let firstPrint = ScriptTrust.fingerprint(ofPublicKey: first.publicKey.rawRepresentation)
+        expect(ScriptTrust.signatureStatus(in: folder, loadedHash: loaded.scriptHash), .valid(fingerprint: firstPrint), "as loaded, it is signed by the first key")
+        // Another version, signed by another key, is put in the folder after the load.
+        plugin(in: folder, script: scriptTestSource + "// another\n")
+        try? ScriptTrust.writeSignature(try! ScriptTrust.sign(digest: ScriptTrust.digest(folder: folder)!, with: second), to: folder)
+        expect(ScriptTrust.signatureStatus(in: folder).isValid, true, "the folder as it is now is validly signed (by the second key)")
+        expect(ScriptTrust.signatureStatus(in: folder, loadedHash: loaded.scriptHash).isValid, false, "but the files that were loaded are not signed by it")
+        expect(ScriptTrust.signatureStatus(in: folder, loadedHash: nil).isValid, false, "no hash, no signer")
+        expect(ScriptTrust.signatureStatus(in: folder, loadedHash: "not hex").isValid, false, "nor a hash that is not one")
+        try? fm.removeItem(at: folder.appendingPathComponent("signature.json"))
+        expect(ScriptTrust.signatureStatus(in: folder, loadedHash: loaded.scriptHash), .none, "and no signature is none")
+    }
     test("script trust: the author's key is made once, readable only by its author") {
         let dir = temp(); defer { try? fm.removeItem(at: dir) }
         let url = dir.appendingPathComponent(".turnover-plugin/author.key")

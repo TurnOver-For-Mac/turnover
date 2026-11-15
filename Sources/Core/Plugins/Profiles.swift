@@ -214,8 +214,36 @@ nonisolated public enum ElementMatcher {
         if pattern == "*" { return !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }   // "has one"
         let p = pattern.lowercased(), t = s.lowercased()
         if !p.contains("*") { return p == t }
-        let escaped = NSRegularExpression.escapedPattern(for: p).replacingOccurrences(of: "\\*", with: ".*")
-        return t.range(of: "^" + escaped + "$", options: .regularExpression) != nil
+        // A pattern or a text beyond the limits matches nothing (ScriptLimits.globPatternCharacters says why).
+        let pattern = Array(p.unicodeScalars), text = Array(t.unicodeScalars)
+        guard pattern.count <= ScriptLimits.globPatternCharacters, text.count <= ScriptLimits.globTextCharacters else { return false }
+        return wildcardMatch(pattern, text)
+    }
+
+    /// `*` matches any run of characters except a line end (as `.*` did), everything else only itself. One star is
+    /// remembered and widened one character at a time, so the work is at most the pattern's length times the text's: never
+    /// the combinatorial work a backtracking regular expression does on "*a*a*a*b" against a long run of a's.
+    static func wildcardMatch(_ p: [Unicode.Scalar], _ t: [Unicode.Scalar]) -> Bool {
+        func lineEnd(_ c: Unicode.Scalar) -> Bool { c == "\n" || c == "\r" || c == "\u{85}" || c == "\u{2028}" || c == "\u{2029}" }
+        var pi = 0, ti = 0, star = -1, starText = 0
+        while ti < t.count {
+            if pi < p.count, p[pi] == "*" { star = pi; starText = ti; pi += 1 }
+            else if pi < p.count, p[pi] == t[ti] { pi += 1; ti += 1 }
+            else if star >= 0, !lineEnd(t[starText]) { starText += 1; ti = starText; pi = star + 1 }
+            else { return false }
+        }
+        while pi < p.count, p[pi] == "*" { pi += 1 }
+        return pi == p.count
+    }
+
+    /// What one search may spend and must not read: its end time (every step after it fails, so a slow app costs the search,
+    /// not the reader), and whether a secure field's value is hidden from the match (a script must not be able to ask
+    /// "does the password start with a?").
+    public final class SearchContext {
+        let end: Date?
+        let hideSecure: Bool
+        public init(end: Date? = nil, hideSecure: Bool = false) { self.end = end; self.hideSecure = hideSecure }
+        var expired: Bool { end.map { Date() >= $0 } ?? false }
     }
 
     /// "AXRadioButton", "RadioButton", "radio button" and "radioButton" all mean the same role.
@@ -226,8 +254,9 @@ nonisolated public enum ElementMatcher {
     }
 
     /// Whether an element satisfies a match (the "nth" field is for searches, not single tests).
-    public static func matches(_ e: AXUIElement, _ m: ElementMatch) -> Bool {
-        if let any = m.any { return any.contains { matches(e, $0) } }
+    public static func matches(_ e: AXUIElement, _ m: ElementMatch, context: SearchContext? = nil) -> Bool {
+        if context?.expired == true { return false }
+        if let any = m.any { return any.contains { matches(e, $0, context: context) } }
         if let r = m.role, !roleMatches(r, e.role) { return false }
         if let rs = m.roles { let actual = e.role; if !rs.contains(where: { roleMatches($0, actual) }) { return false } }
         if let s = m.subrole, !glob(s, e.string(kAXSubroleAttribute) ?? "") { return false }
@@ -235,7 +264,11 @@ nonisolated public enum ElementMatcher {
         if let t = m.title, !glob(t, e.string(kAXTitleAttribute) ?? "") { return false }
         if let d = m.description, !glob(d, e.string(kAXDescriptionAttribute) ?? "") { return false }
         if let h = m.help, !glob(h, e.string(kAXHelpAttribute) ?? "") { return false }
-        if let v = m.value { let val = e.attr(kAXValueAttribute).map { "\($0)" } ?? ""; if !glob(v, val) { return false } }
+        if let v = m.value {
+            let secret = context?.hideSecure == true && ScriptItem.isSecure(subrole: e.string(kAXSubroleAttribute), role: e.string(kAXRoleAttribute))
+            let val = secret ? "" : (e.attr(kAXValueAttribute).map { "\($0)" } ?? "")
+            if !glob(v, val) { return false }
+        }
         if m.unnamed == true {
             let named = [e.string(kAXTitleAttribute), e.string(kAXDescriptionAttribute)].contains { s in
                 let t = (s ?? "").trimmingCharacters(in: .whitespaces); return !t.isEmpty && !TurnOverObject.isClassName(t)
@@ -248,11 +281,11 @@ nonisolated public enum ElementMatcher {
             if ((e.actionNamesResult().value as? [String]) ?? []).contains("AXPress") != p { return false }
         }
         if let w = m.window { guard let win = e.element(kAXWindowAttribute), glob(w, win.string(kAXTitleAttribute) ?? "") else { return false } }
-        if let t = m.text, !glob(t, text(of: e)) { return false }
-        if let pm = m.parent?.value { guard let p = e.element(kAXParentAttribute), matches(p, pm) else { return false } }
+        if let t = m.text, !glob(t, text(of: e, context: context)) { return false }
+        if let pm = m.parent?.value { guard let p = e.element(kAXParentAttribute), matches(p, pm, context: context) else { return false } }
         if let inside = m.inside?.value {
             var p = e.element(kAXParentAttribute); var depth = 0; var found = false
-            while let x = p, depth < 30 { if matches(x, inside) { found = true; break }; p = x.element(kAXParentAttribute); depth += 1 }
+            while let x = p, depth < 30, context?.expired != true { if matches(x, inside, context: context) { found = true; break }; p = x.element(kAXParentAttribute); depth += 1 }
             if !found { return false }
         }
         return true
@@ -264,6 +297,7 @@ nonisolated public enum ElementMatcher {
     public static func matchesHere(_ e: AXUIElement, _ m: ElementMatch, pid: pid_t) -> Bool {
         guard matches(e, m) else { return false }
         guard let n = m.nth else { return true }
+        guard validNth(n) else { return false }   // 0, or past what a search can visit: nothing is "the nth"
         let key = "\(pid)|" + String(data: (try? JSONEncoder().encode(m)) ?? Data(), encoding: .utf8)!
         nthLock.lock(); let cached = nthCache[key]; nthLock.unlock()
         let chosen: AXUIElement?
@@ -276,6 +310,9 @@ nonisolated public enum ElementMatcher {
         }
         return chosen.map { $0.isSame(e) } ?? false
     }
+    /// The most elements a search visits, and so the furthest an `nth` can reach. Zero is not a place.
+    static let maxVisits = 6000
+    public static func validNth(_ n: Int) -> Bool { n != 0 && n.magnitude <= UInt(maxVisits) }
     private static let nthLock = NSLock()
     nonisolated(unsafe) private static var nthCache: [String: (element: AXUIElement?, at: Date)] = [:]   // under `nthLock`
 
@@ -283,7 +320,7 @@ nonisolated public enum ElementMatcher {
     nonisolated(unsafe) public static var searchRoots: ((pid_t) -> [AXUIElement]?)?   // set by the test runner only
 
     /// Every element in the application's windows that matches, in tree order (bounded).
-    public static func find(_ m: ElementMatch, pid: pid_t, limit: Int = 50, budget: TimeInterval = 0.6) -> [AXUIElement] {
+    public static func find(_ m: ElementMatch, pid: pid_t, limit: Int = 50, budget: TimeInterval = 0.6, hideSecure: Bool = false) -> [AXUIElement] {
         let app = AXUIElementCreateApplication(pid)
         // The messaging timeout is inherited by the elements copied from the application element: set once per
         // application, not on every search (code review, 8 Oct 2026).
@@ -296,6 +333,7 @@ nonisolated public enum ElementMatcher {
         var queue = searchRoots?(pid) ?? app.elements(kAXWindowsAttribute)
         var head = 0
         let started = Date()
+        let context = SearchContext(end: started.addingTimeInterval(budget), hideSecure: hideSecure)
         func sameKind(_ a: AXUIElement, _ b: AXUIElement) -> Bool {
             let keys = [kAXRoleAttribute, kAXTitleAttribute, kAXDescriptionAttribute, kAXIdentifierAttribute]
             let x = a.attrs(keys), y = b.attrs(keys)
@@ -306,35 +344,37 @@ nonisolated public enum ElementMatcher {
             return keys.allSatisfy { (x[$0] as? String) == (y[$0] as? String) }
         }
         // A time budget as well as a count: 6,000 visits of a slow application is seconds on the main thread.
-        while head < queue.count, head < 6000, out.count < limit, Date().timeIntervalSince(started) < budget {
+        // The same end time stops the match and the walk part-way through one element, not only between elements.
+        while head < queue.count, head < maxVisits, out.count < limit, !context.expired {
             let e = queue[head]; head += 1
-            if matches(e, m) { out.append(e) }
-            for c in e.elements(kAXChildrenAttribute) where !sameKind(c, e) { queue.append(c) }
+            if matches(e, m, context: context) { out.append(e) }
+            for c in e.elements(kAXChildrenAttribute) where !context.expired && !sameKind(c, e) { queue.append(c) }
         }
         return out
     }
 
     /// The one element a key acts on: "nth" picks among the matches (default the first).
-    public static func findOne(_ m: ElementMatch, pid: pid_t, budget: TimeInterval = 0.6) -> AXUIElement? {
-        let all = find(m, pid: pid, limit: max(50, (m.nth ?? 1)), budget: budget)
-        guard !all.isEmpty else { return nil }
+    public static func findOne(_ m: ElementMatch, pid: pid_t, budget: TimeInterval = 0.6, hideSecure: Bool = false) -> AXUIElement? {
         let n = m.nth ?? 1
+        guard validNth(n) else { return nil }   // nth 0 once indexed all[-1]; a huge one once overflowed abs()
+        let all = find(m, pid: pid, limit: max(50, n), budget: budget, hideSecure: hideSecure)
+        guard !all.isEmpty else { return nil }
         if n < 0 { return all.count + n >= 0 ? all[all.count + n] : nil }
         return n - 1 < all.count ? all[n - 1] : nil
     }
 
     /// Static text inside an element, in order.
-    nonisolated public static func text(of e: AXUIElement) -> String {
+    nonisolated public static func text(of e: AXUIElement, context: SearchContext? = nil) -> String {
         if e.role == "AXStaticText" { return (e.string(kAXValueAttribute) ?? "").trimmingCharacters(in: .whitespacesAndNewlines) }
         // On a web page, one sentence comes in pieces ("Hello " and "world"): joined as they are. In an app, each text
         // is its own item: joined with a pause, or Asobi's game card read "Example GameLast played27 days ago…"
         // (parts request #3, from an AI making an Asobi plugin, 14 Oct 2026).
         var p = e.element(kAXParentAttribute); var hops = 0
-        while let x = p, hops < 30 { if x.role == "AXWebArea" { return ClaudeTranscript.text(of: e, skipHidden: false) }; p = x.element(kAXParentAttribute); hops += 1 }
+        while let x = p, hops < 30, context?.expired != true { if x.role == "AXWebArea" { return ClaudeTranscript.text(of: e, skipHidden: false) }; p = x.element(kAXParentAttribute); hops += 1 }
         var parts: [String] = []
         var budget = 2000
         func walk(_ x: AXUIElement) {
-            guard budget > 0 else { return }
+            guard budget > 0, context?.expired != true else { return }
             budget -= 1
             if x.role == "AXStaticText" {
                 if let v = x.string(kAXValueAttribute)?.trimmingCharacters(in: .whitespacesAndNewlines), !v.isEmpty { parts.append(v) }
@@ -408,7 +448,7 @@ nonisolated public enum ElementMatcher {
                 p = x.element(kAXParentAttribute); hops += 1
             }
             return nil
-        case "parentText": return plain(e.element(kAXParentAttribute).map(text(of:)))
+        case "parentText": return plain(e.element(kAXParentAttribute).map { text(of: $0) })
         case "help": return plain(e.string(kAXHelpAttribute).map(firstSentence))
         case "description": return plain(e.string(kAXDescriptionAttribute))
         default: return nil
@@ -420,7 +460,7 @@ nonisolated public enum ElementMatcher {
 
 public final class ProfileStore {
     nonisolated public static let shared = ProfileStore()
-    nonisolated init() {}
+    nonisolated package init() {}
     public static var folder: URL {
         AppPaths.file("plugins")
     }
@@ -441,7 +481,7 @@ public final class ProfileStore {
     /// Load one plugin folder (also used by the tester). Each counted file is read once, through `read`, and both parsed and
     /// hashed from those bytes, so a receipt is for what was parsed even if the file changes during the load (15 Nov 2026).
     /// `read` is a seam for the tests only.
-    public static func load(folder: URL, read: (URL) -> Data? = { try? Data(contentsOf: $0) }) -> LoadedPlugin {
+    public static func load(folder: URL, read: (URL) -> Data? = { PluginFormat.readPluginFile($0) }) -> LoadedPlugin {
         let fm = FileManager.default
         let mURL = folder.appendingPathComponent("manifest.json"), pURL = folder.appendingPathComponent("profile.json")
         let jURL = folder.appendingPathComponent(PluginFormat.scriptName)
@@ -539,7 +579,7 @@ public final class ProfileStore {
             else { Log.info("plugin \(p.manifest!.name) \(p.manifest!.version) for \(p.manifest!.apps.joined(separator: ", "))\(p.profile?.view.map { " (a \($0.kind) view)" } ?? "")") }
             for w in p.warnings { Log.info("plugin \(p.folder.lastPathComponent): \(w)") }
         }
-        Recipes.load(plugins: loaded)   // the plugins' views, over the built-in recipes
+        Recipes.load(plugins: livePlugins)   // the plugins' views, over the built-in recipes
         DispatchQueue.main.async { Games.pluginsChanged(loaded); Trackpad.pluginsChanged(loaded) }   // official plugins switch built-in features on or off
         leadInPluginApps(loaded)
         onReload?()
@@ -594,22 +634,65 @@ public final class ProfileStore {
         lock.lock(); _plugins.removeAll { $0.manifest?.id == p.manifest?.id }; _plugins.append(p); lock.unlock()
     }
 
+    // MARK: Which profiles are live
+
+    /// With plugin scripts on, a plugin that has a script is one thing: until ScriptTrust says its script may run, none of its
+    /// profile is live either (no labels, keys, watches, silences, holds or view). This maps each such plugin's id to the hash
+    /// of the files that may run, set by ScriptPlugins whenever the receipts or the files change; a plugin whose files are
+    /// not the ones in the map is not live (so a change is dark until it is decided again). nil: scripts are off, every plugin
+    /// is live as a data plugin always was. Plugins without a script are never touched.
+    nonisolated(unsafe) private var scriptLive: [String: String]?   // under `lock`
+    /// Set the map; true if it changed (then `livenessChanged()` follows, on main).
+    nonisolated package func setScriptLive(_ map: [String: String]?) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        guard scriptLive != map else { return false }
+        scriptLive = map
+        return true
+    }
+    /// What to do when the live set changed without a reload: the keys are rebuilt (ProfilesPlugin) and the views reloaded.
+    nonisolated(unsafe) package var onLiveChange: (() -> Void)?   // main thread only
+    package func livenessChanged() {
+        if plugins.contains(where: { $0.manifest?.script != nil && $0.profile?.view != nil }) { Recipes.load(plugins: livePlugins) }
+        onLiveChange?()
+    }
+    /// The plugins whose profiles apply now.
+    nonisolated public var livePlugins: [LoadedPlugin] {
+        lock.lock(); defer { lock.unlock() }
+        guard let live = scriptLive else { return _plugins }
+        return _plugins.filter { p in
+            guard p.manifest?.script != nil else { return true }
+            guard let id = p.manifest?.id, let hash = p.scriptHash else { return false }
+            return live[id] == hash
+        }
+    }
+
     /// The profiles that apply to an application.
     nonisolated public func profiles(for bundle: String) -> [(PluginManifest, Profile)] {
-        plugins.compactMap { p in
+        livePlugins.compactMap { p in
             guard let m = p.manifest, let pr = p.profile, m.apps.contains(bundle) else { return nil }
             return (m, pr)
         }
     }
 
-    nonisolated(unsafe) private var bundleCache: [pid_t: String] = [:]   // under `lock`
+    nonisolated(unsafe) private var bundleCache: [pid_t: (start: UInt64, bundle: String)] = [:]   // under `lock`
+    /// When the process began, to the microsecond: a process id that is used again by another program has another start, so
+    /// what was cached for the old one is not believed. Seams for the tests.
+    nonisolated(unsafe) package var processStart: (pid_t) -> UInt64? = { pid in
+        var info = proc_bsdinfo()
+        guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, Int32(MemoryLayout<proc_bsdinfo>.size)) == Int32(MemoryLayout<proc_bsdinfo>.size) else { return nil }
+        return info.pbi_start_tvsec &* 1_000_000 &+ info.pbi_start_tvusec
+    }
+    nonisolated(unsafe) package var lookupBundle: (pid_t) -> String = { NSRunningApplication(processIdentifier: $0)?.bundleIdentifier ?? "" }
     /// The app a replayed screen stands for (a plugin's tests: every element of a replay has a pid of its own).
     nonisolated(unsafe) public var replayBundle: String?   // set and cleared by the test runner, main thread
     nonisolated public func bundle(of pid: pid_t) -> String {
         if pid >= 900_000, let b = replayBundle { return b }
-        lock.lock(); if let b = bundleCache[pid] { lock.unlock(); return b }; lock.unlock()
-        let b = NSRunningApplication(processIdentifier: pid)?.bundleIdentifier ?? ""
-        lock.lock(); bundleCache[pid] = b; lock.unlock()
+        // The app that really has this process now: what is kept for a process id is kept with the process's start, because the
+        // answer decides what a script may reach, and an id passes to another program when the first one quits.
+        guard let start = processStart(pid) else { return lookupBundle(pid) }
+        lock.lock(); if let c = bundleCache[pid], c.start == start { lock.unlock(); return c.bundle }; lock.unlock()
+        let b = lookupBundle(pid)
+        lock.lock(); bundleCache[pid] = (start, b); lock.unlock()
         return b
     }
 
@@ -660,6 +743,10 @@ final class ProfilesPlugin: GlobalPlugin {
 
     required init() {
         super.init()
+        // With plugin scripts on, no profile of a plugin that has a script is live until its script is approved: shut before
+        // anything loads, opened one plugin at a time by ScriptPlugins.
+        if Edition.includesPluginScripts { _ = ProfileStore.shared.setScriptLive([:]) }
+        ProfileStore.shared.onLiveChange = { [weak self] in self?.rebuild() }
         ProfileStore.shared.onReload = { [weak self] in DispatchQueue.main.async { self?.rebuild() } }
         ProfileStore.shared.reload(force: true)
         // The plugins folder looked at every second: a file saved is reloaded and said (a few file dates, no reading).
@@ -670,7 +757,7 @@ final class ProfilesPlugin: GlobalPlugin {
     private func rebuild() {
         scriptNames.forEach { removeScript($0) }
         scriptNames.removeAll()
-        for p in ProfileStore.shared.plugins {
+        for p in ProfileStore.shared.livePlugins {
             guard let m = p.manifest, let profile = p.profile else { continue }
             for (i, rule) in (profile.keys ?? []).enumerated() {
                 let name = "plugin_\(m.id)_\(i)"
@@ -729,7 +816,7 @@ final class ProfilesPlugin: GlobalPlugin {
     /// say the shortcuts, so they can be learnt).
     static func commands(for bundle: String) -> [(letter: String?, title: String, key: String, run: @MainActor () -> Void)] {
         var out: [(letter: String?, title: String, key: String, run: @MainActor () -> Void)] = []
-        for p in ProfileStore.shared.plugins {
+        for p in ProfileStore.shared.livePlugins {
             guard let m = p.manifest, p.error == nil, m.apps.contains(bundle) else { continue }
             for rule in p.profile?.keys ?? [] {
                 let id = normalizeGestureIdentifier(rule.key.hasPrefix("kb:") ? rule.key : "kb:" + rule.key)

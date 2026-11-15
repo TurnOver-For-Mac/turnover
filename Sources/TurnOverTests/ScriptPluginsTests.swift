@@ -37,10 +37,15 @@ private func miniScreen() -> AXFixture {
         node(3, child("AXTextField", [kAXSubroleAttribute: .string("AXSecureTextField"), kAXTitleAttribute: .string("Password"), kAXValueAttribute: .string("hunter2")])),
         node(4, child("AXStaticText", [kAXValueAttribute: .string("Total 12")])),
         node(5, [kAXRoleAttribute: .string("AXApplication"), kAXChildrenAttribute: .elements([0])]),
+        // A menu item, held by no window: only for asking whether pressing it is refused.
+        // Two buttons with very long names, held by no window: for the wildcard tests.
+        node(7, [kAXRoleAttribute: .string("AXButton"), kAXTitleAttribute: .string(String(repeating: "a", count: 5_000)), kAXParentAttribute: .element(5)]),
+        node(8, [kAXRoleAttribute: .string("AXButton"), kAXTitleAttribute: .string(String(repeating: "a", count: 20_000)), kAXParentAttribute: .element(5)]),
+        node(6, [kAXRoleAttribute: .string("AXMenuItem"), kAXTitleAttribute: .string("Paste"), kAXParentAttribute: .element(5)], actions: ["AXPress"]),
     ])
 }
 
-private let button = 1, nameField = 2, passwordField = 3, totalText = 4
+private let button = 1, nameField = 2, passwordField = 3, totalText = 4, menuItem = 6, longName = 7, longerName = 8
 private func el(_ id: Int) -> AXUIElement { AXReplay.element(id) }
 
 // MARK: A stand-in for the Mac
@@ -62,6 +67,9 @@ private final class Mac {
     var afterHang = false
     var limits = ScriptLimits()
     var questions: [(title: String, items: [MenuItem], closed: () -> Void)] = []
+    var onFocusQuery: (() -> Void)?   // run when TurnOver asks the app what has the focus (a slow question, in the Mac's life)
+    let profiles = ProfileStore()
+    var soundNames = ["link"]
     let storage = FileManager.default.temporaryDirectory.appendingPathComponent("turnover-script-storage-\(UUID().uuidString)")
 
     func environment() -> ScriptEnvironment {
@@ -73,7 +81,9 @@ private final class Mac {
         env.bundle = { self.bundles($0) }
         env.runningPid = { self.running.contains($0) ? AXReplay.floor + 1 : nil }
         env.isRunning = { self.running.contains($0) }
-        env.focusedElement = { _ in self.focus }
+        env.focusedElement = { _ in self.onFocusQuery?(); return self.focus }
+        env.profiles = profiles
+        env.soundNames = { self.soundNames }
         env.say = { text, _ in self.scriptSaid.append(text) }
         env.sound = { name in self.sounds.append(name); return name == "link" }
         env.copy = { self.copied.append($0) }
@@ -933,5 +943,275 @@ func scriptPluginsTests() {
         mac.plugins = []
         plugins.reloaded()
         expect(plugins.entries.isEmpty, true, "removed")
+    }
+
+    // MARK: The fix pass after the independent review (16 Nov 2026)
+
+    /// A holder that keeps bytes in memory and can be told to fail its writes: a keeper that stops answering.
+    final class FailableHolder: ScriptTrustHolder {
+        let kind = "memory (a test)"
+        var bytes: Data?
+        var failStores = false
+        func load() throws -> Data? { bytes }
+        func store(_ data: Data) throws {
+            if failStores { throw ScriptTrustStore.WriteFailure(description: "the keeper did not answer") }
+            bytes = data
+        }
+    }
+
+    test("script plugins: until a script may run, none of its plugin's profile is live; plugins without a script are untouched") {
+        let mac = Mac()
+        let manifest = scriptManifestText(["abilities": "[\"read\", \"say\"]", "commands": nil])
+        let profile = #"{"labels":[{"match":{"role":"button","title":"Save"},"name":"Keep"}],"silence":[{"title":"Name"}]}"#
+        let folder = scriptTempPlugin(["manifest.json": manifest, "profile.json": profile, "main.js": "turnover.on('focus', function (e) {});\n"])
+        let dataFolder = scriptTempPlugin(["manifest.json": #"{"id":"data-one","name":"Data","version":"1","apps":["com.example.app"]}"#,
+                                           "profile.json": #"{"labels":[{"match":{"role":"textField","title":"Name"},"name":"Who"}]}"#])
+        cleanup += [folder, dataFolder]
+        let script = ProfileStore.load(folder: folder), data = ProfileStore.load(folder: dataFolder)
+        expect(script.error, nil, "the script plugin loads"); expect(data.error, nil, "and the data plugin")
+        let profiles = mac.profiles
+        profiles.replayBundle = "com.example.app"
+        defer { profiles.replayBundle = nil }
+        let pid = AXReplay.floor + 1
+        profiles.addTesting(script); profiles.addTesting(data)
+        expect(profiles.livePlugins.count, 2, "with scripts off (no gate) both are live, as before")
+        expect(profiles.label(for: el(button), pid: pid)?.0, "Keep", "the label works")
+        mac.plugins = [script]
+        let trust = store()
+        let plugins = ScriptPlugins(trust: trust, environment: mac.environment())
+        defer { plugins.terminate() }
+        expect(profiles.livePlugins.compactMap { $0.manifest?.id }, ["data-one"], "an unapproved script's plugin is dark, the data plugin is not")
+        expect(profiles.label(for: el(button), pid: pid)?.0, nil, "no label from it")
+        expect(profiles.isSilenced(el(nameField), pid: pid), false, "no silence from it")
+        expect(profiles.label(for: el(nameField), pid: pid)?.0, "Who", "the data plugin's label still works")
+        try? trust.approve(script, origin: .file)
+        plugins.reconcileTrust()
+        expect(profiles.livePlugins.count, 2, "approved, its profile is live")
+        expect(profiles.label(for: el(button), pid: pid)?.0, "Keep", "its label works")
+        expect(profiles.isSilenced(el(nameField), pid: pid), true, "and its silence")
+        // Its files change: dark again until decided again.
+        try? (manifest + "\n").write(to: folder.appendingPathComponent("manifest.json"), atomically: true, encoding: .utf8)
+        let changed = ProfileStore.load(folder: folder)
+        mac.plugins = [changed]; profiles.addTesting(changed)
+        check(profiles.livePlugins.count == 1, "a plugin with other files than the approved ones is dark at once, before anything reloads")
+        plugins.reloaded()
+        expect(profiles.livePlugins.compactMap { $0.manifest?.id }, ["data-one"], "and stays dark")
+        expect(profiles.isSilenced(el(nameField), pid: pid), false, "no silence")
+        // Approved again, then turned off from the menu.
+        try? trust.approve(changed, origin: .file)
+        plugins.reconcileTrust()
+        expect(profiles.livePlugins.count, 2, "approved again, live again")
+        if let entry = plugins.entries["script-test"] { plugins.turnOffByMenu(entry) }
+        expect(profiles.livePlugins.compactMap { $0.manifest?.id }, ["data-one"], "taking the approval away darkens it")
+    }
+
+    test("script plugins: silences, watches and reading keys count as say in a plugin's real abilities; the listing's own count is unchanged") {
+        @MainActor func plugin(_ profile: String) -> LoadedPlugin {
+            let folder = scriptTempPlugin(["manifest.json": scriptManifestText(["abilities": "[\"read\"]", "commands": nil]), "profile.json": profile, "main.js": "\n"])
+            cleanup.append(folder)
+            return ProfileStore.load(folder: folder)
+        }
+        let silence = plugin(#"{"silence":[{"title":"Name"}]}"#), watch = plugin(#"{"watch":[{"match":{"title":"Total"}}]}"#)
+        let reading = plugin(#"{"keys":[{"key":"control+option+k","description":"Read","action":"read","target":{"title":"Save"}}]}"#)
+        let label = plugin(#"{"labels":[{"match":{"title":"Save"},"name":"Keep"}]}"#)
+        for (name, p) in [("a silence", silence), ("a watch", watch), ("a reading key", reading)] {
+            expect(p.error, nil, "\(name) loads")
+            check(ScriptAbilities.effective(for: p).contains(.say), "\(name) counts as say")
+            check(!PluginListing.abilitiesUsed(by: p.profile!).contains("say") || name == "a reading key" && false, "the listing's own count is as it was for \(name)")
+        }
+        check(!ScriptAbilities.effective(for: label).contains(.say), "a label is not speech control")
+        expect(PluginListing.abilitiesUsed(by: silence.profile!), ["read"], "the listing counts a silence as read only, as before")
+    }
+
+    test("script plugins: in a closed app a script reads and speaks and never acts, in the broker whatever the manifest said") {
+        let mac = Mac()
+        mac.bundles = { $0 >= AXReplay.floor ? "com.apple.Terminal" : "com.other.app" }
+        mac.focus = el(nameField)
+        let broker = AXScriptBroker(pluginID: "script-test", apps: ["com.apple.Terminal"], environment: mac.environment(), questionOpen: { false })
+        let b = broker.item(for: el(button))?["handle"]?.stringValue ?? "", n = broker.item(for: el(nameField))?["handle"]?.stringValue ?? ""
+        check(!b.isEmpty && !n.isEmpty, "items in the closed app can still be read")
+        allRefused(["press", "focus", "edit", "menu", "keys"], "in a closed app", broker, mac, button: b, field: n)
+        _ = try? broker.perform(.say, .object(["text": .string("spoken in Terminal")]))
+        _ = try? broker.perform(.itemRead, .object(["handle": .string(b)]))
+        expect(mac.scriptSaid.count, 2, "speech and reading still work there")
+        // The same acts in an ordinary app.
+        mac.bundles = { $0 >= AXReplay.floor ? "com.example.app" : "com.other.app" }
+        let ok = AXScriptBroker(pluginID: "script-test", apps: ["com.example.app"], environment: mac.environment(), questionOpen: { false })
+        let b2 = ok.item(for: el(button))?["handle"]?.stringValue ?? ""
+        do { _ = try ok.perform(.itemPress, .object(["handle": .string(b2)])) } catch { check(false, "press in an ordinary app: \(error)") }
+        // A script whose own app is ordinary but whose item is in a closed one is refused too.
+        mac.bundles = { $0 == AXReplay.floor + 1 ? "com.example.app" : "com.apple.Terminal" }
+    }
+
+    test("script plugins: the closed-app notice says read and speak only, and a manifest that names a closed app and asks to act is refused at load") {
+        for (app, name) in [("com.apple.Terminal", "Terminal"), ("com.googlecode.iterm2", "iTerm"), ("com.apple.Safari", "Safari"), ("com.apple.Passwords", "Passwords")] {
+            for ability in ["press", "focus", "edit", "menu", "keys"] {
+                let folder = scriptTempPlugin(["manifest.json": scriptManifestText(["apps": "[\"\(app)\"]", "abilities": "[\"read\", \"say\", \"\(ability)\"]", "commands": nil]), "profile.json": "{}", "main.js": "\n"])
+                cleanup.append(folder)
+                let loaded = ProfileStore.load(folder: folder)
+                check(loaded.error?.contains("only read and speak in \(name)") == true && loaded.error?.contains(ability) == true, "\(app) with \(ability) is refused, saying why: \(loaded.error ?? "loaded")")
+            }
+            let folder = scriptTempPlugin(["manifest.json": scriptManifestText(["apps": "[\"\(app)\"]", "abilities": "[\"read\", \"say\", \"clipboard\"]", "commands": nil]), "profile.json": "{}", "main.js": "\n"])
+            cleanup.append(folder)
+            expect(ProfileStore.load(folder: folder).error, nil, "\(app) with read, say and clipboard loads")
+        }
+        let mixed = scriptTempPlugin(["manifest.json": scriptManifestText(["apps": "[\"com.example.app\", \"com.apple.Terminal\"]", "abilities": "[\"read\", \"keys\"]", "commands": nil]), "profile.json": "{}", "main.js": "\n"])
+        cleanup.append(mixed)
+        check(ProfileStore.load(folder: mixed).error?.contains("Terminal") == true, "a plugin for an ordinary app and Terminal is refused as a whole")
+        let plugin = makePlugin(script: "", abilities: "[\"read\", \"say\"]", apps: "[\"com.apple.Terminal\"]")
+        let lines = ScriptAbilities.approvalLines(for: plugin, appName: { _ in nil }).map(\.text)
+        check(lines.contains { $0.contains("In Terminal it can only read and speak") && $0.contains("never press, type or choose") }, "the notice: \(lines)")
+        check(!lines.contains { $0.contains("Only the person who wrote it") || $0.contains("do more harm") }, "and it promises nothing more")
+    }
+
+    test("script plugins: a menu item cannot be pressed like a button, whatever its title or language") {
+        let mac = Mac()
+        let broker = AXScriptBroker(pluginID: "script-test", apps: ["com.example.app"], environment: mac.environment(), questionOpen: { false })
+        guard let handle = broker.item(for: el(menuItem))?["handle"]?.stringValue else { return check(false, "a handle for the menu item") }
+        let actions = AXReplay.actions.count
+        do { _ = try broker.perform(.itemPress, .object(["handle": .string(handle)])); check(false, "a menu item was pressed") }
+        catch let error as ScriptBrokerError { check(error == .refused(error.message) && error.message.contains("menu"), "refused, pointing to menu: \(error)") } catch { check(false, "\(error)") }
+        expect(AXReplay.actions.count, actions, "nothing was pressed")
+        check(PluginPolicy.isPasteShortcut(character: "v", modifiers: 0), "Command V is Paste in any language")
+        check(PluginPolicy.isPasteShortcut(character: "V", modifiers: 1), "so is Command Shift V")
+        check(!PluginPolicy.isPasteShortcut(character: "v", modifiers: 8), "a V with no Command is not")
+        check(!PluginPolicy.isPasteShortcut(character: "c", modifiers: 0), "nor is Copy")
+        check(!PluginPolicy.isPasteShortcut(character: nil, modifiers: nil), "nor an item with no shortcut")
+    }
+
+    test("script plugins: find with a huge limit or a zero nth does not stop TurnOver, and is refused or clamped") {
+        let mac = Mac()
+        let broker = AXScriptBroker(pluginID: "script-test", apps: ["com.example.app"], environment: mac.environment(), questionOpen: { false })
+        for limit in [1e100, -1e100, 1e300, 0] {
+            let found = (try? broker.perform(.find, .object(["match": .object([:]), "limit": .number(limit)])))
+            if case .array(let items)? = found { check(items.count >= 1 && items.count <= mac.limits.findLimit, "a limit of \(limit) is clamped: \(items.count)") } else { check(false, "a limit of \(limit) gave no list") }
+        }
+        for nth in [0.0, -9223372036854775808.0, 1e19, 6001] {
+            do { _ = try broker.perform(.find, .object(["match": .object(["nth": .number(nth)])])); check(false, "nth \(nth) was accepted") }
+            catch let error as ScriptBrokerError { check(error == .invalid(error.message), "nth \(nth) is invalid: \(error)") } catch { check(false, "\(error)") }
+        }
+        var zero = ElementMatch(); zero.nth = 0
+        expect(ElementMatcher.findOne(zero, pid: AXReplay.floor + 1) == nil, true, "findOne with nth 0 finds nothing, and does not index before the start")
+        check(!ElementMatcher.matchesHere(el(button), zero, pid: AXReplay.floor + 1), "nor does a rule with nth 0 match anything")
+        var last = ElementMatch(); last.nth = -1; last.role = "button"
+        expect(ElementMatcher.findOne(last, pid: AXReplay.floor + 1) != nil, true, "the last still works")
+    }
+
+    test("script plugins: a script's search cannot ask what a password field holds") {
+        let mac = Mac()
+        let broker = AXScriptBroker(pluginID: "script-test", apps: ["com.example.app"], environment: mac.environment(), questionOpen: { false })
+        var plain = ElementMatch(); plain.value = "hunter*"
+        expect(ElementMatcher.find(plain, pid: AXReplay.floor + 1).count, 1, "an ordinary search matches on the value (the leak this closes)")
+        for value in ["hunter*", "hunter2", "*"] {
+            guard case .array(let items)? = try? broker.perform(.find, .object(["match": .object(["value": .string(value), "subrole": .string("AXSecureTextField")])])) else { return check(false, "no list") }
+            expect(items.count, 0, "a script asking for a password field by its value (\(value)) gets nothing")
+        }
+        guard case .array(let nested)? = try? broker.perform(.find, .object(["match": .object(["any": .array([.object(["value": .string("hunter2")]), .object(["value": .string("zzz")])])])])) else { return check(false, "no list") }
+        expect(nested.count, 0, "nor through an any")
+        guard case .array(let ordinary)? = try? broker.perform(.find, .object(["match": .object(["value": .string("Ann")])])) else { return check(false, "no list") }
+        expect(ordinary.count, 1, "an ordinary field is still found by its value")
+    }
+
+    test("script plugins: a wildcard cannot run for long, and a pattern or a text beyond the limits matches nothing") {
+        var pathological = ElementMatch()
+        pathological.title = String(repeating: "*a", count: 25) + "*b"
+        let started = Date()
+        check(!ElementMatcher.matches(el(longName), pathological), "it does not match")
+        check(Date().timeIntervalSince(started) < 1, "and finishes at once, not after exponential work: \(Date().timeIntervalSince(started)) s")
+        var ends = ElementMatch(); ends.title = "*a"
+        check(ElementMatcher.matches(el(longName), ends), "a star still matches a long run")
+        var first = ElementMatch(); first.title = "a*a"
+        check(ElementMatcher.matches(el(longName), first), "at either end")
+        check(!ElementMatcher.matches(el(longerName), ends), "a name past 10,000 characters is not matched by a pattern with a star")
+        var long = ElementMatch(); long.title = "*" + String(repeating: "a", count: 300)
+        check(!ElementMatcher.matches(el(longName), long), "a pattern past 200 characters matches nothing")
+        var save = ElementMatch(); save.title = "S*e"
+        check(ElementMatcher.matches(el(button), save), "S*e is Save")
+        save.title = "*AVE"; check(ElementMatcher.matches(el(button), save), "without regard to case")
+        save.title = "S*x"; check(!ElementMatcher.matches(el(button), save), "and not what it is not")
+        save.title = "Sa?e"; check(!ElementMatcher.matches(el(button), save), "a question mark is only itself")
+        save.title = "*"; check(ElementMatcher.matches(el(button), save), "a lone star means has one")
+    }
+
+    test("script plugins: speech is heard only while the Mac's own frontmost app is the plugin's, and a reading is cut to the limit") {
+        let mac = Mac()
+        mac.limits.sayCharacters = 3
+        let broker = AXScriptBroker(pluginID: "script-test", apps: ["com.example.app"], environment: mac.environment(), questionOpen: { false })
+        let t = broker.item(for: el(totalText))?["handle"]?.stringValue ?? ""
+        _ = try? broker.perform(.itemRead, .object(["handle": .string(t)]))
+        expect(mac.scriptSaid, ["Tot"], "a reading is cut to the character limit")
+        mac.macFront = AXReplay.floor - 1   // TurnOver's focus is still in the plugin's app; the Mac says another
+        _ = try? broker.perform(.say, .object(["text": .string("hi")]))
+        _ = try? broker.perform(.sound, .object(["name": .string("link")]))
+        _ = try? broker.perform(.itemRead, .object(["handle": .string(t)]))
+        expect(mac.scriptSaid, ["Tot"], "nothing was said while the Mac's frontmost app is another")
+        expect(mac.sounds, [], "and no sound")
+    }
+
+    test("script plugins: keys are looked at again after the slow questions, and go to the same app or not at all; copy needs the app in front") {
+        let mac = Mac()
+        mac.focus = el(nameField)
+        let broker = AXScriptBroker(pluginID: "script-test", apps: ["com.example.app"], environment: mac.environment(), questionOpen: { false })
+        mac.onFocusQuery = { mac.front = AXReplay.floor - 1; mac.macFront = AXReplay.floor - 1 }   // the person switches apps while TurnOver asks
+        do { _ = try broker.perform(.keys, .object(["keys": .string("command+k")])); check(false, "keys went to another app") }
+        catch let error as ScriptBrokerError { check(error == .refused(error.message), "refused: \(error)") } catch { check(false, "\(error)") }
+        expect(mac.keys, [], "no key was sent")
+        mac.onFocusQuery = nil
+        mac.front = AXReplay.floor - 1
+        do { _ = try broker.perform(.copy, .object(["text": .string("x")])); check(false, "copied while behind") } catch { }
+        expect(mac.copied, [], "nothing was put on the clipboard while the app is behind")
+        mac.front = AXReplay.floor + 1; mac.macFront = AXReplay.floor + 1
+        _ = try? broker.perform(.copy, .object(["text": .string("y")]))
+        expect(mac.copied, ["y"], "in front it is")
+    }
+
+    test("script plugins: what a host reports is held while an approval question is open, and said when it closes") {
+        let mac = Mac()
+        guard let (plugins, entry, _, _) = start(mac, script: "var x = ;\n") else { return }
+        defer { plugins.terminate() }
+        plugins.askApproval(entry.id)
+        check(plugins.questionIsOpen && mac.questions.count == 1, "a question is open")
+        fire(plugins, .gainFocus, el(button))
+        check(waitFor { entry.failedHash != nil }, "the script failed to load")
+        settle(0.2)
+        check(!mac.spoken.contains { $0.contains("did not load") }, "its words were not said during the question: \(mac.spoken)")
+        mac.questions.last?.closed()
+        check(mac.spoken.contains { $0.contains("did not load") }, "they are said when it closes: \(mac.spoken)")
+    }
+
+    test("script plugins: when taking an approval away cannot be kept, the script stops anyway and no approval holds for the rest of the run") {
+        let mac = Mac()
+        let plugin = makePlugin(script: "turnover.on('focus', function (e) {});")
+        let holder = FailableHolder()
+        let trust = ScriptTrustStore(holder: holder)
+        try? trust.approve(plugin, origin: .file)
+        mac.plugins = [plugin]
+        let plugins = ScriptPlugins(trust: trust, environment: mac.environment())
+        defer { plugins.terminate() }
+        guard let entry = plugins.entries["script-test"] else { return check(false, "an entry") }
+        expect(startHost(plugins, entry), true, "the approved script runs")
+        holder.failStores = true
+        plugins.turnOffByMenu(entry)
+        expect(entry.host == nil, true, "the script was stopped though the revocation was not kept")
+        expect(trust.receipts.count, 0, "no approval is believed for the rest of this run")
+        check(trust.unavailable != nil, "the store says it cannot be used")
+        expect(trust.decision(for: plugin).isAllowed, false, "so it would not start again")
+        check(mac.spoken.contains { $0.contains("could not be taken away") }, "and the person is told: \(mac.spoken)")
+    }
+
+    test("script plugins: the signer in the approval question is the signer of the files that were loaded") {
+        let mac = Mac()
+        guard let (plugins, entry, _, plugin) = start(mac, script: "turnover.on('focus', function (e) {});", approved: false) else { return }
+        defer { plugins.terminate() }
+        let first = Curve25519.Signing.PrivateKey(), second = Curve25519.Signing.PrivateKey()
+        try? ScriptTrust.writeSignature(try! ScriptTrust.sign(digest: ScriptTrust.digest(folder: plugin.folder)!, with: first), to: plugin.folder)
+        // Between loading and the question, another signed version is put in the folder.
+        try? (commandStub + "turnover.on('focus', function (e) { e.say('other'); });").write(to: plugin.folder.appendingPathComponent("main.js"), atomically: true, encoding: .utf8)
+        try? ScriptTrust.writeSignature(try! ScriptTrust.sign(digest: ScriptTrust.digest(folder: plugin.folder)!, with: second), to: plugin.folder)
+        let secondPrint = ScriptTrust.fingerprint(ofPublicKey: second.publicKey.rawRepresentation)
+        plugins.askApproval(entry.id)
+        guard let title = mac.questions.last?.title else { return check(false, "a question") }
+        check(!title.contains(secondPrint), "the question does not name the signer of other files: \(title)")
+        check(title.contains("does not match its files"), "it says the signature does not fit the files it is about: \(title)")
     }
 }

@@ -74,6 +74,7 @@ nonisolated public final class ScriptHost: @unchecked Sendable {
     private let language: String
     private let hostPath: String
     private let broker: any ScriptBroker
+    private let sounds: [String]
 
     private let lock = NSLock()
     private var _state = ScriptHostState.starting
@@ -97,14 +98,19 @@ nonisolated public final class ScriptHost: @unchecked Sendable {
     private var mainSpans: [(at: TimeInterval, took: TimeInterval)] = []
     private var cpuSamples: [(at: TimeInterval, cpu: TimeInterval)] = []
     private var queuedBytes = 0
+    private var lineTimes: [TimeInterval] = []        // when each line from the host came, for the second just gone
+    private var floodDrops: [TimeInterval] = []       // when a line was thrown away for coming too fast
+    private var mainQueued = 0                        // requests accepted and not yet taken up by main
+    private var lastLogged: [String: (at: TimeInterval, held: Int)] = [:]
+    private var inputClosed = false                   // touched only on `writer`
     private var lastErrorText = ""
     private var watchdog: DispatchSourceTimer?
     private let writer: DispatchQueue
 
     public init(plugin: ScriptPluginInfo, abilities: Set<ScriptAbility>, commands: [String], source: String, language: String = "en",
-                hostPath: String, broker: any ScriptBroker, limits: ScriptLimits = .standard) {
+                hostPath: String, broker: any ScriptBroker, limits: ScriptLimits = .standard, sounds: [String] = []) {
         self.plugin = plugin; self.abilities = abilities; self.declaredCommands = commands; self.source = source
-        self.language = language; self.hostPath = hostPath; self.broker = broker; self.limits = limits
+        self.language = language; self.hostPath = hostPath; self.broker = broker; self.limits = limits; self.sounds = sounds
         outputFramer = LineFramer(maxBytes: limits.messageBytes)
         writer = DispatchQueue(label: "turnover.script-host.write.\(plugin.id)")
     }
@@ -146,7 +152,9 @@ nonisolated public final class ScriptHost: @unchecked Sendable {
             Log.warning("script host \(plugin.id): the host program is missing at \(hostPath)")
             return finish(failed: String(localized: "TurnOver's script program is missing, so scripts cannot run.", comment: "Said when the helper that runs plugin scripts is not in the app"))
         }
-        let spawned = DisclaimedSpawn.run(hostPath, arguments: [], directory: "/") { [self] status in processExited(status) }
+        // No environment: the host needs none, and TurnOver's own would hand it whatever the person's shell holds. Held, so the
+        // end of the host is not heard until the host is known here (see `release` below).
+        let spawned = DisclaimedSpawn.run(hostPath, arguments: [], directory: "/", environment: [], hold: true) { [self] status in processExited(status) }
         guard let (child, disclaimed) = spawned else {
             return finish(failed: String(localized: "TurnOver could not start its script program.", comment: "Said when starting the helper that runs plugin scripts fails"))
         }
@@ -165,14 +173,16 @@ nonisolated public final class ScriptHost: @unchecked Sendable {
             if data.isEmpty { handle.readabilityHandler = nil; return }
             let text = String(decoding: data, as: UTF8.self)
             lock.lock(); lastErrorText = String(text.prefix(300)); lock.unlock()
-            Log.info("script host \(plugin.id) (errors): \(Log.words(String(text.prefix(300))))")
+            logLimited("errors", "script host \(plugin.id) (errors): \(Log.words(String(text.prefix(300))))")
         }
         startWatchdog()
+        child.releaseExit?()   // published and watched: an end from here on finds everything in place
         let hello: [String: Any] = [
             "t": PluginWire.ToHost.hello, "api": PluginWire.apiVersion,
             "plugin": ["id": plugin.id, "name": plugin.name, "version": plugin.version],
             "language": language, "abilities": abilities.map(\.rawValue).sorted(), "commands": declaredCommands,
             "limits": ["timers": limits.timers, "minimumTimerMilliseconds": limits.minimumTimerMilliseconds],
+            "sounds": sounds,
             "source": source,
         ]
         guard let line = PluginWire.line(for: hello), line.count <= PluginWire.Limits.helloBytes else {
@@ -193,8 +203,8 @@ nonisolated public final class ScriptHost: @unchecked Sendable {
         guard stillRunning, let pid else { return setState(.ended) }
         write(PluginWire.line(for: ["t": PluginWire.ToHost.bye])!, thenClose: true)
         DispatchQueue.global().asyncAfter(deadline: .now() + 1) { [self] in
-            lock.lock(); let alive = running; lock.unlock()
-            if alive { Darwin.kill(pid, SIGKILL) }
+            // Under the lock that also ends `running`: while it is true the host has not been reaped, so the id is still its own.
+            lock.lock(); if running { Darwin.kill(pid, SIGKILL) }; lock.unlock()
         }
     }
 
@@ -278,9 +288,12 @@ nonisolated public final class ScriptHost: @unchecked Sendable {
     /// Finish the open work `id` with a command result (or an unhandled answer for a question).
     private func resolve(id: Int, with result: ScriptCommandResult) {
         lock.lock()
-        guard let entry = open.removeValue(forKey: id) else { lock.unlock(); return }
+        // Only a command is finished by a command's answer: a question or event left open by a forged `commandDone` would keep
+        // its kill deadline away and go unanswered.
+        guard case .command(let completion)? = open[id]?.work else { lock.unlock(); return }
+        open.removeValue(forKey: id)
         lock.unlock()
-        if case .command(let completion) = entry.work { onMain { completion(result) } }
+        onMain { completion(result) }
     }
 
     // MARK: Writing
@@ -300,13 +313,13 @@ nonisolated public final class ScriptHost: @unchecked Sendable {
         if tooMuch { return kill("it stopped reading what TurnOver sent", state: String(localized: "The script's program stopped listening and was stopped.", comment: "Said to a plugin author")) }
         writer.async { [self] in
             var offset = 0
-            while offset < line.count {
+            while offset < line.count, !inputClosed {
                 let n = line.withUnsafeBytes { Darwin.write(input.fileDescriptor, $0.baseAddress! + offset, line.count - offset) }
                 if n < 0 { if errno == EINTR { continue }; break }
                 offset += n
             }
             lock.lock(); queuedBytes -= line.count; lock.unlock()
-            if thenClose { try? input.close() }
+            if thenClose, !inputClosed { inputClosed = true; try? input.close() }
         }
     }
 
@@ -318,20 +331,51 @@ nonisolated public final class ScriptHost: @unchecked Sendable {
         lock.unlock()
         for piece in pieces {
             switch piece {
-            case .tooLong: Log.warning("script host \(plugin.id): a message from the script was too long and was dropped")
+            case .tooLong: logLimited("toolong", "script host \(plugin.id): a message from the script was too long and was dropped")
             case .line(let line):
-                guard !line.isEmpty, let object = (try? JSONSerialization.jsonObject(with: line)) as? [String: Any],
+                guard !line.isEmpty, admitLine() else { continue }
+                guard let object = (try? JSONSerialization.jsonObject(with: line)) as? [String: Any],
                       let type = object["t"] as? String else { continue }
                 handle(type: type, object)
             }
         }
     }
 
+    /// Whether this line may be looked at: at most `messagesPerSecond` a second are, and the rest are thrown away unread. A host
+    /// that keeps it up (`floodDropsAllowed` thrown away within `floodWindow`) is stopped: it is not a script that is slow, it
+    /// is one that is trying to use TurnOver's time.
+    private func admitLine() -> Bool {
+        let now = Self.now()
+        lock.lock()
+        lineTimes.removeAll { $0 <= now - 1 }
+        if lineTimes.count < limits.messagesPerSecond { lineTimes.append(now); lock.unlock(); return true }
+        floodDrops.removeAll { $0 <= now - limits.floodWindow }
+        floodDrops.append(now)
+        let abusive = floodDrops.count > limits.floodDropsAllowed
+        lock.unlock()
+        if abusive { kill("it sent far more messages than a script may", state: String(localized: "The script's program sent far more messages than it may and was stopped.", comment: "Said to a plugin author when the program running its script floods TurnOver with messages")) }
+        else { logLimited("flood", "script host \(plugin.id): messages came faster than \(limits.messagesPerSecond) a second and were thrown away") }
+        return false
+    }
+
+    /// Say something to the log at most once in `logInterval` for each kind, with how many were held back since: a host that
+    /// repeats one complaint or refusal cannot fill the log or spend TurnOver's time on writing it.
+    private func logLimited(_ kind: String, _ text: String) {
+        let now = Self.now()
+        lock.lock()
+        let last = lastLogged[kind]
+        if let last, now - last.at < limits.logInterval { lastLogged[kind] = (last.at, last.held + 1); lock.unlock(); return }
+        lastLogged[kind] = (now, 0)
+        lock.unlock()
+        Log.info(text + ((last?.held ?? 0) > 0 ? " (and \(last!.held) more like it)" : ""))
+    }
+
     private func handle(type: String, _ object: [String: Any]) {
         switch type {
         case PluginWire.FromHost.ready:
-            let events = (object["events"] as? [Any])?.compactMap { $0 as? String } ?? []
-            let commands = (object["commands"] as? [Any])?.compactMap { $0 as? String } ?? []
+            // Only what exists: an event TurnOver sends and a command the manifest declared, once each.
+            let events = ((object["events"] as? [Any])?.compactMap { $0 as? String } ?? []).filter { PluginWire.eventNames.contains($0) }
+            let commands = ((object["commands"] as? [Any])?.compactMap { $0 as? String } ?? []).filter { declaredCommands.contains($0) }
             lock.lock()
             guard case .starting = _state else { lock.unlock(); return }
             _events = events; _commands = commands
@@ -344,11 +388,24 @@ nonisolated public final class ScriptHost: @unchecked Sendable {
             kill("the script did not load", state: message, strike: false)
         case PluginWire.FromHost.eventDone:
             guard let id = object["id"] as? Int else { return }
-            let answer: ScriptAnswer = (object["handled"] as? Bool ?? false) ? .say(object["say"] as? String ?? "") : .unhandled
+            let now = Self.now()
             lock.lock()
-            let entry = open.removeValue(forKey: id)
+            // Only a question or an event is finished by this answer; a command left open stays open (a forged answer to the
+            // wrong kind of work changes nothing, so nothing loses its deadline).
+            guard let entry = open[id] else { lock.unlock(); return }
+            if case .command = entry.work { lock.unlock(); return }
+            open.removeValue(forKey: id)
             if lateQuestion == id { lateQuestion = nil }
-            if case .question(let question)? = entry?.work, !question.abandoned {
+            // Words in place of TurnOver's own are speech like any other: they need the `say` ability, are cut to the character
+            // limit and count toward the rate. Silence (empty words) needs the ability but is not speech, so it is not counted.
+            var answer = ScriptAnswer.unhandled
+            if (object["handled"] as? Bool) == true, abilities.contains(.say), let said = object["say"] as? String {
+                let words = String(said.prefix(limits.sayCharacters))
+                sayTimes.removeAll { $0 <= now - limits.sayWindow }
+                if words.isEmpty { answer = .say("") }
+                else if sayTimes.count < limits.saysPerWindow { sayTimes.append(now); answer = .say(words) }
+            }
+            if case .question(let question) = entry.work, !question.abandoned {
                 question.answer = answer
                 question.semaphore.signal()
             }
@@ -365,13 +422,25 @@ nonisolated public final class ScriptHost: @unchecked Sendable {
 
     // MARK: Checking a request
 
-    /// Everything that can be decided without main: the operation, the plugin's abilities, the rates. Refusals are
+    /// Everything that can be decided without main: the rates, the operation, the plugin's abilities. Refusals are
     /// answered here; what passes is handed to main for the broker.
     private func gate(isRequest: Bool, _ object: [String: Any]) {
         let id = object["id"] as? Int
         func refuse(_ message: String) {
-            guard isRequest, let id else { return Log.info("script host \(plugin.id): dropped a one-way message: \(message)") }
+            guard isRequest, let id else { return logLimited("refused", "script host \(plugin.id): dropped a one-way message: \(message)") }
             reply(id: id, result: .failure(ScriptBrokerError.refused(message)))
+        }
+        // Every message counts toward the rate, whatever it asks for or whether it is allowed (it used to be only the ones that
+        // got through, so a flood of refused ones cost TurnOver an answer each and counted for nothing).
+        let now = Self.now()
+        lock.lock()
+        requestTimes.removeAll { $0 <= now - 1 }
+        let tooManyRequests = requestTimes.count >= limits.requestsPerSecond
+        if !tooManyRequests { requestTimes.append(now) }
+        let paused = pauseRequested
+        lock.unlock()
+        if tooManyRequests {
+            return refuse(String(localized: "That is more than \(limits.requestsPerSecond) requests in a second, which is the most a script may make.", comment: "Said to a plugin author"))
         }
         guard let name = object["op"] as? String, let operation = ScriptOperation(rawValue: name) else {
             return refuse(String(localized: "TurnOver does not know that operation.", comment: "Said to a plugin author when a script asks for something that does not exist"))
@@ -384,21 +453,20 @@ nonisolated public final class ScriptHost: @unchecked Sendable {
             let names = missing.map(\.rawValue).joined(separator: ", ")
             return refuse(String(localized: "This needs the \(names) ability. Add \"\(names)\" to abilities in manifest.json, and the person has to agree to it.", comment: "Said to a plugin author when a script asks for something its manifest did not ask for; the placeholder is the ability's name"))
         }
+        // While the plugin's app is not in front the script is paused: what it asks for then (a timer's search, a clipboard
+        // write, a spoken word) is refused here, on TurnOver's side, whatever the host does with its pause. Only what reaches
+        // nothing outside the plugin (its log and its own stored data) goes on.
+        if paused, !ScriptAbilities.required(for: operation).isEmpty {
+            return refuse(String(localized: "The plugin's app is not in front, so the script is paused and cannot do that now.", comment: "Said to a plugin author when a script asks for something while it is paused"))
+        }
         var args = ScriptValue(json: object["args"])
-        let now = Self.now()
-        lock.lock()
-        requestTimes.removeAll { $0 <= now - 1 }
-        let tooManyRequests = requestTimes.count >= limits.requestsPerSecond
-        if !tooManyRequests { requestTimes.append(now) }
         var tooManySays = false
-        if operation == .say || operation == .sound {
+        if operation == .say || operation == .sound || operation == .itemRead {   // everything that speaks or sounds shares one budget
+            lock.lock()
             sayTimes.removeAll { $0 <= now - limits.sayWindow }
             tooManySays = sayTimes.count >= limits.saysPerWindow
-            if !tooManySays && !tooManyRequests { sayTimes.append(now) }
-        }
-        lock.unlock()
-        if tooManyRequests {
-            return refuse(String(localized: "That is more than \(limits.requestsPerSecond) requests in a second, which is the most a script may make.", comment: "Said to a plugin author"))
+            if !tooManySays { sayTimes.append(now) }
+            lock.unlock()
         }
         if tooManySays {
             return refuse(String(localized: "That is more than \(limits.saysPerWindow) things said in \(Int(limits.sayWindow)) seconds, which is the most a script may say.", comment: "Said to a plugin author"))
@@ -411,14 +479,23 @@ nonisolated public final class ScriptHost: @unchecked Sendable {
            let data = try? JSONSerialization.data(withJSONObject: value.json, options: [.fragmentsAllowed]), data.count > limits.storageBytes {
             return refuse(String(localized: "That value is larger than \(limits.storageBytes / 1024) KB, which is the most a plugin may store.", comment: "Said to a plugin author"))
         }
+        lock.lock()
+        let full = mainQueued >= limits.mainQueueLimit
+        if !full { mainQueued += 1 }
+        lock.unlock()
+        if full {
+            return refuse(String(localized: "TurnOver has not yet dealt with the script's earlier requests. Ask for less, or less often.", comment: "Said to a plugin author when too many of its requests are waiting"))
+        }
         let handed = args
         onMain { [self] in perform(operation, handed, id: isRequest ? id : nil) }
     }
 
-    /// On main: the broker's work, within its share of the main thread's time.
+    /// On main: the broker's work, within its share of the main thread's time. The time counts from when each call ended and
+    /// by its whole length, so a call that ran for longer than the window still counts against the next ones.
     @MainActor private func perform(_ operation: ScriptOperation, _ args: ScriptValue, id: Int?) {
         let start = Self.now()
         lock.lock()
+        mainQueued -= 1
         mainSpans.removeAll { $0.at <= start - 1 }
         let overBudget = mainSpans.reduce(0) { $0 + $1.took } >= limits.mainThreadSecondsPerSecond
         let stopped = stopRequested || !running
@@ -430,7 +507,7 @@ nonisolated public final class ScriptHost: @unchecked Sendable {
         }
         let result = Result { try broker.perform(operation, args) }
         let end = Self.now()
-        lock.lock(); mainSpans.append((start, end - start)); lock.unlock()
+        lock.lock(); mainSpans.append((end, end - start)); lock.unlock()
         if let id { reply(id: id, result: result) }
     }
 
@@ -505,8 +582,8 @@ nonisolated public final class ScriptHost: @unchecked Sendable {
         guard killedReason == nil, running, let pid = child?.pid else { lock.unlock(); return }
         killedReason = reason
         let wasStopping = stopRequested
+        Darwin.kill(pid, SIGKILL)   // under the lock that ends `running`: until then the host is not reaped and the id is its own
         lock.unlock()
-        Darwin.kill(pid, SIGKILL)
         Log.warning("script host \(plugin.id): stopped it, because \(reason)")
         setState(.failed(message))
         failOpenWork()

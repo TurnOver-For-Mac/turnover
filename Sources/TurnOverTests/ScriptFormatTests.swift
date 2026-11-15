@@ -208,7 +208,7 @@ func scriptFormatTests() {
     test("script format: the approval text warns for a closed app, and says who signed it and whether it was reviewed") {
         let terminal = load(scriptManifestText(["apps": "[\"com.apple.Terminal\", \"com.example.app\"]"]))
         let warned = ScriptAbilities.approvalLines(for: terminal, appName: { _ in nil })
-        check(warned.contains { $0.kind == .closedAppWarning && $0.text.contains("Terminal") && $0.text.contains("Only the person who wrote it") }, "a warning for Terminal")
+        check(warned.contains { $0.kind == .closedAppWarning && $0.text.contains("Terminal") && $0.text.contains("can only read and speak") && !$0.text.contains("Only the person who wrote it") }, "the notice for Terminal says read and speak only")
         let plain = load(scriptManifestText())
         check(!ScriptAbilities.approvalLines(for: plain, appName: { _ in nil }).contains { $0.kind == .closedAppWarning }, "none for an ordinary app")
         let signed = ScriptAbilities.approvalLines(for: plain, origin: .file, signature: .valid(fingerprint: "1234 5678 9abc def0"), appName: { _ in nil })

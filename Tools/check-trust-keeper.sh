@@ -10,6 +10,9 @@
 #   (a) signed with the build's identity, the check must say ok;
 #   (b) a copy whose outside is signed again ad hoc, the service inside left alone, must be refused;
 #   (c) a copy whose host is signed with another identifier by the build's identity must be refused.
+# (b) and (c) run the program as the attacker (--client check-as-stranger): a client that connects to the keeper without the
+# team check of its own and without a requirement on the keeper, so that it is the keeper's own check that says no. The ordinary
+# client refuses itself when it has no team, before the keeper is asked anything, which proves nothing about the keeper.
 # Exit status: 0 all three as they should be; 2 (b) or (c) was answered, so the keeper answers a stranger (build.sh stops);
 # 1 anything else: (a) failed, or a check could not be run (build.sh warns that scripts cannot be approved in this build).
 # The throwaway apps are removed afterwards. Never run on its own with the real app's folder as the work folder.
@@ -49,9 +52,9 @@ make_app() {
   codesign --verify --deep --strict "$app" 2>/dev/null
 }
 
-# run_check <app>: what the host says, and its exit status in $STATUS.
+# run_check <app> [mode]: what the host says, and its exit status in $STATUS. The mode is check, or check-as-stranger.
 run_check() {
-  OUT=$(to 30 "$1/Contents/MacOS/keepercheck" --client check 2>&1); STATUS=$?
+  OUT=$(to 30 "$1/Contents/MacOS/keepercheck" --client "${2:-check}" 2>&1); STATUS=$?
   echo "    $OUT (exit $STATUS)"
 }
 
@@ -66,14 +69,14 @@ if [ $STATUS -ne 0 ]; then echo "check-trust-keeper: the keeper did not answer i
 echo "  (b) a copy whose outside is signed again ad hoc, the service inside untouched:"
 mkdir -p "$DIR/adhoc" && ditto "$DIR/genuine/Check.app" "$DIR/adhoc/Check.app" || exit 1
 quiet to 60 codesign --force --timestamp=none --sign - "$DIR/adhoc/Check.app"
-run_check "$DIR/adhoc/Check.app"
+run_check "$DIR/adhoc/Check.app" check-as-stranger
 if [ $STATUS -eq 0 ]; then echo "check-trust-keeper: THE KEEPER ANSWERED AN AD HOC COPY OF THE APP" >&2; exit 2; fi
 if [ $STATUS -ne 3 ]; then echo "check-trust-keeper: (b) gave neither an answer nor a refusal (exit $STATUS); it could not be judged" >&2; RESULT=1; fi
 
 echo "  (c) a copy whose host is signed with another identifier by the same identity:"
 mkdir -p "$DIR/other" && ditto "$DIR/genuine/Check.app" "$DIR/other/Check.app" || exit 1
 quiet to 60 codesign --force --timestamp=none --options runtime --sign "$IDENTITY" --identifier "$HOSTID.other" "$DIR/other/Check.app"
-run_check "$DIR/other/Check.app"
+run_check "$DIR/other/Check.app" check-as-stranger
 if [ $STATUS -eq 0 ]; then echo "check-trust-keeper: THE KEEPER ANSWERED A PROGRAM WITH ANOTHER IDENTIFIER" >&2; exit 2; fi
 if [ $STATUS -ne 3 ]; then echo "check-trust-keeper: (c) gave neither an answer nor a refusal (exit $STATUS); it could not be judged" >&2; RESULT=1; fi
 

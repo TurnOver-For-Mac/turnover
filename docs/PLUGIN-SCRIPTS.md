@@ -405,7 +405,8 @@ developer mode they hear the script's own error.
 An ability is a thing the script may ask TurnOver to do. A script asks for the ones it needs in `abilities`. The
 user hears them, in TurnOver's words, before the script runs, and TurnOver refuses any request outside them. The
 abilities in force are the manifest's together with those the plugin's `profile.json` rules imply (a key that presses
-needs `press`, a label needs `read`), because the profile and the script share one approval.
+needs `press`, a label needs `read`, a silence, a watch or a key that reads needs `say` as well), because the profile and
+the script share one approval. Until the script may run, none of the profile is live either (16 Nov 2026).
 
 `read`, `say`, `press`, `focus`, `menu` and `keys` are the six abilities that data plugins already name. `edit` and
 `clipboard` are new with scripts.
@@ -459,9 +460,9 @@ description):
    think and keep its own notes."
 4. "It can never use the internet, read or change your files, see the keys you press, see a password, or reach any
    other app."
-5. For an app where a plugin can do more harm (passwords, settings, terminals, browsers): "Warning: this works in
-   <the apps>, where a plugin can do more harm: passwords, settings, terminals and browsers are like this. Only the
-   person who wrote it should approve it."
+5. For an app where a plugin can do more harm (passwords, settings, terminals, browsers), where a script can only read
+   and speak: "In <the apps> it can only read and speak: passwords, settings, terminals and browsers are like this. It
+   can never press, type or choose anything there, whatever else it is allowed to do."
 6. If signed: "It is signed with the key <fingerprint>. That says who made it, not that it is safe." If the signature
    does not fit the files: "It has a signature, but the signature does not match its files, so the files were
    changed after it was signed."
@@ -505,8 +506,13 @@ Slow answers and starting:
 Greed:
 - 128 MB of memory, or more than half a processor for ten seconds: killed.
 - 100 requests a second, and 150 ms of TurnOver's main thread in any second: further requests are refused.
-- 20 things said in two seconds, 500 characters each.
+- 20 things said in two seconds, 500 characters each (replacement words for an event and `item.read` count too; silence
+  does not).
 - 20 timers, none faster than 50 ms.
+- 500 lines a second from the host program; more are thrown away unread, and a host that keeps it up is stopped. At
+  most 64 requests waiting for TurnOver's main thread. While the script is paused, everything but its log and its own
+  stored data is refused.
+- A `*` pattern in a match is at most 200 characters and is compared with at most 10,000.
 - 256 KB for the script, 256 KB for a message, and 256 KB for the plugin's stored data.
 
 Strikes:

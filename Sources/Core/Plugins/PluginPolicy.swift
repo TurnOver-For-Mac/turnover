@@ -111,6 +111,13 @@ public enum PluginPolicy {
         return out
     }
 
+    /// Whether a menu item's own shortcut is Paste (Command V, with or without Shift, Option or Control), whatever language its
+    /// title is in. `modifiers` is the menu item's AXMenuItemCmdModifiers: bit 3 set means the Command key is not used.
+    nonisolated public static func isPasteShortcut(character: String?, modifiers: Int?) -> Bool {
+        guard let character, character.lowercased() == "v" else { return false }
+        return ((modifiers ?? 0) & 8) == 0
+    }
+
     /// What no plugin may do on any Mac, from its profile alone: checked at load as well as install, so a plugin
     /// copied into the folder or edited in place can't get round it (code review, 13 Oct).
     nonisolated public static func refusals(_ p: Profile?) -> [String] {
@@ -133,14 +140,29 @@ public enum PluginPolicy {
         "com.apple.loginwindow": "the login window",
     ]
 
-    /// What a plugin with a script may never do, from its manifest alone: apps it may not name, and keys its commands
-    /// may not take. The library's closed apps apply on top, as to any plugin.
+    /// The abilities that act on an app, not only read it and speak. In a closed app (closedApps: passwords, settings,
+    /// terminals, browsers) a script has none of them, on any Mac: an approved script that could press, type or choose a menu
+    /// in Terminal could run any program (the review of 16 Nov 2026).
+    nonisolated public static let actingAbilities: Set<String> = ["press", "focus", "edit", "menu", "keys"]
+
+    /// Whether this app is one of the closed apps, by its bundle identifier without regard to case.
+    nonisolated public static func isClosedApp(_ bundle: String) -> Bool {
+        let b = bundle.lowercased()
+        return closedApps.keys.contains { $0.lowercased() == b }
+    }
+
+    /// What a plugin with a script may never do, from its manifest alone: apps it may not name, keys its commands
+    /// may not take, and, in a closed app, anything but reading and speaking. The library's closed apps apply on top, as to any plugin.
     nonisolated public static func scriptRefusals(_ m: PluginManifest) -> [String] {
         guard m.script != nil else { return [] }
         var out: [String] = []
+        let acting = Set(m.abilities ?? []).intersection(actingAbilities).sorted()
         for app in m.apps {
             if let what = scriptForbiddenApps[app] { out.append("a script may not work in \(what) (\(app))") }
             else if app == "com.turnover" || app.hasPrefix("com.turnover.") { out.append("a script may not work in TurnOver itself (\(app))") }
+            else if isClosedApp(app), !acting.isEmpty {
+                out.append("a script may only read and speak in \(closedApps[app] ?? app) (\(app)): take \(acting.joined(separator: ", ")) out of abilities, or leave that app out")
+            }
         }
         for c in m.commands ?? [] { if let key = c.key { out += triggerRefusals(key).map { "command \(c.id): " + $0 } } }
         return out

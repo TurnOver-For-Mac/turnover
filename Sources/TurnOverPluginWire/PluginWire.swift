@@ -84,7 +84,8 @@ public enum PluginWire {
 }
 
 /// Cuts a byte stream into lines, whatever the pipe's reads do to them, and refuses a line longer than `maxBytes`
-/// without ever holding more than that: the rest of an over-long line is thrown away up to its newline.
+/// without ever holding more than that: the limit is checked before each piece is added, and the rest of an over-long line is
+/// thrown away up to its newline. (What a single read hands in is the reader's to bound.)
 public struct LineFramer: Sendable {
     public enum Piece: Equatable, Sendable {
         case line(Data)
@@ -104,19 +105,24 @@ public struct LineFramer: Sendable {
         while start < data.endIndex, let newline = data[start...].firstIndex(of: 0x0A) {
             if skipping {
                 skipping = false
+            } else if pending.count + (newline - start) > maxBytes {
+                // Checked before anything is added, so what is held never passes the limit.
+                pending.removeAll(keepingCapacity: true)
+                out.append(.tooLong)
             } else {
                 pending.append(data[start..<newline])
-                out.append(pending.count > maxBytes ? .tooLong : .line(pending))
+                out.append(.line(pending))
                 pending.removeAll(keepingCapacity: true)
             }
             start = data.index(after: newline)
         }
         if start < data.endIndex, !skipping {
-            pending.append(data[start...])
-            if pending.count > maxBytes {
+            if pending.count + (data.endIndex - start) > maxBytes {
                 pending.removeAll()
                 skipping = true
                 out.append(.tooLong)
+            } else {
+                pending.append(data[start...])
             }
         }
         return out

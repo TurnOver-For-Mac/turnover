@@ -21,6 +21,22 @@ nonisolated public enum PluginFormat {
     /// The one name a plugin's script may have, and the most it may hold (the plan's 256 KB).
     public static let scriptName = "main.js"
     public static let scriptBytes = 256 * 1024
+    /// The most manifest.json or profile.json is read as: a file larger than this is cut here and so does not parse. Far more than
+    /// any real plugin needs; it stops a huge file from filling the memory of the reader (16 Nov 2026 review).
+    public static let fileBytes = 1024 * 1024
+
+    /// At most `limit + 1` bytes of a file: one more than the limit is enough to know it is too large, and the rest is never
+    /// read. Nil if the file cannot be read.
+    public static func readBounded(_ url: URL, limit: Int) -> Data? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+        do { return try handle.read(upToCount: limit + 1) ?? Data() } catch { return nil }
+    }
+
+    /// A plugin file as the loader reads it: main.js to the script limit, the others to `fileBytes`.
+    public static func readPluginFile(_ url: URL) -> Data? {
+        readBounded(url, limit: url.lastPathComponent == scriptName ? scriptBytes : fileBytes)
+    }
     /// The values a field may take, where it is a choice.
     public static let choices: [String: [String]] = [
         "nameFrom": ["nextText", "previousText", "childText", "parentText", "help", "description", "ancestorHelp", "rowText"],

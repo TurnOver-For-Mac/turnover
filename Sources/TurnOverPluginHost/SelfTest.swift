@@ -59,6 +59,15 @@ enum SelfTest {
         if spawnResult == 0 { var status: Int32 = 0; waitpid(pid, &status, 0) }
         report(spawnResult != 0, "starting /usr/bin/true was refused" + (spawnResult == 0 ? " (it was allowed)" : " (error \(spawnResult))"))
 
+        // The machine's model, name and memory, and whether a path outside what is readable exists, are not for a script to read.
+        var size = 0
+        let modelRefused = sysctlbyname("hw.model", nil, &size, nil, 0) != 0 && refused(errno)
+        report(modelRefused, "reading the machine's model (hw.model) was refused")
+        var info = stat()
+        let statResult = stat(home, &info)
+        let statError = errno
+        report(statResult != 0 && refused(statError), "asking about the home folder was refused" + (statResult == 0 ? " (it was allowed)" : " (error \(statError))"))
+
         let context = JSContext()
         let value = context?.evaluateScript("[1, 2, 3].map(x => x * 2).join(',') + ' ' + new Date(0).toISOString() + ' ' + new Intl.NumberFormat('en').format(1234.5)")?.toString()
         report(value == "2,4,6 1970-01-01T00:00:00.000Z 1,234.5", "JavaScript ran (\(value ?? "no answer"))")

@@ -42,7 +42,7 @@ package final class ScriptPlugins: GlobalPlugin {
         var saidOff = false
         var everReady = false
         /// The files that failed to load: not started again until they change.
-        var failedHash: String?
+        package var failedHash: String?
         var saidFailureFor: String?
         var announceReload = false
         package var inFront = false
@@ -62,6 +62,7 @@ package final class ScriptPlugins: GlobalPlugin {
     private var waitingNoticed = Set<String>()
     package private(set) var waitingNotices = 0
     private var approvalOpen = false
+    private var heldSpeech: [String] = []   // what a host asked to be said while a question was open
     private var startupPending = true
     private var terminationObserver: NSObjectProtocol?
     /// After a hang no script runs for this run of TurnOver.
@@ -97,6 +98,7 @@ package final class ScriptPlugins: GlobalPlugin {
 
     override package func terminate() {
         entries.values.forEach(stop)
+        if env.profiles.setScriptLive([:]) { env.profiles.livenessChanged() }   // nothing is approved once this is gone
         if let terminationObserver { NSWorkspace.shared.notificationCenter.removeObserver(terminationObserver) }
         terminationObserver = nil
         if ScriptPlugins.current === self { ScriptPlugins.current = nil }
@@ -142,6 +144,10 @@ package final class ScriptPlugins: GlobalPlugin {
     /// Hosts whose receipt no longer holds go (taken away, developer mode off, a changed file).
     package func reconcileTrust() {
         for entry in entries.values where entry.host != nil && !trust.decision(for: entry.plugin).isAllowed { stop(entry) }
+        // A plugin with a script is one thing: its profile is live only while its script may run (ProfileStore.livePlugins).
+        var live: [String: String] = [:]
+        for entry in entries.values where trust.decision(for: entry.plugin).isAllowed { live[entry.id] = entry.plugin.scriptHash }
+        if env.profiles.setScriptLive(live) { env.profiles.livenessChanged() }
         for entry in entries.values where entry.host == nil && entry.inFront { arrived(entry) }
     }
 
@@ -170,7 +176,8 @@ package final class ScriptPlugins: GlobalPlugin {
         let broker = AXScriptBroker(pluginID: manifest.id, apps: manifest.apps, environment: env, questionOpen: { [weak self] in self?.approvalOpen ?? false })
         let host = ScriptHost(plugin: ScriptPluginInfo(id: manifest.id, name: manifest.name, version: manifest.version),
                               abilities: ScriptAbilities.effective(for: entry.plugin), commands: (manifest.commands ?? []).map(\.id), source: source,
-                              language: Locale.current.language.languageCode?.identifier ?? "en", hostPath: env.hostPath, broker: broker, limits: env.limits)
+                              language: Locale.current.language.languageCode?.identifier ?? "en", hostPath: env.hostPath, broker: broker, limits: env.limits,
+                              sounds: env.soundNames())
         entry.generation += 1
         let generation = entry.generation
         entry.host = host; entry.broker = broker; entry.everReady = false
@@ -189,7 +196,7 @@ package final class ScriptPlugins: GlobalPlugin {
         switch state {
         case .ready:
             entry.everReady = true
-            if entry.announceReload { entry.announceReload = false; env.speak(String(localized: "\(entry.name) script reloaded.", comment: "Said in developer mode when a plugin's script was saved and started again; the placeholder is the plugin's name")) }
+            if entry.announceReload { entry.announceReload = false; speakHost(entry, String(localized: "\(entry.name) script reloaded.", comment: "Said in developer mode when a plugin's script was saved and started again; the placeholder is the plugin's name")) }
             if entry.inFront { tell(entry, "appFocus") } else { entry.host?.pause() }
         case .failed(let message):
             entry.host = nil; entry.broker = nil
@@ -198,12 +205,30 @@ package final class ScriptPlugins: GlobalPlugin {
             entry.announceReload = false
             if entry.saidFailureFor != entry.plugin.scriptHash {
                 entry.saidFailureFor = entry.plugin.scriptHash
-                env.speak(String(localized: "The script of \(entry.name) did not load. \(message)", comment: "Said once when a plugin's script fails to start; the placeholders are the plugin's name and the first error, with its line, in English"))
+                speakHost(entry, String(localized: "The script of \(entry.name) did not load. \(String(message.prefix(200)))", comment: "Said once when a plugin's script fails to start; the placeholders are the plugin's name and the first error, with its line, in English"))
             }
         case .ended:
             entry.host = nil; entry.broker = nil
         case .starting, .paused: break
         }
+    }
+
+    /// Said because of something a host did (its first error, a failed command, a reload): never while an approval question is
+    /// open (it is held until the question closes, a few at most), never longer than a sentence or two, and only while the
+    /// plugin's app is in front, or, in developer mode, while its author works on it elsewhere.
+    private func speakHost(_ entry: Entry, _ text: String) {
+        let capped = String(text.prefix(300))
+        if approvalOpen { if heldSpeech.count < 5 { heldSpeech.append(capped) }; return }
+        guard entry.inFront || trust.developerMode else { return Log.info("script \(entry.id): not said, its app is not in front: \(Log.words(capped))") }
+        env.speak(capped)
+    }
+
+    /// The question is over, however it ended: what was held for it is said now.
+    private func closeApproval() {
+        approvalOpen = false
+        let held = heldSpeech
+        heldSpeech = []
+        held.forEach { env.speak($0) }
     }
 
     private func struck(_ entry: Entry, _ strike: ScriptStrike) {
@@ -386,7 +411,7 @@ package final class ScriptPlugins: GlobalPlugin {
         host.run(command: commandID, item: context) { [weak self] result in
             guard case .failed(let message) = result, let self else { return }
             Log.info("script \(entry.id): the command \(commandID) failed: \(Log.words(message))")
-            self.env.speak(self.trust.developerMode
+            self.speakHost(entry, self.trust.developerMode
                 ? String(localized: "\(entry.name): \(message)", comment: "Said in developer mode when a script's command fails; the placeholders are the plugin's name and the script's own error")
                 : String(localized: "\(entry.name) could not do that.", comment: "Said when a script's command fails; the placeholder is the plugin's name"))
         }
@@ -399,19 +424,21 @@ package final class ScriptPlugins: GlobalPlugin {
     package func askApproval(_ id: String) {
         guard let entry = entries[id] else { return }
         let plugin = entry.plugin
-        let signature = ScriptTrust.signatureStatus(in: plugin.folder)
+        // The signer is of the files this question is about (the ones loaded and to be hashed into the receipt), not of the folder as
+        // it is now.
+        let signature = ScriptTrust.signatureStatus(in: plugin.folder, loadedHash: plugin.scriptHash)
         let lines = ScriptAbilities.approvalLines(for: plugin, origin: .file, signature: signature).map(\.text)
         let title = (lines + [String(localized: "Approve it?", comment: "The question after what a plugin's script can do")]).joined(separator: " ")
         approvalOpen = true
         env.present(title, [
-            MenuItem("Not now", .action { [weak self] in self?.approvalOpen = false }),
+            MenuItem("Not now", .action { [weak self] in self?.closeApproval() }),
             MenuItem("Approve", .action { [weak self] in self?.approve(plugin, signature: signature) }),
-        ]) { [weak self] in self?.approvalOpen = false }
+        ]) { [weak self] in self?.closeApproval() }
     }
 
     /// Approve what was heard. The receipt's origin is a draft only if developer mode is on now.
     package func approve(_ plugin: LoadedPlugin, signature: ScriptTrust.SignatureStatus) {
-        approvalOpen = false
+        closeApproval()
         var signer: String?
         if case .valid(let fingerprint) = signature { signer = fingerprint }
         do { try trust.approve(plugin, origin: trust.developerMode ? .draft : .file, signer: signer) }
@@ -424,8 +451,14 @@ package final class ScriptPlugins: GlobalPlugin {
     }
 
     package func turnOffByMenu(_ entry: Entry) {
-        do { try trust.revoke(id: entry.id) } catch { return env.speak(String(localized: "The approval could not be taken away.", comment: "Said when a plugin script's approval could not be removed")) }
+        // The script stops whether or not the revocation could be kept: a script the person turned off must not go on running. If it
+        // could not be kept the store has let go of every approval for this run (ScriptTrustStore.latch), so every host stops.
         stop(entry)
+        do { try trust.revoke(id: entry.id) } catch {
+            reconcileTrust()
+            return env.speak(String(localized: "The approval could not be taken away, so no script will run until TurnOver starts again.", comment: "Said when a plugin script's approval could not be removed: every script is stopped for this run"))
+        }
+        reconcileTrust()   // its profile goes dark with it
         env.speak(String(localized: "\(entry.name) script is off. It needs your approval to run again.", comment: "Said when a plugin's script is turned off from the menu; the placeholder is the plugin's name"))
     }
 
@@ -436,7 +469,10 @@ package final class ScriptPlugins: GlobalPlugin {
     }
 
     package func setDeveloperMode(_ on: Bool) {
-        do { try trust.setDeveloperMode(on) } catch { return env.speak(String(localized: "Developer mode for scripts could not be changed.", comment: "Said when the developer mode switch could not be saved")) }
+        do { try trust.setDeveloperMode(on) } catch {
+            reconcileTrust()   // turning it off that could not be kept lets go of every approval for this run
+            return env.speak(String(localized: "Developer mode for scripts could not be changed.", comment: "Said when the developer mode switch could not be saved"))
+        }
         if on {
             env.speak(String(localized: "Developer mode for scripts is on. A script you approve now keeps running when you save changes to it, as long as it asks for no more apps or abilities. TurnOver says so each time it starts.", comment: "Said when developer mode for plugin scripts is turned on"))
         }

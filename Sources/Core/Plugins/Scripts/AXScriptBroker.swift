@@ -5,7 +5,9 @@
 // - the item or app a request concerns must belong to one of the plugin's own apps at that moment (the bundle of the
 //   process that really owns it, not what the manifest says), and never to a forbidden app;
 // - press, focus, edit, menu and keys work only while one of the plugin's apps is in front, by TurnOver's own idea of the
-//   focus and by the Mac's frontmost app both (15 Nov 2026);
+//   focus and by the Mac's frontmost app both (15 Nov 2026), and never in a closed app (PluginPolicy.closedApps), where a
+//   script may read and speak and nothing more (16 Nov 2026);
+// - press never reaches a menu element: menus are chosen with `menu`, which is checked against the policy;
 // - menu and keys are checked against PluginPolicy when asked; keys and edit are refused while the Mac reports secure
 //   keyboard entry, while a secure field has the focus, and when TurnOver cannot find what has the focus; edit is never
 //   done to a password field;
@@ -20,6 +22,9 @@ import TurnOverAX
 /// What the broker and ScriptPlugins reach out to. `live()` is the real Mac; a test replaces what it exercises.
 package struct ScriptEnvironment {
     package var plugins: () -> [LoadedPlugin]
+    /// The store whose profiles wait for a script's approval, and the names of TurnOver's own sounds.
+    package var profiles: ProfileStore
+    package var soundNames: () -> [String]
     /// The process the focus is in (the key availability check's own question), and the bundle a process belongs to.
     package var frontPid: () -> pid_t?
     /// The process of the app the Mac itself says is frontmost (NSWorkspace), which can differ from TurnOver's idea of the focus.
@@ -49,6 +54,8 @@ package struct ScriptEnvironment {
     @MainActor package static func live() -> ScriptEnvironment {
         ScriptEnvironment(
             plugins: { ProfileStore.shared.plugins },
+            profiles: .shared,
+            soundNames: { TurnOverSounds.names.sorted() },
             frontPid: { API.focusPid },
             macFrontPid: { NSWorkspace.shared.frontmostApplication?.processIdentifier },
             secureInput: { IsSecureEventInputEnabled() },
@@ -70,7 +77,13 @@ package struct ScriptEnvironment {
                 gesture.send()
                 return true
             },
-            chooseMenu: { MenuPath.choose($0, pid: $1) },
+            chooseMenu: { path, pid in
+                // Paste is refused by its shortcut as well as its title, so another language's name for it is refused too.
+                guard let item = MenuPath.find(path, pid: pid),
+                      !PluginPolicy.isPasteShortcut(character: item.string(kAXMenuItemCmdCharAttribute), modifiers: item.attr(kAXMenuItemCmdModifiersAttribute) as? Int)
+                else { return false }
+                return AXUIElementPerformAction(item, kAXPressAction as CFString) == .success
+            },
             refocus: { AXHandler.shared.refocus(pid: $0) },
             speak: { Speech.speakMessage($0) },
             present: { title, items, closed in
@@ -118,10 +131,33 @@ package final class AXScriptBroker: ScriptBroker {
 
     /// Acting needs both TurnOver's focus and the Mac's own frontmost app to be the plugin's: either alone can be stale or
     /// wrong, and a request must never reach an app the person is not looking at.
+    private var macFrontOwns: Bool { env.macFrontPid().map(owns) ?? false }
     private func requireFront() throws {
-        guard frontOwns, env.macFrontPid().map(owns) ?? false else {
+        guard frontOwns, macFrontOwns else {
             throw ScriptBrokerError.refused(String(localized: "This works only while one of the plugin's apps is in front.", comment: "Said to a plugin author when a script asks to act while its app is not in front"))
         }
+    }
+
+    /// Acting (press, focus, edit, menu, keys) needs the app in front, and is never done in a closed app: there a script reads and
+    /// speaks. Decided here against the app really in front (and the item's own app), whatever the manifest and the load said.
+    private func requireMayAct(_ element: AXUIElement? = nil) throws {
+        try requireFront()
+        let pids = [env.frontPid(), env.macFrontPid(), element?.pid].compactMap { $0 }
+        if pids.contains(where: { PluginPolicy.isClosedApp(env.bundle($0)) }) {
+            throw ScriptBrokerError.refused(String(localized: "In this app a plugin can only read and speak. It can never press, type or choose anything there.", comment: "Said to a plugin author when a script asks to act in a closed app such as Terminal"))
+        }
+    }
+
+    private static let menuRoles: Set<String> = ["AXMenu", "AXMenuBar", "AXMenuBarItem", "AXMenuItem"]
+    /// Whether the element is a menu or part of one: they are chosen with `menu`, through the policy's refusals, never pressed.
+    private func isInMenu(_ element: AXUIElement) -> Bool {
+        var current: AXUIElement? = element
+        var hops = 0
+        while let x = current, hops < 8 {
+            if Self.menuRoles.contains(x.role) { return true }
+            current = x.element(kAXParentAttribute); hops += 1
+        }
+        return false
     }
 
     private func element(_ args: ScriptValue) throws -> AXUIElement {
@@ -178,14 +214,17 @@ package final class AXScriptBroker: ScriptBroker {
         case .itemRead: return try read(args)
         case .itemPress:
             let e = try element(args)
-            try requireFront()
+            try requireMayAct(e)
+            if isInMenu(e) {
+                throw ScriptBrokerError.refused(String(localized: "A menu item cannot be pressed like a button. Choose it with menu, which checks it first.", comment: "Said to a plugin author when a script presses an item that is part of a menu"))
+            }
             guard AXUIElementPerformAction(e, kAXPressAction as CFString) == .success else {
                 throw ScriptBrokerError.failed(String(localized: "That item could not be pressed.", comment: "Said to a plugin author"))
             }
             return .bool(true)
         case .itemFocus:
             let e = try element(args)
-            try requireFront()
+            try requireMayAct(e)
             guard e.set(kAXFocusedAttribute, kCFBooleanTrue) == .success else {
                 throw ScriptBrokerError.failed(String(localized: "The focus could not be moved to that item.", comment: "Said to a plugin author"))
             }
@@ -196,6 +235,7 @@ package final class AXScriptBroker: ScriptBroker {
         case .keys: return try keys(args)
         case .copy:
             guard let text = args["text"]?.stringValue else { throw ScriptBrokerError.invalid(String(localized: "copy needs the text to put on the clipboard.", comment: "Said to a plugin author")) }
+            try requireFront()   // the clipboard is the person's: written only while the plugin's app is the one they are in
             env.copy(text)
             return .null
         case .storageGet, .storageSet, .storageRemove: return try storage(operation, args)
@@ -214,7 +254,7 @@ package final class AXScriptBroker: ScriptBroker {
     }
 
     /// Speech and sounds are heard only while the plugin's app is in front and no approval question is open.
-    private var mayBeHeard: Bool { frontOwns && !questionOpen() }
+    private var mayBeHeard: Bool { frontOwns && macFrontOwns && !questionOpen() }
 
     private func say(_ args: ScriptValue) -> ScriptValue {
         guard let text = args["text"]?.stringValue, !text.isEmpty else { return .null }
@@ -235,7 +275,7 @@ package final class AXScriptBroker: ScriptBroker {
         let e = try element(args)
         if Self.isSecure(e) { throw ScriptBrokerError.refused(String(localized: "A password field is never read to a plugin.", comment: "Said to a plugin author")) }
         guard mayBeHeard else { Log.info("script \(pluginID): a reading it asked for was dropped (its app is not in front, or a question is open)"); return .null }
-        env.say(ProfilesPlugin.readingText(of: e), false)
+        env.say(String(ProfilesPlugin.readingText(of: e).prefix(env.limits.sayCharacters)), false)   // as much as anything else a script says
         return .null
     }
 
@@ -251,16 +291,26 @@ package final class AXScriptBroker: ScriptBroker {
         var searched = env.frontPid().flatMap { owns($0) ? $0 : nil }   // the app in front, else a running one of the plugin's
         if searched == nil { searched = apps.lazy.compactMap { self.env.runningPid($0) }.first { self.owns($0) } }
         guard let pid = searched else { return .array([]) }
-        let limit = max(1, min(env.limits.findLimit, Int(args["limit"]?.numberValue ?? Double(env.limits.findLimit))))
+        // The number is clamped as the number it came as: turning 1e100 into an Int first stops the program. And "the nth" is a
+        // place: not zero, and not past what a search can visit.
+        var limit = env.limits.findLimit
+        if let asked = args["limit"]?.numberValue {
+            guard asked.isFinite else { throw ScriptBrokerError.invalid(String(localized: "limit must be a number.", comment: "Said to a plugin author")) }
+            limit = Int(max(1, min(Double(env.limits.findLimit), asked)))
+        }
+        if let nth = match.nth, !ElementMatcher.validNth(nth) {
+            throw ScriptBrokerError.invalid(String(localized: "nth counts from 1 (the first) or from -1 (the last); it cannot be 0.", comment: "Said to a plugin author when a match's nth is zero or out of reach"))
+        }
+        // A script's search never matches on what is in a password field (hideSecure), in this match or any inside it.
         let found: [AXUIElement]
-        if match.nth != nil { found = ElementMatcher.findOne(match, pid: pid, budget: env.limits.findBudget).map { [$0] } ?? [] }
-        else { found = ElementMatcher.find(match, pid: pid, limit: limit, budget: env.limits.findBudget) }
+        if match.nth != nil { found = ElementMatcher.findOne(match, pid: pid, budget: env.limits.findBudget, hideSecure: true).map { [$0] } ?? [] }
+        else { found = ElementMatcher.find(match, pid: pid, limit: limit, budget: env.limits.findBudget, hideSecure: true) }
         return .array(found.compactMap { item(for: $0) })
     }
 
     private func edit(_ args: ScriptValue) throws -> ScriptValue {
         let e = try element(args)
-        try requireFront()
+        try requireMayAct(e)
         if Self.isSecure(e) { throw ScriptBrokerError.refused(String(localized: "A password field is never changed by a plugin.", comment: "Said to a plugin author")) }
         try requireNoSecret(
             secureInput: String(localized: "The Mac is hiding what is typed, as it does for a password, so a plugin cannot change anything now.", comment: "Said to a plugin author when a script asks to edit while the Mac reports secure keyboard entry"),
@@ -279,7 +329,7 @@ package final class AXScriptBroker: ScriptBroker {
     }
 
     private func menu(_ args: ScriptValue) throws -> ScriptValue {
-        try requireFront()
+        try requireMayAct()
         var path: [String] = []
         if case .array(let steps)? = args["path"], steps.count <= 8 { path = steps.compactMap(\.stringValue); if path.count != steps.count { path = [] } }
         guard !path.isEmpty, !path.contains(where: { $0.isEmpty || $0.count > 200 }) else {
@@ -295,7 +345,8 @@ package final class AXScriptBroker: ScriptBroker {
     }
 
     private func keys(_ args: ScriptValue) throws -> ScriptValue {
-        try requireFront()
+        try requireMayAct()
+        let target = env.frontPid()
         guard let keys = args["keys"]?.stringValue, !keys.isEmpty else {
             throw ScriptBrokerError.invalid(String(localized: "keys needs a key, such as \"command+k\".", comment: "Said to a plugin author"))
         }
@@ -305,6 +356,11 @@ package final class AXScriptBroker: ScriptBroker {
             unknownFocus: String(localized: "TurnOver cannot tell what has the focus, so a plugin cannot press keys now.", comment: "Said to a plugin author when a script asks to press keys and the focused item cannot be found"))
         if let why = PluginPolicy.refusedKey(keys) {
             throw ScriptBrokerError.refused(String(localized: "A plugin may not send \(keys): \(why).", comment: "Said to a plugin author when a script's key is refused; the placeholders are the key and the reason"))
+        }
+        // The questions above ask the app, which can be slow: look again, at the same app, just before the keys go.
+        try requireMayAct()
+        guard env.frontPid() == target else {
+            throw ScriptBrokerError.refused(String(localized: "The app in front changed, so the keys were not sent.", comment: "Said to a plugin author when the app in front changed while a script's keys were being checked"))
         }
         guard env.sendKeys(keys) else {
             throw ScriptBrokerError.invalid(String(localized: "\(keys) is not a key combination TurnOver knows.", comment: "Said to a plugin author; the placeholder is the key"))

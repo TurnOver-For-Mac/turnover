@@ -42,9 +42,13 @@ and every identifier beginning `com.turnover.`). The check refuses them when the
 checks again, against the bundle of the app that really owns the item, whenever a script asks for something.
 
 The library's closed apps (passwords, System Settings, terminals, browsers, as PluginPolicy.closedApps lists them) are
-closed to a script in the library as to any other plugin. On the person's own Mac a script may name them. TurnOver then
-adds a warning to what the person hears at approval: "Warning: this works in <the apps>, where a plugin can do more
-harm: passwords, settings, terminals and browsers are like this. Only the person who wrote it should approve it."
+closed to a script in the library as to any other plugin. On the person's own Mac a script may name them, but there
+(decided 16 Nov 2026) it can only read and speak: `press`, `focus`, `edit`, `menu` and `keys` are refused for a closed app
+on any Mac, when the plugin loads and again whenever the script asks, against the app really in front. TurnOver says so
+in what the person hears at approval: "In <the apps> it can only read and speak: passwords, settings, terminals and
+browsers are like this. It can never press, type or choose anything there, whatever else it is allowed to do." A plugin
+that has a script is also one thing: until its script may run, none of its profile (labels, keys, watches, silences,
+holds, view) is live either.
 
 ## How a script is held
 
@@ -281,7 +285,8 @@ Said plainly, 15 Nov 2026:
   (the plan says `say` is needed; the code differs, 15 Nov 2026). `turnover-plugin check` warns about the missing
   `say`.
 - On the person's own Mac a script may name a closed app (a browser, a terminal, a password manager, System
-  Settings). The only protection is the warning in what the person hears at approval.
+  Settings), but there it can only read and speak: acting is refused on any Mac, and what the person hears at approval
+  says so.
 - Approval is only as good as the user's reading of it. TurnOver cannot judge intent.
 - A reviewer can miss something. A review lowers the risk; it does not remove it.
 - Data plugins do not have receipts yet. Anything that can write to the plugins folder has a live data plugin within
@@ -320,7 +325,8 @@ Follow these steps for each version, not only the first.
    that copies what the script has read into storage, or into the clipboard.
 8. Check what is read and what it is for: whether `read` results are used only for what the description says.
 9. Check the apps. None may be one no script may name, and a closed app (a browser, a terminal, a password manager,
-   System Settings) needs a reason the description gives.
+   System Settings) needs a reason the description gives. In a closed app a script can only read and speak, whatever
+   its manifest asks for.
 10. Run the plugin's tests (`turnover-plugin test <folder>`), and `turnover-plugin check <folder> --listing`. A script
     with no tests is a reason to ask for them. A test that passes proves what it tests and nothing more.
 11. Check that the author's key (if signed) is the one the previous version used, or that the change is explained.

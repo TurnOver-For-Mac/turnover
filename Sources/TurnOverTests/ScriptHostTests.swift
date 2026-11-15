@@ -40,10 +40,11 @@ private struct Rig {
     let host: ScriptHost
     let broker: FakeBroker
     let strikes: Strikes
-    init(_ source: String, abilities: Set<ScriptAbility> = [.say], commands: [String] = [], limits: ScriptLimits = fastLimits(), broker: FakeBroker = FakeBroker()) {
+    init(_ source: String, abilities: Set<ScriptAbility> = [.say], commands: [String] = [], limits: ScriptLimits = fastLimits(), broker: FakeBroker = FakeBroker(),
+         sounds: [String] = [], hostPath: String = scriptHostPath) {
         let strikes = Strikes()
         host = ScriptHost(plugin: ScriptPluginInfo(id: "test-plugin", name: "Test", version: "1.0"), abilities: abilities, commands: commands,
-                          source: source, hostPath: scriptHostPath, broker: broker, limits: limits)
+                          source: source, hostPath: hostPath, broker: broker, limits: limits, sounds: sounds)
         host.onStrike = { strikes.list.append($0) }
         self.broker = broker; self.strikes = strikes
     }
@@ -78,7 +79,7 @@ func scriptHostTests() {
         let output = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
         process.waitUntilExit()
         expect(process.terminationStatus, 0, "the self-test's exit status (output: \(output))")
-        expect(output.split(separator: "\n").filter { $0.hasPrefix("ok") }.count, 5, "five checks passed")
+        expect(output.split(separator: "\n").filter { $0.hasPrefix("ok") }.count, 7, "seven checks passed")
         check(!output.contains("FAIL"), "no check failed: \(output)")
     }
 
@@ -474,5 +475,237 @@ func scriptHostTests() {
         rig.start()
         expect(rig.ask("focus", .object(["name": .string(String(repeating: "y", count: 300_000))])), .unhandled, "an item over the message limit")
         expect(rig.ask("focus", .object(["name": .string("small")])), .say("x"), "and the host is still fine")
+    }
+
+    // MARK: The fix pass after the independent review (16 Nov 2026)
+
+    /// A program standing in for the host: a shell script that answers TurnOver's hello as the test says, so a host that
+    /// misbehaves in ways the real one never would can be met. The caller removes it.
+    func fakeHost(_ body: String) -> String {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("turnover-fake-host-\(UUID().uuidString).sh")
+        try? ("#!/bin/bash\n" + body + "\n").write(to: url, atomically: true, encoding: .utf8)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
+        return url.path
+    }
+
+    test("script host: event.say and event.silence need the say ability in the code, not only in the checker") {
+        let source = "turnover.on('focus', function (e) { e.say('hello'); }); turnover.on('valueChange', function (e) { e.silence(); });"
+        let without = Rig(source, abilities: [.read])
+        defer { without.host.stop() }
+        without.start()
+        expect(without.ask("focus"), .unhandled, "words from a script that may not say are not used")
+        expect(without.ask("valueChange"), .unhandled, "nor is its silence")
+        let with = Rig(source, abilities: [.read, .say])
+        defer { with.host.stop() }
+        with.start()
+        expect(with.ask("focus"), .say("hello"), "with the ability the words are used")
+        expect(with.ask("valueChange"), .say(""), "and so is the silence")
+    }
+
+    test("script host: replacement words are cut to the character limit and count toward the rate; silence does not") {
+        var limits = fastLimits()
+        limits.saysPerWindow = 3
+        limits.sayCharacters = 10
+        let rig = Rig("turnover.on('focus', function (e) { e.say('0123456789ABCDEF'); }); turnover.on('valueChange', function (e) { e.silence(); });", limits: limits)
+        defer { rig.host.stop() }
+        rig.start()
+        expect(rig.ask("focus"), .say("0123456789"), "cut to ten characters")
+        _ = rig.ask("focus"); _ = rig.ask("focus")
+        expect(rig.ask("focus"), .unhandled, "a fourth in the window is not used")
+        for _ in 0..<5 { expect(rig.ask("valueChange"), .say(""), "silence is never counted") }
+    }
+
+    test("script host: item.read shares the speech budget") {
+        var limits = fastLimits()
+        limits.saysPerWindow = 4
+        limits.requestsPerSecond = 1000
+        let broker = FakeBroker()
+        broker.answers[.focused] = .object(["handle": .string("h1")])
+        let rig = Rig("""
+            turnover.on('focus', function (e) {
+              turnover.focused().then(function (item) { for (let i = 0; i < 12; i++) item.read().catch(function () {}); });
+            });
+            """, abilities: [.read, .say], limits: limits, broker: broker)
+        defer { rig.host.stop() }
+        rig.start()
+        _ = rig.ask()
+        check(waitFor(3) { broker.calls.filter { $0.operation == .itemRead }.count >= 4 }, "the first readings arrived")
+        settle(0.4)
+        expect(broker.calls.filter { $0.operation == .itemRead }.count, 4, "no more than the limit were read in the window")
+    }
+
+    test("script host: an answer of the wrong kind changes nothing, so a question still has its deadline") {
+        // A host that, asked a question (id 1), answers it with a command's answer. The question must stay open, so the host is
+        // killed for not answering it; before, the forged answer closed it and nothing was ever watching it again.
+        let path = fakeHost("""
+            read hello
+            echo '{"t":"ready","events":["focus"],"commands":[]}'
+            read question
+            echo '{"t":"commandDone","id":1}'
+            sleep 20
+            """)
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        var limits = fastLimits()
+        limits.killLimit = 0.4
+        let rig = Rig("", limits: limits, hostPath: path)
+        rig.host.start()
+        check(waitFor(3) { if case .ready = rig.host.state { return true } else { return false } }, "the stand-in is ready")
+        expect(rig.ask(), .late, "it never answered the question")
+        check(waitFor(3) { if case .failed = rig.host.state { return true } else { return false } }, "and it was stopped for it: \(rig.host.state)")
+        check(rig.strikes.list.contains { if case .killed = $0 { return true } else { return false } }, "as a kill: \(rig.strikes.list)")
+    }
+
+    test("script host: a host that floods TurnOver with lines is thrown away unread, then stopped") {
+        let path = fakeHost("""
+            read hello
+            echo '{"t":"ready","events":[],"commands":[]}'
+            yes '{"t":"notify","op":"nonsense","args":{}}' | head -n 30000
+            sleep 20
+            """)
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let rig = Rig("", hostPath: path)
+        rig.host.start()
+        check(waitFor(5) { if case .failed = rig.host.state { return true } else { return false } }, "the flood stopped the host: \(rig.host.state)")
+        check(rig.strikes.list.contains { if case .killed(let why) = $0 { return why.contains("far more messages") } else { return false } }, "as a kill for sending too many: \(rig.strikes.list)")
+        check(waitFor(3) { !rig.host.isRunning }, "and the host is gone")
+    }
+
+    test("script host: a host that ends at once is known to have ended, and a held child is not heard from until it is released") {
+        for _ in 0..<20 {
+            let rig = Rig("", hostPath: "/usr/bin/true")
+            rig.host.start()
+            check(waitFor(3) { !rig.host.isRunning }, "the host that ended at once is not running")
+            if case .failed = rig.host.state {} else { check(false, "it is reported as ended on its own: \(rig.host.state)") }
+        }
+        final class Flag: @unchecked Sendable { var heard = false }
+        let flag = Flag()
+        guard let (child, _) = DisclaimedSpawn.run("/usr/bin/true", arguments: [], directory: "/", environment: [], hold: true, exited: { _ in flag.heard = true }) else { return check(false, "no child") }
+        settle(0.4)
+        expect(flag.heard, false, "a held child that has ended is not reported until it is released")
+        check(Darwin.kill(child.pid, 0) == 0, "and its process id is still its own (it has not been reaped)")
+        child.releaseExit?()
+        check(waitFor(3) { flag.heard }, "released, the end is reported")
+        settle(0.2)
+        check(Darwin.kill(child.pid, 0) != 0, "and the child is reaped after")
+    }
+
+    test("script host: timers are limited in Swift, whatever the script does to its own bookkeeping") {
+        let broker = FakeBroker()
+        let rig = Rig("""
+            Object.defineProperty(Map.prototype, 'size', { get: function () { return 0; } });   // blinds the script's own count
+            for (let i = 0; i < 40; i++) setTimeout(function () { console.log('x'); }, 50);
+            Number = function () { return 1e100; };   // and a delay no number of milliseconds can be
+            setTimeout(function () { console.log('far'); }, 5);
+            turnover.on('focus', function (e) { e.say('alive'); });
+            """, broker: broker)
+        defer { rig.host.stop() }
+        rig.start()
+        settle(0.8)
+        expect(broker.calls.filter { $0.operation == .log && $0.arguments["text"]?.stringValue == "x" }.count, PluginWire.Limits.timers, "no more timers ran than may exist")
+        expect(rig.ask(), .say("alive"), "and the host did not trap on the impossible delay")
+    }
+
+    test("script host: a message with a line break in it is refused by the host, so a script cannot send two") {
+        let broker = FakeBroker()
+        let rig = Rig("""
+            JSON.stringify = function () { return '{"t":"notify","op":"log","args":{"text":"one"}}\\n{"t":"notify","op":"log","args":{"text":"two"}}'; };
+            turnover.say('x');
+            turnover.on('focus', function (e) { e.say('alive'); });
+            """, broker: broker)
+        defer { rig.host.stop() }
+        rig.start()
+        settle(0.3)
+        check(!broker.calls.contains { $0.operation == .log && $0.arguments["text"]?.stringValue == "two" }, "no second message got through: \(broker.calls)")
+        expect(rig.ask(), .say("alive"), "the host is fine")
+    }
+
+    test("script host: turnover.sound rejects a name TurnOver does not have, and passes one it has") {
+        let broker = FakeBroker()
+        let rig = Rig("""
+            turnover.on('focus', function (e) {
+              try { turnover.sound('nope'); turnover.say('no error'); } catch (err) { turnover.say(err.message); }
+              turnover.sound('link');
+            });
+            """, broker: broker, sounds: ["link", "tick"])
+        defer { rig.host.stop() }
+        rig.start()
+        _ = rig.ask()
+        check(waitFor(3) { broker.calls.contains { $0.operation == .sound } && !broker.said.isEmpty }, "both happened: \(broker.calls)")
+        check(broker.said.first?.contains("nope") ?? false, "the error names the sound: \(broker.said)")
+        expect(broker.calls.filter { $0.operation == .sound }.map { $0.arguments["name"]?.stringValue }, ["link"], "only the real sound reached TurnOver")
+    }
+
+    test("script host: while paused, everything but the log and the plugin's own data is refused on TurnOver's side") {
+        let broker = FakeBroker()
+        let rig = Rig("""
+            turnover.command('go', function () {
+              turnover.find({}).then(function () { console.log('found'); }, function (err) { console.log('refused: ' + err.message); });
+              turnover.copy('x').then(function () { console.log('copied'); }, function (err) { console.log('refused copy'); });
+            });
+            """, abilities: [.read, .clipboard], commands: ["go"], broker: broker)
+        defer { rig.host.stop() }
+        rig.start()
+        // The command is sent first and the pause straight after: TurnOver's side is paused before the script's requests arrive.
+        rig.host.run(command: "go") { _ in }
+        rig.host.pause()
+        check(waitFor(3) { broker.calls.filter { $0.operation == .log }.count >= 2 }, "the script heard both refusals: \(broker.calls)")
+        check(!broker.calls.contains { $0.operation == .find || $0.operation == .copy }, "the broker saw neither request")
+        check(broker.calls.contains { $0.operation == .log && ($0.arguments["text"]?.stringValue ?? "").contains("paused") }, "and the reason is said: \(broker.calls)")
+        rig.host.resume()
+        rig.host.run(command: "go") { _ in }
+        check(waitFor(3) { broker.calls.contains { $0.operation == .find } && broker.calls.contains { $0.operation == .copy } }, "resumed, both go through")
+    }
+
+    test("script host: requests waiting for main are limited, and the rest are refused") {
+        var limits = fastLimits()
+        limits.mainQueueLimit = 5
+        limits.requestsPerSecond = 10_000
+        let broker = FakeBroker()
+        let rig = Rig("""
+            turnover.on('focus', function (e) { for (let i = 0; i < 40; i++) turnover.storage.get('k').catch(function () {}); });
+            """, limits: limits, broker: broker)
+        defer { rig.host.stop() }
+        rig.start()
+        _ = rig.ask()
+        Thread.sleep(forTimeInterval: 0.5)   // main does not run, so every accepted request waits
+        settle(0.5)
+        expect(broker.calls.filter { $0.operation == .storageGet }.count, 5, "no more than five were taken up")
+    }
+
+    test("script host: a call that runs longer than the window still counts against the next one") {
+        var limits = fastLimits()
+        limits.mainThreadSecondsPerSecond = 0.1
+        limits.requestsPerSecond = 1000
+        let broker = FakeBroker()
+        broker.delay = 1.2   // longer than the window the time is counted in
+        let rig = Rig("""
+            turnover.on('focus', function (e) {
+              turnover.storage.get('a').then(function () { console.log('first done'); });
+              turnover.storage.get('b').then(function () { console.log('second done'); }, function (err) { console.log('second refused'); });
+            });
+            """, limits: limits, broker: broker)
+        defer { rig.host.stop() }
+        rig.start()
+        _ = rig.ask()
+        check(waitFor(5) { broker.calls.contains { $0.operation == .storageGet } }, "the first was taken up")
+        settle(0.6)
+        expect(broker.calls.filter { $0.operation == .storageGet }.count, 1, "the second never reached the broker: the first's whole time counts against it")
+    }
+
+    test("script host: the host's environment is empty") {
+        // A stand-in that reports what it was given, through the only way it can speak: its ready message's event list.
+        let path = fakeHost("""
+            read hello
+            n=$(env | grep -c . )
+            echo "{\\"t\\":\\"ready\\",\\"events\\":[],\\"commands\\":[\\"env$n\\"]}"
+            sleep 20
+            """)
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let rig = Rig("", commands: ["env0", "env1", "env2", "env3", "env4"], hostPath: path)
+        defer { rig.host.stop() }
+        rig.host.start()
+        check(waitFor(3) { if case .ready = rig.host.state { return true } else { return false } }, "ready")
+        // bash adds a few variables of its own (PWD, SHLVL, _); TurnOver's own PATH, HOME and the rest must not be among them.
+        check(rig.host.commands.first.map { Int($0.dropFirst(3)) ?? 99 }.map { $0 <= 4 } ?? false, "only the shell's own few variables: \(rig.host.commands)")
     }
 }

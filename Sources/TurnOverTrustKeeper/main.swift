@@ -7,7 +7,10 @@
 //
 // With `--client check` it is the other end: it asks the keeper in the app it is running inside to run its check, prints
 // one line and exits (0 ok; 3 refused or unreachable; 1 anything else). build.sh's keeper check runs it as the host of a
-// throwaway app, to prove that the keeper answers its own app and a stranger gets nothing.
+// throwaway app, to prove that the keeper answers its own app.
+// With `--client check-as-stranger` it is the attacker: the same call, made by a client that does not first refuse itself
+// for having no team and does not put a requirement on the keeper, so a refusal is the keeper's own. The check runs it in the
+// copies that must be refused.
 import Foundation
 import TurnOverPluginWire
 
@@ -62,6 +65,11 @@ if arguments.isEmpty {
     case .success: print("trust keeper: ok"); exit(0)
     case .failure(let why): print("trust keeper: \(why)"); exit(3)
     }
+} else if arguments == ["--client", "check-as-stranger"] {
+    switch TrustKeeperClient(strangerOf: Bundle.main.bundleIdentifier).check() {
+    case .success: print("trust keeper: ok"); exit(0)
+    case .failure(let why): print("trust keeper: \(why)"); exit(3)
+    }
 } else {
-    print("usage: turnover-trust-keeper [--client check]"); exit(1)
+    print("usage: turnover-trust-keeper [--client check | --client check-as-stranger]"); exit(1)
 }

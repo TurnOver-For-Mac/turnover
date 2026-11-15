@@ -209,4 +209,64 @@ func scriptKeeperTests() {
         _ = FileSealKey(url: link).makeKey()
         expect(try? Data(contentsOf: target), Data("keep".utf8), "a link in the key's place was not written through")
     }
+
+    // MARK: The fix pass after the independent review (16 Nov 2026)
+
+    test("script keeper: a revocation that cannot be kept lets go of every approval for the run, and so does turning developer mode off") {
+        let holder = MemoryHolder()
+        let trust = ScriptTrustStore(holder: holder)
+        try? trust.approve(id: "a", hash: "h", apps: ["x"], abilities: [.say], origin: .file)
+        try? trust.approve(id: "b", hash: "h2", apps: ["x"], abilities: [.say], origin: .file)
+        holder.failure = "the keeper did not answer"
+        do { try trust.revoke(id: "a"); check(false, "revoke went through") } catch { }
+        expect(trust.receipts.count, 0, "no approval at all is believed after a revocation that could not be kept")
+        check(trust.unavailable != nil, "the store is unavailable for the run")
+        expect(trust.decision(id: "b", hash: "h2", apps: ["x"], abilities: [.say]), .refused(.neverApproved), "so the other plugin's script is not allowed either")
+        do { try trust.approve(id: "c", hash: "h", apps: [], abilities: [], origin: .file); check(false, "approve went through") } catch { }
+        // Developer mode: turning it on that cannot be kept just stays off; turning it off that cannot be kept lets go of everything.
+        let second = MemoryHolder()
+        let dev = ScriptTrustStore(holder: second)
+        try? dev.setDeveloperMode(true)
+        try? dev.approve(id: "a", hash: "h", apps: ["x"], abilities: [.say], origin: .draft)
+        second.failure = "gone"
+        do { try dev.setDeveloperMode(false); check(false, "went through") } catch { }
+        expect(dev.developerMode, false, "developer mode is off")
+        expect(dev.receipts.count, 0, "and nothing approved is believed")
+        let failing = MemoryHolder()
+        let fresh = ScriptTrustStore(holder: failing)
+        failing.failure = "gone"
+        do { try fresh.setDeveloperMode(true); check(false, "went through") } catch { }
+        expect(fresh.developerMode, false, "turning it on that could not be kept leaves it off")
+    }
+
+    test("script keeper: the attacker's client connects to the keeper without a team or a requirement; an ordinary client without a team does not connect") {
+        let stranger = TrustKeeperClient(strangerOf: "com.example.app")
+        check(stranger.connects, "the stranger connects")
+        check(!stranger.requiresKeeperSignature, "and asks nothing of the keeper's own signature")
+        let honestNoTeam = TrustKeeperClient(bundleIdentifier: "com.example.app", team: nil)
+        check(!honestNoTeam.connects, "an ordinary client with no team of its own refuses itself before asking the keeper anything")
+        expect({ if case .failure(let why) = honestNoTeam.check() { return "\(why)".contains("no signing team") } else { return false } }(), true, "saying so, without XPC")
+        let honest = TrustKeeperClient(bundleIdentifier: "com.example.app", team: "ABCDE12345")
+        check(honest.connects && honest.requiresKeeperSignature, "an ordinary client with a team connects and puts a requirement on the keeper")
+        check(!TrustKeeperClient(strangerOf: nil).connects, "the stranger needs an identifier to know whom to ask")
+        check(!TrustKeeperClient(strangerOf: "a\" or true").connects, "and a name that could carry text into a requirement is not one")
+    }
+
+    test("script keeper: a file read for hashing or a signature is read only up to one byte past its limit") {
+        let folder = made()
+        let big = folder.appendingPathComponent("big")
+        try? Data(repeating: 0x41, count: 5_000_000).write(to: big)
+        expect(PluginFormat.readBounded(big, limit: 1000)?.count, 1001, "one byte past the limit and no more")
+        expect(PluginFormat.readBounded(folder.appendingPathComponent("missing"), limit: 10), nil, "a missing file is nil")
+        try? Data("hi".utf8).write(to: folder.appendingPathComponent("small"))
+        expect(PluginFormat.readBounded(folder.appendingPathComponent("small"), limit: 10), Data("hi".utf8), "a small file whole")
+        try? Data().write(to: folder.appendingPathComponent("empty"))
+        expect(PluginFormat.readBounded(folder.appendingPathComponent("empty"), limit: 10), Data(), "an empty file is empty, not missing")
+        // A plugin whose main.js is far past the limit has no hash and does not load, and neither read the file whole.
+        try? Data(scriptManifestText().utf8).write(to: folder.appendingPathComponent("manifest.json"))
+        try? Data(repeating: 0x20, count: 5_000_000).write(to: folder.appendingPathComponent("main.js"))
+        expect(ScriptTrust.hash(folder: folder), nil, "no hash for a script past the limit")
+        let loaded = ProfileStore.load(folder: folder)
+        check(loaded.error?.contains("larger than 256 KB") == true && loaded.script == nil, "it does not load: \(loaded.error ?? "loaded")")
+    }
 }

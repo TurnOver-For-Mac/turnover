@@ -58,11 +58,12 @@ nonisolated extension PluginFormat {
     /// main.js itself: there, UTF-8 text, and small enough.
     static func checkScriptFile(in folder: URL?, data given: Data? = nil) -> [Problem] {
         func problem(_ message: String) -> [Problem] { [Problem(file: scriptName, line: nil, message: message, isError: true)] }
-        guard let data = given ?? folder.flatMap({ try? Data(contentsOf: $0.appendingPathComponent(scriptName)) }) else {
+        guard let data = given ?? folder.flatMap({ readBounded($0.appendingPathComponent(scriptName), limit: scriptBytes) }) else {
             return problem("is missing or cannot be read: the manifest says this plugin has a script")
         }
+        // The size first: nothing is decoded that is larger than a script may be (and a file is read only to one byte past it).
+        guard data.count <= scriptBytes else { return problem("is larger than \(scriptBytes / 1024) KB; a script may be at most \(scriptBytes / 1024) KB") }
         guard String(data: data, encoding: .utf8) != nil else { return problem("is not text in UTF-8") }
-        guard data.count <= scriptBytes else { return problem("is \(data.count / 1024) KB; a script may be at most \(scriptBytes / 1024) KB") }
         return []
     }
 }
