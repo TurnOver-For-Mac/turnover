@@ -46,6 +46,7 @@ let coreSources: [String] = [
     "Apps/Chat/ChatAppModule.swift",
     "Apps/Chat/ChatView.swift",
     "Apps/Claude/ClaudeAppModule.swift",
+    "Apps/Claude/ClaudeBrowserReturn.swift",
     "Apps/Claude/ClaudeSessionDeletion.swift",
     "Apps/Claude/ClaudeTranscript.swift",
     "Apps/Contacts/ContactsAppModule.swift",

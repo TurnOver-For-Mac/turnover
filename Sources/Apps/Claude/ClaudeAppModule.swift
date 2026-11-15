@@ -25,6 +25,7 @@ public enum ClaudeProgressReadiness {
 package final class ClaudeAppModule: AppModule {
     private var watching = false
     private let sessionDeletion = ClaudeSessionDeletion()
+    private lazy var browserReturn = ClaudeBrowserReturn(pid: pid)
     private var readReplies: Bool { config.appSetting(ClaudeTranscript.bundleID, "readReplies", default: "on") == "on" }
 
     package required init(pid: pid_t, bundleIdentifier: String, appName: String) {
@@ -62,6 +63,10 @@ package final class ClaudeAppModule: AppModule {
             let reply = ClaudeTranscript.latestReply(chat: chat)
             Speech.speakText(reply.isEmpty ? String(localized: "no reply yet", comment: "Spoken message") : reply)
         }
+    }
+
+    package override func script(for gesture: KeyboardGesture) -> Script? {
+        browserReturn.script(for: gesture, owner: self) ?? super.script(for: gesture)
     }
 
     package override var handlesGroupMenus: Bool { true }
@@ -551,6 +556,7 @@ package final class ClaudeAppModule: AppModule {
     package override var rolesPressedByKeyboard: Set<String> { ["AXButton", "AXMenuItem"] }
 
     package override func handleEvent(_ event: Event, next: () -> Void) {
+        browserReturn.handleEvent(event)
         sessionDeletion.observe(event)
         if event.kind == .gainFocus,
            API.focusTreeInterceptor?.navigationWaiting == true { return }
