@@ -20,6 +20,12 @@ extension AXHandler {
     // MARK: Notifications → events
 
 
+    /// What a log line says about an element: its description when the app is in front, else only the pid. Asking a
+    /// background app (maybe hung) costs the main thread a wait for a log line; nothing is asked of it here.
+    public static func logDescription(pid: pid_t, activePid: pid_t, _ describe: () -> String) -> String {
+        pid == activePid ? describe() : "(pid \(pid), in the background; not asked)"
+    }
+
     func notification(_ name: String, _ element: AXUIElement, _ info: [String: Any]?) {
         lastNewsAt[element.pid] = Date()
         AXHealth.heardFrom(pid: element.pid)   // a sign of life: what was silent in the app is looked at again now
@@ -130,7 +136,7 @@ extension AXHandler {
             if openMenus.isEmpty, before > 0 || element.role == "AXMenu" { lastMenuClosed = (pid, Date()) }
         case kAXMenuItemSelectedNotification:
             // A keyboard shortcut also "selects" its menu item (Cmd+A: "Select All"); only a menu the user is in counts.
-            if isMenuOpen { focusChanged(element, pid: pid) } else { Log.debug("menu item selected by shortcut: \(element.string(kAXTitleAttribute) ?? "")") }
+            if isMenuOpen { focusChanged(element, pid: pid) } else { Log.debug("menu item selected by shortcut: \(Self.logDescription(pid: pid, activePid: activePid) { element.string(kAXTitleAttribute) ?? "" })") }
         case kAXLayoutChangedNotification, "AXLiveRegionChanged", "AXLoadComplete":
             if name == "AXLiveRegionChanged", pid == activePid { EventHandler.queue(Event(.liveRegionChange, ObjectFactory.make(element))) }
             if let d = API.focusTreeInterceptor, d.webArea.pid == pid {
@@ -155,13 +161,17 @@ extension AXHandler {
             if name == kAXWindowCreatedNotification, !ForeignChildren.contains(pid) { ForeignChildren.check(pid: pid) }
             if Date().timeIntervalSince(loggedOnlyWindow) > 1 { loggedOnlyWindow = Date(); loggedOnlyCount = 0 }
             loggedOnlyCount += 1
-            if loggedOnlyCount <= 20 { Log.io("notification \(name): \(element.role) \"\(Log.words(element.string(kAXTitleAttribute) ?? ""))\"") }
+            if loggedOnlyCount <= 20 {
+                // Only the front app is asked what the element is: a background app that is hung made every one of
+                // these reads wait on the main thread and froze the keys for 4 s (Mail, 15 Nov 2026).
+                Log.io("notification \(name): " + Self.logDescription(pid: pid, activePid: activePid) { "\(element.role) \"\(Log.words(element.string(kAXTitleAttribute) ?? ""))\"" })
+            }
             else if loggedOnlyCount == 21 { Log.io("notifications: more than 20 this second; the rest not logged") }
         case kAXSelectedCellsChangedNotification:
             // A grid that moves its selection without moving the focus: Excel says only "selected cells changed" on
             // each arrow, and its focused cell catches up seconds later, if at all (Day 2, 10 Oct 2026). Where the
             // focus is in this grid, the one cell selected is the new focus (a range keeps the focus where it is).
-            Log.io("notification \(name): \(element.role) \"\(Log.words(element.string(kAXTitleAttribute) ?? element.string(kAXDescriptionAttribute) ?? ""))\"")
+            Log.io("notification \(name): " + Self.logDescription(pid: pid, activePid: activePid) { "\(element.role) \"\(Log.words(element.string(kAXTitleAttribute) ?? element.string(kAXDescriptionAttribute) ?? ""))\"" })
             guard pid == activePid, let f = API.focusObject,
                   f.isSameElement(as: element) || API.focusAncestors.contains(where: { $0.isSameElement(as: element) }) else { return }
             // Counted, not fetched: a whole column selected is a million cells.
