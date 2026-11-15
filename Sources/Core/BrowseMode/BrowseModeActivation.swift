@@ -74,8 +74,14 @@ extension BrowseModeDocument {
         let text = lineText(at: position).trimmingCharacters(in: .whitespacesAndNewlines)
         if !text.isEmpty, let live = Self.liveActionable(named: text, in: webArea) {
             Log.io("browse mode: \"\(Log.words(text))\" was stale in the buffer; pressing the page's own \(live.role)")
-            if press(nearestTo: live) { buffer.build(); clampPosition(); return }
+            if press(nearestTo: live) { buffer.build(); return }
         }
+        // Text the page itself takes clicks on, with no link or button made of it: a questionnaire's "Yes" and "No"
+        // were plain text in three groups, and Enter, Space and VO-Space all said "nothing to activate"; the form
+        // could only be filled in with VoiceOver (an online questionnaire, 11 Nov 2026). Safari lists a press
+        // among the actions of text that is listened to for clicks, on it or on what holds it, and of no other text
+        // (Safari 27.2, a test page, 11 Nov 2026), so text nothing listens to still says there is nothing there.
+        if pressClickableText(from: e) { return }
         // What was there, for the log: the buffer's element and its ancestors (alive or gone).
         var chain: [String] = []; var x = e; var d = 0
         while let y = x, d < 6 { chain.append("\(y.role) \"\((y.string(kAXTitleAttribute) ?? y.string(kAXValueAttribute) ?? "").prefix(30))\""); x = y.element(kAXParentAttribute); d += 1 }
@@ -200,6 +206,7 @@ extension BrowseModeDocument {
     /// that kind alone, as JAWS's lists of links, headings and form fields (Insert+F7, F6, F5): Left and Right stay on it.
     func elementsList(only kind: String? = nil) {
         refreshIfNavigated()
+        guard ensureContent() else { return }
         if buffer.isDirty { rebuildKeepingPlace() }
         let kinds: [(String, Set<String>)] = [
             ("Headings", ["AXHeading"]),
@@ -232,6 +239,9 @@ extension BrowseModeDocument {
     }
 
     func elementsListLabel(_ el: AXUIElement, at: Int, kind: String) -> String {
+        buffer.withSnapshot { elementsListLabelInSnapshot(el, at: at, kind: kind) }
+    }
+    private func elementsListLabelInSnapshot(_ el: AXUIElement, at: Int, kind: String) -> String {
         // The whole element, not its first wrapped line (a long heading showed cut short in the list, 8 Oct 2026).
         let line: String = {
             guard let i = buffer.lineIndex(at: at) else { return lineText(at: at) }
@@ -253,9 +263,8 @@ extension BrowseModeDocument {
             return el.string(kAXTitleAttribute) ?? el.string(kAXDescriptionAttribute) ?? line
         case "Tables":
             let name = el.string(kAXTitleAttribute) ?? el.string(kAXDescriptionAttribute) ?? ""
-            var rows: CFIndex = 0
-            AXUIElementGetAttributeValueCount(el, kAXRowsAttribute as CFString, &rows)
-            return (name.isEmpty ? Role.table.displayString : "\(name), \(Role.table.displayString)") + (rows > 0 ? ", " + String(localized: "\(rows) rows", comment: "A table's size") : "")
+            let rows = el.attributeValueCountResult(kAXRowsAttribute).value ?? 0
+            return (name.isEmpty ? Role.table.displayString : "\(name), \(Role.table.displayString)") + (rows > 0 ? ", " + String(localized: "\(String(rows)) rows", comment: "A table's size") : "")
         case "Landmarks":
             let what = el.string(kAXRoleDescriptionAttribute) ?? Role.landmark.displayString
             let name = el.string(kAXDescriptionAttribute) ?? el.string(kAXTitleAttribute) ?? ""
@@ -270,6 +279,7 @@ extension BrowseModeDocument {
     /// type; Enter puts the reading position there and reads it.
     public func openItemChooser() {
         refreshIfNavigated()
+        guard ensureContent() else { return }
         if buffer.isDirty { rebuildKeepingPlace() }
         var items: [MenuItem] = []
         for (j, line) in buffer.lines.enumerated() where line.end > line.start && line.end <= buffer.text.length {
@@ -277,7 +287,7 @@ extension BrowseModeDocument {
             let (a, b) = buffer.elementRange(fromLine: j)
             let text = buffer.text.substring(with: NSRange(location: a, length: min(b - a, 150))).replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { continue }
-            let kind = line.isControl ? (line.element?.string(kAXRoleDescriptionAttribute) ?? "") : ""
+            let kind = buffer.withSnapshot { line.isControl ? (line.element?.string(kAXRoleDescriptionAttribute) ?? "") : "" }
             let label = kind.isEmpty ? text : "\(text), \(kind)"
             let start = line.start, el = line.element, control = line.isControl
             items.append(MenuItem(verbatim: label, .action { [weak self] in
@@ -304,24 +314,10 @@ extension BrowseModeDocument {
     }
 
     /// Read the page again (NVDA's buffer follows the page as it changes) and stay at the same place: on `anchor` if
-    /// given, otherwise on the same line's text nearest where it was. The read is done by `deadline` at the latest.
-    func rebuildKeepingPlace(anchor: AXUIElement? = nil, until deadline: Date = .distantFuture) {
-        let oldLine = lineText(at: position).trimmingCharacters(in: .whitespacesAndNewlines)
-        let oldPosition = position
-        buffer.build(until: deadline)
-        let n = buffer.text.length
-        if let a = anchor, let o = buffer.offset(of: a) { position = o; return }
-        if !oldLine.isEmpty {
-            var best: Int?; var from = 0
-            while from < n {
-                let r = buffer.text.range(of: oldLine, options: .literal, range: NSRange(location: from, length: n - from))
-                if r.location == NSNotFound { break }
-                if best == nil || abs(r.location - oldPosition) < abs(best! - oldPosition) { best = r.location }
-                from = r.location + max(r.length, 1)
-            }
-            if let best { position = best; return }
-        }
-        position = min(oldPosition, max(0, n - 1))
+    /// given, otherwise on the same line's text nearest where it was.
+    func rebuildKeepingPlace(anchor: AXUIElement? = nil) {
+        if let anchor { followFocusAfterBuild(anchor, requiresFocus: false) }
+        else { buffer.build() }
     }
 
     /// The key that presses a control when it is pressed by the keyboard and not by accessibility's press.
@@ -410,6 +406,37 @@ extension BrowseModeDocument {
             e = x.element(kAXParentAttribute); depth += 1
         }
         return false
+    }
+
+    /// Which of the element at the reading position and what holds it, nearest first, the page takes a click on:
+    /// the first that lists a press, before the page itself is reached and no more than six up. Nil when none does.
+    public static func clickableText(in chain: [(role: String, actions: [String])]) -> Int? {
+        for (i, x) in chain.prefix(6).enumerated() {
+            if x.role == "AXWebArea" || x.role == "AXScrollArea" { return nil }
+            if x.actions.contains(kAXPressAction as String) { return i }
+        }
+        return nil
+    }
+
+    /// Text at the reading position that the page takes clicks on is pressed. False when there is none.
+    func pressClickableText(from start: AXUIElement?) -> Bool {
+        var elements: [AXUIElement] = []; var chain: [(role: String, actions: [String])] = []
+        var e = start
+        while let x = e, chain.count < 6 {
+            var names: CFArray?; AXUIElementCopyActionNames(x, &names)
+            elements.append(x); chain.append((x.role, (names as? [String]) ?? []))
+            if x.isSame(webArea) { break }
+            e = x.element(kAXParentAttribute)
+        }
+        guard let i = Self.clickableText(in: chain) else { return false }
+        let x = elements[i]
+        let before = ControlState(x)
+        let r = AXUIElementPerformAction(x, kAXPressAction as CFString)
+        Log.io("browse mode: press the clickable \(chain[i].role) at the reading position\(i > 0 ? ", \(i) above it" : "") → \(describeError(r))")
+        guard r == .success else { return false }
+        Tones.press()
+        watchStateChange(x, before: before)   // the page is read again: a chosen answer often changes what follows
+        return true
     }
 
     /// A link or button on the live page whose text is `name`.

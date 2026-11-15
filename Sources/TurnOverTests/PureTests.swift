@@ -262,6 +262,12 @@ func pureTests() {
         expect(UserGestures.spoken("kb:rightoption+s"), "right option s")
         expect(UserGestures.storedIdentifier(of: KeyboardGesture(identifier: "kb:turnover+shift+0")!), "kb:turnover+shift+0", "the plain form, not the layout's")
     }
+    test("speech: the same focus twice is said once, another row with the same words is said") {
+        check(Speech.focusRepeated(words: "12, A1", last: "12, A1", after: 0.1, anotherRow: false), "the same focus reported twice")
+        check(!Speech.focusRepeated(words: "Your order, 09:16", last: "Your order, 09:16", after: 0.1, anotherRow: true), "two copies of a message, one above the other")
+        check(!Speech.focusRepeated(words: "12, A1", last: "12, A1", after: 0.6, anotherRow: false), "after half a second it is said again")
+        check(!Speech.focusRepeated(words: "13, A2", last: "12, A1", after: 0.1, anotherRow: false), "other words")
+    }
     test("speech: a capital said alone is marked for a raised pitch only when the setting is on") {
         let was = config.speech.capitalPitch; defer { config.speech.capitalPitch = was }
         config.speech.capitalPitch = 0
@@ -1473,6 +1479,16 @@ func browseTextNavTests() {
         expect(NewToTry.heading("Spelling corrections in any edit box: on a misspelled word (or just after one), VO Shift M lists the suggestions; Return puts one in place.").0, "Spelling corrections in any edit box", "before the colon")
         expect(NewToTry.heading("Direct (Command Control Comma, then D): for a game or app that speaks for itself, every key goes straight to it.").0, "Direct", "before the bracket")
         expect(NewToTry.heading("CoExist, much simpler: VoiceOver keeps running and is silenced at the sound level wherever TurnOver reads, and heard the instant.").0, "CoExist", "before the comma")
+    }
+    test("browse mode: text the page takes clicks on is pressed, other text is not") {
+        let plain = ["AXShowMenu", "AXScrollToVisible"], pressable = ["AXPress", "AXShowMenu", "AXScrollToVisible"]
+        // A questionnaire's "Yes": text in three groups, the click listened for on the text or on a group around it.
+        expect(BrowseModeDocument.clickableText(in: [("AXStaticText", pressable), ("AXGroup", pressable), ("AXGroup", plain), ("AXWebArea", plain)]), 0, "the text itself")
+        expect(BrowseModeDocument.clickableText(in: [("AXStaticText", plain), ("AXGroup", pressable), ("AXGroup", plain), ("AXWebArea", plain)]), 1, "the group holding it")
+        expect(BrowseModeDocument.clickableText(in: [("AXStaticText", plain), ("AXGroup", plain), ("AXWebArea", plain)]), nil, "a paragraph: nothing to activate")
+        expect(BrowseModeDocument.clickableText(in: [("AXStaticText", plain), ("AXWebArea", pressable)]), nil, "never the page itself")
+        expect(BrowseModeDocument.clickableText(in: Array(repeating: ("AXGroup", plain), count: 6) + [("AXGroup", pressable)]), nil, "no more than six up")
+        expect(BrowseModeDocument.clickableText(in: []), nil, "nothing at the reading position")
     }
     test("browse mode: NVDA's comma keys parse") {
         check(KeyboardGesture(identifier: "kb:,") != nil, "comma")
