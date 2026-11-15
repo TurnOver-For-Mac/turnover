@@ -198,6 +198,10 @@ extension BrowseModeDocument {
     func watchStateChange(_ element: AXUIElement, before: ControlState) {
         let watch = Self.beginWatch(element)
         let pressedAt = Date()
+        let keyAtPress = InputManager.lastKeyDownAt
+        let speechAtPress = Speech.lastSpoken
+        var stateChanged = false
+        var acknowledged = false
         let checkable = Self.isCheckable(element)
         let focusAtPress = API.focusObject?.element
         let urlAtPress = url   // another page since (a link followed, Back): nothing said about the one left
@@ -217,9 +221,20 @@ extension BrowseModeDocument {
                 guard ControlState.alive(element) else { self.finishWatch(watch, element, changed: true, movedOn: movedOn); return }   // gone: nothing said
                 let now = ControlState(element)
                 guard now != before else {
-                    if tries.count == 1 { self.finishWatch(watch, element, changed: false, movedOn: movedOn) } else { look(tries.dropFirst()) }
+                    if next == 1.0, !acknowledged, element.role == "AXButton" {
+                        // 15 Nov 2026 log review: Submit received a native key but no changed state or speech.
+                        // Acknowledge only that press, never submission, and never interrupt a later interaction.
+                        if !stateChanged, !movedOn, watch == Self.lastWatch,
+                           InputManager.lastKeyDownAt == keyAtPress, Speech.lastSpoken == speechAtPress {
+                            acknowledged = true
+                            Speech.speakMessage(String(localized: "pressed", comment: "Spoken acknowledgement that an activation was sent, not that a form was submitted"))
+                        }
+                    }
+                    if tries.count == 1 { self.finishWatch(watch, element, changed: false, movedOn: movedOn) }
+                    else { look(tries.dropFirst()) }
                     return
                 }
+                stateChanged = true
                 // The focus's own expansion and selection events say those for it; only a check state is said for
                 // the focus too (pages often change it with no event), de-duplicated with the event. A change that
                 // isn't said keeps the watch going, for one that is (a code review, 25 Oct 2026).

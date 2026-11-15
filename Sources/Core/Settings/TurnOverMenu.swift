@@ -143,7 +143,8 @@ public final class TurnOverMenu {
         guard let top = stack.last, top.items.indices.contains(top.index) else { return }
         let item = top.items[top.index]
         hintWork?.cancel()
-        if let hint = item.hint, !valueOnly {
+        // The menu's own hints follow "Hints after a pause" too (15 Nov 2026: they were still spoken with hints off).
+        if config.presentation.speakHints, let hint = item.hint, !valueOnly {
             let depth = stack.count, index = top.index
             let work = DispatchWorkItem { [weak self] in
                 guard let self, self.isOpen, self.stack.count == depth, self.stack.last?.index == index else { return }

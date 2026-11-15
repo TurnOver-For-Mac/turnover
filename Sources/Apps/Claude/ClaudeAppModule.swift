@@ -24,10 +24,13 @@ public enum ClaudeProgressReadiness {
 
 package final class ClaudeAppModule: AppModule {
     private var watching = false
+    private let sessionDeletion = ClaudeSessionDeletion()
+    private lazy var browserReturn = ClaudeBrowserReturn(pid: pid)
     private var readReplies: Bool { config.appSetting(ClaudeTranscript.bundleID, "readReplies", default: "on") == "on" }
 
     package required init(pid: pid_t, bundleIdentifier: String, appName: String) {
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
+        sessionDeletion.installScripts(on: self)
         WebBuffer.statusEchoApps.insert(ClaudeTranscript.bundleID)   // its tool rows' status repeats the row's button
         script("claude_switchConversation", String(localized: "Switches to a recent or new Claude conversation", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+1", "kb:command+2", "kb:command+3", "kb:command+4", "kb:command+5", "kb:command+6", "kb:command+7", "kb:command+8", "kb:command+9", "kb:command+n"], category: "Claude") { [weak self] gesture in
             self?.prepareConversationSwitch(gesture)
@@ -35,9 +38,12 @@ package final class ClaudeAppModule: AppModule {
         }
         for arrow in ["upArrow", "downArrow"] {
             script("claude_popup_" + arrow, String(localized: "Reads the selected Claude command", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:" + arrow], category: "Claude") { [weak self] key in
+                // The availability check is pure and cheap; a popup gone stale (slash erased, no news yet)
+                // is found and retired here, and the key still does what an arrow does in the Prompt.
+                let stale = self?.retireStalePromptPopup() ?? false
                 key.send()
-                self?.refreshPopup(after: 0.04)
-            }.isAvailable = { [weak self] in self?.popup != nil && API.focusObject?.axRole == "AXTextArea" }
+                if !stale { self?.refreshPopup(after: 0.04) }
+            }.isAvailable = { [weak self] in self?.hasPromptPopup == true }
         }
         script("claude_chooseMenuItem", String(localized: "Chooses a Claude menu item", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:enter", "kb:space"], category: "Claude") { [weak self] key in
             guard let self, let focus = API.focusObject else { return }
@@ -46,11 +52,15 @@ package final class ClaudeAppModule: AppModule {
         }.isAvailable = { [weak self] in self?.popup != nil && API.focusObject?.axRole == "AXMenuItem" }
         // 14 Nov 2026: focused session menu items exposed no AXPress/AXConfirm; VO-Space
         // only refocused them. Native Return opened the confirmation dialog in the same log.
-        script("vo_defaultAction", String(localized: "Activates Claude's focused menu item", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+space"], category: "Claude") { [weak self] _ in
-            guard let self, canActivateFocusedMenuItem else { return }
+        script("vo_defaultAction", String(localized: "Activates Claude's focused menu item", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+space"], category: "Claude") { [weak self] key in
+            guard let self else { return }
+            if sessionDeletion.activate(key, useReturn: true) { return }
+            guard canActivateFocusedMenuItem else { return }
             if let focus = API.focusObject { rememberChoice(focus) }
             KeyboardGesture(identifier: "kb:enter")?.send()
-        }.isAvailable = { [weak self] in self?.canActivateFocusedMenuItem == true }
+        }.isAvailable = { [weak self] in
+            self?.sessionDeletion.canActivate == true || self?.canActivateFocusedMenuItem == true
+        }
         script("claude_readLatest", String(localized: "Reads Claude's latest reply", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+shift+r"], category: "Claude") { [weak self] _ in
             guard let self, let chat = ClaudeTranscript.chat(pid: self.pid) else { Speech.speakMessage(String(localized: "no conversation", comment: "Spoken message")); return }
             let reply = ClaudeTranscript.latestReply(chat: chat)
@@ -58,8 +68,13 @@ package final class ClaudeAppModule: AppModule {
         }
     }
 
+    package override func script(for gesture: KeyboardGesture) -> Script? {
+        browserReturn.script(for: gesture, owner: self) ?? super.script(for: gesture)
+    }
+
     package override var handlesGroupMenus: Bool { true }
     private var popup: AXUIElement?
+    private var popupField: AXUIElement?
     private var popupGeneration = 0
     private var popupSpoken = ""
     private var pendingChoice: (String, Date)?
@@ -67,6 +82,7 @@ package final class ClaudeAppModule: AppModule {
     package struct PopupReading: Sendable {
         let selected: String
         let first: String
+        var closed = false
     }
 
     // The log proves AXGroup menu notifications, but does not record descendants. Accept only
@@ -77,8 +93,44 @@ package final class ClaudeAppModule: AppModule {
         pendingChoice = (focus.name, Date())
     }
 
+    private func clearPopup() {
+        popup = nil
+        popupField = nil
+        popupGeneration += 1
+        popupReader.cancel()
+    }
+
+    /// The availability check for the popup's arrows. Pure and cheap: no Accessibility read of the value, and no
+    /// change of state. Staleness (the slash erased) is retired by `retireStalePromptPopup`, from the events and
+    /// from the arrow script itself.
+    private var hasPromptPopup: Bool {
+        guard popup != nil,
+              let field = API.focusObject,
+              let origin = popupField,
+              field.axRole == "AXTextArea",
+              field.element.isSame(origin) else { return false }
+        return API.focusTreeInterceptor?.passThrough == true
+    }
+
+    /// Retires the popup if the Prompt no longer starts with a slash. Returns true if it did.
+    /// 15 Nov 2026, Claude/macOS 27.2: group menus posted no menuEnd after the slash was erased; their cached
+    /// reference still took arrows while ordinary text was read. Read the current value: the focus object's lazy
+    /// value predates these edits.
+    @discardableResult
+    private func retireStalePromptPopup() -> Bool {
+        guard popup != nil, let field = API.focusObject, let origin = popupField, field.element.isSame(origin) else { return false }
+        if field.name == "Prompt", (origin.string(kAXValueAttribute) ?? "").hasPrefix("/") { return false }
+        clearPopup()
+        return true
+    }
+
     nonisolated private static func readPopup(_ root: AXUIElement, field: AXUIElement?, request: AXWalkRequest) -> PopupReading {
         let deadline = Date().addingTimeInterval(0.15)
+        AXUIElementSetMessagingTimeout(root, 0.03)
+        let role = root.attributeResult(kAXRoleAttribute)
+        if role.error == .invalidUIElement || root.attr("AXHidden") as? Bool == true {
+            return PopupReading(selected: "", first: "", closed: true)
+        }
         var pending = [(root, 0)], seen = Set<ElementKey>()
         var first = "", selected = ""
         var selectedElements = Set<ElementKey>()
@@ -114,8 +166,9 @@ package final class ClaudeAppModule: AppModule {
         return PopupReading(selected: selected, first: first)
     }
 
-    private func refreshPopup(after delay: TimeInterval = 0, opening: Bool = false) {
+    private func refreshPopup(after delay: TimeInterval = 0) {
         guard let root = popup, API.focusObject?.axRole == "AXTextArea" else { return }
+        guard hasPromptPopup, !retireStalePromptPopup() else { return }
         popupGeneration += 1
         let generation = popupGeneration
         let field = API.focusObject?.axRole == "AXTextArea" ? API.focusObject?.element : nil
@@ -125,8 +178,9 @@ package final class ClaudeAppModule: AppModule {
             popupReader.submit(collect: { request in AXReadScope.with(while: { !request.isCancelled }) { Self.readPopup(root, field: field, request: request) } }, publish: { [weak self] reading in
                 guard let self, popupGeneration == generation, popup != nil,
                       API.focusTreeInterceptor?.webArea.pid == pid,
-                      API.focusObject?.axRole == "AXTextArea" else { return }
-                let label = reading.selected.isEmpty && (opening || popupSpoken.isEmpty) ? reading.first : reading.selected
+                      hasPromptPopup, !retireStalePromptPopup() else { return }
+                if reading.closed { clearPopup(); return }
+                let label = reading.selected.isEmpty ? reading.first : reading.selected
                 guard !label.isEmpty else {
                     Log.io("claude: group popup has no named semantic selection; awaiting focus or selection news")
                     return
@@ -186,6 +240,7 @@ package final class ClaudeAppModule: AppModule {
     /// Only the destination owns switch speech. An unchanged poll can release queued keys after the
     /// existing settle, but cannot establish that the shortcut chose the already-open conversation.
     package func prepareConversationSwitch(_ gesture: KeyboardGesture) {
+        sessionDeletion.cancel()
         guard let page = API.focusTreeInterceptor,
               page.webArea.pid == pid else { return }
         let previousTitle = conversationPage === page && page.navigationTitleOwned ? conversationStartingTitle : ""
@@ -512,19 +567,28 @@ package final class ClaudeAppModule: AppModule {
     package override var rolesPressedByKeyboard: Set<String> { ["AXButton", "AXMenuItem"] }
 
     package override func handleEvent(_ event: Event, next: () -> Void) {
+        browserReturn.handleEvent(event)
+        sessionDeletion.observe(event)
         if event.kind == .gainFocus,
            API.focusTreeInterceptor?.navigationWaiting == true { return }
+        // A menu may disappear without a close notification. A different field/page owns
+        // subsequent keys; a native menu item can still own its own focus and confirmation.
+        if event.kind == .gainFocus, popup != nil,
+           event.obj.axRole != "AXMenuItem",
+           popup?.isSame(event.obj.element) != true,
+           popupField?.isSame(event.obj.element) != true {
+            clearPopup()
+        }
         switch event.kind {
         case .menuStart where event.obj.axRole == "AXGroup":
             popup = event.obj.element
+            popupField = API.focusObject?.axRole == "AXTextArea" ? API.focusObject?.element : nil
             popupSpoken = ""
-            refreshPopup(opening: true)
+            refreshPopup()
             return
         case .menuEnd where event.obj.axRole == "AXGroup":
             if popup?.isSame(event.obj.element) == true {
-                popup = nil
-                popupGeneration += 1
-                popupReader.cancel()
+                clearPopup()
             }
             return
         case .gainFocus where pendingChoice != nil && event.obj.axRole == "AXTextArea":
@@ -537,10 +601,8 @@ package final class ClaudeAppModule: AppModule {
             refreshPopup()
             next()
         case .appModuleLoseFocus:
-            popup = nil
+            clearPopup()
             pendingChoice = nil
-            popupGeneration += 1
-            popupReader.cancel()
             next()
         case .gainFocus where event.obj.element.string(kAXRoleDescriptionAttribute) == "article":
             // A message: its text, with "You said" or "Claude responded" from its hidden heading.

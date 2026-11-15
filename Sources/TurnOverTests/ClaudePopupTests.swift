@@ -76,6 +76,76 @@ func claudePopupTests() {
         }
     }
 
+    test("Claude popup: missing close news cannot take arrows after slash removal or browse intent") {
+        withPopup { module, page, said, _ in
+            let root = ObjectFactory.make(AXReplay.element(3))
+            let down = KeyboardGesture(identifier: "kb:downArrow")!
+            module.handleEvent(Event(.menuStart, root)) {}
+            settle()
+            check(module.script(for: down) != nil, "an open slash popup owns focus-mode arrows")
+            page.passThrough = false
+            check(module.script(for: down) == nil, "browse arrows belong to the reading position")
+            page.passThrough = true
+            AXUIElementSetAttributeValue(AXReplay.element(2), kAXValueAttribute as CFString, "public text" as CFString)
+            module.handleEvent(Event(.valueChange, ObjectFactory.make(AXReplay.element(2)))) {}
+            check(module.script(for: down) == nil, "ordinary Prompt text retires the stale group without menuEnd")
+            AXUIElementSetAttributeValue(AXReplay.element(2), kAXValueAttribute as CFString, "/" as CFString)
+            check(module.script(for: down) == nil, "typing another slash requires fresh opening news")
+            settle()
+            expect(said.value, ["compact"], "retired refreshes cannot speak late")
+        }
+    }
+
+    test("Claude popup: the availability check changes no state; the arrow script retires a stale popup and still sends the key") {
+        withPopup { module, _, said, sent in
+            let down = KeyboardGesture(identifier: "kb:downArrow")!
+            module.handleEvent(Event(.menuStart, ObjectFactory.make(AXReplay.element(3)))) {}
+            settle()
+            AXUIElementSetAttributeValue(AXReplay.element(2), kAXValueAttribute as CFString, "plain" as CFString)
+            for _ in 0..<3 { check(module.script(for: down) != nil, "asking never retires the popup") }
+            AXUIElementSetAttributeValue(AXReplay.element(2), kAXValueAttribute as CFString, "/" as CFString)
+            let command = module.script(for: down)
+            check(command != nil, "the popup was untouched by the checks")
+            AXUIElementSetAttributeValue(AXReplay.element(2), kAXValueAttribute as CFString, "plain" as CFString)
+            said.value.removeAll()
+            command?.handler(down)
+            settle()
+            expect(sent.value, ["kb:downArrow"], "the arrow still reaches the Prompt once")
+            expect(said.value, [], "a stale popup says nothing")
+            check(module.script(for: down) == nil, "running the script found the popup stale and retired it")
+        }
+    }
+
+    test("Claude popup: focus leaving the field and a hidden root retire missing close news") {
+        withPopup { module, page, _, _ in
+            let down = KeyboardGesture(identifier: "kb:downArrow")!
+            module.handleEvent(Event(.menuStart, ObjectFactory.make(AXReplay.element(3)))) {}
+            let web = ObjectFactory.make(AXReplay.element(0))
+            API.setFocusObject(web, ancestors: [], interceptor: page)
+            module.handleEvent(Event(.gainFocus, web)) {}
+            API.setFocusObject(ObjectFactory.make(AXReplay.element(2)), ancestors: [], interceptor: page)
+            check(module.script(for: down) == nil, "returning to the Prompt cannot resurrect the old group")
+            AXUIElementSetAttributeValue(AXReplay.element(3), "AXHidden" as CFString, kCFBooleanTrue)
+            module.handleEvent(Event(.menuStart, ObjectFactory.make(AXReplay.element(3)))) {}
+            settle()
+            check(module.script(for: down) == nil, "a hidden root closes even without focus or menuEnd news")
+        }
+    }
+
+    test("Claude popup: narrowing without selection news reads the new first match once") {
+        withPopup { module, _, said, _ in
+            AXUIElementSetAttributeValue(AXReplay.element(4), kAXSelectedAttribute as CFString, kCFBooleanFalse)
+            module.handleEvent(Event(.menuStart, ObjectFactory.make(AXReplay.element(3)))) {}
+            settle()
+            AXUIElementSetAttributeValue(AXReplay.element(3), kAXChildrenAttribute as CFString, [AXReplay.element(5)] as CFArray)
+            module.handleEvent(Event(.valueChange, ObjectFactory.make(AXReplay.element(2)))) {}
+            settle()
+            module.handleEvent(Event(.caret, ObjectFactory.make(AXReplay.element(2)))) {}
+            settle()
+            expect(said.value, ["compact", "help"], "a changed first match is announced without repeating it")
+        }
+    }
+
     test("Claude popup: opening says the first option and native arrows say the highlighted option") {
         withPopup { module, page, said, sent in
             check(module.handlesGroupMenus, "Claude opts into group menu notifications")
