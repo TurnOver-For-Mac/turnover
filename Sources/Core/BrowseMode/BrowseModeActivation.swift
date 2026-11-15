@@ -407,6 +407,14 @@ extension BrowseModeDocument {
         return nil
     }
 
+    /// Whether the person moved on while the keyboard was being put on a control, so that it must not be pressed.
+    /// The focus ending up elsewhere counts only when a key arrived meanwhile (a Tab): with no key it is the page's own
+    /// answer to the request for the focus, which is no reason to leave the control the person asked for unpressed.
+    /// The reading position leaving the control always counts.
+    public static func movedOn(focusMovedElsewhere: Bool, keyArrived: Bool, positionLeftIt: Bool) -> Bool {
+        positionLeftIt || (focusMovedElsewhere && keyArrived)
+    }
+
     /// True means an activation started; completion reports whether it actually sent a key or pressed.
     /// Recovery supplies its absolute deadline, shared by focus confirmation and the final action.
     func press(nearestTo start: AXUIElement?, deadline: Date? = nil, valid: @escaping () -> Bool = { true },
@@ -442,6 +450,7 @@ extension BrowseModeDocument {
                     let activation = Self.beginWatch(x)   // an older watch of this control stops
                     let name = Log.words(x.string(kAXTitleAttribute) ?? x.string(kAXDescriptionAttribute) ?? "")
                     let asked = Date()
+                    let keysBefore = ScriptHandler.keysArrivedCount
                     let focusBefore = API.focusObject?.element
                     guard valid() else { return false }
                     Self.confirmFocus(x, deadline: deadline ?? Date().addingTimeInterval(0.2)) { [weak self] confirmed in
@@ -454,10 +463,17 @@ extension BrowseModeDocument {
                         let focusNow = API.focusObject?.element
                         let focusMovedElsewhere = focusNow.map { now in !now.isSame(x) && !(focusBefore.map { now.isSame($0) } ?? false) } ?? false
                         let onIt = self.buffer.segment(at: self.position)?.element.isSame(x) ?? false
-                        if focusMovedElsewhere || (self.positionMovedAt > asked && !onIt) {
+                        let keyArrived = ScriptHandler.keysArrivedCount != keysBefore
+                        if Self.movedOn(focusMovedElsewhere: focusMovedElsewhere, keyArrived: keyArrived, positionLeftIt: self.positionMovedAt > asked && !onIt) {
                             Log.io("browse mode: moved on before \(role) \"\(name)\" could be pressed; not pressed")
                             completion(false)
                             return
+                        }
+                        if focusMovedElsewhere {
+                            // No key came and the reading position stayed: the page moved the focus itself in answer to
+                            // the request (the Claude app puts it on the first rating button when a code block's Copy
+                            // or Run button cannot take it, 15 Nov 2026), so it is not the person moving on.
+                            Log.io("browse mode: the focus went elsewhere on its own after the request for \(role) \"\(name)\"; pressing it")
                         }
                         if confirmed {
                             switch key {

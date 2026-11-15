@@ -107,7 +107,7 @@ public final class VoiceOverKeysPlugin: GlobalPlugin {
         }
         add("quickNav", String(localized: "Browse mode on or off: single-letter navigation (VO-Q)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+q"]) { g in
             if API.focusTreeInterceptor != nil { run("toggleVirtualBufferPassThrough", g, otherwise: String(localized: "not in a document", comment: "Spoken message")) }
-            else { ArrowQuickNav.toggle() }   // outside a document VoiceOver's Quick Nav toggles all the same (the code review, 17 Oct 2026)
+            else { ArrowQuickNav.toggle("VO-Q outside a document") }   // outside a document VoiceOver's Quick Nav toggles all the same (the code review, 17 Oct 2026)
         }
         add("defaultAction", String(localized: "Activates the item under the VoiceOver cursor (VO-Space)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+space"]) { g in
             // 14 Nov 2026: this global binding wins before app scripts. Let an app's available

@@ -33,6 +33,15 @@ func silentAppTests() {
         body()
     }
 
+    test("silent app: a log line about a notification asks nothing of a background app") {
+        var asked = 0
+        let background = AXHandler.logDescription(pid: 70699, activePid: 4242) { asked += 1; return "AXRow \"x\"" }
+        check(asked == 0, "the app that is not in front is not asked for the log line")
+        check(background.contains("70699"), "the log line still names the app")
+        let front = AXHandler.logDescription(pid: 4242, activePid: 4242) { asked += 1; return "AXRow \"x\"" }
+        check(asked == 1 && front == "AXRow \"x\"", "the front app is described as before")
+    }
+
     test("silent app: no answer is told apart from no value") {
         check(AXHealth.isNoAnswer(.returned(.cannotComplete), elapsedNanoseconds: 2 * second), "a question that waited out the timeout")
         check(AXHealth.isNoAnswer(.deferred(AXBackoff(reason: .timeout, remainingNanoseconds: 1)), elapsedNanoseconds: 0), "a question not asked of a resting app")

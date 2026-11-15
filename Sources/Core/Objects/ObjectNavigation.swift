@@ -717,12 +717,21 @@ public final class ObjectNavigator {
                 Tones.edge()
                 Speech.speakMessage(forward ? String(localized: "no next \(kind)", comment: "Nothing more of a kind ahead: %@ is the kind (heading)") : String(localized: "no previous \(kind)", comment: "Nothing more of a kind behind: %@ is the kind (heading)"))
             case .unavailable:
-                Speech.speakMessage(String(localized: "nothing to search", comment: "Spoken message"))
+                Self.speakSearchNotice(.unavailable)
             case .incomplete(.cancelled): break
             case .incomplete(let reason):
                 Log.io("review: window \(kind) search incomplete (\(reason.rawValue))")
-                Speech.speakMessage(String(localized: "Search stopped before finishing. Try again.", comment: "Spoken message"))
+                Self.speakSearchNotice(.incomplete(reason))
             }
+        }
+    }
+
+    private static func speakSearchNotice(_ stop: WindowSearchStopKind) {
+        let inSwitcher = API.focusObject is AppSwitcherList || API.focusObject is AppSwitcherItem
+        switch WindowSearchNotice.notice(for: stop, focusInSwitcher: inSwitcher) {
+        case .switcherOpen: Speech.speakMessage(String(localized: "application switcher is open", comment: "Spoken message: a heading or link search was asked for while Command-Tab's list is showing"))
+        case .nothingToSearch: Speech.speakMessage(String(localized: "nothing to search", comment: "Spoken message"))
+        case .tryAgain: Speech.speakMessage(String(localized: "Search stopped before finishing. Try again.", comment: "Spoken message"))
         }
     }
 

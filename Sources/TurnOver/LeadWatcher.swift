@@ -308,6 +308,7 @@ final class LeadWatcher {
         // the person was stuck in Big Picture. With VoiceOver off for the game there is nothing to keep keys from.)
         KeyboardHandler.redirectPid = nil
         KeyboardHandler.frontPid = app.processIdentifier
+        KeyboardHandler.frontAppEpoch &+= 1   // a waiting first arrow of the Quick Nav chord is dropped (15 Nov 2026)
         // TurnOver's own windows (the update window, alerts) are VoiceOver's: TurnOver does not read itself. A menu-bar
         // app is not a regular one, so it is let through here by name; it went unread (5 Oct 2026, the update window).
         let own = app.bundleIdentifier == Bundle.main.bundleIdentifier
@@ -404,7 +405,7 @@ final class LeadWatcher {
             guard gameOff || bringBack else { Log.info("coexist: TurnOver \(voiceOverOn ? "steps back" : "takes the keys"); VoiceOver stays on"); return }
             Log.info("coexist: the game exception: VoiceOver \(voiceOverOn ? "back on" : "off for the game")")
         }
-        Log.info("hand-over: asked for VoiceOver \(voiceOverOn ? "on" : "off")")
+        Log.info("hand-over: asked for VoiceOver \(voiceOverOn ? "on" : "off") (app in front: \(NSWorkspace.shared.frontmostApplication?.localizedName ?? "none"), VoiceOver was \(NSWorkspace.shared.isVoiceOverEnabled ? "on" : "off"), after a hand \(yieldedToVoiceOverByHand), lock \(lockTurnedVoiceOverOn)")
         if Uninstaller.running && !voiceOverOn { completion?(false); return }   // uninstalling: VoiceOver stays on
         if !voiceOverOn { ScreenCurtain.noteVoiceOverCurtain() }   // before VoiceOver goes, and its curtain with it
         lastHandOverAt = Date()

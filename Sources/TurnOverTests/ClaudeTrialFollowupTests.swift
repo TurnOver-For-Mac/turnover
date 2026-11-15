@@ -179,6 +179,21 @@ func claudeTrialFollowupTests() {
                "an unavailable app action falls back to the ordinary button press")
     }
 
+    test("Claude trial: a focus the page moved by itself does not stop the button the person asked for") {
+        // 15 Nov 2026: VO-Space on a code block's Run and Copy buttons; the request for the focus made the Claude
+        // app put it on the first rating button, no key came, and the press was dropped as "moved on".
+        check(!BrowseModeDocument.movedOn(focusMovedElsewhere: true, keyArrived: false, positionLeftIt: false),
+              "focus moved with no key and the reading position unchanged: the press goes ahead")
+        check(BrowseModeDocument.movedOn(focusMovedElsewhere: true, keyArrived: true, positionLeftIt: false),
+              "a Tab arrived and the focus moved: moved on, nothing pressed")
+        check(BrowseModeDocument.movedOn(focusMovedElsewhere: false, keyArrived: true, positionLeftIt: true),
+              "the reading position left the control: nothing pressed")
+        check(BrowseModeDocument.movedOn(focusMovedElsewhere: true, keyArrived: false, positionLeftIt: true),
+              "the reading position left the control and the focus moved: nothing pressed")
+        check(!BrowseModeDocument.movedOn(focusMovedElsewhere: false, keyArrived: true, positionLeftIt: false),
+              "a key but the focus is where it was: the press goes ahead as before")
+    }
+
     test("Claude trial: browse VO-Space routes a session menu item through confirmed native Return") {
         let savedFocus = API.focusObject, savedAncestors = API.focusAncestors, savedPage = API.focusTreeInterceptor
         let savedPoster = KeyboardGesture.poster

@@ -576,7 +576,7 @@ extension VoiceOverKeysPlugin {
         add("nextOwnWindowSpot", String(localized: "Your next window spot (VO-Command-Right Bracket)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+command+]"]) { _ in Self.cycleOwnSpot(forward: true) }
         add("previousOwnWindowSpot", String(localized: "Your previous window spot (VO-Command-Left Bracket)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+command+["]) { _ in Self.cycleOwnSpot(forward: false) }
         add("arrowQuickNav", String(localized: "Arrow-key Quick Nav on or off: Left and Right move the VoiceOver cursor, Up and Down the item above and below (VO-Shift-Q; Left and Right Arrow together)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+shift+q"]) { _ in
-            ArrowQuickNav.toggle()
+            ArrowQuickNav.toggle("vo_arrowQuickNav script")
         }
         // The arrows alone, while Quick Nav is on: the keyboard handler holds each one until it is let go (or a second
         // arrow joins it, a chord) and hands it here, ArrowQuickNav.single. These scripts answer the same keys when
@@ -631,7 +631,7 @@ public enum ArrowQuickNav {
         if let vo = VoiceOverSettings.arrowQuickNav() {
             voiceOverOn = vo
             Log.info("Quick Nav: VoiceOver's is \(vo ? "on" : "off"); TurnOver's the same")
-            if vo != on { set(vo, sound: false) }
+            if vo != on { set(vo, sound: false, reason: "start, in step with VoiceOver") }
         } else {
             voiceOverOn = nil
             Log.info("Quick Nav: VoiceOver's setting can't be read; the arrows TurnOver passes go to the app alone")
@@ -644,11 +644,11 @@ public enum ArrowQuickNav {
         let vo = !(voiceOverOn ?? on)
         voiceOverOn = vo
         Log.io("Quick Nav: VoiceOver's \(vo ? "on" : "off") in its app; TurnOver's the same")
-        if vo != on { set(vo, sound: false) }
+        if vo != on { set(vo, sound: false, reason: "VoiceOver's own chord seen") }
     }
 
-    static func toggle() {
-        set(!on, sound: true)
+    static func toggle(_ reason: String = "key") {
+        set(!on, sound: true, reason: reason)
         // In a document the chord is also the way between browse mode and focus mode (VoiceOver has no focus mode:
         // Quick Nav off is when the arrows go to the page). Quick Nav off: focus mode, kept until the focus leaves, as
         // NVDA's by-hand switch is; on: browse mode. The VoiceOver keys had no deliberate way into focus mode, since
@@ -661,15 +661,19 @@ public enum ArrowQuickNav {
         // come back into step. (Tried on 17 Oct 2026 and undone, because VoiceOver's Quick Nav then took the arrows
         // TurnOver passed to its apps; those now go to the app alone, so it can be on.)
         guard Coexist.on, !NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.VoiceOver").isEmpty,
-              voiceOverOn != on else { return }
+              voiceOverOn != on else {
+            Log.io("Quick Nav: toggled to \(on ? "on" : "off"); no chord posted to VoiceOver (coexist \(Coexist.on), VoiceOver running \(!NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.VoiceOver").isEmpty), its Quick Nav believed \(voiceOverOn.map { $0 ? "on" : "off" } ?? "unknown"))")
+            return
+        }
         voiceOverOn = on
         Log.io("Quick Nav: VoiceOver's turned \(on ? "on" : "off") with TurnOver's")
         let post = KeyboardGesture.chordPoster
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.15) { post?([123, 124]) }
     }
 
-    private static func set(_ value: Bool, sound: Bool) {
+    private static func set(_ value: Bool, sound: Bool, reason: String = "following VoiceOver") {
         on = value
+        Log.io("Quick Nav: TurnOver's \(value ? "on" : "off") (sound: \(sound); \(reason); app in front: \(NSWorkspace.shared.frontmostApplication?.localizedName ?? "none"))")
         timer?.invalidate(); timer = nil
         if on {
             // Kept current four times a second while on, for the keyboard thread (focus and browse mode change often).
@@ -686,7 +690,7 @@ public enum ArrowQuickNav {
         // Quick Nav on but not applying here (a text field): the chord still toggles, as VoiceOver's does; it was
         // ignored, and the chord did nothing in Claude's prompt (17 Oct 2026).
         guard config.general.macKeys else { return }
-        toggle()
+        toggle("Left and Right chord")
     }
 
     /// One arrow, let go without another joining it. Not Quick Nav's here after all: the key goes to the app.

@@ -30220,6 +30220,23 @@
         }
       }
     },
+    "application switcher is open" : {
+      "comment" : "Spoken message: a heading or link search was asked for while Command-Tab's list is showing",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "uygulama değiştirici açık"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "переключатель приложений открыт"
+          }
+        }
+      }
+    },
     "article" : {
       "comment" : "A web page's article",
       "localizations" : {
