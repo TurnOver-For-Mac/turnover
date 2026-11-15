@@ -76,8 +76,17 @@ private func makeZip(_ entries: [(String, String)], links: [String] = [], at url
     let code = "import sys, json, zipfile\nspec = json.loads(sys.argv[1])\nz = zipfile.ZipFile(spec['path'], 'w')\nfor e in spec['entries']:\n    zi = zipfile.ZipInfo(e['name'])\n    if e['link']:\n        zi.external_attr = 0o120777 << 16\n    z.writestr(zi, e['data'])\nz.close()\n"
     let p = Process()
     p.executableURL = URL(fileURLWithPath: "/usr/bin/python3"); p.arguments = ["-I", "-c", code, json]
-    p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
-    try? p.run(); p.waitUntilExit()
+    // The environment the tool's own Python runs in: the test runner's DYLD_INSERT_LIBRARIES (its replay shim) must not reach it.
+    p.environment = ["PATH": "/usr/bin:/bin", "LANG": "en_US.UTF-8"]
+    let err = Pipe()
+    p.standardOutput = FileHandle.nullDevice; p.standardError = err
+    do { try p.run() } catch { Harness.fail("makeZip: python3 could not start: \(error)"); return }
+    let stderr = String(decoding: err.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+    p.waitUntilExit()
+    let size = ((try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.intValue ?? 0
+    if p.terminationStatus != 0 || size == 0 {
+        Harness.fail("makeZip: no zip was made at \(url.path) (exit status \(p.terminationStatus), \(size) bytes). python3 said: \(stderr)")
+    }
 }
 
 nonisolated private func storeList(id: String, name: String = "Hello Add-on", sha: String, channel: String = "stable", description: String = "Says hello", url: String = "https://example.test/hello.nvda-addon") -> String {
