@@ -79,3 +79,27 @@ A plugin's author is responsible for it, and TurnOver makes that visible.
   TurnOver's or a plugin's.
 - The library can mark a plugin as unmaintained and let someone else take it over.
 - CONTRIBUTING.md says what belongs in the core and what is a plugin.
+
+## Review by risk, not review of everything (decided 16 Nov 2026)
+
+This replaces the rule in docs/PLUGIN-SCRIPTS-PLAN.md that every version of every script is read by a person
+before the library carries it. That does not scale to hundreds of plugins, and the abilities already do most of
+its work: a plugin can only do what it was granted, and the person was told what that is.
+
+Three levels, worked out from the abilities alone, so a tool can decide which applies:
+1. Low: reads and speaks in named apps. No reviewer. The automatic checks run, the library lists it, and the
+   person's own approval is the safeguard.
+2. Higher: acts in an app (`press`, `focus`, `edit`, `menu`, `keys`), or works `everywhere`. One review of the
+   first version and of the author, by a person who is not the author. Later versions that ask for nothing new,
+   signed by the same key, need none.
+3. Highest: can both read private things and send them out (`hearSpeech` or `clipboardRead` or `read` together
+   with the internet or files, when those exist). A person who is not the author reads every version.
+
+Updates. One that asks for nothing new and is signed by the same key goes through, and the person is not asked
+again. One that asks for more is put to the person, who hears what is new; it needs a reviewer only if it moves up
+a level. A changed key is said and asked about.
+
+What stands in for review everywhere else: the automatic checks on every submission; the report item on every
+plugin; withdrawal, which turns a plugin off on every Mac; and the author's name and key on everything.
+
+The list records, for each plugin, its level, and for levels 2 and 3 the reviewer and the fingerprint reviewed.

@@ -120,3 +120,8 @@ Ask of any piece of work: does TurnOver work properly without it? Could a user r
 different one? If yes to both, it is a plugin. A request to work on an app that is not one everybody has (the
 "Work on an app" issues) is best answered with a plugin. A plugin that many people come to rely on can be adopted
 as an official plugin, and one that everyone needs can be taken into the core.
+
+A third kind of thing is a companion program: a separate program, in its own project, that talks to TurnOver
+through its speech port (a bridge for games under Wine is one). Anything that must install files elsewhere, run
+as its own program or stand in for another system's parts is a companion program, never a plugin, because a
+plugin may not start programs or touch files.
