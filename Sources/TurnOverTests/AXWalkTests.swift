@@ -311,4 +311,11 @@ func axWalkTests() {
             else { check(false, "\(error) cannot silently switch the search target to focus") }
         }
     }
+    test("AX window search: an immediate failure while the application switcher is up says so, not try again") {
+        expect(WindowSearchNotice.notice(for: .incomplete(.providerFailure), focusInSwitcher: true), .switcherOpen)
+        expect(WindowSearchNotice.notice(for: .unavailable, focusInSwitcher: true), .switcherOpen)
+        expect(WindowSearchNotice.notice(for: .incomplete(.providerFailure), focusInSwitcher: false), .tryAgain, "elsewhere unchanged")
+        expect(WindowSearchNotice.notice(for: .incomplete(.deadline), focusInSwitcher: true), .tryAgain, "a real time-out unchanged")
+        expect(WindowSearchNotice.notice(for: .unavailable, focusInSwitcher: false), .nothingToSearch, "unchanged")
+    }
 }

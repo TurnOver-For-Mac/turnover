@@ -30,6 +30,24 @@ nonisolated package enum WindowSearchPreflight {
     }
 }
 
+/// What to say when a window search ends without an answer. While the Cmd-Tab switcher is up, the focus is the
+/// Dock's list, which has no window to search; every press fails at once, so "try again" cannot help (15 Nov 2026).
+nonisolated package enum WindowSearchNotice: Equatable, Sendable {
+    case switcherOpen, nothingToSearch, tryAgain
+
+    package static func notice(for result: WindowSearchStopKind, focusInSwitcher: Bool) -> WindowSearchNotice {
+        switch result {
+        case .unavailable: return focusInSwitcher ? .switcherOpen : .nothingToSearch
+        case .incomplete(let reason): return focusInSwitcher && reason == .providerFailure ? .switcherOpen : .tryAgain
+        }
+    }
+}
+
+nonisolated package enum WindowSearchStopKind: Sendable {
+    case unavailable
+    case incomplete(AXWalkStop)
+}
+
 nonisolated package enum WindowKindSearchResult<Node: Sendable>: Sendable {
     case found(Node)
     case end
