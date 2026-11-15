@@ -38,8 +38,11 @@ package final class ClaudeAppModule: AppModule {
         }
         for arrow in ["upArrow", "downArrow"] {
             script("claude_popup_" + arrow, String(localized: "Reads the selected Claude command", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:" + arrow], category: "Claude") { [weak self] key in
+                // The availability check is pure and cheap; a popup gone stale (slash erased, no news yet)
+                // is found and retired here, and the key still does what an arrow does in the Prompt.
+                let stale = self?.retireStalePromptPopup() ?? false
                 key.send()
-                self?.refreshPopup(after: 0.04)
+                if !stale { self?.refreshPopup(after: 0.04) }
             }.isAvailable = { [weak self] in self?.hasPromptPopup == true }
         }
         script("claude_chooseMenuItem", String(localized: "Chooses a Claude menu item", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:enter", "kb:space"], category: "Claude") { [weak self] key in
@@ -97,20 +100,28 @@ package final class ClaudeAppModule: AppModule {
         popupReader.cancel()
     }
 
+    /// The availability check for the popup's arrows. Pure and cheap: no Accessibility read of the value, and no
+    /// change of state. Staleness (the slash erased) is retired by `retireStalePromptPopup`, from the events and
+    /// from the arrow script itself.
     private var hasPromptPopup: Bool {
         guard popup != nil,
               let field = API.focusObject,
               let origin = popupField,
               field.axRole == "AXTextArea",
               field.element.isSame(origin) else { return false }
-        // 15 Nov 2026, Claude/macOS 27.2: group menus posted no menuEnd after the slash
-        // was erased; their cached reference still took arrows while ordinary text was read.
-        // Read the current value: the focus object's lazy value predates these edits.
-        guard field.name == "Prompt", (field.element.string(kAXValueAttribute) ?? "").hasPrefix("/") else {
-            clearPopup()
-            return false
-        }
         return API.focusTreeInterceptor?.passThrough == true
+    }
+
+    /// Retires the popup if the Prompt no longer starts with a slash. Returns true if it did.
+    /// 15 Nov 2026, Claude/macOS 27.2: group menus posted no menuEnd after the slash was erased; their cached
+    /// reference still took arrows while ordinary text was read. Read the current value: the focus object's lazy
+    /// value predates these edits.
+    @discardableResult
+    private func retireStalePromptPopup() -> Bool {
+        guard popup != nil, let field = API.focusObject, let origin = popupField, field.element.isSame(origin) else { return false }
+        if field.name == "Prompt", (origin.string(kAXValueAttribute) ?? "").hasPrefix("/") { return false }
+        clearPopup()
+        return true
     }
 
     nonisolated private static func readPopup(_ root: AXUIElement, field: AXUIElement?, request: AXWalkRequest) -> PopupReading {
@@ -157,7 +168,7 @@ package final class ClaudeAppModule: AppModule {
 
     private func refreshPopup(after delay: TimeInterval = 0) {
         guard let root = popup, API.focusObject?.axRole == "AXTextArea" else { return }
-        guard hasPromptPopup else { return }
+        guard hasPromptPopup, !retireStalePromptPopup() else { return }
         popupGeneration += 1
         let generation = popupGeneration
         let field = API.focusObject?.axRole == "AXTextArea" ? API.focusObject?.element : nil
@@ -167,7 +178,7 @@ package final class ClaudeAppModule: AppModule {
             popupReader.submit(collect: { request in AXReadScope.with(while: { !request.isCancelled }) { Self.readPopup(root, field: field, request: request) } }, publish: { [weak self] reading in
                 guard let self, popupGeneration == generation, popup != nil,
                       API.focusTreeInterceptor?.webArea.pid == pid,
-                      hasPromptPopup else { return }
+                      hasPromptPopup, !retireStalePromptPopup() else { return }
                 if reading.closed { clearPopup(); return }
                 let label = reading.selected.isEmpty ? reading.first : reading.selected
                 guard !label.isEmpty else {

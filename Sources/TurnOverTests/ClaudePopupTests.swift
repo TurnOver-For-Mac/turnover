@@ -96,6 +96,26 @@ func claudePopupTests() {
         }
     }
 
+    test("Claude popup: the availability check changes no state; the arrow script retires a stale popup and still sends the key") {
+        withPopup { module, _, said, sent in
+            let down = KeyboardGesture(identifier: "kb:downArrow")!
+            module.handleEvent(Event(.menuStart, ObjectFactory.make(AXReplay.element(3)))) {}
+            settle()
+            AXUIElementSetAttributeValue(AXReplay.element(2), kAXValueAttribute as CFString, "plain" as CFString)
+            for _ in 0..<3 { check(module.script(for: down) != nil, "asking never retires the popup") }
+            AXUIElementSetAttributeValue(AXReplay.element(2), kAXValueAttribute as CFString, "/" as CFString)
+            let command = module.script(for: down)
+            check(command != nil, "the popup was untouched by the checks")
+            AXUIElementSetAttributeValue(AXReplay.element(2), kAXValueAttribute as CFString, "plain" as CFString)
+            said.value.removeAll()
+            command?.handler(down)
+            settle()
+            expect(sent.value, ["kb:downArrow"], "the arrow still reaches the Prompt once")
+            expect(said.value, [], "a stale popup says nothing")
+            check(module.script(for: down) == nil, "running the script found the popup stale and retired it")
+        }
+    }
+
     test("Claude popup: focus leaving the field and a hidden root retire missing close news") {
         withPopup { module, page, _, _ in
             let down = KeyboardGesture(identifier: "kb:downArrow")!
