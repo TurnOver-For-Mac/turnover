@@ -376,7 +376,9 @@ func scriptHostTests() {
         _ = rig.ask()
         check(waitFor(6) { !broker.said.isEmpty }, "the script saw every answer")
         check(broker.said.first?.contains("refused") ?? false, "later requests were refused: \(broker.said)")
-        check(broker.said.first?.hasPrefix("ok,ok") ?? false, "the first requests, within the budget, were let through: \(broker.said)")
+        // 15 Nov 2026: only the first is certain. On a busy Mac the first answer can take the whole
+        // budget by itself, so the second is refused; "ok,ok" failed a full build that way.
+        check(broker.said.first?.hasPrefix("ok") ?? false, "the first request, within the budget, was let through: \(broker.said)")
     }
 
     test("script host: a timer fires, does not fire while paused, and fires after resume") {
