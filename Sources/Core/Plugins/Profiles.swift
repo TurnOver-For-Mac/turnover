@@ -86,10 +86,15 @@ nonisolated public struct PluginConversionRecord: Codable, Equatable {
     /// a person chose for the Mac, written here as well as in `apps`).
     public var abilities: [String]?
     public var apps: [String]?
+    /// "not reviewed" from the converter on: a draft nobody has read against the original. A person changes it to
+    /// "reviewed" once they have read main.js against the original. Credit and honesty only: it never widens what the
+    /// plugin may do, and it never counts as approval (approval is the person's, in TurnOver).
+    public var translation: String?
+    public static let notReviewed = "not reviewed"
     public init(id: String, version: String, sha256: String? = nil, sourceURL: String? = nil, author: String? = nil, convertedBy: String? = nil,
-                abilities: [String]? = nil, apps: [String]? = nil) {
+                abilities: [String]? = nil, apps: [String]? = nil, translation: String? = nil) {
         self.id = id; self.version = version; self.sha256 = sha256; self.sourceURL = sourceURL; self.author = author
-        self.convertedBy = convertedBy; self.abilities = abilities; self.apps = apps
+        self.convertedBy = convertedBy; self.abilities = abilities; self.apps = apps; self.translation = translation
     }
 }
 
@@ -281,8 +286,10 @@ nonisolated public enum ElementMatcher {
     }
 
     /// "AXRadioButton", "RadioButton", "radio button" and "radioButton" all mean the same role.
-    static func roleMatches(_ wanted: String, _ axRole: String) -> Bool {
+    public static func roleMatches(_ wanted: String, _ axRole: String) -> Bool {
         if wanted.hasPrefix("AX") { return glob(wanted, axRole) }
+        // Authors guess "text" for a piece of text; AXText is not a role, so the word means what the item's role says, staticText.
+        if wanted.lowercased() == "text" { return axRole == "AXStaticText" }
         let words = wanted.split(separator: " ").map { $0.prefix(1).uppercased() + $0.dropFirst() }
         return glob("AX" + words.joined(), axRole)
     }

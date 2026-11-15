@@ -47,6 +47,16 @@ are in the study of twelve add-ons made the same day (kept outside the repositor
    the record does not have, so a later hand or AI edit that reaches further is seen. The draft then meets
    TurnOver's own approval like any other plugin.
 8. An add-on that cannot come across at all still gets its report, and no plugin.
+9. The AI translation step (built 16 Nov 2026): TurnOver never calls an AI service itself. When it writes a folder,
+   `convert` also writes the original as untrusted plain text in `original/` and a brief for finishing the
+   translation (`BRIEF.md`, the pointer files, the guides), in the same shape as the plugin maker's briefs, and
+   `--with claude|chatgpt|gemini|myself` hands the folder over as "Make a plugin" does. The draft is marked
+   "converted, translation not reviewed" (`convertedFrom.translation`) until a person has read it against the
+   original; `check --listing` refuses it until then. No refusal or approval step was changed. Status: built.
+10. The store and converter in the Plugins menu (built 16 Nov 2026): Plugins, NVDA add-ons. The first use asks once whether
+   TurnOver may ask NVDA's store (Not now first; the yes is a setting, off by default, and a toggle). The menu runs the
+   bundled `turnover-plugin` as a separate program with a time limit; the screen reader does no networking or parsing.
+   Status: built; see FROM-JAWS-AND-NVDA.md.
 
 ## Stage B: what scripts must gain (each a named ability with its own approval sentence)
 

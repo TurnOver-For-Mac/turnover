@@ -32,6 +32,9 @@ nonisolated public enum PluginConversion {
         if (record.convertedBy ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             f.warnings.append("a converted plugin must say who converted it before it can be shared: add convertedBy to convertedFrom (turnover-plugin convert --converted-by \"Name\" does it)")
         }
+        if (record.translation ?? "").lowercased() == PluginConversionRecord.notReviewed {
+            f.warnings.append("converted, translation not reviewed: a person has not yet read main.js against the original add-on. When they have, they change translation to \"reviewed\" in convertedFrom. This is not approval: approving the script is the person's, in TurnOver")
+        }
         return f
     }
 
@@ -42,7 +45,7 @@ nonisolated public enum PluginConversion {
         var lines = ["Converted from an NVDA add-on:"]
         for p in f.problems { lines.append("  PROBLEM: " + p) }
         for w in f.warnings { lines.append((listing ? "  PROBLEM: " : "  WARNING: ") + w) }
-        if f.problems.isEmpty && f.warnings.isEmpty { lines.append("  the abilities and apps match the record of the conversion, and both names are given") }
+        if f.problems.isEmpty && f.warnings.isEmpty { lines.append("  the abilities and apps match the record of the conversion, both names are given, and the translation has been reviewed") }
         return (lines, f.problems.count + (listing ? f.warnings.count : 0))
     }
 }

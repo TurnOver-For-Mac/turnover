@@ -4,13 +4,15 @@
   "name": "reads the result",
   "steps": [
     // "say" is what the focus event's answer was: words, "" for silence, null for TurnOver's own reading.
-    { "event": "focus", "item": { "role": "button", "name": "", "identifier": "clear" },
-      "expect": { "say": "Clear, button" } },
+    { "event": "focus", "item": { "role": "button", "name": "Divide", "identifier": "Divide" },
+      "expect": { "say": "Divided by, button" } },
+    { "event": "focus", "item": { "role": "button", "name": "Multiply", "identifier": "Multiply" },
+      "expect": { "say": "Times, button" } },
     { "event": "focus", "item": { "role": "button", "name": "Seven", "identifier": "seven" },
       "expect": { "say": null } },
     // "answers" gives the reply to each request the script makes in this step; "said" is what turnover.say spoke.
     { "command": "readResult",
-      "answers": { "find": [ { "role": "text", "value": "42", "description": "Edit field" } ] },
+      "answers": { "find": [ { "role": "staticText", "value": "42", "description": "Edit field" } ] },
       "expect": { "said": ["42"] } },
     { "command": "readResult",
       "answers": { "find": [] },

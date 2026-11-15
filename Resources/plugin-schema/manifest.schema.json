@@ -159,6 +159,14 @@
           "items": {
             "type": "string"
           }
+        },
+        "translation": {
+          "type": "string",
+          "description": "\"not reviewed\" from the converter on: nobody has read main.js against the original add-on. A person changes it to \"reviewed\" after doing that. It is not approval, and an AI must never change it.",
+          "enum": [
+            "not reviewed",
+            "reviewed"
+          ]
         }
       }
     },

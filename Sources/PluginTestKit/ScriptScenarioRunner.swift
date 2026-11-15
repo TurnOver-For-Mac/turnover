@@ -10,7 +10,7 @@
 //       { "event": "focus", "item": { "role": "button", "name": "", "identifier": "clear" },
 //         "expect": { "say": "Clear, button" } },
 //       { "command": "readResult",
-//         "answers": { "find": [ { "role": "text", "value": "42", "description": "Edit field" } ] },
+//         "answers": { "find": [ { "role": "staticText", "value": "42", "description": "Edit field" } ] },
 //         "expect": { "said": ["42"] } } ] }
 //
 // A scenario starts the script fresh (a new host program) and runs its steps in order; the script's own memory and

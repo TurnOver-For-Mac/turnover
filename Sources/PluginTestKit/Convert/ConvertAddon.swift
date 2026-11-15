@@ -22,6 +22,8 @@ nonisolated public struct ConvertResult {
     public var abilities: [String] = []
     public var verdict: StoreVerdict = .needsWork
     public var verdictReason: String?
+    /// What the translation brief says about the add-on (written beside the draft by `convert`, never with --report-only).
+    public var briefInfo: ConvertBrief.Info?
 }
 
 nonisolated public enum AddonConverter {

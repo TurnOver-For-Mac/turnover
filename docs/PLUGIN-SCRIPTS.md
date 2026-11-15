@@ -42,7 +42,7 @@ replaces the rules; it sits beside them.
 ## A first script
 
 This is the sample plugin, `plugins/examples/sample-script-calculator`. It does two things in Calculator: a command
-that reads the result, and a name for the Clear button when it takes the focus.
+that reads the result, and plainer words for the Divide and Multiply buttons when one takes the focus.
 
 ### 1. Start the folder
 
@@ -63,19 +63,19 @@ makes a plugin of rules only. You can also make the files by hand, as below.
   "name": "Calculator, scripted",
   "version": "1.0",
   "author": "TurnOver",
-  "description": "Says what the Calculator's Clear button is, and reads the result aloud on a key.",
+  "description": "Says Calculator's Divide and Multiply buttons as Divided by and Times, and reads the result aloud on a key.",
   "apps": ["com.apple.calculator"],
   "abilities": ["read", "say"],
   "script": "main.js",
   "commands": [
     { "id": "readResult", "description": "Read the result", "key": "turnover+command+shift+a", "letter": "o" }
   ],
-  "summary": "Reads Calculator's result on a key, and names its Clear button.",
+  "summary": "Reads Calculator's result on a key, and says its Divide and Multiply buttons plainly.",
   "contact": "https://github.com/TurnOver-For-Mac/turnover/issues",
   "privacy": "Reads Calculator's window only; nothing leaves your Mac.",
   "license": "MIT",
   "changes": [
-    { "version": "1.0", "notes": "First version: the readResult command and a name for the Clear button." }
+    { "version": "1.0", "notes": "First version: the readResult command and plainer words for the Divide and Multiply buttons." }
   ]
 }
 ```
@@ -108,7 +108,7 @@ What matters here:
 - `description` is the sentence the user hears at approval, marked as your words.
 - The last five fields (`summary`, `contact`, `privacy`, `license`, `changes`) are the listing. A plugin that stays
   on your own Mac does not need them; `turnover-plugin check <folder> --listing` asks for them.
-- `profile.json` is optional for a plugin with a script. The sample has one, with a label for the equals button.
+- `profile.json` is optional for a plugin with a script. The sample has none: Calculator names its own buttons now, so its script does the work.
 
 ### 3. Write main.js
 
@@ -124,8 +124,10 @@ What matters here:
 // nothing, and doing neither leaves TurnOver to read the item as usual. (Both need the "say" ability.)
 turnover.on("focus", function (event) {
   const item = event.item;
-  if (item.role === "button" && item.name === "" && item.identifier === "clear") {
-    event.say("Clear, button");
+  if (item.role === "button" && item.identifier === "Divide") {
+    event.say("Divided by, button");
+  } else if (item.role === "button" && item.identifier === "Multiply") {
+    event.say("Times, button");
   }
 });
 
@@ -134,7 +136,7 @@ turnover.on("focus", function (event) {
 turnover.command("readResult", async function (context) {
   // turnover.find takes the same match object as profile.json's rules, and answers with a list of items, empty if
   // nothing matched. Each item is a copy of what was true a moment ago.
-  const found = await turnover.find({ role: "text", inside: { identifier: "StandardInputView*" } }, { limit: 1 });
+  const found = await turnover.find({ role: "staticText", inside: { identifier: "StandardInputView*" } }, { limit: 1 });
   if (found.length === 0) {
     turnover.say("There is no result to read");
     return;
@@ -188,6 +190,13 @@ and exits with a non-zero status when something needs fixing.
 - `turnover-plugin test <plugin folder>`: runs the plugin's tests. For a script that is every file in `tests/script/`,
   run in the real sandboxed program with no app and no permissions. It prints `ok` or `FAIL` for each test and a
   count, and exits non-zero if any failed.
+- `turnover-plugin convert <add-on id | file | folder> --out <folder> [--converted-by "Name"] [--with claude|chatgpt|gemini|myself]`:
+  makes a draft plugin from an NVDA add-on, with a report, the original kept as plain text in `original/`, and a brief
+  (`BRIEF.md`, the pointer files for the three AI tools, the two guides) for finishing the translation. TurnOver never
+  calls an AI service itself: you give the folder to your own AI tool, or finish it yourself. `--with` does that hand
+  over the way "Make a plugin" does. Nothing is installed or approved, and the draft says "converted, translation not
+  reviewed" until a person who has read it against the original changes `convertedFrom.translation` to `reviewed`. See
+  FROM-JAWS-AND-NVDA.md.
 - `turnover-plugin keygen [--force]`: makes your signing key. It is never replaced unless you give `--force`.
 - `turnover-plugin sign <plugin folder>`: writes `signature.json` over the plugin's hash, with your key.
 - `turnover-plugin verify <plugin folder>`: prints the plugin's hash and the signing key's fingerprint, and whether the
@@ -277,7 +286,9 @@ if (item) turnover.say(item.name);
 Ability: `read`. Finds items in the plugin's app: the one in front, or else a running one of its apps. `match` is the
 same match object `profile.json` uses (see "Matching elements" in PLUGIN-GUIDE.md): `role`, `roles`, `subrole`,
 `identifier`, `title`, `description`, `help`, `value`, `text`, `window`, `inside`, `parent`, `unnamed`, `pressable`,
-`nth` and `any`. Leave it out to match anything. `limit` is the most to return, and TurnOver never gives more than
+`nth` and `any`. A match's `role` is the same word an item's `role` gives (`button`, `staticText`, `textField`), so
+read it off the item: Calculator's display is `staticText`, and the plain word `text` is taken to mean `staticText` too.
+Leave it out to match anything. `limit` is the most to return, and TurnOver never gives more than
 50. A search may take 150 ms, so a slow app costs the script its turn. The result is a list of items, empty when
 nothing matched. A match TurnOver cannot read rejects.
 
@@ -583,7 +594,7 @@ What the person hears, in order, for the sample plugin (the sentences are TurnOv
 description):
 1. "Calculator, scripted has a script. It works only in Calculator, and does nothing while you are in another app."
    (With several apps: "It works only in these apps: A and B, and does nothing while you are in another app.")
-2. "The author's own words about it: Says what the Calculator's Clear button is, and reads the result aloud on a key."
+2. "The author's own words about it: Says Calculator's Divide and Multiply buttons as Divided by and Times, and reads the result aloud on a key."
    (With no description: "The author gave no description of what it is for.")
 3. One sentence for each ability, as under "Abilities". With none: "It asks to do nothing in those apps. It can only
    think and keep its own notes."
@@ -708,13 +719,15 @@ This is the sample plugin's own test, `tests/script/read-result.json`, in full:
   "name": "reads the result",
   "steps": [
     // "say" is what the focus event's answer was: words, "" for silence, null for TurnOver's own reading.
-    { "event": "focus", "item": { "role": "button", "name": "", "identifier": "clear" },
-      "expect": { "say": "Clear, button" } },
+    { "event": "focus", "item": { "role": "button", "name": "Divide", "identifier": "Divide" },
+      "expect": { "say": "Divided by, button" } },
+    { "event": "focus", "item": { "role": "button", "name": "Multiply", "identifier": "Multiply" },
+      "expect": { "say": "Times, button" } },
     { "event": "focus", "item": { "role": "button", "name": "Seven", "identifier": "seven" },
       "expect": { "say": null } },
     // "answers" gives the reply to each request the script makes in this step; "said" is what turnover.say spoke.
     { "command": "readResult",
-      "answers": { "find": [ { "role": "text", "value": "42", "description": "Edit field" } ] },
+      "answers": { "find": [ { "role": "staticText", "value": "42", "description": "Edit field" } ] },
       "expect": { "said": ["42"] } },
     { "command": "readResult",
       "answers": { "find": [] },

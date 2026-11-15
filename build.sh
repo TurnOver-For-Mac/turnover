@@ -201,6 +201,8 @@ cp "Resources/TurnOver Guide.txt" "$APP/Contents/Resources/TurnOver Guide.txt"
 # format's schemas, for editors and AIs.
 cp "$BIN/turnover-plugin" "$APP/Contents/MacOS/turnover-plugin"
 cp PLUGIN-GUIDE.md "$APP/Contents/Resources/PLUGIN-GUIDE.md"
+# The script author's guide: the brief for finishing a converted NVDA add-on gives it to the AI beside the draft.
+cp docs/PLUGIN-SCRIPTS.md "$APP/Contents/Resources/PLUGIN-SCRIPTS.md"
 rm -rf "$APP/Contents/Resources/plugin-schema"; cp -R Resources/plugin-schema "$APP/Contents/Resources/plugin-schema"
 # The fixes people shared and the project accepted (Resources/fixes, 7 Nov 2026): loaded for everyone (ProfileStore).
 rm -rf "$APP/Contents/Resources/fixes"; [ -d Resources/fixes ] && cp -R Resources/fixes "$APP/Contents/Resources/fixes"

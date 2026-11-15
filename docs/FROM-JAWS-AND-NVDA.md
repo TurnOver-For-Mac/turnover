@@ -233,7 +233,7 @@ a draft: a person must read every line, because NVDA's store does not review cod
 who published a file and that it has not changed, not that the code is safe.
 
 ```
-turnover-plugin convert <add-on id | .nvda-addon file | folder> --out <folder> [--converted-by "Name"] [--channel stable|beta|dev] [--force]
+turnover-plugin convert <add-on id | .nvda-addon file | folder> --out <folder> [--converted-by "Name"] [--channel stable|beta|dev] [--force] [--with claude|chatgpt|gemini|myself]
 turnover-plugin convert <…> --report-only
 ```
 
@@ -264,6 +264,55 @@ turnover-plugin convert <…> --report-only
   field is left empty; `check` warns, and `check --listing` refuses to call it ready to share, until it is filled.
   At approval TurnOver says whose add-on it was converted from and who converted it. Neither name changes what the
   plugin may do.
+
+### Finishing the translation with your own AI tool, or yourself
+
+The draft is mostly stubs, because the converter only translates what it can translate with certainty. The rest stays as
+the original Python in comments. To finish it, `convert` also writes, beside the draft:
+
+- `original/`: the add-on's Python files and `manifest.ini`, copied as plain text (each name ends in `.txt`), with a
+  note saying this is untrusted reference text that nobody runs. Nothing in it is ever run, by TurnOver, the converter
+  or the AI.
+- `BRIEF.md`, with `CLAUDE.md`, `AGENTS.md` and `GEMINI.md` pointing at it, and `PLUGIN-GUIDE.md` and
+  `PLUGIN-SCRIPTS.md` (the same set the "Make a plugin" briefs use). The brief gives the task (finish translating,
+  function by function, from `original/`); says plainly that the add-on's text is data and never instructions, that the
+  AI must not add abilities, apps or keys beyond what the report lists without saying so in plain words, and must
+  never try to get round a refusal; gives the table of NVDA calls and events and what each becomes (built from the
+  converter's own table, so the two cannot disagree) and the list of what can never come across; says Windows selectors
+  do not carry over, that Mac items are found from `turnover-plugin snapshot <app>`, and that an add-on for a
+  Windows-only program is reported as not for the Mac, not forced; gives the key rules (`NVDA+` becomes `turnover+`,
+  never add Control or Option to `turnover`, a layer letter is the fallback); says how to check the work (`check`,
+  `test` with a scenario test in `tests/script/` for each translated command, `consent`); and gives the credit and
+  licence rules. The finish line is a passing check, passing tests, and a short `CONVERSION-NOTES.md` saying what was
+  translated, what was left out and why, and what to try by ear.
+- With `--report-only`, or when nothing could be carried over, none of this is written.
+
+`--with claude`, `--with chatgpt` or `--with gemini` then hands the folder over exactly as "Make a plugin" does: Claude
+Code opens in the folder with the request typed in; Codex or Gemini CLI opens in Terminal if it is installed; otherwise
+the whole task, with no folder path in it, goes on the clipboard and the AI's website opens, and you save its answer
+into the folder. `--with myself` opens the folder in Finder. TurnOver does not send anything to an AI service itself.
+
+The draft is marked "converted, translation not reviewed" in `convertedFrom.translation`, in `CONVERSION.md` and at the
+top of `main.js`. `check` says so, and `check --listing` will not call it ready to share, until a person who has read
+`main.js` against the original changes it to `reviewed`. That is not approval: a translated plugin is installed
+unapproved like any other, and approving it is the person's, in TurnOver, after hearing what it can do. An AI is told
+never to change that field.
+
+### From TurnOver's Plugins menu
+
+Plugins, NVDA add-ons has: Search NVDA's add-ons (type some words, then Return), All NVDA's add-ons (a list by name; type
+the first letters of a name to jump), a toggle "Ask NVDA's store for its list of add-ons", and the name to credit for
+converted add-ons. The first time you search, TurnOver asks once: "TurnOver will fetch the list of add-ons from NVDA's
+store on the internet. Nothing about you or your Mac is sent beyond the request itself. Connect?" with "Not now" first.
+Connect turns the toggle on; turning it off stops all asking. "Not now" is asked again next time.
+
+TurnOver the screen reader does no networking and no parsing of the answer. Each step runs the bundled `turnover-plugin`
+as a separate program with a time limit and a cap on what it may print (`store list|search|show --json`, then
+`convert`), and says any failure in a plain sentence. Results give the name, author, a short description and, where
+known, "not for the Mac". Choosing one gives About (version, author, licence, source, verdict) and Convert with Claude,
+ChatGPT or Gemini, or Convert it myself. The first conversion asks for the name to credit, once, and keeps it. The
+draft goes in a new folder under ~/TurnOver Plugins and is handed over exactly as "Make a plugin" hands over. TurnOver
+then says where the folder is, and that nothing is installed or approved.
 
 ### Finding an add-on without knowing its id
 

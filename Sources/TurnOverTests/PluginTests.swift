@@ -7,6 +7,13 @@ import PluginTestKit
 import CryptoKit
 
 func pluginTests() {
+    test("plugin match: the role word \"text\" means static text, as an item's role says") {
+        check(ElementMatcher.roleMatches("text", "AXStaticText"), "text matches a static text")
+        check(ElementMatcher.roleMatches("staticText", "AXStaticText"), "staticText matches it")
+        check(!ElementMatcher.roleMatches("text", "AXTextField"), "text does not match a text field")
+        check(ElementMatcher.roleMatches("textField", "AXTextField"), "textField still matches a text field")
+        check(!ElementMatcher.roleMatches("text", "AXButton"), "or a button")
+    }
     let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     for dir in ["Tests/Plugins", "Resources/plugins"] {
         for folder in PluginTestRunner.folders(under: root.appendingPathComponent(dir)) {

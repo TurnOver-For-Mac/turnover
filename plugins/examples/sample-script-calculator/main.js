@@ -9,8 +9,10 @@
 // nothing, and doing neither leaves TurnOver to read the item as usual. (Both need the "say" ability.)
 turnover.on("focus", function (event) {
   const item = event.item;
-  if (item.role === "button" && item.name === "" && item.identifier === "clear") {
-    event.say("Clear, button");
+  if (item.role === "button" && item.identifier === "Divide") {
+    event.say("Divided by, button");
+  } else if (item.role === "button" && item.identifier === "Multiply") {
+    event.say("Times, button");
   }
 });
 
@@ -22,7 +24,7 @@ turnover.command("readResult", async function (context) {
   // Calculator's display is a piece of text inside the part its developers named "StandardInputView…" (found with
   // `turnover-plugin snapshot Calculator`). The star stands for whatever follows, and a name like this is the same in
   // every language.
-  const found = await turnover.find({ role: "text", inside: { identifier: "StandardInputView*" } }, { limit: 1 });
+  const found = await turnover.find({ role: "staticText", inside: { identifier: "StandardInputView*" } }, { limit: 1 });
   if (found.length === 0) {
     turnover.say("There is no result to read");
     return;

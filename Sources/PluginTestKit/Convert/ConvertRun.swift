@@ -46,17 +46,21 @@ nonisolated public enum ConvertRun {
         defer { source.cleanUp() }
         let parser = try ConvertParse()
         defer { parser.finish() }
-        let result = try AddonConverter.convert(source: source, options: ConvertOptions(convertedBy: request.convertedBy), parser: parser)
+        var result = try AddonConverter.convert(source: source, options: ConvertOptions(convertedBy: request.convertedBy), parser: parser)
         ConvertMemory(cacheDirectory: cache).remember(id: result.id, version: result.version, verdict: result.verdict, reason: result.verdictReason)
         var text = result.report.components(separatedBy: "\n")
         if text.last == "" { text.removeLast() }
         if !request.reportOnly, let out = request.out {
             let folder = URL(fileURLWithPath: (out as NSString).expandingTildeInPath)
+            // The translation brief and the original, kept as plain text beside the draft (made before the source is cleaned up).
+            if let info = result.briefInfo { result.files += ConvertBrief.files(info: info, source: source) }
             try write(result, to: folder, force: request.force)
             text.append("")
             text.append("## Written")
             text.append("The files are in \(folder.path): \(result.files.map(\.name).joined(separator: ", ")).")
-            if result.madePlugin { text.append("Next: put the Mac app in apps, then run turnover-plugin check \(folder.path) --listing. Nothing was installed or approved.") }
+            if result.madePlugin {
+                text.append("Next: BRIEF.md in that folder is the task for finishing the translation. Give the folder to your AI tool (Claude, ChatGPT or Gemini), or finish it yourself, then run turnover-plugin check and turnover-plugin test on it. Putting the Mac app in apps is the person's choice. Nothing was installed or approved, and the translation is marked not reviewed.")
+            }
             else { text.append("No plugin was made.") }
         } else if request.reportOnly {
             text.append("")
@@ -65,13 +69,22 @@ nonisolated public enum ConvertRun {
         return (text, result.madePlugin, result)
     }
 
+
     /// Writes the files into the folder: a new folder, or with force the folder that is there (only the files this tool writes).
     public static func write(_ result: ConvertResult, to folder: URL, force: Bool) throws {
         let fm = FileManager.default
         try fm.createDirectory(at: folder, withIntermediateDirectories: true)
-        let ours = ["manifest.json", "main.js", "CONVERSION.md", "LICENSE-ORIGINAL.txt"]
-        if force { for n in ours where !result.files.contains(where: { $0.name == n }) { try? fm.removeItem(at: folder.appendingPathComponent(n)) } }
-        for f in result.files { try f.data.write(to: folder.appendingPathComponent(f.name), options: .atomic) }
+        let ours = ["manifest.json", "main.js", "CONVERSION.md", "LICENSE-ORIGINAL.txt", "BRIEF.md", "CLAUDE.md", "AGENTS.md", "GEMINI.md", "PLUGIN-GUIDE.md", "PLUGIN-SCRIPTS.md"]
+        if force {
+            for n in ours where !result.files.contains(where: { $0.name == n }) { try? fm.removeItem(at: folder.appendingPathComponent(n)) }
+            // The kept original is this tool's too: an older copy is replaced whole, never mixed with a new one.
+            try? fm.removeItem(at: folder.appendingPathComponent(ConvertBrief.originalFolder))
+        }
+        for f in result.files {
+            let url = folder.appendingPathComponent(f.name)
+            try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try f.data.write(to: url, options: .atomic)
+        }
     }
 }
 

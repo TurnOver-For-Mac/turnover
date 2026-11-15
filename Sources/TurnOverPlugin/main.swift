@@ -22,8 +22,10 @@
 //                                            --everywhere makes a script for every app
 //   turnover-plugin consent <folder>         what TurnOver will say when someone is asked to approve the script, word for word,
 //                                            and the plugin's hash
-//   turnover-plugin convert <id|file|folder> [--out <folder>] [--force] [--channel stable|beta|dev] [--report-only] [--converted-by "<name>"]
-//                                            a draft plugin from an NVDA add-on, and a report (CONVERSION.md); never installs or approves
+//   turnover-plugin convert <id|file|folder> [--out <folder>] [--force] [--channel stable|beta|dev] [--report-only] [--converted-by "<name>"] [--with claude|chatgpt|gemini|myself]
+//                                            a draft plugin from an NVDA add-on, a report (CONVERSION.md), the original kept as text in
+//                                            original/ and a brief (BRIEF.md …) for finishing the translation with your own AI tool or
+//                                            yourself; --with hands the folder over; never installs or approves
 //   turnover-plugin store list|search <words>|show <id> [--json] [--hide-not-mac]
 //                                            find an add-on in NVDA's store without knowing its id
 //   turnover-plugin keygen [--force]         make your signing key, ~/.turnover-plugin/author.key (never replaced without --force)
@@ -61,7 +63,7 @@ func usage() -> Never {
       turnover-plugin new <new folder> --app <bundle id> [--script]
       turnover-plugin new <new folder> --everywhere        (a script for every app: apps ["*"] and the everywhere ability)
       turnover-plugin consent <plugin folder>
-      turnover-plugin convert <add-on id | .nvda-addon file | folder> [--out <folder>] [--force] [--channel stable|beta|dev] [--report-only] [--converted-by "<name>"]
+      turnover-plugin convert <add-on id | .nvda-addon file | folder> [--out <folder>] [--force] [--channel stable|beta|dev] [--report-only] [--converted-by "<name>"] [--with claude|chatgpt|gemini|myself]
       turnover-plugin store list | search <words> | show <id>   [--json] [--hide-not-mac] [--channel stable|beta|dev]
       turnover-plugin keygen [--force]
       turnover-plugin sign <plugin folder>
@@ -343,17 +345,36 @@ case "consent":
 case "convert":
     // turnover-plugin convert <id|file|folder> [--out <folder>] [--force] [--channel c] [--report-only] [--converted-by "name"]
     func value(_ flag: String) -> String? { args.firstIndex(of: flag).flatMap { args.indices.contains($0 + 1) ? args[$0 + 1] : nil } }
-    let valueFlags: Set<String> = ["--out", "--channel", "--converted-by"]
+    let valueFlags: Set<String> = ["--out", "--channel", "--converted-by", "--with"]
     var positional: [String] = []
     var skip = false
     for a in args.dropFirst() { if skip { skip = false; continue }; if valueFlags.contains(a) { skip = true; continue }; if !a.hasPrefix("--") { positional.append(a) } }
     guard positional.count == 1 else { usage() }
+    // Who finishes the translation: asked before anything is fetched. TurnOver never calls an AI service itself.
+    var handOverTo: PluginAI??   // .some(nil) is "myself"
+    if let w = value("--with") {
+        switch w.lowercased() {
+        case "claude": handOverTo = .some(.claude)
+        case "chatgpt", "codex": handOverTo = .some(.chatGPT)
+        case "gemini": handOverTo = .some(.gemini)
+        case "myself": handOverTo = .some(nil)
+        default: fail("--with takes claude, chatgpt, gemini or myself.")
+        }
+        if args.contains("--report-only") { fail("--with needs a folder to hand over, so it cannot go with --report-only.") }
+    }
     var request = ConvertRequest(input: positional[0])
     request.out = value("--out"); request.force = args.contains("--force"); request.reportOnly = args.contains("--report-only")
     request.channel = value("--channel") ?? "stable"; request.convertedBy = value("--converted-by")
     do {
         let done = try ConvertRun.perform(request, fetch: ConvertNetwork.fetch, cache: StoreBrowser.defaultCacheDirectory)
         for l in done.text { print(l) }
+        if let who = handOverTo, done.madePlugin, let out = request.out {
+            let folder = URL(fileURLWithPath: (out as NSString).expandingTildeInPath, isDirectory: true)
+            let handed = PluginAI.handOver(who, folder: folder, task: "finish translating this NVDA add-on into a TurnOver plugin", chatText: ConvertBrief.chatText(folder: folder))
+            print(handed.words)
+            if !handed.opened { exit(1) }
+        } else if handOverTo != nil, !done.madePlugin { print("No plugin was made, so there is nothing to hand over.") }
+        else if handOverTo == nil, done.madePlugin, !args.contains("--report-only") { print("To finish it: give the folder to your AI tool, or run this again with --with claude, chatgpt, gemini or myself.") }
     } catch { fail("\(error)") }
 
 case "store":

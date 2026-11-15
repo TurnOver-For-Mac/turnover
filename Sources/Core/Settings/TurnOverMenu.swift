@@ -604,6 +604,9 @@ public final class TurnOverMenu {
             items.append(MenuItem("Write a plugin for \(name) yourself", .action { PluginAI.startByHand(pid: pid) }, hint: "A starter folder with the guide, a snapshot of the app and its menus"))
         }
         items.append(MenuItem("Plugin library", .action { DispatchQueue.main.async { PluginLibrary.open() } }, hint: "Plugins others have made, checked and signed; each says what it can do before it installs"))
+        if Edition.includesPluginScripts {
+            items.append(MenuItem("NVDA add-ons", .submenu { NVDAStoreMenu.items() }, hint: "Find an add-on in NVDA's store and convert it into a draft plugin for your own AI tool or you to finish. Asks NVDA's store only after you agree"))
+        }
         items.append(MenuItem("Open the plugin guide", .action { DispatchQueue.main.async { PluginAI.openGuide() } }))
         if Trackpad.available {
             items.append(MenuItem("Gesture control", .toggle(get: { Trackpad.controlOn }, set: { Trackpad.set($0) }), hint: "The trackpad's gestures: VoiceOver's, or NVDA's in the Windows style. Also Command Control Comma, G; or hold the TurnOver key and turn two fingers, clockwise for on"))
