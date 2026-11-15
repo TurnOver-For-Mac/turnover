@@ -20,7 +20,7 @@ func scriptManifestText(_ overrides: [String: String?] = [:]) -> String {
     var fields: [(String, String?)] = [
         ("formatVersion", "2"), ("id", "\"script-test\""), ("name", "\"Script test\""), ("version", "\"1\""),
         ("apps", "[\"com.example.app\"]"), ("abilities", "[\"read\", \"say\"]"), ("script", "\"main.js\""),
-        ("commands", "[{ \"id\": \"readResult\", \"description\": \"Read the result\", \"key\": \"turnover+control+shift+r\", \"letter\": \"r\" }]"),
+        ("commands", "[{ \"id\": \"readResult\", \"description\": \"Read the result\", \"key\": \"turnover+command+shift+a\", \"letter\": \"o\" }]"),
     ]
     for (key, value) in overrides {
         if let i = fields.firstIndex(where: { $0.0 == key }) { fields[i].1 = value } else { fields.append((key, value)) }
@@ -65,7 +65,7 @@ func scriptFormatTests() {
         expect(p.error, nil, "no error")
         expect(p.script, scriptTestSource, "the script's text")
         check(p.scriptHash?.count == 64, "a 64 digit hash: \(p.scriptHash ?? "nil")")
-        expect(p.manifest?.commands, [PluginCommand(id: "readResult", description: "Read the result", key: "turnover+control+shift+r", letter: "r")], "the commands")
+        expect(p.manifest?.commands, [PluginCommand(id: "readResult", description: "Read the result", key: "turnover+command+shift+a", letter: "o")], "the commands")
         expect(p.warnings, [], "no warnings")
     }
     test("script format: a plugin with a script needs no profile.json, a data plugin does") {
@@ -128,6 +128,48 @@ func scriptFormatTests() {
         check(command("command+control+,").error?.hasPrefix("refused:") ?? false, "an essential key")
         check(command("p").error?.hasPrefix("refused:") ?? false, "a plain key would type in the app")
         expect(command("turnover+shift+p").error, nil, "an ordinary command key")
+    }
+    test("script format: a key that adds Control or Option to the TurnOver key is refused in plain words, because Control and Option are the TurnOver key") {
+        // KeyboardHandler turns Control+Option into "turnover" and removes both, so these can never arrive (15 Nov 2026, the sample plugins).
+        for key in ["turnover+control+shift+b", "turnover+option+shift+b", "turnover+control+option+b", "caps+control+b", "control+option+shift+b", "bosun+control+o"] {
+            let p = command(key)
+            check(p.error?.hasPrefix("refused: command a: ") ?? false, "\(key) is refused: \(p.error ?? "loaded")")
+            check(p.error?.contains("can never be pressed") ?? false, "and says why: \(p.error ?? "")")
+            check(p.error?.contains("turnover+command+shift+n") ?? false, "and what to write instead: \(p.error ?? "")")
+        }
+        for key in ["turnover+shift+p", "turnover+command+shift+n", "turnover+command+p", "command+shift+p", "control+shift+p", "option+shift+p"] {
+            expect(command(key).error, nil, "\(key) can be pressed")
+        }
+        expect(PluginPolicy.unpressableKey("kb:turnover+control+x") != nil, true, "the kb: form is read too")
+        expect(PluginPolicy.unpressableKey("nonsense+"), nil, "a key that is no key is the listing check's to say")
+        // A profile's keys keep the rules they had.
+        expect(PluginPolicy.refusals(try JSONDecoder().decode(Profile.self, from: Data(#"{"keys":[{"key":"turnover+control+o","description":"x","action":"say","say":"hi"}]}"#.utf8))), [], "profile.json keys are not changed by this")
+    }
+    test("script format: a command letter the TurnOver layer keeps for itself is warned about, and another is not") {
+        let reserved = load(scriptManifestText(["commands": "[{ \"id\": \"a\", \"description\": \"x\", \"key\": \"turnover+command+shift+n\", \"letter\": \"R\" }]"]))
+        expect(reserved.error, nil, "it still loads: the key works")
+        check(reserved.warnings.contains { $0.contains("the letter \"r\"") && $0.contains("TurnOver layer keeps") }, "the warning: \(reserved.warnings)")
+        let free = load(scriptManifestText(["commands": "[{ \"id\": \"a\", \"description\": \"x\", \"letter\": \"b\" }]"]))
+        expect(free.warnings.filter { $0.contains("layer") }, [], "a free letter has no warning")
+    }
+    test("script format: the sample plugins' keys can be pressed with any TurnOver key, clash with no built-in key, and their letters are free in the layer") {
+        BuiltInModules.register()
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("plugins/examples")
+        for name in ["sample-script-chooser", "sample-script-calculator"] {
+            let plugin = ProfileStore.load(folder: root.appendingPathComponent(name))
+            expect(plugin.error, nil, "\(name) loads: \(plugin.error ?? "")")
+            for c in plugin.manifest?.commands ?? [] {
+                guard let key = c.key else { continue }
+                expect(PluginPolicy.unpressableKey(key), nil, "\(name): \(key) can be pressed")
+                let id = normalizeGestureIdentifier("kb:" + key)
+                check(!id.isEmpty, "\(name): \(key) is a key")
+                if let letter = c.letter { check(!PluginCommands.reservedLetters.contains(letter), "\(name): the letter \(letter) is free in the layer") }
+            }
+            expect(plugin.warnings, [], "\(name) has no warnings")
+            // The listing check compares with TurnOver's own keys, VoiceOver's and the official module's: no "is also" note.
+            let lines = PluginListing.check(plugin).lines
+            check(!lines.contains { $0.contains(" is also ") }, "\(name) clashes with no built-in key: \(lines)")
+        }
     }
     test("script format: a command's key and letter get the listing's key checks, together with the profile's") {
         let twice = listing(commands: "[{ \"id\": \"a\", \"description\": \"x\", \"letter\": \"r\" }, { \"id\": \"b\", \"description\": \"y\", \"letter\": \"r\" }]")

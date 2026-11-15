@@ -936,4 +936,40 @@ public enum MenuPath {
 /// The plugins' commands for the plugin layer in the app (Command Control Comma, P).
 public enum PluginCommands {
     public static func forApp(_ bundle: String) -> [(letter: String?, title: String, key: String, run: @MainActor () -> Void)] { ProfilesPlugin.commands(for: bundle) + ScriptPlugins.commands(for: bundle) }
+
+    /// The letters the TurnOver layer's own commands use (MenuAnywhere.letters, N and E included). A plugin's letter is tried only
+    /// when the layer has none of its own for it, so one of these never reaches the plugin; the checks say so. Keep in step with
+    /// MenuAnywhere.letters (a test in TurnOverTests lists them).
+    nonisolated public static let reservedLetters: Set<String> = ["m", "n", "s", "/", "r", "t", "d", "a", "k", "j", "h", "i", "c", "g", "v", "e"]
+
+    /// The plugin command a letter chosen in the layer runs, in the app with this bundle identifier: the first command whose
+    /// declared letter it is. Nil for a letter the layer keeps for itself, and for no match. (15 Nov 2026: the plugin layer
+    /// left in October, so a plugin's declared letter reached nothing.)
+    public typealias Entry = (letter: String?, title: String, key: String, run: @MainActor () -> Void)
+    public static func command(letter: String, bundle: String) -> Entry? { command(letter: letter, in: forApp(bundle)) }
+    /// The same, from a list of commands (what the tests pass, as the app's running scripts are not theirs).
+    public static func command(letter: String, in commands: [Entry]) -> Entry? {
+        let l = letter.lowercased()
+        guard !reservedLetters.contains(l) else { return nil }
+        return commands.first { $0.letter == l }
+    }
+
+    /// The commands with a letter that the layer offers in the app with this bundle identifier, in order: what is spoken beside the
+    /// layer's own letters and listed with them. A letter the layer keeps for itself, or one an earlier command has, is left out.
+    public static func layerCommands(bundle: String) -> [(letter: String, title: String, run: @MainActor () -> Void)] { layerCommands(in: forApp(bundle)) }
+    public static func layerCommands(in commands: [Entry]) -> [(letter: String, title: String, run: @MainActor () -> Void)] {
+        var seen = reservedLetters
+        var out: [(letter: String, title: String, run: @MainActor () -> Void)] = []
+        for c in commands {
+            guard let l = c.letter, seen.insert(l).inserted else { continue }
+            out.append((l, c.title, c.run))
+        }
+        return out
+    }
+
+    /// The app in front, by bundle identifier: the one TurnOver is reading, or else the one the Mac says is in front.
+    @MainActor public static func frontBundle() -> String {
+        if let pid = API.focusPid { let b = ProfileStore.shared.bundle(of: pid); if !b.isEmpty { return b } }
+        return NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
+    }
 }

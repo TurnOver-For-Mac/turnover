@@ -275,7 +275,7 @@ Starting without scripts:
   "abilities": ["read", "say"],
   "script": "main.js",
   "commands": [
-    { "id": "readResult", "description": "Read the result", "key": "turnover+control+shift+r", "letter": "r" }
+    { "id": "readResult", "description": "Read the result", "key": "turnover+command+shift+a", "letter": "o" }
   ]
 }
 ```
