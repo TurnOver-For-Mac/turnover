@@ -3,15 +3,17 @@
 // library and review", "The format"; 15 Nov 2026):
 //
 // - the hash of a plugin's files, which an approval and a signature are both for;
-// - receipts, kept in plugin-trust.json in TurnOver's support folder, sealed with an HMAC-SHA256. Another program can
-//   delete the file (every script then needs approving again) but cannot write a receipt TurnOver will believe, because
-//   it does not have the sealing key. The key is in the Keychain for a release build; a developer build, whose signature
-//   changes with every build and so could not keep reading a Keychain item, keeps it in a file beside the trust file with
-//   permissions 0600, and says so in the log: weaker, and only on a developer's own Mac;
+// - receipts, kept as one JSON object (the receipts and the developer-mode switch) by a holder. For every build that is
+//   not a developer build the holder is the keeper: a sandboxed XPC service inside TurnOver.app that no other program can
+//   write through (docs/PLUGIN-SCRIPTS-PLAN.md, "The keeper"). A developer build, whose signature may be ad hoc and so cannot
+//   use the keeper, keeps plugin-trust.json in TurnOver's support folder, sealed with an HMAC-SHA256 whose key is in a file
+//   beside it with permissions 0600, and says so in the log: weaker, and only on a developer's own Mac. Another program can
+//   delete the sealed file (every script then needs approving again) but cannot write a receipt TurnOver will believe
+//   without the key, which anything running as the person can read. The Keychain is no longer used (15 Nov 2026);
 // - the question the next stage asks: may this plugin's script run?
 // - the author's signature (signature.json) over the same hash, and the signing key's fingerprint.
 //
-// The sealed file. One JSON object: "format", "developerMode", "receipts" and "seal". The seal is the base64 HMAC of the
+// The sealed file (a developer build and the tests). One JSON object: "format", "developerMode", "receipts" and "seal". The seal is the base64 HMAC of the
 // object without "seal", written compactly with its keys sorted; the check parses the file, takes "seal" out and writes
 // that object the same way, so what is compared is never the file's spacing. A missing file, an unreadable one or a seal
 // that does not match is read as empty, and the log says which.
@@ -21,7 +23,7 @@
 // files and verify.
 import Foundation
 import CryptoKit
-import Security
+import TurnOverPluginWire
 
 // MARK: - The hash, signatures and the author's key
 
@@ -129,6 +131,27 @@ nonisolated public enum ScriptTrust {
     }
 }
 
+/// Make a new file that nobody else can ever read: created by open(2) with O_CREAT | O_EXCL and mode 0600 (the umask can only
+/// narrow it), so there is no moment when it exists with wider permissions, and a file or link already there is never
+/// followed. False, with nothing left behind, if the file exists or cannot be made or written. (Stage 2's review, 15 Nov 2026:
+/// the files were created and then narrowed.)
+nonisolated func createPrivateFile(at url: URL, contents: Data) -> Bool {
+    let descriptor = open(url.path, O_CREAT | O_EXCL | O_WRONLY | O_CLOEXEC, 0o600)
+    guard descriptor >= 0 else { return false }
+    var written = 0
+    let ok = contents.withUnsafeBytes { bytes -> Bool in
+        while written < bytes.count {
+            let n = write(descriptor, bytes.baseAddress! + written, bytes.count - written)
+            if n < 0 { if errno == EINTR { continue }; return false }
+            written += n
+        }
+        return true
+    }
+    let closed = close(descriptor) == 0
+    if !(ok && closed) { unlink(url.path); return false }
+    return true
+}
+
 /// The author's own signing key: a file only they can read (~/.turnover-plugin/author.key), base64 of the private key.
 nonisolated public enum ScriptAuthorKey {
     public enum Failure: Error, CustomStringConvertible {
@@ -157,8 +180,7 @@ nonisolated public enum ScriptAuthorKey {
         try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         let key = Curve25519.Signing.PrivateKey()
         let text = key.rawRepresentation.base64EncodedString() + "\n"
-        guard fm.createFile(atPath: url.path, contents: Data(text.utf8), attributes: [.posixPermissions: 0o600]) else { throw Failure.unreadable(url.path) }
-        try fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)   // the umask cannot widen it, but be sure
+        guard createPrivateFile(at: url, contents: Data(text.utf8)) else { throw Failure.unreadable(url.path) }
         return key
     }
 
@@ -216,65 +238,77 @@ nonisolated public enum ScriptTrustDecision: Equatable, Sendable {
     public var isAllowed: Bool { self == .allowed }
 }
 
-// MARK: - Where the sealing key lives
+// MARK: - Where the receipts are kept
 
-/// The key that seals plugin-trust.json. Three kinds below; the store asks for an existing key to check a file, and
-/// makes one only when it first has something to write.
-protocol ScriptSealKeyStore: AnyObject {
+/// What keeps the receipts' bytes. Two kinds: the sealed file with its key (a developer build, and the tests), and the keeper
+/// (every other build). The store above it keeps the JSON; the holder only keeps bytes safe. Failures are `WriteFailure`s whose
+/// words can be told to a person.
+package protocol ScriptTrustHolder: AnyObject {
+    /// What the log says about where the receipts are kept.
+    var kind: String { get }
+    /// The kept bytes. Nil when there are none, or when what is there cannot be believed: both mean no script is approved.
+    /// Throws when the holder cannot be asked or refuses: the store is then unusable for this run.
+    func load() throws -> Data?
+    /// Keep these bytes whole in place of the others.
+    func store(_ data: Data) throws
+}
+
+/// The keeper, through its client: the same JSON, without a seal. Never falls back to a file.
+final class KeeperHolder: ScriptTrustHolder {
+    let kind = "the keeper"
+    private let client: TrustKeeperClient
+    init(client: TrustKeeperClient = TrustKeeperClient()) { self.client = client }
+
+    private func failure(_ why: TrustKeeperFailure) -> ScriptTrustStore.WriteFailure {
+        ScriptTrustStore.WriteFailure(description: String(localized: "TurnOver's keeper of approvals cannot be used, so no script can be approved or taken back in this run. The rest of TurnOver works as usual. (\(why.reason))",
+                                                          comment: "Said when the part of TurnOver that keeps plugin script approvals cannot be reached; the reason in brackets is technical"))
+    }
+    func load() throws -> Data? {
+        switch client.load() { case .success(let data): return data; case .failure(let why): throw failure(why) }
+    }
+    func store(_ data: Data) throws {
+        if case .failure(let why) = client.store(data) { throw failure(why) }
+    }
+}
+
+/// `turnover --check-trust-keeper` and build.sh: the keeper's own check, without starting anything else of TurnOver.
+public enum ScriptTrustKeeperCheck {
+    /// Nil if the keeper said ok, otherwise why not.
+    public static func run() -> String? {
+        if case .failure(let why) = TrustKeeperClient().check() { return why.reason }
+        return nil
+    }
+}
+
+/// The sealing key of a sealed file. Two kinds below; the holder asks for an existing key to check a file, and makes one only
+/// when it first has something to write.
+package protocol ScriptSealKeyStore: AnyObject {
     /// What the log says about where the key is kept.
     var kind: String { get }
     func existingKey() -> SymmetricKey?
     func makeKey() -> SymmetricKey?
 }
 
-/// The Keychain: a generic password that only the program that made it (TurnOver, by its signature) can read.
-final class KeychainSealKey: ScriptSealKeyStore {
-    let kind = "the Keychain"
-    private let service: String, account = "seal key"
-    init(service: String = "com.turnover.reader.plugin-trust") { self.service = service }
-
-    private var query: [String: Any] {
-        [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account]
-    }
-    func existingKey() -> SymmetricKey? {
-        var q = query
-        q[kSecReturnData as String] = true; q[kSecMatchLimit as String] = kSecMatchLimitOne
-        var out: CFTypeRef?
-        guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess, let data = out as? Data, data.count == 32 else { return nil }
-        return SymmetricKey(data: data)
-    }
-    func makeKey() -> SymmetricKey? {
-        let key = SymmetricKey(size: .bits256)
-        var q = query
-        q[kSecValueData as String] = key.withUnsafeBytes { Data($0) }
-        q[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        let status = SecItemAdd(q as CFDictionary, nil)
-        if status == errSecDuplicateItem { return existingKey() }
-        guard status == errSecSuccess else { Log.warning("plugin trust: the Keychain refused the sealing key (status \(status))"); return nil }
-        return key
-    }
-}
-
-/// A file beside the trust file, permissions 0600: for a developer build, whose signature changes with each build, so a
-/// Keychain item made by one build is not readable by the next. Weaker (anything running as the person can read it), and logged.
-final class FileSealKey: ScriptSealKeyStore {
-    let kind = "a file beside it (a developer build: weaker than the Keychain)"
+/// A file beside the trust file, permissions 0600: for a developer build, whose signature may be ad hoc and changes with
+/// each build. Weaker (anything running as the person can read it), and logged.
+package final class FileSealKey: ScriptSealKeyStore {
+    package let kind = "a file beside it (a developer build: weaker than the keeper)"
     private let url: URL
-    init(url: URL) { self.url = url }
-    func existingKey() -> SymmetricKey? {
+    package init(url: URL) { self.url = url }
+    package func existingKey() -> SymmetricKey? {
         guard let data = try? Data(contentsOf: url), data.count == 32 else { return nil }
         return SymmetricKey(data: data)
     }
-    func makeKey() -> SymmetricKey? {
+    package func makeKey() -> SymmetricKey? {
         let key = SymmetricKey(size: .bits256)
         try? FileManager.default.removeItem(at: url)
-        guard FileManager.default.createFile(atPath: url.path, contents: key.withUnsafeBytes { Data($0) }, attributes: [.posixPermissions: 0o600]) else { return nil }
-        Log.warning("plugin trust: the sealing key is kept in a file, not the Keychain (a developer build); this is weaker and only for a developer's own Mac")
+        guard createPrivateFile(at: url, contents: key.withUnsafeBytes { Data($0) }) else { return nil }
+        Log.warning("plugin trust: the sealing key is kept in a file, not the keeper (a developer build); this is weaker and only for a developer's own Mac")
         return key
     }
 }
 
-/// For tests: never touches the Keychain or a file.
+/// For tests: never touches a file.
 final class MemorySealKey: ScriptSealKeyStore {
     let kind = "memory (a test)"
     private var key: SymmetricKey?
@@ -283,31 +317,73 @@ final class MemorySealKey: ScriptSealKeyStore {
     func makeKey() -> SymmetricKey? { key = SymmetricKey(size: .bits256); return key }
 }
 
-// MARK: - The sealed file and the questions about it
-
-/// The receipts and the developer-mode switch, read and written as the sealed file. Main thread only, as the menu and
-/// the plugins that ask it are.
-public final class ScriptTrustStore {
-    public static let fileName = "plugin-trust.json"
-    /// The one TurnOver uses: the support folder's file, and the Keychain (release) or a key file (developer build).
-    public static let shared: ScriptTrustStore = {
-        let keys: ScriptSealKeyStore = Edition.isDevBuild ? FileSealKey(url: AppPaths.file("plugin-trust.key")) : KeychainSealKey()
-        return ScriptTrustStore(file: AppPaths.file(fileName), keys: keys)
-    }()
-
+/// The sealed file: the JSON with an HMAC-SHA256 seal added, in `file`. Anything wrong with it reads as nothing kept, and the
+/// log says which.
+final class SealedFileHolder: ScriptTrustHolder {
     private let file: URL
     private let keys: ScriptSealKeyStore
+    var kind: String { "the sealed file \(ScriptTrustStore.fileName)" }
+    init(file: URL, keys: ScriptSealKeyStore) { self.file = file; self.keys = keys }
+
+    /// The bytes the seal covers: the file's object without its seal, compact, keys sorted.
+    private static func canonical(_ object: [String: Any]) -> Data? {
+        try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes])
+    }
+
+    func load() throws -> Data? {
+        let name = ScriptTrustStore.fileName
+        guard FileManager.default.fileExists(atPath: file.path) else { Log.info("plugin trust: no \(name) yet; no script is approved"); return nil }
+        func distrust(_ why: String) -> Data? { Log.warning("plugin trust: \(name) \(why); it is read as empty, so every script needs approving again"); return nil }
+        guard let data = try? Data(contentsOf: file) else { return distrust("cannot be read") }
+        guard var object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any], let seal = object.removeValue(forKey: "seal") as? String,
+              let sealBytes = Data(base64Encoded: seal), let body = Self.canonical(object) else { return distrust("is not a sealed file") }
+        guard let key = keys.existingKey() else { return distrust("has no sealing key to check it against (kept in \(keys.kind))") }
+        guard HMAC<SHA256>.isValidAuthenticationCode(sealBytes, authenticating: body, using: key) else { return distrust("does not match its seal (edited, or made by another copy of TurnOver)") }
+        return body
+    }
+
+    func store(_ data: Data) throws {
+        guard var object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any], let body = Self.canonical(object) else {
+            throw ScriptTrustStore.WriteFailure(description: "the receipts could not be written")
+        }
+        guard let key = keys.existingKey() ?? keys.makeKey() else { throw ScriptTrustStore.WriteFailure(description: "the sealing key in \(keys.kind) could not be made or read") }
+        object["seal"] = Data(HMAC<SHA256>.authenticationCode(for: body, using: key)).base64EncodedString()
+        do {
+            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .prettyPrinted, .withoutEscapingSlashes]).write(to: file, options: .atomic)
+        } catch { throw ScriptTrustStore.WriteFailure(description: error.localizedDescription) }
+    }
+}
+
+// MARK: - The receipts and the questions about them
+
+/// The receipts and the developer-mode switch, read from and written to a holder. Main thread only, as the menu and the
+/// plugins that ask it are. If the holder cannot be used, the store is empty for this run and says so when asked to change.
+public final class ScriptTrustStore {
+    public static let fileName = "plugin-trust.json"
+    /// The one TurnOver uses: the keeper, or in a developer build the support folder's sealed file with a key file beside it.
+    public static let shared: ScriptTrustStore = {
+        let holder: ScriptTrustHolder = Edition.isDevBuild
+            ? SealedFileHolder(file: AppPaths.file(fileName), keys: FileSealKey(url: AppPaths.file("plugin-trust.key")))
+            : KeeperHolder()
+        return ScriptTrustStore(holder: holder)
+    }()
+
+    private let holder: ScriptTrustHolder
     public private(set) var receipts: [ScriptReceipt] = []
     public private(set) var developerMode = false
+    /// Words for a person, if the holder could not be used when the store last read it. Then nothing can be changed.
+    public private(set) var unavailable: String?
+    private var saidUnavailable = false
 
-    init(file: URL, keys: ScriptSealKeyStore) {
-        self.file = file; self.keys = keys
+    package init(holder: ScriptTrustHolder) {
+        self.holder = holder
         reload()
     }
 
-    /// For tests: a store that keeps its key in memory.
+    /// For tests: a sealed file that keeps its key in memory.
     public convenience init(file: URL, inMemoryKey: Data? = nil) {
-        self.init(file: file, keys: MemorySealKey(key: inMemoryKey.map { SymmetricKey(data: $0) }))
+        self.init(holder: SealedFileHolder(file: file, keys: MemorySealKey(key: inMemoryKey.map { SymmetricKey(data: $0) })))
     }
 
     private struct Payload: Codable {
@@ -319,44 +395,38 @@ public final class ScriptTrustStore {
     private static func coding() -> (JSONEncoder, JSONDecoder) {
         let encoder = JSONEncoder(), decoder = JSONDecoder()
         encoder.dateEncodingStrategy = .iso8601; decoder.dateDecodingStrategy = .iso8601
+        encoder.outputFormatting = [.sortedKeys]
         return (encoder, decoder)
     }
 
-    /// The bytes the seal covers: the file's object without its seal, compact, keys sorted.
-    private static func canonical(_ object: [String: Any]) -> Data? {
-        try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes])
-    }
-
-    /// Read the file again. Anything wrong with it leaves the store empty, and the log says what.
+    /// Read again. Anything wrong leaves the store empty, and the log says what (once, for a holder that cannot be used).
     public func reload() {
-        receipts = []; developerMode = false
-        guard FileManager.default.fileExists(atPath: file.path) else { return Log.info("plugin trust: no \(Self.fileName) yet; no script is approved") }
-        func distrust(_ why: String) { Log.warning("plugin trust: \(Self.fileName) \(why); it is read as empty, so every script needs approving again") }
-        guard let data = try? Data(contentsOf: file) else { return distrust("cannot be read") }
-        guard var object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any], let seal = object.removeValue(forKey: "seal") as? String,
-              let sealBytes = Data(base64Encoded: seal), let body = Self.canonical(object) else { return distrust("is not a sealed file") }
-        guard let key = keys.existingKey() else { return distrust("has no sealing key to check it against (kept in \(keys.kind))") }
-        guard HMAC<SHA256>.isValidAuthenticationCode(sealBytes, authenticating: body, using: key) else { return distrust("does not match its seal (edited, or made by another copy of TurnOver)") }
-        guard let payload = try? Self.coding().1.decode(Payload.self, from: body), payload.format == 1 else { return distrust("is in a format this TurnOver does not know") }
+        receipts = []; developerMode = false; unavailable = nil
+        let data: Data?
+        do { data = try holder.load() } catch {
+            unavailable = (error as? WriteFailure)?.description ?? error.localizedDescription
+            if !saidUnavailable { saidUnavailable = true; Log.warning("plugin trust: \(holder.kind) cannot be used (\(unavailable ?? "")); no script is approved in this run and none can be") }
+            return
+        }
+        guard let data else { return }
+        guard let payload = try? Self.coding().1.decode(Payload.self, from: data), payload.format == 1 else {
+            return Log.warning("plugin trust: what \(holder.kind) holds is in a format this TurnOver does not know; it is read as empty, so every script needs approving again")
+        }
         receipts = payload.receipts; developerMode = payload.developerMode
     }
 
     public struct WriteFailure: Error, CustomStringConvertible {
         public let description: String
+        package init(description: String) { self.description = description }
     }
 
     private func save() throws {
+        if let unavailable { throw WriteFailure(description: unavailable) }   // never write over what could not be read
         let (encoder, _) = Self.coding()
-        let payload = Payload(developerMode: developerMode, receipts: receipts)
-        guard var object = (try? JSONSerialization.jsonObject(with: encoder.encode(payload))) as? [String: Any], let body = Self.canonical(object) else {
+        guard let data = try? encoder.encode(Payload(developerMode: developerMode, receipts: receipts)) else {
             throw WriteFailure(description: "the receipts could not be written")
         }
-        guard let key = keys.existingKey() ?? keys.makeKey() else { throw WriteFailure(description: "the sealing key in \(keys.kind) could not be made or read") }
-        object["seal"] = Data(HMAC<SHA256>.authenticationCode(for: body, using: key)).base64EncodedString()
-        do {
-            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .prettyPrinted, .withoutEscapingSlashes]).write(to: file, options: .atomic)
-        } catch { throw WriteFailure(description: error.localizedDescription) }
+        try holder.store(data)
     }
 
     // MARK: Asking
@@ -398,6 +468,7 @@ public final class ScriptTrustStore {
 
     /// Take a plugin's approval away (the person says so, or the library withdrew it).
     public func revoke(id: String) throws {
+        if let unavailable { throw WriteFailure(description: unavailable) }
         let before = receipts
         receipts.removeAll { $0.id == id }
         guard receipts != before else { return }

@@ -345,15 +345,22 @@ public enum Speech {
         if reason == .focus { Hints.schedule(Hints.forObject(obj)) }
     }
 
-    /// The words a plugin script gave for a focus, said in place of `speakObject`'s: with the same step for a focus that
-    /// follows another within moments (the speech for the one before is dropped once these have words of their own).
-    /// Empty words say nothing.
-    public static func speakFocusWords(_ words: String) {
+    /// The words a plugin script gave for a focus, said in place of `speakObject`'s, with what `speakObject` does for a
+    /// focus: the same words twice within half a second are said once, the speech for a focus that this one follows within
+    /// moments is dropped once these have words of their own, and the hint for the object is scheduled. Empty words say
+    /// nothing and schedule no hint.
+    public static func speakFocusWords(_ words: String, for obj: TurnOverObject) {
+        if !words.isEmpty {
+            if words == lastFocusWords, Date().timeIntervalSince(lastFocusWordsAt) < 0.5 { Log.io("focus: the same words again within 0.5 s; not repeated"); return }
+            lastFocusWords = words; lastFocusWordsAt = Date()
+        }
         if let until = dropForFocusUntil {
             dropForFocusUntil = nil
             if Date() < until, !words.isEmpty { cancel(); Log.io("focus moved on at once: the speech for the focus before it dropped") }
         }
-        if !words.isEmpty { enqueue(words) }
+        guard !words.isEmpty else { return }
+        enqueue(words)
+        Hints.schedule(Hints.forObject(obj))
     }
 
     /// NVDA: speakObjectProperties with reason CHANGE — only the named property.

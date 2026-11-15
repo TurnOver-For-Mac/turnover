@@ -124,8 +124,13 @@ nonisolated public enum PluginFormat {
 
     /// Decode a file of the format, or throw the first problem in words with its line.
     public static func decode<T: Decodable>(_ type: T.Type, from url: URL) throws -> T {
-        let file = url.lastPathComponent
-        guard let data = try? Data(contentsOf: url) else { throw PluginFormatError(problem: Problem(file: file, line: nil, message: "cannot be read (is it there?)", isError: true)) }
+        try decode(type, from: try? Data(contentsOf: url), file: url.lastPathComponent)
+    }
+
+    /// The same for bytes the caller already read, so what is parsed is what it hashes (15 Nov 2026). `file` is the name
+    /// the messages use; nil bytes read as a file that cannot be read.
+    public static func decode<T: Decodable>(_ type: T.Type, from data: Data?, file: String) throws -> T {
+        guard let data else { throw PluginFormatError(problem: Problem(file: file, line: nil, message: "cannot be read (is it there?)", isError: true)) }
         guard let raw = String(data: data, encoding: .utf8) else { throw PluginFormatError(problem: Problem(file: file, line: nil, message: "is not text in UTF-8", isError: true)) }
         let text = clean(raw)
         do {
@@ -177,8 +182,14 @@ nonisolated public enum PluginFormat {
 
     /// Warnings and errors a decoder does not give: unknown fields, values outside their choices, the format version.
     public static func check(manifest: URL?, profile: URL?) -> [Problem] {
+        check(manifest: manifest.flatMap { try? Data(contentsOf: $0) }, profile: profile.flatMap { try? Data(contentsOf: $0) }, folder: manifest?.deletingLastPathComponent())
+    }
+
+    /// The same for bytes the caller already read. `folder` is where main.js is, and `scriptData` is main.js as the caller
+    /// read it (read again from `folder` if nil).
+    public static func check(manifest: Data?, profile: Data?, folder: URL?, scriptData: Data? = nil) -> [Problem] {
         var out: [Problem] = []
-        if let manifest, let raw = try? String(contentsOf: manifest, encoding: .utf8) {
+        if let manifest, let raw = String(data: manifest, encoding: .utf8) {
             let text = clean(raw)
             for k in keys(in: text) {
                 let fields = fieldsFor(path: k.path, inManifest: true)
@@ -195,9 +206,9 @@ nonisolated public enum PluginFormat {
                     out.append(Problem(file: "manifest.json", line: k.line, message: "kind \"\(v)\" is not one TurnOver loads; the only kind is \"profile\" (data, no code)", isError: true))
                 }
             }
-            out += checkScript(manifest: manifest, text: text)
+            out += checkScript(folder: folder, text: text, scriptData: scriptData)
         }
-        if let profile, let raw = try? String(contentsOf: profile, encoding: .utf8) {
+        if let profile, let raw = String(data: profile, encoding: .utf8) {
             let text = clean(raw)
             for k in keys(in: text) {
                 if let fields = fieldsFor(path: k.path, inManifest: false), !fields.contains(k.key) {

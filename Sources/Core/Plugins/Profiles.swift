@@ -438,15 +438,18 @@ public final class ProfileStore {
     /// Whether a change found on reload is said (on once TurnOver is running; not at its first load).
     nonisolated(unsafe) public var announceChanges = false   // main thread only
 
-    /// Load one plugin folder (also used by the tester).
-    public static func load(folder: URL) -> LoadedPlugin {
+    /// Load one plugin folder (also used by the tester). Each counted file is read once, through `read`, and both parsed and
+    /// hashed from those bytes, so a receipt is for what was parsed even if the file changes during the load (15 Nov 2026).
+    /// `read` is a seam for the tests only.
+    public static func load(folder: URL, read: (URL) -> Data? = { try? Data(contentsOf: $0) }) -> LoadedPlugin {
         let fm = FileManager.default
         let mURL = folder.appendingPathComponent("manifest.json"), pURL = folder.appendingPathComponent("profile.json")
         let jURL = folder.appendingPathComponent(PluginFormat.scriptName)
         let modified = [mURL, pURL, jURL].compactMap { (try? fm.attributesOfItem(atPath: $0.path))?[.modificationDate] as? Date }.max() ?? .distantPast
         do {
             // Read as hand-written files: comments and trailing commas allowed, errors with their line (PluginFormat).
-            let manifest = try PluginFormat.decode(PluginManifest.self, from: mURL)
+            let mData = read(mURL)
+            let manifest = try PluginFormat.decode(PluginManifest.self, from: mData, file: mURL.lastPathComponent)
             // The id names its folder: never a path (".." would have made install delete TurnOver's own folder, the
             // code review, 13 Oct 2026).
             guard PluginManifest.isValidID(manifest.id) else {
@@ -455,8 +458,10 @@ public final class ProfileStore {
             // A plugin with a script may have no profile.json at all (the hash counts it "if present"); a data plugin may not.
             let hasProfile = fm.fileExists(atPath: pURL.path)
             let profile: Profile
-            if manifest.script != nil, !hasProfile { profile = Profile() } else { profile = try PluginFormat.decode(Profile.self, from: pURL) }
-            let problems = PluginFormat.check(manifest: mURL, profile: hasProfile ? pURL : nil)
+            let pData = hasProfile ? read(pURL) : nil
+            if manifest.script != nil, !hasProfile { profile = Profile() } else { profile = try PluginFormat.decode(Profile.self, from: pData, file: pURL.lastPathComponent) }
+            let jData = manifest.script != nil ? read(jURL) : nil
+            let problems = PluginFormat.check(manifest: mData, profile: pData, folder: folder, scriptData: jData)
             if let first = problems.first(where: { $0.isError }) {
                 return LoadedPlugin(folder: folder, manifest: nil, profile: nil, error: first.description, modified: modified, warnings: problems.filter { !$0.isError }.map(\.description))
             }
@@ -465,10 +470,13 @@ public final class ProfileStore {
             if let why = (PluginPolicy.refusals(profile) + PluginPolicy.scriptRefusals(manifest)).first {
                 return LoadedPlugin(folder: folder, manifest: nil, profile: nil, error: "refused: " + why, modified: modified)
             }
-            // The script's text and the hash of the files, from one read, so a receipt is for what was loaded.
+            // The script's text and the hash of the files, from the one read of each, so a receipt is for what was loaded.
             var text: String?, hash: String?
-            if manifest.script != nil, let data = try? Data(contentsOf: jURL), let loaded = String(data: data, encoding: .utf8) {
-                text = loaded; hash = ScriptTrust.hash(folder: folder, scriptData: data)
+            if manifest.script != nil, let mData, let jData, let loaded = String(data: jData, encoding: .utf8) {
+                var files = [(name: "manifest.json", data: mData)]
+                if let pData { files.append((name: "profile.json", data: pData)) }
+                files.append((name: PluginFormat.scriptName, data: jData))
+                text = loaded; hash = ScriptTrust.hex(ScriptTrust.digest(files: files))
             }
             return LoadedPlugin(folder: folder, manifest: manifest, profile: profile, error: nil, modified: modified, warnings: problems.map(\.description),
                                 script: text, scriptHash: hash)
@@ -512,7 +520,7 @@ public final class ProfileStore {
             f == p.folder && ([f.appendingPathComponent("manifest.json"), f.appendingPathComponent("profile.json"), f.appendingPathComponent(PluginFormat.scriptName)]
                 .compactMap { (try? fm.attributesOfItem(atPath: $0.path))?[.modificationDate] as? Date }.max() ?? .distantPast) == p.modified
         }) { return false }
-        let loaded = folders.map(Self.load(folder:))
+        let loaded = folders.map { Self.load(folder: $0) }
         lock.lock(); _plugins = loaded; lock.unlock()
         // Saved while TurnOver runs: said, so the author hears the result without looking (docs/PLUGIN-TOOLKIT-PLAN.md,
         // item 3: NVDA's scratchpad, without the reload key).

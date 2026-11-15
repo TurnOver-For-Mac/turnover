@@ -49,6 +49,8 @@ package final class ScriptPlugins: GlobalPlugin {
         init(_ plugin: LoadedPlugin) { id = plugin.manifest?.id ?? ""; self.plugin = plugin }
         var name: String { plugin.manifest?.name ?? id }
         var apps: [String] { plugin.manifest?.apps ?? [] }
+        /// A focus or value event carries the item, so only a plugin that has `read` is sent one (15 Nov 2026).
+        var mayRead: Bool { ScriptAbilities.effective(for: plugin).contains(.read) }
     }
 
     private let trust: ScriptTrustStore
@@ -269,7 +271,7 @@ package final class ScriptPlugins: GlobalPlugin {
         case .gainFocus:
             let name = "focus"
             for entry in list {
-                guard let host = entry.host, host.events.contains(name), let item = entry.broker?.item(for: event.obj.element) else { continue }
+                guard entry.mayRead, let host = entry.host, host.events.contains(name), let item = entry.broker?.item(for: event.obj.element) else { continue }
                 if case .say(let words) = host.ask(name, item: item) {
                     // The first plugin to give words wins. They are held for this element while the event goes on down the
                     // chain (the object does more than speak when it takes the focus), then let go.
@@ -282,8 +284,9 @@ package final class ScriptPlugins: GlobalPlugin {
             next()
         case .valueChange:
             let name = "valueChange"
+            if AXScriptBroker.isSecure(event.obj.element) { return next() }   // what is typed in a password field is never sent to any script
             for entry in list {
-                guard let host = entry.host, host.events.contains(name), let item = entry.broker?.item(for: event.obj.element) else { continue }
+                guard entry.mayRead, let host = entry.host, host.events.contains(name), let item = entry.broker?.item(for: event.obj.element) else { continue }
                 if case .say(let words) = host.ask(name, item: item) {
                     if !words.isEmpty { env.speak(words) }
                     return   // handled: the chain stops here, as a watch rule's does

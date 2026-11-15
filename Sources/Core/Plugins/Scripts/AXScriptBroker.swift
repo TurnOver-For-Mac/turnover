@@ -4,14 +4,17 @@
 // the plugin's abilities, the rates and the sizes; every rule here is about the screen:
 // - the item or app a request concerns must belong to one of the plugin's own apps at that moment (the bundle of the
 //   process that really owns it, not what the manifest says), and never to a forbidden app;
-// - press, focus, edit, menu and keys work only while one of the plugin's apps is in front;
-// - menu and keys are checked against PluginPolicy when asked; keys and edit are refused while a secure field has the
-//   focus, and edit is never done to one;
+// - press, focus, edit, menu and keys work only while one of the plugin's apps is in front, by TurnOver's own idea of the
+//   focus and by the Mac's frontmost app both (15 Nov 2026);
+// - menu and keys are checked against PluginPolicy when asked; keys and edit are refused while the Mac reports secure
+//   keyboard entry, while a secure field has the focus, and when TurnOver cannot find what has the focus; edit is never
+//   done to a password field;
 // - say and sound are dropped (not an error) while none of the plugin's apps is in front or an approval question is open.
 // Everything that touches the Mac goes through `ScriptEnvironment`, so a test can stand in for each part.
 import Foundation
 import AppKit
 import ApplicationServices
+import Carbon.HIToolbox
 import TurnOverAX
 
 /// What the broker and ScriptPlugins reach out to. `live()` is the real Mac; a test replaces what it exercises.
@@ -19,6 +22,10 @@ package struct ScriptEnvironment {
     package var plugins: () -> [LoadedPlugin]
     /// The process the focus is in (the key availability check's own question), and the bundle a process belongs to.
     package var frontPid: () -> pid_t?
+    /// The process of the app the Mac itself says is frontmost (NSWorkspace), which can differ from TurnOver's idea of the focus.
+    package var macFrontPid: () -> pid_t?
+    /// Whether macOS reports secure keyboard entry (a password field or a program has asked that no one else see the keys).
+    package var secureInput: () -> Bool
     package var bundle: (pid_t) -> String
     package var runningPid: (String) -> pid_t?
     package var isRunning: (String) -> Bool
@@ -43,6 +50,8 @@ package struct ScriptEnvironment {
         ScriptEnvironment(
             plugins: { ProfileStore.shared.plugins },
             frontPid: { API.focusPid },
+            macFrontPid: { NSWorkspace.shared.frontmostApplication?.processIdentifier },
+            secureInput: { IsSecureEventInputEnabled() },
             bundle: { ProfileStore.shared.bundle(of: $0) },
             runningPid: { NSRunningApplication.runningApplications(withBundleIdentifier: $0).first?.processIdentifier },
             isRunning: { !NSRunningApplication.runningApplications(withBundleIdentifier: $0).isEmpty },
@@ -107,8 +116,10 @@ package final class AXScriptBroker: ScriptBroker {
 
     private var frontOwns: Bool { env.frontPid().map(owns) ?? false }
 
+    /// Acting needs both TurnOver's focus and the Mac's own frontmost app to be the plugin's: either alone can be stale or
+    /// wrong, and a request must never reach an app the person is not looking at.
     private func requireFront() throws {
-        guard frontOwns else {
+        guard frontOwns, env.macFrontPid().map(owns) ?? false else {
             throw ScriptBrokerError.refused(String(localized: "This works only while one of the plugin's apps is in front.", comment: "Said to a plugin author when a script asks to act while its app is not in front"))
         }
     }
@@ -127,9 +138,13 @@ package final class AXScriptBroker: ScriptBroker {
         ScriptItem.isSecure(subrole: element.string(kAXSubroleAttribute), role: element.string(kAXRoleAttribute))
     }
 
-    private var secureHasFocus: Bool {
-        guard let pid = env.frontPid(), let focused = env.focusedElement(pid) else { return false }
-        return Self.isSecure(focused)
+    /// Typing for a script (`keys`, `edit`) is refused while the Mac reports secure keyboard entry, while a password field
+    /// has the focus, and when what has the focus cannot be found at all: not knowing is not a reason to go ahead. The three
+    /// sentences are for each of those, said in the request's own words.
+    private func requireNoSecret(secureInput: String, secureFocus: String, unknownFocus: String) throws {
+        if env.secureInput() { throw ScriptBrokerError.refused(secureInput) }
+        guard let pid = env.frontPid(), let focused = env.focusedElement(pid) else { throw ScriptBrokerError.refused(unknownFocus) }
+        if Self.isSecure(focused) { throw ScriptBrokerError.refused(secureFocus) }
     }
 
     /// The item for a script, with a handle: nil if the element is not in one of the plugin's apps now.
@@ -247,7 +262,10 @@ package final class AXScriptBroker: ScriptBroker {
         let e = try element(args)
         try requireFront()
         if Self.isSecure(e) { throw ScriptBrokerError.refused(String(localized: "A password field is never changed by a plugin.", comment: "Said to a plugin author")) }
-        if secureHasFocus { throw ScriptBrokerError.refused(String(localized: "A password field has the focus, so a plugin cannot change anything now.", comment: "Said to a plugin author")) }
+        try requireNoSecret(
+            secureInput: String(localized: "The Mac is hiding what is typed, as it does for a password, so a plugin cannot change anything now.", comment: "Said to a plugin author when a script asks to edit while the Mac reports secure keyboard entry"),
+            secureFocus: String(localized: "A password field has the focus, so a plugin cannot change anything now.", comment: "Said to a plugin author"),
+            unknownFocus: String(localized: "TurnOver cannot tell what has the focus, so a plugin cannot change anything now.", comment: "Said to a plugin author when a script asks to edit and the focused item cannot be found"))
         let value: CFTypeRef
         switch args["value"] {
         case .string(let s)?: value = s as CFString
@@ -281,7 +299,10 @@ package final class AXScriptBroker: ScriptBroker {
         guard let keys = args["keys"]?.stringValue, !keys.isEmpty else {
             throw ScriptBrokerError.invalid(String(localized: "keys needs a key, such as \"command+k\".", comment: "Said to a plugin author"))
         }
-        if secureHasFocus { throw ScriptBrokerError.refused(String(localized: "A password field has the focus, so a plugin cannot press keys now.", comment: "Said to a plugin author")) }
+        try requireNoSecret(
+            secureInput: String(localized: "The Mac is hiding what is typed, as it does for a password, so a plugin cannot press keys now.", comment: "Said to a plugin author when a script asks to press keys while the Mac reports secure keyboard entry"),
+            secureFocus: String(localized: "A password field has the focus, so a plugin cannot press keys now.", comment: "Said to a plugin author"),
+            unknownFocus: String(localized: "TurnOver cannot tell what has the focus, so a plugin cannot press keys now.", comment: "Said to a plugin author when a script asks to press keys and the focused item cannot be found"))
         if let why = PluginPolicy.refusedKey(keys) {
             throw ScriptBrokerError.refused(String(localized: "A plugin may not send \(keys): \(why).", comment: "Said to a plugin author when a script's key is refused; the placeholders are the key and the reason"))
         }

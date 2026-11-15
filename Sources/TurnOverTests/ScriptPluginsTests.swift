@@ -49,7 +49,9 @@ private func el(_ id: Int) -> AXUIElement { AXReplay.element(id) }
 nonisolated(unsafe) private var macStorages: [URL] = []
 
 private final class Mac {
-    var front: pid_t? = AXReplay.floor + 1
+    var front: pid_t? = AXReplay.floor + 1       // TurnOver's own idea of the focus
+    var macFront: pid_t? = AXReplay.floor + 1    // the Mac's frontmost app
+    var secureInput = false
     var bundles: (pid_t) -> String = { $0 >= AXReplay.floor ? "com.example.app" : "com.other.app" }
     var focus: AXUIElement?
     var scriptSaid: [String] = []     // what a script said or read, as TurnOver would speak it
@@ -66,6 +68,8 @@ private final class Mac {
         var env = ScriptEnvironment.live()
         env.plugins = { self.plugins }
         env.frontPid = { self.front }
+        env.macFrontPid = { self.macFront }
+        env.secureInput = { self.secureInput }
         env.bundle = { self.bundles($0) }
         env.runningPid = { self.running.contains($0) ? AXReplay.floor + 1 : nil }
         env.isRunning = { self.running.contains($0) }
@@ -112,8 +116,8 @@ func scriptPluginsTests() {
     func ready(_ entry: ScriptPlugins.Entry?) -> Bool { if case .ready? = entry?.host?.state { return true } else { return false } }
 
     /// A running ScriptPlugins over a Mac, one approved plugin, and its entry once the host has started.
-    func start(_ mac: Mac, script: String, approved: Bool = true, developerMode: Bool = false, id: String = "script-test") -> (ScriptPlugins, ScriptPlugins.Entry, ScriptTrustStore, LoadedPlugin)? {
-        let plugin = makePlugin(id: id, script: script)
+    func start(_ mac: Mac, script: String, approved: Bool = true, developerMode: Bool = false, id: String = "script-test", abilities: String = "[\"read\", \"say\"]") -> (ScriptPlugins, ScriptPlugins.Entry, ScriptTrustStore, LoadedPlugin)? {
+        let plugin = makePlugin(id: id, script: script, abilities: abilities)
         let trust = store()
         if developerMode { try? trust.setDeveloperMode(true) }
         if approved { try? trust.approve(plugin, origin: developerMode ? .draft : .file) }
@@ -265,6 +269,7 @@ func scriptPluginsTests() {
 
     test("script plugins: press, focus and edit work only while the plugin's app is in front") {
         let mac = Mac()
+        mac.focus = el(nameField)   // an edit needs the focused item to be found (15 Nov 2026)
         let broker = AXScriptBroker(pluginID: "script-test", apps: ["com.example.app"], environment: mac.environment(), questionOpen: { false })
         let b = broker.item(for: el(button))?["handle"]?.stringValue ?? "", n = broker.item(for: el(nameField))?["handle"]?.stringValue ?? ""
         mac.front = AXReplay.floor + 1
@@ -288,6 +293,7 @@ func scriptPluginsTests() {
 
     test("script plugins: a refused menu path and a refused key are refused when asked, with the reason") {
         let mac = Mac()
+        mac.focus = el(nameField)   // an allowed key needs the focused item to be found (15 Nov 2026)
         let broker = AXScriptBroker(pluginID: "script-test", apps: ["com.example.app"], environment: mac.environment(), questionOpen: { false })
         @MainActor func menu(_ path: [String]) throws -> ScriptValue { try broker.perform(.menu, .object(["path": .array(path.map { .string($0) })])) }
         for (path, reason) in [(["Apple", "About This Mac"], "the Apple menu"), (["*", "Anything"], "not a pattern"), (["Edit", "Paste"], "Paste"), (["File", "Log Out Ann…"], "Log Out")]  {
@@ -342,6 +348,120 @@ func scriptPluginsTests() {
         }
         expect(mac.keys, ["command+k"], "no more keys were sent")
         expect(AXReplay.sets.count, setsBefore, "nothing was written to any field")
+    }
+
+    // MARK: Stage 3's review (15 Nov 2026)
+
+    test("script plugins: a plugin without read is sent no focus or value event, and a password field's value change goes to no script") {
+        let script = "turnover.on('focus', function (e) { e.say('focus ' + e.item.name); }); turnover.on('valueChange', function (e) { e.say('value ' + e.item.name); });"
+        // Without read: the script runs, but is never asked.
+        let blind = Mac()
+        blind.limits.eventDeadline = 0.5
+        guard let (blindPlugins, blindEntry, _, blindPlugin) = start(blind, script: script, abilities: "[\"say\"]") else { return }
+        defer { blindPlugins.terminate() }
+        check(!ScriptAbilities.effective(for: blindPlugin).contains(.read), "this plugin has no read")
+        expect(startHost(blindPlugins, blindEntry), true, "the script loads and runs")
+        var heldDuring = true
+        expect(fire(blindPlugins, .gainFocus, el(nameField), during: { heldDuring = ScriptFocusWords.current != nil }), 1, "a focus goes straight on")
+        expect(heldDuring, false, "and no words were held for it")
+        expect(fire(blindPlugins, .valueChange, el(nameField)), 1, "a value change goes on too")
+        expect(blind.spoken.filter { $0.hasPrefix("value") || $0.hasPrefix("focus") }, [], "the script was asked nothing")
+        // With read: the same script is asked.
+        let seeing = Mac()
+        seeing.limits.eventDeadline = 0.5
+        guard let (plugins, entry, _, _) = start(seeing, script: script) else { return }
+        defer { plugins.terminate() }
+        expect(startHost(plugins, entry), true, "the script loads")
+        expect(fire(plugins, .valueChange, el(nameField)), 0, "with read, a value change is handled and stops the chain")
+        expect(seeing.spoken.contains("value Name"), true, "and the script's words were said")
+        // A password field's value change is sent to nobody.
+        let before = seeing.spoken.count
+        expect(fire(plugins, .valueChange, el(passwordField)), 1, "a value change in a password field passes straight on")
+        expect(seeing.spoken.count, before, "and the script said nothing")
+    }
+
+    test("script plugins: the approval sentences say exactly what is agreed to") {
+        let plugin = makePlugin(script: "", abilities: "[\"read\", \"say\"]")
+        let lines = ScriptAbilities.approvalLines(for: plugin, appName: { _ in nil }).map(\.text)
+        check(lines.contains("It can speak, change or silence what TurnOver says in those apps, and play TurnOver's own sounds."), "say: \(lines)")
+        check(lines.contains("It can read what is on the screen in those apps, including text you have typed there, but never a password."), "read: \(lines)")
+        check(lines.contains("It can never use the internet, read or change your files, see the keys you press, see a password, or reach any other app."), "the fixed sentence: \(lines)")
+    }
+
+    /// The five acting requests, by name, against a broker; the handles are for the button and the name field.
+    func act(_ name: String, _ broker: AXScriptBroker, button b: String, field n: String) throws -> ScriptValue {
+        switch name {
+        case "press": return try broker.perform(.itemPress, .object(["handle": .string(b)]))
+        case "focus": return try broker.perform(.itemFocus, .object(["handle": .string(b)]))
+        case "edit": return try broker.perform(.itemSetValue, .object(["handle": .string(n), "value": .string("x")]))
+        case "menu": return try broker.perform(.menu, .object(["path": .array([.string("Edit"), .string("Copy")])]))
+        default: return try broker.perform(.keys, .object(["keys": .string("command+k")]))
+        }
+    }
+    /// Every request in `names` must be refused (not failed, not invalid), and change nothing.
+    func allRefused(_ names: [String], _ why: String, _ broker: AXScriptBroker, _ mac: Mac, button b: String, field n: String) {
+        let actions = AXReplay.actions.count, sets = AXReplay.sets.count
+        for name in names {
+            do { _ = try act(name, broker, button: b, field: n); check(false, "\(name) went through \(why)") }
+            catch let error as ScriptBrokerError { check(error == .refused(error.message), "\(name) is refused \(why): \(error)") } catch { check(false, "\(error)") }
+        }
+        expect(AXReplay.actions.count, actions, "nothing was pressed \(why)"); expect(AXReplay.sets.count, sets, "nothing was set \(why)")
+        expect(mac.keys, [], "no key was sent \(why)"); expect(mac.menus, [], "no menu was chosen \(why)")
+    }
+
+    test("script plugins: acting needs TurnOver's focus and the Mac's frontmost app both to be the plugin's") {
+        let mac = Mac()
+        mac.focus = el(nameField)
+        let broker = AXScriptBroker(pluginID: "script-test", apps: ["com.example.app"], environment: mac.environment(), questionOpen: { false })
+        let b = broker.item(for: el(button))?["handle"]?.stringValue ?? "", n = broker.item(for: el(nameField))?["handle"]?.stringValue ?? ""
+        let all = ["press", "focus", "edit", "menu", "keys"]
+        mac.front = AXReplay.floor + 1; mac.macFront = AXReplay.floor - 1   // TurnOver thinks the plugin's app, the Mac says another
+        allRefused(all, "when the Mac's frontmost app is another", broker, mac, button: b, field: n)
+        mac.front = AXReplay.floor - 1; mac.macFront = AXReplay.floor + 1   // the other way round
+        allRefused(all, "when TurnOver's focus is in another app", broker, mac, button: b, field: n)
+        mac.macFront = nil; mac.front = AXReplay.floor + 1
+        allRefused(all, "when the Mac names no frontmost app", broker, mac, button: b, field: n)
+        mac.macFront = AXReplay.floor + 1
+        for name in all { do { _ = try act(name, broker, button: b, field: n) } catch { check(false, "\(name) with both agreeing: \(error)") } }
+        expect(mac.keys, ["command+k"], "with both agreeing a key goes")
+    }
+
+    test("script plugins: keys and edit are refused while the Mac reports secure keyboard entry, and when the focused item cannot be found") {
+        let mac = Mac()
+        let broker = AXScriptBroker(pluginID: "script-test", apps: ["com.example.app"], environment: mac.environment(), questionOpen: { false })
+        let b = broker.item(for: el(button))?["handle"]?.stringValue ?? "", n = broker.item(for: el(nameField))?["handle"]?.stringValue ?? ""
+        mac.focus = el(nameField); mac.secureInput = true
+        allRefused(["keys", "edit"], "while secure keyboard entry is on", broker, mac, button: b, field: n)
+        mac.secureInput = false; mac.focus = nil
+        allRefused(["keys", "edit"], "when the focus cannot be found", broker, mac, button: b, field: n)
+        mac.focus = el(nameField)
+        for name in ["keys", "edit"] { do { _ = try act(name, broker, button: b, field: n) } catch { check(false, "\(name) in an ordinary field: \(error)") } }
+        expect(mac.keys, ["command+k"], "both go when the focus is an ordinary field and nothing is hidden")
+        expect(AXReplay.sets.last?.attribute, kAXValueAttribute, "the edit was made")
+    }
+
+    test("script plugins: words a script gave for a focus, said twice within half a second, are said once; silence says nothing and schedules no hint") {
+        let object = ObjectFactory.make(el(button))
+        let delay = Hints.delay
+        Hints.delay = 0.05
+        defer { Hints.delay = delay }
+        Speech.testResetFocusTiming()
+        settle(0.55)   // after any earlier words of the same kind
+        var heard: [String] = []
+        said(&heard) {
+            Speech.speakFocusWords("Save it twice", for: object)
+            Speech.speakFocusWords("Save it twice", for: object)
+            settle(0.4)
+        }
+        expect(heard.filter { $0 == "Save it twice" }.count, 1, "the repeat is said once: \(heard)")
+        check(heard.contains(Hints.forObject(object)) && !Hints.forObject(object).isEmpty, "and the hint follows the words: \(heard)")
+        settle(0.55)
+        var silent: [String] = []
+        said(&silent) {
+            Speech.speakFocusWords("", for: object)
+            settle(0.4)
+        }
+        expect(silent, [], "a silence says nothing and schedules no hint")
     }
 
     // MARK: Speech

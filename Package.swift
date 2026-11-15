@@ -15,6 +15,8 @@
 // turnover-plugin   the plugin tool (making and checking app plugins)
 // turnover-plugin-host   runs one plugin's script in a sandbox (TurnOverPluginHost; TurnOverPluginWire is the
 //                   message names and limits it shares with the core)
+// turnover-trust-keeper   the sandboxed XPC service that keeps plugin script approvals (TurnOverTrustKeeper), also the
+//                   program build.sh's keeper check runs as a throwaway app's host
 // turnover-tests    the unit tests (build.sh runs them); turnover-coretest the live and fixture tests
 // AXFixtures, PluginTestKit   recorded accessibility trees and the plugin test kit, for the tests
 // turnover-probe    measurement probes, run by hand
@@ -111,6 +113,7 @@ let package = Package(
         .executable(name: "turnover-plugin", targets: ["TurnOverPlugin"]),
         .executable(name: "turnover-key", targets: ["TurnOverKey"]),
         .executable(name: "turnover-plugin-host", targets: ["TurnOverPluginHost"]),
+        .executable(name: "turnover-trust-keeper", targets: ["TurnOverTrustKeeper"]),
         .executable(name: "turnover-settings", targets: ["TurnOverSettings"]),
         .executable(name: "turnover-tests", targets: ["TurnOverTests"]),
         // Dynamic: dyld honours interposing only in a library loaded at launch, never in the executable itself.
@@ -172,6 +175,7 @@ let package = Package(
                 "TurnOverSettings",
                 "TurnOverSpeech",
                 "TurnOverTests",
+                "TurnOverTrustKeeper",
                 "README.md",
                 "Core/README.md",
                 "Views/README.md",
@@ -425,6 +429,13 @@ let package = Package(
             path: "Sources/TurnOverPluginHost",
             swiftSettings: [.defaultIsolation(MainActor.self)],
             linkerSettings: [.linkedFramework("JavaScriptCore")]
+        ),
+        // The keeper of plugin script approvals: a small sandboxed XPC service inside TurnOver.app, and with --client check
+        // the program the build uses to prove it (docs/PLUGIN-SCRIPTS-PLAN.md, "The keeper"). Depends on the wire only.
+        .executableTarget(
+            name: "TurnOverTrustKeeper",
+            dependencies: ["TurnOverPluginWire"],
+            path: "Sources/TurnOverTrustKeeper"
         ),
         .executableTarget(
             name: "TurnOverProbe",

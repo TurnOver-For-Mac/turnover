@@ -14,7 +14,7 @@ nonisolated extension PluginFormat {
     /// The problems in a manifest's `script` and `commands`, and in main.js beside it. `text` is the manifest with its
     /// comments blanked (PluginFormat.clean), so lines match the file. Nothing if the manifest does not decode:
     /// the decoder's own error says so, and says it first.
-    static func checkScript(manifest url: URL, text: String) -> [Problem] {
+    static func checkScript(folder: URL?, text: String, scriptData: Data? = nil) -> [Problem] {
         guard let m = try? JSONDecoder().decode(PluginManifest.self, from: Data(text.utf8)) else { return [] }
         var out: [Problem] = []
         /// At the line where `path` is, or where its first existing parent is.
@@ -37,7 +37,7 @@ nonisolated extension PluginFormat {
             for (i, app) in m.apps.enumerated() where app.contains("*") || app.contains("?") {
                 manifestProblem(["apps", String(i)], "a script works only in apps it names, so \"\(app)\" cannot be a pattern: give the bundle identifier")
             }
-            out += checkScriptFile(in: url.deletingLastPathComponent())
+            out += checkScriptFile(in: folder, data: scriptData)
         } else if m.commands != nil {
             manifestProblem(["commands"], "commands need a script: add \"script\": \"\(scriptName)\" (and \"formatVersion\": 2), or take the commands out")
         }
@@ -56,9 +56,9 @@ nonisolated extension PluginFormat {
     }
 
     /// main.js itself: there, UTF-8 text, and small enough.
-    static func checkScriptFile(in folder: URL) -> [Problem] {
+    static func checkScriptFile(in folder: URL?, data given: Data? = nil) -> [Problem] {
         func problem(_ message: String) -> [Problem] { [Problem(file: scriptName, line: nil, message: message, isError: true)] }
-        guard let data = try? Data(contentsOf: folder.appendingPathComponent(scriptName)) else {
+        guard let data = given ?? folder.flatMap({ try? Data(contentsOf: $0.appendingPathComponent(scriptName)) }) else {
             return problem("is missing or cannot be read: the manifest says this plugin has a script")
         }
         guard String(data: data, encoding: .utf8) != nil else { return problem("is not text in UTF-8") }

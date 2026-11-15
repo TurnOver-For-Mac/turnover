@@ -46,6 +46,12 @@ public enum ScriptChecker {
                 for id in host.commands where !declared.contains(id) {
                     report.problems.append("the script handles a command \(id) that manifest.json does not declare: add it to \"commands\"")
                 }
+                // A focus or value event carries the item, so TurnOver sends them only to a plugin that has `read`.
+                if !ScriptAbilities.effective(for: plugin).contains(.read) {
+                    for name in ["focus", "valueChange"] where host.events.contains(name) {
+                        report.problems.append("the script handles \"\(name)\", but a plugin without \"read\" in \"abilities\" is never sent focus or value events (they carry the item): add \"read\"")
+                    }
+                }
             default: break
             }
             host.stop()

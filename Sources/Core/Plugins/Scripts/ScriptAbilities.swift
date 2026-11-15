@@ -90,7 +90,7 @@ extension ScriptAbilities {
         if granted.isEmpty {
             lines.append(.init(kind: .ability, text: String(localized: "It asks to do nothing in those apps. It can only think and keep its own notes.", comment: "Said when asking a person to approve a plugin's script that asks for no abilities")))
         }
-        lines.append(.init(kind: .cannot, text: String(localized: "It can never use the internet, read or change your files, see what you type, see a password, or reach any other app.", comment: "Said when asking a person to approve a plugin's script: what no script can ever do")))
+        lines.append(.init(kind: .cannot, text: String(localized: "It can never use the internet, read or change your files, see the keys you press, see a password, or reach any other app.", comment: "Said when asking a person to approve a plugin's script: what no script can ever do")))
         let closed = manifest.apps.compactMap { PluginPolicy.closedApps[$0] }
         if !closed.isEmpty {
             var unique: [String] = []
@@ -114,8 +114,8 @@ extension ScriptAbilities {
     /// One sentence for an ability, plain and short.
     static func sentence(for ability: ScriptAbility) -> String {
         switch ability {
-        case .read: return String(localized: "It can read what is on the screen in those apps: the names and values of buttons, text and other items.", comment: "Said when asking a person to approve a plugin's script: the read ability")
-        case .say: return String(localized: "It can speak, and play TurnOver's own sounds.", comment: "Said when asking a person to approve a plugin's script: the say ability")
+        case .read: return String(localized: "It can read what is on the screen in those apps, including text you have typed there, but never a password.", comment: "Said when asking a person to approve a plugin's script: the read ability")
+        case .say: return String(localized: "It can speak, change or silence what TurnOver says in those apps, and play TurnOver's own sounds.", comment: "Said when asking a person to approve a plugin's script: the say ability")
         case .press: return String(localized: "It can press buttons and other controls in those apps.", comment: "Said when asking a person to approve a plugin's script: the press ability")
         case .focus: return String(localized: "It can move the keyboard focus to an item in those apps.", comment: "Said when asking a person to approve a plugin's script: the focus ability")
         case .menu: return String(localized: "It can choose commands from those apps' menus.", comment: "Said when asking a person to approve a plugin's script: the menu ability")

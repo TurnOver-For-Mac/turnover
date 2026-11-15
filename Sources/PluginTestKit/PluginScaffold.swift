@@ -107,8 +107,9 @@ public enum PluginScaffold {
           "apps": ["\(app)"],
           // What the script may do, which the person is asked to agree to in plain words. Ask for as little as you can:
           // read (see items), say (speak), press, focus, menu, keys, edit (change a field), clipboard (put text on it).
-          // A request for something not listed here is refused, and the error says which ability to add.
-          "abilities": ["say"],
+          // A request for something not listed here is refused, and the error says which ability to add. A script is sent focus
+          // and value events only if it has "read", because they carry the item.
+          "abilities": ["read", "say"],
           // The script is always main.js, next to this file.
           "script": "main.js",
           // The commands the script handles. They are listed here, not found by running the script, so TurnOver can show

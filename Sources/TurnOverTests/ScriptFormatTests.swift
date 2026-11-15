@@ -199,7 +199,7 @@ func scriptFormatTests() {
         check(lines[2].text.contains("read what is on the screen"), "read: \(lines[2].text)")
         check(lines[3].text.contains("speak"), "say: \(lines[3].text)")
         check(lines[4].text.contains("clipboard") && lines[4].text.contains("cannot read"), "clipboard: \(lines[4].text)")
-        for word in ["internet", "files", "type", "password", "other app"] { check(lines[5].text.contains(word), "the fixed sentence says \(word): \(lines[5].text)") }
+        for word in ["internet", "files", "keys you press", "password", "other app"] { check(lines[5].text.contains(word), "the fixed sentence says \(word): \(lines[5].text)") }
         check(lines[6].text.contains("Nobody has checked this script"), "unchecked: \(lines[6].text)")
         let all = load(scriptManifestText(["abilities": "[\"read\", \"say\", \"press\", \"focus\", \"menu\", \"keys\", \"edit\", \"clipboard\"]"]))
         expect(ScriptAbilities.approvalLines(for: all, appName: { _ in nil }).filter { $0.kind == .ability }.count, 8, "one sentence for each of the eight")
