@@ -19,7 +19,10 @@ turnover.on("focus", function (event) {
 turnover.command("readResult", async function (context) {
   // turnover.find takes the same match object as profile.json's rules, and answers with a list of items, empty if
   // nothing matched. Each item is a copy of what was true a moment ago.
-  const found = await turnover.find({ role: "text", identifier: "result" }, { limit: 1 });
+  // Calculator's display is a piece of text inside the part its developers named "StandardInputView…" (found with
+  // `turnover-plugin snapshot Calculator`). The star stands for whatever follows, and a name like this is the same in
+  // every language.
+  const found = await turnover.find({ role: "text", inside: { identifier: "StandardInputView*" } }, { limit: 1 });
   if (found.length === 0) {
     turnover.say("There is no result to read");
     return;

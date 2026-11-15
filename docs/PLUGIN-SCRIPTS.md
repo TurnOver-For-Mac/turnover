@@ -134,7 +134,7 @@ turnover.on("focus", function (event) {
 turnover.command("readResult", async function (context) {
   // turnover.find takes the same match object as profile.json's rules, and answers with a list of items, empty if
   // nothing matched. Each item is a copy of what was true a moment ago.
-  const found = await turnover.find({ role: "text", identifier: "result" }, { limit: 1 });
+  const found = await turnover.find({ role: "text", inside: { identifier: "StandardInputView*" } }, { limit: 1 });
   if (found.length === 0) {
     turnover.say("There is no result to read");
     return;
@@ -714,7 +714,7 @@ This is the sample plugin's own test, `tests/script/read-result.json`, in full:
       "expect": { "say": null } },
     // "answers" gives the reply to each request the script makes in this step; "said" is what turnover.say spoke.
     { "command": "readResult",
-      "answers": { "find": [ { "role": "text", "value": "42", "identifier": "result" } ] },
+      "answers": { "find": [ { "role": "text", "value": "42", "description": "Edit field" } ] },
       "expect": { "said": ["42"] } },
     { "command": "readResult",
       "answers": { "find": [] },

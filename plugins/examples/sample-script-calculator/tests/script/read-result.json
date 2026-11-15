@@ -10,7 +10,7 @@
       "expect": { "say": null } },
     // "answers" gives the reply to each request the script makes in this step; "said" is what turnover.say spoke.
     { "command": "readResult",
-      "answers": { "find": [ { "role": "text", "value": "42", "identifier": "result" } ] },
+      "answers": { "find": [ { "role": "text", "value": "42", "description": "Edit field" } ] },
       "expect": { "said": ["42"] } },
     { "command": "readResult",
       "answers": { "find": [] },
