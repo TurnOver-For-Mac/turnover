@@ -64,14 +64,14 @@ func scriptToolTests() {
         }
     }
     test("script tool: a wrong expected answer fails and says what differed") {
-        let outcome = run(#"{ "name": "wrong", "steps": [ { "event": "focus", "item": { "role": "button", "name": "", "identifier": "clear" }, "expect": { "say": "Delete, button" } } ] }"#)
+        let outcome = run(#"{ "name": "wrong", "steps": [ { "event": "focus", "item": { "role": "button", "name": "Divide", "identifier": "Divide" }, "expect": { "say": "Delete, button" } } ] }"#)
         expect(outcome.failed, 1, "fails")
         let message = outcome.lines.joined(separator: "\n")
         check(message.contains("FAIL wrong: step 1 (focus)"), "says which test and step: \(message)")
-        check(message.contains("\"Clear, button\"") && message.contains("\"Delete, button\""), "says what it was and what was expected: \(message)")
+        check(message.contains("\"Divided by, button\"") && message.contains("\"Delete, button\""), "says what it was and what was expected: \(message)")
     }
     test("script tool: silence and neither are told apart") {
-        let item = #"{ "role": "button", "name": "", "identifier": "clear" }"#
+        let item = #"{ "role": "button", "name": "Divide", "identifier": "Divide" }"#
         let silent = run(#"{ "steps": [ { "event": "focus", "item": \#(item), "expect": { "say": "" } } ] }"#)
         check(silent.lines.joined().contains("expected silence"), "silence expected, words given: \(silent.lines)")
         let neither = run(#"{ "steps": [ { "event": "focus", "item": \#(item), "expect": { "say": null } } ] }"#)
@@ -223,7 +223,7 @@ func scriptToolTests() {
         let plugin = ProfileStore.load(folder: sample)
         let lines = ScriptAbilities.approvalLines(for: plugin, appName: { _ in "Calculator" }).map(\.text)
         check(lines[0].contains("Calculator, scripted") && lines[0].contains("Calculator"), "names the plugin and the app: \(lines[0])")
-        check(lines.contains { $0.contains("The author's own words about it") && $0.contains("Clear button") }, "the author's words, marked: \(lines)")
+        check(lines.contains { $0.contains("The author's own words about it") && $0.contains("Divide and Multiply buttons") }, "the author's words, marked: \(lines)")
         check(lines.contains { $0.contains("read what is on the screen") } && lines.contains { $0.contains("speak") }, "read and say")
         check(!lines.contains { $0.contains("clipboard") && $0.hasPrefix("It can put") }, "and nothing it did not ask for")
         check(lines.last?.contains("Nobody has checked this script") ?? false, "unchecked, last")
