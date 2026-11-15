@@ -9,8 +9,10 @@
 // nothing, and doing neither leaves TurnOver to read the item as usual. (Both need the "say" ability.)
 turnover.on("focus", function (event) {
   const item = event.item;
-  if (item.role === "button" && item.name === "" && item.identifier === "clear") {
-    event.say("Clear, button");
+  if (item.role === "button" && item.identifier === "Divide") {
+    event.say("Divided by, button");
+  } else if (item.role === "button" && item.identifier === "Multiply") {
+    event.say("Times, button");
   }
 });
 

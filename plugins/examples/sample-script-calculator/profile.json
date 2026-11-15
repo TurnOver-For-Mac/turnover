@@ -1,9 +1,0 @@
-// profile.json: rules that need no code. A plugin with a script may have these as well; the script and the rules are
-// approved together, so the abilities the rules need are counted with the manifest's.
-{
-  // Name the equals button, which Calculator leaves without a name for a screen reader.
-  // (The identifier is an example: take a real one from `turnover-plugin snapshot com.apple.calculator`.)
-  "labels": [
-    { "match": { "role": "AXButton", "identifier": "Equals", "unnamed": true }, "name": "Equals" }
-  ]
-}
