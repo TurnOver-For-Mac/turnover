@@ -41,7 +41,23 @@ package final class DockAppModule: AppModule {
         return String(localized: "Left and Right move through the items; Return opens one.", comment: "A hint in the Dock at the bottom of the screen")
     }
 
+    /// An item reached in the Dock's own list is said by its name alone: "Safari", not "Safari, dock item, selected"
+    /// (Oliver, 15 Nov 2026). Nothing for an item with no name, which keeps the general wording. Object navigation does
+    /// not come through here, so it still says what the item is.
+    package static func itemWords(name: String) -> String? {
+        let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return n.isEmpty ? nil : n
+    }
+
     package override func handleEvent(_ event: Event, next: () -> Void) {
+        if event.kind == .selection || event.kind == .gainFocus, event.obj.element.role == "AXDockItem",
+           let words = Self.itemWords(name: event.obj.name) {
+            // The same item reported by both the selection and the focus is said once.
+            if let (e, t) = TurnOverObject.lastSelectionSpoken, Date().timeIntervalSince(t) < 0.6, e.isSame(event.obj.element) { return }
+            TurnOverObject.noteSelectionSpoken(event.obj.element)
+            Speech.speakOnly(words)
+            return
+        }
         if event.kind == .gainFocus, event.obj is AppSwitcherList {
             // As VoiceOver does: just the highlighted application's name, not "application switcher, list" first.
             // (The first highlighted item is marked before the list reports focus.)

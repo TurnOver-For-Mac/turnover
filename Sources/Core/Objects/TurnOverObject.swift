@@ -493,7 +493,7 @@ open class TurnOverObject: ScriptableObject {
     }
     /// Set by the selection notification when several rows are selected: said after the row that changed.
     public static var selectionNote: String?
-    private static var lastSelectionSpoken: (AXUIElement, Date)?
+    package static var lastSelectionSpoken: (AXUIElement, Date)?
     public static func noteSelectionSpoken(_ e: AXUIElement) { lastSelectionSpoken = (e, Date()) }
     open func event_textChange() {}
     open func event_alert() { Speech.speakObject(self, reason: .focus) }
