@@ -24,10 +24,12 @@ public enum ClaudeProgressReadiness {
 
 package final class ClaudeAppModule: AppModule {
     private var watching = false
+    private let sessionDeletion = ClaudeSessionDeletion()
     private var readReplies: Bool { config.appSetting(ClaudeTranscript.bundleID, "readReplies", default: "on") == "on" }
 
     package required init(pid: pid_t, bundleIdentifier: String, appName: String) {
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
+        sessionDeletion.installScripts(on: self)
         WebBuffer.statusEchoApps.insert(ClaudeTranscript.bundleID)   // its tool rows' status repeats the row's button
         script("claude_switchConversation", String(localized: "Switches to a recent or new Claude conversation", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+1", "kb:command+2", "kb:command+3", "kb:command+4", "kb:command+5", "kb:command+6", "kb:command+7", "kb:command+8", "kb:command+9", "kb:command+n"], category: "Claude") { [weak self] gesture in
             self?.prepareConversationSwitch(gesture)
@@ -46,11 +48,15 @@ package final class ClaudeAppModule: AppModule {
         }.isAvailable = { [weak self] in self?.popup != nil && API.focusObject?.axRole == "AXMenuItem" }
         // 14 Nov 2026: focused session menu items exposed no AXPress/AXConfirm; VO-Space
         // only refocused them. Native Return opened the confirmation dialog in the same log.
-        script("vo_defaultAction", String(localized: "Activates Claude's focused menu item", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+space"], category: "Claude") { [weak self] _ in
-            guard let self, canActivateFocusedMenuItem else { return }
+        script("vo_defaultAction", String(localized: "Activates Claude's focused menu item", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+space"], category: "Claude") { [weak self] key in
+            guard let self else { return }
+            if sessionDeletion.activate(key, useReturn: true) { return }
+            guard canActivateFocusedMenuItem else { return }
             if let focus = API.focusObject { rememberChoice(focus) }
             KeyboardGesture(identifier: "kb:enter")?.send()
-        }.isAvailable = { [weak self] in self?.canActivateFocusedMenuItem == true }
+        }.isAvailable = { [weak self] in
+            self?.sessionDeletion.canActivate == true || self?.canActivateFocusedMenuItem == true
+        }
         script("claude_readLatest", String(localized: "Reads Claude's latest reply", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+shift+r"], category: "Claude") { [weak self] _ in
             guard let self, let chat = ClaudeTranscript.chat(pid: self.pid) else { Speech.speakMessage(String(localized: "no conversation", comment: "Spoken message")); return }
             let reply = ClaudeTranscript.latestReply(chat: chat)
@@ -186,6 +192,7 @@ package final class ClaudeAppModule: AppModule {
     /// Only the destination owns switch speech. An unchanged poll can release queued keys after the
     /// existing settle, but cannot establish that the shortcut chose the already-open conversation.
     package func prepareConversationSwitch(_ gesture: KeyboardGesture) {
+        sessionDeletion.cancel()
         guard let page = API.focusTreeInterceptor,
               page.webArea.pid == pid else { return }
         let previousTitle = conversationPage === page && page.navigationTitleOwned ? conversationStartingTitle : ""
@@ -512,6 +519,7 @@ package final class ClaudeAppModule: AppModule {
     package override var rolesPressedByKeyboard: Set<String> { ["AXButton", "AXMenuItem"] }
 
     package override func handleEvent(_ event: Event, next: () -> Void) {
+        sessionDeletion.observe(event)
         if event.kind == .gainFocus,
            API.focusTreeInterceptor?.navigationWaiting == true { return }
         switch event.kind {
