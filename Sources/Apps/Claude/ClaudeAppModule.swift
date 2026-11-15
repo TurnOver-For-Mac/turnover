@@ -39,7 +39,7 @@ package final class ClaudeAppModule: AppModule {
             script("claude_popup_" + arrow, String(localized: "Reads the selected Claude command", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:" + arrow], category: "Claude") { [weak self] key in
                 key.send()
                 self?.refreshPopup(after: 0.04)
-            }.isAvailable = { [weak self] in self?.popup != nil && API.focusObject?.axRole == "AXTextArea" }
+            }.isAvailable = { [weak self] in self?.hasPromptPopup == true }
         }
         script("claude_chooseMenuItem", String(localized: "Chooses a Claude menu item", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:enter", "kb:space"], category: "Claude") { [weak self] key in
             guard let self, let focus = API.focusObject else { return }
@@ -66,6 +66,7 @@ package final class ClaudeAppModule: AppModule {
 
     package override var handlesGroupMenus: Bool { true }
     private var popup: AXUIElement?
+    private var popupField: AXUIElement?
     private var popupGeneration = 0
     private var popupSpoken = ""
     private var pendingChoice: (String, Date)?
@@ -73,6 +74,7 @@ package final class ClaudeAppModule: AppModule {
     package struct PopupReading: Sendable {
         let selected: String
         let first: String
+        var closed = false
     }
 
     // The log proves AXGroup menu notifications, but does not record descendants. Accept only
@@ -83,8 +85,36 @@ package final class ClaudeAppModule: AppModule {
         pendingChoice = (focus.name, Date())
     }
 
+    private func clearPopup() {
+        popup = nil
+        popupField = nil
+        popupGeneration += 1
+        popupReader.cancel()
+    }
+
+    private var hasPromptPopup: Bool {
+        guard popup != nil,
+              let field = API.focusObject,
+              let origin = popupField,
+              field.axRole == "AXTextArea",
+              field.element.isSame(origin) else { return false }
+        // 15 Nov 2026, Claude/macOS 27.2: group menus posted no menuEnd after the slash
+        // was erased; their cached reference still took arrows while ordinary text was read.
+        // Read the current value: the focus object's lazy value predates these edits.
+        guard field.name == "Prompt", (field.element.string(kAXValueAttribute) ?? "").hasPrefix("/") else {
+            clearPopup()
+            return false
+        }
+        return API.focusTreeInterceptor?.passThrough == true
+    }
+
     nonisolated private static func readPopup(_ root: AXUIElement, field: AXUIElement?, request: AXWalkRequest) -> PopupReading {
         let deadline = Date().addingTimeInterval(0.15)
+        AXUIElementSetMessagingTimeout(root, 0.03)
+        let role = root.attributeResult(kAXRoleAttribute)
+        if role.error == .invalidUIElement || root.attr("AXHidden") as? Bool == true {
+            return PopupReading(selected: "", first: "", closed: true)
+        }
         var pending = [(root, 0)], seen = Set<ElementKey>()
         var first = "", selected = ""
         var selectedElements = Set<ElementKey>()
@@ -120,8 +150,9 @@ package final class ClaudeAppModule: AppModule {
         return PopupReading(selected: selected, first: first)
     }
 
-    private func refreshPopup(after delay: TimeInterval = 0, opening: Bool = false) {
+    private func refreshPopup(after delay: TimeInterval = 0) {
         guard let root = popup, API.focusObject?.axRole == "AXTextArea" else { return }
+        guard hasPromptPopup else { return }
         popupGeneration += 1
         let generation = popupGeneration
         let field = API.focusObject?.axRole == "AXTextArea" ? API.focusObject?.element : nil
@@ -131,8 +162,9 @@ package final class ClaudeAppModule: AppModule {
             popupReader.submit(collect: { request in AXReadScope.with(while: { !request.isCancelled }) { Self.readPopup(root, field: field, request: request) } }, publish: { [weak self] reading in
                 guard let self, popupGeneration == generation, popup != nil,
                       API.focusTreeInterceptor?.webArea.pid == pid,
-                      API.focusObject?.axRole == "AXTextArea" else { return }
-                let label = reading.selected.isEmpty && (opening || popupSpoken.isEmpty) ? reading.first : reading.selected
+                      hasPromptPopup else { return }
+                if reading.closed { clearPopup(); return }
+                let label = reading.selected.isEmpty ? reading.first : reading.selected
                 guard !label.isEmpty else {
                     Log.io("claude: group popup has no named semantic selection; awaiting focus or selection news")
                     return
@@ -522,17 +554,24 @@ package final class ClaudeAppModule: AppModule {
         sessionDeletion.observe(event)
         if event.kind == .gainFocus,
            API.focusTreeInterceptor?.navigationWaiting == true { return }
+        // A menu may disappear without a close notification. A different field/page owns
+        // subsequent keys; a native menu item can still own its own focus and confirmation.
+        if event.kind == .gainFocus, popup != nil,
+           event.obj.axRole != "AXMenuItem",
+           popup?.isSame(event.obj.element) != true,
+           popupField?.isSame(event.obj.element) != true {
+            clearPopup()
+        }
         switch event.kind {
         case .menuStart where event.obj.axRole == "AXGroup":
             popup = event.obj.element
+            popupField = API.focusObject?.axRole == "AXTextArea" ? API.focusObject?.element : nil
             popupSpoken = ""
-            refreshPopup(opening: true)
+            refreshPopup()
             return
         case .menuEnd where event.obj.axRole == "AXGroup":
             if popup?.isSame(event.obj.element) == true {
-                popup = nil
-                popupGeneration += 1
-                popupReader.cancel()
+                clearPopup()
             }
             return
         case .gainFocus where pendingChoice != nil && event.obj.axRole == "AXTextArea":
@@ -545,10 +584,8 @@ package final class ClaudeAppModule: AppModule {
             refreshPopup()
             next()
         case .appModuleLoseFocus:
-            popup = nil
+            clearPopup()
             pendingChoice = nil
-            popupGeneration += 1
-            popupReader.cancel()
             next()
         case .gainFocus where event.obj.element.string(kAXRoleDescriptionAttribute) == "article":
             // A message: its text, with "You said" or "Claude responded" from its hidden heading.
