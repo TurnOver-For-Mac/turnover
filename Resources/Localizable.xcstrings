@@ -10641,6 +10641,15 @@
         }
       }
     },
+    "In a toolbar: back to the window's content" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
+    "In a toolbar: the next control; the edge sound at the last" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
+    "In a toolbar: the previous control; the edge sound at the first" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
     "In the ribbon, sidebar, status bar or toolbar: back to the document" : {
       "comment" : "A command, as the key list and keyboard help say it",
       "localizations" : {

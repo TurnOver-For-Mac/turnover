@@ -6,6 +6,11 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- In a toolbar, in any app, Left and Right move to the previous or next control, with the edge sound at either end
+  instead of silence, and Escape goes back to the window's content (the place you were before the toolbar; in Finder
+  the files, in System Settings the pane or the sidebar). A text field in the toolbar keeps its own keys. Up, Down,
+  Tab and Shift+Tab are unchanged. Reaching a toolbar now says "tool bar", even where the kind of an item is left out
+  of what is said.
 - Two rows with the same words, one above the other, are both read when you move quickly between them, such as two
   copies of one message in Mail's list. The second was not spoken.
 - "Nothing in this window can be read", with the keys for screen recognition, is a hint now: turning off Hints after
