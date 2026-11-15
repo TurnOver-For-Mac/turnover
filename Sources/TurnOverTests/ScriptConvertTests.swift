@@ -565,3 +565,110 @@ func scriptConvertTests() {
         check(!none.madePlugin && !fm.fileExists(atPath: out2.appendingPathComponent("BRIEF.md").path) && !fm.fileExists(atPath: out2.appendingPathComponent("original").path), "nothing to translate, so no brief and no copy of the original")
     }
 }
+
+// MARK: NVDA's add-on store in the Plugins menu: the model, with fixture answers and never the network
+
+private let storeListJSON = """
+{"addons":[
+ {"id":"clock","name":"Clock","version":"1.0","author":"Ann\\u0007 Author","description":"Says the time.\\nLong\\u2028text","verdict":"can be converted"},
+ {"id":"winonly","name":"Windows Thing","version":"2","author":"Bob","description":"For a Windows program","verdict":"not for the Mac","reason":"a Windows program"},
+ {"id":"../evil","name":"Bad id","version":"1","author":"x","description":"x","verdict":"can be converted"},
+ {"id":"fresh","name":"Fresh","version":"3","author":"","description":"","verdict":"not looked at yet"}
+],"shown":4,"leftOut":0}
+"""
+
+func nvdaStoreTests() {
+    func result(_ json: String = "", status: Int32 = 0, err: String = "", timedOut: Bool = false, couldNotStart: Bool = false) -> NVDAStore.ToolResult {
+        NVDAStore.ToolResult(status: status, out: Data(json.utf8), err: err, timedOut: timedOut, couldNotStart: couldNotStart)
+    }
+
+    test("nvda store: a list is read, cleaned, and an entry with an unsafe id is left out") {
+        guard case .success(let items) = NVDAStore.parseList(Data(storeListJSON.utf8)) else { check(false, "the list reads"); return }
+        expect(items.map(\.id), ["clock", "winonly", "fresh"], "the id with a path in it is dropped")
+        check(!items[0].author.unicodeScalars.contains { $0.value < 0x20 }, "control characters are taken out of what is spoken: \(items[0].author)")
+        check(!items[0].description.contains("\n") && !items[0].description.contains("\u{2028}"), "and line breaks")
+        expect(items[1].verdict, .notForMac, "the not-for-Mac verdict is kept")
+        let t = NVDAStore.title(items[1])
+        check(t.hasPrefix("Windows Thing, by Bob.") && t.contains("Not for the Mac: a Windows program"), "a title has name, author, description and the verdict: \(t)")
+        check(NVDAStore.title(items[2]) == "Fresh", "a bare entry is just its name: \(NVDAStore.title(items[2]))")
+        if case .failure(let f) = NVDAStore.parseList(Data("not json".utf8)) { check(f.words.contains("could not read"), "bad JSON gives a plain sentence: \(f.words)") } else { check(false, "bad JSON fails") }
+    }
+
+    test("nvda store: nothing is asked until the person has said yes") {
+        var calls = 0
+        let run: NVDAStore.Runner = { _, _ in calls += 1; return result(storeListJSON) }
+        if case .failure(let f) = NVDAStore.fetchList(search: nil, connected: false, run: run) { expect(f, NVDAStore.Failure.notConnected, "says why") } else { check(false, "refused") }
+        _ = NVDAStore.fetchDetail(id: "clock", connected: false, run: run)
+        let item = NVDAStore.Item(id: "clock", name: "Clock", version: "1", author: "", description: "", verdict: .notLookedAt, reason: nil)
+        expect(NVDAStore.convert(item, convertedBy: "T", base: URL(fileURLWithPath: "/nonexistent"), connected: false, run: run), .failed(.notConnected), "convert refused too")
+        expect(calls, 0, "the tool was never run")
+        _ = NVDAStore.fetchList(search: nil, connected: true, run: run)
+        expect(calls, 1, "once connected it runs")
+        expect(Config().pluginSources.connectToNVDAStore, false, "the setting is off by default")
+        expect(Config.PluginSources().convertedBy, "", "and no name is kept")
+        let decoded = try JSONDecoder().decode(Config.PluginSources.self, from: Data("{}".utf8))
+        expect(decoded.connectToNVDAStore, false, "an older settings file reads as off")
+    }
+
+    test("nvda store: the questions put to the tool") {
+        expect(NVDAStore.searchArguments("  clock   --json -x "), ["store", "search", "clock", "json", "x", "--json"], "words are separate, with leading hyphens taken off, so none is a flag")
+        expect(NVDAStore.searchArguments(" -- "), nil, "nothing to search for")
+        expect(NVDAStore.showArguments("clock"), ["store", "show", "clock", "--json"], "show")
+        expect(NVDAStore.showArguments("../x"), nil, "an id with a path is never used")
+        expect(NVDAStore.showArguments("--out"), nil, "nor one that looks like a flag")
+        let base = URL(fileURLWithPath: "/tmp/TurnOver Plugins")
+        let folder = NVDAStore.conversionFolder(name: "Clock/../x", id: "clock", base: base, now: Date(timeIntervalSince1970: 0), exists: { _ in false })
+        expect(folder.deletingLastPathComponent().path, base.path, "the folder is directly under the plugins folder")
+        check(folder.lastPathComponent.hasPrefix("NVDA add-on Clock") && !folder.lastPathComponent.contains("/"), "named for the add-on: \(folder.lastPathComponent)")
+        let second = NVDAStore.conversionFolder(name: "Clock", id: "clock", base: base, now: Date(timeIntervalSince1970: 0), exists: { $0.lastPathComponent.hasSuffix("0000") || !$0.lastPathComponent.hasSuffix(" 2") })
+        check(second.lastPathComponent.hasSuffix(" 2"), "never an existing folder: \(second.lastPathComponent)")
+        let args = NVDAStore.convertArguments(id: "clock", folder: folder, convertedBy: "--Ann  Converter")
+        expect(args?.suffix(2).map { $0 }, ["--converted-by", "Ann Converter"], "the credit name is plain and cannot start a flag: \(args ?? [])")
+        expect(NVDAStore.convertArguments(id: "a b", folder: folder, convertedBy: "x"), nil, "an unsafe id never reaches a command line")
+        check(!(args ?? []).contains { $0.contains("/Users/") && $0 != folder.path }, "nothing of the person but the folder and the name is given")
+    }
+
+    test("nvda store: failures are said in plain sentences") {
+        let a = NVDAStore.failure(result(status: -1, couldNotStart: true), what: "asking NVDA's store").words
+        check(a.contains("could not be started"), a)
+        let b = NVDAStore.failure(result(status: 15, timedOut: true), what: "asking NVDA's store").words
+        check(b.contains("did not answer in time") && b.contains("Nothing was changed"), b)
+        let c = NVDAStore.failure(result(status: 1, err: "The file's SHA-256 does not match the store's list.\nmore"), what: "converting the add-on").words
+        check(c.contains("SHA-256 does not match") && !c.contains("more"), c)
+        var asked = [[String]]()
+        let r = NVDAStore.fetchList(search: "clock", connected: true, run: { a, t in asked.append(a); return result(status: 1, err: "boom") })
+        if case .failure(let f) = r { check(f.words.contains("boom"), f.words) } else { check(false, "a failed run is a failure") }
+        expect(asked.first ?? [], ["store", "search", "clock", "--json"], "the search was put as separate words")
+    }
+
+    test("nvda store: converting hands over a folder, or says nothing came across") {
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("nvda-store-test-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        let item = NVDAStore.Item(id: "clock", name: "Clock", version: "1", author: "Ann", description: "", verdict: .notLookedAt, reason: nil)
+        var seen: [String] = []
+        let made: NVDAStore.Runner = { args, timeout in
+            seen = args
+            if let i = args.firstIndex(of: "--out") { let f = URL(fileURLWithPath: args[i + 1]); try? FileManager.default.createDirectory(at: f, withIntermediateDirectories: true); try? "{}".write(to: f.appendingPathComponent("manifest.json"), atomically: true, encoding: .utf8) }
+            return result("done")
+        }
+        if case .made(let folder) = NVDAStore.convert(item, convertedBy: "Tess", base: tmp, connected: true, run: made) { expect(folder.deletingLastPathComponent().path, tmp.path, "a new folder under the plugins folder") } else { check(false, "made") }
+        expect(seen.first, "convert", "the tool's convert was run"); check(seen.contains("clock") && seen.contains("Tess"), "with the id and the name")
+        let reportOnly: NVDAStore.Runner = { args, _ in
+            if let i = args.firstIndex(of: "--out") { let f = URL(fileURLWithPath: args[i + 1]); try? FileManager.default.createDirectory(at: f, withIntermediateDirectories: true); try? "r".write(to: f.appendingPathComponent("CONVERSION.md"), atomically: true, encoding: .utf8) }
+            return result("done")
+        }
+        if case .nothingToConvert = NVDAStore.convert(item, convertedBy: "Tess", base: tmp, connected: true, run: reportOnly) {} else { check(false, "nothing to convert") }
+        let timedOut = NVDAStore.convert(item, convertedBy: "Tess", base: tmp, connected: true, run: { _, _ in result(status: 15, timedOut: true) })
+        if case .failed(let f) = timedOut { check(f.words.contains("in time"), f.words) } else { check(false, "a timeout fails") }
+    }
+
+    test("nvda store: the real runner reads output, times out, and reports a tool that is not there") {
+        let echo = ToolProcess.run(["hello"], timeout: 10, tool: URL(fileURLWithPath: "/bin/echo"))
+        expect(echo.status, 0, "ran"); expect(String(decoding: echo.out, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines), "hello", "its output is read")
+        let slow = ToolProcess.run(["5"], timeout: 0.3, tool: URL(fileURLWithPath: "/bin/sleep"))
+        check(slow.timedOut, "a program that takes too long is stopped")
+        let big = ToolProcess.run(["-c", "head -c 200000 /dev/zero"], timeout: 10, tool: URL(fileURLWithPath: "/bin/sh"), limit: 1000)
+        check(big.status != 0 && big.out.isEmpty, "output over the cap is refused")
+        check(ToolProcess.run([], timeout: 1, tool: nil).couldNotStart, "no tool is said plainly")
+    }
+}

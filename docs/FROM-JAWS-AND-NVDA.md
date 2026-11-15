@@ -298,6 +298,22 @@ top of `main.js`. `check` says so, and `check --listing` will not call it ready 
 unapproved like any other, and approving it is the person's, in TurnOver, after hearing what it can do. An AI is told
 never to change that field.
 
+### From TurnOver's Plugins menu
+
+Plugins, NVDA add-ons has: Search NVDA's add-ons (type some words, then Return), All NVDA's add-ons (a list by name; type
+the first letters of a name to jump), a toggle "Ask NVDA's store for its list of add-ons", and the name to credit for
+converted add-ons. The first time you search, TurnOver asks once: "TurnOver will fetch the list of add-ons from NVDA's
+store on the internet. Nothing about you or your Mac is sent beyond the request itself. Connect?" with "Not now" first.
+Connect turns the toggle on; turning it off stops all asking. "Not now" is asked again next time.
+
+TurnOver the screen reader does no networking and no parsing of the answer. Each step runs the bundled `turnover-plugin`
+as a separate program with a time limit and a cap on what it may print (`store list|search|show --json`, then
+`convert`), and says any failure in a plain sentence. Results give the name, author, a short description and, where
+known, "not for the Mac". Choosing one gives About (version, author, licence, source, verdict) and Convert with Claude,
+ChatGPT or Gemini, or Convert it myself. The first conversion asks for the name to credit, once, and keeps it. The
+draft goes in a new folder under ~/TurnOver Plugins and is handed over exactly as "Make a plugin" hands over. TurnOver
+then says where the folder is, and that nothing is installed or approved.
+
 ### Finding an add-on without knowing its id
 
 ```
