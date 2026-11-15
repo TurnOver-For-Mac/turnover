@@ -134,7 +134,7 @@ turnover.on("focus", function (event) {
 turnover.command("readResult", async function (context) {
   // turnover.find takes the same match object as profile.json's rules, and answers with a list of items, empty if
   // nothing matched. Each item is a copy of what was true a moment ago.
-  const found = await turnover.find({ role: "text", inside: { identifier: "StandardInputView*" } }, { limit: 1 });
+  const found = await turnover.find({ role: "staticText", inside: { identifier: "StandardInputView*" } }, { limit: 1 });
   if (found.length === 0) {
     turnover.say("There is no result to read");
     return;
@@ -284,7 +284,9 @@ if (item) turnover.say(item.name);
 Ability: `read`. Finds items in the plugin's app: the one in front, or else a running one of its apps. `match` is the
 same match object `profile.json` uses (see "Matching elements" in PLUGIN-GUIDE.md): `role`, `roles`, `subrole`,
 `identifier`, `title`, `description`, `help`, `value`, `text`, `window`, `inside`, `parent`, `unnamed`, `pressable`,
-`nth` and `any`. Leave it out to match anything. `limit` is the most to return, and TurnOver never gives more than
+`nth` and `any`. A match's `role` is the same word an item's `role` gives (`button`, `staticText`, `textField`), so
+read it off the item: Calculator's display is `staticText`, and the plain word `text` is taken to mean `staticText` too.
+Leave it out to match anything. `limit` is the most to return, and TurnOver never gives more than
 50. A search may take 150 ms, so a slow app costs the script its turn. The result is a list of items, empty when
 nothing matched. A match TurnOver cannot read rejects.
 
@@ -721,7 +723,7 @@ This is the sample plugin's own test, `tests/script/read-result.json`, in full:
       "expect": { "say": null } },
     // "answers" gives the reply to each request the script makes in this step; "said" is what turnover.say spoke.
     { "command": "readResult",
-      "answers": { "find": [ { "role": "text", "value": "42", "description": "Edit field" } ] },
+      "answers": { "find": [ { "role": "staticText", "value": "42", "description": "Edit field" } ] },
       "expect": { "said": ["42"] } },
     { "command": "readResult",
       "answers": { "find": [] },

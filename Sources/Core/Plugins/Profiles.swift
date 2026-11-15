@@ -286,8 +286,10 @@ nonisolated public enum ElementMatcher {
     }
 
     /// "AXRadioButton", "RadioButton", "radio button" and "radioButton" all mean the same role.
-    static func roleMatches(_ wanted: String, _ axRole: String) -> Bool {
+    public static func roleMatches(_ wanted: String, _ axRole: String) -> Bool {
         if wanted.hasPrefix("AX") { return glob(wanted, axRole) }
+        // Authors guess "text" for a piece of text; AXText is not a role, so the word means what the item's role says, staticText.
+        if wanted.lowercased() == "text" { return axRole == "AXStaticText" }
         let words = wanted.split(separator: " ").map { $0.prefix(1).uppercased() + $0.dropFirst() }
         return glob("AX" + words.joined(), axRole)
     }
