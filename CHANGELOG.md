@@ -19,6 +19,11 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- In a toolbar, in any app, Left and Right move to the previous or next control, with the edge sound at either end
+  instead of silence, and Escape goes back to the window's content (the place you were before the toolbar; in Finder
+  the files, in System Settings the pane or the sidebar). A text field in the toolbar keeps its own keys. Up, Down,
+  Tab and Shift+Tab are unchanged. Reaching a toolbar now says "tool bar", even where the kind of an item is left out
+  of what is said.
 - Quick Nav no longer switches itself on: Left and Right arrows count as the turn-on chord only when pressed within 150 milliseconds of each other, and a half-seen first arrow is forgotten when the keyboard connection restarts or you change application.
 
 - Heading and link keys say "application switcher is open" in your language too, not only in English.

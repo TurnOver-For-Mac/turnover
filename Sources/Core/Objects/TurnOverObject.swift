@@ -447,7 +447,7 @@ open class TurnOverObject: ScriptableObject {
         reportFocus()
     }
     open func event_loseFocus() { Speech.clearTypedWordBuffer() }
-    open func event_focusEntered() { Speech.speakObject(self, reason: .focusEntered) }
+    open func event_focusEntered() { if !ToolbarKeys.sayEntering(self) { Speech.speakObject(self, reason: .focusEntered) } }
     open func event_focusExited() {}
     open func event_foreground() { Speech.cancel() }
     open func event_valueChange() {
@@ -602,7 +602,7 @@ open class TurnOverObject: ScriptableObject {
             return
         }
         if event.kind == .gainFocus, role == .passwordEdit { SecureEcho.focused(element) }
-        if event.kind == .gainFocus { SettingsPanePlugin.focusMoved(to: self) }
+        if event.kind == .gainFocus { SettingsPanePlugin.focusMoved(to: self); ToolbarKeys.focusMoved(to: self) }
         switch event.kind {
         case .gainFocus: event_gainFocus()
         case .loseFocus: event_loseFocus()

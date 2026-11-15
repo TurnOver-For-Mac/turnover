@@ -85,6 +85,11 @@ open class AppModule: ScriptableObject {
     /// cursor. Nil when the review cursor and the focus say it, or when the reader doesn't have the keys.
     open func readingPosition() -> (element: AXUIElement, movedAt: Date)? { nil }
 
+    /// Where Escape from a toolbar control goes in this window (ToolbarKeys): the window's main content as this app
+    /// knows it, or nil for the general rule (the place the keyboard was before the toolbar, else the first control
+    /// outside the toolbar).
+    open func toolbarEscapeTarget(in window: AXUIElement) -> AXUIElement? { nil }
+
     /// Where the app misreports its focus, the element that really has it.
     open func redirectFocus(_ element: AXUIElement) -> AXUIElement? { nil }
 
