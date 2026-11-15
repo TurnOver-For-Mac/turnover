@@ -241,7 +241,6 @@ nonisolated public enum NVDAStore {
         var s = i.name
         let author = speakableAuthor(i.author)
         if !author.isEmpty { s += String(localized: ", by \(author)", comment: "An NVDA add-on in a list: its author, after its name") }
-        if !i.description.isEmpty { s += ". " + (i.description.count > 140 ? String(i.description.prefix(139)) + "…" : i.description) }
         switch i.verdict {
         case .notForMac: s += String(localized: ". Not for the Mac\(i.reason.map { ": \($0)" } ?? "").", comment: "An NVDA add-on that cannot come across; the placeholder is the reason, with its colon, or empty")
         case .needsWork: s += String(localized: ". Looked at before: needs work.", comment: "An NVDA add-on an earlier conversion found needs a person's work")
@@ -250,6 +249,9 @@ nonisolated public enum NVDAStore {
         }
         return s
     }
+
+    /// What a result says after a pause (only with hints on): its description, which About reads out in full either way.
+    public static func hint(_ i: Item) -> String? { i.description.isEmpty ? nil : i.description }
 
     /// Everything the list says about one add-on, as one spoken passage.
     public static func facts(_ d: Detail) -> String {

@@ -896,10 +896,15 @@ public final class TurnOverMenu {
         openChooser("Applications", items: items)
     }
 
+    /// What is said when a key is waited for: with hints off, the prompt alone; with hints on, "Escape to cancel" after it.
+    public static func spokenKeyPrompt(_ prompt: String, hints: Bool) -> String {
+        hints ? String(localized: "\(prompt). Escape to cancel", comment: "Waiting for a key: %@ says which") : prompt
+    }
+
     /// Wait for the next key, after the prompt; Escape cancels.
     static func captureKey(prompt: String, _ done: @escaping (KeyboardGesture) -> Void) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            Speech.speakMessage(String(localized: "\(prompt). Escape to cancel", comment: "Waiting for a key: %@ says which"))
+            Speech.speakMessage(spokenKeyPrompt(prompt, hints: config.presentation.speakHints))
             InputManager.captureNext = { g in
                 guard let g else { Speech.speakMessage(String(localized: "cancelled", comment: "Waiting for a key, cancelled with Escape")); return }
                 done(g)

@@ -83,7 +83,7 @@ enum NVDAStoreMenu {
                 if found.isEmpty { Speech.speakMessage(search.map { String(localized: "No add-on on NVDA's store matches \($0).", comment: "A search of NVDA's add-on store found nothing; the placeholder is the words") } ?? String(localized: "NVDA's store list was empty.", comment: "The store list had nothing in it")); return }
                 let title = search.map { String(localized: "NVDA add-ons matching \($0)", comment: "A list of NVDA add-ons; the placeholder is the search words") } ?? String(localized: "NVDA add-ons", comment: "A list of every NVDA add-on")
                 TurnOverMenu.shared.openList(verbatim: title, items: found.map { i in
-                    MenuItem(verbatim: NVDAStore.title(i), .action { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { details(i) } })
+                    MenuItem(verbatim: NVDAStore.title(i), .action { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { details(i) } }, hint: NVDAStore.hint(i))
                 })
             }
         }
