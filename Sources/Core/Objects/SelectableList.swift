@@ -167,7 +167,7 @@ open class SelectableList: TurnOverObject {
         }
         // Not at an end, but nothing yet: the application is slow (Mail fetching a message); its event reads the row
         // when it comes. In a grid, Up and Down at the top or bottom row do nothing: the edge (Freeform's boards).
-        Log.io("list: no selection change yet after \(g.keyName)")
+        Log.io("list: no selection change yet after \(g.keyName) (VoiceOver process \(NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.VoiceOver").isEmpty ? "absent" : "running"), VoiceOver flag \(NSWorkspace.shared.isVoiceOverEnabled ? "on" : "off"))")
         if axSubrole == "AXCollectionList" { Tones.edge(keySent: true) }
     }
 

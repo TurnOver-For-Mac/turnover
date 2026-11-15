@@ -404,7 +404,7 @@ final class LeadWatcher {
             guard gameOff || bringBack else { Log.info("coexist: TurnOver \(voiceOverOn ? "steps back" : "takes the keys"); VoiceOver stays on"); return }
             Log.info("coexist: the game exception: VoiceOver \(voiceOverOn ? "back on" : "off for the game")")
         }
-        Log.info("hand-over: asked for VoiceOver \(voiceOverOn ? "on" : "off")")
+        Log.info("hand-over: asked for VoiceOver \(voiceOverOn ? "on" : "off") (app in front: \(NSWorkspace.shared.frontmostApplication?.localizedName ?? "none"), VoiceOver was \(NSWorkspace.shared.isVoiceOverEnabled ? "on" : "off"), after a hand \(yieldedToVoiceOverByHand), lock \(lockTurnedVoiceOverOn)")
         if Uninstaller.running && !voiceOverOn { completion?(false); return }   // uninstalling: VoiceOver stays on
         if !voiceOverOn { ScreenCurtain.noteVoiceOverCurtain() }   // before VoiceOver goes, and its curtain with it
         lastHandOverAt = Date()

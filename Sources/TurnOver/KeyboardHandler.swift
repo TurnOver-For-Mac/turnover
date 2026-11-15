@@ -81,6 +81,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
     /// With Quick Nav off: the bare arrow physically held (passed to the app as usual), so Left and Right pressed
     /// together can turn Quick Nav on, as VoiceOver's do (13 Oct 2026: they turned it off, never on).
     private var arrowDownWhileOff: Int64?
+    private var arrowDownWhileOffAt = Date()   // for the log only
     private static let arrowNames: [Int64: String] = [123: "leftArrow", 124: "rightArrow", 125: "downArrow", 126: "upArrow"]
     private var optionCode: Int64 = 0
     /// Keyboard help: the name of a modifier key as it goes down (keyboard thread; spoken on the main thread).
@@ -616,10 +617,11 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
             if let first = arrowDownWhileOff, first != code, Set([first, code]) == Set<Int64>([123, 124]) {
                 arrowDownWhileOff = nil
                 quarantined.insert(code)
-                onMain { Log.io("input chord leftArrow+rightArrow (Quick Nav off)"); ArrowQuickNav.turnOnFromChord() }
+                let gap = Int(Date().timeIntervalSince(arrowDownWhileOffAt) * 1000)
+                onMain { Log.io("input chord leftArrow+rightArrow (Quick Nav off; the first arrow went down \(gap) ms before the second, not yet let go)"); ArrowQuickNav.turnOnFromChord() }
                 return .some(nil)
             }
-            arrowDownWhileOff = code
+            arrowDownWhileOff = code; arrowDownWhileOffAt = Date()
             return nil
         }
         guard bare else { return nil }
