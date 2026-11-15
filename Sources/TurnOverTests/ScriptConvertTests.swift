@@ -718,7 +718,24 @@ func nvdaStoreTests() {
         expect(typing(.off, .always, "clock"), ["clock"], "words only: Return says the finished word")
         expect(typing(.off, .always, "clock "), ["clock"], "words only: Space says the word, and Return then adds nothing")
         expect(typing(.off, .always, "one two"), ["one", "two"], "words only: each word as it ends")
-        expect(typing(.always, .always, "hi "), ["h", "i", "hi", "space"], "both: letters, then the word, then the space that ended it")
+        // The entry must say what ordinary typing in a text field says for the same keys, whichever way the base
+        // treats the space after a word (VoiceOver's keys leave it out on later bases), so the expectation is
+        // taken from the ordinary typing path itself rather than written out.
+        @MainActor func ordinary(_ text: String) -> [String] {
+            config.keyboard.speakTypedCharacters = .always; config.keyboard.speakTypedWords = .always
+            nonisolated(unsafe) var said: [String] = []
+            Speech.sink = { said.append($0) }
+            Speech.clearTypedWordBuffer()
+            for c in text { Speech.speakTypedCharacter(c, inEditable: true) }
+            Speech.clearTypedWordBuffer()
+            return said
+        }
+        for style in ["mac", "windows"] {
+            config.general.keyboardStyle = style
+            let said = typing(.always, .always, "hi ")
+            expect(said, ordinary("hi "), "both (\(style) keys): the entry says what ordinary typing says")
+            check(Array(said.prefix(3)) == ["h", "i", "hi"], "both: letters, then the word")
+        }
         // Backspace takes the letter off the word being typed, so the word said is the corrected one.
         config.keyboard.speakTypedCharacters = .off; config.keyboard.speakTypedWords = .always
         nonisolated(unsafe) var said: [String] = []
