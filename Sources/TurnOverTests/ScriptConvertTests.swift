@@ -598,7 +598,9 @@ func nvdaStoreTests() {
         check(!items[0].description.contains("\n") && !items[0].description.contains("\u{2028}"), "and line breaks")
         expect(items[1].verdict, .notForMac, "the not-for-Mac verdict is kept")
         let t = NVDAStore.title(items[1])
-        check(t.hasPrefix("Windows Thing, by Bob.") && t.contains("Not for the Mac: a Windows program"), "a title has name, author, description and the verdict: \(t)")
+        check(t.hasPrefix("Windows Thing, by Bob.") && t.contains("Not for the Mac: a Windows program") && !t.contains("For a Windows program"), "a title has name, author and the verdict, not the description: \(t)")
+        expect(NVDAStore.hint(items[1]), "For a Windows program", "the description is the hint")
+        expect(NVDAStore.hint(items[2]), nil, "no description, no hint")
         check(NVDAStore.title(items[2]) == "Fresh", "a bare entry is just its name: \(NVDAStore.title(items[2]))")
         if case .failure(let f) = NVDAStore.parseList(Data("not json".utf8)) { check(f.words.contains("could not read"), "bad JSON gives a plain sentence: \(f.words)") } else { check(false, "bad JSON fails") }
     }
@@ -685,12 +687,16 @@ func nvdaStoreTests() {
         expect(NVDAStore.speakableAuthor("Plain Name"), "Plain Name", "a plain name is untouched")
         let raw = "Ann Author <ann@example.org>, Bob <b@example.com>"
         let item = NVDAStore.Item(id: "clock", name: "Clock", version: "1.0", author: raw, description: "Says the time.", verdict: .notLookedAt, reason: nil)
-        expect(NVDAStore.title(item), "Clock, by Ann Author, Bob. Says the time.", "the list title")
+        expect(NVDAStore.title(item), "Clock, by Ann Author, Bob", "the list title is name and author only")
         let json = "{\"id\":\"clock\",\"name\":\"Clock\",\"version\":\"1.0\",\"author\":\"Ann Author <ann@example.org>, Bob <b@example.com>\",\"description\":\"Says the time.\",\"license\":\"GPL\"}"
         guard case .success(let detail) = NVDAStore.parseDetail(Data(json.utf8)) else { check(false, "the detail reads"); return }
         expect(detail.item.author, raw, "the detail keeps the full author string too")
         let facts = NVDAStore.facts(detail)
-        check(!facts.contains("@") && !facts.contains("<") && facts.contains("By Ann Author, Bob."), "the About facts: \(facts)")
+        check(!facts.contains("@") && !facts.contains("<") && facts.contains("By Ann Author, Bob.") && facts.contains("Says the time."), "the About facts keep the description: \(facts)")
+        expect(LineInput.spokenPrompt("Words to search", hints: false), "Words to search", "hints off: the prompt alone")
+        expect(LineInput.spokenPrompt("Words to search", hints: true), "Words to search. Type it, then Return. Escape cancels", "hints on: unchanged")
+        expect(TurnOverMenu.spokenKeyPrompt("Press the key", hints: false), "Press the key", "key prompt, hints off")
+        expect(TurnOverMenu.spokenKeyPrompt("Press the key", hints: true), "Press the key. Escape to cancel", "key prompt, hints on")
         expect(item.author, raw, "the item keeps the full author string for the files the converter writes")
         let onlyEmail = NVDAStore.Item(id: "x", name: "X", version: "", author: "<a@b.c>", description: "", verdict: .notLookedAt, reason: nil)
         expect(NVDAStore.title(onlyEmail), "X", "no \"by\" with nothing to say")

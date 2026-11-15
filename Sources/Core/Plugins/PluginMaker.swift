@@ -366,6 +366,11 @@ public enum LineInput {
     /// Backspace: the word being typed loses its last letter; what was deleted is said, as a text field does.
     public static func echoDeleted(_ ch: Character) { Speech.speakTypedCharacter("\u{8}", inEditable: true); Speech.speakMessage(Symbols.name(of: ch)) }
 
+    /// What is said when typed words are waited for: with hints off, the prompt alone; with hints on, the instruction after it too.
+    public static func spokenPrompt(_ prompt: String, hints: Bool) -> String {
+        hints ? String(localized: "\(prompt). Type it, then Return. Escape cancels", comment: "Waiting for typed words: %@ says what for") : prompt
+    }
+
     public static func ask(_ prompt: String, initial: String = "", done: @escaping (String?) -> Void) {
         var text = initial
         func next() {
@@ -385,7 +390,7 @@ public enum LineInput {
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             Speech.clearTypedWordBuffer()
-            Speech.speakMessage(String(localized: "\(prompt). Type it, then Return. Escape cancels", comment: "Waiting for typed words: %@ says what for"))
+            Speech.speakMessage(spokenPrompt(prompt, hints: config.presentation.speakHints))
             next()
         }
     }
