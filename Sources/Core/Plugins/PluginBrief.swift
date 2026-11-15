@@ -25,6 +25,19 @@ nonisolated public enum PluginBrief {
         return candidates.first { FileManager.default.fileExists(atPath: $0.path) }
     }
 
+    /// The guide to writing a plugin's script (docs/PLUGIN-SCRIPTS.md): beside the app, or in the source tree when run from a build.
+    public static var scriptsGuideURL: URL? {
+        let candidates = [
+            Bundle.main.resourceURL?.appendingPathComponent("PLUGIN-SCRIPTS.md"),
+            URL(fileURLWithPath: "/Applications/TurnOver.app/Contents/Resources/PLUGIN-SCRIPTS.md"),
+        ].compactMap { $0 }
+        return candidates.first { FileManager.default.fileExists(atPath: $0.path) }
+    }
+
+    /// Each agent reads its own file first: Claude Code CLAUDE.md, Codex AGENTS.md, Gemini CLI GEMINI.md. All say the same.
+    public static let agentPointerFiles = ["CLAUDE.md", "AGENTS.md", "GEMINI.md"]
+    public static let agentPointerText = "Read BRIEF.md in this folder and follow it: it is the whole task.\n"
+
     // MARK: Snapshot
 
     public struct Snapshot {
@@ -233,8 +246,8 @@ nonisolated public enum PluginBrief {
         """
         try brief.write(to: folder.appendingPathComponent("BRIEF.md"), atomically: true, encoding: .utf8)
         // Each agent reads its own file first: Claude Code CLAUDE.md, Codex AGENTS.md, Gemini CLI GEMINI.md.
-        for f in ["CLAUDE.md", "AGENTS.md", "GEMINI.md"] {
-            try "Read BRIEF.md in this folder and follow it: it is the whole task.\n".write(to: folder.appendingPathComponent(f), atomically: true, encoding: .utf8)
+        for f in agentPointerFiles {
+            try agentPointerText.write(to: folder.appendingPathComponent(f), atomically: true, encoding: .utf8)
         }
         Log.info("plugin brief for \(name) written: \(folder.path) (\(snap.elements) elements, \(snap.unnamed) unnamed)")
         return folder

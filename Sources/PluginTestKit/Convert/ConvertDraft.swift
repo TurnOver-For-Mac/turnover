@@ -79,6 +79,7 @@ nonisolated extension AddonConverter {
             js.append("// Original author: \(creator.isEmpty ? "not named" : creator). Licence of the original: \(licenceName.map(comment) ?? "not known: find it before sharing this").")
             if let u = source.sourceURL ?? entry?.sourceURL { js.append("// Source of the original: \(comment(u))") }
             js.append("// This is a derived work of that add-on and keeps its author and licence. The store does not review code, and nobody has read this.")
+            js.append("// CONVERTED, TRANSLATION NOT REVIEWED: a person must read this against the original (kept in original/) before the plugin is approved or shared.")
             js.append("// A person must read every line before approving it. Lines under \"A PERSON MUST WRITE THIS\" are the original Python, not translated.")
             js.append("")
             for c in commands {
@@ -136,7 +137,8 @@ nonisolated extension AddonConverter {
         manifest.changes = [PluginChange(version: manifest.version, notes: "Converted from the NVDA add-on \(addonID) version \(addonVersion).")]
         var record = PluginConversionRecord(id: addonID, version: addonVersion, sha256: source.sha256, sourceURL: source.sourceURL ?? entry?.sourceURL,
                                             author: creator.isEmpty ? nil : creator, convertedBy: converter.isEmpty ? nil : converter,
-                                            abilities: abilityList, apps: everywhere ? [PluginManifest.everyApp] : found.programs)
+                                            abilities: abilityList, apps: everywhere ? [PluginManifest.everyApp] : found.programs,
+                                            translation: PluginConversionRecord.notReviewed)
         record.sha256 = source.sha256
         manifest.convertedFrom = record
         let encoder = JSONEncoder()
@@ -148,6 +150,8 @@ nonisolated extension AddonConverter {
         r.append("# Converting the NVDA add-on \(displayName)")
         r.append("")
         r.append("## Read this first")
+        r.append("Converted, translation not reviewed: nobody has read the draft against the original add-on yet. convertedFrom.translation in manifest.json says \"not reviewed\" until a person who has read it changes it to \"reviewed\".")
+        r.append("")
         r.append("This is a draft made by turnover-plugin convert. It is not finished, and it is not safe because it came from NVDA's store: the store does not review code, and nothing was run or tried here. A person must read every line before approving it.")
         r.append("")
         r.append("## Where it came from")
@@ -235,6 +239,12 @@ nonisolated extension AddonConverter {
         }
 
         if result.madePlugin {
+            var info = ConvertBrief.Info()
+            info.id = addonID; info.version = addonVersion; info.displayName = displayName; info.creator = creator; info.converter = converter
+            info.licence = licenceName; info.sourceURL = source.sourceURL ?? entry?.sourceURL; info.programs = found.programs
+            info.kinds = found.kinds.sorted(); info.everywhere = everywhere; info.commandIDs = commands.map(\.id)
+            info.handlerEvents = Array(Set(found.handlers.map(\.event))).sorted()
+            result.briefInfo = info
             result.files.append(("manifest.json", manifestData))
             result.files.append(("main.js", Data(mainJS.utf8)))
         }

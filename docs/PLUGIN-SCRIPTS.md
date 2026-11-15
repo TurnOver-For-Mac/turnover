@@ -188,6 +188,13 @@ and exits with a non-zero status when something needs fixing.
 - `turnover-plugin test <plugin folder>`: runs the plugin's tests. For a script that is every file in `tests/script/`,
   run in the real sandboxed program with no app and no permissions. It prints `ok` or `FAIL` for each test and a
   count, and exits non-zero if any failed.
+- `turnover-plugin convert <add-on id | file | folder> --out <folder> [--converted-by "Name"] [--with claude|chatgpt|gemini|myself]`:
+  makes a draft plugin from an NVDA add-on, with a report, the original kept as plain text in `original/`, and a brief
+  (`BRIEF.md`, the pointer files for the three AI tools, the two guides) for finishing the translation. TurnOver never
+  calls an AI service itself: you give the folder to your own AI tool, or finish it yourself. `--with` does that hand
+  over the way "Make a plugin" does. Nothing is installed or approved, and the draft says "converted, translation not
+  reviewed" until a person who has read it against the original changes `convertedFrom.translation` to `reviewed`. See
+  FROM-JAWS-AND-NVDA.md.
 - `turnover-plugin keygen [--force]`: makes your signing key. It is never replaced unless you give `--force`.
 - `turnover-plugin sign <plugin folder>`: writes `signature.json` over the plugin's hash, with your key.
 - `turnover-plugin verify <plugin folder>`: prints the plugin's hash and the signing key's fingerprint, and whether the
