@@ -104,6 +104,9 @@
         }
       }
     },
+    "%@ It gives no address for problems. The plugin's name and version and TurnOver's build are on the clipboard." : {
+      "comment" : "Said after Report a problem with a plugin that has no address: the first sentence says who looks after it"
+    },
     "%@ Report the problem at github.com/TurnOver-For-Mac/turnover/issues." : {
       "comment" : "Feedback: %@ says where the report is",
       "localizations" : {
@@ -117,6 +120,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ Sorunu github.com/TurnOver-For-Mac/turnover/issues adresinden bildirin."
+          }
+        }
+      }
+    },
+    "%@ To report a problem, write to %@. The address, the plugin's name and version and TurnOver's build are on the clipboard." : {
+      "comment" : "Said after Report a problem with a plugin: the first sentence says who looks after it, then the address",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ To report a problem, write to %2$@. The address, the plugin's name and version and TurnOver's build are on the clipboard."
           }
         }
       }
@@ -248,6 +262,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ uygulama bağlantısı, %2$@ satır duyuldu."
+          }
+        }
+      }
+    },
+    "%@ asks: %@" : {
+      "comment" : "A plugin's question for a typed answer: the plugin's name, then the words its author gave it",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ asks: %2$@"
           }
         }
       }
@@ -649,6 +674,9 @@
     "%@ has a script waiting for approval. It will not run until you approve it in the Plugins menu." : {
       "comment" : "Said once when an app comes to the front that has a plugin whose script is not approved; the placeholder is the plugin's name"
     },
+    "%@ has a script. It works in every app you use, not only one, and goes on working whichever app you are in, except in password and permission dialogs and the login window. \"Those apps\" below means every app." : {
+      "comment" : "Said when asking a person to approve a plugin's script that works in every app: the plugin's name"
+    },
     "%@ has a script. It works only in %@, and does nothing while you are in another app." : {
       "comment" : "Said when asking a person to approve a plugin's script: the plugin, then the one app it works in",
       "localizations" : {
@@ -832,6 +860,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@, %2$@ ile yapılmış. TurnOver'da bunun için gereken parçalar var, bu yüzden herkes eklentisini yapabilir"
+          }
+        }
+      }
+    },
+    "%@ is looked after by %@." : {
+      "comment" : "Said when a person asks to report a problem with a plugin; the placeholders are the plugin's name and its author",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ is looked after by %2$@."
           }
         }
       }
@@ -3044,6 +3083,17 @@
         }
       }
     },
+    "%@. It is now %@" : {
+      "comment" : "Asking for a plugin's text option: the author's label for it, then its value now",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@. It is now %2$@"
+          }
+        }
+      }
+    },
     "%@. Or Down Arrow for a list" : {
       "comment" : "The TurnOver layer's letters, then the list",
       "localizations" : {
@@ -3079,7 +3129,7 @@
       }
     },
     "%@: %@" : {
-      "comment" : "Said in developer mode when a script's command fails; the placeholders are the plugin's name and the script's own error",
+      "comment" : "A plugin's list to choose from: the plugin's name, then the title its author gave it\nSaid in developer mode when a script's command fails; the placeholders are the plugin's name and the script's own error",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4324,6 +4374,12 @@
         }
       }
     },
+    "A list has 1 to %lld items." : {
+      "comment" : "Said to a plugin author; the placeholder is a number"
+    },
+    "A list needs a title of at most %lld characters." : {
+      "comment" : "Said to a plugin author; the placeholder is a number"
+    },
     "A list of apps for each reader, a mode (TurnOver in its apps, everywhere, or VoiceOver everywhere), and switching between the readers as you change apps. The list is under Tools in the TurnOver menu while this is on. Off, TurnOver reads everywhere while it is on." : {
       "localizations" : {
         "ru" : {
@@ -4343,6 +4399,9 @@
     "A menu item cannot be pressed like a button. Choose it with menu, which checks it first." : {
       "comment" : "Said to a plugin author when a script presses an item that is part of a menu"
     },
+    "A password field has the focus, so a plugin cannot ask you anything now." : {
+      "comment" : "Said to a plugin author"
+    },
     "A password field has the focus, so a plugin cannot change anything now." : {
       "comment" : "Said to a plugin author"
     },
@@ -4354,6 +4413,9 @@
     },
     "A password field is never read to a plugin." : {
       "comment" : "Said to a plugin author"
+    },
+    "A place in the text is a whole number from 0 (before the first character)." : {
+      "comment" : "Said to a plugin author when a caret or selection place is not a whole number"
     },
     "A plugin may keep at most %lld KB in all, and that would be more." : {
       "comment" : "Said to a plugin author; the placeholder is a number of kilobytes"
@@ -4387,6 +4449,9 @@
           }
         }
       }
+    },
+    "A question is answered when the person answers it." : {
+      "comment" : "Said to a plugin author when a script's question reaches the wrong door"
     },
     "A report in TurnOver's reports folder, and the problem form on GitHub" : {
       "localizations" : {
@@ -4477,6 +4542,9 @@
           }
         }
       }
+    },
+    "A tone is 100 to 4000 hertz and 10 to 500 milliseconds." : {
+      "comment" : "Said to a plugin author when a tone's pitch or length is out of range"
     },
     "A web game is connected on port %@." : {
       "comment" : "The Steam program's status: %@ is the port",
@@ -4959,6 +5027,12 @@
         }
       }
     },
+    "An item has no text." : {
+      "comment" : "Said to a plugin author"
+    },
+    "An option of %@" : {
+      "comment" : "A hint under a plugin's option in the Plugins menu: the plugin's name"
+    },
     "Another conversation is open, not the one chosen. Press Return again." : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -4975,6 +5049,9 @@
           }
         }
       }
+    },
+    "Another question is open. Ask when it has been answered." : {
+      "comment" : "Said to a plugin author when a script asks while a question is already open"
     },
     "App Store" : {
       "comment" : "A group of commands in the key list",
@@ -8461,6 +8538,9 @@
         }
       }
     },
+    "Each item is text of at most %lld characters." : {
+      "comment" : "Said to a plugin author; the placeholder is a number"
+    },
     "Each item's keyboard shortcut" : {
       "localizations" : {
         "ru" : {
@@ -8642,6 +8722,9 @@
           }
         }
       }
+    },
+    "Every plugin is off until TurnOver starts again." : {
+      "comment" : "Said when the person turned off every plugin, rules and scripts, from the Plugins menu"
     },
     "Every setting, in a window with sections down the side" : {
       "localizations" : {
@@ -10662,6 +10745,9 @@
         }
       }
     },
+    "In passwords, settings, terminals and browsers it can only read and speak. It can never press, type or choose anything there, hear what TurnOver says there or read your clipboard there, whatever else it is allowed to do." : {
+      "comment" : "Said when asking a person to approve a plugin's script that works in every app: what it can do in the sensitive apps"
+    },
     "In text, moves the review cursor to the next character (NVDA+Right Arrow)" : {
       "comment" : "A command, as the key list and keyboard help say it",
       "localizations" : {
@@ -10834,6 +10920,12 @@
     },
     "In this app a plugin can only read and speak. It can never press, type or choose anything there." : {
       "comment" : "Said to a plugin author when a script asks to act in a closed app such as Terminal"
+    },
+    "In this app a plugin can only read and speak. It can never read the clipboard there." : {
+      "comment" : "Said to a plugin author when a script reads the clipboard in a closed app such as a password manager"
+    },
+    "In this app a plugin can only read and speak. It cannot ask you to type here." : {
+      "comment" : "Said to a plugin author when a script asks for typed text in a closed app such as a password manager"
     },
     "Input Monitoring is on. TurnOver is ready." : {
       "comment" : "Spoken message",
@@ -11021,7 +11113,13 @@
     "It asks to do nothing in those apps. It can only think and keep its own notes." : {
       "comment" : "Said when asking a person to approve a plugin's script that asks for no abilities"
     },
-    "It can change the text or value of a field in those apps." : {
+    "It can %@, so one person who is not its author reviews its first version and its author; later versions that ask for nothing new and are signed by the same key need none." : {
+      "comment" : "Why a plugin is at the higher level of review; the placeholder lists what it can do"
+    },
+    "It can %@, which is private, and could send it out another way, so a person who is not its author reads every version." : {
+      "comment" : "Why a plugin is at the highest level of review; the placeholder lists what it can do"
+    },
+    "It can change the text or value of a field in those apps, and move the cursor or the selection in it." : {
       "comment" : "Said when asking a person to approve a plugin's script: the edit ability"
     },
     "It can choose commands from those apps' menus." : {
@@ -11029,6 +11127,9 @@
     },
     "It can move the keyboard focus to an item in those apps." : {
       "comment" : "Said when asking a person to approve a plugin's script: the focus ability"
+    },
+    "It can never use the internet, read or change your files, see the keys you press, or see a password." : {
+      "comment" : "Said when asking a person to approve a plugin's script that works in every app: what no script can ever do"
     },
     "It can never use the internet, read or change your files, see the keys you press, see a password, or reach any other app." : {
       "comment" : "Said when asking a person to approve a plugin's script: what no script can ever do"
@@ -11039,20 +11140,35 @@
     "It can press keys in those apps for you." : {
       "comment" : "Said when asking a person to approve a plugin's script: the keys ability"
     },
-    "It can put text on the clipboard. It cannot read what is on it." : {
+    "It can put text on the clipboard. It cannot read what is on it unless it also has the clipboardRead ability, which is said separately." : {
       "comment" : "Said when asking a person to approve a plugin's script: the clipboard ability"
     },
-    "It can read what is on the screen in those apps, including text you have typed there, but never a password." : {
+    "It can read what is on the screen in those apps, including text you have typed there, the selected text and whole lines, but never a password." : {
       "comment" : "Said when asking a person to approve a plugin's script: the read ability"
     },
-    "It can speak, change or silence what TurnOver says in those apps, and play TurnOver's own sounds." : {
+    "It can read what you copy: the text on the clipboard, while you are in those apps." : {
+      "comment" : "Said when asking a person to approve a plugin's script: the clipboardRead ability"
+    },
+    "It can speak, change or silence what TurnOver says in those apps, play TurnOver's own sounds and tones, and ask you to choose from a list or type a line." : {
       "comment" : "Said when asking a person to approve a plugin's script: the say ability"
     },
     "It has a signature, but the signature does not match its files, so the files were changed after it was signed." : {
       "comment" : "Said when asking a person to approve a plugin's script"
     },
+    "It hears what TurnOver says to you in those apps, as TurnOver says it, except in password fields. It cannot change it or stop it." : {
+      "comment" : "Said when asking a person to approve a plugin's script: the hearSpeech ability"
+    },
     "It is signed with the key %@. That says who made it, not that it is safe." : {
       "comment" : "Said when asking a person to approve a plugin's script: the signing key's fingerprint, in groups of four"
+    },
+    "It only reads and speaks in the apps it names, so it has no reviewer: the automatic checks run, and your own approval is the safeguard." : {
+      "comment" : "Why a plugin is at the lowest level of review"
+    },
+    "It works in every app except passwords and permission dialogs, and its keys work in every app." : {
+      "comment" : "Said when asking a person to approve a plugin's script: the everywhere ability"
+    },
+    "It works in every app except passwords and permission dialogs, its keys work in every app, and, because it can also read, it can read what is on the screen wherever you are." : {
+      "comment" : "Said when asking a person to approve a plugin's script: the everywhere ability, for a plugin that can also read"
     },
     "Item details" : {
       "comment" : "A section of the Settings window",
@@ -19336,6 +19452,9 @@
         }
       }
     },
+    "Report a problem with this plugin" : {
+
+    },
     "Report saved in TurnOver's reports folder, open in Finder, as %@. It includes what TurnOver said, which may be the text of emails and pages: issues are public, so attach it only if nothing private was read." : {
       "comment" : "Feedback: where the report is, with speech; %@ is its name",
       "localizations" : {
@@ -20365,6 +20484,17 @@
         }
       }
     },
+    "Review level %lld. %@" : {
+      "comment" : "Printed by turnover-plugin check and consent: the level of review a plugin needs, then why",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Review level %1$lld. %2$@"
+          }
+        }
+      }
+    },
     "Review modes" : {
       "comment" : "A VoiceOver feature",
       "localizations" : {
@@ -20463,6 +20593,9 @@
           }
         }
       }
+    },
+    "Rules and scripts both, so you can tell whether a fault is TurnOver's or a plugin's" : {
+
     },
     "Run it again whenever you change VoiceOver's settings: the TurnOver menu, Copy VoiceOver settings." : {
       "comment" : "The VoiceOver settings copy done",
@@ -20947,6 +21080,9 @@
           }
         }
       }
+    },
+    "Says who looks after it and copies where to write, with its name and version and TurnOver's build" : {
+
     },
     "Screen Curtain" : {
       "comment" : "A braille chord's command, as braille help says it",
@@ -23721,6 +23857,9 @@
     "That item could not be pressed." : {
       "comment" : "Said to a plugin author"
     },
+    "That item has no text to move in." : {
+      "comment" : "Said to a plugin author"
+    },
     "That item is not in one of this plugin's apps." : {
       "comment" : "Said to a plugin author when a script asks about an item in another app"
     },
@@ -23731,6 +23870,9 @@
       "comment" : "Said to a plugin author"
     },
     "That message was sent the wrong way." : {
+      "comment" : "Said to a plugin author"
+    },
+    "That place is past the end of the text." : {
       "comment" : "Said to a plugin author"
     },
     "That shortcut isn't on this Mac" : {
@@ -23807,11 +23949,17 @@
         }
       }
     },
+    "The Mac is hiding what is typed, as it does for a password, so a plugin cannot ask you anything now." : {
+      "comment" : "Said to a plugin author when a script asks a question while the Mac reports secure keyboard entry"
+    },
     "The Mac is hiding what is typed, as it does for a password, so a plugin cannot change anything now." : {
       "comment" : "Said to a plugin author when a script asks to edit while the Mac reports secure keyboard entry"
     },
     "The Mac is hiding what is typed, as it does for a password, so a plugin cannot press keys now." : {
       "comment" : "Said to a plugin author when a script asks to press keys while the Mac reports secure keyboard entry"
+    },
+    "The Mac is hiding what is typed, as it does for a password, so a plugin cannot read the clipboard now." : {
+      "comment" : "Said to a plugin author when a script reads the clipboard while the Mac reports secure keyboard entry"
     },
     "The Mac's default output" : {
       "localizations" : {
@@ -24137,6 +24285,12 @@
     "The author gave no description of what it is for." : {
       "comment" : "Said when asking a person to approve a plugin's script"
     },
+    "The author of %@ is not named." : {
+      "comment" : "Said when a person asks to report a problem with a plugin whose author is not named; the placeholder is the plugin's name"
+    },
+    "The author says it uses this to: %@" : {
+      "comment" : "Said when asking a person to approve a plugin's script, after what an ability allows: the author's own reason for it, in their words, not TurnOver's"
+    },
     "The author's own words about it: %@" : {
       "comment" : "Said when asking a person to approve a plugin's script: the plugin's description, written by its author, not by TurnOver"
     },
@@ -24349,6 +24503,9 @@
           }
         }
       }
+    },
+    "The end of a selection cannot be before its start." : {
+      "comment" : "Said to a plugin author"
     },
     "The event box's next field" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -25806,6 +25963,42 @@
     "This script has not been approved on this Mac." : {
       "comment" : "Why a plugin's script does not run"
     },
+    "This was converted from the NVDA add-on %@ by %@, and converted by %@." : {
+      "comment" : "Said when asking a person to approve a plugin's script converted from an NVDA add-on: the add-on's id, its creator, and who converted it",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This was converted from the NVDA add-on %1$@ by %2$@, and converted by %3$@."
+          }
+        }
+      }
+    },
+    "This was converted from the NVDA add-on %@ by %@. The person who converted it is not named." : {
+      "comment" : "Said when asking a person to approve a plugin's script converted from an NVDA add-on: the add-on's id and its creator",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This was converted from the NVDA add-on %1$@ by %2$@. The person who converted it is not named."
+          }
+        }
+      }
+    },
+    "This was converted from the NVDA add-on %@, whose creator is not named, and converted by %@." : {
+      "comment" : "Said when asking a person to approve a plugin's script converted from an NVDA add-on: the add-on's id and who converted it",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This was converted from the NVDA add-on %1$@, whose creator is not named, and converted by %2$@."
+          }
+        }
+      }
+    },
+    "This was converted from the NVDA add-on %@. Neither its creator nor the person who converted it is named." : {
+      "comment" : "Said when asking a person to approve a plugin's script converted from an NVDA add-on: the add-on's id"
+    },
     "This will not be announced. Saved" : {
       "comment" : "An item silenced",
       "localizations" : {
@@ -26110,6 +26303,9 @@
         }
       }
     },
+    "Turn off every plugin until TurnOver starts again" : {
+
+    },
     "TurnOver" : {
       "comment" : "A group of commands in the key list",
       "localizations" : {
@@ -26322,6 +26518,9 @@
           }
         }
       }
+    },
+    "TurnOver cannot tell what has the focus, so a plugin cannot ask you anything now." : {
+      "comment" : "Said to a plugin author when a script asks a question and the focused item cannot be found"
     },
     "TurnOver cannot tell what has the focus, so a plugin cannot change anything now." : {
       "comment" : "Said to a plugin author when a script asks to edit and the focused item cannot be found"
@@ -29983,6 +30182,9 @@
         }
       }
     },
+    "ask needs a prompt of at most %lld characters." : {
+      "comment" : "Said to a plugin author; the placeholder is a number"
+    },
     "asking the catalog; a moment" : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -31017,6 +31219,12 @@
         }
       }
     },
+    "change text" : {
+      "comment" : "Part of the reason a plugin needs a higher review"
+    },
+    "change your clipboard" : {
+      "comment" : "Part of the reason a plugin needs a higher review"
+    },
     "characters" : {
       "comment" : "A choice in the TurnOver menu\nA trackpad rotor kind",
       "localizations" : {
@@ -31203,6 +31411,12 @@
           }
         }
       }
+    },
+    "choose menu items" : {
+      "comment" : "Part of the reason a plugin needs a higher review"
+    },
+    "choose needs a title and a list of texts." : {
+      "comment" : "Said to a plugin author"
     },
     "clear" : {
       "comment" : "Spoken message",
@@ -32749,6 +32963,9 @@
         }
       }
     },
+    "every app" : {
+      "comment" : "A plugin that works in every app, in the Plugins menu: after \"for\""
+    },
     "everywhere" : {
       "comment" : "Where haptics are felt",
       "localizations" : {
@@ -33343,6 +33560,9 @@
           }
         }
       }
+    },
+    "hear what TurnOver says to you" : {
+      "comment" : "Part of the reason a plugin needs the highest review"
     },
     "help" : {
       "comment" : "A braille chord's command, as braille help says it",
@@ -35721,6 +35941,9 @@
           }
         }
       }
+    },
+    "move the focus" : {
+      "comment" : "Part of the reason a plugin needs a higher review"
     },
     "move up" : {
       "comment" : "A braille chord's command, as braille help says it",
@@ -39026,6 +39249,12 @@
         }
       }
     },
+    "press keys" : {
+      "comment" : "Part of the reason a plugin needs a higher review"
+    },
+    "press things" : {
+      "comment" : "Part of the reason a plugin needs a higher review"
+    },
     "pressed" : {
       "comment" : "A state, spoken after an item's role",
       "localizations" : {
@@ -39387,6 +39616,9 @@
           }
         }
       }
+    },
+    "read what you copy" : {
+      "comment" : "Part of the reason a plugin needs the highest review"
     },
     "reading the screen's controls" : {
       "comment" : "Spoken message",
@@ -43129,6 +43361,9 @@
         }
       }
     },
+    "text needs a unit: \"selection\", \"line\" or \"all\"." : {
+      "comment" : "Said to a plugin author"
+    },
     "that was wrong" : {
       "comment" : "A letter's command in the TurnOver layer (Command Control Comma)",
       "localizations" : {
@@ -44604,6 +44839,9 @@
           }
         }
       }
+    },
+    "work in every app" : {
+      "comment" : "Part of the reason a plugin needs a higher review"
     },
     "wrapped to the bottom" : {
       "comment" : "Spoken message",
