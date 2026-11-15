@@ -308,6 +308,7 @@ final class LeadWatcher {
         // the person was stuck in Big Picture. With VoiceOver off for the game there is nothing to keep keys from.)
         KeyboardHandler.redirectPid = nil
         KeyboardHandler.frontPid = app.processIdentifier
+        KeyboardHandler.frontAppEpoch &+= 1   // a waiting first arrow of the Quick Nav chord is dropped (15 Nov 2026)
         // TurnOver's own windows (the update window, alerts) are VoiceOver's: TurnOver does not read itself. A menu-bar
         // app is not a regular one, so it is let through here by name; it went unread (5 Oct 2026, the update window).
         let own = app.bundleIdentifier == Bundle.main.bundleIdentifier

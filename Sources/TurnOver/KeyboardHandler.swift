@@ -80,8 +80,11 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
     private var arrowRepeated = false
     /// With Quick Nav off: the bare arrow physically held (passed to the app as usual), so Left and Right pressed
     /// together can turn Quick Nav on, as VoiceOver's do (13 Oct 2026: they turned it off, never on).
-    private var arrowDownWhileOff: Int64?
-    private var arrowDownWhileOffAt = Date()   // for the log only
+    private var arrowDownWhileOff = QuickNavChord()
+    /// Bumped on the main thread when the app in front changes; the keyboard thread drops a waiting first arrow
+    /// when it sees a new value (15 Nov 2026).
+    nonisolated(unsafe) static var frontAppEpoch: Int = 0
+    private var chordEpochSeen = 0
     private static let arrowNames: [Int64: String] = [123: "leftArrow", 124: "rightArrow", 125: "downArrow", 126: "upArrow"]
     private var optionCode: Int64 = 0
     /// Keyboard help: the name of a modifier key as it goes down (keyboard thread; spoken on the main thread).
@@ -209,6 +212,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         // Nothing carried over from the tap before (a restart after the watchdog): a code still in `quarantined`
         // would swallow the next real key-up, and the app would see a key held down (a code review, 14 Oct 2026).
         quarantined.removeAll(); remapped.removeAll(); capsDown = false; chordFired = false; keypadZeroDown = false
+        arrowDownWhileOff.clear()
         Self.capsHeld.value = false
         controlAlone = false; loneShift.cancel(); loneOption.cancel(); loneCommand.cancel()
         let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching(kIOHIDSystemClass))
@@ -379,6 +383,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         }
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             Log.warning("keyboard: tap disabled (\(type.rawValue)), re-enabling")
+            arrowDownWhileOff.clear()   // a key-up may have been lost while the tap was off (15 Nov 2026)
             if let t = tap { CGEvent.tapEnable(tap: t, enable: true) }
             guard let t = tap, CGEvent.tapIsEnabled(tap: t) else {
                 Log.error("keyboard: tap could not be re-enabled; handing input back")
@@ -604,7 +609,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
     private func quickNavArrow(_ type: CGEventType, _ event: CGEvent, _ code: Int64, _ settings: KeySettings) -> Unmanaged<CGEvent>?? {
         guard let name = Self.arrowNames[code], type == .keyDown || type == .keyUp else { return nil }
         if type == .keyUp {
-            if code == arrowDownWhileOff { arrowDownWhileOff = nil }
+            arrowDownWhileOff.up(code: code)
             guard code == arrowHeld else { return nil }   // the chord's second arrow is let go through `quarantined`
             arrowHeld = nil
             if !arrowChorded && !arrowRepeated { onMain { ArrowQuickNav.single(name) } }
@@ -614,15 +619,18 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         // Quick Nav off: arrows go to the app as always; Left and Right together turn Quick Nav on (Mac style).
         if !ArrowQuickNav.applies.value {
             guard bare, !settings.windowsKeys, event.getIntegerValueField(.keyboardEventAutorepeat) == 0 else { return nil }
-            if let first = arrowDownWhileOff, first != code, Set([first, code]) == Set<Int64>([123, 124]) {
-                arrowDownWhileOff = nil
+            if chordEpochSeen != Self.frontAppEpoch { chordEpochSeen = Self.frontAppEpoch; arrowDownWhileOff.clear() }
+            switch arrowDownWhileOff.down(code: code) {
+            case .chord(let gap):
                 quarantined.insert(code)
-                let gap = Int(Date().timeIntervalSince(arrowDownWhileOffAt) * 1000)
                 onMain { Log.io("input chord leftArrow+rightArrow (Quick Nav off; the first arrow went down \(gap) ms before the second, not yet let go)"); ArrowQuickNav.turnOnFromChord() }
                 return .some(nil)
+            case .tooSlow(let gap):
+                Log.debug("input chord leftArrow+rightArrow rejected (Quick Nav off; \(gap) ms apart, over the \(Int(QuickNavChord.window * 1000)) ms limit)")
+                return nil
+            case .first:
+                return nil
             }
-            arrowDownWhileOff = code; arrowDownWhileOffAt = Date()
-            return nil
         }
         guard bare else { return nil }
         if let first = arrowHeld, first != code, let firstName = Self.arrowNames[first] {

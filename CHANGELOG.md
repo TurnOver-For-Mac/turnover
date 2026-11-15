@@ -19,6 +19,10 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- Quick Nav no longer switches itself on: Left and Right arrows count as the turn-on chord only when pressed within 150 milliseconds of each other, and a half-seen first arrow is forgotten when the keyboard connection restarts or you change application.
+
+- Heading and link keys say "application switcher is open" in your language too, not only in English.
+
 - A waiting system dialog reminds you once, with at most one further reminder after five minutes, instead of repeating on every application switch.
 
 - Claude's conversation shortcuts return to focus mode when the destination Prompt has keyboard focus, so typing goes into the Prompt after the page changes.
