@@ -69,6 +69,10 @@ open class AppModule: ScriptableObject {
     /// True when it did.
     open func takeFocus(_ element: AXUIElement) -> Bool { false }
 
+    /// The roles this app's pages answer by the keyboard and not by accessibility's press: browse mode puts the
+    /// keyboard on such a control and sends Return, where it would have pressed it. Empty: the press, as everywhere.
+    open var rolesPressedByKeyboard: Set<String> { [] }
+
     /// Adopt the destination of a linked-item or window-spot jump. Return the element the reader can continue
     /// from, or nil when the destination is outside this reader. The caller places and announces the review cursor.
     open func adoptReading(_ element: AXUIElement, within region: AXUIElement?) -> AXUIElement? { nil }
