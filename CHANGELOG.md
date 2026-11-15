@@ -8,6 +8,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 - "Nothing in this window can be read", with the keys for screen recognition, is a hint now: turning off Hints after
   a pause turns it off too. It is no longer said in Steam's Big Picture while TurnOver is reading it.
+- Command Shift V and Command Option Shift V are said as "pasted" only where there is text to paste into. In Zoom,
+  where Command Shift V starts and stops the video, the clipboard's text was read out. Reported by a tester.
 
 ## 2.0, build 24
 

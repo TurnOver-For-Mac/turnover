@@ -1513,4 +1513,26 @@ func browseTextNavTests() {
         check(!AXHandler.servesPanel(helperBundle: svc, helperName: nil, frontName: "TextEdit"), "a service without a name")
         check(!AXHandler.servesPanel(helperBundle: svc, helperName: "Open and Save Panel Service ()", frontName: ""), "no app in front")
     }
+    test("clipboard: a paste key with Shift is announced only in a place to type") {
+        check(ClipboardAnnouncer.announcesPaste(withShift: false, inText: false), "Command-V is announced anywhere: files paste in a list")
+        check(ClipboardAnnouncer.announcesPaste(withShift: false, inText: true), "and in text")
+        check(ClipboardAnnouncer.announcesPaste(withShift: true, inText: true), "paste and match style in a place to type")
+        check(!ClipboardAnnouncer.announcesPaste(withShift: true, inText: false), "Command-Shift-V away from text is the application's own key")
+        // What counts as a place to type is the focus's own answer: a combo box that takes typing, not a plain one.
+        check(EditableComboBox(element: AXReplay.element(99_901)).hasNavigableText, "a combo box you type into")
+        check(!TurnOverObject(element: AXReplay.element(99_902)).hasNavigableText, "an item with no role known")
+        // The same two as an app gives them: the role alone is a plain combo box, the role with a caret is one you type into.
+        guard AXReplay.isAvailable else { return }
+        AXReplay.load(.init(app: "Sample", bundle: "com.example.sample", recorded: "synthetic combo boxes", root: 1,
+                            application: nil, focus: 1, nodes: [
+            .init(id: 1, attrs: ["AXRole": .string("AXGroup"), "AXChildren": .elements([2, 3])]),
+            .init(id: 2, attrs: ["AXRole": .string("AXComboBox"), "AXValue": .string("Helvetica")]),
+            .init(id: 3, attrs: ["AXRole": .string("AXComboBox"), "AXValue": .string("12"), "AXSelectedTextRange": .range(2, 0)]),
+        ]))
+        defer { AXReplay.unload() }
+        let plain = ObjectFactory.make(AXReplay.element(2))
+        check(plain.role == .comboBox, "a plain combo box keeps its role")
+        check(!plain.hasNavigableText, "and is not a place to type: a Shift paste key there is not announced")
+        check(ObjectFactory.make(AXReplay.element(3)).hasNavigableText, "the same role with a caret is a place to type")
+    }
 }
