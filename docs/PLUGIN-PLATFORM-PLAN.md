@@ -103,3 +103,17 @@ What stands in for review everywhere else: the automatic checks on every submiss
 plugin; withdrawal, which turns a plugin off on every Mac; and the author's name and key on everything.
 
 The list records, for each plugin, its level, and for levels 2 and 3 the reviewer and the fingerprint reviewed.
+
+## The author's reason for each ability (decided 16 Nov 2026)
+
+Every plugin, hand-written or converted, is put to the person the same way: TurnOver says what it may do, from
+the manifest, in TurnOver's own words. An author may add why.
+- The manifest gains `reasons`: for an ability, one short sentence saying what the plugin uses it for
+  (`"keys": "Sends Command-T to jump to today."`).
+- At approval the reason follows TurnOver's own sentence for that ability, marked as the author's words. It never
+  replaces TurnOver's sentence, cannot widen anything, and is limited to 150 characters of plain text.
+- The library needs a reason for every ability above reading and speaking. `turnover-plugin check --listing`
+  says which are missing, and flags a reason for an ability the plugin does not ask for.
+- A reviewer, and anyone sorting submissions, reads the reasons beside the abilities: an ability with no
+  believable reason is the first thing to question. For a converted add-on the converter writes a first reason
+  from what the original used the ability for, for the person to correct.
