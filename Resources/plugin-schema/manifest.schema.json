@@ -118,6 +118,22 @@
       "const": "main.js",
       "description": "The plugin's script, always main.js, next to manifest.json (at most 256 KB, UTF-8). Needs formatVersion 2, abilities, and apps named exactly (no patterns). It runs in a sandbox and only after the person has approved it."
     },
+    "convertedFrom": {
+      "type": "object",
+      "description": "Set by turnover-plugin convert: where a plugin converted from an NVDA add-on came from. author is the creator and convertedBy who converted it; both are credit only. turnover-plugin check reports any ability or app in this manifest that abilities and apps here do not have.",
+      "required": ["id", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "version": { "type": "string" },
+        "sha256": { "type": "string" },
+        "sourceURL": { "type": "string" },
+        "author": { "type": "string" },
+        "convertedBy": { "type": "string" },
+        "abilities": { "type": "array", "items": { "type": "string" } },
+        "apps": { "type": "array", "items": { "type": "string" } }
+      }
+    },
     "commands": {
       "type": "array",
       "description": "The commands the script handles (turnover.command(id, handler)). Needs script. Keys and letters follow the rules for a key in profile.json.",

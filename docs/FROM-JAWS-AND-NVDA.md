@@ -223,3 +223,65 @@ job with no script: a label in `profile.json` such as
 - Be shared as a compiled file without source.
 - Keep running when it misbehaves: three strikes in ten minutes and it is off.
 - Be switched on without the user's agreement. The user hears what it can do, and agrees, on their own Mac.
+
+## Converting an NVDA add-on
+
+`turnover-plugin convert` makes a draft TurnOver plugin from an NVDA add-on and a report on what came across. It reads
+the add-on's Python as text, with Python's own parser (`/usr/bin/python3 -I`, on a small script of ours that only
+parses). It never runs anything from the add-on, never installs anything and never approves anything. The result is
+a draft: a person must read every line, because NVDA's store does not review code. Its SHA-256 and a virus scan say
+who published a file and that it has not changed, not that the code is safe.
+
+```
+turnover-plugin convert <add-on id | .nvda-addon file | folder> --out <folder> [--converted-by "Name"] [--channel stable|beta|dev] [--force]
+turnover-plugin convert <…> --report-only
+```
+
+- An id is looked up in NVDA's combined store list (`https://addonStore.nvaccess.org/en/all/latest.json`), on the stable
+  channel unless you ask. The file is downloaded only over https from the address the list gives, at most 50 MB, and is
+  refused unless its SHA-256 matches the list. The request carries nothing about your Mac or you. TurnOver the screen
+  reader still connects only to its update site; this is the tool's own request.
+- A file or folder you already have is read in place. Unpacking refuses any entry whose path leaves the folder, any
+  link, more than 2,000 entries and more than 50 MB.
+- `--out` is where the draft goes. An existing folder is never overwritten without `--force`. `--report-only` prints
+  the report and writes nothing.
+- The draft is `manifest.json`, `main.js`, `CONVERSION.md` (the report: what carried over, what needs a person, what can
+  never come across and why, and the licence notice) and a copy of the original's licence text. An add-on that cannot
+  come across at all (a speech driver, say) gets the report and no plugin.
+- Scripts and events become `turnover.command` and `turnover.on` handlers. A statement is translated only where one
+  table, `ConvertMapping.swift`, says the translation is exact and every argument is a plain literal (`ui.message("x")`
+  becomes `turnover.say("x")`). Every other statement stays as the original Python in comments, under a line saying
+  a person must write it. A call that is not in the table is never guessed at; it is listed in the report.
+- `kb:NVDA+x` becomes `turnover+x`. A gesture TurnOver refuses a plugin, or one that clashes, is left unbound and reported.
+- The abilities come from the original's own calls and nothing else, and are written in `convertedFrom` in the manifest
+  with the add-on's id, version, SHA-256 and source address. `turnover-plugin check` reports as an error any ability or
+  app in `manifest.json` that the record does not have, so a later hand or AI edit that reaches further is seen.
+- An app module names a Windows program, so `apps` is left empty for you. The report says how to find the Mac app's
+  identifier. When you choose it, put it in `apps` and in `convertedFrom.apps`. `check` says a converted plugin with no
+  app is not finished.
+- Credit: `convertedFrom.author` is the creator (the original author, kept as the manifest's `author` too) and
+  `convertedFrom.convertedBy` is who converted it, from `--converted-by "Name"`. Without it nothing is asked and the
+  field is left empty; `check` warns, and `check --listing` refuses to call it ready to share, until it is filled.
+  At approval TurnOver says whose add-on it was converted from and who converted it. Neither name changes what the
+  plugin may do.
+
+### Finding an add-on without knowing its id
+
+```
+turnover-plugin store list [--hide-not-mac] [--json]
+turnover-plugin store search <words> [--hide-not-mac] [--json]
+turnover-plugin store show <id> [--json]
+```
+
+`list` shows every add-on on the stable channel, sorted by name. `search` matches the name, id, author and description,
+ignoring case, and every word must be found. `show` gives everything the list says about one add-on: licence, source
+address, SHA-256 and so on. Each add-on is one plain line made for a screen reader, with no tables. `--json` prints the
+same as JSON. The list is kept for an hour in the tool's cache folder (`~/Library/Caches/turnover-plugin`).
+
+Each line ends with a small verdict: "can be converted", "needs work", "not for the Mac" or "not looked at yet". It
+comes from, in order: what an earlier `convert` or `convert --report-only` of that id and version found on this Mac
+(kept in the same cache folder); plain signs in the store's own entry, from the one small table in
+`ConvertSigns.swift` (a speech synthesizer or braille driver, remote access, or a Windows-only thing such as
+Notepad++ or SAPI gives "not for the Mac", with the reason in a few words); otherwise "not looked at yet". The list
+alone never says "can be converted". `--hide-not-mac` leaves out the "not for the Mac" ones and says at the end how
+many it left out.

@@ -48,6 +48,9 @@ nonisolated public struct PluginManifest: Codable {
     /// The commands the script handles, declared here so TurnOver can list them, check their keys and let the person
     /// rebind them without running anything. Format 2, with `script`.
     public var commands: [PluginCommand]?
+    /// Where a plugin converted from an NVDA add-on came from, and what the original needed (PluginConversion). Nothing in
+    /// it widens what the plugin may do: `check` reports an ability or app the manifest has and this record does not.
+    public var convertedFrom: PluginConversionRecord?
 
     /// A plugin id: 1 to 64 letters, digits and hyphens, not starting with a hyphen. It names the plugin's folder.
     public static func isValidID(_ id: String) -> Bool {
@@ -56,6 +59,29 @@ nonisolated public struct PluginManifest: Codable {
 
     public init(id: String, name: String, version: String, author: String? = nil, description: String? = nil, apps: [String]) {
         self.id = id; self.name = name; self.version = version; self.author = author; self.description = description; self.apps = apps
+    }
+}
+
+/// The record of a conversion from an NVDA add-on (docs/PLUGIN-PLATFORM-PLAN.md, stage A).
+nonisolated public struct PluginConversionRecord: Codable, Equatable {
+    /// The add-on's id, and its version.
+    public var id: String
+    public var version: String
+    /// The SHA-256 of the add-on file that was read (none when a folder was converted), and where it came from.
+    public var sha256: String?
+    public var sourceURL: String?
+    /// The creator: the original add-on's author. Credit only.
+    public var author: String?
+    /// Who converted it. Credit only; empty until the converter is told.
+    public var convertedBy: String?
+    /// The abilities the original's behaviour needed, and the programs it named (Windows program names, then any app
+    /// a person chose for the Mac, written here as well as in `apps`).
+    public var abilities: [String]?
+    public var apps: [String]?
+    public init(id: String, version: String, sha256: String? = nil, sourceURL: String? = nil, author: String? = nil, convertedBy: String? = nil,
+                abilities: [String]? = nil, apps: [String]? = nil) {
+        self.id = id; self.version = version; self.sha256 = sha256; self.sourceURL = sourceURL; self.author = author
+        self.convertedBy = convertedBy; self.abilities = abilities; self.apps = apps
     }
 }
 

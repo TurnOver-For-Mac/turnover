@@ -20,6 +20,10 @@
 //                                            a working plugin to start from, with comments that teach and a first test
 //   turnover-plugin consent <folder>         what TurnOver will say when someone is asked to approve the script, word for word,
 //                                            and the plugin's hash
+//   turnover-plugin convert <id|file|folder> [--out <folder>] [--force] [--channel stable|beta|dev] [--report-only] [--converted-by "<name>"]
+//                                            a draft plugin from an NVDA add-on, and a report (CONVERSION.md); never installs or approves
+//   turnover-plugin store list|search <words>|show <id> [--json] [--hide-not-mac]
+//                                            find an add-on in NVDA's store without knowing its id
 //   turnover-plugin keygen [--force]         make your signing key, ~/.turnover-plugin/author.key (never replaced without --force)
 //   turnover-plugin sign <folder>            write signature.json over the plugin's hash, with your key
 //   turnover-plugin verify <folder>          the plugin's hash and its signing key's fingerprint, and whether the signature holds
@@ -54,6 +58,8 @@ func usage() -> Never {
       turnover-plugin test <plugin folder>
       turnover-plugin new <new folder> --app <bundle id> [--script]
       turnover-plugin consent <plugin folder>
+      turnover-plugin convert <add-on id | .nvda-addon file | folder> [--out <folder>] [--force] [--channel stable|beta|dev] [--report-only] [--converted-by "<name>"]
+      turnover-plugin store list | search <words> | show <id>   [--json] [--hide-not-mac] [--channel stable|beta|dev]
       turnover-plugin keygen [--force]
       turnover-plugin sign <plugin folder>
       turnover-plugin verify <plugin folder>
@@ -75,7 +81,7 @@ if command == "test", !AXReplay.isAvailable, ProcessInfo.processInfo.environment
     }
 }
 // Making, hashing, signing and describing a plugin read no app, so they need no permission.
-let needsNoAccessibility: Set<String> = ["new", "consent", "keygen", "sign", "verify"]
+let needsNoAccessibility: Set<String> = ["new", "consent", "keygen", "sign", "verify", "convert", "store"]
 if !needsNoAccessibility.contains(command), !AXIsProcessTrusted() { fail("This tool needs Accessibility permission for the app it runs in (System Settings, Privacy & Security, Accessibility).") }
 
 func runningApp(_ s: String) -> NSRunningApplication {
@@ -127,6 +133,12 @@ case "check":
         for p in script.problems { print("  PROBLEM: " + p) }
         for w in script.warnings { print("  WARNING: " + w) }
         scriptProblems = script.problems.count
+    }
+    // A plugin converted from an NVDA add-on: what the record of the conversion says (credit names, abilities, apps).
+    if let m = checked.manifest {
+        let conversion = PluginConversion.lines(for: m, listing: args.contains("--listing"))
+        for l in conversion.lines { print(l) }
+        scriptProblems += conversion.problems
     }
     if args.contains("--listing") { exit(listing.problems == 0 && scriptProblems == 0 ? 0 : 1) }
     let report = PluginChecker.check(checked, read: args.contains("--read"))
@@ -320,6 +332,27 @@ case "consent":
     print("")
     print("Hash: \(plugin.scriptHash ?? "?")")
     if case .valid(let fingerprint) = signature { print("Signing key: \(fingerprint)") }
+
+case "convert":
+    // turnover-plugin convert <id|file|folder> [--out <folder>] [--force] [--channel c] [--report-only] [--converted-by "name"]
+    func value(_ flag: String) -> String? { args.firstIndex(of: flag).flatMap { args.indices.contains($0 + 1) ? args[$0 + 1] : nil } }
+    let valueFlags: Set<String> = ["--out", "--channel", "--converted-by"]
+    var positional: [String] = []
+    var skip = false
+    for a in args.dropFirst() { if skip { skip = false; continue }; if valueFlags.contains(a) { skip = true; continue }; if !a.hasPrefix("--") { positional.append(a) } }
+    guard positional.count == 1 else { usage() }
+    var request = ConvertRequest(input: positional[0])
+    request.out = value("--out"); request.force = args.contains("--force"); request.reportOnly = args.contains("--report-only")
+    request.channel = value("--channel") ?? "stable"; request.convertedBy = value("--converted-by")
+    do {
+        let done = try ConvertRun.perform(request, fetch: ConvertNetwork.fetch, cache: StoreBrowser.defaultCacheDirectory)
+        for l in done.text { print(l) }
+    } catch { fail("\(error)") }
+
+case "store":
+    do {
+        for l in try StoreRun.perform(Array(args.dropFirst()), fetch: ConvertNetwork.fetch, cache: StoreBrowser.defaultCacheDirectory) { print(l) }
+    } catch { fail("\(error)") }
 
 case "keygen":
     do {

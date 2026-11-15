@@ -47,7 +47,8 @@ nonisolated public enum PluginFormat {
 
     /// The fields each part of the format knows (for the unknown-field warning).
     static let manifestFields = ["id", "name", "version", "author", "description", "apps", "kind", "formatVersion", "minimumTurnOver", "$schema",
-                                  "summary", "contact", "changes", "abilities", "privacy", "license", "provides", "script", "commands"]
+                                  "summary", "contact", "changes", "abilities", "privacy", "license", "provides", "script", "commands", "convertedFrom"]
+    static let convertedFromFields = ["id", "version", "sha256", "sourceURL", "author", "convertedBy", "abilities", "apps"]
     static let commandFields = ["id", "description", "key", "letter"]
     static let profileFields = ["labels", "keys", "watch", "silence", "view", "hold", "$schema"]
     static let holdFields = ["focus", "items"]
@@ -241,6 +242,7 @@ nonisolated public enum PluginFormat {
     /// The fields allowed at a path, or nil where TurnOver does not check (the view section has its own checks).
     static func fieldsFor(path: [String], inManifest: Bool) -> [String]? {
         if inManifest {
+            if path == ["convertedFrom"] { return convertedFromFields }
             if path.count == 2, path[0] == "commands", Int(path[1]) != nil { return commandFields }
             return path.isEmpty ? manifestFields : nil
         }

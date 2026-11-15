@@ -33,7 +33,9 @@ nonisolated extension PluginFormat {
             for (i, a) in (m.abilities ?? []).enumerated() where !abilityNames.contains(a) {
                 manifestProblem(["abilities", String(i)], "ability \"\(a)\" is not one a script can have (\(abilityNames.joined(separator: ", ")))")
             }
-            if m.apps.isEmpty { manifestProblem(["apps"], "a script needs apps: name the applications it works in, by bundle identifier") }
+            if m.apps.isEmpty {
+                manifestProblem(["apps"], m.convertedFrom != nil ? PluginConversion.notFinished : "a script needs apps: name the applications it works in, by bundle identifier")
+            }
             for (i, app) in m.apps.enumerated() where app.contains("*") || app.contains("?") {
                 manifestProblem(["apps", String(i)], "a script works only in apps it names, so \"\(app)\" cannot be a pattern: give the bundle identifier")
             }

@@ -53,7 +53,7 @@ nonisolated public enum ScriptAbilities {
 /// One line of what TurnOver says at approval. The kind lets a screen show the author's words or a warning differently;
 /// the text is the whole sentence, in words for a listener.
 nonisolated public struct ScriptApprovalLine: Equatable, Sendable {
-    public enum Kind: String, Sendable { case apps, author, ability, cannot, closedAppWarning, signature, unchecked }
+    public enum Kind: String, Sendable { case apps, author, converted, ability, cannot, closedAppWarning, signature, unchecked }
     public let kind: Kind
     public let text: String
 }
@@ -90,6 +90,19 @@ extension ScriptAbilities {
         lines.append(.init(kind: .author, text: described.isEmpty
             ? String(localized: "The author gave no description of what it is for.", comment: "Said when asking a person to approve a plugin's script")
             : String(localized: "The author's own words about it: \(described)", comment: "Said when asking a person to approve a plugin's script: the plugin's description, written by its author, not by TurnOver")))
+        // A plugin converted from an NVDA add-on says whose work it is and who converted it. Credit only: it changes nothing about what the plugin may do.
+        if let from = manifest.convertedFrom {
+            let creator = (from.author ?? manifest.author ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let converter = (from.convertedBy ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let text: String
+            switch (creator.isEmpty, converter.isEmpty) {
+            case (false, false): text = String(localized: "This was converted from the NVDA add-on \(from.id) by \(creator), and converted by \(converter).", comment: "Said when asking a person to approve a plugin's script converted from an NVDA add-on: the add-on's id, its creator, and who converted it")
+            case (false, true): text = String(localized: "This was converted from the NVDA add-on \(from.id) by \(creator). The person who converted it is not named.", comment: "Said when asking a person to approve a plugin's script converted from an NVDA add-on: the add-on's id and its creator")
+            case (true, false): text = String(localized: "This was converted from the NVDA add-on \(from.id), whose creator is not named, and converted by \(converter).", comment: "Said when asking a person to approve a plugin's script converted from an NVDA add-on: the add-on's id and who converted it")
+            case (true, true): text = String(localized: "This was converted from the NVDA add-on \(from.id). Neither its creator nor the person who converted it is named.", comment: "Said when asking a person to approve a plugin's script converted from an NVDA add-on: the add-on's id")
+            }
+            lines.append(.init(kind: .converted, text: text))
+        }
         let granted = effective(for: plugin)
         for ability in ScriptAbility.allCases where granted.contains(ability) { lines.append(.init(kind: .ability, text: sentence(for: ability))) }
         if granted.isEmpty {
