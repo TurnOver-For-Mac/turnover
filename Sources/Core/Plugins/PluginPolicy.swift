@@ -10,7 +10,7 @@ import Foundation
 
 public enum PluginPolicy {
     /// Apps only official plugins may claim: passwords, security, system settings, terminals, TurnOver, browsers.
-    public static let closedApps: [String: String] = [
+    nonisolated public static let closedApps: [String: String] = [
         "com.apple.Passwords": "Passwords", "com.1password.1password": "1Password", "com.agilebits.onepassword7": "1Password",
         "com.bitwarden.desktop": "Bitwarden", "com.lastpass.LastPass": "LastPass", "com.dashlane.dashlanephonefinal": "Dashlane",
         "com.apple.keychainaccess": "Keychain Access", "com.apple.systempreferences": "System Settings",
@@ -72,22 +72,31 @@ public enum PluginPolicy {
         return nil
     }
 
+    /// Why a key that triggers a rule or a script command is refused on any Mac: TurnOver's essential keys, and a plain
+    /// key that would type in the app. One check for a profile's keys and a script's commands (15 Nov 2026), so the two
+    /// cannot drift apart.
+    nonisolated static func triggerRefusals(_ key: String) -> [String] {
+        var out: [String] = []
+        let essential = Set(PluginListing.essentialKeys.map { normalizeGestureIdentifier("kb:" + $0) })
+        if essential.contains(normalizeGestureIdentifier(key.hasPrefix("kb:") ? key : "kb:" + key)) {
+            out.append("\(key) is one of TurnOver's essential keys (its way in and its way out)")
+        }
+        // A plain key (a letter, Return, Delete) would type in the app or take a key the app needs: a modifier
+        // beyond Shift, or a function key. The maker refused it; a hand-written or pasted file didn't (the full
+        // code review, 14 Oct 2026).
+        if let g = KeyboardGesture(identifier: normalizeGestureIdentifier(key.hasPrefix("kb:") ? key : "kb:" + key)) {
+            let fkey = g.keyName.lowercased().hasPrefix("f") && Int(g.keyName.dropFirst()) != nil
+            if g.modifiers.subtracting(.shift).isEmpty, !fkey { out.append("\(key) on its own would type in the app: a key needs a modifier (Caps Lock, Command, Control or Option) or a function key") }
+        }
+        return out
+    }
+
     /// What no plugin may do on any Mac, from its profile alone: checked at load as well as install, so a plugin
     /// copied into the folder or edited in place can't get round it (code review, 13 Oct).
     nonisolated public static func refusals(_ p: Profile?) -> [String] {
         var out: [String] = []
-        let essential = Set(PluginListing.essentialKeys.map { normalizeGestureIdentifier("kb:" + $0) })
         for k in p?.keys ?? [] {
-            if essential.contains(normalizeGestureIdentifier(k.key.hasPrefix("kb:") ? k.key : "kb:" + k.key)) {
-                out.append("\(k.key) is one of TurnOver's essential keys (its way in and its way out)")
-            }
-            // A plain key (a letter, Return, Delete) would type in the app or take a key the app needs: a modifier
-            // beyond Shift, or a function key. The maker refused it; a hand-written or pasted file didn't (the full
-            // code review, 14 Oct 2026).
-            if let g = KeyboardGesture(identifier: normalizeGestureIdentifier(k.key.hasPrefix("kb:") ? k.key : "kb:" + k.key)) {
-                let fkey = g.keyName.lowercased().hasPrefix("f") && Int(g.keyName.dropFirst()) != nil
-                if g.modifiers.subtracting(.shift).isEmpty, !fkey { out.append("\(k.key) on its own would type in the app: a key needs a modifier (Caps Lock, Command, Control or Option) or a function key") }
-            }
+            out += triggerRefusals(k.key)
             if k.action == "menu", let path = k.menu, let first = path.first {
                 if first.lowercased() == "apple" || first == "\u{F8FF}" { out.append("\(k.key): the Apple menu belongs to the Mac, not the app") }
                 // A pattern for the first menu could land on the Apple menu, which comes first.
@@ -107,6 +116,29 @@ public enum PluginPolicy {
         return out
     }
 
+    /// The apps no script may name, on any Mac (docs/PLUGIN-SCRIPTS-PLAN.md, "Details settled"): the macOS password and
+    /// permission dialogs and the login window, where a plugin could read or act on what a person types to prove who
+    /// they are; and TurnOver itself. Bundle identifiers, exactly; TurnOver's are the whole com.turnover. family, so
+    /// the published and developer copies and any helper are covered.
+    nonisolated public static let scriptForbiddenApps: [String: String] = [
+        "com.apple.SecurityAgent": "the macOS password dialogs", "com.apple.LocalAuthentication.UIAgent": "the macOS password dialogs",
+        "com.apple.CoreServicesUIAgent": "the macOS permission dialogs", "com.apple.UserNotificationCenter": "the macOS permission dialogs",
+        "com.apple.loginwindow": "the login window",
+    ]
+
+    /// What a plugin with a script may never do, from its manifest alone: apps it may not name, and keys its commands
+    /// may not take. The library's closed apps apply on top, as to any plugin.
+    nonisolated public static func scriptRefusals(_ m: PluginManifest) -> [String] {
+        guard m.script != nil else { return [] }
+        var out: [String] = []
+        for app in m.apps {
+            if let what = scriptForbiddenApps[app] { out.append("a script may not work in \(what) (\(app))") }
+            else if app == "com.turnover" || app.hasPrefix("com.turnover.") { out.append("a script may not work in TurnOver itself (\(app))") }
+        }
+        for c in m.commands ?? [] { if let key = c.key { out += triggerRefusals(key).map { "command \(c.id): " + $0 } } }
+        return out
+    }
+
     /// The built-in features an official plugin may switch on (PluginManifest.provides).
     public static let features = ["games", "trackpad"]
 
@@ -114,7 +146,7 @@ public enum PluginPolicy {
         var f = Findings()
         guard let m = plugin.manifest else { return f }
         let p = plugin.profile
-        f.refused = refusals(p)
+        f.refused = refusals(p) + scriptRefusals(m)
         // A built-in feature switched on: official plugins only, and only a feature TurnOver has.
         if let pr = m.provides {
             if !features.contains(pr) { f.refused.append("provides \"\(pr)\": TurnOver has no such feature (\(features.joined(separator: ", ")))") }

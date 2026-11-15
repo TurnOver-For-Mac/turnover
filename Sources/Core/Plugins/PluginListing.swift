@@ -28,6 +28,8 @@ public enum PluginListing {
         "menu": "choose menu items in its app",
         "keys": "send key combinations to its app",
         "say": "say set words",
+        "edit": "change text or values in its app",
+        "clipboard": "put text on the clipboard",
     ]
     /// Open licences the library accepts, by SPDX name. MIT is the library's own (13 Oct 2026).
     public static let openLicences = ["MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "MPL-2.0", "CC0-1.0", "Unlicense"]
@@ -35,7 +37,7 @@ public enum PluginListing {
     nonisolated public static let essentialKeys = ["command+control+,", "command+control+."]
 
     /// What the profile actually does, in ability words.
-    public static func abilitiesUsed(by p: Profile) -> Set<String> {
+    nonisolated public static func abilitiesUsed(by p: Profile) -> Set<String> {
         var used = Set<String>()
         if !(p.labels ?? []).isEmpty || !(p.watch ?? []).isEmpty || !(p.silence ?? []).isEmpty || p.view != nil { used.insert("read") }
         if !(p.hold ?? []).isEmpty { used.insert("read"); used.insert("press") }
@@ -90,7 +92,8 @@ public enum PluginListing {
         if let p = plugin.profile {
             let used = abilitiesUsed(by: p)
             for a in used.subtracting(declared).sorted() { problem("it can \(abilities[a] ?? a), but abilities doesn't say so: add \"\(a)\"") }
-            for a in declared.intersection(abilities.keys).subtracting(used).sorted() { note("abilities says \"\(a)\" but nothing uses it: leave it out") }
+            // A script's own abilities cannot be told from its rules (turnover-plugin check guesses from its text).
+            if m.script == nil { for a in declared.intersection(abilities.keys).subtracting(used).sorted() { note("abilities says \"\(a)\" but nothing uses it: leave it out") } }
         }
 
         // Keys: in the fixed form; never an essential key; clashes said.
@@ -98,15 +101,19 @@ public enum PluginListing {
         let known = others ?? defaultOthers(apps: m.apps)
         var seen: [String: String] = [:]
         var letters: [String: String] = [:]
-        for k in plugin.profile?.keys ?? [] {
+        // A key rule and a script's command are triggers alike: the same form, letter and clash rules (15 Nov 2026).
+        var triggers: [(key: String?, letter: String?, description: String)] = (plugin.profile?.keys ?? []).map { ($0.key, $0.letter, $0.description) }
+        triggers += (m.commands ?? []).map { ($0.key, $0.letter, $0.description) }
+        for k in triggers {
             guard let l = k.letter?.lowercased() else { continue }
             if l.count != 1 || !(l.first!.isLetter || l.first!.isNumber) { problem("letter \"\(k.letter!)\" for \(k.description): one letter or digit") }
             else if let other = letters[l] { problem("letter \(l) is used twice (\(other); \(k.description))") }
             letters[l] = k.description
         }
-        for k in plugin.profile?.keys ?? [] {
-            let id = normalizeGestureIdentifier(k.key.hasPrefix("kb:") ? k.key : "kb:" + k.key)
-            guard let g = KeyboardGesture(identifier: id) else { problem("key \"\(k.key)\" is not in the fixed form (see PLUGIN-GUIDE.md, keys)"); continue }
+        for k in triggers {
+            guard let key = k.key else { continue }
+            let id = normalizeGestureIdentifier(key.hasPrefix("kb:") ? key : "kb:" + key)
+            guard let g = KeyboardGesture(identifier: id) else { problem("key \"\(key)\" is not in the fixed form (see PLUGIN-GUIDE.md, keys)"); continue }
             if k.description.trimmingCharacters(in: .whitespaces).isEmpty { problem("key \(g.displayName) has no description") }
             if essential.contains(id) { problem("\(g.displayName) is one of TurnOver's essential keys; no plugin can take it"); continue }
             if let first = seen[id] { problem("\(g.displayName) is used twice in this plugin (\(first); \(k.description))") }

@@ -14,7 +14,18 @@
 //                                            between keys waits); only for an app the person chose Make a plugin for
 //   turnover-plugin explain <key> [app]      which command a key reaches there, and who else would answer it
 //   turnover-plugin record <app> <folder>    each new screen of the app, as you move through it, into <folder>/tests (masked)
-//   turnover-plugin test <folder>            the plugin's own tests (tests/expect.json), against its recorded screens
+//   turnover-plugin test <folder>            the plugin's own tests: tests/expect.json against its recorded screens, and for a
+//                                            script every file in tests/script/ (run in the real sandboxed host, no app needed)
+//   turnover-plugin new <folder> --app <bundle id> [--script]
+//                                            a working plugin to start from, with comments that teach and a first test
+//   turnover-plugin consent <folder>         what TurnOver will say when someone is asked to approve the script, word for word,
+//                                            and the plugin's hash
+//   turnover-plugin keygen [--force]         make your signing key, ~/.turnover-plugin/author.key (never replaced without --force)
+//   turnover-plugin sign <folder>            write signature.json over the plugin's hash, with your key
+//   turnover-plugin verify <folder>          the plugin's hash and its signing key's fingerprint, and whether the signature holds
+//
+// A script (format 2: "script": "main.js" in manifest.json) is checked, tested and signed here and never approved: approval
+// is the person's, in TurnOver, on their own Mac (docs/PLUGIN-SCRIPTS-PLAN.md).
 //
 // <app> is a bundle identifier or the app's name, and the app must be running.
 import Foundation
@@ -41,6 +52,11 @@ func usage() -> Never {
       turnover-plugin explain <key> [app] [--style windows|mac]
       turnover-plugin record <app> <plugin folder> [--no-mask]
       turnover-plugin test <plugin folder>
+      turnover-plugin new <new folder> --app <bundle id> [--script]
+      turnover-plugin consent <plugin folder>
+      turnover-plugin keygen [--force]
+      turnover-plugin sign <plugin folder>
+      turnover-plugin verify <plugin folder>
       turnover-plugin parts
       turnover-plugin try <app> <key> [<key>…]   (keys as turnover+shift+p, command+2, downArrow; "wait 1" waits)
     <key> as TurnOver writes it: turnover+shift+p, control+option+1, f6.
@@ -58,7 +74,9 @@ if command == "test", !AXReplay.isAvailable, ProcessInfo.processInfo.environment
         execv(exe, argv)
     }
 }
-if !AXIsProcessTrusted() { fail("This tool needs Accessibility permission for the app it runs in (System Settings, Privacy & Security, Accessibility).") }
+// Making, hashing, signing and describing a plugin read no app, so they need no permission.
+let needsNoAccessibility: Set<String> = ["new", "consent", "keygen", "sign", "verify"]
+if !needsNoAccessibility.contains(command), !AXIsProcessTrusted() { fail("This tool needs Accessibility permission for the app it runs in (System Settings, Privacy & Security, Accessibility).") }
 
 func runningApp(_ s: String) -> NSRunningApplication {
     let all = NSWorkspace.shared.runningApplications
@@ -100,13 +118,23 @@ case "check":
     let level = args.firstIndex(of: "--level").flatMap { i in args.indices.contains(i + 1) ? PluginPolicy.Level(rawValue: args[i + 1]) : nil } ?? .community
     let listing = PluginListing.check(checked, level: level)
     print(listing.lines.joined(separator: "\n"))
-    if args.contains("--listing") { exit(listing.problems == 0 ? 0 : 1) }
+    // A script is loaded by the real sandboxed host (a broker that refuses everything) to see what it registers.
+    var scriptProblems = 0
+    if checked.manifest?.script != nil {
+        let script = ScriptChecker.check(checked, hostPath: ScriptScenarioRunner.hostPath())
+        print("Script (main.js):")
+        if script.problems.isEmpty { print("  loads; handles events: \(script.events.isEmpty ? "none" : script.events.joined(separator: ", ")); commands: \(script.commands.isEmpty ? "none" : script.commands.joined(separator: ", "))") }
+        for p in script.problems { print("  PROBLEM: " + p) }
+        for w in script.warnings { print("  WARNING: " + w) }
+        scriptProblems = script.problems.count
+    }
+    if args.contains("--listing") { exit(listing.problems == 0 && scriptProblems == 0 ? 0 : 1) }
     let report = PluginChecker.check(checked, read: args.contains("--read"))
     print(report.lines.joined(separator: "\n"))
     // Not yet ready for the library is not a failure for a private plugin (the brief tells an AI to fix every problem,
     // and it would invent a licence and privacy text): those count only with --listing.
     if listing.problems > 0 { print("(\(listing.problems) to fix before it can go in the library: only needed to share it there)") }
-    exit(report.problems == 0 ? 0 : 1)
+    exit(report.problems == 0 && scriptProblems == 0 ? 0 : 1)
 
 case "install":
     guard args.count >= 2 else { usage() }
@@ -121,6 +149,7 @@ case "install":
         let dest = try PluginChecker.install(plugin)
         let appName = plugin.manifest!.apps.compactMap { b in NSRunningApplication.runningApplications(withBundleIdentifier: b).first?.localizedName }.first ?? plugin.manifest!.apps.first ?? "the app"
         print("Installed \(plugin.manifest!.name) in \(dest.path). TurnOver applies it the next time \(appName) comes to the front.")
+        if plugin.script != nil { print("It has a script. Installing does not approve it: the script waits until the person approves it in TurnOver, having heard what it can do (turnover-plugin consent shows that).") }
     } catch { fail("Could not install: \(error.localizedDescription)") }
 
 case "list":
@@ -250,12 +279,78 @@ case "record":
 
 case "test":
     guard args.count >= 2 else { usage() }
-    guard AXReplay.isAvailable else { fail("The tests need TurnOver's replay library (libAXReplayShim.dylib) beside this tool; run the tool from a TurnOver developer build.") }
     Speech.mode = .off
-    let r = PluginTestRunner.run(folder: URL(fileURLWithPath: (args[1] as NSString).expandingTildeInPath, isDirectory: true))
-    for l in r.lines { print(l) }
-    print("\(r.passed) passed, \(r.failed) failed")
-    exit(r.failed == 0 ? 0 : 1)
+    let folder = URL(fileURLWithPath: (args[1] as NSString).expandingTildeInPath, isDirectory: true)
+    let hasRuleTests = FileManager.default.fileExists(atPath: folder.appendingPathComponent("tests/expect.json").path)
+    let hasScriptTests = !ScriptScenarioRunner.scenarioFiles(in: folder).isEmpty
+    var passed = 0, failed = 0
+    // The rules' tests replay recorded screens; a plugin with only script tests needs no replay.
+    if hasRuleTests || !hasScriptTests {
+        guard AXReplay.isAvailable else { fail("The tests need TurnOver's replay library (libAXReplayShim.dylib) beside this tool; run the tool from a TurnOver developer build.") }
+        let r = PluginTestRunner.run(folder: folder)
+        for l in r.lines { print(l) }
+        passed += r.passed; failed += r.failed
+    }
+    if hasScriptTests {
+        guard let host = ScriptScenarioRunner.hostPath() else { fail("The script tests need TurnOver's script program (turnover-plugin-host) beside this tool, or in ../Helpers when it runs from inside TurnOver.app.") }
+        let r = ScriptScenarioRunner.run(folder: folder, hostPath: host)
+        for l in r.lines { print(l) }
+        passed += r.passed; failed += r.failed
+    }
+    print("\(passed) passed, \(failed) failed")
+    exit(failed == 0 ? 0 : 1)
+
+case "new":
+    // turnover-plugin new <folder> --app <bundle id> [--script]
+    guard args.count >= 2, !args[1].hasPrefix("--"), let i = args.firstIndex(of: "--app"), args.indices.contains(i + 1) else { usage() }
+    let folder = URL(fileURLWithPath: (args[1] as NSString).expandingTildeInPath, isDirectory: true)
+    do {
+        let written = try PluginScaffold.make(folder: folder, app: args[i + 1], script: args.contains("--script"))
+        print("Made \(folder.path):")
+        for f in written { print("  \(f)") }
+        print("Next: turnover-plugin check \(args[1])\(args.contains("--script") ? " and turnover-plugin test \(args[1])" : "")")
+    } catch { fail("\(error)") }
+
+case "consent":
+    guard args.count >= 2 else { usage() }
+    let plugin = loadPlugin(args[1])
+    guard plugin.script != nil else { fail("This plugin has no script, so there is nothing to approve.") }
+    let signature = ScriptTrust.signatureStatus(in: plugin.folder)
+    for line in ScriptAbilities.approvalLines(for: plugin, origin: .file, signature: signature) { print(line.text) }
+    print("")
+    print("Hash: \(plugin.scriptHash ?? "?")")
+    if case .valid(let fingerprint) = signature { print("Signing key: \(fingerprint)") }
+
+case "keygen":
+    do {
+        let key = try ScriptAuthorKey.generate(force: args.contains("--force"))
+        print("Made your signing key at \(ScriptAuthorKey.defaultURL.path), readable only by you. Keep it; anyone who has it can sign as you.")
+        print("Fingerprint: \(ScriptTrust.fingerprint(ofPublicKey: key.publicKey.rawRepresentation))")
+    } catch { fail("\(error)") }
+
+case "sign":
+    guard args.count >= 2 else { usage() }
+    let plugin = loadPlugin(args[1])
+    guard plugin.script != nil, let digest = ScriptTrust.digest(folder: plugin.folder) else { fail("This plugin has no script to sign.") }
+    do {
+        let key = try ScriptAuthorKey.load()
+        let signature = try ScriptTrust.sign(digest: digest, with: key)
+        try ScriptTrust.writeSignature(signature, to: plugin.folder)
+        print("Signed \(plugin.manifest!.name). Hash: \(ScriptTrust.hex(digest))")
+        print("Signing key: \(ScriptTrust.fingerprint(ofPublicKey: key.publicKey.rawRepresentation))")
+        print("Sign again after any change to manifest.json, profile.json or main.js: the signature is for exactly these files.")
+    } catch { fail("\(error)") }
+
+case "verify":
+    guard args.count >= 2 else { usage() }
+    let plugin = loadPlugin(args[1])
+    guard plugin.script != nil else { fail("This plugin has no script.") }
+    print("Hash: \(plugin.scriptHash ?? "?")")
+    switch ScriptTrust.signatureStatus(in: plugin.folder) {
+    case .valid(let fingerprint): print("Signing key: \(fingerprint)"); print("The signature is good for these files.")
+    case .invalid(let why): print("Signature: \(why)"); exit(1)
+    case .none: print("Not signed."); exit(1)
+    }
 
 default:
     usage()

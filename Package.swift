@@ -368,7 +368,7 @@ let package = Package(
         // HIServices calls, and the recording/replay model over it.
         .target(name: "AXReplayShim", path: "Sources/AXReplayShim", linkerSettings: [.linkedFramework("ApplicationServices")]),
         // A plugin's own tests, replayed (docs/PLUGIN-TOOLKIT-PLAN.md item 5): used by turnover-plugin test and turnover-tests.
-        .target(name: "PluginTestKit", dependencies: ["TurnOverCore", "AXFixtures"], path: "Sources/PluginTestKit",
+        .target(name: "PluginTestKit", dependencies: ["TurnOverCore", "AXFixtures", "TurnOverPluginWire"], path: "Sources/PluginTestKit",
                 swiftSettings: [.defaultIsolation(MainActor.self)],
                 linkerSettings: [.linkedFramework("ApplicationServices")]),
         .target(name: "AXFixtures", path: "Sources/AXFixtures",

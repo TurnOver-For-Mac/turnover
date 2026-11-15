@@ -100,7 +100,7 @@ public enum PluginMaker {
         let safe = String(bundle.map { $0.isLetter || $0.isNumber ? $0 : "-" })
         var m = PluginManifest(id: "my-" + safe, name: "My changes for \(appName)", version: "1", author: NSFullUserName(),
                                description: "Made in TurnOver with its fix list.", apps: [bundle])
-        m.kind = "profile"; m.formatVersion = PluginFormat.currentVersion
+        m.kind = "profile"; m.formatVersion = PluginFormat.dataVersion
         return (m, Profile(labels: nil, keys: nil, watch: nil, silence: nil, view: nil))
     }
 

@@ -6,14 +6,21 @@
 //   nextText, previousText, childText, parentText, help, description".
 // - A field TurnOver does not know is a warning, with the nearest field it does know ("did you mean name?"): a
 //   misspelt field used to be ignored without a word.
-// - formatVersion (the format the plugin is written in; 1 today) and minimumTurnOver (the oldest TurnOver it works
+// - formatVersion (the format the plugin is written in; 2 today) and minimumTurnOver (the oldest TurnOver it works
 //   with) in the manifest. TurnOver reads every older format; a newer one is refused with a reason, never half-read.
+// - Format 2 (15 Nov 2026, docs/PLUGIN-SCRIPTS-PLAN.md) adds `script` and `commands` to the manifest: one JavaScript
+//   file that runs in a sandbox, and the commands it handles. Everything valid in format 1 is valid in format 2.
 import Foundation
 
 nonisolated public enum PluginFormat {
     /// The newest format this TurnOver reads.
-    public static let currentVersion = 1
-
+    public static let currentVersion = 2
+    /// The format a plugin with no script is written in. The maker writes this, so a data plugin still loads in a
+    /// TurnOver that only knows format 1 (15 Nov 2026).
+    public static let dataVersion = 1
+    /// The one name a plugin's script may have, and the most it may hold (the plan's 256 KB).
+    public static let scriptName = "main.js"
+    public static let scriptBytes = 256 * 1024
     /// The values a field may take, where it is a choice.
     public static let choices: [String: [String]] = [
         "nameFrom": ["nextText", "previousText", "childText", "parentText", "help", "description", "ancestorHelp", "rowText"],
@@ -24,7 +31,8 @@ nonisolated public enum PluginFormat {
 
     /// The fields each part of the format knows (for the unknown-field warning).
     static let manifestFields = ["id", "name", "version", "author", "description", "apps", "kind", "formatVersion", "minimumTurnOver", "$schema",
-                                  "summary", "contact", "changes", "abilities", "privacy", "license", "provides"]
+                                  "summary", "contact", "changes", "abilities", "privacy", "license", "provides", "script", "commands"]
+    static let commandFields = ["id", "description", "key", "letter"]
     static let profileFields = ["labels", "keys", "watch", "silence", "view", "hold", "$schema"]
     static let holdFields = ["focus", "items"]
     static let labelFields = ["match", "name", "nameFrom", "role"]
@@ -187,6 +195,7 @@ nonisolated public enum PluginFormat {
                     out.append(Problem(file: "manifest.json", line: k.line, message: "kind \"\(v)\" is not one TurnOver loads; the only kind is \"profile\" (data, no code)", isError: true))
                 }
             }
+            out += checkScript(manifest: manifest, text: text)
         }
         if let profile, let raw = try? String(contentsOf: profile, encoding: .utf8) {
             let text = clean(raw)
@@ -204,7 +213,10 @@ nonisolated public enum PluginFormat {
 
     /// The fields allowed at a path, or nil where TurnOver does not check (the view section has its own checks).
     static func fieldsFor(path: [String], inManifest: Bool) -> [String]? {
-        if inManifest { return path.isEmpty ? manifestFields : nil }
+        if inManifest {
+            if path.count == 2, path[0] == "commands", Int(path[1]) != nil { return commandFields }
+            return path.isEmpty ? manifestFields : nil
+        }
         let named = path.filter { Int($0) == nil }   // list positions dropped
         guard let first = named.first else { return profileFields }
         if first == "view" { return nil }

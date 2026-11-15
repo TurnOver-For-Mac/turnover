@@ -134,17 +134,29 @@ Measured on this Mac, macOS 27.2, 14 Nov 2026 (a throwaway test program, not kep
 
 - A script runs only if TurnOver holds a receipt for it: the plugin's id, the SHA-256 of its files, its apps and
   its abilities, and when it was approved.
-- Receipts live in `plugin-trust.json` in TurnOver's support folder, sealed with an HMAC. The key is in the
-  Keychain, where only TurnOver's signed program can read it. Another program can delete the file (every script
-  then needs approving again) but cannot forge an approval. A developer build, whose signature changes with each
-  build, keeps the key in a file beside it and says so in the log: weaker, and only on a developer's Mac.
+- Receipts live in `plugin-trust.json` in TurnOver's support folder, sealed with an HMAC-SHA256. The key is in the
+  Keychain. A developer build, whose signature changes with each build, keeps the key in a file beside it and
+  says so in the log: weaker, and only on a developer's Mac.
+- What the seal stops: a plugin that arrives as files (downloaded, unzipped, synced, restored from a backup,
+  dropped by an installer) cannot bring an approval with it; an approval cannot be copied from another Mac; and a
+  plugin changed after it was approved no longer matches. Deleting the file only means every script needs
+  approving again.
+- What the seal does not stop (reviewed 15 Nov 2026): a program already running as the person, attacking TurnOver
+  on purpose, can replace the key in the Keychain and seal a file of its own. The Keychain keeps a secret from
+  other programs; it does not stop them deleting an item and putting another in its place, and TurnOver cannot
+  tell whose item it reads. Nothing TurnOver can store today is out of such a program's reach. Three things limit
+  it. TurnOver reads the trust file once, when it starts, so a file replaced while TurnOver runs changes nothing
+  until the next start. Each time TurnOver starts with scripts on, it says how many scripts are on, and that
+  developer mode is on if it is, so an approval the person never gave is heard. And a place for receipts that
+  another program cannot write is a decision for the maintainer, below.
 - A script with no receipt, or whose files have changed, does not start. TurnOver says once that the plugin has a
   script waiting for approval, and the Plugins menu offers it.
 - Approving speaks what the plugin is for (the author's words, marked as the author's) and what it can do
   (TurnOver's own words, generated from the manifest, with the fixed list of what it cannot do).
 - Developer mode, a switch in the Plugins menu kept in the sealed file: a draft's receipt then holds as long as
-  its apps and abilities do not grow, so saving `main.js` reloads it without a question. TurnOver says which draft
-  scripts are running each time it starts.
+  its apps and abilities do not grow, so saving `main.js` reloads it without a question. A receipt is a draft's
+  only if developer mode was on when the person approved it; any other receipt is for exactly the files approved,
+  whatever developer mode is later. TurnOver says that developer mode is on each time it starts.
 - A plugin's profile and its script share one approval: a script cannot reach past its abilities by leaving the
   work to a key in `profile.json`, because the abilities are worked out from both.
 
@@ -153,6 +165,9 @@ Measured on this Mac, macOS 27.2, 14 Nov 2026 (a throwaway test program, not kep
 - An author may sign a plugin: `turnover-plugin keygen` makes an Ed25519 key, `turnover-plugin sign` writes
   `signature.json` over the same SHA-256 the receipt uses. TurnOver shows the key's fingerprint at approval and
   keeps it in the receipt. A later version signed by a different key is said to be so.
+- `signature.json` is `{"format": 1, "key": "<the public key, base64>", "signature": "<base64>"}`. The signature
+  is Ed25519 over the 32 raw bytes of the hash, not its hex text, so a tool in any language need only hash the
+  files and verify. The fingerprint is the first 16 hex digits of the SHA-256 of the public key, in fours.
 - The library keeps its signed list. For a plugin with a script the list will also carry the author's key, the
   level, who reviewed it and the hash they reviewed.
 - A script reaches the library only at Verified: a named person who is not its author has read every line of that
@@ -281,6 +296,21 @@ Details settled while the documents were written (15 Nov 2026):
   An author's key is a file, `~/.turnover-plugin/author.key`, readable only by them.
 - "What is this?" (VO-Slash, the plugin maker) is the developer information for the item in focus.
 
+Details settled while the format and the tool were built (15 Nov 2026):
+- A plugin with a script may have no `profile.json`. A plugin without a script still needs one.
+- An empty `abilities` list counts as none, and a script needs at least one ability.
+- Format 2 is the newest this TurnOver reads. The plugin maker still writes format 1, so a plugin of rules stays
+  readable by older builds.
+- The apps no script may name on any Mac are `PluginPolicy.scriptForbiddenApps` and every identifier beginning
+  `com.turnover.`. They are checked when the plugin loads and again, against the app really in front, whenever a
+  script asks for something.
+- `plugin-trust.json` is one JSON object: `format`, `developerMode`, `receipts` and `seal`. The seal is the base64
+  HMAC of the object without `seal`, written compactly with its keys sorted.
+- A script test (`tests/script/*.json`) may also give `{"error": "..."}` as an answer, expect an error with
+  `expect.error`, and use `turnover.storage`, which the runner keeps in memory.
+- What a script stores is a plain file in TurnOver's support folder. Other programs can read it, so a script
+  should not store what it reads from an app unless the person would expect that.
+
 ## The wire
 
 One JSON object per line. TurnOver to host:
@@ -366,6 +396,15 @@ full `build.sh --no-install` runs once at the end.
    hardened runtime JavaScriptCore runs without its compiler, which is what the tests use.
 4. Whether scripts may ever reach every app, a website, or the internet. This plan says not yet.
 5. Where a report of a harmful plugin goes. There is no SECURITY.md; docs/PLUGIN-SECURITY.md says so until there is.
+6. A place for receipts that another program cannot write (see Approval). Both ways change how TurnOver is
+   assembled and signed, so neither is built here:
+   - a small sandboxed service inside TurnOver.app that keeps the receipts in its own container, which macOS 14 and
+     later protects from other developers' programs, and which answers only the signed TurnOver
+     (`xpc_connection_set_peer_code_signing_requirement`); or
+   - the data-protection Keychain with an access group, which needs a provisioning profile and the
+     `keychain-access-groups` entitlement.
+   Until one of them exists, a receipt stops files that arrive, not a program that attacks TurnOver's own files on
+   purpose. That is still more than a plugin of rules has today (gap 1).
 
 ## Later
 

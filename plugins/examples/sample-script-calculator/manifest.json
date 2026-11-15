@@ -1,0 +1,21 @@
+{
+  "formatVersion": 2,
+  "id": "sample-script-calculator",
+  "name": "Calculator, scripted",
+  "version": "1.0",
+  "author": "TurnOver",
+  "description": "Says what the Calculator's Clear button is, and reads the result aloud on a key.",
+  "apps": ["com.apple.calculator"],
+  "abilities": ["read", "say"],
+  "script": "main.js",
+  "commands": [
+    { "id": "readResult", "description": "Read the result", "key": "turnover+control+shift+r", "letter": "r" }
+  ],
+  "summary": "Reads Calculator's result on a key, and names its Clear button.",
+  "contact": "https://github.com/TurnOver-For-Mac/turnover/issues",
+  "privacy": "Reads Calculator's window only; nothing leaves your Mac.",
+  "license": "MIT",
+  "changes": [
+    { "version": "1.0", "notes": "First version: the readResult command and a name for the Clear button." }
+  ]
+}

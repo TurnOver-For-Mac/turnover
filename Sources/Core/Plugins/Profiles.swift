@@ -43,6 +43,11 @@ nonisolated public struct PluginManifest: Codable {
     /// Acted on only for an official plugin installed from the library; anywhere else it does nothing. The code stays
     /// TurnOver's (closed); the plugin is how a tester chooses it (14 Oct 2026).
     public var provides: String?
+    /// The plugin's script, always "main.js" (format 2; docs/PLUGIN-SCRIPTS-PLAN.md). Needs `abilities` and named `apps`.
+    public var script: String?
+    /// The commands the script handles, declared here so TurnOver can list them, check their keys and let the person
+    /// rebind them without running anything. Format 2, with `script`.
+    public var commands: [PluginCommand]?
 
     /// A plugin id: 1 to 64 letters, digits and hyphens, not starting with a hyphen. It names the plugin's folder.
     public static func isValidID(_ id: String) -> Bool {
@@ -51,6 +56,21 @@ nonisolated public struct PluginManifest: Codable {
 
     public init(id: String, name: String, version: String, author: String? = nil, description: String? = nil, apps: [String]) {
         self.id = id; self.name = name; self.version = version; self.author = author; self.description = description; self.apps = apps
+    }
+}
+
+/// One command of a plugin's script (manifest.json, format 2). A script never sees the key: it is told its command was chosen.
+nonisolated public struct PluginCommand: Codable, Equatable {
+    /// Letters and digits only: how the script names it (`turnover.command("readResult", …)`).
+    public var id: String
+    /// What it does, for input help and the shortcuts list.
+    public var description: String
+    /// A TurnOver gesture, as a key in profile.json is written.
+    public var key: String?
+    /// Its letter in the plugin layer, as a key's in profile.json.
+    public var letter: String?
+    public init(id: String, description: String, key: String? = nil, letter: String? = nil) {
+        self.id = id; self.description = description; self.key = key; self.letter = letter
     }
 }
 
@@ -168,8 +188,15 @@ nonisolated public struct LoadedPlugin {
     public let modified: Date
     /// Things to fix that do not stop it loading (an unknown field), each with its file and line.
     public let warnings: [String]
-    public init(folder: URL, manifest: PluginManifest?, profile: Profile?, error: String?, modified: Date, warnings: [String] = []) {
+    /// The text of main.js, when the manifest names a script. Nothing runs it in this stage; a plugin with a script
+    /// still works as a data plugin when scripts are off.
+    public let script: String?
+    /// ScriptTrust's hash of the plugin's files as they were read together at load (a receipt matches this).
+    public let scriptHash: String?
+    public init(folder: URL, manifest: PluginManifest?, profile: Profile?, error: String?, modified: Date, warnings: [String] = [],
+                script: String? = nil, scriptHash: String? = nil) {
         self.folder = folder; self.manifest = manifest; self.profile = profile; self.error = error; self.modified = modified; self.warnings = warnings
+        self.script = script; self.scriptHash = scriptHash
     }
     /// The plugin's view, as a recipe for each app its manifest names (none without a view section).
     public var recipes: [Recipe] {
@@ -415,7 +442,8 @@ public final class ProfileStore {
     public static func load(folder: URL) -> LoadedPlugin {
         let fm = FileManager.default
         let mURL = folder.appendingPathComponent("manifest.json"), pURL = folder.appendingPathComponent("profile.json")
-        let modified = [mURL, pURL].compactMap { (try? fm.attributesOfItem(atPath: $0.path))?[.modificationDate] as? Date }.max() ?? .distantPast
+        let jURL = folder.appendingPathComponent(PluginFormat.scriptName)
+        let modified = [mURL, pURL, jURL].compactMap { (try? fm.attributesOfItem(atPath: $0.path))?[.modificationDate] as? Date }.max() ?? .distantPast
         do {
             // Read as hand-written files: comments and trailing commas allowed, errors with their line (PluginFormat).
             let manifest = try PluginFormat.decode(PluginManifest.self, from: mURL)
@@ -424,17 +452,26 @@ public final class ProfileStore {
             guard PluginManifest.isValidID(manifest.id) else {
                 return LoadedPlugin(folder: folder, manifest: nil, profile: nil, error: "manifest.json: id \"\(manifest.id)\" must be 1 to 64 letters, digits and hyphens, starting with a letter or digit", modified: modified)
             }
-            let profile = try PluginFormat.decode(Profile.self, from: pURL)
-            let problems = PluginFormat.check(manifest: mURL, profile: pURL)
+            // A plugin with a script may have no profile.json at all (the hash counts it "if present"); a data plugin may not.
+            let hasProfile = fm.fileExists(atPath: pURL.path)
+            let profile: Profile
+            if manifest.script != nil, !hasProfile { profile = Profile() } else { profile = try PluginFormat.decode(Profile.self, from: pURL) }
+            let problems = PluginFormat.check(manifest: mURL, profile: hasProfile ? pURL : nil)
             if let first = problems.first(where: { $0.isError }) {
                 return LoadedPlugin(folder: folder, manifest: nil, profile: nil, error: first.description, modified: modified, warnings: problems.filter { !$0.isError }.map(\.description))
             }
             try profile.view?.validate()   // a view that names a shape TurnOver has no view for fails the plugin
             // What no plugin may do on any Mac fails it here, however it arrived: copied in, or edited in place.
-            if let why = PluginPolicy.refusals(profile).first {
+            if let why = (PluginPolicy.refusals(profile) + PluginPolicy.scriptRefusals(manifest)).first {
                 return LoadedPlugin(folder: folder, manifest: nil, profile: nil, error: "refused: " + why, modified: modified)
             }
-            return LoadedPlugin(folder: folder, manifest: manifest, profile: profile, error: nil, modified: modified, warnings: problems.map(\.description))
+            // The script's text and the hash of the files, from one read, so a receipt is for what was loaded.
+            var text: String?, hash: String?
+            if manifest.script != nil, let data = try? Data(contentsOf: jURL), let loaded = String(data: data, encoding: .utf8) {
+                text = loaded; hash = ScriptTrust.hash(folder: folder, scriptData: data)
+            }
+            return LoadedPlugin(folder: folder, manifest: manifest, profile: profile, error: nil, modified: modified, warnings: problems.map(\.description),
+                                script: text, scriptHash: hash)
         } catch let e as PluginFormatError {
             return LoadedPlugin(folder: folder, manifest: nil, profile: nil, error: e.description, modified: modified)
         } catch let e as RecipeError {
@@ -472,7 +509,7 @@ public final class ProfileStore {
         let folders = (Self.shippedFixes.map(subfolders) ?? []) + subfolders(Self.folder)
         let current = plugins
         if !force, folders.count == current.count, zip(folders, current).allSatisfy({ f, p in
-            f == p.folder && ([f.appendingPathComponent("manifest.json"), f.appendingPathComponent("profile.json")]
+            f == p.folder && ([f.appendingPathComponent("manifest.json"), f.appendingPathComponent("profile.json"), f.appendingPathComponent(PluginFormat.scriptName)]
                 .compactMap { (try? fm.attributesOfItem(atPath: $0.path))?[.modificationDate] as? Date }.max() ?? .distantPast) == p.modified
         }) { return false }
         let loaded = folders.map(Self.load(folder:))
