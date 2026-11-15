@@ -17,6 +17,9 @@ public enum PluginWire {
         public static let pause = "pause"
         public static let resume = "resume"
         public static let bye = "bye"
+        /// The current values of the plugin's options (stage B, 16 Nov 2026): sent whenever one changes, even while the script is
+        /// paused, so `turnover.options.get` is always current. Carries no code and runs none.
+        public static let options = "options"
     }
 
     /// The `t` field of a message, host to TurnOver.
@@ -42,16 +45,25 @@ public enum PluginWire {
         case itemFocus = "item.focus"
         case itemSetValue = "item.setValue"
         case menu, keys, copy
+        /// Stage B (16 Nov 2026): TurnOver's own list and text prompt (answered when the person answers), a tone, an item's
+        /// text and caret, and the clipboard's text.
+        case choose, ask, tone
+        case itemText = "item.text"
+        case itemSetCaret = "item.setCaret"
+        case itemSelect = "item.select"
+        case clipboard
         case storageGet = "storage.get"
         case storageSet = "storage.set"
         case storageRemove = "storage.remove"
 
         /// Said, played or logged: sent as a `notify`, never answered.
-        public var isNotification: Bool { self == .say || self == .sound || self == .log }
+        public var isNotification: Bool { self == .say || self == .sound || self == .log || self == .tone }
+        /// Answered later, when the person has chosen or typed: TurnOver's reply is not an immediate one.
+        public var isDeferred: Bool { self == .choose || self == .ask }
     }
 
     /// The events a script can handle (`turnover.on`).
-    public static let eventNames = ["focus", "valueChange", "appFocus", "appBlur", "windowChange"]
+    public static let eventNames = ["focus", "valueChange", "appFocus", "appBlur", "windowChange", "optionsChange", "speech"]
     /// The events whose handler may replace what TurnOver says (`event.say`, `event.silence`).
     public static let replaceableEvents: Set<String> = ["focus", "valueChange"]
 
@@ -68,6 +80,17 @@ public enum PluginWire {
         public static let helloBytes = 2 * 1024 * 1024
         /// Characters in one thing said.
         public static let sayCharacters = 500
+        /// A tone's pitch and length (stage B).
+        public static let toneHertz: ClosedRange<Double> = 100...4000
+        public static let toneMilliseconds: ClosedRange<Double> = 10...500
+        /// A list's items and their length, a prompt's and a title's length, and the text a prompt may give back.
+        public static let choiceItems = 200
+        public static let choiceCharacters = 200
+        public static let answerCharacters = 1000
+        /// The text of an item or of the clipboard that a script is given.
+        public static let textCharacters = 10_000
+        /// What the script is told TurnOver said (stage B, `hearSpeech`).
+        public static let heardCharacters = 1000
         /// Timers a script may have at once.
         public static let timers = 20
         /// The fastest a timer may run.

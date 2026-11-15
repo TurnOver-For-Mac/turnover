@@ -65,6 +65,13 @@ public enum Speech {
     /// The lowest level: text already processed, queued behind what is playing.
     /// Receives everything that would be spoken, before the mode check (tests and the log viewer).
     public static var sink: ((String) -> Void)?
+    /// Plugin scripts with the `hearSpeech` ability are told what TurnOver says (docs/PLUGIN-PLATFORM-PLAN.md, stage B; 16 Nov 2026).
+    /// Nil unless plugin scripts are on and one listens, so with them off nothing here runs. It is told the text and can do nothing
+    /// to it: this only watches. What a plugin itself said is never passed on (`attributedToPlugin`).
+    public static var observer: ((String) -> Void)?
+    private static var attributedDepth = 0
+    /// Run `body` (which speaks) with the words marked as a plugin's: the observer does not hear them.
+    public static func attributedToPlugin(_ body: () -> Void) { attributedDepth += 1; defer { attributedDepth -= 1 }; body() }
     /// An in-memory speech queue for lifecycle tests; production leaves this nil. Tests hold the real
     /// onStart/completion callbacks and deliver them through their existing return-to-main path.
     package static var enqueueTestDriver: ((String, (@Sendable () -> Void)?, (@Sendable (Bool) -> Void)?) -> Void)?
@@ -126,6 +133,7 @@ public enum Speech {
         // raised the pitch of the next real utterance instead (code review, 16 Oct 2026).
         let pitch = pitchNext; pitchNext = nil
         sink?(cleaned(text))
+        if attributedDepth == 0, let observer { observer(cleaned(text)) }
         if let enqueueTestDriver { enqueueTestDriver(cleaned(text), onStart, completion); return }
         switch mode {
         case .talk: break

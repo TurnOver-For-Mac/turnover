@@ -31,7 +31,9 @@ package final class ScriptPlugins: GlobalPlugin {
     /// What TurnOver knows about one plugin that has a script.
     package final class Entry {
         package let id: String
-        package var plugin: LoadedPlugin
+        package var plugin: LoadedPlugin { didSet { hearsSpeech = ScriptAbilities.effective(for: plugin).contains(.hearSpeech) } }
+        /// Whether the plugin may hear what TurnOver says: kept here so each thing TurnOver says costs no more than a look.
+        package private(set) var hearsSpeech: Bool
         package var host: ScriptHost?
         var broker: AXScriptBroker?
         /// Bumped at each start and stop, so a late message from an older host is ignored.
@@ -46,9 +48,17 @@ package final class ScriptPlugins: GlobalPlugin {
         var saidFailureFor: String?
         var announceReload = false
         package var inFront = false
-        init(_ plugin: LoadedPlugin) { id = plugin.manifest?.id ?? ""; self.plugin = plugin }
+        init(_ plugin: LoadedPlugin) { id = plugin.manifest?.id ?? ""; self.plugin = plugin; hearsSpeech = ScriptAbilities.effective(for: plugin).contains(.hearSpeech) }
         var name: String { plugin.manifest?.name ?? id }
         var apps: [String] { plugin.manifest?.apps ?? [] }
+        /// Works in every app (stage B): its host starts when TurnOver starts reading and is never paused for the app changing.
+        var everywhere: Bool { plugin.manifest?.worksEverywhere ?? false }
+        /// The app in front when an everywhere plugin was last told (so a change is told once).
+        var lastBundle = ""
+        /// Whether the plugin's own app, or any allowed app for an everywhere plugin, is this one: never a forbidden app.
+        func matches(_ bundle: String) -> Bool {
+            !bundle.isEmpty && !AXScriptBroker.isForbiddenApp(bundle) && (everywhere || apps.contains(bundle))
+        }
         /// A focus or value event carries the item, so only a plugin that has `read` is sent one (15 Nov 2026).
         var mayRead: Bool { ScriptAbilities.effective(for: plugin).contains(.read) }
     }
@@ -57,7 +67,11 @@ package final class ScriptPlugins: GlobalPlugin {
     private let env: ScriptEnvironment
     package private(set) var entries: [String: Entry] = [:]
     private var byBundle: [String: [Entry]] = [:]
+    private var everywhereEntries: [Entry] = []
     private var ordered: [Entry] = []   // by id
+    /// A script's question (a list or a prompt) is open: one at a time across every plugin, and none while an approval is open.
+    private var scriptQuestionOpen = false
+    private var hearing = false
     private var commandNames: [String] = []
     private var waitingNoticed = Set<String>()
     package private(set) var waitingNotices = 0
@@ -68,14 +82,17 @@ package final class ScriptPlugins: GlobalPlugin {
     /// After a hang no script runs for this run of TurnOver.
     package let blocked: Bool
 
-    /// Whether an approval question is open: no script is heard meanwhile.
-    package var questionIsOpen: Bool { approvalOpen }
+    /// Whether a question is open (an approval, or a script's list or prompt): no script is heard meanwhile.
+    package var questionIsOpen: Bool { approvalOpen || scriptQuestionOpen }
+    /// Every plugin, rules and scripts, was turned off from the menu until TurnOver starts again; or after a hang.
+    private var stopped: Bool { blocked || env.profiles.pluginsOff }
 
     /// For TurnOver: the real Mac, the real trust file, and a hook on the plugins' reloads.
     package required init() {
         trust = .shared; env = .live(); blocked = env.afterHang
         super.init()
         ScriptPlugins.current = self
+        installSpeechHearing()
         Self.chainReload(onto: ProfileStore.shared) { [weak self] in DispatchQueue.main.async { self?.reloaded() } }
         terminationObserver = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.checkQuit() }
@@ -99,6 +116,7 @@ package final class ScriptPlugins: GlobalPlugin {
     override package func terminate() {
         entries.values.forEach(stop)
         if env.profiles.setScriptLive([:]) { env.profiles.livenessChanged() }   // nothing is approved once this is gone
+        if hearing { Speech.observer = nil; hearing = false }
         if let terminationObserver { NSWorkspace.shared.notificationCenter.removeObserver(terminationObserver) }
         terminationObserver = nil
         if ScriptPlugins.current === self { ScriptPlugins.current = nil }
@@ -117,13 +135,16 @@ package final class ScriptPlugins: GlobalPlugin {
                 entry.plugin = plugin
                 if changed { scriptChanged(entry) }
             } else {
-                entries[manifest.id] = Entry(plugin)
+                let entry = Entry(plugin)
+                entry.inFront = entry.everywhere   // never paused for the app changing
+                entries[manifest.id] = entry
             }
         }
         for (id, entry) in entries where !seen.contains(id) { stop(entry); entries[id] = nil }   // the plugin was removed
         ordered = entries.values.sorted { $0.id < $1.id }
         byBundle = [:]
-        for entry in ordered { for app in entry.apps { byBundle[app, default: []].append(entry) } }
+        for entry in ordered where !entry.everywhere { for app in entry.apps { byBundle[app, default: []].append(entry) } }
+        everywhereEntries = ordered.filter(\.everywhere)
         rebuildCommands()
         reconcileTrust()
     }
@@ -133,20 +154,20 @@ package final class ScriptPlugins: GlobalPlugin {
     private func scriptChanged(_ entry: Entry) {
         stop(entry)
         entry.strikes = []; entry.turnedOff = false; entry.saidOff = false; entry.everReady = false; entry.failedHash = nil
-        guard trust.developerMode, trust.decision(for: entry.plugin).isAllowed, !blocked else { return }
+        entry.inFront = entry.everywhere || isFront(entry)
+        guard trust.developerMode, trust.decision(for: entry.plugin).isAllowed, !stopped else { return }
         // Started even while its app is behind (the author is in an editor): it loads, says reloaded or its first error,
         // and waits paused until its app is in front.
-        entry.inFront = isFront(entry)
         entry.announceReload = true
         start(entry)
     }
 
     /// Hosts whose receipt no longer holds go (taken away, developer mode off, a changed file).
     package func reconcileTrust() {
-        for entry in entries.values where entry.host != nil && !trust.decision(for: entry.plugin).isAllowed { stop(entry) }
+        for entry in entries.values where entry.host != nil && (stopped || !trust.decision(for: entry.plugin).isAllowed) { stop(entry) }
         // A plugin with a script is one thing: its profile is live only while its script may run (ProfileStore.livePlugins).
         var live: [String: String] = [:]
-        for entry in entries.values where trust.decision(for: entry.plugin).isAllowed { live[entry.id] = entry.plugin.scriptHash }
+        if !stopped { for entry in entries.values where trust.decision(for: entry.plugin).isAllowed { live[entry.id] = entry.plugin.scriptHash } }
         if env.profiles.setScriptLive(live) { env.profiles.livenessChanged() }
         for entry in entries.values where entry.host == nil && entry.inFront { arrived(entry) }
     }
@@ -158,26 +179,32 @@ package final class ScriptPlugins: GlobalPlugin {
 
     private func stop(_ entry: Entry) {
         entry.generation += 1
+        entry.broker?.cancelQuestion()   // a list or prompt it opened is closed: nobody is waiting for its answer
         entry.host?.stop()
         entry.host = nil; entry.broker = nil
     }
 
     private func isFront(_ entry: Entry) -> Bool {
         guard let pid = env.frontPid() else { return false }
-        let bundle = env.bundle(pid)
-        return !bundle.isEmpty && entry.apps.contains(bundle) && !AXScriptBroker.isForbiddenApp(bundle)
+        return entry.matches(env.bundle(pid))
     }
 
     // MARK: Starting, pausing and the host's news
 
     private func start(_ entry: Entry) {
-        guard entry.host == nil, !blocked, !entry.turnedOff, entry.failedHash == nil || entry.failedHash != entry.plugin.scriptHash,
+        guard entry.host == nil, !stopped, !entry.turnedOff, entry.failedHash == nil || entry.failedHash != entry.plugin.scriptHash,
               trust.decision(for: entry.plugin).isAllowed, let manifest = entry.plugin.manifest, let source = entry.plugin.script else { return }
-        let broker = AXScriptBroker(pluginID: manifest.id, apps: manifest.apps, environment: env, questionOpen: { [weak self] in self?.approvalOpen ?? false })
+        let broker = AXScriptBroker(pluginID: manifest.id, apps: manifest.apps, everywhere: manifest.worksEverywhere, pluginName: manifest.name, environment: env,
+                                    questionOpen: { [weak self] in self?.questionIsOpen ?? false },
+                                    beginQuestion: { [weak self] in
+                                        guard let self, !self.approvalOpen, !self.scriptQuestionOpen else { return false }
+                                        self.scriptQuestionOpen = true; return true
+                                    },
+                                    endQuestion: { [weak self] in self?.scriptQuestionOpen = false })
         let host = ScriptHost(plugin: ScriptPluginInfo(id: manifest.id, name: manifest.name, version: manifest.version),
                               abilities: ScriptAbilities.effective(for: entry.plugin), commands: (manifest.commands ?? []).map(\.id), source: source,
                               language: Locale.current.language.languageCode?.identifier ?? "en", hostPath: env.hostPath, broker: broker, limits: env.limits,
-                              sounds: env.soundNames())
+                              sounds: env.soundNames(), options: optionValues(of: entry))
         entry.generation += 1
         let generation = entry.generation
         entry.host = host; entry.broker = broker; entry.everReady = false
@@ -220,7 +247,8 @@ package final class ScriptPlugins: GlobalPlugin {
         let capped = String(text.prefix(300))
         if approvalOpen { if heldSpeech.count < 5 { heldSpeech.append(capped) }; return }
         guard entry.inFront || trust.developerMode else { return Log.info("script \(entry.id): not said, its app is not in front: \(Log.words(capped))") }
-        env.speak(capped)
+        // These words carry the plugin's name and its own error text, so no other plugin that hears TurnOver is told them.
+        Speech.attributedToPlugin { env.speak(capped) }
     }
 
     /// The question is over, however it ended: what was held for it is said now.
@@ -254,7 +282,7 @@ package final class ScriptPlugins: GlobalPlugin {
 
     /// One of the plugin's apps came to the front.
     private func arrived(_ entry: Entry) {
-        guard !blocked, !entry.turnedOff else { return }
+        guard !stopped, !entry.turnedOff else { return }
         guard trust.decision(for: entry.plugin).isAllowed else { return noticeWaiting(entry) }
         if let host = entry.host { host.resume(); tell(entry, "appFocus") } else { start(entry) }
     }
@@ -291,7 +319,8 @@ package final class ScriptPlugins: GlobalPlugin {
         let pid = event.obj.pid
         let bundle = env.bundle(pid)
         if event.kind != .valueChange { frontChanged(bundle: bundle, windowEvent: event.kind == .foreground) }
-        guard !bundle.isEmpty, !approvalOpen, let list = byBundle[bundle], !AXScriptBroker.isForbiddenApp(bundle) else { return next() }
+        let list = (byBundle[bundle] ?? []) + everywhereEntries   // an everywhere plugin hears every app but a forbidden one
+        guard !bundle.isEmpty, !approvalOpen, !list.isEmpty, !AXScriptBroker.isForbiddenApp(bundle) else { return next() }
         switch event.kind {
         case .gainFocus:
             let name = "focus"
@@ -326,7 +355,15 @@ package final class ScriptPlugins: GlobalPlugin {
     /// Which plugins have an app in front now: tell each what changed (an app arriving or leaving, or a new window).
     private func frontChanged(bundle: String, windowEvent: Bool) {
         for entry in ordered {
-            let now = !bundle.isEmpty && entry.apps.contains(bundle) && !AXScriptBroker.isForbiddenApp(bundle)
+            let now = entry.matches(bundle)
+            if entry.everywhere {
+                // Never paused and never told it left: a forbidden app is told nothing at all, not even that it is in front.
+                if now {
+                    if entry.lastBundle != bundle { entry.lastBundle = bundle; tell(entry, "appFocus") }
+                    else if windowEvent, !approvalOpen { tell(entry, "windowChange") }
+                } else { entry.lastBundle = "" }
+                continue
+            }
             if now, !entry.inFront { entry.inFront = true; arrived(entry) }
             else if !now, entry.inFront { entry.inFront = false; left(entry) }
             else if now, windowEvent, !approvalOpen { tell(entry, "windowChange") }
@@ -364,13 +401,17 @@ package final class ScriptPlugins: GlobalPlugin {
         for entry in ordered {
             guard let manifest = entry.plugin.manifest else { continue }
             let apps = Set(manifest.apps)
+            let everywhere = manifest.worksEverywhere
             for command in manifest.commands ?? [] {
                 guard let key = command.key else { continue }
                 let name = "plugin_\(manifest.id)_script_\(command.id)"
                 let id = key.hasPrefix("kb") ? key : "kb:" + key
                 script(name, command.description, gestures: [id], category: manifest.name) { [weak self, weak entry] _ in
                     if let self, let entry { self.run(command.id, of: entry) }
-                }.isAvailable = { API.focusPid.map { apps.contains(ProfileStore.shared.bundle(of: $0)) } ?? false }
+                }.isAvailable = { API.focusPid.map { pid in
+                    let bundle = ProfileStore.shared.bundle(of: pid)
+                    return everywhere ? !bundle.isEmpty && !AXScriptBroker.isForbiddenApp(bundle) : apps.contains(bundle)
+                } ?? false }
                 commandNames.append(name)
             }
         }
@@ -383,7 +424,7 @@ package final class ScriptPlugins: GlobalPlugin {
 
     package func commandList(for bundle: String) -> [(letter: String?, title: String, key: String, run: @MainActor () -> Void)] {
         var out: [(letter: String?, title: String, key: String, run: @MainActor () -> Void)] = []
-        for entry in byBundle[bundle] ?? [] {
+        for entry in (byBundle[bundle] ?? []) + (AXScriptBroker.isForbiddenApp(bundle) ? [] : everywhereEntries) {
             for command in entry.plugin.manifest?.commands ?? [] {
                 let key = command.key.map { GlobalCommands.spoken(normalizeGestureIdentifier($0.hasPrefix("kb:") ? $0 : "kb:" + $0)) } ?? ""
                 out.append((command.letter?.lowercased(), command.description, key, { [weak self, weak entry] in
@@ -397,13 +438,13 @@ package final class ScriptPlugins: GlobalPlugin {
     /// A command was chosen (its key, or its letter in the plugin layer). If the host is not ready, say so in a few words.
     package func run(_ commandID: String, of entry: Entry) {
         func say(_ words: String) { env.speak(words) }
-        if blocked { return say(String(localized: "Plugin scripts are off until TurnOver starts again.", comment: "Said when a script's command is chosen after a hang")) }
+        if stopped { return say(String(localized: "Plugin scripts are off until TurnOver starts again.", comment: "Said when a script's command is chosen after a hang")) }
         if !trust.decision(for: entry.plugin).isAllowed {
             return say(String(localized: "\(entry.name) is waiting for approval in the Plugins menu.", comment: "Said when a command of a plugin whose script is not approved is chosen; the placeholder is the plugin's name"))
         }
         if entry.turnedOff { return say(String(localized: "The script of \(entry.name) is off after problems.", comment: "Said when a command of a script that was turned off is chosen; the placeholder is the plugin's name")) }
         guard let host = entry.host, case .ready = host.state, let broker = entry.broker else {
-            if entry.host == nil, isFront(entry) { start(entry) }
+            if entry.host == nil, entry.everywhere || isFront(entry) { start(entry) }
             return say(String(localized: "The script of \(entry.name) is not ready yet.", comment: "Said when a command is chosen while its script is still starting; the placeholder is the plugin's name"))
         }
         var context: ScriptValue?
@@ -465,7 +506,7 @@ package final class ScriptPlugins: GlobalPlugin {
     package func turnOnAgain(_ entry: Entry) {
         entry.turnedOff = false; entry.saidOff = false; entry.strikes = []; entry.failedHash = nil
         env.speak(String(localized: "\(entry.name) script is on again.", comment: "Said when a plugin's script that was turned off after problems is started again; the placeholder is the plugin's name"))
-        if isFront(entry) { entry.inFront = true; arrived(entry) }
+        if entry.everywhere || isFront(entry) { entry.inFront = true; arrived(entry) }
     }
 
     package func setDeveloperMode(_ on: Bool) {
@@ -479,6 +520,97 @@ package final class ScriptPlugins: GlobalPlugin {
         reconcileTrust()
     }
 
+    // MARK: Hearing what TurnOver says (stage B)
+
+    /// Begin passing TurnOver's speech to the scripts that may hear it. The real TurnOver does this when it starts; a test calls it.
+    package func installSpeechHearing() {
+        hearing = true
+        Speech.observer = { [weak self] text in self?.heard(text) }
+    }
+
+    /// TurnOver said `text`. Each plugin with `hearSpeech` whose app is in front (every app, for one that works everywhere) is told, and
+    /// only when it is safe to tell: not while a question is open (what a person types into one plugin's prompt is not another's to
+    /// hear), not while the Mac reports secure keyboard entry, not while a password field has the focus or the focus cannot be found,
+    /// not in a forbidden or closed app. What a plugin said itself never comes here (Speech.attributedToPlugin). This runs inside
+    /// TurnOver's speech and costs nothing when no script listens; it can change nothing about what is said.
+    private func heard(_ text: String) {
+        guard !stopped, !questionIsOpen else { return }
+        let listeners = ordered.filter { $0.hearsSpeech && ($0.host?.events.contains("speech") ?? false) }
+        guard !listeners.isEmpty, !env.secureInput(), let pid = env.frontPid(), let macPid = env.macFrontPid() else { return }
+        let bundle = env.bundle(pid), macBundle = env.bundle(macPid)
+        guard bundle == macBundle, !PluginPolicy.isClosedApp(bundle), !AXScriptBroker.isForbiddenApp(bundle),
+              let focus = env.focusedElement(pid), !AXScriptBroker.isSecure(focus) else { return }
+        for entry in listeners where entry.matches(bundle) && entry.inFront {
+            entry.host?.tell("speech", data: .object(["text": .string(text)]))
+        }
+    }
+
+    // MARK: Options (stage B)
+
+    /// The values of a plugin's options now, as the script is given them.
+    private func optionValues(of entry: Entry) -> [String: ScriptValue] {
+        env.options.values(for: entry.plugin.manifest?.options ?? [], plugin: entry.id).mapValues(\.scriptValue)
+    }
+
+    /// The person changed an option: kept if the option allows it, then the script is given all the values and told which changed.
+    package func setOption(_ value: PluginOptionValue, _ option: PluginOption, ofPlugin id: String) {
+        guard let entry = entries[id], let kept = env.options.set(value, of: option, plugin: id) else { return }
+        guard let host = entry.host else { return }
+        host.setOptions(optionValues(of: entry))
+        if host.events.contains("optionsChange") { host.tell("optionsChange", data: .object(["id": .string(option.id), "value": kept.scriptValue])) }
+    }
+
+    /// What a plugin's options are now (for the menu and for tests).
+    package func optionValue(_ option: PluginOption, ofPlugin id: String) -> PluginOptionValue {
+        env.options.value(of: option, plugin: id)
+    }
+
+    /// The items under a plugin in the Plugins menu: its options, in the author's words, shown as the author wrote them.
+    package func optionItems(forPlugin id: String) -> [MenuItem] {
+        guard let entry = entries[id] else { return [] }
+        let by = String(localized: "An option of \(entry.name)", comment: "A hint under a plugin's option in the Plugins menu: the plugin's name")
+        return (entry.plugin.manifest?.options ?? []).map { option in
+            let current = { [weak self] in self?.optionValue(option, ofPlugin: id) ?? option.defaultValue }
+            let set: (PluginOptionValue) -> Void = { [weak self] in self?.setOption($0, option, ofPlugin: id) }
+            switch option.kind {
+            case "switch":
+                return MenuItem(verbatim: option.label, .toggle(get: { current() == .bool(true) }, set: { set(.bool($0)) }), hint: by)
+            case "choice":
+                let choices = option.choices ?? []
+                return MenuItem(verbatim: option.label, .cycle(options: choices, get: { if case .string(let s) = current() { return choices.firstIndex(of: s) ?? 0 }; return 0 },
+                                                              set: { if choices.indices.contains($0) { set(.string(choices[$0])) } }), hint: by)
+            case "number":
+                let lo = option.min ?? 0, hi = option.max ?? 0
+                let whole = lo == lo.rounded() && hi == hi.rounded()
+                return MenuItem(verbatim: option.label, .number(get: { if case .number(let n) = current() { return n }; return lo }, set: { set(.number($0)) },
+                                                                step: whole ? 1 : Swift.max((hi - lo) / 20, 0.001), min: lo, max: hi,
+                                                                format: { whole ? String(Int($0)) : String(format: "%g", $0) }), hint: by)
+            default:
+                return MenuItem(verbatim: option.label, .action { [weak self] in
+                    guard let self else { return }
+                    var shown = ""
+                    if case .string(let s) = current() { shown = s }
+                    let prompt = shown.isEmpty ? option.label : String(localized: "\(option.label). It is now \(shown)", comment: "Asking for a plugin's text option: the author's label for it, then its value now")
+                    DispatchQueue.main.async { self.env.askText(prompt) { typed in if let typed { set(.string(typed)) } } }
+                }, hint: by)
+            }
+        }
+    }
+
+    /// What goes under a plugin in the Plugins menu besides what the menu already has: its options, and "Report a problem".
+    package static func pluginItems(for manifest: PluginManifest) -> [MenuItem] {
+        (current?.optionItems(forPlugin: manifest.id) ?? []) + [PluginSupport.reportItem(for: manifest)]
+    }
+
+    /// Every plugin, rules and scripts, off until TurnOver starts again: so a person can tell whether a fault is TurnOver's or a plugin's.
+    package func turnEverythingOff() {
+        env.profiles.setPluginsOff()
+        entries.values.forEach(stop)
+        reconcileTrust()
+        env.profiles.livenessChanged()
+        env.speak(String(localized: "Every plugin is off until TurnOver starts again.", comment: "Said when the person turned off every plugin, rules and scripts, from the Plugins menu"))
+    }
+
     /// The Plugins menu's items for scripts.
     package static func menuItems() -> [MenuItem] { current?.items() ?? [] }
 
@@ -486,7 +618,7 @@ package final class ScriptPlugins: GlobalPlugin {
         var out: [MenuItem] = []
         for entry in entries.values.sorted(by: { $0.id < $1.id }) {
             let name = entry.name
-            if blocked {
+            if stopped {
                 out.append(MenuItem(verbatim: String(localized: "\(name), script off until TurnOver starts again", comment: "A plugin's script in the Plugins menu after a hang; the placeholder is the plugin's name"), .action { [weak self] in
                     self?.env.speak(String(localized: "Plugin scripts are off until TurnOver starts again.", comment: "Said when a script's menu item is chosen after a hang")) }))
             } else if entry.turnedOff {
@@ -504,6 +636,8 @@ package final class ScriptPlugins: GlobalPlugin {
                                     hint: String(localized: "Choose it to hear what the script can do, and approve it", comment: "A hint for a plugin's script waiting for approval")))
             }
         }
+        out.append(MenuItem("Turn off every plugin until TurnOver starts again", .action { [weak self] in self?.turnEverythingOff() },
+                            hint: "Rules and scripts both, so you can tell whether a fault is TurnOver's or a plugin's"))
         out.append(MenuItem("Developer mode for scripts", .toggle(get: { [weak self] in self?.trust.developerMode ?? false }, set: { [weak self] in self?.setDeveloperMode($0) }),
                             hint: "A script you approve in developer mode starts again by itself when you save it, as long as it asks for no more"))
         return out

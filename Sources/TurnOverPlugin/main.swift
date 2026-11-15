@@ -17,7 +17,9 @@
 //   turnover-plugin test <folder>            the plugin's own tests: tests/expect.json against its recorded screens, and for a
 //                                            script every file in tests/script/ (run in the real sandboxed host, no app needed)
 //   turnover-plugin new <folder> --app <bundle id> [--script]
-//                                            a working plugin to start from, with comments that teach and a first test
+//   turnover-plugin new <folder> --everywhere
+//                                            a working plugin to start from, with comments that teach and a first test;
+//                                            --everywhere makes a script for every app
 //   turnover-plugin consent <folder>         what TurnOver will say when someone is asked to approve the script, word for word,
 //                                            and the plugin's hash
 //   turnover-plugin convert <id|file|folder> [--out <folder>] [--force] [--channel stable|beta|dev] [--report-only] [--converted-by "<name>"]
@@ -57,6 +59,7 @@ func usage() -> Never {
       turnover-plugin record <app> <plugin folder> [--no-mask]
       turnover-plugin test <plugin folder>
       turnover-plugin new <new folder> --app <bundle id> [--script]
+      turnover-plugin new <new folder> --everywhere        (a script for every app: apps ["*"] and the everywhere ability)
       turnover-plugin consent <plugin folder>
       turnover-plugin convert <add-on id | .nvda-addon file | folder> [--out <folder>] [--force] [--channel stable|beta|dev] [--report-only] [--converted-by "<name>"]
       turnover-plugin store list | search <words> | show <id>   [--json] [--hide-not-mac] [--channel stable|beta|dev]
@@ -129,6 +132,7 @@ case "check":
     if checked.manifest?.script != nil {
         let script = ScriptChecker.check(checked, hostPath: ScriptScenarioRunner.hostPath())
         print("Script (main.js):")
+        print("  " + ScriptReview.level(for: ScriptAbilities.effective(for: checked)).summary)
         if script.problems.isEmpty { print("  loads; handles events: \(script.events.isEmpty ? "none" : script.events.joined(separator: ", ")); commands: \(script.commands.isEmpty ? "none" : script.commands.joined(separator: ", "))") }
         for p in script.problems { print("  PROBLEM: " + p) }
         for w in script.warnings { print("  WARNING: " + w) }
@@ -314,13 +318,15 @@ case "test":
 
 case "new":
     // turnover-plugin new <folder> --app <bundle id> [--script]
-    guard args.count >= 2, !args[1].hasPrefix("--"), let i = args.firstIndex(of: "--app"), args.indices.contains(i + 1) else { usage() }
+    let everywhere = args.contains("--everywhere")
+    guard args.count >= 2, !args[1].hasPrefix("--"), everywhere || args.firstIndex(of: "--app").map({ args.indices.contains($0 + 1) }) == true else { usage() }
     let folder = URL(fileURLWithPath: (args[1] as NSString).expandingTildeInPath, isDirectory: true)
     do {
-        let written = try PluginScaffold.make(folder: folder, app: args[i + 1], script: args.contains("--script"))
+        let app = everywhere ? PluginManifest.everyApp : args[args.firstIndex(of: "--app")! + 1]
+        let written = try PluginScaffold.make(folder: folder, app: app, script: args.contains("--script") || everywhere, everywhere: everywhere)
         print("Made \(folder.path):")
         for f in written { print("  \(f)") }
-        print("Next: turnover-plugin check \(args[1])\(args.contains("--script") ? " and turnover-plugin test \(args[1])" : "")")
+        print("Next: turnover-plugin check \(args[1])\(args.contains("--script") || everywhere ? " and turnover-plugin test \(args[1])" : "")")
     } catch { fail("\(error)") }
 
 case "consent":
@@ -330,6 +336,7 @@ case "consent":
     let signature = ScriptTrust.signatureStatus(in: plugin.folder)
     for line in ScriptAbilities.approvalLines(for: plugin, origin: .file, signature: signature) { print(line.text) }
     print("")
+    print(ScriptReview.level(for: ScriptAbilities.effective(for: plugin)).summary)
     print("Hash: \(plugin.scriptHash ?? "?")")
     if case .valid(let fingerprint) = signature { print("Signing key: \(fingerprint)") }
 

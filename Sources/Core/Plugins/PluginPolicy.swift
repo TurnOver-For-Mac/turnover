@@ -144,6 +144,9 @@ public enum PluginPolicy {
     /// terminals, browsers) a script has none of them, on any Mac: an approved script that could press, type or choose a menu
     /// in Terminal could run any program (the review of 16 Nov 2026).
     nonisolated public static let actingAbilities: Set<String> = ["press", "focus", "edit", "menu", "keys"]
+    /// What a script has in no closed app: the acting abilities, and (stage B, 16 Nov 2026) hearing what TurnOver says and reading the
+    /// clipboard, because a password manager's secrets are spoken and copied there.
+    nonisolated public static let closedAppRefusedAbilities: Set<String> = actingAbilities.union(["hearSpeech", "clipboardRead"])
 
     /// Whether this app is one of the closed apps, by its bundle identifier without regard to case.
     nonisolated public static func isClosedApp(_ bundle: String) -> Bool {
@@ -156,10 +159,11 @@ public enum PluginPolicy {
     nonisolated public static func scriptRefusals(_ m: PluginManifest) -> [String] {
         guard m.script != nil else { return [] }
         var out: [String] = []
-        let acting = Set(m.abilities ?? []).intersection(actingAbilities).sorted()
+        let acting = Set(m.abilities ?? []).intersection(closedAppRefusedAbilities).sorted()
         for app in m.apps {
             if let what = scriptForbiddenApps[app] { out.append("a script may not work in \(what) (\(app))") }
             else if app == "com.turnover" || app.hasPrefix("com.turnover.") { out.append("a script may not work in TurnOver itself (\(app))") }
+            else if app == PluginManifest.everyApp {}   // everywhere: judged against the app really in front, when it asks
             else if isClosedApp(app), !acting.isEmpty {
                 out.append("a script may only read and speak in \(closedApps[app] ?? app) (\(app)): take \(acting.joined(separator: ", ")) out of abilities, or leave that app out")
             }

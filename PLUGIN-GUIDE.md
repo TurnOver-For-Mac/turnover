@@ -474,3 +474,5 @@ sign a plugin with your own key.
   declarations, for editors and AI assistants.
 - [plugins/examples/sample-script-calculator](plugins/examples/sample-script-calculator): a complete example with a
   command, an event and a test.
+- [plugins/examples/sample-script-chooser](plugins/examples/sample-script-chooser): a script that works in every app,
+  with options, a list to choose from, reasons and tests.

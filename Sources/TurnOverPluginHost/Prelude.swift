@@ -18,6 +18,7 @@ enum Prelude {
       const declared = new Set(config.commands);
       const pending = new Map();
       const timers = new Map();
+      const optionValues = Object.assign({}, config.options || {});
       let nextRequest = 1;
       let nextTimer = 1;
 
@@ -57,7 +58,14 @@ enum Prelude {
           read: { value: function () { return ask("item.read"); } },
           press: { value: function () { return ask("item.press"); } },
           focus: { value: function () { return ask("item.focus"); } },
-          setValue: { value: function (value) { return ask("item.setValue", { value: value }); } }
+          setValue: { value: function (value) { return ask("item.setValue", { value: value }); } },
+          text: { value: function (options) {
+            const unit = options && options.unit !== undefined ? String(options.unit) : "selection";
+            if (unit !== "selection" && unit !== "line" && unit !== "all") throw new RangeError('item.text: unit must be "selection", "line" or "all".');
+            return ask("item.text", { unit: unit });
+          } },
+          setCaret: { value: function (offset) { return ask("item.setCaret", { offset: Number(offset) }); } },
+          select: { value: function (start, end) { return ask("item.select", { start: Number(start), end: Number(end) }); } }
         });
         return item;
       }
@@ -93,6 +101,24 @@ enum Prelude {
         menu: function (path) { return request("menu", { path: path }); },
         keys: function (combination) { return request("keys", { keys: String(combination) }); },
         copy: function (text) { return request("copy", { text: String(text) }); },
+        clipboard: function () { return request("clipboard", {}); },
+        choose: function (title, items) {
+          if (!Array.isArray(items)) throw new TypeError("turnover.choose needs a title and a list of texts.");
+          return request("choose", { title: String(title), items: items.map(String) });
+        },
+        ask: function (prompt) { return request("ask", { prompt: String(prompt) }); },
+        tone: function (hertz, milliseconds) {
+          const pitch = Number(hertz), length = Number(milliseconds);
+          if (!(pitch >= config.toneHertz[0] && pitch <= config.toneHertz[1])) throw new RangeError("A tone's pitch is " + config.toneHertz[0] + " to " + config.toneHertz[1] + " hertz.");
+          if (!(length >= config.toneMilliseconds[0] && length <= config.toneMilliseconds[1])) throw new RangeError("A tone lasts " + config.toneMilliseconds[0] + " to " + config.toneMilliseconds[1] + " milliseconds.");
+          send({ t: "notify", op: "tone", args: { hertz: pitch, milliseconds: length } });
+        },
+        options: Object.freeze({
+          get: function (id) {
+            const wanted = String(id);
+            return Object.prototype.hasOwnProperty.call(optionValues, wanted) ? optionValues[wanted] : null;
+          }
+        }),
         storage: Object.freeze({
           get: function (key) { return request("storage.get", { key: String(key) }); },
           set: function (key, value) { return request("storage.set", { key: String(key), value: value }); },
@@ -134,6 +160,10 @@ enum Prelude {
         const state = { open: true, say: null };
         const event = {};
         if (raw.item) event.item = makeItem(raw.item);
+        if (raw.data && typeof raw.data === "object") {
+          if (name === "optionsChange") { event.id = String(raw.data.id); event.value = raw.data.value; }
+          else if (name === "speech") { event.text = String(raw.data.text); }
+        }
         const replaceable = config.replaceableEvents.includes(name);
         Object.defineProperties(event, {
           say: { value: function (text) {
@@ -177,6 +207,12 @@ enum Prelude {
           try { result = handler({ item: message.item ? makeItem(message.item) : null }); }
           catch (error) { finish(describe(error)); return; }
           Promise.resolve(result).then(function () { finish(null); }, function (error) { finish(describe(error)); });
+        },
+        options: function (line) {
+          const message = parse(line);
+          if (!message.values || typeof message.values !== "object") return;
+          for (const key of Object.keys(optionValues)) delete optionValues[key];
+          Object.assign(optionValues, message.values);
         },
         reply: function (line) {
           const message = parse(line);

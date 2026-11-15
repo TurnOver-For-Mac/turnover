@@ -53,6 +53,11 @@ nonisolated extension AddonConverter {
         }
 
         var abilities = found.abilities
+        // A global plugin works in every app in NVDA, so its draft asks for exactly that, and says so (stage B). An add-on that also has an
+        // app module names programs, and keeps its apps for a person to choose.
+        let everywhere = found.kinds.contains("global plugin") && !found.kinds.contains("app module")
+        var why = found.why
+        if everywhere { abilities.insert("everywhere"); why["everywhere"] = ["the original is a global plugin, which works in every app"] }
         if !found.handlers.isEmpty { /* the events' own abilities were added when each was found */ }
         let abilityList = abilities.sorted()
         abilities = Set(abilityList)
@@ -104,7 +109,7 @@ nonisolated extension AddonConverter {
         let mainJS = js.joined(separator: "\n")
 
         // MARK: manifest.json
-        var manifest = PluginManifest(id: "x", name: displayName, version: plain(addonVersion, limit: 40), author: creator.isEmpty ? nil : creator, description: nil, apps: [])
+        var manifest = PluginManifest(id: "x", name: displayName, version: plain(addonVersion, limit: 40), author: creator.isEmpty ? nil : creator, description: nil, apps: everywhere ? [PluginManifest.everyApp] : [])
         var idBase = addonID.map { $0.isASCII && ($0.isLetter || $0.isNumber) ? String($0) : "-" }.joined()
         while idBase.contains("--") { idBase = idBase.replacingOccurrences(of: "--", with: "-") }
         idBase = idBase.trimmingCharacters(in: CharacterSet(charactersIn: "-"))
@@ -115,12 +120,23 @@ nonisolated extension AddonConverter {
         manifest.license = licenceName
         manifest.formatVersion = 2
         manifest.abilities = abilityList
+        // A first reason for each ability, from what the original used it for: the table's own words, never the add-on's, for a person
+        // to correct. Plain text, cut to 150 characters.
+        var reasons: [String: String] = [:]
+        for a in abilityList where ScriptAbilities.needsReason(ScriptAbility(rawValue: a) ?? .read) || !(why[a] ?? []).isEmpty {
+            let uses = (why[a] ?? []).sorted().joined(separator: "; ")
+            guard !uses.isEmpty else { continue }
+            var text = "In the original add-on: " + uses + "."
+            if text.count > ScriptAbilities.reasonCharacters { text = String(text.prefix(ScriptAbilities.reasonCharacters - 1)) + "…" }
+            reasons[a] = text
+        }
+        if !reasons.isEmpty { manifest.reasons = reasons }
         manifest.script = "main.js"
         manifest.commands = commands.map { PluginCommand(id: $0.id, description: $0.description, key: $0.key) }
         manifest.changes = [PluginChange(version: manifest.version, notes: "Converted from the NVDA add-on \(addonID) version \(addonVersion).")]
         var record = PluginConversionRecord(id: addonID, version: addonVersion, sha256: source.sha256, sourceURL: source.sourceURL ?? entry?.sourceURL,
                                             author: creator.isEmpty ? nil : creator, convertedBy: converter.isEmpty ? nil : converter,
-                                            abilities: abilityList, apps: found.programs)
+                                            abilities: abilityList, apps: everywhere ? [PluginManifest.everyApp] : found.programs)
         record.sha256 = source.sha256
         manifest.convertedFrom = record
         let encoder = JSONEncoder()
@@ -173,8 +189,13 @@ nonisolated extension AddonConverter {
         r.append("## What needs a person")
         var needs = 0
         if result.madePlugin {
+            if everywhere {
+                r.append("The apps are [\"*\"] and the draft asks for the everywhere ability, because a global plugin works in every app in NVDA. The person is asked to agree to that in plain words, and it is never in password and permission dialogs. The reasons in manifest.json are a first draft from what the original used each ability for: correct them before sharing.")
+                needs += 1
+            } else {
             r.append("The apps are empty. \(found.programs.isEmpty ? "A global plugin works in every app in NVDA, but a script here must name the apps it works in, so a person chooses them." : "The add-on named a Windows program, not a Mac app.") Find the Mac app's bundle identifier (for an app that is installed, run: osascript -e 'id of app \"Name\"' ; for one that is running, turnover-plugin snapshot <name> shows it), put it in apps in manifest.json, and add it to convertedFrom.apps as well, so the record shows the choice was made on purpose. Until then turnover-plugin check says this converted plugin is not finished.")
             needs += 1
+            }
             for c in commands where c.body.kept > 0 { r.append("In command \(c.id), the original Python is kept as comments under a line saying a person must write it. Where it looked at NVDA objects, the Mac's items have to be found with turnover.find from a snapshot of the Mac app; the Windows selectors do not carry over."); needs += 1 }
             for c in commands where c.key == nil { r.append(c.gestures.isEmpty ? "Command \(c.id) had no key in the original." : "Command \(c.id) is left without a key: \(c.unbound.joined(separator: "; "))."); needs += 1 }
             for l in found.labelRules { r.append("\(l) renamed items when they were made. That is a label rule in profile.json, and it needs the Mac item found from a snapshot of the Mac app; no rule was written."); needs += 1 }

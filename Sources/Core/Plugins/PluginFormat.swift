@@ -47,9 +47,11 @@ nonisolated public enum PluginFormat {
 
     /// The fields each part of the format knows (for the unknown-field warning).
     static let manifestFields = ["id", "name", "version", "author", "description", "apps", "kind", "formatVersion", "minimumTurnOver", "$schema",
-                                  "summary", "contact", "changes", "abilities", "privacy", "license", "provides", "script", "commands", "convertedFrom"]
+                                  "summary", "contact", "changes", "abilities", "privacy", "license", "provides", "script", "commands", "convertedFrom",
+                                  "support", "reasons", "options"]
     static let convertedFromFields = ["id", "version", "sha256", "sourceURL", "author", "convertedBy", "abilities", "apps"]
     static let commandFields = ["id", "description", "key", "letter"]
+    static let optionFields = ["id", "label", "kind", "choices", "min", "max", "default"]
     static let profileFields = ["labels", "keys", "watch", "silence", "view", "hold", "$schema"]
     static let holdFields = ["focus", "items"]
     static let labelFields = ["match", "name", "nameFrom", "role"]
@@ -244,6 +246,7 @@ nonisolated public enum PluginFormat {
         if inManifest {
             if path == ["convertedFrom"] { return convertedFromFields }
             if path.count == 2, path[0] == "commands", Int(path[1]) != nil { return commandFields }
+            if path.count == 2, path[0] == "options", Int(path[1]) != nil { return optionFields }
             return path.isEmpty ? manifestFields : nil
         }
         let named = path.filter { Int($0) == nil }   // list positions dropped

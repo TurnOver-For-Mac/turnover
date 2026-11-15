@@ -49,6 +49,7 @@ final class ScriptRuntime {
         case PluginWire.ToHost.event: if !paused { call("event", line) }
         case PluginWire.ToHost.command: if !paused { call("command", line) }
         case PluginWire.ToHost.reply: call("reply", line)
+        case PluginWire.ToHost.options: call("options", line)   // current values: always taken, even while paused (it runs no script code)
         case PluginWire.ToHost.pause: paused = true
         case PluginWire.ToHost.resume:
             paused = false
@@ -104,6 +105,9 @@ final class ScriptRuntime {
             ],
             "commands": commands,
             "sounds": sounds,
+            "options": object["options"] as? [String: Any] ?? [:],
+            "toneHertz": [PluginWire.Limits.toneHertz.lowerBound, PluginWire.Limits.toneHertz.upperBound],
+            "toneMilliseconds": [PluginWire.Limits.toneMilliseconds.lowerBound, PluginWire.Limits.toneMilliseconds.upperBound],
             "eventNames": PluginWire.eventNames,
             "replaceableEvents": Array(PluginWire.replaceableEvents),
             "messageBytes": PluginWire.Limits.messageBytes,

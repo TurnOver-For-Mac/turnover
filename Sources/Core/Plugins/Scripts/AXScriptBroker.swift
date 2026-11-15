@@ -12,12 +12,17 @@
 //   keyboard entry, while a secure field has the focus, and when TurnOver cannot find what has the focus; edit is never
 //   done to a password field;
 // - say and sound are dropped (not an error) while none of the plugin's apps is in front or an approval question is open.
+// Stage B (16 Nov 2026): a plugin that works in every app (`everywhere`) owns every app but the forbidden ones, and each request is
+// still judged against the app really in front; text, caret and selection follow the rules of read and edit; tones, lists and
+// prompts are under say, one question at a time, never over a password; the clipboard is read only in front, never under secure
+// keyboard entry and never in a closed app.
 // Everything that touches the Mac goes through `ScriptEnvironment`, so a test can stand in for each part.
 import Foundation
 import AppKit
 import ApplicationServices
 import Carbon.HIToolbox
 import TurnOverAX
+import TurnOverPluginWire
 
 /// What the broker and ScriptPlugins reach out to. `live()` is the real Mac; a test replaces what it exercises.
 package struct ScriptEnvironment {
@@ -45,6 +50,13 @@ package struct ScriptEnvironment {
     /// and what to run when it closes however it closes).
     package var speak: (String) -> Void
     package var present: (String, [MenuItem], @escaping () -> Void) -> Void
+    /// Stage B: the clipboard's text; a tone (hertz, milliseconds); TurnOver's own text prompt (its words, then what was typed or nil); closing
+    /// a list a script's question opened; and TurnOver's own settings, where plugins' options are kept.
+    package var readClipboard: () -> String?
+    package var tone: (Double, Int) -> Void
+    package var askText: (String, @escaping (String?) -> Void) -> Void
+    package var dismissQuestion: () -> Void
+    package var options: ScriptOptionsStore
     package var hostPath: String
     package var afterHang: Bool
     /// Where the plugins' stored data goes (one file per plugin); asked only when something is stored.
@@ -64,8 +76,11 @@ package struct ScriptEnvironment {
             isRunning: { !NSRunningApplication.runningApplications(withBundleIdentifier: $0).isEmpty },
             focusedElement: { AXUIElementCreateApplication($0).element(kAXFocusedUIElementAttribute) ?? API.focusObject?.element },
             say: { text, interrupt in
-                if interrupt { Speech.cancel() }
-                Speech.speakMessage(text)
+                // A plugin's words are marked as its own, so no other plugin that hears TurnOver is told them.
+                Speech.attributedToPlugin {
+                    if interrupt { Speech.cancel() }
+                    Speech.speakMessage(text)
+                }
             },
             sound: { TurnOverSounds.play($0) },
             copy: { text in
@@ -91,6 +106,11 @@ package struct ScriptEnvironment {
                 let before = TurnOverMenu.shared.onClose   // one hook, run once on closing: kept, then ours
                 TurnOverMenu.shared.onClose = { before?(); closed() }
             },
+            readClipboard: { NSPasteboard.general.string(forType: .string) },
+            tone: { hertz, milliseconds in Tones.beep(hertz, milliseconds) },
+            askText: { prompt, done in LineInput.ask(prompt, done: done) },
+            dismissQuestion: { TurnOverMenu.shared.close() },
+            options: ScriptOptionsStore.live(),
             hostPath: Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/turnover-plugin-host").path,
             afterHang: CommandLine.arguments.contains("--after-hang"),
             storageFolder: { AppPaths.file("plugin-data") },
@@ -101,13 +121,23 @@ package struct ScriptEnvironment {
 package final class AXScriptBroker: ScriptBroker {
     package let pluginID: String
     package let apps: [String]
+    /// A plugin that works in every app: it owns whichever app is in front, but never a forbidden one.
+    package let everywhere: Bool
+    private let pluginName: String
     private let env: ScriptEnvironment
     private let questionOpen: () -> Bool
+    private let beginQuestion: () -> Bool
+    private let endQuestion: () -> Void
+    /// Whether this plugin has a question open now (a list or a prompt): at most one.
+    private var asking = false
     package let handles: ScriptHandleTable
     private var stored: [String: ScriptValue]?
 
-    package init(pluginID: String, apps: [String], environment: ScriptEnvironment, questionOpen: @escaping () -> Bool, handleCapacity: Int = ScriptHandleTable.capacity) {
-        self.pluginID = pluginID; self.apps = apps; env = environment; self.questionOpen = questionOpen
+    package init(pluginID: String, apps: [String], everywhere: Bool = false, pluginName: String = "", environment: ScriptEnvironment,
+                 questionOpen: @escaping () -> Bool, beginQuestion: @escaping () -> Bool = { true }, endQuestion: @escaping () -> Void = {},
+                 handleCapacity: Int = ScriptHandleTable.capacity) {
+        self.pluginID = pluginID; self.apps = apps; self.everywhere = everywhere; self.pluginName = pluginName.isEmpty ? pluginID : pluginName
+        env = environment; self.questionOpen = questionOpen; self.beginQuestion = beginQuestion; self.endQuestion = endQuestion
         handles = ScriptHandleTable(capacity: handleCapacity)
     }
 
@@ -124,7 +154,7 @@ package final class AXScriptBroker: ScriptBroker {
     /// plugins apply to an app (the manifest's list holds the bundle exactly), and not a forbidden one.
     package func owns(_ pid: pid_t) -> Bool {
         let bundle = env.bundle(pid)
-        return !bundle.isEmpty && apps.contains(bundle) && !Self.isForbiddenApp(bundle)
+        return !bundle.isEmpty && (everywhere || apps.contains(bundle)) && !Self.isForbiddenApp(bundle)
     }
 
     private var frontOwns: Bool { env.frontPid().map(owns) ?? false }
@@ -231,6 +261,12 @@ package final class AXScriptBroker: ScriptBroker {
             env.refocus(e.pid)
             return .bool(true)
         case .itemSetValue: return try edit(args)
+        case .itemText: return try text(args)
+        case .itemSetCaret, .itemSelect: return try moveCaret(operation, args)
+        case .tone: return try tone(args)
+        case .clipboard: return try clipboard()
+        case .choose, .ask:
+            throw ScriptBrokerError.failed(String(localized: "A question is answered when the person answers it.", comment: "Said to a plugin author when a script's question reaches the wrong door"))
         case .menu: return try menu(args)
         case .keys: return try keys(args)
         case .copy:
@@ -308,14 +344,20 @@ package final class AXScriptBroker: ScriptBroker {
         return .array(found.compactMap { item(for: $0) })
     }
 
-    private func edit(_ args: ScriptValue) throws -> ScriptValue {
-        let e = try element(args)
+    /// Everything that changing an item's text, value, caret or selection needs: the item is the plugin's, the plugin's app is in front
+    /// and it is not a closed app, the item is not a password field, and nothing is being typed secretly. `edit`'s own rules, once.
+    private func requireMayEdit(_ e: AXUIElement) throws {
         try requireMayAct(e)
         if Self.isSecure(e) { throw ScriptBrokerError.refused(String(localized: "A password field is never changed by a plugin.", comment: "Said to a plugin author")) }
         try requireNoSecret(
             secureInput: String(localized: "The Mac is hiding what is typed, as it does for a password, so a plugin cannot change anything now.", comment: "Said to a plugin author when a script asks to edit while the Mac reports secure keyboard entry"),
             secureFocus: String(localized: "A password field has the focus, so a plugin cannot change anything now.", comment: "Said to a plugin author"),
             unknownFocus: String(localized: "TurnOver cannot tell what has the focus, so a plugin cannot change anything now.", comment: "Said to a plugin author when a script asks to edit and the focused item cannot be found"))
+    }
+
+    private func edit(_ args: ScriptValue) throws -> ScriptValue {
+        let e = try element(args)
+        try requireMayEdit(e)
         let value: CFTypeRef
         switch args["value"] {
         case .string(let s)?: value = s as CFString
@@ -366,6 +408,174 @@ package final class AXScriptBroker: ScriptBroker {
             throw ScriptBrokerError.invalid(String(localized: "\(keys) is not a key combination TurnOver knows.", comment: "Said to a plugin author; the placeholder is the key"))
         }
         return .null
+    }
+
+    // MARK: Text, caret and selection (stage B)
+
+    /// The text of an item, as TurnOver's own text code reads it (the same code that reads a field aloud), cut to what a script may be
+    /// given. A password field gives nothing, not even an error that tells it from an empty one.
+    private func text(_ args: ScriptValue) throws -> ScriptValue {
+        let e = try element(args)
+        if Self.isSecure(e) { return .string("") }
+        guard let unit = args["unit"]?.stringValue, ["selection", "line", "all"].contains(unit) else {
+            throw ScriptBrokerError.invalid(String(localized: "text needs a unit: \"selection\", \"line\" or \"all\".", comment: "Said to a plugin author"))
+        }
+        let limit = env.limits.textCharacters
+        let object = ObjectFactory.make(e)
+        guard object.role != .passwordEdit else { return .string("") }
+        func bounded(_ info: TextInfo, from: Int, to: Int) -> ScriptValue { .string(String(info.textRange(from, min(to, from + limit)).prefix(limit))) }
+        switch unit {
+        case "selection":
+            guard let info = try? object.makeTextInfo(.selection) else { return .string("") }
+            return info.isCollapsed ? .string("") : bounded(info, from: info.start, to: info.end)
+        case "line":
+            guard let info = try? object.makeTextInfo(.caret) else { return .string("") }
+            info.expand(.line)
+            return info.isCollapsed ? .string("") : bounded(info, from: info.start, to: info.end)
+        default:
+            guard let info = try? object.makeTextInfo(.first) else { return .string("") }
+            return bounded(info, from: 0, to: info.storyLength())
+        }
+    }
+
+    /// `setCaret(offset)` and `select(start, end)`: under `edit`, with every rule `edit` has, and only to places inside the text.
+    private func moveCaret(_ operation: ScriptOperation, _ args: ScriptValue) throws -> ScriptValue {
+        let e = try element(args)
+        try requireMayEdit(e)
+        func place(_ key: String) throws -> Int {
+            guard let n = args[key]?.numberValue, n.isFinite, n == n.rounded(), n >= 0, n < 1e9 else {
+                throw ScriptBrokerError.invalid(String(localized: "A place in the text is a whole number from 0 (before the first character).", comment: "Said to a plugin author when a caret or selection place is not a whole number"))
+            }
+            return Int(n)
+        }
+        let start = try place(operation == .itemSetCaret ? "offset" : "start")
+        let end = operation == .itemSetCaret ? start : try place("end")
+        guard end >= start else { throw ScriptBrokerError.invalid(String(localized: "The end of a selection cannot be before its start.", comment: "Said to a plugin author")) }
+        guard let info = try? ObjectFactory.make(e).makeTextInfo(.first) else {
+            throw ScriptBrokerError.failed(String(localized: "That item has no text to move in.", comment: "Said to a plugin author"))
+        }
+        guard end <= info.storyLength() else {
+            throw ScriptBrokerError.invalid(String(localized: "That place is past the end of the text.", comment: "Said to a plugin author"))
+        }
+        if operation == .itemSetCaret { info.setCaretOffset(start) } else { info.setSelectionOffsets(start, end) }
+        return .bool(true)
+    }
+
+    // MARK: Tone, clipboard (stage B)
+
+    private func tone(_ args: ScriptValue) throws -> ScriptValue {
+        guard let hertz = args["hertz"]?.numberValue, let milliseconds = args["milliseconds"]?.numberValue,
+              PluginWire.Limits.toneHertz.contains(hertz), PluginWire.Limits.toneMilliseconds.contains(milliseconds) else {
+            throw ScriptBrokerError.invalid(String(localized: "A tone is 100 to 4000 hertz and 10 to 500 milliseconds.", comment: "Said to a plugin author when a tone's pitch or length is out of range"))
+        }
+        guard mayBeHeard else { Log.info("script \(pluginID): a tone it played was dropped (its app is not in front, or a question is open)"); return .null }
+        env.tone(hertz, Int(milliseconds))
+        return .null
+    }
+
+    /// The clipboard's text, only while the plugin's app is in front (every app, for one that works everywhere), never under secure
+    /// keyboard entry (a password being typed, or copied from a password manager), and never in a closed app.
+    private func clipboard() throws -> ScriptValue {
+        try requireFront()
+        try requireNotClosedApp(String(localized: "In this app a plugin can only read and speak. It can never read the clipboard there.", comment: "Said to a plugin author when a script reads the clipboard in a closed app such as a password manager"))
+        if env.secureInput() {
+            throw ScriptBrokerError.refused(String(localized: "The Mac is hiding what is typed, as it does for a password, so a plugin cannot read the clipboard now.", comment: "Said to a plugin author when a script reads the clipboard while the Mac reports secure keyboard entry"))
+        }
+        return .string(String((env.readClipboard() ?? "").prefix(env.limits.textCharacters)))
+    }
+
+    private func requireNotClosedApp(_ message: String) throws {
+        let pids = [env.frontPid(), env.macFrontPid()].compactMap { $0 }
+        if pids.contains(where: { PluginPolicy.isClosedApp(env.bundle($0)) }) { throw ScriptBrokerError.refused(message) }
+    }
+
+    // MARK: Questions to the person (stage B)
+
+    /// The words of an author, shown and said as theirs: control characters and TurnOver's own marks taken out, line breaks made spaces.
+    nonisolated static func plain(_ text: String) -> String {
+        var out = ""
+        for scalar in text.unicodeScalars {
+            switch scalar.properties.generalCategory {
+            case .control, .lineSeparator, .paragraphSeparator: out.append(" ")
+            case .format, .privateUse, .surrogate, .unassigned: break
+            default: out.unicodeScalars.append(scalar)
+            }
+        }
+        return out.split(separator: " ", omittingEmptySubsequences: true).joined(separator: " ")
+    }
+
+    package func perform(deferred operation: ScriptOperation, _ args: ScriptValue, completion: @escaping @MainActor (Result<ScriptValue, any Error>) -> Void) {
+        do {
+            guard operation == .choose || operation == .ask else { return completion(Result { try perform(operation, args) }) }
+            try requireFront()
+            if operation == .ask {
+                try requireNotClosedApp(String(localized: "In this app a plugin can only read and speak. It cannot ask you to type here.", comment: "Said to a plugin author when a script asks for typed text in a closed app such as a password manager"))
+            }
+            try requireNoSecret(
+                secureInput: String(localized: "The Mac is hiding what is typed, as it does for a password, so a plugin cannot ask you anything now.", comment: "Said to a plugin author when a script asks a question while the Mac reports secure keyboard entry"),
+                secureFocus: String(localized: "A password field has the focus, so a plugin cannot ask you anything now.", comment: "Said to a plugin author"),
+                unknownFocus: String(localized: "TurnOver cannot tell what has the focus, so a plugin cannot ask you anything now.", comment: "Said to a plugin author when a script asks a question and the focused item cannot be found"))
+            let limit = PluginWire.Limits.choiceCharacters
+            let words: String
+            var items: [String] = []
+            if operation == .choose {
+                guard let title = args["title"]?.stringValue, case .array(let list)? = args["items"] else {
+                    throw ScriptBrokerError.invalid(String(localized: "choose needs a title and a list of texts.", comment: "Said to a plugin author"))
+                }
+                guard !list.isEmpty, list.count <= PluginWire.Limits.choiceItems else {
+                    throw ScriptBrokerError.invalid(String(localized: "A list has 1 to \(PluginWire.Limits.choiceItems) items.", comment: "Said to a plugin author; the placeholder is a number"))
+                }
+                for entry in list {
+                    guard let text = entry.stringValue, text.count <= limit else {
+                        throw ScriptBrokerError.invalid(String(localized: "Each item is text of at most \(limit) characters.", comment: "Said to a plugin author; the placeholder is a number"))
+                    }
+                    let cleaned = Self.plain(text)
+                    guard !cleaned.isEmpty else { throw ScriptBrokerError.invalid(String(localized: "An item has no text.", comment: "Said to a plugin author")) }
+                    items.append(cleaned)
+                }
+                let heading = Self.plain(title)
+                guard !heading.isEmpty, title.count <= limit else { throw ScriptBrokerError.invalid(String(localized: "A list needs a title of at most \(limit) characters.", comment: "Said to a plugin author; the placeholder is a number")) }
+                words = heading
+            } else {
+                guard let prompt = args["prompt"]?.stringValue, prompt.count <= limit, !Self.plain(prompt).isEmpty else {
+                    throw ScriptBrokerError.invalid(String(localized: "ask needs a prompt of at most \(limit) characters.", comment: "Said to a plugin author; the placeholder is a number"))
+                }
+                words = Self.plain(prompt)
+            }
+            // At most one at a time, for this plugin and for TurnOver: another question open (an approval, another plugin's) refuses it.
+            guard !asking, beginQuestion() else {
+                throw ScriptBrokerError.refused(String(localized: "Another question is open. Ask when it has been answered.", comment: "Said to a plugin author when a script asks while a question is already open"))
+            }
+            asking = true
+            var finished = false
+            func finish(_ result: Result<ScriptValue, any Error>) {
+                guard !finished else { return }
+                finished = true
+                asking = false
+                endQuestion()
+                completion(result)
+            }
+            // The person is told whose question it is: the plugin's name, then the author's words.
+            if operation == .choose {
+                var chosen: Int?
+                let menu = items.enumerated().map { index, text in MenuItem(verbatim: text, .action { chosen = index }) }
+                // The list's own close runs before the item's action does (TurnOverMenu), so the answer is taken a moment later.
+                env.present(String(localized: "\(pluginName): \(words)", comment: "A plugin's list to choose from: the plugin's name, then the title its author gave it"), menu) {
+                    onMain { finish(.success(chosen.map { .string(items[$0]) } ?? .null)) }
+                }
+            } else {
+                env.askText(String(localized: "\(pluginName) asks: \(words)", comment: "A plugin's question for a typed answer: the plugin's name, then the words its author gave it")) { typed in
+                    onMain { finish(.success(typed.map { .string(String($0.prefix(PluginWire.Limits.answerCharacters))) } ?? .null)) }
+                }
+            }
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
+    /// The plugin has gone (stopped, turned off): a list it opened is closed, and its answer is not waited for.
+    package func cancelQuestion() {
+        if asking { env.dismissQuestion() }
     }
 
     // MARK: Storage

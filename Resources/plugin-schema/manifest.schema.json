@@ -37,7 +37,7 @@
       "items": {
         "type": "string"
       },
-      "description": "Bundle identifiers; nothing applies anywhere else."
+      "description": "Bundle identifiers; nothing applies anywhere else. A script may instead give exactly [\"*\"], with the everywhere ability and only with it: it then works in every app except the macOS password and permission dialogs and the login window."
     },
     "kind": {
       "const": "profile"
@@ -83,7 +83,7 @@
     },
     "abilities": {
       "type": "array",
-      "description": "What it asks to do, in TurnOver's fixed words. A script needs at least one; edit and clipboard are for scripts.",
+      "description": "What it asks to do, in TurnOver's fixed words. A script needs at least one; edit and clipboard are for scripts. everywhere (apps is [\"*\"]), hearSpeech (be told what TurnOver says) and clipboardRead (read the clipboard) are for scripts too, and each is agreed to in plain words.",
       "items": {
         "enum": [
           "read",
@@ -93,7 +93,10 @@
           "keys",
           "say",
           "edit",
-          "clipboard"
+          "clipboard",
+          "everywhere",
+          "hearSpeech",
+          "clipboardRead"
         ]
       }
     },
@@ -121,17 +124,42 @@
     "convertedFrom": {
       "type": "object",
       "description": "Set by turnover-plugin convert: where a plugin converted from an NVDA add-on came from. author is the creator and convertedBy who converted it; both are credit only. turnover-plugin check reports any ability or app in this manifest that abilities and apps here do not have.",
-      "required": ["id", "version"],
+      "required": [
+        "id",
+        "version"
+      ],
       "additionalProperties": false,
       "properties": {
-        "id": { "type": "string" },
-        "version": { "type": "string" },
-        "sha256": { "type": "string" },
-        "sourceURL": { "type": "string" },
-        "author": { "type": "string" },
-        "convertedBy": { "type": "string" },
-        "abilities": { "type": "array", "items": { "type": "string" } },
-        "apps": { "type": "array", "items": { "type": "string" } }
+        "id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "sourceURL": {
+          "type": "string"
+        },
+        "author": {
+          "type": "string"
+        },
+        "convertedBy": {
+          "type": "string"
+        },
+        "abilities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "apps": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       }
     },
     "commands": {
@@ -166,6 +194,98 @@
           }
         }
       }
+    },
+    "support": {
+      "type": "string",
+      "maxLength": 300,
+      "description": "Where to report a problem with the plugin: a web address (https) or an email address. The Plugins menu's \"Report a problem with this plugin\" says who looks after it and copies this. The library needs one for a plugin with a script."
+    },
+    "reasons": {
+      "type": "object",
+      "description": "For an ability, one short sentence saying what the plugin uses it for, in the author's words. At approval it follows TurnOver's own sentence for that ability, marked as the author's; it never replaces it or widens it. The library needs one for every ability above read and say.",
+      "propertyNames": {
+        "enum": [
+          "read",
+          "press",
+          "focus",
+          "menu",
+          "keys",
+          "say",
+          "edit",
+          "clipboard",
+          "everywhere",
+          "hearSpeech",
+          "clipboardRead"
+        ]
+      },
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 150
+      }
+    },
+    "options": {
+      "type": "array",
+      "maxItems": 20,
+      "description": "Settings the person can change: TurnOver shows them under the plugin in its Plugins menu and keeps the values itself. The script reads them with turnover.options.get(id) and is told of a change with the optionsChange event. Needs script.",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "kind",
+          "default"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9]+$",
+            "description": "Letters and digits only; the name the script uses."
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "description": "The author's words, shown as written in TurnOver's menu: plain text."
+          },
+          "kind": {
+            "enum": [
+              "switch",
+              "choice",
+              "text",
+              "number"
+            ]
+          },
+          "choices": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 50,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "description": "For a choice: the choices, in plain text."
+          },
+          "min": {
+            "type": "number",
+            "description": "For a number: the smallest value."
+          },
+          "max": {
+            "type": "number",
+            "description": "For a number: the largest value."
+          },
+          "default": {
+            "type": [
+              "boolean",
+              "number",
+              "string"
+            ],
+            "description": "What the option is until the person changes it: true or false for a switch, one of the choices, text (at most 200 characters), or a number from min to max."
+          }
+        }
+      }
     }
   },
   "dependentRequired": {
@@ -174,6 +294,9 @@
       "abilities"
     ],
     "commands": [
+      "script"
+    ],
+    "options": [
       "script"
     ]
   }

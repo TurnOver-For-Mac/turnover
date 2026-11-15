@@ -51,6 +51,14 @@ nonisolated public struct PluginManifest: Codable {
     /// Where a plugin converted from an NVDA add-on came from, and what the original needed (PluginConversion). Nothing in
     /// it widens what the plugin may do: `check` reports an ability or app the manifest has and this record does not.
     public var convertedFrom: PluginConversionRecord?
+    /// Who to tell about a problem: a web address or an email address (stage B, 16 Nov 2026). The library needs one for a plugin
+    /// with a script; "Report a problem with this plugin" in the Plugins menu says who looks after it and copies it.
+    public var support: String?
+    /// For an ability, one short sentence saying what the plugin uses it for, in the author's words (at most 150 characters of plain
+    /// text). At approval it follows TurnOver's own sentence for the ability, marked as the author's; it never replaces it or widens it.
+    public var reasons: [String: String]?
+    /// The settings TurnOver shows under the plugin in its Plugins menu and keeps itself; the script reads them (stage B).
+    public var options: [PluginOption]?
 
     /// A plugin id: 1 to 64 letters, digits and hyphens, not starting with a hyphen. It names the plugin's folder.
     public static func isValidID(_ id: String) -> Bool {
@@ -678,12 +686,18 @@ public final class ProfileStore {
     /// What to do when the live set changed without a reload: the keys are rebuilt (ProfilesPlugin) and the views reloaded.
     nonisolated(unsafe) package var onLiveChange: (() -> Void)?   // main thread only
     package func livenessChanged() {
-        if plugins.contains(where: { $0.manifest?.script != nil && $0.profile?.view != nil }) { Recipes.load(plugins: livePlugins) }
+        if pluginsOff || plugins.contains(where: { $0.manifest?.script != nil && $0.profile?.view != nil }) { Recipes.load(plugins: livePlugins) }
         onLiveChange?()
     }
+    /// Every plugin off until TurnOver starts again (the Plugins menu's one item for it, stage B 16 Nov 2026): kept in memory only, so a
+    /// restart always has the plugins back. Nothing is live while it is set, rules or scripts.
+    nonisolated(unsafe) private var _pluginsOff = false   // under `lock`
+    nonisolated package var pluginsOff: Bool { lock.lock(); defer { lock.unlock() }; return _pluginsOff }
+    nonisolated package func setPluginsOff() { lock.lock(); _pluginsOff = true; lock.unlock() }
     /// The plugins whose profiles apply now.
     nonisolated public var livePlugins: [LoadedPlugin] {
         lock.lock(); defer { lock.unlock() }
+        if _pluginsOff { return [] }
         guard let live = scriptLive else { return _plugins }
         return _plugins.filter { p in
             guard p.manifest?.script != nil else { return true }

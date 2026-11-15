@@ -16,22 +16,32 @@
 // A scenario starts the script fresh (a new host program) and runs its steps in order; the script's own memory and
 // turnover.storage carry from one step to the next. A step is one of:
 //
-//   "event":   one of focus, valueChange, appFocus, appBlur, windowChange. "item" is the item the event carries: an
-//              object with whatever the script reads (role, name, value, identifier, states …).
+//   "event":   one of focus, valueChange, appFocus, appBlur, windowChange, optionsChange, speech. "item" is the item the
+//              event carries: an object with whatever the script reads (role, name, value, identifier, states …). An
+//              optionsChange step gives "id" and "value" (the option's new value, which the option must allow: it is also what
+//              turnover.options.get gives from then on); a speech step gives "text" (what TurnOver said), and the plugin
+//              needs hearSpeech to be sent it.
 //   "command": one of the commands in manifest.json. "item" is optional: it is context.item, the item with the focus
 //              when the command was chosen.
 //
 // and may have:
 //
 //   "answers": what TurnOver answers when the script asks it something in this step, by operation: focused, find,
-//              item.refresh, item.parent, item.children, item.read, item.press, item.focus, item.setValue, menu,
-//              keys, copy. The answer is the JSON the script gets back: an item (or a list of them) is written like
+//              item.refresh, item.parent, item.children, item.read, item.press, item.focus, item.setValue, item.text,
+//              item.setCaret, item.select, menu, keys, copy, clipboard, choose, ask. The answer is the JSON the script gets
+//              back: for choose, the text of the item the person chose (one of the script's items) or null if they dismissed
+//              the list; for ask, the text typed or null; for item.text and clipboard, the text. An item (or a list of them) is written like
 //              the step's "item", and TurnOver gives each one a handle. An answer {"error": "…"} makes the request
 //              fail with that message. The same answer serves every time the script asks in that step. A question with
 //              no answer fails the test and says which. turnover.storage needs no answer: it keeps what is stored.
 //   "expect":  "say"   what the event's answer was, for focus and valueChange: text; "" for silence (the script called
 //                      event.silence()); null for neither (TurnOver would read as usual). Left out: not checked.
 //              "said"  the texts turnover.say was called with in this step, in order. Left out: not checked.
+//              "tones" the tones turnover.tone played in this step, as [hertz, milliseconds], in order. Left out: not checked.
+//              "asked" the questions the script put in this step, in order: {"choose": "title", "items": [...]} or
+//                      {"ask": "prompt"}. Left out: not checked.
+//
+// A scenario may also have "options": {"id": value}, the values its options start with (the manifest's defaults otherwise).
 //              "error" for a command: some words the command's failure message must contain. Left out: the
 //                      command must finish without an error.
 //
@@ -117,6 +127,8 @@ public enum ScriptScenarioRunner {
     private final class ScenarioBroker: ScriptBroker {
         var answers: [String: ScriptValue] = [:]
         var said: [String] = []
+        var tones: [[Double]] = []
+        var asked: [ScriptValue] = []
         var failures: [String] = []
         var storage: [String: ScriptValue] = [:]
         var lastActivity = Date()
@@ -128,6 +140,7 @@ public enum ScriptScenarioRunner {
             switch operation {
             case .say: said.append(arguments["text"]?.stringValue ?? ""); return .null
             case .sound, .log: return .null
+            case .tone: tones.append([arguments["hertz"]?.numberValue ?? 0, arguments["milliseconds"]?.numberValue ?? 0]); return .null
             case .storageGet: return storage[arguments["key"]?.stringValue ?? ""] ?? .null
             case .storageSet: storage[arguments["key"]?.stringValue ?? ""] = arguments["value"] ?? .null; return .null
             case .storageRemove: storage[arguments["key"]?.stringValue ?? ""] = nil; return .null
@@ -139,6 +152,30 @@ public enum ScriptScenarioRunner {
                 if case .object(let fields) = answer, fields.count == 1, let message = fields["error"]?.stringValue { throw ScriptBrokerError.refused(message) }
                 return answer
             }
+        }
+
+        /// A question to the person, answered from the step's answers: the item chosen, the text typed, or null (dismissed).
+        func perform(deferred operation: ScriptOperation, _ arguments: ScriptValue, completion: @escaping @MainActor (Result<ScriptValue, any Error>) -> Void) {
+            guard operation == .choose || operation == .ask else { return completion(Result { try perform(operation, arguments) }) }
+            lastActivity = Date()
+            var items: [String] = []
+            if operation == .choose {
+                if case .array(let list)? = arguments["items"] { items = list.compactMap(\.stringValue) }
+                asked.append(.object(["choose": .string(arguments["title"]?.stringValue ?? ""), "items": .array(items.map { .string($0) })]))
+            } else {
+                asked.append(.object(["ask": .string(arguments["prompt"]?.stringValue ?? "")]))
+            }
+            guard let answer = answers[operation.rawValue] else {
+                failures.append("\(step): the script asked for \(operation.rawValue), and the step has no answer for it: add \"\(operation.rawValue)\" to its \"answers\" (the item chosen or the text typed, or null for dismissed)")
+                return completion(.failure(ScriptBrokerError.failed("The test gave no answer for \(operation.rawValue).")))
+            }
+            if case .object(let fields) = answer, fields.count == 1, let message = fields["error"]?.stringValue { return completion(.failure(ScriptBrokerError.refused(message))) }
+            if operation == .choose, case .string(let chosen) = answer, !items.contains(chosen) {
+                failures.append("\(step): the test chose \"\(chosen)\", which is not one of the items the script offered (\(items.joined(separator: ", ")))")
+                return completion(.success(.null))
+            }
+            if case .string = answer { return completion(.success(answer)) }
+            completion(.success(.null))
         }
 
         /// Give each item in a value (an object with a role) the handle TurnOver would have given it.
@@ -165,12 +202,23 @@ public enum ScriptScenarioRunner {
             guard let manifest = plugin.manifest else { return ["the plugin does not load"] }
             guard let steps = scenario["steps"] as? [[String: Any]], !steps.isEmpty else { return ["the test has no \"steps\""] }
             let broker = ScenarioBroker()
+            // The options start at the manifest's defaults, or the scenario's own values (which the option must allow).
+            var values: [String: PluginOptionValue] = [:]
+            var failures: [String] = []
+            let declaredOptions = manifest.options ?? []
+            for option in declaredOptions { values[option.id] = option.defaultValue }
+            for (id, raw) in scenario["options"] as? [String: Any] ?? [:] {
+                guard let option = declaredOptions.first(where: { $0.id == id }) else { failures.append("the test sets the option \"\(id)\", which manifest.json does not declare"); continue }
+                guard let given = PluginOptionValue(any: raw), let ok = option.accepting(given) else { failures.append("the test gives the option \"\(id)\" a value it does not allow"); continue }
+                values[id] = ok
+            }
+            if !failures.isEmpty { return failures }
             var limits = ScriptLimits()
             limits.eventDeadline = 2   // a test is not in the middle of speech; the real 25 ms is TurnOver's to keep
             limits.watchdogInterval = 0.02
             let host = ScriptHost(plugin: ScriptPluginInfo(id: manifest.id, name: manifest.name, version: manifest.version),
                                   abilities: ScriptAbilities.effective(for: plugin), commands: (manifest.commands ?? []).map(\.id),
-                                  source: source, hostPath: hostPath, broker: broker, limits: limits)
+                                  source: source, hostPath: hostPath, broker: broker, limits: limits, options: values.mapValues(\.scriptValue))
             defer { host.stop(); pumpRunLoop(1) { !host.isRunning } }
             host.start()
             pumpRunLoop(5) { if case .starting = host.state { return false } else { return true } }
@@ -179,11 +227,10 @@ public enum ScriptScenarioRunner {
             case .starting: return ["the script did not start within 5 seconds"]
             default: break
             }
-            var failures: [String] = []
             for (i, step) in steps.enumerated() {
                 let name = step["event"] as? String ?? step["command"] as? String ?? "?"
                 broker.step = "step \(i + 1) (\(name))"
-                broker.said = []; broker.failures = []
+                broker.said = []; broker.tones = []; broker.asked = []; broker.failures = []
                 broker.answers = (step["answers"] as? [String: Any] ?? [:]).mapValues { broker.withHandles(ScriptValue(json: $0)) }
                 let expect = step["expect"] as? [String: Any] ?? [:]
                 func fail(_ message: String) { failures.append("\(broker.step): \(message)") }
@@ -204,7 +251,18 @@ public enum ScriptScenarioRunner {
                         }
                     } else {
                         if expect["say"] != nil { fail("\(event) has nothing to replace, so it has no \"say\" to expect") }
-                        host.tell(event, item: item)
+                        var data: ScriptValue?
+                        if event == "optionsChange" {
+                            guard let id = step["id"] as? String, let option = declaredOptions.first(where: { $0.id == id }) else { fail("an optionsChange step needs the \"id\" of an option manifest.json declares"); continue }
+                            guard let given = PluginOptionValue(any: step["value"]), let ok = option.accepting(given) else { fail("the option \"\(id)\" does not allow that value"); continue }
+                            values[id] = ok
+                            host.setOptions(values.mapValues(\.scriptValue))
+                            data = .object(["id": .string(id), "value": ok.scriptValue])
+                        } else if event == "speech" {
+                            guard let text = step["text"] as? String else { fail("a speech step needs the \"text\" TurnOver said"); continue }
+                            data = .object(["text": .string(text)])
+                        }
+                        host.tell(event, item: item, data: data)
                     }
                     pumpRunLoop(3) { Date().timeIntervalSince(broker.lastActivity) > 0.08 && Date().timeIntervalSince(started) > 0.08 }
                 } else if let command = step["command"] as? String {
@@ -228,6 +286,13 @@ public enum ScriptScenarioRunner {
                 failures += broker.failures
                 if let want = expect["said"] as? [String], broker.said != want {
                     fail("the script said \(quoted(broker.said)), but the test expected \(quoted(want))")
+                }
+                if let want = expect["tones"] as? [[Double]], broker.tones != want {
+                    fail("the script played the tones \(broker.tones), but the test expected \(want)")
+                }
+                if let want = expect["asked"] {
+                    let wanted = ScriptValue(json: want)
+                    if wanted != .array(broker.asked) { fail("the script asked \(broker.asked.map { String(describing: $0.json) }), but the test expected a different question") }
                 }
             }
             return failures

@@ -34,6 +34,13 @@ nonisolated public struct ScriptLimits: Sendable {
     public var saysPerWindow: Int = 20
     public var sayWindow: TimeInterval = 2
     public var sayCharacters: Int = PluginWire.Limits.sayCharacters
+    /// What a plugin with `hearSpeech` is told TurnOver said (stage B, 16 Nov 2026): at most this many a second, each cut to this many
+    /// characters. More are dropped, not queued: a script that falls behind must not hold the reader's speech in memory, and the speech
+    /// itself is never slowed, changed or stopped by it.
+    public var heardPerSecond: Int = 20
+    public var heardCharacters: Int = PluginWire.Limits.heardCharacters
+    /// The text of an item and of the clipboard that a script is given: the most that one answer holds.
+    public var textCharacters: Int = PluginWire.Limits.textCharacters
     /// Timers at once and the fastest one, so timers cannot become a busy loop. Passed to the host in `hello`.
     public var timers: Int = PluginWire.Limits.timers
     public var minimumTimerMilliseconds: Int = PluginWire.Limits.minimumTimerMilliseconds

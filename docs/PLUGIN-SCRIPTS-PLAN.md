@@ -221,9 +221,9 @@ loaded into it by another program, and that code then is TurnOver. Published bui
   files and verify. The fingerprint is the first 16 hex digits of the SHA-256 of the public key, in fours.
 - The library keeps its signed list. For a plugin with a script the list will also carry the author's key, the
   level, who reviewed it and the hash they reviewed.
-- A script reaches the library only at Verified: a named person who is not its author has read every line of that
-  version against docs/PLUGIN-SECURITY.md. That goes for TurnOver's own plugins too. The pull request cannot be
-  approved by its author.
+- How much review a script gets in the library depends on the risk of its abilities, not on every script alike: see
+  "Review by risk" in docs/PLUGIN-PLATFORM-PLAN.md (decided 16 Nov 2026), which replaces the rule that every version of
+  every script is read by a person. A reviewer is never the author, and that goes for TurnOver's own plugins too.
 - Until the library returns, a script arrives only as a folder the user approves on their own Mac. The existing
   install paths copy `main.js` but never approve it.
 - The list's `withdrawn` entries already turn a library plugin off; a withdrawn script loses its receipt too.

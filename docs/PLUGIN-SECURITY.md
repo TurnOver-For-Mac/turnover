@@ -29,8 +29,17 @@ A script can, only where its manifest asks and the user agreed:
 - `focus`: move the keyboard focus to an item;
 - `menu`: choose a command from its app's menus;
 - `keys`: send a key press to its app;
-- `edit`: change an item's text or value;
-- `clipboard`: put text on the clipboard (never read it).
+- `edit`: change an item's text or value, and move the caret or the selection in it;
+- `clipboard`: put text on the clipboard (reading it is `clipboardRead`);
+- `everywhere`: work in every app but the forbidden ones (the apps field is `["*"]`), judged against the app really in
+  front on every request;
+- `hearSpeech`: be told what TurnOver says to the person while one of its apps is in front, never what is said at a
+  password field or under secure keyboard entry, never what a plugin said, and with no power over the speech;
+- `clipboardRead`: read the clipboard's text while one of its apps is in front, never under secure keyboard entry.
+
+Also under `read`, a script can be given the selected text, the line and the whole text of an item (at most 10,000
+characters, never from a password field), and under `say` it can put up TurnOver's own list or typed prompt (one at a
+time, never over a password field or under secure keyboard entry) and play tones.
 
 PluginPolicy's refusals apply to a script's requests when they are made, not only when a file is checked: the Apple
 menu, Paste, keys that leave the app, and TurnOver's essential keys.
@@ -196,10 +205,11 @@ What stops it:
 - A script runs only after the user has approved it on this Mac, having heard what it can do in plain words.
 - Its abilities are enforced on every request, so a script that did not ask for `keys` cannot send a key.
 - It runs in a sandbox with no files, no network and no other programs.
-- Its apps are named; it hears and sees nothing from other apps, and nothing while its app is not in front.
+- Its apps are named (or, with `everywhere`, every app but the forbidden ones); it hears and sees nothing from other apps, and nothing while its app is not in front.
 - A secure field is blank to a script, and a script can neither change one nor send keys while one has the focus.
-- In the library, a script is taken only at Verified: a named person who is not the author has read every line of
-  that version (the reviewer's checklist below).
+- In the library, how much review a plugin gets depends on the risk of its abilities, not on every plugin alike: see
+  "Review by risk" in docs/PLUGIN-PLATFORM-PLAN.md, and the reviewer's checklist below. `turnover-plugin check` prints
+  the level.
 - A misbehaving script is turned off.
 
 ### A good plugin turned bad by an update
@@ -266,6 +276,35 @@ spoke last" is listed under Later in the plan; it does not exist. What a script 
 source, so turning a script off does not cut what it is already saying (15 Nov 2026); that waits for speech-source
 work that is on another branch.
 
+## What stage B added, and what holds it (16 Nov 2026)
+
+- Working in every app is an ability the person hears in plain words: that it works in every app except password and
+  permission dialogs, and that with `read` it can read what is on the screen wherever they are. The forbidden apps give
+  it nothing at all, not even an event, and a closed app lets it read and speak only.
+- A list or prompt a script puts up is TurnOver's own, said with the plugin's name first. While one is open no other
+  question opens, and no plugin hears what TurnOver says, so what the person types into one plugin's prompt is not
+  another's to hear. A question is refused over a password field and under secure keyboard entry, because the keys
+  the person types would go to TurnOver's prompt.
+- Reading text and moving the caret use TurnOver's own text code and the rules `read` and `edit` already have. A
+  password field gives nothing and is never changed.
+- `hearSpeech` and `clipboardRead` are the abilities that can read what is private, so they sit at the highest level
+  of review, are refused in the closed apps, and are refused under secure keyboard entry. What the plugin itself says,
+  and the notices TurnOver says about a plugin (which carry the plugin's name and its own error text), are not passed to
+  any plugin that hears.
+- Options are kept by TurnOver and checked every time: a value the option does not allow is never stored and never given
+  to the script.
+- Every plugin's author gives a `support` address and a reason for each ability above reading and speaking, and the
+  Plugins menu can say who looks after a plugin and turn every plugin off until TurnOver starts again.
+- Found and fixed in the same pass: a host that ended by itself (crashed) left its input open, so a write queued just
+  before it ended could reach a closed file number. The input is now closed for every later write whichever way the
+  host ends.
+- Checked, with a test each, and not changed: a script's search never matches on what a password field holds, in a
+  match or any match inside it; the keeper's sandbox check is a test of the program's home folder and environment, so it
+  is a guard against a mistake and not proof of confinement, which only the signed build can show
+  (`turnover --check-trust-keeper`); and whether a build is a developer build is read from its Info.plist, so a
+  changed Info.plist in a copy that keeps its permissions could pick the developer file, which only a live signed build
+  can show.
+
 ## What is not protected against
 
 Said plainly, 15 Nov 2026:
@@ -299,13 +338,15 @@ Said plainly, 15 Nov 2026:
   developer mode keeps a draft's approval while apps and abilities do not grow.
 - A local build signed without the hardened runtime can be loaded with code by another program, which then is
   TurnOver, keeper and all.
-- Whether scripts may ever reach every app, a website or the internet is not decided. This design says not yet.
+- Scripts reach every app only with the `everywhere` ability, as above. Whether they may ever reach a website or the internet is not decided. This design says not yet.
 
 ## The reviewer's checklist for a script
 
-For the library, a script reaches Verified only when a named person who is not its author has read every line of
-that version. This also applies to TurnOver's own plugins. The pull request cannot be approved by its author.
-Follow these steps for each version, not only the first.
+For the library, which plugins need a reviewer, and how much of each version is read, is decided by "Review by risk" in
+docs/PLUGIN-PLATFORM-PLAN.md: three levels, worked out from the abilities alone (`turnover-plugin check` prints the
+level and why). A reviewer is never the author, and this also applies to TurnOver's own plugins. For a plugin at a
+level that needs a reviewer, follow these steps for each version the level says is read, and read the author's reason
+for each ability beside it: an ability with no believable reason is the first thing to question.
 
 1. Read every line of `main.js`, `manifest.json` and `profile.json`. If you cannot read it, you cannot approve it.
 2. Reject code that is packed, encoded or built from strings: `eval`, `Function`, `new Function`, and long encoded

@@ -91,7 +91,7 @@ func scriptFormatTests() {
     test("script format: a script needs apps, named exactly") {
         failsOn(["apps": "[]"], line: "apps", "needs apps")
         failsOn(["apps": "[\"com.example.*\"]"], line: "apps", "cannot be a pattern")
-        failsOn(["apps": "[\"*\"]"], line: "apps", "cannot be a pattern")
+        failsOn(["apps": "[\"*\"]"], line: "apps", "every app", "everywhere")   // stage B: every app only with the ability that says so
     }
     test("script format: main.js missing, not UTF-8 or over 256 KB") {
         let missing = load(scriptManifestText(), script: nil)

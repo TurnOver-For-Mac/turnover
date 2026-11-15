@@ -571,7 +571,8 @@ public final class TurnOverMenu {
             if let m = p.manifest {
                 // The app's name when it isn't running too (the list said "for com.bambulab.bambu-studio"), and the
                 // library's author for a library plugin, as the library itself said (14 Oct 2026).
-                let apps = m.apps.map { b in NSRunningApplication.runningApplications(withBundleIdentifier: b).first?.localizedName ?? Self.appName(for: b) }.joined(separator: ", ")
+                let apps = m.worksEverywhere ? String(localized: "every app", comment: "A plugin that works in every app, in the Plugins menu: after \"for\"")
+                    : m.apps.map { b in NSRunningApplication.runningApplications(withBundleIdentifier: b).first?.localizedName ?? Self.appName(for: b) }.joined(separator: ", ")
                 let folder = p.folder
                 let author = PluginLibrary.receipt(folder)?.author ?? m.author
                 var title = String(localized: "\(m.name) \(String(describing: m.version)), for \(apps)", comment: "A plugin: its name, version and apps")
@@ -588,6 +589,8 @@ public final class TurnOverMenu {
                         Speech.speakMessage(String(localized: "\(m.description ?? m.name). \(String(n.0)) labels, \(String(n.1)) keys, \(String(n.2)) watched.", comment: "About a plugin: its description, then what it has"))
                     }),
                     ]
+                    // With plugin scripts on (stage B, 16 Nov 2026): the plugin's options, and who to tell about a problem with it.
+                    if Edition.includesPluginScripts { sub += ScriptPlugins.pluginItems(for: m) }
                     if !shipped { sub.append(MenuItem("Remove", .action { Self.removePlugin(at: folder, name: m.name) }, hint: "Moves it to the Trash; put it back from there to have it again")) }
                     return sub
                 }))

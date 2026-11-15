@@ -98,7 +98,7 @@ func scriptConvertTests() {
         let r = done.result
         check(done.madePlugin, "a plugin is made")
         expect(r.commandsCarried, 2, "two commands"); expect(r.eventsCarried, 1, "one event handler")
-        expect(r.abilities, ["clipboard", "read", "say"], "abilities come from the original's calls alone")
+        expect(r.abilities, ["clipboard", "everywhere", "read", "say"], "abilities come from the original's calls alone, and a global plugin works everywhere")
         let js = file(r, "main.js")
         check(js.contains("turnover.say(\"Hello there\");"), "ui.message becomes turnover.say: \(js)")
         check(js.contains("await turnover.copy(\"Greetings\");"), "copyToClip becomes turnover.copy")
@@ -109,16 +109,15 @@ func scriptConvertTests() {
         let manifest = try JSONDecoder().decode(PluginManifest.self, from: Data(file(r, "manifest.json").utf8))
         expect(manifest.commands?.map(\.id) ?? [], ["hello", "copyGreeting"], "command ids")
         expect(manifest.commands?.compactMap(\.key) ?? [], ["turnover+shift+h", "turnover+control+g"], "kb:NVDA+x becomes turnover+x")
-        expect(manifest.apps, [], "apps is left for the person")
-        expect(manifest.convertedFrom?.abilities ?? [], ["clipboard", "read", "say"], "recorded")
+        expect(manifest.apps, ["*"], "a global plugin works in every app, so apps is [\"*\"] (stage B)")
+        expect(manifest.convertedFrom?.abilities ?? [], ["clipboard", "everywhere", "read", "say"], "recorded")
+        expect(manifest.convertedFrom?.apps ?? [], ["*"], "and so is the app")
         expect(manifest.id, "nvda-hello", "the id says where it came from")
         // The script is a real, loadable script.
         if let host {
             let out = f.sub("draft"); try ConvertRun.write(r, to: out, force: false)
-            var m = manifest; m.apps = ["com.example.app"]; m.convertedFrom?.apps = ["com.example.app"]
-            try JSONEncoder().encode(m).write(to: out.appendingPathComponent("manifest.json"))
             let plugin = ProfileStore.load(folder: out)
-            expect(plugin.error, nil, "the draft loads once it has an app")
+            expect(plugin.error, nil, "the draft loads as it was written: it names every app, so there is no app to choose")
             let report = ScriptChecker.check(plugin, hostPath: host)
             expect(report.problems, [], "main.js loads in the sandbox host")
             expect(report.commands.sorted(), ["copyGreeting", "hello"], "both commands handled")
@@ -232,7 +231,7 @@ func scriptConvertTests() {
         // The names change nothing about what it may do.
         expect(unnamed.result.abilities, done.result.abilities, "the same abilities")
         // The approval line.
-        var named = m; named.apps = ["com.example.app"]; named.convertedFrom?.apps = ["com.example.app"]
+        let named = m
         let out = f.sub("draft"); try ConvertRun.write(done.result, to: out, force: false)
         try JSONEncoder().encode(named).write(to: out.appendingPathComponent("manifest.json"))
         let plugin = ProfileStore.load(folder: out)
@@ -408,5 +407,84 @@ func scriptConvertTests() {
         let j = b.judge(b.entries[0])
         expect(j.source, .remembered, "remembered from the earlier convert")
         check(j.verdict == .needsWork, "the app module's apps, key choices and kept Python make it needs work: \(j.verdict)")
+    }
+
+    // MARK: Stage B (16 Nov 2026): what scripts gained is in the table, and each ability gets a first reason
+
+    test("script platform: convert: the table maps tones, lists, prompts, text and caret, the clipboard, settings and speech to what scripts now have") {
+        @MainActor func row(_ name: String) -> ConvertMapping.Row? { ConvertMapping.row(for: name) }
+        expect(row("tones.beep")?.fit, .exact, "a beep is a tone"); expect(row("tones.beep")?.template, "turnover.tone({0}, {1})", "its translation")
+        expect(row("tones.beep")?.ability, "say", "under say")
+        expect(row("wx.SingleChoiceDialog")?.fit, .partial, "a list of choices"); expect(row("wx.SingleChoiceDialog")?.ability, "say", "under say")
+        expect(row("wx.TextEntryDialog")?.fit, .partial, "a prompt for text"); expect(row("wx.TextEntryDialog")?.ability, "say", "under say")
+        expect(row("ui.browseableMessage")?.fit, .partial, "a window of text")
+        expect(row("obj.makeTextInfo")?.fit, .partial, "text of an item"); expect(row("obj.makeTextInfo")?.ability, "read", "under read")
+        expect(row("textInfos.POSITION_CARET")?.ability, "read", "text by position")
+        expect(row("info.updateCaret")?.ability, "edit", "moving the caret is edit"); expect(row("info.updateSelection")?.ability, "edit", "so is selecting")
+        expect(row("config.conf")?.fit, .partial, "settings become options"); check(row("config.conf")?.why.contains("options") == true, "and says so")
+        expect(row("api.getClipData")?.fit, .partial, "the clipboard can now be read"); expect(row("api.getClipData")?.ability, "clipboardRead", "with its own ability")
+        expect(row("speech.extensions.pre_speech.register")?.ability, "hearSpeech", "hearing speech")
+        check(ConvertMapping.rows.filter { $0.fit == .nothingYet }.allSatisfy { !($0.later ?? "").contains("turnover.tone") && !($0.later ?? "").contains("options TurnOver shows") }, "no row still waits for a piece that now exists")
+        check(ConvertMapping.rows.filter { $0.fit == .never }.allSatisfy { $0.nvda != "api.getClipData" }, "reading the clipboard is no longer \"never\"")
+        expect(ConvertMapping.rows.filter { $0.fit == .never }.count, 6, "what is still never: settings of TurnOver, programs, files, web pages")
+    }
+
+    test("script platform: convert: a global plugin becomes an everywhere draft with a first reason for each ability from what the original used it for") {
+        let f = Fixture(); defer { f.remove() }
+        f.write(ini, "addon/manifest.ini")
+        f.write("""
+        import globalPluginHandler, ui, tones, api, textInfos, config
+        class GlobalPlugin(globalPluginHandler.GlobalPlugin):
+            def script_beep(self, gesture):
+                \"\"\"Beeps\"\"\"
+                tones.beep(440, 100)
+            def script_paste(self, gesture):
+                \"\"\"Reads the clipboard\"\"\"
+                text = api.getClipData()
+                ui.message("done")
+            def script_line(self, gesture):
+                \"\"\"Reads a line and moves\"\"\"
+                obj = api.getFocusObject()
+                info = obj.makeTextInfo(textInfos.POSITION_CARET)
+                info.updateCaret()
+                loud = config.conf["myAddon"]["loud"]
+        """, "addon/globalPlugins/tools.py")
+        let done = try convertFolder(f.sub("addon"), convertedBy: "Bob", cache: cache)
+        let r = done.result
+        check(done.madePlugin, "a plugin is made")
+        expect(r.abilities, ["clipboardRead", "edit", "everywhere", "read", "say"], "everything from the original's own calls, and everywhere because it is a global plugin")
+        let js = file(r, "main.js")
+        check(js.contains("turnover.tone(440, 100);"), "tones.beep becomes turnover.tone: \(js)")
+        check(js.contains("A PERSON MUST WRITE THIS") && js.contains("api.getClipData()"), "what is only partly mapped stays as the original Python")
+        let m = try JSONDecoder().decode(PluginManifest.self, from: Data(file(r, "manifest.json").utf8))
+        expect(m.apps, ["*"], "apps"); expect(m.worksEverywhere, true, "it works everywhere")
+        expect(m.convertedFrom?.apps ?? [], ["*"], "the record has it too")
+        for ability in ["clipboardRead", "edit", "everywhere", "read", "say"] {
+            let reason = m.reasons?[ability] ?? ""
+            check(!reason.isEmpty && reason.count <= 150 && PluginText.isPlain(reason), "a first reason for \(ability), plain and at most 150 characters: \(reason)")
+        }
+        check(m.reasons?["clipboardRead"]?.contains("reads the clipboard's text") == true, "the reason says what the original used it for: \(m.reasons?["clipboardRead"] ?? "")")
+        check(m.reasons?["everywhere"]?.contains("global plugin") == true, "and why everywhere: \(m.reasons?["everywhere"] ?? "")")
+        check(m.reasons?["edit"]?.contains("moves the caret") == true, "edit: \(m.reasons?["edit"] ?? "")")
+        check(m.reasons?["say"]?.contains("plays a tone") == true && m.reasons?["say"]?.contains("speaks a message") == true, "say names both uses: \(m.reasons?["say"] ?? "")")
+        check(!(m.reasons ?? [:]).values.contains { $0.contains("getClipData") || $0.contains("textInfos") }, "the add-on's own names are never copied into a reason")
+        check(PluginConversion.findings(for: m).problems.isEmpty, "the record matches the manifest")
+        let out = f.sub("draft"); try ConvertRun.write(r, to: out, force: false)
+        let plugin = ProfileStore.load(folder: out)
+        expect(plugin.error, nil, "the draft loads as written: \(plugin.error ?? "")")
+        let listing = PluginListing.check(plugin, others: [])
+        check(!listing.lines.contains { $0.contains("reasons has nothing") }, "the library's reasons check finds one for every ability above read and say: \(listing.lines)")
+        let md = file(r, "CONVERSION.md")
+        check(md.contains("[\"*\"]") && md.contains("everywhere") && md.contains("first draft"), "the report says apps is [\"*\"] and that the reasons are a first draft: \(md)")
+        let lines = ScriptAbilities.approvalLines(for: plugin, appName: { $0 }).map(\.text)
+        check(lines.contains { $0.hasPrefix("The author says it uses this to: In the original add-on: reads the clipboard's text") }, "and the person hears it, marked as the author's: \(lines)")
+        expect(ScriptReview.level(for: ScriptAbilities.effective(for: plugin)).number, 3, "a converted plugin that reads the clipboard is at the highest level")
+        // An add-on with an app module is not everywhere: its programs are Windows ones, and apps is left to a person.
+        let g = Fixture(); defer { g.remove() }
+        g.write(ini, "addon/manifest.ini")
+        g.write("import appModuleHandler, ui, tones\nclass AppModule(appModuleHandler.AppModule):\n    def script_swap(self, gesture):\n        tones.beep(500, 50)\n", "addon/appModules/filezilla.py")
+        let app = try convertFolder(g.sub("addon"), cache: cache).result
+        let am = try JSONDecoder().decode(PluginManifest.self, from: Data(file(app, "manifest.json").utf8))
+        expect(am.apps, [], "an app module's draft has no apps"); check(!(am.abilities ?? []).contains("everywhere"), "and is not everywhere")
     }
 }

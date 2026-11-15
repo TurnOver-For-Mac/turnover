@@ -13,6 +13,7 @@
   ],
   "summary": "Reads Calculator's result on a key, and names its Clear button.",
   "contact": "https://github.com/TurnOver-For-Mac/turnover/issues",
+  "support": "https://github.com/TurnOver-For-Mac/turnover/issues",
   "privacy": "Reads Calculator's window only; nothing leaves your Mac.",
   "license": "MIT",
   "changes": [

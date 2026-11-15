@@ -130,6 +130,8 @@ nonisolated public enum AddonConverter {
         var handlers: [Handler] = []
         var notCarried: [Dropped] = []
         var abilities = Set<String>()
+        /// For each ability, what the original used it for, in the converter's own words (the table's), for the first draft of `reasons`.
+        var why: [String: Set<String>] = [:]
         var later = Set<String>()
         var unlisted = Set<String>()
         var programs: [String] = []
@@ -232,7 +234,7 @@ nonisolated public enum AddonConverter {
                 if let why = blockReason(m, fileReason: fileReason) { found.notCarried.append(Dropped(what: label, why: why)); continue }
                 for name in m.calls.keys.sorted() {
                     if let row = ConvertMapping.row(for: name) {
-                        if let ab = row.ability { found.abilities.insert(ab) }
+                        if let ab = row.ability { found.abilities.insert(ab); found.why[ab, default: []].insert(row.why) }
                         if let l = row.later { found.later.insert(l) }
                     } else if let root = name.split(separator: ".").first.map(String.init), ConvertMapping.nvdaModules.contains(root), name != "scriptHandler.script", !name.hasPrefix("globalPluginHandler."), !name.hasPrefix("appModuleHandler.") {
                         found.unlisted.insert(name)
@@ -248,7 +250,7 @@ nonisolated public enum AddonConverter {
                     guard let target = row.script else {
                         found.notCarried.append(Dropped(what: label, why: row.why + (row.later.map { " (a later stage: \($0))" } ?? ""))); if let l = row.later { found.later.insert(l) }; continue
                     }
-                    if let ab = row.ability { found.abilities.insert(ab) }
+                    if let ab = row.ability { found.abilities.insert(ab); found.why[ab, default: []].insert(row.why) }
                     found.handlers.append(Handler(nvda: nvda, event: target, file: file, owner: owner, line: m.line, overlay: !plugin, body: body(m)))
                 } else {
                     let desc = m.decorators.compactMap(\.description).first(where: { !$0.isEmpty }) ?? (m.doc?.components(separatedBy: "\n").first(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty })).map { $0.trimmingCharacters(in: .whitespaces) }

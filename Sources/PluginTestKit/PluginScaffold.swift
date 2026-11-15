@@ -17,17 +17,18 @@ public enum PluginScaffold {
 
     /// Write the plugin into `folder` (which must be new, or empty). Returns the files written, relative to it.
     @discardableResult
-    public static func make(folder: URL, app: String, script: Bool) throws -> [String] {
-        guard app.contains("."), !app.contains(" "), !app.contains("*") else {
+    public static func make(folder: URL, app: String, script: Bool, everywhere: Bool = false) throws -> [String] {
+        guard everywhere ? app == PluginManifest.everyApp : (app.contains(".") && !app.contains(" ") && !app.contains("*")) else {
             throw Failure(description: "--app wants a bundle identifier such as com.apple.calculator, not \"\(app)\"")
         }
+        guard script || !everywhere else { throw Failure(description: "a plugin that works in every app is a script") }
         let fm = FileManager.default
         if fm.fileExists(atPath: folder.path), !((try? fm.contentsOfDirectory(atPath: folder.path)) ?? []).isEmpty {
             throw Failure(description: "\(folder.path) is not empty; make a plugin in a new folder")
         }
         let id = identifier(from: folder.lastPathComponent)
         let name = id.split(separator: "-").map { $0.prefix(1).uppercased() + $0.dropFirst() }.joined(separator: " ")
-        var files: [(String, String)] = [("manifest.json", script ? scriptManifest(id: id, name: name, app: app) : dataManifest(id: id, name: name, app: app)),
+        var files: [(String, String)] = [("manifest.json", script ? scriptManifest(id: id, name: name, app: app, everywhere: everywhere) : dataManifest(id: id, name: name, app: app)),
                                          ("profile.json", script ? scriptProfile : dataProfile)]
         if script {
             files += [("main.js", mainScript(name: name)), ("tests/script/first.json", firstTest(name: name))]
@@ -91,8 +92,40 @@ public enum PluginScaffold {
 
         """
 
-    private static func scriptManifest(id: String, name: String, app: String) -> String {
-        """
+    private static func scriptManifest(id: String, name: String, app: String, everywhere: Bool = false) -> String {
+        let appsText = everywhere
+            ? """
+              // Every app (the one way a script may do so): exactly ["*"], and the "everywhere" ability below. TurnOver then starts
+                // the script as it starts reading and never pauses it for the app changing; its keys work in every app. It is never
+                // given anything from password and permission dialogs or the login window, and in terminals, browsers, settings and
+                // password managers it can only read and speak.
+                "apps": ["*"],
+              """
+            : """
+              // The apps the script works in, by bundle identifier. A script must name them: no patterns.
+                "apps": ["\(app)"],
+              """
+        let abilitiesText = everywhere
+            ? """
+              // What the script may do, which the person is asked to agree to in plain words. Ask for as little as you can:
+                // everywhere (every app), read (see items, and their text), say (speak, tones, lists and prompts), press, focus, menu,
+                // keys, edit (change a field, move its caret), clipboard (put text on it), clipboardRead (read it), hearSpeech (be
+                // told what TurnOver says). A request for something not listed here is refused, and the error says which ability to add.
+                "abilities": ["everywhere", "read", "say"],
+                // For each ability above reading and speaking, one short sentence on what the plugin uses it for (150 characters at
+                // most). The person hears it after TurnOver's own sentence, marked as yours; the library needs one for each.
+                "reasons": { "everywhere": "Says what this plugin does in every app." },
+                // Where to report a problem: a web address or an email address. The library needs one.
+                "support": "https://example.com/support",
+              """
+            : """
+              // What the script may do, which the person is asked to agree to in plain words. Ask for as little as you can:
+                // read (see items), say (speak), press, focus, menu, keys, edit (change a field), clipboard (put text on it).
+                // A request for something not listed here is refused, and the error says which ability to add. A script is sent focus
+                // and value events only if it has "read", because they carry the item.
+                "abilities": ["read", "say"],
+              """
+        return """
         // manifest.json: who made this plugin, which app it is for, and what its script may do. Comments like these are
         // allowed in TurnOver's plugin files; TurnOver ignores them.
         {
@@ -103,13 +136,8 @@ public enum PluginScaffold {
           "version": "0.1",
           // Say in a sentence what the plugin is for. Whoever installs it hears this, marked as your words.
           "description": "Says what the \(name) plugin is for.",
-          // The apps the script works in, by bundle identifier. A script must name them: no patterns.
-          "apps": ["\(app)"],
-          // What the script may do, which the person is asked to agree to in plain words. Ask for as little as you can:
-          // read (see items), say (speak), press, focus, menu, keys, edit (change a field), clipboard (put text on it).
-          // A request for something not listed here is refused, and the error says which ability to add. A script is sent focus
-          // and value events only if it has "read", because they carry the item.
-          "abilities": ["read", "say"],
+          \(appsText)
+          \(abilitiesText)
           // The script is always main.js, next to this file.
           "script": "main.js",
           // The commands the script handles. They are listed here, not found by running the script, so TurnOver can show

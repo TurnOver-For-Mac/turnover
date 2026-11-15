@@ -36,12 +36,45 @@ nonisolated extension PluginFormat {
             if m.apps.isEmpty {
                 manifestProblem(["apps"], m.convertedFrom != nil ? PluginConversion.notFinished : "a script needs apps: name the applications it works in, by bundle identifier")
             }
+            // Every app (stage B, 16 Nov 2026): exactly ["*"] and the `everywhere` ability, the one without the other never.
+            let asksEverywhere = (m.abilities ?? []).contains(ScriptAbility.everywhere.rawValue)
+            let everyApp = m.apps == [PluginManifest.everyApp]
+            if asksEverywhere, !everyApp {
+                manifestProblem(["abilities"], "the everywhere ability means every app, so apps must be exactly [\"*\"]; to work in named apps, take everywhere out")
+            }
             for (i, app) in m.apps.enumerated() where app.contains("*") || app.contains("?") {
-                manifestProblem(["apps", String(i)], "a script works only in apps it names, so \"\(app)\" cannot be a pattern: give the bundle identifier")
+                if app == PluginManifest.everyApp {
+                    if m.apps.count > 1 { manifestProblem(["apps", String(i)], "\"*\" means every app and must be the only entry in apps") }
+                    else if !asksEverywhere { manifestProblem(["apps", String(i)], "\"*\" (every app) needs the everywhere ability: add \"everywhere\" to abilities, and the person is asked to agree to it") }
+                } else {
+                    manifestProblem(["apps", String(i)], "a script works only in apps it names, so \"\(app)\" cannot be a pattern: give the bundle identifier (or exactly \"*\" with the everywhere ability)")
+                }
             }
             out += checkScriptFile(in: folder, data: scriptData)
         } else if m.commands != nil {
             manifestProblem(["commands"], "commands need a script: add \"script\": \"\(scriptName)\" (and \"formatVersion\": 2), or take the commands out")
+        } else if m.options != nil {
+            manifestProblem(["options"], "options need a script: add \"script\": \"\(scriptName)\" (and \"formatVersion\": 2), or take the options out")
+        }
+        // Options: what the person can set, shown in TurnOver's menu (the author's words, plain and short).
+        if let options = m.options {
+            if options.count > PluginOption.maxCount { manifestProblem(["options"], "a plugin may have at most \(PluginOption.maxCount) options") }
+            var ids = Set<String>()
+            for (i, option) in options.enumerated() {
+                for why in option.problems() { manifestProblem(["options", String(i)], "option \(i + 1): " + why) }
+                if !ids.insert(option.id).inserted { manifestProblem(["options", String(i), "id"], "option \(i + 1): the id \"\(option.id)\" is used twice") }
+            }
+        }
+        // The author's reasons: for an ability, a sentence in plain text, short. Whether one is wanted is the library's check.
+        for (ability, reason) in (m.reasons ?? [:]).sorted(by: { $0.key < $1.key }) {
+            if !ScriptAbility.allCases.map(\.rawValue).contains(ability) {
+                manifestProblem(["reasons", ability], "reasons names \"\(ability)\", which is not an ability (\(ScriptAbility.allCases.map(\.rawValue).joined(separator: ", ")))")
+            }
+            if reason.count > ScriptAbilities.reasonCharacters { manifestProblem(["reasons", ability], "the reason for \(ability) is \(reason.count) characters; at most \(ScriptAbilities.reasonCharacters)") }
+            else if !PluginText.isPlain(reason) { manifestProblem(["reasons", ability], "the reason for \(ability) must be plain text, with no line breaks or control characters") }
+        }
+        if let support = m.support, support.count > 300 || !PluginText.isPlain(support) {
+            manifestProblem(["support"], "support must be a web address or an email address on one line, at most 300 characters")
         }
         var seen = Set<String>()
         for (i, c) in (m.commands ?? []).enumerated() {

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// TurnOver plugin script interface, version 1, as built (15 Nov 2026). It matches Sources/TurnOverPluginHost/Prelude.swift
+// TurnOver plugin script interface, version 1, as built (15 Nov 2026; stage B added 16 Nov 2026: everywhere, options,
+// choose and ask, tone, item text and caret, hearSpeech, clipboardRead). It matches Sources/TurnOverPluginHost/Prelude.swift
 // and docs/PLUGIN-SCRIPTS.md. For editors and AI assistants. Scripts are off until the maintainer switches on
 // `pluginScripts`.
 //
@@ -10,7 +11,7 @@
 // rejects with an error that names the ability to add. Every call that asks TurnOver for something returns a promise.
 
 /** The abilities a manifest may list. `read`, `say`, `press`, `focus`, `menu` and `keys` are the data plugins' six. */
-type Ability = "read" | "say" | "press" | "focus" | "menu" | "keys" | "edit" | "clipboard";
+type Ability = "read" | "say" | "press" | "focus" | "menu" | "keys" | "edit" | "clipboard" | "everywhere" | "hearSpeech" | "clipboardRead";
 
 /**
  * A match, the same object profile.json uses (PLUGIN-GUIDE.md, "Matching elements"). Every field given must agree.
@@ -84,6 +85,21 @@ interface Item {
    * of the plugin's apps is in front.
    */
   setValue(value: string | number): Promise<boolean>;
+  /**
+   * Ability: read. The item's text as TurnOver's own text code reads it: the selected text, the line the caret is on, or all of
+   * it, at most 10,000 characters. Resolves with "" when there is none, and always for a password field. `unit` is
+   * "selection" (the default), "line" or "all".
+   * @example const line = await item.text({ unit: "line" });
+   */
+  text(options?: { unit?: "selection" | "line" | "all" }): Promise<string>;
+  /**
+   * Ability: edit, with every rule `setValue` has (never a password field, never while the Mac hides what is typed, only while the
+   * plugin's app is in front). Moves the caret to a place in the text: a whole number from 0 (before the first character) to the
+   * text's length. Resolves with true.
+   */
+  setCaret(offset: number): Promise<boolean>;
+  /** Ability: edit, with the same rules. Selects the text from `start` to `end` (0 to the text's length, end not before start). Resolves with true. */
+  select(start: number, end: number): Promise<boolean>;
 }
 
 /**
@@ -122,6 +138,28 @@ interface EventMap {
   appBlur: NoticeEvent;
   /** The window of one of the plugin's apps changed. */
   windowChange: NoticeEvent;
+  /** One of the plugin's options was changed by the person. Sent to a script that is not paused; `turnover.options.get` is always current. */
+  optionsChange: OptionsEvent;
+  /** Ability: hearSpeech. What TurnOver said to the person. See SpeechEvent. */
+  speech: SpeechEvent;
+}
+
+/** What an `optionsChange` handler receives. Nothing to replace. */
+interface OptionsEvent extends NoticeEvent {
+  /** The option's id, as manifest.json's "options" gives it. */
+  readonly id: string;
+  /** The new value: a boolean for a switch, text for a choice or text, a number for a number. Always one the option allows. */
+  readonly value: boolean | string | number;
+}
+
+/**
+ * What a `speech` handler receives (ability hearSpeech): one thing TurnOver said while one of the plugin's apps was in front (any app
+ * but the forbidden ones, for a plugin with the everywhere ability). It can only listen: it cannot change what is said or stop it.
+ * Never sent: what is said in a password field or while the Mac hides what is typed, in a closed app (terminals, browsers, settings,
+ * password managers), or what any plugin said itself. At most 20 a second reach the script, each at most 1,000 characters; more are dropped.
+ */
+interface SpeechEvent extends NoticeEvent {
+  readonly text: string;
 }
 
 /** What a command's handler is given. */
@@ -218,6 +256,43 @@ interface Turnover {
    * @example await turnover.copy("Done");
    */
   copy(text: string): Promise<null>;
+
+  /**
+   * Ability: clipboardRead. The clipboard's text, at most 10,000 characters, "" if there is none. Works only while one of the plugin's apps
+   * is in front (every app but the forbidden ones, with everywhere); refused while the Mac hides what is typed, and in a closed app.
+   * @example const copied = await turnover.clipboard();
+   */
+  clipboard(): Promise<string>;
+
+  /**
+   * Ability: say. TurnOver's own list to choose from, spoken with the plugin's name before the title: 1 to 200 items, each at most 200
+   * characters, a title of at most 200. Resolves with the text of the item the person chose, or null if they dismissed it. Refused while
+   * another question is open (an approval, another list or prompt: at most one at a time), while none of the plugin's apps is in front,
+   * and while a password field has the focus or the Mac hides what is typed. Two items with the same text give the first.
+   * @example const answer = await turnover.choose("Which button?", ["Save", "Cancel"]);
+   */
+  choose(title: string, items: string[]): Promise<string | null>;
+
+  /**
+   * Ability: say. TurnOver's own text prompt: the person hears the plugin's name and the prompt (at most 200 characters), types a line and
+   * presses Return, or presses Escape. Resolves with the text (at most 1,000 characters) or null when dismissed. The same refusals as
+   * `choose`, and never in a closed app.
+   * @example const name = await turnover.ask("What shall I call it?");
+   */
+  ask(prompt: string): Promise<string | null>;
+
+  /**
+   * Ability: say. Plays a tone: 100 to 4000 hertz, 10 to 500 milliseconds (a value outside throws). Counts toward the same 20 things in
+   * two seconds as `say`, and is dropped, with no error, while none of the plugin's apps is in front or a question is open.
+   * @example turnover.tone(880, 100);
+   */
+  tone(hertz: number, milliseconds: number): void;
+
+  /** No ability. The plugin's options from manifest.json, as the person set them. */
+  readonly options: {
+    /** The value of an option now (a boolean, a number or text), or null if there is no such option. Always one the option allows. */
+    get(id: string): boolean | number | string | null;
+  };
 
   readonly storage: Storage;
 }

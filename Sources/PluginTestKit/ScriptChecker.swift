@@ -46,6 +46,10 @@ public enum ScriptChecker {
                 for id in host.commands where !declared.contains(id) {
                     report.problems.append("the script handles a command \(id) that manifest.json does not declare: add it to \"commands\"")
                 }
+                // A speech event is sent only to a plugin that may hear what TurnOver says.
+                if host.events.contains("speech"), !ScriptAbilities.effective(for: plugin).contains(.hearSpeech) {
+                    report.problems.append("the script handles \"speech\", but a plugin without \"hearSpeech\" in \"abilities\" is never sent it: add \"hearSpeech\"")
+                }
                 // A focus or value event carries the item, so TurnOver sends them only to a plugin that has `read`.
                 if !ScriptAbilities.effective(for: plugin).contains(.read) {
                     for name in ["focus", "valueChange"] where host.events.contains(name) {
@@ -72,11 +76,15 @@ public enum ScriptChecker {
         (#"\.\s*press\s*\("#, "press", [.press]), (#"\.\s*focus\s*\("#, "focus", [.focus]),
         (#"\bturnover\s*\.\s*menu\s*\("#, "turnover.menu", [.menu]), (#"\bturnover\s*\.\s*keys\s*\("#, "turnover.keys", [.keys]),
         (#"\.\s*setValue\s*\("#, "setValue", [.edit]), (#"\bturnover\s*\.\s*copy\s*\("#, "turnover.copy", [.clipboard]),
+        (#"\bturnover\s*\.\s*choose\s*\("#, "turnover.choose", [.say]), (#"\bturnover\s*\.\s*ask\s*\("#, "turnover.ask", [.say]),
+        (#"\bturnover\s*\.\s*tone\s*\("#, "turnover.tone", [.say]),
+        (#"\.\s*text\s*\(\s*\{"#, "text", [.read]), (#"\.\s*setCaret\s*\("#, "setCaret", [.edit]), (#"\.\s*select\s*\("#, "select", [.edit]),
+        (#"\bturnover\s*\.\s*clipboard\s*\("#, "turnover.clipboard", [.clipboardRead]),
     ]
 
     /// Warnings for members the script seems to call whose ability the plugin does not have. A guess: the text is searched,
     /// not understood (a comment is skipped, but a method of another object with the same name is not told apart).
-    static func abilityWarnings(source: String, granted: Set<ScriptAbility>) -> [String] {
+    public static func abilityWarnings(source: String, granted: Set<ScriptAbility>) -> [String] {
         let bare = source.replacingOccurrences(of: #"/\*[\s\S]*?\*/"#, with: " ", options: .regularExpression)
             .replacingOccurrences(of: #"//[^\n]*"#, with: " ", options: .regularExpression)
         var warnings: [String] = []

@@ -71,4 +71,13 @@ nonisolated public enum ScriptBrokerError: Error, Equatable, Sendable {
     /// Do one operation for the plugin and answer. `say`, `sound` and `log` are one way: their answer is ignored.
     /// Items travel as objects with a `handle`; a handle the plugin was not given must throw `.gone`.
     func perform(_ operation: ScriptOperation, _ arguments: ScriptValue) throws -> ScriptValue
+    /// For the operations answered later (`choose`, `ask`: a question to the person): the answer is given to `completion`, on main,
+    /// when there is one. The default answers at once, as `perform` does.
+    func perform(deferred operation: ScriptOperation, _ arguments: ScriptValue, completion: @escaping @MainActor (Result<ScriptValue, any Error>) -> Void)
+}
+
+extension ScriptBroker {
+    public func perform(deferred operation: ScriptOperation, _ arguments: ScriptValue, completion: @escaping @MainActor (Result<ScriptValue, any Error>) -> Void) {
+        completion(Result { try perform(operation, arguments) })
+    }
 }

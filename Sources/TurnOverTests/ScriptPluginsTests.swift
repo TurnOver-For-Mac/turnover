@@ -393,8 +393,8 @@ func scriptPluginsTests() {
     test("script plugins: the approval sentences say exactly what is agreed to") {
         let plugin = makePlugin(script: "", abilities: "[\"read\", \"say\"]")
         let lines = ScriptAbilities.approvalLines(for: plugin, appName: { _ in nil }).map(\.text)
-        check(lines.contains("It can speak, change or silence what TurnOver says in those apps, and play TurnOver's own sounds."), "say: \(lines)")
-        check(lines.contains("It can read what is on the screen in those apps, including text you have typed there, but never a password."), "read: \(lines)")
+        check(lines.contains("It can speak, change or silence what TurnOver says in those apps, play TurnOver's own sounds and tones, and ask you to choose from a list or type a line."), "say: \(lines)")
+        check(lines.contains("It can read what is on the screen in those apps, including text you have typed there, the selected text and whole lines, but never a password."), "read: \(lines)")
         check(lines.contains("It can never use the internet, read or change your files, see the keys you press, see a password, or reach any other app."), "the fixed sentence: \(lines)")
     }
 
@@ -851,7 +851,7 @@ func scriptPluginsTests() {
         guard let (plugins, entry, trust, _) = start(mac, script: "turnover.on('focus', function (e) {});", approved: false) else { return }
         defer { plugins.terminate() }
         @MainActor func titles() -> [String] { plugins.items().map { $0.title } }
-        expect(titles(), ["Script test, script waiting for approval", "Developer mode for scripts"], "waiting")
+        expect(titles(), ["Script test, script waiting for approval", "Turn off every plugin until TurnOver starts again", "Developer mode for scripts"], "waiting")
         if case .action(let run) = plugins.items()[0].kind { run() }
         check(waitFor { !mac.questions.isEmpty }, "choosing it opens the question")
         try? trust.approve(entry.plugin, origin: .file)

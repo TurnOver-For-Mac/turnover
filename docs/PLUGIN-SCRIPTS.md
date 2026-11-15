@@ -164,12 +164,15 @@ words suggest an ability the manifest does not ask for. That last part is a gues
 and exits with a non-zero status when something needs fixing.
 
 - `turnover-plugin new <new folder> --app <bundle id> [--script]`: a working plugin to start from.
+- `turnover-plugin new <new folder> --everywhere`: a working script for every app, with `apps` as `["*"]`, the
+  `everywhere` ability, a reason for it and a support address, ready to edit.
 - `turnover-plugin check <plugin folder> [--read] [--listing] [--level Community|Verified|Official]`: checks the
   plugin. With `--listing` it checks only the manifest, the keys and the script, and needs no running app: this is the
   form to use for a script. Without it the tool also checks the plugin against the app, which must be running. `--read` shows web content as TurnOver reads it. `--level` checks against the
   library rules of that level.
 - `turnover-plugin consent <plugin folder>`: prints what TurnOver will say when the person is asked to approve the
-  script, word for word, then the plugin's hash and, if it is signed, the signing key's fingerprint.
+  script, word for word, then the level of review the plugin needs and why, then the plugin's hash and, if it is
+  signed, the signing key's fingerprint. `check` prints the same level for a script.
 - `turnover-plugin test <plugin folder>`: runs the plugin's tests. For a script that is every file in `tests/script/`,
   run in the real sandboxed program with no app and no permissions. It prints `ok` or `FAIL` for each test and a
   count, and exits non-zero if any failed.
@@ -409,22 +412,136 @@ needs `press`, a label needs `read`, a silence, a watch or a key that reads need
 the script share one approval. Until the script may run, none of the profile is live either (16 Nov 2026).
 
 `read`, `say`, `press`, `focus`, `menu` and `keys` are the six abilities that data plugins already name. `edit` and
-`clipboard` are new with scripts.
+`clipboard` are new with scripts. Three more came with stage B of the plan on 16 Nov 2026: `everywhere`, `hearSpeech`
+and `clipboardRead`.
 
 What the user hears for each, taken from the code on 15 Nov 2026 (`turnover-plugin consent` prints them for your
 plugin):
 
-- `read`: "It can read what is on the screen in those apps, including text you have typed there, but never a
-  password."
-- `say`: "It can speak, change or silence what TurnOver says in those apps, and play TurnOver's own sounds."
+- `read`: "It can read what is on the screen in those apps, including text you have typed there, the selected text and
+  whole lines, but never a password."
+- `say`: "It can speak, change or silence what TurnOver says in those apps, play TurnOver's own sounds and tones, and ask
+  you to choose from a list or type a line."
 - `press`: "It can press buttons and other controls in those apps."
 - `focus`: "It can move the keyboard focus to an item in those apps."
 - `menu`: "It can choose commands from those apps' menus."
 - `keys`: "It can press keys in those apps for you."
-- `edit`: "It can change the text or value of a field in those apps."
-- `clipboard`: "It can put text on the clipboard. It cannot read what is on it."
+- `edit`: "It can change the text or value of a field in those apps, and move the cursor or the selection in it."
+- `clipboard`: "It can put text on the clipboard. It cannot read what is on it unless it also has the clipboardRead ability,
+  which is said separately."
+- `everywhere`: "It works in every app except passwords and permission dialogs, and its keys work in every app." With `read`
+  as well, it says: "It works in every app except passwords and permission dialogs, its keys work in every app, and,
+  because it can also read, it can read what is on the screen wherever you are." The first thing said about an
+  everywhere plugin is "<name> has a script. It works in every app you use, not only one, and goes on working whichever
+  app you are in, except in password and permission dialogs and the login window. "Those apps" below means every app."
+- `hearSpeech`: "It hears what TurnOver says to you in those apps, as TurnOver says it, except in password fields. It
+  cannot change it or stop it."
+- `clipboardRead`: "It can read what you copy: the text on the clipboard, while you are in those apps."
+
+After TurnOver's own sentence for an ability, the person hears the author's reason for it if the manifest has one,
+marked as the author's: "The author says it uses this to: <the reason>". The reason never replaces TurnOver's
+sentence and is not said for an ability the plugin does not have.
 
 `item.read()` needs both `read` and `say`, because it reads the item and speaks it.
+
+## Stage B: every app, options, lists and prompts, tones, text, hearing speech and the clipboard (16 Nov 2026)
+
+Each of these has its own place in the manifest or in `turnover`, and each is held to the same rule as everything else
+a script does: TurnOver checks the request against the abilities the person agreed to, when it is made.
+
+### Working in every app: `everywhere`
+
+A script may give `apps` as exactly `["*"]`, and only together with the `everywhere` ability. Either one without the
+other makes the plugin refuse to load, and so does `"*"` beside other apps or any other pattern. TurnOver starts
+such a script when it starts reading, never pauses it when the app in front changes, and its commands' keys work in
+every app. Every request is still judged against the app really in front at that moment: in the macOS password and
+permission dialogs, the login window and TurnOver itself it gets no events, no items and no answers to anything, and
+what it says is not heard; in a closed app (passwords, settings, terminals, browsers) it reads and speaks only, and
+`press`, `focus`, `edit`, `menu`, `keys`, `hearSpeech`, `clipboardRead` and a typed prompt are refused. Its key clashes are
+checked like any other plugin's, against the keys of every app's official module as well. A script that works in
+every app gets `appFocus` once each time a different app comes to the front, and `windowChange` for new windows, and
+never `appBlur`, because it is never paused.
+
+### Options
+
+The manifest's `options` is a list of what the person may set. Each has an `id` (letters and digits), a `label`, a
+`kind` and a `default`. The kinds are `switch` (the default is `true` or `false`), `choice` (with `choices`, a list of
+1 to 50 texts, and the default one of them), `text` (the default is text of at most 200 characters) and `number` (with
+`min` and `max`, and the default between them). A plugin has at most 20. A label and a choice are the author's words,
+plain text of at most 80 characters with no line breaks or control characters, shown as written. TurnOver shows the
+options under the plugin in its Plugins menu, keeps the values in its own settings, and keeps a value only if the
+option allows it; a saved value the option no longer allows is the default again. Options need no ability: they are the
+person's own settings, and a script can only read them.
+
+```js
+turnover.options.get("level")        // the value now: true or false, a number or text; null for an id that is not declared
+turnover.on("optionsChange", function (event) { /* event.id, event.value */ });
+```
+
+`turnover.options.get` answers at once and is always current, even for a script that was paused when the person
+changed an option. The `optionsChange` event is not sent to a script that is paused.
+
+### `await turnover.choose(title, items)` and `await turnover.ask(prompt)`
+
+Ability: `say`. `choose` puts up TurnOver's own list: the person hears the plugin's name, the title and the number of
+items, moves with the arrow keys and chooses with Return. It resolves with the text of the item chosen (the first, if
+two are alike), or `null` if the list was dismissed. `ask` uses TurnOver's own typed line: the person hears the plugin's
+name and the prompt, types, and presses Return, or Escape; it resolves with the text (at most 1,000 characters) or
+`null`. A list has 1 to 200 items of at most 200 characters, a title and a prompt are at most 200 characters, and control
+characters and TurnOver's own marks are taken out of what is shown. A question is refused while another question is open
+(an approval, another plugin's list or prompt, or one of the same plugin: only one at a time), while none of the
+plugin's apps is in front (every app but the forbidden ones, with `everywhere`), while a password field has the focus or
+the Mac hides what is typed, and when TurnOver cannot tell what has the focus. A typed prompt is also refused in a closed
+app. The five seconds a command has to finish do not run while it waits for the person.
+
+### `turnover.tone(hertz, milliseconds)`
+
+Ability: `say`. Plays a tone, 100 to 4000 hertz and 10 to 500 milliseconds; a value outside throws. It counts toward the
+same 20 things in two seconds as `say`, and is dropped, with no error, while none of the plugin's apps is in front or a
+question is open.
+
+### Text and the caret: `item.text`, `item.setCaret`, `item.select`
+
+`await item.text({ unit })` needs `read`. The unit is `"selection"` (the default), `"line"` (the line the caret is on)
+or `"all"`; the answer is at most 10,000 characters, read with TurnOver's own text code, and is `""` when there is none.
+A password field always gives `""`. `await item.setCaret(offset)` and `await item.select(start, end)` need `edit`, and
+have every rule `setValue` has: never a password field, never while the Mac hides what is typed or while a password
+field has the focus, only while the plugin's app is in front, and never in a closed app. A place is a whole number from 0
+to the text's length, and the end of a selection is not before its start.
+
+### `hearSpeech`: the `speech` event
+
+With `hearSpeech`, `turnover.on("speech", function (event) { … })` is told, in `event.text`, what TurnOver says while
+one of the plugin's apps is in front (any app but the forbidden ones, with `everywhere`). It can only listen: it cannot
+change or stop speech, and speech is not slowed. It is never told what is said while a password field has the focus,
+the focus cannot be found, or the Mac hides what is typed; what is said in a forbidden or closed app; what is said
+while a question is open; or anything a plugin said, its own included. At most 20 a second are sent, each at most 1,000
+characters; more are dropped.
+
+### `await turnover.clipboard()`
+
+Ability: `clipboardRead`. The clipboard's text, at most 10,000 characters, or `""` if there is none. It works only while
+one of the plugin's apps is in front (every app but the forbidden ones, with `everywhere`), and is refused while the
+Mac hides what is typed and in a closed app.
+
+### Who looks after the plugin: `support` and `reasons`
+
+`support` is a web address (https) or an email address for reporting a problem. `reasons` maps an ability to one
+sentence, at most 150 characters of plain text, saying what the plugin uses it for. The library needs a `support` and a
+reason for every ability above `read` and `say` in a plugin with a script, and `turnover-plugin check --listing` says
+which is missing and flags a reason for an ability the plugin does not ask for. The Plugins menu has "Report a problem
+with this plugin" for each plugin: it says who looks after it and copies the address, the plugin's name and version and
+TurnOver's build. One item there, "Turn off every plugin until TurnOver starts again", turns off rules and scripts
+together until TurnOver is started again, so a person can tell whether a fault is TurnOver's or a plugin's. These menu
+items, like everything in stage B, exist only while `pluginScripts` is on.
+
+### The level of review
+
+The level a plugin needs is worked out from its abilities alone, by one function, and printed by `turnover-plugin check`
+and `consent` with the reason in a sentence. Level 1 is a plugin that only reads and speaks in the apps it names. Level 2
+is one that presses, focuses, edits, chooses menu items, sends keys, changes the clipboard or works everywhere. Level 3
+is one that can hear what TurnOver says or read the clipboard. See "Review by risk" in docs/PLUGIN-PLATFORM-PLAN.md for what
+each level means for review.
 
 ## How approval works
 
@@ -509,6 +626,10 @@ Greed:
 - 20 things said in two seconds, 500 characters each (replacement words for an event and `item.read` count too; silence
   does not).
 - 20 timers, none faster than 50 ms.
+- Tones count as things said. At most 20 things TurnOver says are sent a second to a script that hears speech, each cut
+  to 1,000 characters. A list has at most 200 items of 200 characters, a prompt or title 200 characters, an answer from a
+  prompt 1,000, and the text of an item or the clipboard 10,000 characters. One question at a time. A script waiting for
+  the person's answer is not counted against the five seconds a command has.
 - 500 lines a second from the host program; more are thrown away unread, and a host that keeps it up is stopped. At
   most 64 requests waiting for TurnOver's main thread. While the script is paused, everything but its log and its own
   stored data is refused.
@@ -541,21 +662,27 @@ sandboxed script program, with no app and no permissions. A file holds one test 
 
 A test starts the script fresh, and runs its `steps` in order. The script's own memory, and `turnover.storage`, which the
 runner keeps in memory, carry from one step to the next. Each step is one of:
-- `"event"`: one of `focus`, `valueChange`, `appFocus`, `appBlur`, `windowChange`. `"item"` is the item the event
-  carries: an object with whatever the script reads (`role`, `name`, `value`, `identifier`, `states`).
+- `"event"`: one of `focus`, `valueChange`, `appFocus`, `appBlur`, `windowChange`, `optionsChange` or `speech`. `"item"`
+  is the item the event carries: an object with whatever the script reads (`role`, `name`, `value`, `identifier`,
+  `states`). An `optionsChange` step gives `"id"` and `"value"`, which the option must allow; a `speech` step gives
+  `"text"`, and the plugin needs `hearSpeech` to be sent it.
 - `"command"`: one of the commands in `manifest.json`. `"item"` is optional: it is `context.item`.
 
 and may have:
 - `"answers"`: what TurnOver answers when the script asks for something in this step, by operation: `focused`,
   `find`, `item.refresh`, `item.parent`, `item.children`, `item.read`, `item.press`, `item.focus`, `item.setValue`,
-  `menu`, `keys`, `copy`. The answer is the JSON the script gets back. An item, or a list of them, is written like the
+  `item.text`, `item.setCaret`, `item.select`, `menu`, `keys`, `copy`, `clipboard`, `choose`, `ask`. For `choose` the answer
+  is the text of the item chosen, one of the script's own items, or `null` for dismissed; for `ask` the text typed or
+  `null`. The answer is the JSON the script gets back. An item, or a list of them, is written like the
   step's `"item"`. `{"error": "…"}` makes the request fail with that message. The same answer serves every time the
   script asks in that step. A question with no answer fails the test and says which. `turnover.storage` needs no
   answer.
 - `"expect"`: `"say"` is what the event's answer was, for `focus` and `valueChange`: the words, `""` for silence, or
   `null` for neither (TurnOver would read as usual). `"said"` is the list of what `turnover.say` was called with in this
   step, in order. `"error"`, for a command, is some words its failure message must contain; leave it out and the
-  command must finish without an error. A key you leave out is not checked.
+  command must finish without an error. `"tones"` is the list of `[hertz, milliseconds]` the script played in the step.
+  `"asked"` is the list of questions it put, as `{"choose": "title", "items": [...]}` or `{"ask": "prompt"}`. A key
+  you leave out is not checked. A test may also give `"options"`, the values its options start with.
 
 Requests are ability-checked as in TurnOver, against the abilities the plugin really has, so a script that asks for
 more than its manifest says fails here as it would there.
