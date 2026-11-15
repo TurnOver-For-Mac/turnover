@@ -30,16 +30,28 @@ extension BrowseModeDocument {
         "Control": ["AXButton", "AXTextField", "AXTextArea", "AXCheckBox", "AXRadioButton", "AXPopUpButton", "AXComboBox", "AXSlider", "AXMenuButton", "AXDisclosureTriangle"],
     ]
 
-    func quickNav(_ q: QuickNavType, forward: Bool, afterRefresh: Bool = false) {
+    package func quickNav(_ q: QuickNavType, forward: Bool, afterRefresh: Bool = false) {
+        if readFromCopyIfSilent({ quickNav(q, forward: forward, afterRefresh: afterRefresh) }) { return }
+        let navigationTicket = ModeAnnouncement.navigationStarted(self)
+        ModeAnnouncement.begin()
+        var waitingForResult = false
+        defer {
+            if !waitingForResult { ModeAnnouncement.navigationFinished(self, ticket: navigationTicket) }
+            ModeAnnouncement.end()
+        }
         positionMovedAt = Date()
         refreshIfNavigated()
         clearSelection()
-        guard ensureContent({ [weak self] in self?.quickNav(q, forward: forward, afterRefresh: afterRefresh) }) else { return }
+        guard ensureContent({ [weak self] in self?.quickNav(q, forward: forward, afterRefresh: afterRefresh) }) else { waitingForResult = true; return }
         refreshBufferIfNeeded(stale: 20)
         /// Search the buffer by role (headings, buttons, links…): no WebKit to ask, or WebKit's answer is unusable.
         /// Nothing further this way: from the other end of the page (wrapping on), or "no next heading".
         func wrapOrStop() {
-            if buffer.isPartial || buffer.isLoading { reportBufferEnd(forward: forward); return }
+            defer { ModeAnnouncement.navigationFinished(self, ticket: navigationTicket) }
+            // A copy read in part is not wrapped past its unread rest. A page being read again is wrapped from the copy
+            // held, as the arrows read it: previous heading said only "top", five times on 13 Nov 2026, while a
+            // refresh was under way (MacRumors: two presses running, during a read of 933 ms).
+            if !canWrapFromCopy { reportBufferEnd(forward: forward); return }
             guard config.virtualBuffers.wrapQuickNav, let roles = BrowseModeDocument.quickNavRoles[q.name] else {
                 Speech.speakMessage(Phrases.noNext(q.spoken, forward: forward)); return
             }
@@ -58,6 +70,7 @@ extension BrowseModeDocument {
             if BrowseModeDocument.controlRoles.contains(el.role), !(el.role == "AXLink" && buffer.linkEnd(at: at) != nil) {
                 let obj = ObjectFactory.make(el)
                 Speech.speakMessage(Speech.objectPropertiesSpeech(obj, reason: .focus).joined(separator: ", "))
+                ModeAnnouncement.navigationReported(self, object: obj)
                 lastChain = []
             } else { speakQuickNavText(at: at, link: q.name.contains("Link"), element: el) }
         }
@@ -68,21 +81,26 @@ extension BrowseModeDocument {
             // A long page read only in part (a long chat, issue 227): read on first; with more still not read, said,
             // rather than wrapping to the top past it.
             if hit == nil, forward, buffer.canReadOn {
+                waitingForResult = true
                 readOnUntil({ [weak self] in
                     guard let self else { return true }
                     return buffer.find(from: position, forward: forward, roles: roles, headingLevel: level) != nil
                 }) { [weak self] found in
                     guard let self else { return }
-                    if !found, buffer.stoppedAtLimit { Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")); return }
+                    if !found, buffer.stoppedAtLimit { ModeAnnouncement.navigationFinished(self, ticket: navigationTicket); Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")); return }
                     quickNav(q, forward: forward, afterRefresh: afterRefresh)
                 }
                 return
             }
-            // Nothing ahead on a page that may have more below: once, the page read again from its end.
-            if hit == nil, forward, !afterRefresh, reachForMore({ [weak self] more in
+            // Nothing ahead on a page that may have more below: once, the page read again from its end. Only where that
+            // can find something (quickWrapWaits); elsewhere the wrap is at once, as NVDA's, and the end is looked at in
+            // the background.
+            let atTheEnd = hit == nil && forward && !afterRefresh
+            if atTheEnd, !quickWrapWaits() { reachEndInBackground() }
+            if atTheEnd, quickWrapWaits(), reachForMore({ [weak self] more in
                 guard let self else { return }
                 if more { quickNav(q, forward: forward, afterRefresh: true) } else { wrapOrStop() }
-            }) { return }
+            }) { waitingForResult = true; return }
             guard let (at, el) = hit else {
                 wrapOrStop(); return
             }
@@ -92,6 +110,7 @@ extension BrowseModeDocument {
             if BrowseModeDocument.controlRoles.contains(el.role), !(el.role == "AXLink" && buffer.linkEnd(at: at) != nil) {
                 let obj = ObjectFactory.make(el)
                 Speech.speakMessage(Speech.objectPropertiesSpeech(obj, reason: .focus).joined(separator: ", "))
+                ModeAnnouncement.navigationReported(self, object: obj)
                 lastChain = []
             } else { speakQuickNavText(at: at, link: q.name.contains("Link"), element: el) }
         }
@@ -102,28 +121,30 @@ extension BrowseModeDocument {
             var hit = buffer.findText(from: position, forward: forward, kind: kind)
             // The rest of a long page read on first (issue 227); with more still not read, said rather than wrapping.
             if hit == nil, forward, buffer.canReadOn {
+                waitingForResult = true
                 readOnUntil({ [weak self] in
                     guard let self else { return true }
                     return buffer.findText(from: position, forward: forward, kind: kind) != nil
                 }) { [weak self] found in
                     guard let self else { return }
-                    if !found, buffer.stoppedAtLimit { Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")); return }
+                    if !found, buffer.stoppedAtLimit { ModeAnnouncement.navigationFinished(self, ticket: navigationTicket); Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")); return }
                     quickNav(q, forward: forward, afterRefresh: afterRefresh)
                 }
                 return
             }
-            if hit == nil, !buffer.isPartial, !buffer.isLoading, config.virtualBuffers.wrapQuickNav,
+            if hit == nil, canWrapFromCopy, config.virtualBuffers.wrapQuickNav,
                let w = buffer.findText(from: forward ? -1 : buffer.text.length + 1, forward: forward, kind: kind), w.offset != position {
                 Tones.edge(); Speech.speakMessage(forward ? String(localized: "wrapped to the top", comment: "Spoken message") : String(localized: "wrapped to the bottom", comment: "Spoken message")); hit = w
             }
-            guard let (at, el) = hit else { if buffer.isPartial || buffer.isLoading { reportBufferEnd(forward: forward) } else { Speech.speakMessage(Phrases.noNext(q.spoken, forward: forward)) }; return }
+            guard let (at, el) = hit else { if !canWrapFromCopy { reportBufferEnd(forward: forward) } else { Speech.speakMessage(Phrases.noNext(q.spoken, forward: forward)) }; return }
             position = at
             if let el { lastQuickNavTarget = el }
             speakQuickNavText(at: at, link: false, element: el)
             return
         }
         // VoiceOver's D with no WebKit search: the next line that is a different kind of thing from this one.
-        if q.name == "DifferentItem", !hasWebKitSearch {
+        // (A silent page first: finding out whether WebKit's search is there asks the page.)
+        if q.name == "DifferentItem", pageSilent || !hasWebKitSearch {
             let different = buffer.withSnapshot {
                 let here = buffer.lineIndex(at: position).flatMap { buffer.lines[$0].element?.role }
                 let order = forward ? Array(((buffer.lineIndex(at: position) ?? 0) + 1)..<buffer.lines.count) : Array((0..<(buffer.lineIndex(at: position) ?? 0)).reversed())
@@ -138,6 +159,8 @@ extension BrowseModeDocument {
             return
         }
         // Kinds WebKit's search has no key for (list items, separators, embedded objects, annotations, headings 7 to 9).
+        // A page that is not answering: its own search would not answer either. The copy has the headings.
+        if pageSilent { bufferSearch(); return }
         if !hasWebKitSearch || q.searchKey.isEmpty { bufferSearch(); return }
         let startEl = (try? rootObject.makeTextInfo(.caret) as? BufferTextInfo)?.element(at: position) ?? webArea
         let raw = bridge.search(key: q.searchKey, from: startEl, forward: forward, limit: q.roles == nil ? 1 : 25)
@@ -161,8 +184,13 @@ extension BrowseModeDocument {
         if found == nil {
             if afterRefresh { bufferSearch(); return }
             let epoch = pageGeneration, intent = bufferIntent, movedAt = positionMovedAt
+            waitingForResult = true
             buffer.build { [weak self] in
-                guard let self, pageGeneration == epoch, bufferIntent == intent, positionMovedAt == movedAt, API.focusTreeInterceptor === self else { return }
+                guard let self else { return }
+                guard pageGeneration == epoch, bufferIntent == intent, positionMovedAt == movedAt, API.focusTreeInterceptor === self else {
+                    ModeAnnouncement.navigationFinished(self, ticket: navigationTicket)
+                    return
+                }
                 if let at = buffer.offset(of: target), at != position { land(at, target) } else { bufferSearch() }
             }
             return
@@ -182,10 +210,19 @@ extension BrowseModeDocument {
         if BrowseModeDocument.controlRoles.contains(target.role), !(target.role == "AXLink" && buffer.linkEnd(at: r.0) != nil) {
             let obj = ObjectFactory.make(target)
             Speech.speakMessage(Speech.objectPropertiesSpeech(obj, reason: .focus).joined(separator: ", ") + (obj.value.map { _ in "" } ?? ((obj.hasNavigableText && ((try? obj.makeTextInfo(.all))?.text.isEmpty ?? true)) ? ", " + Phrases.blank : "")))
+            ModeAnnouncement.navigationReported(self, object: obj)
             lastChain = []
         } else {
             speakQuickNavText(at: r.0, link: q.name.contains("Link"))
         }
+    }
+
+    /// Whether quick navigation may wrap round from the copy held: it is not read in part, and it holds the page (a
+    /// read again keeps the copy until it is done, and the arrows read it meanwhile).
+    var canWrapFromCopy: Bool {
+        if buffer.isPartial { return false }
+        if buffer.lines.isEmpty { return false }
+        return true
     }
 
     /// NVDA's TextInfoQuickNavItem.report: the line from the item, but no further than the item's end — a link
@@ -206,6 +243,7 @@ extension BrowseModeDocument {
             info.end = min(info.end, end)
         }
         speak(info, unit: .line)
+        if let element = element ?? lastQuickNavTarget { ModeAnnouncement.navigationReported(self, object: ObjectFactory.make(element)) }
     }
 
     static func isInside(_ x: AXUIElement, _ root: AXUIElement) -> Bool {
@@ -220,6 +258,8 @@ extension BrowseModeDocument {
     /// link or control after (before) it; the focus event then reads it. Otherwise the browser's own Tab.
     func focusFromCaret(forward: Bool) -> Bool {
         guard position != positionAtFocus else { return false }
+        // Putting the keyboard on a control asks the page, some of it by calls that wait out the timeout each time.
+        guard !pageSilent else { return false }
         let roles: Set<String> = ["AXLink", "AXButton", "AXTextField", "AXTextArea", "AXCheckBox", "AXRadioButton", "AXPopUpButton", "AXComboBox", "AXSlider", "AXMenuButton", "AXDisclosureTriangle"]
         var from = position
         for _ in 0..<30 {
@@ -269,7 +309,7 @@ extension BrowseModeDocument {
         } else {
             position = c.start
         }
-        speakUnit(.line)
+        speakUnit(.line, caretMoved: true)
     }
 
     /// The heading level a quick key wants: "Heading3" is 3; VoiceOver's M is the level of the heading the caret is

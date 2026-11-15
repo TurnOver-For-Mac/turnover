@@ -22,13 +22,16 @@ public struct MenuItem {
     public let kind: Kind
     /// What it means, said after a pause on the item (docs/MENU-PLAN.md: names in titles, explanations after).
     public var hint: String?
+    /// Which thing a list's item stands for, when the list may be filled in after it opens (the Item Chooser): the
+    /// cursor stays on the item with the same tag. Nil for every menu and list that is made once.
+    public var tag: Int?
     /// TurnOver's own words, translated (Resources/Localizable.xcstrings): a literal title or hint is listed for
     /// translation as it is written. A number goes in as text ("\(String(n))"), so English reads as it did.
     public init(_ title: LocalizedStringResource, _ kind: Kind, hint: LocalizedStringResource? = nil) {
         self.init(verbatim: String(localized: title), kind, hint: hint.map { String(localized: $0) })
     }
     /// A title made elsewhere: an app's or a document's own words, or words already translated.
-    public init(verbatim title: String, _ kind: Kind, hint: String? = nil) { self.title = title; self.kind = kind; self.hint = hint }
+    public init(verbatim title: String, _ kind: Kind, hint: String? = nil, tag: Int? = nil) { self.title = title; self.kind = kind; self.hint = hint; self.tag = tag }
 
     var valueText: String? {
         switch kind {
@@ -112,6 +115,7 @@ public final class TurnOverMenu {
         guard !items.isEmpty else { Speech.speakMessage(Self.none(title)); return }
         stack = [(title, items, 0)]
         isOpen = true
+        countPending = false
         Speech.cancel()
         Speech.speakMessage("\(title), \(items.count)")
         announce()
@@ -124,8 +128,9 @@ public final class TurnOverMenu {
 
     public func close() {
         isOpen = false
+        listGeneration += 1
         stack.removeAll()
-        filterSource = nil; filter = ""; rotor = nil
+        filterSource = nil; filter = ""; rotor = nil; countPending = false
         config.save()
         let hook = onClose; onClose = nil
         Braille.releaseItem()
@@ -150,33 +155,83 @@ public final class TurnOverMenu {
         if valueOnly { Speech.speakItem("\(item.title): \(item.valueText ?? "")"); return }
         var parts = [item.title]
         if let v = item.valueText { parts.append(v) }
-        parts.append(Phrases.position(top.index + 1, of: top.items.count))
+        if !countPending { parts.append(Phrases.position(top.index + 1, of: top.items.count)) }
         Speech.speakItem(Speech.joined(parts))
     }
 
     /// A list that narrows as you type (VoiceOver's Item Chooser): every item whose title contains the text.
-    public func openChooser(_ title: LocalizedStringResource, items: [MenuItem]) { openChooser(verbatim: String(localized: title), items: items) }
-    public func openChooser(verbatim title: String, items: [MenuItem]) {
+    /// `partial`: these items are only the first of what is coming (the Item Chooser's rows on screen, with the rows out
+    /// of sight to follow in `refillChooser`). No count and no "1 of 23" is said until the rest is in: a small number
+    /// and then a big one was what was heard (Oliver, 10 Nov 2026).
+    public func openChooser(_ title: LocalizedStringResource, items: [MenuItem], partial: Bool = false) { openChooser(verbatim: String(localized: title), items: items, partial: partial) }
+    public func openChooser(verbatim title: String, items: [MenuItem], partial: Bool = false) {
         guard !items.isEmpty else { Speech.speakMessage(Self.none(title)); return }
         filterSource = items; filter = ""
+        listGeneration += 1
         stack = [(title, items, 0)]
         isOpen = true
+        countPending = partial
         Speech.cancel()
-        Speech.speakMessage(String(localized: "\(title), \(Phrases.items(items.count)), type to filter", comment: "A list that narrows as you type: its title, then the count of items"))
+        Speech.speakMessage(partial ? String(localized: "\(title), type to filter", comment: "A list that narrows as you type, opened before all its items are in: its title, with no count yet")
+            : String(localized: "\(title), \(Phrases.items(items.count)), type to filter", comment: "A list that narrows as you type: its title, then the count of items"))
         announce()
     }
+    /// True from a chooser or rotor opening on part of its items until the rest arrives: counts and positions are not
+    /// said meanwhile, because they would be the part's.
+    private var countPending = false
     private var filterSource: [MenuItem]?
     private var filter = ""
+
+    /// Counts every chooser and rotor opened and every close: a list filled in later proves it is still the same one.
+    public private(set) var listGeneration = 0
+
+    /// The open chooser's items replaced by a fuller list, quietly: nothing is spoken, what was typed still narrows
+    /// it, and the cursor stays on the item it was on (by `tag`). The Item Chooser opens on what is on screen and
+    /// fills in the rows scrolled out of sight a moment later (10 Nov 2026). Ignored unless `generation` is still the
+    /// open list's.
+    public func refillChooser(generation: Int, items: [MenuItem]) {
+        guard isOpen, generation == listGeneration, rotor == nil, filterSource != nil, stack.count == 1, !items.isEmpty else { return }
+        countPending = false
+        replaceShownItems(items)
+    }
+
+    /// The same for the rotor: each kind's list replaced, staying on the kind and the item it was on.
+    public func refillRotor(generation: Int, categories: [(name: String, items: [MenuItem])]) {
+        guard isOpen, generation == listGeneration, let old = rotor, stack.count == 1 else { return }
+        countPending = false
+        let kinds = categories.filter { !$0.items.isEmpty }
+        guard let index = kinds.firstIndex(where: { $0.name == old[rotorIndex].name }) else { return }
+        rotor = kinds
+        rotorIndex = index
+        replaceShownItems(kinds[index].items)
+    }
+
+    private func replaceShownItems(_ source: [MenuItem]) {
+        let top = stack[0]
+        let tag = top.items.indices.contains(top.index) ? top.items[top.index].tag : nil
+        filterSource = source
+        let matches = filter.isEmpty ? source : source.filter { $0.title.lowercased().contains(filter.lowercased()) }
+        let shown = matches.isEmpty ? source : matches
+        let index = tag.flatMap { t in shown.firstIndex { $0.tag == t } } ?? min(top.index, shown.count - 1)
+        stack[0] = (top.title, shown, index)
+    }
+
+    /// For tests: where the cursor is in the open list, and how long the list is.
+    public var debugPosition: (index: Int, count: Int, title: String)? {
+        stack.last.flatMap { top in top.items.indices.contains(top.index) ? (top.index, top.items.count, top.items[top.index].title) : nil }
+    }
 
     /// VoiceOver's Rotor (VO-U), NVDA's Elements List: kinds of item (Headings, Links, Form controls…). Left and
     /// Right change kind, Up and Down move through it, typing narrows it, Enter goes there. It opens on the kind
     /// used last, as VoiceOver's does.
-    public func openRotor(_ categories: [(name: String, items: [MenuItem])]) {
+    public func openRotor(_ categories: [(name: String, items: [MenuItem])], partial: Bool = false) {
         let kinds = categories.filter { !$0.items.isEmpty }
         guard !kinds.isEmpty else { Speech.speakMessage(String(localized: "nothing to list here", comment: "The rotor found nothing")); return }
         rotor = kinds
         rotorIndex = kinds.firstIndex { $0.name == lastRotorKind } ?? 0
+        listGeneration += 1
         isOpen = true
+        countPending = partial
         Speech.cancel()
         showRotorKind(intro: String(localized: "rotor", comment: "VoiceOver's rotor, as it opens"))
     }
@@ -190,7 +245,7 @@ public final class TurnOverMenu {
         lastRotorKind = kind.name
         filterSource = kind.items; filter = ""
         stack = [(kind.name, kind.items, 0)]
-        Speech.speakMessage(Speech.joined([intro ?? "", kind.name, "\(kind.items.count)"]))
+        Speech.speakMessage(Speech.joined([intro ?? "", kind.name, countPending ? "" : "\(kind.items.count)"]))
         announce()
     }
 
@@ -862,6 +917,9 @@ public final class TurnOverMenu {
             MenuItem("Each item's keyboard shortcut", .toggle(get: { config.presentation.reportKeyboardShortcuts }, set: { config.presentation.reportKeyboardShortcuts = $0 })),
             MenuItem("Position, such as 3 of 10", .toggle(get: { config.presentation.reportObjectPositionInformation }, set: { config.presentation.reportObjectPositionInformation = $0 })),
             MenuItem("Hints after a pause", .toggle(get: { config.presentation.speakHints }, set: { config.presentation.speakHints = $0 }), hint: "What you can do with an item"),
+            MenuItem("Mouse tracking", .toggle(get: { config.presentation.mouseTracking }, set: { config.presentation.mouseTracking = $0; MouseTracking.refresh() }), hint: "Reads what is under the mouse pointer as it moves"),
+            MenuItem("Mouse moves the cursor", .toggle(get: { config.presentation.mouseMovesCursor }, set: { config.presentation.mouseMovesCursor = $0 }), hint: "With mouse tracking, the review cursor goes to what the pointer is over; the keyboard focus never does"),
+            MenuItem("Mouse interrupts other speech", .toggle(get: { config.presentation.mouseInterruptsSpeech }, set: { config.presentation.mouseInterruptsSpeech = $0 }), hint: "With mouse tracking, the pointer also cuts off other speech, such as notifications; off, only the pointer's own speech gives way"),
             MenuItem("Progress bars", .cycle(options: [String(localized: "beep", comment: "A choice in the TurnOver menu"), String(localized: "speak the percentage", comment: "A choice in the TurnOver menu"), String(localized: "beep and speak", comment: "A choice in the TurnOver menu"), String(localized: "off", comment: "A choice in the TurnOver menu")],
                 get: { ProgressOutput.modes.firstIndex(of: config.presentation.progressBars) ?? 0 },
                 set: { config.presentation.progressBars = ProgressOutput.modes[$0] }), hint: "Beeps that rise in pitch as a progress bar moves, the percentage spoken, both, or nothing"),

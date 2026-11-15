@@ -20,7 +20,148 @@ nonisolated private func sampleCollection(_ root: AXUIElement, text: String, sto
     ]), documentText: text, focusedPart: nil, stop: stop, elapsedMs: 10)
 }
 
+/// A page of three headings, each followed by a line of text, for quick navigation (14 Nov 2026). Web area 0.
+private func threeHeadingsPage() -> AXFixture {
+    var f = AXFixture(app: "Public sample", bundle: "test.wrap", recorded: "", root: 0, application: 1, focus: 0, nodes: [])
+    var kids: [Int] = []
+    for k in 1...3 {
+        let h = 100 + 4 * k, ht = h + 1, p = h + 2
+        kids += [h, p]
+        f.nodes.append(.init(id: h, attrs: ["AXRole": .string("AXHeading"), "AXValue": .number(2), "AXParent": .element(0), "AXChildren": .elements([ht])]))
+        f.nodes.append(.init(id: ht, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("Heading \(k)"), "AXParent": .element(h)]))
+        // Long enough that the page is not taken for one still filling in (watchWhileFilling).
+        let text = String(repeating: "Text under heading \(k), long enough to be a page of its own. ", count: 12)
+        f.nodes.append(.init(id: p, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string(text), "AXParent": .element(0)]))
+    }
+    f.nodes.append(.init(id: 0, attrs: ["AXRole": .string("AXWebArea"), "AXURL": .url("https://example.com/wrap"), "AXParent": .element(1), "AXChildren": .elements(kids)]))
+    f.nodes.append(.init(id: 1, attrs: ["AXRole": .string("AXApplication"), "AXTitle": .string("Public sample"), "AXChildren": .elements([0])]))
+    return f
+}
+
 func webBufferTests() {
+    test("focus mode: a pop up button that opens a menu stays in browse mode; a choice list goes to focus mode (14 Nov 2026)") {
+        AXReplay.load(AXFixture(app: "Public sample", bundle: "test.popup", recorded: "", root: 0, application: nil, focus: nil, nodes: [
+            .init(id: 0, attrs: ["AXRole": .string("AXPopUpButton"), "AXTitle": .string("Model"), "AXPopupValue": .string("menu"), "AXChildren": .elements([])]),
+            .init(id: 1, attrs: ["AXRole": .string("AXPopUpButton"), "AXTitle": .string("Country"), "AXPopupValue": .string("menu"), "AXChildren": .elements([2])]),
+            .init(id: 2, attrs: ["AXRole": .string("AXMenu"), "AXParent": .element(1)]),
+            .init(id: 3, attrs: ["AXRole": .string("AXPopUpButton"), "AXTitle": .string("Size")]),
+            .init(id: 4, attrs: ["AXRole": .string("AXPopUpButton"), "AXTitle": .string("Usage"), "AXPopupValue": .string("dialog"), "AXChildren": .elements([])]),
+            // Chromium's <select>: "menu", with its options as menu items straight inside it.
+            .init(id: 5, attrs: ["AXRole": .string("AXPopUpButton"), "AXTitle": .string("Colour"), "AXPopupValue": .string("menu"), "AXChildren": .elements([6, 7])]),
+            .init(id: 6, attrs: ["AXRole": .string("AXMenuItem"), "AXTitle": .string("Red"), "AXParent": .element(5)]),
+            .init(id: 7, attrs: ["AXRole": .string("AXMenuItem"), "AXTitle": .string("Blue"), "AXParent": .element(5)]),
+        ]))
+        defer { AXReplay.unload() }
+        check(BrowseModeDocument.isMenuButton(AXReplay.element(0)), "Claude's Model button: a menu button, browse mode stays")
+        check(!BrowseModeDocument.isMenuButton(AXReplay.element(1)), "a select holding its options as a menu is a choice list: focus mode, as before")
+        check(!BrowseModeDocument.isMenuButton(AXReplay.element(3)), "no popup value: as before, a choice list")
+        check(BrowseModeDocument.isMenuButton(AXReplay.element(4)), "a button that opens a dialog")
+        check(!BrowseModeDocument.isMenuButton(AXReplay.element(5)), "Chromium's select, its options as menu items inside it, is a choice list")
+    }
+    test("focus: a nameless group around the page does not take the focus from a text field that still has the keyboard (14 Nov 2026)") {
+        // The page's group (0) holds the web area (1); the Email field (2) is in a frame of its own; a button (3).
+        AXReplay.load(AXFixture(app: "Public sample", bundle: "test.field", recorded: "", root: 0, application: nil, focus: 2, nodes: [
+            .init(id: 0, attrs: ["AXRole": .string("AXGroup"), "AXChildren": .elements([1])]),
+            .init(id: 1, attrs: ["AXRole": .string("AXWebArea"), "AXParent": .element(0), "AXChildren": .elements([2, 3])]),
+            .init(id: 2, attrs: ["AXRole": .string("AXTextField"), "AXTitle": .string("Email"), "AXFocused": .bool(true), "AXParent": .element(1)]),
+            .init(id: 3, attrs: ["AXRole": .string("AXButton"), "AXTitle": .string("Submit"), "AXFocused": .bool(true), "AXParent": .element(1)]),
+            .init(id: 4, attrs: ["AXRole": .string("AXTextField"), "AXTitle": .string("Name"), "AXFocused": .bool(false), "AXParent": .element(1)]),
+        ]))
+        defer { AXReplay.unload() }
+        let group = AXReplay.element(0)
+        let page = AXReplay.element(1)
+        check(AXHandler.fieldHoldsKeyboard(AXReplay.element(2), group, page: page), "a focused text field in the page keeps the keyboard: the group's report is ignored")
+        check(!AXHandler.fieldHoldsKeyboard(AXReplay.element(4), group, page: page), "a field that no longer says it is focused does not")
+        check(!AXHandler.fieldHoldsKeyboard(AXReplay.element(3), group, page: page), "nor does a control that is not a text field (other rules decide)")
+        check(!AXHandler.fieldHoldsKeyboard(AXReplay.element(0), group, page: page), "the group itself is not a field holding the keyboard")
+    }
+    test("quick navigation: at the end of a page that has not changed, the wrap is at once; a changed page is read first (14 Nov 2026)") {
+        AXReplay.load(threeHeadingsPage())
+        defer { AXReplay.unload() }
+        guard let root = AXReplay.root else { return check(false, "fixture root") }
+        let reads = OSAllocatedUnfairLock(initialState: 0)
+        let buffer = WebBuffer(webArea: root, collect: { root, focus, request in
+            reads.withLock { $0 += 1 }
+            return WebBufferCollection.collect(root: root, focus: focus, request: request)
+        })
+        let page = BrowseModeDocument(webArea: root, buffer: buffer)
+        BrowseModeHandler.shared.adopt(page)   // the page's lines are read from this copy
+        API.setFocusObject(nil, ancestors: [], interceptor: page)
+        var said: [String] = []
+        let savedSink = Speech.sink, savedEdge = Tones.edgeSound
+        Speech.sink = { said.append($0) }
+        Tones.edgeSound = { _ in }
+        defer { Speech.sink = savedSink; Tones.edgeSound = savedEdge; API.setFocusObject(nil, ancestors: []); BrowseModeHandler.shared.forget(pid: root.pid) }
+        page.hasWebKitSearch = false   // the copy's own search, as in Chromium and when WebKit's answers nothing
+        page.refreshIfNavigated(); waitForBuffer(buffer)
+        guard let heading = BrowseModeDocument.quickNav.first(where: { $0.name == "Heading" }) else { return check(false, "the heading key") }
+        let last = buffer.text.range(of: "Heading 3").location
+        check(last != NSNotFound, "the copy holds the last heading")
+
+        // A copy more than a second old, as in use: before 14 Nov 2026 the page was read again here before the wrap.
+        RunLoop.current.run(until: Date().addingTimeInterval(1.1))
+
+        // An unchanged page: wrapped at once, from the copy, with nothing read first.
+        page.position = last; said = []
+        let before = reads.withLock { $0 }
+        page.quickNav(heading, forward: true)
+        expect(said.first, "wrapped to the top", "the wrap is said at once, not after a read of the page")
+        check(said.contains { $0.contains("Heading 1") }, "and lands on the first heading")
+        waitForBuffer(buffer)
+        expect(reads.withLock { $0 }, before + 1, "the page's end is read in the background, to learn whether it loads more")
+
+        // The same again, the copy unchanged: wrapped at once, and no read of the end again.
+        page.position = last; said = []
+        page.quickNav(heading, forward: true)
+        expect(said.first, "wrapped to the top")
+        expect(reads.withLock { $0 }, before + 1, "an unchanged copy's end is not read again on every wrap")
+
+        // A page that has changed since it was read: read again before the wrap, as before.
+        buffer.isDirty = true
+        page.position = last; said = []
+        page.quickNav(heading, forward: true)
+        check(!said.contains("wrapped to the top"), "a changed page is not wrapped before it is read again")
+        waitForBuffer(buffer)
+        expect(said.first, "wrapped to the top", "then wrapped, from the fresh copy")
+        check(reads.withLock { $0 } >= before + 2, "the changed page was read again")
+    }
+
+    test("quick navigation: a page being read again is wrapped from the copy held, not reported as its top (14 Nov 2026)") {
+        AXReplay.load(threeHeadingsPage())
+        defer { AXReplay.unload() }
+        guard let root = AXReplay.root else { return check(false, "fixture root") }
+        let hold = OSAllocatedUnfairLock(initialState: false)
+        let entered = DispatchSemaphore(value: 0), release = DispatchSemaphore(value: 0)
+        let buffer = WebBuffer(webArea: root, collect: { root, focus, request in
+            if hold.withLock({ $0 }) { entered.signal(); _ = release.wait(timeout: .now() + 3) }
+            return WebBufferCollection.collect(root: root, focus: focus, request: request)
+        })
+        let page = BrowseModeDocument(webArea: root, buffer: buffer)
+        BrowseModeHandler.shared.adopt(page)
+        API.setFocusObject(nil, ancestors: [], interceptor: page)
+        var said: [String] = []
+        let savedSink = Speech.sink, savedEdge = Tones.edgeSound
+        Speech.sink = { said.append($0) }
+        Tones.edgeSound = { _ in }
+        defer { release.signal(); Speech.sink = savedSink; Tones.edgeSound = savedEdge; API.setFocusObject(nil, ancestors: []); BrowseModeHandler.shared.forget(pid: root.pid) }
+        page.hasWebKitSearch = false
+        page.refreshIfNavigated(); waitForBuffer(buffer)
+        guard let heading = BrowseModeDocument.quickNav.first(where: { $0.name == "Heading" }) else { return check(false, "the heading key") }
+        let first = buffer.text.range(of: "Heading 1").location
+
+        // A read of the page under way (a refresh), the copy kept meanwhile.
+        hold.withLock { $0 = true }
+        buffer.build()
+        check(entered.wait(timeout: .now() + 2) == .success, "the read is under way")
+        check(buffer.isLoading && !buffer.lines.isEmpty, "the copy is kept while it is read again")
+        page.position = first; said = []
+        page.quickNav(heading, forward: false)
+        expect(said.first, "wrapped to the bottom", "previous heading at the first heading wraps, rather than saying top")
+        check(said.contains { $0.contains("Heading 3") }, "to the last heading")
+        hold.withLock { $0 = false }
+        release.signal(); waitForBuffer(buffer)
+    }
+
     test("document snapshot: interpretation and navigation never fall back to live AX") {
         let root = AXUIElementCreateApplication(910_000)
         let entered = DispatchSemaphore(value: 0), release = DispatchSemaphore(value: 0), collected = DispatchSemaphore(value: 0)
@@ -320,6 +461,124 @@ func webBufferTests() {
         waitForBuffer(buffer)
         check(invalidated && !completed, "a different address retires the old continuation")
         check(buffer.text.length == 0 && buffer.status == .idle, "none of that page was published as the old document")
+    }
+
+    test("browse boundary: a dirty same-length replacement answers from a confirmed complete copy (14 Nov 2026)") {
+        AXReplay.load(threeHeadingsPage())
+        defer { AXReplay.unload() }
+        guard let root = AXReplay.root else { return check(false, "fixture root") }
+        let state = OSAllocatedUnfairLock(initialState: (text: String(repeating: "Public text. ", count: 160), hold: false, stop: Optional<AXWalkStop>.none))
+        let entered = DispatchSemaphore(value: 0), release = DispatchSemaphore(value: 0)
+        let buffer = WebBuffer(webArea: root, collect: { root, _, _ in
+            let next = state.withLock { $0 }
+            if next.hold { entered.signal(); _ = release.wait(timeout: .now() + 3) }
+            return sampleCollection(root, text: next.text, stop: next.stop)
+        })
+        let page = BrowseModeDocument(webArea: root, buffer: buffer)
+        BrowseModeHandler.shared.adopt(page)
+        let saved = config, sink = Speech.sink
+        var said: [String] = []
+        config.general.keyboardStyle = "windows"
+        Speech.sink = { said.append($0) }
+        API.setFocusObject(nil, ancestors: [], interceptor: page)
+        defer {
+            release.signal()
+            API.setFocusObject(nil, ancestors: [])
+            BrowseModeHandler.shared.forget(pid: root.pid)
+            config = saved
+            Speech.sink = sink
+        }
+        page.refreshIfNavigated(); waitForBuffer(buffer)
+        page.passThrough = false
+        let key = KeyboardGesture(identifier: "kb:rightArrow")!
+        @MainActor func forward() {
+            page.position = buffer.text.length
+            said = []
+            guard let command = page.script(for: key) else { return check(false, "forward command") }
+            command.handler(key)
+        }
+        // The first dirty end must be checked before it is called complete.
+        state.withLock { $0.hold = true }
+        buffer.isDirty = true
+        forward()
+        check(entered.wait(timeout: .now() + 2) == .success, "the first end reread is held")
+        check(!said.contains("bottom"), "the first dirty end waits")
+        release.signal(); waitForBuffer(buffer)
+        check(said.contains("bottom"), "the complete reread found no growth")
+        check(page.endReadWithoutGrowth != nil, "this page has a confirmed end")
+
+        // A changed link preview can replace text without adding any content after the reader.
+        state.withLock { $0.text = String(repeating: "Other text!. ", count: 160) }
+        buffer.isDirty = true
+        forward()
+        check(said.contains("bottom"), "the repeated forward edge answers immediately from its copy")
+        check(!said.contains("loading page"), "its background reread does not change the edge answer")
+        check(entered.wait(timeout: .now() + 2) == .success, "the dirty copy is checked in the background")
+        release.signal(); waitForBuffer(buffer)
+        expect(page.loadsMoreAtItsEnd, nil, "same-length replacement does not mark a growing feed")
+
+        // A completed background check can have recorded this exact copy before later AX news arrives.
+        // Even when nothing has changed in the published text, that news must request another background read.
+        page.endReachedInBackground = (page.endReadWithoutGrowth?.generation ?? -1, buffer.text.hash)
+        buffer.isDirty = true
+        forward()
+        check(said.contains("bottom"), "fresh AX news on an identical copy still answers immediately")
+        check(entered.wait(timeout: .now() + 2) == .success, "the dirty identical copy gets a new background check")
+        release.signal(); waitForBuffer(buffer)
+        expect(page.loadsMoreAtItsEnd, nil, "another no-growth check does not classify a feed")
+
+        // An ordinary refresh can grow the page without going through either end-reading helper.
+        // Its longer publication invalidates the old length certification even when freshly built and clean.
+        state.withLock { $0.hold = false; $0.text += " Added by an ordinary refresh." }
+        buffer.build(); waitForBuffer(buffer)
+        check(buffer.text.length > (page.endReadWithoutGrowth?.length ?? Int.max), "the ordinary publication outgrew the certified copy")
+        state.withLock { $0.hold = true }
+        forward()
+        check(!said.contains("bottom"), "a longer ordinary publication invalidates the old confirmed end")
+        check(entered.wait(timeout: .now() + 2) == .success, "the newly extended end is checked before answering")
+        release.signal(); waitForBuffer(buffer)
+        check(said.contains("bottom"), "the longer copy can certify its end after its own complete reread")
+
+        // The same dirty-copy path must discover genuinely longer content that arrived after its last check.
+        page.endReachedInBackground = (page.endReadWithoutGrowth?.generation ?? -1, buffer.text.hash)
+        state.withLock { $0.text += " Newly arrived content after the prior end." }
+        buffer.isDirty = true
+        forward()
+        check(said.contains("bottom"), "the dirty edge answers from the confirmed copy before new content arrives")
+        check(entered.wait(timeout: .now() + 2) == .success, "new AX news checks the provider despite the matching copy hash")
+        release.signal(); waitForBuffer(buffer)
+        check(page.loadsMoreAtItsEnd != nil, "the background check classifies actual text-length growth")
+
+        // A known feed still waits, including when the current copy is freshly built.
+        state.withLock { $0.text += " New content after the end." }
+        forward()
+        check(!said.contains("bottom"), "a known growing feed waits for its new content")
+        check(entered.wait(timeout: .now() + 2) == .success, "the feed end reread is held")
+        release.signal(); waitForBuffer(buffer)
+        check(page.loadsMoreAtItsEnd != nil, "real growth retains the feed classification")
+
+        // A newer executed key owns the reading position; the older edge must not say bottom later.
+        forward()
+        check(entered.wait(timeout: .now() + 2) == .success, "another feed end reread is held")
+        let left = KeyboardGesture(identifier: "kb:leftArrow")!
+        guard let back = page.script(for: left) else { return check(false, "backward command") }
+        back.handler(left)
+        said = []
+        release.signal(); waitForBuffer(buffer)
+        check(!said.contains("bottom"), "a newer backward key retires the pending forward edge answer")
+
+        // A complete end certified earlier cannot certify a later truncated copy as the page's bottom.
+        state.withLock { $0.hold = false; $0.stop = .visits }
+        buffer.build(); waitForBuffer(buffer)
+        check(buffer.stoppedAtLimit, "the provider returned an incomplete huge-page prefix")
+        page.loadsMoreAtItsEnd = nil
+        state.withLock { $0.hold = true }
+        forward()
+        check(!said.contains("bottom"), "a partial copy bypasses the confirmed-end fast path")
+        check(entered.wait(timeout: .now() + 2) == .success, "the partial copy is read again before reporting its edge")
+        release.signal(); waitForBuffer(buffer)
+        check(said.contains("page read in part, it is very long"), "a still-partial huge page is reported as incomplete")
+        check(!said.contains("bottom"), "the huge-page prefix is never reported as a complete bottom")
     }
 
     test("document snapshot: one heading command cannot scroll an infinite feed indefinitely") {

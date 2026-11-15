@@ -2,12 +2,124 @@
 
 The newest build is first. "Reported by a tester" marks a fix for something a tester sent in. Thank you.
 
+## 2.0, build 25
+
+### New to try
+
+- Deleted text by pitch: Settings, Speech, "Lower the pitch for deleted text, instead of saying deleted" says a
+  deleted character or word lower, as VoiceOver does, without the word "deleted". Off by default. A deleted capital
+  is lowered too when capitals are raised.
+
 ## 2.0, build 24.1
+
+### New to try
+
+- Automatic focus mode for caret movement is on by default. Arrows, quick navigation and VoiceOver's keys put
+  the keyboard in the field you reach; VO-Left and VO-Right can move on. Turn it off in Settings, Web pages.
 
 ### Fixed
 
+- A waiting system dialog reminds you once, with at most one further reminder after five minutes, instead of repeating on every application switch.
+
+- Claude's conversation shortcuts return to focus mode when the destination Prompt has keyboard focus, so typing goes into the Prompt after the page changes.
+
+- Claude conversations with identical titles announce their destination once it has loaded, without waiting for the eight-second ceiling.
+
+- Missing Claude conversation numbers preserve the Prompt’s mode; an unavailable sidebar waits for an unchanged URL at the ceiling instead of reading the current title.
+
+- Repeating a Claude conversation shortcut while the page rebuilds says only the final destination.
+
+- Claude’s slash-command suggestions speak when opened and as Up and Down change the choice. Choosing an Effort menu item confirms the choice after focus returns to the Prompt.
+
+- Finder says “opening” immediately when Command Down opens a selected application, while the application starts.
+
+- Claude's conversation shortcuts say only the destination title once, without the " - Claude Code" suffix or
+  an extra first-line announcement. Title-only changes are recognised, and the wait's ceiling reads the current
+  title afresh. A verified already-open conversation answers immediately; a number beyond the sidebar's
+  conversations says "no conversation" and its number without changing mode.
+
+- Notes: Return and Space in the held Folders list now announce the selected folder, or explain why it could not be chosen.
+
+- Notes: view shortcuts announce their destination and focus; Tab leaves attachments for folders and notes.
+
+- Notes: Tab and Shift-Tab reach folders, notes and the open note in list and gallery views.
+
+- Unnamed controls say their known role or stay silent, instead of being called unknown.
+
+- Claude's Command 1 to 9 say the conversation title even when that conversation is already open.
+
+- Dialogs open with their text and focused control, without listing unnamed fields; explicit descriptions keep named choices.
+
+- Reading the saved copy of an unresponsive page no longer asks the page about automatic caret focus.
+- A delayed automatic field-focus event no longer pulls the reading position back after another command.
+- Recovered button presses wait for keyboard activation to finish, or report failure at the shared focus deadline.
+- VO-Space activates Claude's focused session-menu Delete command when VoiceOver keys are active.
+- A button replaced since the page was copied can be found near its old position or at the end of a long page,
+  including labels inside nested groups, with one bounded fresh-copy retry.
+- Claude's Command 5 to 9 use conversation-switch handling, dialog notices are immediate, VO-Right leaves an
+  empty Prompt, and session menu activation uses the keyboard when its accessibility press does nothing.
+- Typing: Left and Right bump at once at the edge of a text field with left-to-right text, where they used to wait
+  for the caret first (over 300 ms in a web field). Not used where the line has right-to-left text, with a
+  selection, with a modifier key or in a table cell.
+- Typing, VoiceOver's keys: with words spoken as you type, the word said as the space is typed is no longer followed by
+  "space", as in VoiceOver. A space typed on its own is still said, and NVDA's and JAWS's keys say both.
+- Automatic changes between browse mode and focus mode play the mode sound after the destination field’s words,
+  even with navigation sounds off. Ordinary keys carry an interrupted cue to the current field or reading
+  position; Control stops it. Brief changes within one key or refresh stay silent.
+- Quick navigation onto an editable field plays the browse-mode sound after the field when typing would still navigate.
+- The manual mode toggle and Escape keep the mode words, or the sound with navigation sounds on.
+- Command F in Maps says "search" followed by the focus-mode sound.
+- Returning to a page with the keyboard in a text field reads that field and resumes focus mode when automatic
+  focus mode is on. Space after pasting stays in the field instead of pressing another control. A manual browse
+  mode override, automatic focus mode off, and returns to other controls keep the saved reading position.
+- Claude's sidebar session status waits until keys and speech are quiet, keeping each session's newest notice
+  through title changes. The open conversation's own assertive notices keep their ordinary delivery.
+- The command layer is audible while VoiceOver leads. Reading-mode changes wait for the reader of the current
+  app to be ready, including confirmed VoiceOver muting when TurnOver speaks while VoiceOver is running.
+- Safari no longer says "please wait" when it answers a focus check without moving the focus.
+- At the bottom of a changing page, repeated forward keys answer from the copy once its end has been checked.
+- Claude's progress lines wait for speech to finish as well as quiet keys, keeping each conversation's newest
+  waiting notice until it can be said, even after a minute, without repeating its last delivered line.
+- Claude's conversation shortcuts say the new name promptly without holding up the keys; waiting page commands
+  run once after a short settle if the conversation stays the same, or when the wait reaches its limit,
+  while Claude stays focused. Leaving Claude discards those waiting commands.
+- Wrapping round a page with the heading, link and other single-letter keys is immediate again: at the end of a page
+  TurnOver no longer reads the whole page again before "wrapped to the top", unless the page has changed. Previous
+  heading at the top of a page wraps to the bottom even while the page is being read again, instead of saying "top".
+- After the Mac sleeps, VoiceOver is no longer turned on and straight off again for the lock screen, and after the
+  unlock TurnOver takes the keys if neither reader is on.
+- Speech that gets stuck just after an unlock, such as when the sound moves to other headphones, recovers within
+  seconds instead of staying silent.
+- Typing in a field on a page whose form is in a frame of its own, with Safari's AutoFill, no longer drops back to
+  browse mode, so the letters go into the field.
+- Buttons that open a menu, such as the Claude app's model and permissions buttons, stay in browse mode when Tab
+  reaches them, as in NVDA.
+- In browse mode, a letter that is not a command says "browse mode", so letters that were not typed are not lost
+  without a sound.
+- Pressing a button that opens or closes something says expanded or collapsed straight away.
+- Tab on a page reads where the focus went, even when the page sends no news of it.
+- A page that fills in after it first appears is read again, so Tab and the quick keys find all of it.
+- After Return in Safari's address bar, a line of the page being left is no longer read before the new page.
+- Find in browse mode goes round the page, and says so.
+- Secure input left on after a password is told sooner when you are pressing keys TurnOver can't hear.
+- Claude app: a reply is no longer read just after you send a message while Claude is working; Claude Code's plan is
+  left out of the reply that is read; a reply you are already reading is not started again from its top; progress
+  lines wait until you stop pressing keys; switching conversations says which one.
+- Mail: switching mailboxes with Command and a number reads the new mailbox, not a row of the old one.
+- Up and Down in an empty list say "empty" at once, and Backspace in an empty field answers at once.
+- The link sound plays once for a line, not once for each link on it.
+- The app you are leaving is no longer read over the Command Tab app switcher.
 - "Nothing in this window can be read", with the keys for screen recognition, is a hint now: turning off Hints after
   a pause turns it off too. It is no longer said in Steam's Big Picture while TurnOver is reading it.
+- On a web page, Return, Space and VO-Space press text that the page takes clicks on, such as the "Yes" and "No"
+  answers of a questionnaire made without real buttons. They used to say "nothing to activate".
+- Two rows with the same words, one above the other, are both read when you move quickly between them, such as two
+  copies of one message in Mail's list. The second was not spoken.
+- In the Claude app, VO-Space, Return and Space press the button the reading position is on. Some buttons, such as
+  the answers offered under a reply and the sessions in the sidebar, made the pressed sound and did nothing until
+  Tab had put the keyboard on them.
+- Selecting with Shift and the arrows is read again in the Claude app's prompt, or a page's text field, after coming
+  back from another app. It said nothing until the focus moved.
 
 ## 2.0, build 24
 
@@ -68,6 +180,23 @@ Features wait for a whole build; point releases carry fixes only (27 Oct 2026).
 
 ### New to try
 
+- Mouse tracking: Settings, Presentation, "Read what is under the mouse pointer as it moves" (or NVDA+M in the Windows
+  keyboard style) reads each item the pointer crosses, as VoiceOver's cursor following the mouse pointer does. The
+  keyboard focus never moves with the pointer. "Mouse pointer moves the review cursor" (on by default) also takes the
+  cursor to the item, as NVDA's review cursor follows the mouse. A blank place (a window's background, a group with no
+  name) is silent, and coming back to an item reads it again. The pointer's own speech is interrupted by the next item,
+  and nothing else is: notifications, focus changes and typing echo are left alone. A tester found that other speech
+  then kept talking over the pointer, so "Mouse pointer interrupts other speech" (off by default) makes the pointer cut
+  that off too.
+  The whole lookup, the item's name, role, value, state and a group's item count, is read off the main thread under one
+  deadline, and only the finished text is handed back, so an app that stops answering cannot freeze TurnOver. This
+  reads less than the keyboard does: app-specific names (Mail, Excel, Finder, Calendar, Dock, Terminal and others),
+  plugin and profile labels, the Item details order and toggles, position information and the "goes in" hint are left
+  out.
+  What it says is private: it is not kept in the speech history, and the log holds only the kind of item and the app,
+  never its words. It watches the pointer only while TurnOver is the reader, and it waits while Say All or the
+  trackpad's explore is reading. If an app holds the lookup for over a second, the lookup is given up and the
+  pointer is read again. Off by default.
 - Searching in the App Store, Music and Podcasts: Return in the search field reads the results as a plain list, from
   Apple's public catalog, and Return on one opens its page. The App Store's own results page couldn't be read reliably
   on macOS 27.2. When the catalog can't answer, the page is read instead. TV keeps its own page, as Apple TV+ isn't in

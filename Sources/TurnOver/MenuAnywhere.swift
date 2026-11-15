@@ -133,7 +133,7 @@ final class MenuAnywhere {
         if Coexist.on {
             if turnOverActive() { steppedIn = false; listen(); return }
             Log.info("layer key where VoiceOver leads: the letters claimed for 3 s")
-            Self.say("TurnOver", tone: true)
+            announceClaimedLayer()
             claimLetters()
             return
         }
@@ -142,8 +142,15 @@ final class MenuAnywhere {
         // at once went to the app (Calculator, 12 Oct 2026). So the layer's letters are claimed for three seconds
         // straight away, as hot keys of their own; the chosen one steps in, runs and hands back.
         Log.info("layer key where VoiceOver leads: the letters claimed for 3 s")
-        Self.say("TurnOver", tone: true)   // VoiceOver says it; the letters are listed only if nothing comes
+        announceClaimedLayer()
         claimLetters()
+    }
+
+    private func announceClaimedLayer() {
+        // 14 Nov 2026: the ordinary tone obeys TurnOver's sound-set preference and can be silent while
+        // VoiceOver leads. The system cue confirms the three-second letter claim without taking speech.
+        NSSound.beep()
+        Self.say("TurnOver")
     }
 
     /// The keys claimed while VoiceOver leads: the layer's letters, and Escape.

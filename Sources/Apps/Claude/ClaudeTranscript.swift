@@ -57,6 +57,34 @@ public enum ClaudeTranscript {
         return false
     }
 
+    /// The conversation, by the address of the page holding the transcript (claude.ai/epitaxy/local_…): its title can
+    /// change within one conversation (Codex's review, 14 Nov 2026).
+    public static func session(of chat: AXUIElement) -> String {
+        var e: AXUIElement? = chat.element(kAXParentAttribute); var hops = 0
+        while let x = e, hops < 40 {
+            if x.role == "AXWebArea", let url = (x.attr("AXURL") as? URL)?.absoluteString, url.hasPrefix("http") { return url }
+            e = x.element(kAXParentAttribute); hops += 1
+        }
+        return ""
+    }
+
+    /// Claude Code's plan, by its shape as measured (14 Nov 2026): a content list whose every item is its state, in
+    /// Claude Code's words, and then a group with the step. An answer's own list of words is not one: its items are
+    /// not built so (Codex's review).
+    static let planStates: Set<String> = ["done", "in progress", "not done"]
+    /// The plan's own label when it is carried over a message ("Plan from before your last message").
+    static let planLabelPrefix = "Plan from before your last message"
+    static func isPlan(_ list: AXUIElement) -> Bool {
+        guard list.string(kAXSubroleAttribute) == "AXContentList" else { return false }
+        let items = list.elements(kAXChildrenAttribute)
+        guard !items.isEmpty, items.count <= 40 else { return false }
+        return items.allSatisfy { item in
+            let parts = item.elements(kAXChildrenAttribute)
+            guard parts.count == 2, parts[0].role == "AXStaticText", parts[1].role == "AXGroup" else { return false }
+            return planStates.contains((parts[0].string(kAXValueAttribute) ?? "").trimmingCharacters(in: .whitespaces))
+        }
+    }
+
     /// The rows of the transcript: the children of its one content group.
     static func rows(chat: AXUIElement) -> [AXUIElement] {
         let kids = chat.elements(kAXChildrenAttribute)
@@ -103,6 +131,13 @@ public enum ClaudeTranscript {
             let r = e.role
             if r == "AXToolbar" || r == "AXButton" || r == "AXCheckBox" || r == "AXPopUpButton" { return }
             if r == "AXHeading", (e.attr("AXDOMClassList") as? [String] ?? []).contains("sr-only") { return }
+            // Claude Code's plan is not the reply: read on its own, it was taken for one ("in progress Find the lap
+            // comparison lines…", 13 Nov 2026). Its label goes with it ("Plan from before your last message").
+            if r == "AXList", isPlan(e) {
+                flush()
+                if let label = out.last, label.hasPrefix(planLabelPrefix) { out.removeLast() }
+                return
+            }
             if r == "AXStaticText" { current += e.string(kAXValueAttribute) ?? ""; return }
             let block = ["AXGroup", "AXHeading", "AXList", "AXRow", "AXTable", "AXCell"].contains(r)
             if block && r != "AXCell" { flush() }

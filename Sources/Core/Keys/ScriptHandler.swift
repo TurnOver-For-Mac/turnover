@@ -159,6 +159,8 @@ public enum ScriptHandler {
         SayAll.resuming = resume
         // NVDA's on-demand speech mode: a reporting command may speak (the time, the line, the title …).
         if Speech.mode == .onDemand, Self.speaksOnDemand(script.name) { Speech.demandedUntil = Date().addingTimeInterval(2) }
+        ModeAnnouncement.begin()
+        defer { ModeAnnouncement.end() }
         script.handler(gesture)
         SayAll.resuming = false
         // The cost of a slow script, measured: how many questions it asked the application and how long they took.

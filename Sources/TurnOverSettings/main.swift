@@ -351,6 +351,11 @@ struct SpeechView: View {
                     .accessibilityValue(model.number("speech", "capitalPitch").wrappedValue == 0 ? String(localized: "off", comment: "A setting that is off")
                         : String(localized: "\(Int(model.number("speech", "capitalPitch").wrappedValue)) percent", comment: "A slider's value"))
             }
+            Section("Deleted text") {
+                Slider(value: model.number("speech", "deletedPitch"), in: 0...50, step: 10) { Text("Lower the pitch for deleted text, instead of saying deleted") }
+                    .accessibilityValue(model.number("speech", "deletedPitch").wrappedValue == 0 ? String(localized: "off", comment: "A setting that is off")
+                        : String(localized: "\(Int(model.number("speech", "deletedPitch").wrappedValue)) percent", comment: "A slider's value"))
+            }
             // The speech rotor's own short list (18 Oct 2026): none ticked, every voice.
             // Folded until opened: a picker per language is the costliest part of the pane to draw (23 Oct 2026).
             Toggle("Show voices for other languages", isOn: $showLanguages).accessibilityLabel("Show voices for other languages")
@@ -565,6 +570,11 @@ struct ItemsView: View {
             // never edit an app the picker no longer names (a code review, 27 Oct 2026).
             .onChange(of: frontApp?.bundle) { _, now in if scope != "everywhere", scope != now { scope = "everywhere" } }
             Toggle("Hints after a pause", isOn: model.bool("presentation", "speakHints"))
+            Toggle("Read what is under the mouse pointer as it moves", isOn: model.bool("presentation", "mouseTracking"))
+            Text("The pointer is not read while a page or Say All is being read out. If pages read themselves when they open, turn off \"Read a page through as it opens\" in Web pages to keep hearing the pointer.").font(.caption)
+            Toggle("Mouse pointer moves the review cursor", isOn: model.bool("presentation", "mouseMovesCursor"))
+            Toggle("Mouse pointer interrupts other speech", isOn: model.bool("presentation", "mouseInterruptsSpeech"))
+            Text("Off, only the pointer's own speech gives way and a notification is not cut off. On, the pointer is heard at once, even while something else is talking.").font(.caption)
             Toggle("Say which plugin an app has as it comes to the front", isOn: model.bool("presentation", "announcePlugins"))
             Picker("Heading, link and button: when to say them", selection: model.string("documentFormatting", "roleOrder", "auto")) {
                 Text("By keyboard style").tag("auto"); Text("Before the words, as NVDA").tag("before"); Text("After the words, as VoiceOver").tag("after")
@@ -606,6 +616,7 @@ struct WebPagesView: View {
     var body: some View {
         Form {
             Toggle("Type into a field as soon as it has the focus", isOn: model.bool("virtualBuffers", "autoFocusMode"))
+            Toggle("Automatic focus mode for caret movement", isOn: model.bool("virtualBuffers", "autoPassThroughOnCaretMove"))
             Toggle("Read a page through as it opens", isOn: model.bool("virtualBuffers", "autoSayAllOnPageLoad"))
             Toggle("Single-letter keys go round the page", isOn: model.bool("virtualBuffers", "wrapQuickNav"))
             Toggle("Links and buttons in the line, as on screen", isOn: model.bool("virtualBuffers", "screenLayout"))

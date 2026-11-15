@@ -164,6 +164,9 @@ public struct Config: Codable {
         /// NVDA's "capital pitch change": a capital letter said on its own (spelling, moving by character, typing) is
         /// raised by this percentage; 0 is off (a tester, 10 Oct 2026). Works with or without "cap".
         public var capitalPitch = 0
+        /// VoiceOver's pitch change for deleted text: 0 says "deleted" before a deleted word; above 0, the deleted
+        /// text is said that many percent lower instead, with no "deleted".
+        public var deletedPitch = 0
         /// The voice's pitch on VoiceOver's scale, 0 to 1 with 0.5 the voice's own (copied from VoiceOver, 15 Oct 2026).
         public var pitch: Float = 0.5
         /// The pitch as the player's multiplier: 0 is half, 0.5 is 1, 1 is double.
@@ -192,7 +195,7 @@ public struct Config: Codable {
         }
         public init() {}
         // Each field falls back to its default, so a setting added later never resets the voice and rate.
-        enum Keys: String, CodingKey { case voice, rate, symbolLevel, sayCapForCapitals, volume, autoLanguageSwitching, languageVoices, languageRates, outputDevice, capitalPitch, ducking, pitch, rotorVoices, bass, middle, treble, voiceTunings }
+        enum Keys: String, CodingKey { case voice, rate, symbolLevel, sayCapForCapitals, volume, autoLanguageSwitching, languageVoices, languageRates, outputDevice, capitalPitch, deletedPitch, ducking, pitch, rotorVoices, bass, middle, treble, voiceTunings }
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: Keys.self)
             voice = (try? c.decodeIfPresent(String.self, forKey: .voice)) ?? voice
@@ -205,6 +208,7 @@ public struct Config: Codable {
             languageRates = (try? c.decodeIfPresent([String: Float].self, forKey: .languageRates)) ?? languageRates
             outputDevice = (try? c.decodeIfPresent(String.self, forKey: .outputDevice)) ?? outputDevice
             capitalPitch = (try? c.decodeIfPresent(Int.self, forKey: .capitalPitch)) ?? capitalPitch
+            deletedPitch = (try? c.decodeIfPresent(Int.self, forKey: .deletedPitch)) ?? deletedPitch
             pitch = (try? c.decodeIfPresent(Float.self, forKey: .pitch)) ?? pitch
             ducking = (try? c.decodeIfPresent(String.self, forKey: .ducking)) ?? ducking
             rotorVoices = (try? c.decodeIfPresent([String].self, forKey: .rotorVoices)) ?? rotorVoices
@@ -219,7 +223,7 @@ public struct Config: Codable {
             try c.encode(sayCapForCapitals, forKey: .sayCapForCapitals); try c.encode(volume, forKey: .volume)
             try c.encode(autoLanguageSwitching, forKey: .autoLanguageSwitching); try c.encode(languageVoices, forKey: .languageVoices)
             try c.encode(languageRates, forKey: .languageRates); try c.encode(outputDevice, forKey: .outputDevice)
-            try c.encode(capitalPitch, forKey: .capitalPitch); try c.encode(ducking, forKey: .ducking); try c.encode(pitch, forKey: .pitch)
+            try c.encode(capitalPitch, forKey: .capitalPitch); try c.encode(deletedPitch, forKey: .deletedPitch); try c.encode(ducking, forKey: .ducking); try c.encode(pitch, forKey: .pitch)
             try c.encode(rotorVoices, forKey: .rotorVoices)
             try c.encode(bass, forKey: .bass); try c.encode(middle, forKey: .middle); try c.encode(treble, forKey: .treble)
             try c.encode(voiceTunings, forKey: .voiceTunings)
@@ -299,11 +303,13 @@ public struct Config: Codable {
         /// NVDA's "Automatic focus mode for focus changes": a field taking the focus switches to focus mode by itself;
         /// off, only TurnOver Space does (a tester, 6 Oct 2026).
         public var autoFocusMode = true
+        /// Automatic focus mode when the virtual reading cursor reaches an interactive field.
+        public var autoPassThroughOnCaretMove = true
         /// A picture with no description is read by its file name ("graphic, sunset beach"), as JAWS can; off, just
         /// "graphic" (a tester, AppleVis, 9 Oct 2026).
         public var imageFileNames = false
         public init() {}
-        enum Keys: String, CodingKey { case maxLineLength, autoSayAllOnPageLoad, wrapQuickNav, screenLayout, autoFocusMode, imageFileNames }
+        enum Keys: String, CodingKey { case maxLineLength, autoSayAllOnPageLoad, wrapQuickNav, screenLayout, autoFocusMode, autoPassThroughOnCaretMove, imageFileNames }
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: Keys.self)
             maxLineLength = (try? c.decodeIfPresent(Int.self, forKey: .maxLineLength)) ?? 100
@@ -311,6 +317,7 @@ public struct Config: Codable {
             wrapQuickNav = (try? c.decodeIfPresent(Bool.self, forKey: .wrapQuickNav)) ?? true
             screenLayout = (try? c.decodeIfPresent(Bool.self, forKey: .screenLayout)) ?? true
             autoFocusMode = (try? c.decodeIfPresent(Bool.self, forKey: .autoFocusMode)) ?? true
+            autoPassThroughOnCaretMove = (try? c.decodeIfPresent(Bool.self, forKey: .autoPassThroughOnCaretMove)) ?? true
             imageFileNames = (try? c.decodeIfPresent(Bool.self, forKey: .imageFileNames)) ?? false
         }
         public func encode(to encoder: Encoder) throws {
@@ -320,6 +327,7 @@ public struct Config: Codable {
             try c.encode(wrapQuickNav, forKey: .wrapQuickNav)
             try c.encode(screenLayout, forKey: .screenLayout)
             try c.encode(autoFocusMode, forKey: .autoFocusMode)
+            try c.encode(autoPassThroughOnCaretMove, forKey: .autoPassThroughOnCaretMove)
             try c.encode(imageFileNames, forKey: .imageFileNames)
         }
     }
@@ -500,8 +508,19 @@ public struct Config: Codable {
         /// A progress bar as it moves (ProgressOutput, NVDA+U): "beep", "speak", "both" or "off". Beeps by
         /// default, as NVDA does (Oliver, having heard them, 3 Nov 2026: "put the progress bar stuff in there").
         public var progressBars = "beep"
+        /// What is under the mouse pointer read as the pointer moves, and the cursor taken there (VoiceOver's cursor
+        /// following the mouse pointer; NVDA+M). Off until asked for: a nudged mouse would otherwise start speech.
+        public var mouseTracking = false
+        /// With mouse tracking, whether the review cursor goes to what the pointer is over (NVDA's review cursor
+        /// follows the mouse). The keyboard focus never does.
+        public var mouseMovesCursor = true
+        /// With mouse tracking, whether an item under the pointer also cuts off other speech (a notification, a focus
+        /// change, typing echo). Off: only the pointer's own speech gives way, so a notification is not lost. On: the
+        /// pointer is heard at once, not after whatever else is talking (a tester, 10 Nov 2026: other speech kept
+        /// talking over the pointer).
+        public var mouseInterruptsSpeech = false
         public init() {}
-        enum Keys: String, CodingKey { case verbosity, verbosityByApp, reportObjectDescriptions, reportKeyboardShortcuts, reportObjectPositionInformation, reportDynamicContentChanges, speakHints, reportNotifications, announcePlugins, progressBars }
+        enum Keys: String, CodingKey { case verbosity, verbosityByApp, reportObjectDescriptions, reportKeyboardShortcuts, reportObjectPositionInformation, reportDynamicContentChanges, speakHints, reportNotifications, announcePlugins, progressBars, mouseTracking, mouseMovesCursor, mouseInterruptsSpeech }
         // Each setting falls back on its own: a settings file from before speakHints keeps the others.
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: Keys.self)
@@ -518,6 +537,9 @@ public struct Config: Codable {
             reportNotifications = (try? c.decodeIfPresent(Bool.self, forKey: .reportNotifications)) ?? true
             announcePlugins = (try? c.decodeIfPresent(Bool.self, forKey: .announcePlugins)) ?? true
             progressBars = (try? c.decodeIfPresent(String.self, forKey: .progressBars)).flatMap { ProgressOutput.modes.contains($0) ? $0 : nil } ?? "beep"
+            mouseTracking = (try? c.decodeIfPresent(Bool.self, forKey: .mouseTracking)) ?? false
+            mouseMovesCursor = (try? c.decodeIfPresent(Bool.self, forKey: .mouseMovesCursor)) ?? true
+            mouseInterruptsSpeech = (try? c.decodeIfPresent(Bool.self, forKey: .mouseInterruptsSpeech)) ?? false
         }
         public func encode(to encoder: Encoder) throws {
             var c = encoder.container(keyedBy: Keys.self)
@@ -526,6 +548,8 @@ public struct Config: Codable {
             try c.encode(reportObjectPositionInformation, forKey: .reportObjectPositionInformation); try c.encode(reportDynamicContentChanges, forKey: .reportDynamicContentChanges)
             try c.encode(speakHints, forKey: .speakHints); try c.encode(reportNotifications, forKey: .reportNotifications)
             try c.encode(announcePlugins, forKey: .announcePlugins); try c.encode(progressBars, forKey: .progressBars)
+            try c.encode(mouseTracking, forKey: .mouseTracking); try c.encode(mouseMovesCursor, forKey: .mouseMovesCursor)
+            try c.encode(mouseInterruptsSpeech, forKey: .mouseInterruptsSpeech)
         }
     }
     public struct DocumentFormatting: Codable {

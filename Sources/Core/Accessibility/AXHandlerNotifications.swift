@@ -22,6 +22,7 @@ extension AXHandler {
 
     func notification(_ name: String, _ element: AXUIElement, _ info: [String: Any]?) {
         lastNewsAt[element.pid] = Date()
+        AXHealth.heardFrom(pid: element.pid)   // a sign of life: what was silent in the app is looked at again now
         guard running else { return }
         let pid = element.pid
         // A banner from Notification Centre (a message, a calendar alert): read as it appears, as VoiceOver and NVDA do
@@ -91,6 +92,13 @@ extension AXHandler {
             guard let f = API.focusObject, f.isSameElement(as: element) else { return }
             EventHandler.queue(Event(.nameChange, f))
         case kAXMenuOpenedNotification:
+            // Claude 5.1231.2, macOS 27.2, 14 Nov 2026: slash suggestions and Effort
+            // submenus announce AXGroup, not AXMenu. Let the opt-in module own them.
+            if element.role == "AXGroup", AppModuleHandler.shared.appModule(for: pid).handlesGroupMenus {
+                guard pid == activePid else { return }
+                EventHandler.queue(Event(.menuStart, ObjectFactory.make(element)))
+                return
+            }
             guard element.role == "AXMenu" else { Log.io("menu opened on a \(element.role); not a menu, ignored"); return }
             // A page's own navigation (role="menu") announces itself as a menu opening while the page loads, and
             // never closes: it held Safari's focus back for a whole visit and ate the letters typed in the next app
@@ -107,6 +115,11 @@ extension AXHandler {
             if Date().timeIntervalSince(lastMenuStart) > 0.5 { EventHandler.queue(Event(.menuStart, ObjectFactory.make(element))) }
             lastMenuStart = Date()
         case kAXMenuClosedNotification:
+            if element.role == "AXGroup", AppModuleHandler.shared.appModule(for: pid).handlesGroupMenus {
+                guard pid == activePid else { return }
+                EventHandler.queue(Event(.menuEnd, ObjectFactory.make(element)))
+                return
+            }
             let before = openMenus.count
             openMenus.removeAll { $0.isSame(element) }
             if openMenus.count == before { openMenus.removeAll { $0.role != "AXMenu" } }

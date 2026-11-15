@@ -929,6 +929,9 @@
         }
       }
     },
+    "%@ is not responding" : {
+      "comment" : "Spoken message: an app has stopped answering"
+    },
     "%@ is now %@" : {
       "comment" : "A piece of the reading order moved: its name, then its new place (2nd)",
       "localizations" : {
@@ -1030,6 +1033,9 @@
           }
         }
       }
+    },
+    "%@ is responding again" : {
+      "comment" : "Spoken message: an app that had stopped answering answers again"
     },
     "%@ is waiting for approval in the Plugins menu." : {
       "comment" : "Said when a command of a plugin whose script is not approved is chosen; the placeholder is the plugin's name"
@@ -2929,6 +2935,9 @@
         }
       }
     },
+    "%@, type to filter" : {
+      "comment" : "A list that narrows as you type, opened before all its items are in: its title, with no count yet"
+    },
     "%@, unselected" : {
       "comment" : "Text no longer selected in browse mode: %@ is the text",
       "localizations" : {
@@ -3290,6 +3299,9 @@
           }
         }
       }
+    },
+    "%@: the view did not change" : {
+      "comment" : "Notes did not confirm the requested view"
     },
     "%@: types %@" : {
       "comment" : "Braille help: the dots, then what they type",
@@ -4712,6 +4724,9 @@
         }
       }
     },
+    "Activates Claude's focused menu item" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
     "Activates the element at the caret" : {
       "comment" : "A command, as the key list and keyboard help say it",
       "localizations" : {
@@ -5357,6 +5372,9 @@
           }
         }
       }
+    },
+    "Automatic focus mode for caret movement" : {
+
     },
     "Automatic%@" : {
       "localizations" : {
@@ -6268,6 +6286,9 @@
         }
       }
     },
+    "Changes the Notes view and reads the focus" : {
+      "comment" : "A command"
+    },
     "Changes the slider and says its new value" : {
       "comment" : "A command, as the key list and keyboard help say it",
       "localizations" : {
@@ -6399,6 +6420,9 @@
           }
         }
       }
+    },
+    "Chooses a Claude menu item" : {
+      "comment" : "A command, as the key list and keyboard help say it"
     },
     "Claude" : {
       "comment" : "A group of commands in the key list",
@@ -7626,6 +7650,9 @@
           }
         }
       }
+    },
+    "Deleted text" : {
+
     },
     "Deletes the character after the caret and reads the next" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -12352,6 +12379,9 @@
         }
       }
     },
+    "Lower the pitch for deleted text, instead of saying deleted" : {
+
+    },
     "Lowers the speech setting (NVDA+Shift+Control+Down Arrow)" : {
       "comment" : "A command, as the key list and keyboard help say it",
       "localizations" : {
@@ -12885,6 +12915,24 @@
           }
         }
       }
+    },
+    "Mouse interrupts other speech" : {
+
+    },
+    "Mouse moves the cursor" : {
+
+    },
+    "Mouse pointer interrupts other speech" : {
+
+    },
+    "Mouse pointer moves the review cursor" : {
+
+    },
+    "Mouse tracking" : {
+
+    },
+    "Mouse tracking on or off; reads what is under the mouse pointer as it moves (NVDA+M)" : {
+      "comment" : "A command, as the key list and keyboard help say it"
     },
     "Move %@ down" : {
       "localizations" : {
@@ -15947,6 +15995,9 @@
         }
       }
     },
+    "Off, only the pointer's own speech gives way and a notification is not cut off. On, the pointer is heard at once, even while something else is talking." : {
+
+    },
     "Off: each reader has its own switch and neither changes the other. Command Control Period is TurnOver's; Command F5 is VoiceOver's." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -18331,6 +18382,9 @@
         }
       }
     },
+    "Read what is under the mouse pointer as it moves" : {
+
+    },
     "Readers per app" : {
       "localizations" : {
         "ru" : {
@@ -18944,6 +18998,9 @@
         }
       }
     },
+    "Reads the selected Claude command" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
     "Reads the selected item (VO-F6)" : {
       "comment" : "A command, as the key list and keyboard help say it",
       "localizations" : {
@@ -19045,6 +19102,9 @@
           }
         }
       }
+    },
+    "Reads what is under the mouse pointer as it moves" : {
+
     },
     "Rebuilds the page's browse mode view (NVDA+F5)" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -23403,6 +23463,9 @@
         }
       }
     },
+    "Switches to a recent or new Claude conversation" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
     "Switches to the first pane" : {
       "comment" : "A command, as the key list and keyboard help say it",
       "localizations" : {
@@ -25217,6 +25280,9 @@
     },
     "The plugin's files changed since you approved its script." : {
       "comment" : "Why a plugin's script does not run"
+    },
+    "The pointer is not read while a page or Say All is being read out. If pages read themselves when they open, turn off \"Read a page through as it opens\" in Web pages to keep hearing the pointer." : {
+
     },
     "The previous control" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -29435,6 +29501,12 @@
         }
       }
     },
+    "With mouse tracking, the pointer also cuts off other speech, such as notifications; off, only the pointer's own speech gives way" : {
+
+    },
+    "With mouse tracking, the review cursor goes to what the pointer is over; the keyboard focus never does" : {
+
+    },
     "With no conversation open: into the conversations (or the sections, from one of them)" : {
       "comment" : "A command, as the key list and keyboard help say it",
       "localizations" : {
@@ -30202,6 +30274,9 @@
         }
       }
     },
+    "attachments browser" : {
+      "comment" : "Notes view change"
+    },
     "auto scroll off" : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -30941,6 +31016,15 @@
         }
       }
     },
+    "cannot choose the folder: it is no longer available" : {
+      "comment" : "Spoken message"
+    },
+    "cannot choose the folder: the app refused selection and activation" : {
+      "comment" : "Spoken message"
+    },
+    "cannot confirm the folder selection" : {
+      "comment" : "Spoken message"
+    },
     "cannot find that item on the page now" : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -30957,6 +31041,9 @@
           }
         }
       }
+    },
+    "cannot leave the attachments browser" : {
+      "comment" : "Spoken message"
     },
     "cannot open or close it" : {
       "comment" : "Spoken message",
@@ -33170,6 +33257,12 @@
         }
       }
     },
+    "folders hidden" : {
+      "comment" : "Notes view change"
+    },
+    "folders shown" : {
+      "comment" : "Notes view change"
+    },
     "font change" : {
       "comment" : "A kind of thing to find, after next or previous",
       "localizations" : {
@@ -33305,6 +33398,9 @@
           }
         }
       }
+    },
+    "gallery view" : {
+      "comment" : "Notes view change"
     },
     "gesture control" : {
       "comment" : "A letter's command in the TurnOver layer (Command Control Comma)",
@@ -35296,6 +35392,9 @@
         }
       }
     },
+    "list view" : {
+      "comment" : "Notes view change"
+    },
     "list with %@ items" : {
       "comment" : "A list on a page, entered: how many items",
       "localizations" : {
@@ -35908,6 +36007,9 @@
         }
       }
     },
+    "mouse tracking %@" : {
+      "comment" : "Mouse tracking turned on or off"
+    },
     "mouse up" : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -36397,6 +36499,9 @@
           }
         }
       }
+    },
+    "no conversation %lld" : {
+      "comment" : "Spoken when Claude has no conversation at this shortcut number"
     },
     "no conversation open" : {
       "comment" : "Spoken message",
@@ -37880,6 +37985,9 @@
         }
       }
     },
+    "notes view" : {
+      "comment" : "Notes view change"
+    },
     "notes, %@" : {
       "comment" : "A Keynote slide's presenter notes: their words",
       "localizations" : {
@@ -38528,6 +38636,9 @@
           }
         }
       }
+    },
+    "opening" : {
+      "comment" : "Spoken message"
     },
     "opening %@" : {
       "comment" : "An app being opened: %@ is its name\nSpoken message",
@@ -43416,18 +43527,18 @@
       }
     },
     "the application" : {
-      "comment" : "An application with no name",
+      "comment" : "An app whose name is not known\nAn application with no name",
       "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "приложение"
-          }
-        },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "uygulama"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "приложение"
           }
         }
       }
@@ -43533,6 +43644,12 @@
           }
         }
       }
+    },
+    "the page is not responding" : {
+      "comment" : "Spoken message: a web page has stopped answering"
+    },
+    "the page is responding again" : {
+      "comment" : "Spoken message: a web page that had stopped answering answers again"
     },
     "the picture could not be captured. TurnOver needs Screen Recording, in System Settings, Privacy and Security" : {
       "comment" : "Spoken message",
@@ -44266,17 +44383,18 @@
     },
     "unknown" : {
       "comment" : "A role, spoken after an item's name",
+      "extractionState" : "stale",
       "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "неизвестно"
-          }
-        },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "bilinmeyen"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "неизвестно"
           }
         }
       }

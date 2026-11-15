@@ -361,7 +361,8 @@ public enum AXReplay {
         }
     }
     private static let actionFn: ActionFn = { e, a in
-        guard let i = id(of: e), let a else { return .invalidUIElement }
+        // A removed fixture node is a dead AX element. Accepting its action would hide stale-buffer failures.
+        guard let i = id(of: e), byId[i] != nil, let a else { return .invalidUIElement }
         actions.append((i, a as String)); return .success
     }
     private static let setFn: SetFn = { e, a, v in

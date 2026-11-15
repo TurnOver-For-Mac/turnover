@@ -17,19 +17,44 @@ import TurnOverAX
 // Browse mode: events for objects inside the document (NVDA: tree interceptor event handling).
 extension BrowseModeDocument {
     public func handleEvent(_ event: Event, next: () -> Void) {
+        var reportFocus = event.kind == .gainFocus
+        ModeAnnouncement.begin()
+        defer {
+            if reportFocus { ModeAnnouncement.focusReported(self, field: event.obj.element) }
+            ModeAnnouncement.end()
+        }
         switch event.kind {
         case .gainFocus:
             let navigated = refreshIfNavigated()
-            // Back from outside the document (another app) onto the control that had the focus when it left: the reading
-            // position and the mode stay as they were, and the line there is read (NVDA: entering from outside onto its
-            // last focus object, browseMode.py, #3145). Command-Tab gives that control the focus again; followed, it took
-            // the reading position back to the Claude app's prompt, and focus mode with it (macOS 27.0.1, 28 Oct 2026), and
-            // to Wikipedia's search field in Safari 27.2 (29 Oct 2026), at every return.
+            if let accepted = acceptCaretFocus(event.obj) {
+                reportFocus = accepted
+                return
+            }
+            // Returning to the last focused control normally keeps the saved browse position (NVDA #3145).
+            // But an automatically focused edit must use the ordinary field event below: Claude's Prompt had
+            // the keyboard while the saved position said Hide sidebar, and Space after a paste pressed it
+            // (14 Nov 2026, turnover-2026-11-14T145341Z.log, 16388.7 s). Honour explicit browse overrides.
             let fromOutside = focusFromOutside
             focusFromOutside = false
-            if fromOutside, !navigated, !passThrough, let last = lastFocusElement, event.obj.isSameElement(as: last) {
+            let returningToEdit = fromOutside
+                && event.obj.states.contains(.editable)
+                && shouldPassThrough(event.obj)
+            // 14 Nov 2026: mode lives on this page across app departure and unlock. Only browse mode
+            // ignores the repeated focus; in focus mode the ordinary field event below must run (NVDA).
+            if fromOutside,
+               !navigated,
+               !passThrough,
+               !returningToEdit,
+               let last = lastFocusElement,
+               event.obj.isSameElement(as: last) {
                 Log.io("browse mode: back from outside onto the \(event.obj.axRole) that had the focus; the reading position stays at \(position)")
                 positionMovedAt = Date()   // Enter and Space are for the reading position again, not that control (activate)
+                // The control's own gain focus is not run here, and with it went the following of a text field's
+                // selection: back in the Claude app's prompt, every Shift-arrow selection said nothing until the focus
+                // moved (all 8 of them on 11 and 12 Nov 2026, against 0 of 113 after an ordinary focus). Followed again.
+                if let field = event.obj as? EditableText {
+                    field.initAutoSelectDetection()
+                }
                 speakUnit(.line)
                 return
             }
@@ -67,10 +92,38 @@ extension BrowseModeDocument {
             // A page reached for the first time (a new page, Back, a reload): NVDA's first gain focus, the title and then
             // the reading (say all, or the line).
             if event.obj.isSameElement(as: webArea), !passThrough, url != announcedURL, !buffer.lines.isEmpty {
-                setPassThrough(false, announce: false)
+                setPassThrough(false, announce: true)
                 positionAtFocus = position
                 lastChain = []
                 announcePage()
+                return
+            }
+            // Back on the page after Return in the address field: a new page is most likely on its way, and the page
+            // being left was read meanwhile ("I agree", from the page left, on three of five loads, 13 Nov 2026). The new
+            // page announces itself when it comes; if none has come in a second and a half, and no key since, the line.
+            if event.obj.isSameElement(as: webArea), let back = BrowseModeHandler.backFromAddressField,
+               Date().timeIntervalSince(back.at) < 0.5, back.page.isSame(webArea) {
+                BrowseModeHandler.backFromAddressField = nil
+                setPassThrough(false, announce: true)
+                positionAtFocus = position
+                lastChain = []
+                Log.io("browse mode: back on the page after Return in the address field; its line waits for the new page")
+                let waiting = url, epoch = pageGeneration, keys = ScriptHandler.keysArrivedCount
+                // While the page says it is busy (loading), up to eight seconds: a slow load is not a page that stayed
+                // (Codex's review, 14 Nov 2026).
+                func readIfStayed(_ waited: Double) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                        guard let self, API.focusTreeInterceptor === self, pageGeneration == epoch, url == waiting else { return }
+                        guard ScriptHandler.keysArrivedCount == keys else { return }
+                        let busy = (webArea.attr("AXElementBusy") as? Bool) == true
+                        if waited < 1.5 || (busy && waited < 8) { readIfStayed(waited + 0.5); return }
+                        // Still loading after eight seconds: the new page announces itself when it comes; the old one's
+                        // line is not read (Codex's second review, 14 Nov 2026).
+                        if busy { Log.io("browse mode: the page is still loading; the old page's line is not read"); return }
+                        speakUnit(.line)
+                    }
+                }
+                readIfStayed(0)
                 return
             }
             // Into a player, say so (a page that puts the focus on its player by itself must not leave the letters
@@ -79,7 +132,7 @@ extension BrowseModeDocument {
             Log.io("browse mode: focus on \(event.obj.axRole) wants \(wanted ? "focus" : "browse") mode (editable \(event.obj.states.contains(.editable)), manual \(disableAutoPassThrough))")
             // Said (or its sound) whenever TurnOver switches by itself, as NVDA: a silent switch on a list or table left
             // H and K doing nothing (8 Oct 2026).
-            setPassThrough(wanted, announce: wanted != passThrough)   // both ways, as NVDA: back to browse mode had no sound (a tester, 12 Oct 2026)
+            setPassThrough(wanted, announce: true)
             // Follow the focus with the virtual caret.
             if !event.obj.isSameElement(as: webArea) {
                 lastFocusElement = event.obj.element

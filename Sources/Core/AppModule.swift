@@ -31,6 +31,9 @@ open class AppModule: ScriptableObject {
     /// The app supplies its own spelling corrections and dictionary through its native context menu.
     open var usesNativeSpellingMenu: Bool { false }
 
+    /// Group-based popups remain app-owned; they must not enter native menu tracking.
+    open var handlesGroupMenus: Bool { false }
+
     /// The app owns formatting-shortcut feedback, including when a shortcut passes through without a script.
     open var handlesNativeFormattingShortcuts: Bool { false }
 
@@ -68,6 +71,10 @@ open class AppModule: ScriptableObject {
     /// A field whose focus can't be set by accessibility: the module may put the keyboard there itself (a click).
     /// True when it did.
     open func takeFocus(_ element: AXUIElement) -> Bool { false }
+
+    /// The roles this app's pages answer by the keyboard and not by accessibility's press: browse mode puts the
+    /// keyboard on such a control and sends Return, where it would have pressed it. Empty: the press, as everywhere.
+    open var rolesPressedByKeyboard: Set<String> { [] }
 
     /// Adopt the destination of a linked-item or window-spot jump. Return the element the reader can continue
     /// from, or nil when the destination is outside this reader. The caller places and announces the review cursor.

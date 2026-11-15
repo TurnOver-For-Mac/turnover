@@ -74,7 +74,7 @@ revert the settings (NVDA+Control+C, R), the log (NVDA+F1), the app module (NVDA
 
 ## Not built (no Mac form, or to decide)
 
-- NVDA+M mouse tracking (TurnOver doesn't speak under the pointer as it moves), NVDA+Alt+T
+- NVDA+Alt+T
   braille mode, NVDA+Control+T braille tether (TurnOver's display follows its own cursor already), NVDA+Alt+S sound
   split (a Windows audio feature), NVDA+Shift+F10 native selection mode (WebKit offers no such mode), NVDA+Page Up and
   Down review modes (TurnOver has object review only), NVDA+Shift+Page Up and Down page in review, Comma and Shift Comma

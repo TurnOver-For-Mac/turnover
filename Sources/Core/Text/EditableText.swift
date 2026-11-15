@@ -27,6 +27,8 @@ open class EditableText: TurnOverObject {
 
     private var lastSelection: TextInfo?
     private var autoSelectDetection = false
+    /// Whether this field's selection is followed (from its gain focus until it loses the focus). For the tests.
+    package var isFollowingSelection: Bool { autoSelectDetection }
     public var hasContentChangedSinceLastSelection = false
 
     open override func initOverlay() {
@@ -239,7 +241,16 @@ open class EditableText: TurnOverObject {
     /// caret is for a plain arrow); if it hasn't changed within the caret's patience, the app's own notice reads it.
     func selectionScript(_ gesture: KeyboardGesture) {
         if GoogleDocs.isEditor(element) { gesture.send(); return }
-        guard autoSelectDetection, let old = try? makeTextInfo(.selection) else { gesture.send(); return }
+        // Each way out without reading says why in the log: this one was silent, and a selection that said nothing
+        // could not be told apart from a key that changed nothing (11 Nov 2026).
+        guard autoSelectDetection else {
+            Log.io("selection: not read, this field's selection is not being followed")
+            gesture.send(); return
+        }
+        guard let old = try? makeTextInfo(.selection) else {
+            Log.io("selection: not read, the field gave no selection")
+            gesture.send(); return
+        }
         gesture.send()
         let began = Date()
         let patience = caretMoveTimeout * (isInWebContent ? 3 : 1)
@@ -255,6 +266,25 @@ open class EditableText: TurnOverObject {
             usleep(2000)
         }
         Log.io("selection: no change seen within \(Int(patience * 1000)) ms; the app's notice will read it")
+    }
+
+    /// Whether the text has letters that run right to left (Hebrew, Arabic, Syriac, Thaana and the like), or a mark that says so.
+    public static func hasRightToLeft(_ text: String) -> Bool {
+        text.unicodeScalars.contains { u in
+            switch u.value {
+            case 0x0590...0x08FF, 0x200F, 0x202B, 0x202E, 0x2067, 0xFB1D...0xFDFF, 0xFE70...0xFEFF, 0x10800...0x10FFF, 0x1E800...0x1EFFF: return true
+            default: return false
+            }
+        }
+    }
+
+    /// Whether Left or Right has nowhere to go: the caret and its line both reach the edge, so a caret wrongly reported at 0 is not believed.
+    public nonisolated static func sidewaysEdge(key: String, caret: Int, lineStart: Int, lineEnd: Int, length: Int, fieldIsEmpty: Bool) -> Bool {
+        switch key {
+        case "leftArrow": return lineStart <= 0 && caret <= 0
+        case "rightArrow": return lineEnd >= length && caret >= length && (length > 0 || fieldIsEmpty)
+        default: return false
+        }
     }
 
     func caretMovement(_ gesture: KeyboardGesture, _ unit: TextUnit) {
@@ -282,11 +312,19 @@ open class EditableText: TurnOverObject {
         if !inCell, appModule.isTableCellText(element) { inCell = true }
         let noRoom = collapsed && !inCell && !gesture.modifiers.contains(.shift) && unit == .line
             && ((backwards && oldLine.start <= 0 && info.start <= 0) || (forwards && length > 0 && oldLine.end >= length && info.start >= length))
-        if noRoom {
-            Log.io("edge: nothing \(backwards ? "before" : "after") the caret (\(info.start) of \(length)); sent unwaited")
+        // Plain Left and Right at either end of left-to-right text are as sure an edge, so the bump is at once, as
+        // VoiceOver's is: a web field made them wait three times the caret's patience, over 300 ms (9 Nov 2026). Not where
+        // the line has right-to-left text, in which the arrows go the other way round.
+        // A length of 0 is believed only when the field says so itself: some editors answer 0 for text they do not expose.
+        // As for Up and Down, the line must also reach the edge: some apps report the caret at 0 when it is not.
+        let fieldIsEmpty = length == 0 && (element.int(kAXNumberOfCharactersAttribute) == 0 || element.string(kAXValueAttribute) == "")
+        let noRoomSideways = collapsed && !inCell && unit == .character && gesture.modifiers.isEmpty && !Self.hasRightToLeft(oldLine.text)
+            && Self.sidewaysEdge(key: key, caret: info.start, lineStart: oldLine.start, lineEnd: oldLine.end, length: length, fieldIsEmpty: fieldIsEmpty)
+        if noRoom || noRoomSideways {
+            Log.io("edge: nothing \(backwards || key == "leftArrow" ? "before" : "after") the caret (\(info.start) of \(length)); sent unwaited")
             gesture.send()
             Tones.edge(keySent: true, sound: boundarySound)
-            caretMoved(speak: readsLineAtEdge ? .line : nil, gesture: gesture, info: info)
+            caretMoved(speak: unit == .line && readsLineAtEdge ? .line : nil, gesture: gesture, info: info)
             return
         }
         gesture.send()
@@ -430,13 +468,15 @@ open class EditableText: TurnOverObject {
             gesture.send()
             _ = hasCaretMoved(from: bookmark)
             lastSelection = try? makeTextInfo(.selection)
-            Speech.speakMessage(gone.isEmpty || gone.count > 80 ? String(localized: "selection deleted", comment: "Selected text deleted")
-                : Phrases.deleted(gone.count == 1 ? Symbols.name(of: gone.first!) : gone))
+            let what = gone.count == 1 ? Symbols.name(of: gone.first!) : gone
+            if !gone.isEmpty, gone.count <= 80, Speech.deletionByPitch { Speech.lowerForDeletion(); Speech.speakMessage(what) }
+            else { Speech.speakMessage(gone.isEmpty || gone.count > 80 ? String(localized: "selection deleted", comment: "Selected text deleted") : Phrases.deleted(what)) }
             return
         }
         let test = old.copy()
         var chunk = ""
-        if test.move(.character, -1) < 0 {
+        let movedBack = test.move(.character, -1)
+        if movedBack < 0 {
             if unit == .line { let l = old.copy(); l.expand(.line); l.setEndPoint(old, .endToStart); chunk = l.text }
             else if unit == .word {
                 // The word before the caret, past any spaces: Option Backspace takes it and the spaces after it. The
@@ -451,6 +491,16 @@ open class EditableText: TurnOverObject {
             else { test.expand(unit); chunk = test.text }
         }
         gesture.send()
+        // An empty field: nothing to delete, and nothing to wait for. The wait was 300 ms of silence a press in
+        // an empty prompt (Claude's: 127 times on 13 Nov 2026), and the next key waited behind it. A bump, as at any edge.
+        // (An empty field only, by its own value, white space aside: Claude's empty prompt holds a line break. Where
+        // the caret's place can't be read, it says 0 with text before it.)
+        let blank = (element.attr(kAXValueAttribute) as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true
+        if movedBack == 0, blank {
+            Log.io("edge: an empty field, nothing to delete; sent unwaited")
+            Tones.edge(keySent: true, sound: appModule.playsNativeCaretBoundarySound)
+            return
+        }
         Speech.speakTypedCharacter("\u{8}", inEditable: true)
         let c = chunk.replacingOccurrences(of: "\r\n", with: "\n")
         // Said at once, before the caret is waited for: with something before the caret the deletion is certain, and
@@ -460,7 +510,7 @@ open class EditableText: TurnOverObject {
             // A line break has nothing to spell: say what it was ("new line"), as for any character named on its own.
             if let only = c.first, c.count == 1, only.isNewline { Speech.speakMessage(Symbols.name(of: only)) }
             // A word or a line deleted says so ("deleted more"); a single character is just the character, as in NVDA.
-            else if c.count > 1 { Speech.speakText(unit == .character ? c : Phrases.deleted(c.trimmingCharacters(in: .whitespaces))) } else { Speech.speakSpelling(c) }
+            else if c.count > 1 { Speech.lowerForDeletion(); Speech.speakText(unit == .character || Speech.deletionByPitch ? c : Phrases.deleted(c.trimmingCharacters(in: .whitespaces))) } else { Speech.lowerForDeletion(); Speech.speakSpelling(c) }
         }
         let (moved, newInfo) = hasCaretMoved(from: bookmark)
         guard moved else { return }

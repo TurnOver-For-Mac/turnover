@@ -60,6 +60,21 @@ public final class WebBuffer {
     public var lines: [Line] { snapshot.lines }
     public var segments: [Segment] { snapshot.segments }
     public var containers: [(start: Int, end: Int, element: AXUIElement)] { snapshot.containers }
+    /// The old copy still knows the parents of an element the app has destroyed. Never ask the dead element
+    /// for them live (Claude rebuilt its answer buttons, 14 Nov 2026).
+    func activationAncestors(of element: AXUIElement) -> [AXUIElement] {
+        inPublication {
+            var result: [AXUIElement] = []
+            var seen: Set<ElementKey> = [ElementKey(element)]
+            var parent = element.element(kAXParentAttribute)
+            while let current = parent, result.count < 16, seen.insert(ElementKey(current)).inserted {
+                if current.isSame(webArea) { break }
+                result.append(current)
+                parent = current.element(kAXParentAttribute)
+            }
+            return result
+        }
+    }
     public private(set) var builtAt = Date.distantPast
     public var isDirty = true { didSet { if isDirty { dirtyRevision += 1 } } }
     private var dirtyRevision = 0
@@ -109,11 +124,17 @@ public final class WebBuffer {
     package init(webArea: AXUIElement, collect: @escaping @Sendable (AXUIElement, AXUIElement?, AXWalkRequest) -> WebBufferCollection) {
         self.collect = collect
         self.webArea = webArea
-        decorativeImages = NSRunningApplication(processIdentifier: webArea.pid)?.bundleIdentifier.map { Self.decorativeImageApps.contains($0) } ?? false
+        let bundle = NSRunningApplication(processIdentifier: webArea.pid)?.bundleIdentifier
+        decorativeImages = bundle.map { Self.decorativeImageApps.contains($0) } ?? false
+        skipsStatusEchoes = bundle.map { Self.statusEchoApps.contains($0) } ?? false
     }
     /// Apps (set by their modules) whose pictures are icons only, left out of the copy.
     public static var decorativeImageApps: Set<String> = []
     private let decorativeImages: Bool
+    /// Apps (set by their modules) whose status regions repeat the control just before them: read once (the Claude
+    /// app's tool rows, 13 Nov 2026).
+    public static var statusEchoApps: Set<String> = []
+    private let skipsStatusEchoes: Bool
     /// Subroles of an iOS screen's parts left out of its copy (set by app modules).
     public static var iosSkippedSubroles: Set<String> = []
     /// Identifiers of an iOS screen's parts read before their siblings (set by app modules).
@@ -296,6 +317,7 @@ public final class WebBuffer {
             iosContent = webArea.string(kAXSubroleAttribute) == "iOSContentGroup"
             profiled = !ProfileStore.shared.profiles(for: ProfileStore.shared.bundle(of: webArea.pid)).isEmpty
             consumed = []
+            lastControlLabel = nil
             docText = collection.documentText as NSString
             docCursor = 0; lastTextEnd = nil
             visit(webArea, depth: 0)
@@ -654,6 +676,33 @@ public final class WebBuffer {
     private var profiled = false
     /// Siblings whose text a plugin label took (so "Open Project" is not read twice).
     private var consumed: [AXUIElement] = []
+    /// The label of the control read last, until text follows it: a status region repeating it is an echo.
+    private var lastControlLabel: String?
+
+    /// Whether a status region holds nothing but the start of the control just read: in an app that does this
+    /// (statusEchoApps), with the whole region looked at (a region with more in it, or too big to look at whole, is
+    /// read), and eight characters at least, so a short word that happens to match is read (Codex's review, 14 Nov 2026).
+    private func echoesLastControl(_ region: AXUIElement) -> Bool {
+        guard skipsStatusEchoes, let label = lastControlLabel, !label.isEmpty else { return false }
+        var parts: [String] = []
+        var queue = [region]; var n = 0
+        while !queue.isEmpty {
+            guard n < 40 else { return false }   // not looked at whole: read it
+            let e = queue.removeFirst(); n += 1
+            let r = e.role
+            // Anything but text and groups in it (a button of its own, a picture) is content: read it.
+            guard r == "AXStaticText" || r == "AXGroup" else { return false }
+            if r == "AXStaticText" {
+                guard let v = e.string(kAXValueAttribute) else { return false }   // text that can't be read: read it
+                parts.append(v)
+            }
+            queue.append(contentsOf: e.elements(kAXChildrenAttribute))
+        }
+        let text = parts.joined().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.count >= 8 else { return false }
+        // Exactly the control's label: a part of it is not proof (Codex's second review, 14 Nov 2026).
+        return text == label.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
     private func visit(_ el: AXUIElement, depth: Int) {
         guard depth < 60 else { return }
@@ -716,6 +765,7 @@ public final class WebBuffer {
                 append(v, el, space: space)
                 if iosContent { flush() }
                 lastTextEnd = r.location != NSNotFound ? r.location + r.length : nil
+                lastControlLabel = nil
             }
         case "AXGenericElement" where iosContent:
             // A book's page in Kindle: the whole page as one value, with no lines or paragraphs given (probe, 18 Oct
@@ -761,6 +811,7 @@ public final class WebBuffer {
             currentElement = el
             addPiece(label.isEmpty ? obj.role.displayString : label, el, false)
             flush(control: true, fields: fields)
+            lastControlLabel = label
         case "AXHeading" where el.elements(kAXChildrenAttribute).isEmpty:
             // A heading with no text children (SwiftUI content in Music) is its own title.
             flush()
@@ -768,6 +819,10 @@ public final class WebBuffer {
             if let t = el.string(kAXDescriptionAttribute) ?? el.string(kAXTitleAttribute) ?? el.string(kAXValueAttribute), !t.isEmpty { currentElement = el; append(t, el) }
             flush()
             pendingEntering.removeAll { $0.isSame(el) }
+        case "AXGroup" where sub == "AXApplicationStatus" && echoesLastControl(el):
+            // A status region that repeats the control just before it is not read twice: the Claude app's tool rows were
+            // read as "Ran 2 commands, button", then "Ran 2 commands" again from the status beside it (13 Nov 2026).
+            break
         default:
             let isLandmark = sub.hasPrefix("AXLandmark") || sub == "AXDocumentArticle" || sub == "AXBlockQuote"
             let announced = Self.announcedContainers.contains(role) || isLandmark || Self.announcedSubroles.contains(sub)
@@ -921,7 +976,7 @@ public final class WebBuffer {
     }
 
     private init(copying source: WebBuffer) {
-        webArea = source.webArea; collect = source.collect; decorativeImages = source.decorativeImages
+        webArea = source.webArea; collect = source.collect; decorativeImages = source.decorativeImages; skipsStatusEchoes = source.skipsStatusEchoes
         snapshot = source.snapshot; revision = source.revision; lastStop = source.lastStop
         builtAt = source.builtAt; status = source.status; isDirty = source.isDirty; lastBuildMs = source.lastBuildMs
     }

@@ -52,12 +52,14 @@ public final class SystemPrompts {
     public var waiting: [(window: AXUIElement, pid: pid_t, text: String)] {
         summaries.filter { p in shown.contains { $0.isSame(p.window) } && p.window.role != "?" && !p.window.role.isEmpty }
     }
-    private var lastReminder = Date.distantPast
+    private var reminders = SystemPromptReminders<AXUIElement>(isSame: { $0.isSame($1) })
 
     /// Another application came to the front while a prompt waits: say so, after the application, with the way to it.
     public func remindIfWaiting(activated pid: pid_t) {
-        guard let p = waiting.first, p.pid != pid, Date().timeIntervalSince(lastReminder) > 5 else { return }
-        lastReminder = Date()
+        let prompts = waiting
+        guard let index = reminders.next(in: prompts.map { ($0.window, $0.pid) },
+                                         activated: pid, now: ProcessInfo.processInfo.systemUptime) else { return }
+        let p = prompts[index]
         let key = config.general.windowsKeys ? String(localized: "Option Tab", comment: "Keys to reach a waiting system dialog") : String(localized: "VO-F1 twice", comment: "Keys to reach a waiting system dialog")
         Log.io("system prompt still open (pid \(p.pid)); reminded")
         Speech.speakMessage(String(localized: "system dialog waiting: \(p.text). \(key) to go to it", comment: "A system dialog waiting: its words, then the keys to reach it"))
@@ -83,6 +85,7 @@ public final class SystemPrompts {
         }
         let gone = !shown.isEmpty && !shown.allSatisfy { w in windows.contains { $0.0.isSame(w) } }
         shown.removeAll { w in !windows.contains { $0.0.isSame(w) } }
+        reminders.retainOpen(windows.map { $0.0 })
         summaries.removeAll { p in !shown.contains { $0.isSame(p.window) } }
         if gone, shown.isEmpty, let front = NSWorkspace.shared.frontmostApplication {
             Log.io("system prompt closed; focus back to \(front.localizedName ?? "?")")
@@ -160,5 +163,40 @@ public final class SystemPrompts {
             let front = NSWorkspace.shared.frontmostApplication?.processIdentifier
             Log.io("system prompt: keyboard \(front == pid ? "is with the prompt" : "still with pid \(front ?? -1)")")
         }
+    }
+}
+
+/// Reminder history belongs to the open dialog, independently of its summary being read again.
+/// An application switch can remind once immediately and once more after five minutes (14 Nov 2026).
+package struct SystemPromptReminders<Window> {
+    private struct Reminder {
+        var window: Window
+        var first: TimeInterval
+        var repeated = false
+    }
+    private var history: [Reminder] = []
+    private let isSame: (Window, Window) -> Bool
+
+    package init(isSame: @escaping (Window, Window) -> Bool) {
+        self.isSame = isSame
+    }
+
+    package mutating func retainOpen(_ windows: [Window]) {
+        let same = isSame
+        history.removeAll { reminder in !windows.contains { same($0, reminder.window) } }
+    }
+
+    package mutating func next(in prompts: [(window: Window, pid: pid_t)], activated pid: pid_t,
+                               now: TimeInterval) -> Int? {
+        for (index, prompt) in prompts.enumerated() where prompt.pid != pid {
+            if let previous = history.firstIndex(where: { isSame($0.window, prompt.window) }) {
+                guard !history[previous].repeated, now - history[previous].first >= 300 else { continue }
+                history[previous].repeated = true
+            } else {
+                history.append(Reminder(window: prompt.window, first: now))
+            }
+            return index
+        }
+        return nil
     }
 }

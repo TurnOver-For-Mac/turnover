@@ -151,6 +151,18 @@ public final class SpeechPlayer: @unchecked Sendable {
         engine.outputNode.presentationLatency + Double(bufferFrames) / format.sampleRate
     }
 
+    /// 14 Nov 2026: exercise clients' connection to the real locked busy count without starting audio,
+    /// changing the device buffer size or registering watches. Seed the queue-owned state before this
+    /// instance is shared; tests only read isBusy and replace the instance to model completion.
+    package init(pendingSpeechForTesting: Bool) {
+        _voiceIdentifier = ""
+        _rate = 0.55
+        bufferFrames = 128
+        format = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 1)!
+        if pendingSpeechForTesting { pending.append(UtteranceState(completion: nil)) }
+        noteBusy()
+    }
+
     public init(voice: String, rate: Float = 0.55, bufferFrames: UInt32 = 128) throws {
         self._voiceIdentifier = voice
         self._rate = rate
@@ -444,7 +456,7 @@ public final class SpeechPlayer: @unchecked Sendable {
     /// first. `requestedAt` lets the caller pass the originating event's time.
     /// `voice`: this utterance only (another language's voice); nil is the current voice.
     public func speak(_ text: String, interrupt: Bool = true, requestedAt: UInt64 = mach_absolute_time(), voice: String? = nil, rate rateOverride: Float? = nil,
-                      pitch: Float? = nil,
+                      pitch: Float? = nil, source: String? = nil,
                       onStart: (@Sendable () -> Void)? = nil,
                       completion: (@Sendable (_ finished: Bool) -> Void)? = nil) {
         if interrupt { outputHealth.cancel() }
@@ -452,13 +464,13 @@ public final class SpeechPlayer: @unchecked Sendable {
             if interrupt { cancelOnQueue() }
             // One utterance renders at a time, in order: a second write while the first was rendering played their
             // buffers interleaved (a typed word and its punctuation queued together).
-            let job = { [self] in render(text, requestedAt: requestedAt, voice: voice, rate: rateOverride, pitch: pitch, onStart: onStart, completion: completion) }
-            if rendering { waiting.append((job, completion)) } else { job() }
+            let job = { [self] in render(text, requestedAt: requestedAt, voice: voice, rate: rateOverride, pitch: pitch, source: source, onStart: onStart, completion: completion) }
+            if rendering { waiting.append((job, completion, source)) } else { job() }
         }
     }
 
     private var rendering = false
-    private var waiting: [(() -> Void, (@Sendable (Bool) -> Void)?)] = []
+    private var waiting: [(job: () -> Void, completion: (@Sendable (Bool) -> Void)?, source: String?)] = []
 
     /// A voice from outside the Mac's speech (Kokoro, on the maintainer's Mac, 12 Oct 2026): a voice identifier starting
     /// "external:" is rendered by this, which delivers its audio buffers and then nil, and returns a way to cancel; nil
@@ -476,13 +488,13 @@ public final class SpeechPlayer: @unchecked Sendable {
     private func renderNext() {
         rendering = false
         guard !waiting.isEmpty else { return }
-        let (job, _) = waiting.removeFirst()
-        job()
+        waiting.removeFirst().job()
     }
 
-    private func render(_ text: String, requestedAt: UInt64, voice: String?, rate rateOverride: Float? = nil, pitch: Float? = nil, onStart: (@Sendable () -> Void)?, completion: (@Sendable (Bool) -> Void)?) {
+    private func render(_ text: String, requestedAt: UInt64, voice: String?, rate rateOverride: Float? = nil, pitch: Float? = nil, source: String? = nil, onStart: (@Sendable () -> Void)?, completion: (@Sendable (Bool) -> Void)?) {
         do {
             let state = UtteranceState(completion: completion)
+            state.source = source
             state.hasWords = text.contains { $0.isLetter || $0.isNumber }
             state.outputIncident = outputHealth.request(hasWords: state.hasWords, now: Self.outputClock)
             ensureRunning(reason: "before a render")   // an utterance with no cancel before it waited on a stopped engine (the code review, 17 Oct 2026)
@@ -524,7 +536,7 @@ public final class SpeechPlayer: @unchecked Sendable {
                         self.pending.removeAll { $0 === state }; self.noteBusy()
                         self.rendering = false
                         let mac = self.fallbackVoiceIdentifier.isEmpty ? nil : self.fallbackVoiceIdentifier
-                        self.render(text, requestedAt: requestedAt, voice: mac ?? AVSpeechSynthesisVoice(language: nil)?.identifier ?? "com.apple.voice.compact.en-GB.Daniel", rate: rateOverride, pitch: pitch, onStart: onStart, completion: completion)
+                        self.render(text, requestedAt: requestedAt, voice: mac ?? AVSpeechSynthesisVoice(language: nil)?.identifier ?? "com.apple.voice.compact.en-GB.Daniel", rate: rateOverride, pitch: pitch, source: source, onStart: onStart, completion: completion)
                     }
                 }
                 doing("external voice render")
@@ -680,6 +692,7 @@ public final class SpeechPlayer: @unchecked Sendable {
         var done = false
         var voice = ""
         var hasWords = false
+        var source: String?
         var outputIncident: SpeechOutputIncident?
         /// The EQ as the utterance's first buffer came, its filters carried from buffer to buffer.
         var eq: SpeechEQ?
@@ -723,6 +736,29 @@ public final class SpeechPlayer: @unchecked Sendable {
         queue.async { [self] in cancelOnQueue() }
     }
 
+    /// Stop only what `source` said (the pointer's reading), leaving other speech (a notification, typing echo)
+    /// alone. Waiting utterances from the source are dropped. What is already rendering or playing can only be
+    /// stopped by stopping the player, which drops everything: so it is stopped only when all of it is the source's,
+    /// and the other sources' waiting utterances are queued again. If another source's utterance is already playing
+    /// or rendering, the source's current utterance finishes (a limitation).
+    public func cancel(source: String) {
+        queue.async { [self] in
+            let dropped = waiting.filter { $0.source == source }
+            waiting = SpeechSourceFilter.keeping(waiting, notFrom: source) { $0.source }
+            for d in dropped { d.completion?(false) }
+            let playing = pending.filter { !$0.done }
+            let others = playing.contains { $0.source != source }
+            guard !others, playing.contains(where: { $0.source == source }) || (current?.state.source == source) else { return }
+            // Taken out before the stop, which tells every waiting utterance it was cut off: these are not cut off,
+            // they are said next, so their completion must be called once, as finished.
+            let kept = waiting
+            waiting.removeAll()
+            cancelOnQueue()
+            waiting = kept
+            renderNext()
+        }
+    }
+
     /// How long the last cancel took (stopping the synthesizer mid-render can be slow): read for the timing log.
     public private(set) var lastCancelMs: Double = 0
 
@@ -739,7 +775,15 @@ public final class SpeechPlayer: @unchecked Sendable {
         guard !node.isPlaying else { return }
         var reason: NSString?
         doing("node play")
+        let started = Self.outputClock
         if !TOCatch({ node.play() }, &reason) { NSLog("speech: the audio device went as a node was played (%@); the next speech starts it again", (reason ?? "") as String) }
+        // The play that held the speech queue for 13 s after the sound moved to AirPods Max (14 Nov 2026, cause not
+        // known): how long a slow one took, and on which output, so the next one shows where the time goes.
+        let ms = Int((Self.outputClock - started) * 1000)
+        if ms >= 200 {
+            let name = Self.stringProperty(engineDevice, kAudioObjectPropertyName) ?? "device \(engineDevice)"
+            onOutputChange?("speech: starting playback took \(ms) ms (output \(name))")
+        }
     }
 
     /// A new player with this one's voice, settings and callbacks, for when this one's queue is stuck in Apple's audio
@@ -870,7 +914,7 @@ public final class SpeechPlayer: @unchecked Sendable {
         let dropped = waiting
         waiting.removeAll()
         rendering = false
-        for (_, completion) in dropped { completion?(false) }
+        for item in dropped { item.completion?(false) }
         doing("external voice cancel")
         externalCancel?(); externalCancel = nil   // the external voice stops making what won't be heard
         doing("player stop")
@@ -943,4 +987,11 @@ final class Flag: @unchecked Sendable {
     private let lock = NSLock(); private var value = false
     func set() { lock.lock(); value = true; lock.unlock() }
     var isSet: Bool { lock.lock(); defer { lock.unlock() }; return value }
+}
+
+/// The waiting list with one source's entries taken out, order kept.
+public enum SpeechSourceFilter {
+    public static func keeping<T>(_ items: [T], notFrom source: String, key: (T) -> String?) -> [T] {
+        items.filter { key($0) != source }
+    }
 }

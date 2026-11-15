@@ -194,7 +194,16 @@ extension AXHandler {
             // Only an app that took none of them: the Dock always refuses most (24 of 27) and never comes to the front,
             // and dropping it silenced the Command Tab switcher (15 Oct 2026).
             guard names.count >= Self.notifications.count else {
-                Log.error("pid \(pid): \(names.count) notifications never registered; the rest kept"); return
+                // The Dock always refuses most of them (24 of 27) and never comes to the front: what it is, not a
+                // fault, though it read as one in every log (13 and 14 Nov 2026). Any other app's refusal is an error.
+                if NSRunningApplication(processIdentifier: pid)?.bundleIdentifier == "com.apple.dock" {
+                    Log.info("pid \(pid), the Dock: \(names.count) notifications refused, as it always does; the rest kept")
+                } else if names.count <= Self.notifications.count / 2 {
+                    Log.info("pid \(pid): \(names.count) notifications not registered after the retries; the rest kept")
+                } else {
+                    Log.error("pid \(pid): \(names.count) notifications never registered; the rest kept")
+                }
+                return
             }
             Log.error("pid \(pid): no notifications registered; trying again when it next comes to the front")
             if let current = observers[pid], current === obs { removeSource(obs); observers[pid] = nil }
@@ -212,17 +221,21 @@ extension AXHandler {
             // closure holds the observer).
             nonisolated(unsafe) let refcon = Unmanaged.passUnretained(self).toOpaque()
             nonisolated(unsafe) let observer = obs
+            // A notification the app says it does not support is not asked for again: no retry changes that (Codex's
+            // review, 14 Nov 2026: only real failures are worth the retries).
             let register: @Sendable ([String]) -> [String] = { some in
                 some.filter { n in
                     let r = AXObserverAddNotification(observer, app, n as CFString, refcon)
-                    return r != .success && r != .notificationAlreadyRegistered
+                    return r != .success && r != .notificationAlreadyRegistered && r != .notificationUnsupported
                 }
             }
             let started = Date()
             let settle: @MainActor @Sendable ([String]) -> Void = { [weak self] still in
                 guard let self, let current = self.observers[pid], current === obs else { return }
                 Log.info("pid \(pid): \(names.count - still.count) of \(names.count) notifications registered on retry, in \(Int(Date().timeIntervalSince(started) * 1000)) ms off the main thread")
-                if still.count > Self.notifications.count / 2 { self.retryNotifications(pid: pid, obs: obs, names: still, delays: Array(delays.dropFirst())) }
+                // Any that still failed, now that the unsupported ones are set aside: one missing focus notification
+                // matters (Codex's second review, 14 Nov 2026). The schedule stays bounded.
+                if !still.isEmpty { self.retryNotifications(pid: pid, obs: obs, names: still, delays: Array(delays.dropFirst())) }
             }
             DispatchQueue.global(qos: .userInitiated).async {
                 let still = register(names)
