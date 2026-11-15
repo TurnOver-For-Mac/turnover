@@ -442,3 +442,16 @@ inspection also limits each listing to 1 MiB and each inspection or extraction c
 
 Keep plugin content in ordinary files. Finder ZIPs are supported, but macOS metadata is unpacked as AppleDouble
 sidecar files rather than restored as Finder attributes or resource forks.
+
+## Scripts
+
+A plugin that needs to make a decision, rather than only name, key or watch things, can have one script, `main.js`,
+in JavaScript (15 Nov 2026). It is off unless the `pluginScripts` setting is switched on
+(`defaults write com.turnover.reader pluginScripts -bool true`); until then every script is ignored and plugins stay
+data. A script runs in a separate sandboxed program with no files, no network and no other programs, asks TurnOver
+for what it needs, and runs only after the user has approved it on their own Mac. A plugin with a script uses
+`formatVersion` 2.
+
+- [docs/PLUGIN-SCRIPTS.md](docs/PLUGIN-SCRIPTS.md): the author's guide and the interface.
+- [docs/PLUGIN-SECURITY.md](docs/PLUGIN-SECURITY.md): what a plugin can never do, the threats, the reviewer's checklist.
+- [docs/FROM-JAWS-AND-NVDA.md](docs/FROM-JAWS-AND-NVDA.md): for people who have written JAWS scripts or NVDA add-ons.

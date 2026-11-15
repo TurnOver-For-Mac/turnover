@@ -195,7 +195,7 @@ Starting without scripts:
   "name": "Calculator, scripted",
   "version": "1.0",
   "apps": ["com.apple.calculator"],
-  "abilities": ["read", "say", "press"],
+  "abilities": ["read", "say"],
   "script": "main.js",
   "commands": [
     { "id": "readResult", "description": "Read the result", "key": "turnover+control+shift+r", "letter": "r" }
@@ -252,9 +252,10 @@ await item.setValue(v)    // edit
 
 Events:
 - `focus`: `event.item`. `event.say(text)` replaces what TurnOver says for the item; `event.silence()` says
-  nothing; neither, and TurnOver reads it as usual. The handler must decide before it returns: nothing after an
-  `await` can change the words (use `turnover.say` to add to them). Everything else TurnOver does on a focus still
-  happens.
+  nothing; neither, and TurnOver reads it as usual. The handler must decide before it returns or reaches its first
+  `await`, from the item it was given: nothing after an `await` can change the words (use `turnover.say` to add to
+  them). So a late answer means the handler's own code took more than 25 ms, never that a request was slow.
+  Everything else TurnOver does on a focus still happens.
 - `valueChange`: `event.item`, with the same `say` and `silence`.
 - `appFocus`, `appBlur`, `windowChange`: told, nothing to replace.
 - Never sent: typed characters, caret moves, anything from an app the plugin did not name.
@@ -264,6 +265,21 @@ given, or one for an item in another app, rejects.
 
 The script is started when one of its apps first comes to the front and ended when its apps have all quit. It is
 paused (no events, no timers) while none of its apps is in front.
+
+Details settled while the documents were written (15 Nov 2026):
+- `event.say` and `event.silence` need `say`.
+- `turnover.storage` needs no ability. A value is anything JSON can hold.
+- A command's handler is given `context`. `context.item` is the item with the focus when the command was chosen,
+  if the plugin has `read`; otherwise null.
+- `turnover.find` gives a list of items, empty when nothing matched.
+- `item.states` is a list of words ("selected", "disabled"); `item.window` is the window's title.
+- `turnover.sound` takes the name of one of TurnOver's own sound files; a name TurnOver does not have rejects.
+- The library's closed apps (PluginPolicy.closedApps) are closed to a plugin with a script as to any other. On any
+  Mac, a script may not name the macOS password and permission dialogs, the login window, or TurnOver.
+- While a secure field has the focus, `keys` and `edit` requests are refused, as reading it always is.
+- `turnover-plugin verify <folder>` prints the hash and the signing key's fingerprint: what a reviewer records.
+  An author's key is a file, `~/.turnover-plugin/author.key`, readable only by them.
+- "What is this?" (VO-Slash, the plugin maker) is the developer information for the item in focus.
 
 ## The wire
 
@@ -349,6 +365,7 @@ full `build.sh --no-install` runs once at the end.
 3. Release signing: `turnover-plugin-host` is signed like the other helpers and needs no entitlement. With the
    hardened runtime JavaScriptCore runs without its compiler, which is what the tests use.
 4. Whether scripts may ever reach every app, a website, or the internet. This plan says not yet.
+5. Where a report of a harmful plugin goes. There is no SECURITY.md; docs/PLUGIN-SECURITY.md says so until there is.
 
 ## Later
 
