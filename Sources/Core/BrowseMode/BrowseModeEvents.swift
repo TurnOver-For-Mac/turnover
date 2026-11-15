@@ -30,6 +30,12 @@ extension BrowseModeDocument {
             if fromOutside, !navigated, !passThrough, let last = lastFocusElement, event.obj.isSameElement(as: last) {
                 Log.io("browse mode: back from outside onto the \(event.obj.axRole) that had the focus; the reading position stays at \(position)")
                 positionMovedAt = Date()   // Enter and Space are for the reading position again, not that control (activate)
+                // The control's own gain focus is not run here, and with it went the following of a text field's
+                // selection: back in the Claude app's prompt, every Shift-arrow selection said nothing until the focus
+                // moved (all 8 of them on 11 and 12 Nov 2026, against 0 of 113 after an ordinary focus). Followed again.
+                if let field = event.obj as? EditableText {
+                    field.initAutoSelectDetection()
+                }
                 speakUnit(.line)
                 return
             }
