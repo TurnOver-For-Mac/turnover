@@ -91,26 +91,33 @@ public enum PluginPolicy {
         return out
     }
 
+    /// Why a menu path may not be chosen on any Mac, if it may not: the Apple menu, a pattern for the first menu, and the
+    /// Mac's own items. One check for a profile's menu keys (at load) and a script's `menu` requests (when made).
+    nonisolated static func menuRefusals(_ path: [String]) -> [String] {
+        guard let first = path.first else { return [] }
+        var out: [String] = []
+        if first.lowercased() == "apple" || first == "\u{F8FF}" { out.append("the Apple menu belongs to the Mac, not the app") }
+        // A pattern for the first menu could land on the Apple menu, which comes first.
+        if first.contains("*") { out.append("the first menu must be named, not a pattern (it could reach the Apple menu)") }
+        for step in path {
+            let st = step.lowercased()
+            // "Log Out Example User…", "Restart…": the Mac's items carry more words; "Sleep Timer" doesn't count.
+            let prefixed = ["Log Out", "Restart", "Shut Down", "Force Quit"]
+            if let item = refusedMenuItems.first(where: { ElementMatcher.glob(step, $0) || (prefixed.contains($0) && st.hasPrefix($0.lowercased())) }) {
+                out.append("the menu item \(item) is never a plugin's to choose")
+                break
+            }
+        }
+        return out
+    }
+
     /// What no plugin may do on any Mac, from its profile alone: checked at load as well as install, so a plugin
     /// copied into the folder or edited in place can't get round it (code review, 13 Oct).
     nonisolated public static func refusals(_ p: Profile?) -> [String] {
         var out: [String] = []
         for k in p?.keys ?? [] {
             out += triggerRefusals(k.key)
-            if k.action == "menu", let path = k.menu, let first = path.first {
-                if first.lowercased() == "apple" || first == "\u{F8FF}" { out.append("\(k.key): the Apple menu belongs to the Mac, not the app") }
-                // A pattern for the first menu could land on the Apple menu, which comes first.
-                if first.contains("*") { out.append("\(k.key): the first menu must be named, not a pattern (it could reach the Apple menu)") }
-                for step in path {
-                    let st = step.lowercased()
-                    // "Log Out Example User…", "Restart…": the Mac's items carry more words; "Sleep Timer" doesn't count.
-                    let prefixed = ["Log Out", "Restart", "Shut Down", "Force Quit"]
-                    if let item = refusedMenuItems.first(where: { ElementMatcher.glob(step, $0) || (prefixed.contains($0) && st.hasPrefix($0.lowercased())) }) {
-                        out.append("\(k.key): the menu item \(item) is never a plugin's to choose")
-                        break
-                    }
-                }
-            }
+            if k.action == "menu", let path = k.menu { out += menuRefusals(path).map { "\(k.key): \($0)" } }
             if k.action == "keys", let sent = k.keys, let why = refusedKey(sent) { out.append("\(k.key) sends \(sent): \(why)") }
         }
         return out

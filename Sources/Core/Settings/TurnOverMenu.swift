@@ -565,6 +565,7 @@ public final class TurnOverMenu {
             let loaded = good == 1 ? String(localized: "1 plugin loaded", comment: "Plugins reloaded") : String(localized: "\(String(good)) plugins loaded", comment: "Plugins reloaded")
             Speech.speakMessage(bad > 0 ? String(localized: "\(loaded), \(String(bad)) with problems", comment: "Plugins reloaded: %1$@ says how many loaded, %2$@ how many have problems") : loaded)
         }))
+        if Edition.includesPluginScripts { items += ScriptPlugins.menuItems() }   // each script's state, and developer mode for scripts
         for (file, reason) in Recipes.problems { items.append(MenuItem("Recipe \(file) does not load: \(reason)", .action {})) }
         for p in ProfileStore.shared.plugins {
             if let m = p.manifest {

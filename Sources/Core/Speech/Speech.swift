@@ -345,6 +345,17 @@ public enum Speech {
         if reason == .focus { Hints.schedule(Hints.forObject(obj)) }
     }
 
+    /// The words a plugin script gave for a focus, said in place of `speakObject`'s: with the same step for a focus that
+    /// follows another within moments (the speech for the one before is dropped once these have words of their own).
+    /// Empty words say nothing.
+    public static func speakFocusWords(_ words: String) {
+        if let until = dropForFocusUntil {
+            dropForFocusUntil = nil
+            if Date() < until, !words.isEmpty { cancel(); Log.io("focus moved on at once: the speech for the focus before it dropped") }
+        }
+        if !words.isEmpty { enqueue(words) }
+    }
+
     /// NVDA: speakObjectProperties with reason CHANGE — only the named property.
     public static func speakObjectProperty(_ obj: TurnOverObject, value: Bool = false, name: Bool = false, description: Bool = false, states: Bool = false) {
         var parts: [String] = []

@@ -42,6 +42,11 @@ nonisolated public struct ScriptLimits: Sendable {
     public var scriptBytes: Int = PluginWire.Limits.scriptBytes
     public var messageBytes: Int = PluginWire.Limits.messageBytes
     public var storageBytes: Int = PluginWire.Limits.storageBytes
+    /// What one `find` may return, whatever the script asks for, and the time one may take on the main thread (a search
+    /// walks the app's windows through Accessibility: the same share of main as the second's whole allowance above, so a
+    /// slow app costs the script its turn, not the reader its voice).
+    public var findLimit: Int = 50
+    public var findBudget: TimeInterval = 0.15
     /// Strikes (a kill, a crash or a late answer) within `strikeWindow` that turn the script off for this run of
     /// TurnOver. Counting them is the next stage's; the numbers live here with the rest.
     public var strikesAllowed: Int = 3

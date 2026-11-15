@@ -428,7 +428,7 @@ open class TurnOverObject: ScriptableObject {
         // The selection event that follows on the same element is the same news (LibreOffice Calc's cells take the
         // focus and are selected on each arrow: every cell was said twice, parts sweep 14 Oct 2026).
         TurnOverObject.noteSelectionSpoken(element)
-        Speech.speakObject(self, reason: .focus)
+        if let words = ScriptFocusWords.held(for: element) { Speech.speakFocusWords(words) } else { Speech.speakObject(self, reason: .focus) }
     }
 
     /// The focus's name as last spoken. Claude's collapsed summary button ("Ran 23 commands (2 failed), compacted the

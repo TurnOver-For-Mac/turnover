@@ -160,6 +160,50 @@ Measured on this Mac, macOS 27.2, 14 Nov 2026 (a throwaway test program, not kep
 - A plugin's profile and its script share one approval: a script cannot reach past its abilities by leaving the
   work to a key in `profile.json`, because the abilities are worked out from both.
 
+## The keeper (decided and proven 15 Nov 2026)
+
+The maintainer decided on 15 Nov 2026 to build the place for receipts that another program cannot write. It
+replaces the Keychain for every build that is not a developer build.
+
+- What it is: a small sandboxed XPC service inside TurnOver.app, `Contents/XPCServices/TurnOverTrustKeeper.xpc`,
+  whose bundle identifier is the app's followed by `.trust-keeper`. Its only entitlement is the App Sandbox. It
+  keeps one file, the receipts and the developer-mode switch, in its own container
+  (`~/Library/Containers/<identifier>/Data`). macOS 14 and later asks the person before a program from another
+  developer may touch an app's container, so the file is out of reach of a program that merely runs as the person.
+- Who it answers: only the signed TurnOver. When a connection arrives the keeper reads its own team from its own
+  signature and requires the other end to be signed by that team with the app's identifier
+  (`NSXPCConnection.setCodeSigningRequirement`). A keeper with no team (an ad hoc build) answers nobody. TurnOver
+  puts the matching requirement on its own end, so a keeper swapped inside the app is not believed either.
+- It refuses to work unless it really is sandboxed, so a build that lost the entitlement fails loudly instead of
+  keeping receipts in an open folder.
+- What it does: load the bytes, store the bytes (1 MB at most, written whole), and a check that writes, reads and
+  removes a probe. It does not understand receipts; ScriptTrustStore does, as before.
+- Which builds use it: every build that is not a developer build. A developer build (`Edition.isDevBuild`) keeps
+  the sealed file and its key file, because it may be signed ad hoc. The Keychain is no longer used.
+- If the keeper cannot be reached, no script is approved in that run and none can be. TurnOver itself is not
+  affected. Nothing waits on the keeper for more than two seconds, and only when scripts are switched on.
+- The checks. `turnover --check-trust-keeper` asks the keeper to run its check and prints the result without
+  starting the screen reader; `build.sh` runs it after signing a build that is not a developer build. A second
+  check builds a throwaway app around the real keeper and proves both that it answers its own app and that it
+  refuses a copy of that app signed by someone else; a keeper that answers the copy stops the build.
+- A published build is signed again elsewhere. The keeper's sandbox entitlement must survive that, and
+  `--check-trust-keeper` should be run on the result.
+
+Measured with a throwaway copy on macOS 27.2 (15 Nov 2026), signed with the Developer ID certificate and the
+hardened runtime:
+- The service starts inside its own container. Its first answer took 164 ms the first time ever and 20 to 25 ms
+  in later runs; further questions on the same connection took 0.04 ms.
+- A fake app signed ad hoc, with the same bundle identifier and a copy of the real keeper inside it, was refused
+  on every call, and the file was unchanged.
+- The same fake app around a keeper built without the check wrote a forged file into the real container. So the
+  check is what stops this attack, and a test must keep it there.
+- An app signed by the same team with a different identifier was refused.
+- Not tried, because it would put a system question on the screen: another program writing the container
+  directly. That rests on what macOS documents for macOS 14 and later.
+
+What this does not change: a copy of TurnOver signed without the hardened runtime (a local build) can have code
+loaded into it by another program, and that code then is TurnOver. Published builds have the hardened runtime.
+
 ## Signing, the library and review
 
 - An author may sign a plugin: `turnover-plugin keygen` makes an Ed25519 key, `turnover-plugin sign` writes
@@ -311,6 +355,22 @@ Details settled while the format and the tool were built (15 Nov 2026):
 - What a script stores is a plain file in TurnOver's support folder. Other programs can read it, so a script
   should not store what it reads from an app unless the person would expect that.
 
+Details settled when scripts were joined to TurnOver (15 Nov 2026):
+- A focus or value event carries the item, so it needs `read`: a plugin without `read` is not sent them. A value
+  change in a password field is never sent to any script.
+- `event.say` replaces the usual words where TurnOver itself would have announced the focus. The usual hint
+  still follows words a script gave; nothing follows a silence. The same words twice within half a second are
+  said once, as TurnOver's own are.
+- `item.role` is the word a `profile.json` match uses for the role (the accessibility role without `AX`, first
+  letter small).
+- A search (`turnover.find`) gives at most 50 items and may take 150 ms.
+- Requests that act (`press`, `focus`, `edit`, `menu`, `keys`) need both TurnOver's focus and the Mac's own
+  frontmost app to be one of the plugin's apps. `keys` and `edit` are also refused while the Mac reports secure
+  keyboard entry, and when TurnOver cannot tell what has the focus.
+- What a script says is not yet marked with its source, so turning a script off does not cut what it is already
+  saying. The speech-source work is on another branch; see Later.
+- The approval question lists "Not now" first, so a hurried Return cannot approve.
+
 ## The wire
 
 One JSON object per line. TurnOver to host:
@@ -384,6 +444,8 @@ full `build.sh --no-install` runs once at the end.
    plugin and its tests.
 3. Joining TurnOver: ScriptPlugins, AXScriptBroker, the reportFocus question, approval and the menu, the switch.
 4. The documents, alongside.
+4a. The keeper, with the two faults found when stage 2 was reviewed (the loader hashing bytes it did not parse,
+   and key files made before their permissions are narrowed).
 5. A review by someone who did not write it, then the full build.
 
 ## Decisions for the maintainer
@@ -396,21 +458,16 @@ full `build.sh --no-install` runs once at the end.
    hardened runtime JavaScriptCore runs without its compiler, which is what the tests use.
 4. Whether scripts may ever reach every app, a website, or the internet. This plan says not yet.
 5. Where a report of a harmful plugin goes. There is no SECURITY.md; docs/PLUGIN-SECURITY.md says so until there is.
-6. A place for receipts that another program cannot write (see Approval). Both ways change how TurnOver is
-   assembled and signed, so neither is built here:
-   - a small sandboxed service inside TurnOver.app that keeps the receipts in its own container, which macOS 14 and
-     later protects from other developers' programs, and which answers only the signed TurnOver
-     (`xpc_connection_set_peer_code_signing_requirement`); or
-   - the data-protection Keychain with an access group, which needs a provisioning profile and the
-     `keychain-access-groups` entitlement.
-   Until one of them exists, a receipt stops files that arrive, not a program that attacks TurnOver's own files on
-   purpose. That is still more than a plugin of rules has today (gap 1).
+6. A place for receipts that another program cannot write. Decided 15 Nov 2026: build the keeper (see "The
+   keeper"). What is left for the maintainer is the release: the signing that publishes TurnOver must keep the
+   keeper's sandbox entitlement, and `turnover --check-trust-keeper` should pass on the published build.
 
 ## Later
 
 - Receipts for data plugins too, so nothing in the plugins folder is live without approval (gap 1).
 - Abilities enforced for data plugins at load (gap 2), and the library install running the checks itself (gap 3).
-- A command that says which plugin spoke last.
+- A command that says which plugin spoke last, and script speech marked with its source so it can be cut when
+  the script is turned off (needs the speech-source work that is on another branch).
 - Scripts for a website (the browsers are closed apps today).
 - Options a plugin declares, shown in TurnOver's own menu.
 - Script tests that replay a recorded app through the real broker.

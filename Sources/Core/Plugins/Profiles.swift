@@ -675,6 +675,13 @@ final class ProfilesPlugin: GlobalPlugin {
         }
     }
 
+    /// What a key's `read` says for an element: its text, or its name, role and the rest if it has none. A script's
+    /// `item.read` says the same.
+    static func readingText(of e: AXUIElement) -> String {
+        let t = ElementMatcher.text(of: e)
+        return t.isEmpty ? Speech.objectPropertiesSpeech(ObjectFactory.make(e), reason: .query).joined(separator: ", ") : t
+    }
+
     static func perform(_ rule: KeyRule, gesture: KeyboardGesture) {
         guard let pid = API.focusPid else { return }
         func target() -> AXUIElement? {
@@ -694,9 +701,7 @@ final class ProfilesPlugin: GlobalPlugin {
             AXHandler.shared.refocus(pid: pid)
         case "read":
             guard let e = target() else { return }
-            let obj = ObjectFactory.make(e)
-            let t = ElementMatcher.text(of: e)
-            Speech.speakMessage(t.isEmpty ? Speech.objectPropertiesSpeech(obj, reason: .query).joined(separator: ", ") : t)
+            Speech.speakMessage(readingText(of: e))
         case "menu":
             guard let path = rule.menu, !path.isEmpty else { return }
             if !MenuPath.choose(path, pid: pid) { Speech.speakMessage(String(localized: "menu item not found: \(path.joined(separator: ", "))", comment: "A plugin's menu item not found: %@ is its path")) }
@@ -795,5 +800,5 @@ public enum MenuPath {
 
 /// The plugins' commands for the plugin layer in the app (Command Control Comma, P).
 public enum PluginCommands {
-    public static func forApp(_ bundle: String) -> [(letter: String?, title: String, key: String, run: @MainActor () -> Void)] { ProfilesPlugin.commands(for: bundle) }
+    public static func forApp(_ bundle: String) -> [(letter: String?, title: String, key: String, run: @MainActor () -> Void)] { ProfilesPlugin.commands(for: bundle) + ScriptPlugins.commands(for: bundle) }
 }
