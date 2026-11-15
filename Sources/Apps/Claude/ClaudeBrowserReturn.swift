@@ -16,6 +16,11 @@ package final class ClaudeBrowserReturn {
     private var holdingSince: Date?
     private var latestKeys = 0
     private var searchUntil = Date.distantPast
+    /// The arming lapses this long after the shortcut if the Prompt has not been found, so a letter
+    /// pressed much later in browse mode is never held and typed into the Prompt.
+    package static let armedLifetime: TimeInterval = 2.0
+    private var armedUntil = Date.distantPast
+    private var lapsed: Bool { prompt == nil && now() >= armedUntil }
     private let reader = AXWalkRunner<Bool>()
     package var now: () -> Date = Date.init
     package var confirm: (AXUIElement, @escaping (Bool) -> Void) -> Void = { element, done in
@@ -46,6 +51,7 @@ package final class ClaudeBrowserReturn {
                 // Opening the browser must preserve its own controls and typing.
                 if let source = API.focusTreeInterceptor, source.webArea.pid == pid, !isConversation(source) {
                     armed = true
+                    armedUntil = now().addingTimeInterval(Self.armedLifetime)
                     latestKeys = ScriptHandler.keysArrivedCount
                     searchUntil = now().addingTimeInterval(0.5)
                     let request = generation
@@ -55,6 +61,7 @@ package final class ClaudeBrowserReturn {
             }
         }
         guard armed else { return nil }
+        guard !lapsed else { cancel(); return nil }
         // Plugins and user bindings resolve ahead of this module. Their intervening command
         // still advances the tap count, so a later letter cannot revive this return.
         let arrived = ScriptHandler.keysArrivedCount
@@ -88,7 +95,7 @@ package final class ClaudeBrowserReturn {
 
     package func handleEvent(_ event: Event) {
         guard armed else { return }
-        if event.kind == .appModuleLoseFocus { cancel(); return }
+        if event.kind == .appModuleLoseFocus || lapsed { cancel(); return }
         guard event.kind == .gainFocus else { return }
         if let prompt, event.obj.element.isSame(prompt) { return }
         if let current = API.focusTreeInterceptor, current.webArea.pid == pid,

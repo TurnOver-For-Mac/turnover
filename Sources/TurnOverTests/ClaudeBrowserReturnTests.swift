@@ -73,13 +73,38 @@ func claudeBrowserReturnTests() {
                 check(target.isSame(AXReplay.element(3)), "only the exact cached destination Prompt is focused")
                 completion = done
             }
-            time = time.addingTimeInterval(2.7)
+            time = time.addingTimeInterval(1.7)   // inside the two second arming window
             type("okay", state: state, owner: owner)
             waitForConfirmation { completion != nil }
             expect(sent.value, ["kb:command+shift+b"], "no letter reaches an unverified target")
             completion?(true)
             expect(sent.value, ["kb:command+shift+b", "kb:o", "kb:k", "kb:a", "kb:y"], "held letters reach the verified Prompt once and in order")
             check(page.passThrough, "native Prompt verification restores focus mode")
+        }
+    }
+    test("Claude browser return: a letter after the two second arming window is not held") {
+        withReturn { state, _, sent, _, owner in
+            var time = Date()
+            state.now = { time }
+            state.confirm = { _, _ in Harness.fail("a lapsed arming never focuses the Prompt") }
+            time = time.addingTimeInterval(2.2)
+            check(state.script(for: KeyboardGesture(identifier: "kb:o")!, owner: owner) == nil, "a late letter keeps its browse mode meaning")
+            time = time.addingTimeInterval(-1)
+            check(state.script(for: KeyboardGesture(identifier: "kb:o")!, owner: owner) == nil, "the lapse retired the arming for good")
+            expect(sent.value, ["kb:command+shift+b"], "nothing is typed")
+        }
+    }
+    test("Claude browser return: a letter just inside the arming window is held and replayed") {
+        withReturn { state, _, sent, _, owner in
+            var time = Date()
+            state.now = { time }
+            var completion: ((Bool) -> Void)?
+            state.confirm = { _, done in completion = done }
+            time = time.addingTimeInterval(1.8)
+            type("o", state: state, owner: owner)
+            waitForConfirmation { completion != nil }
+            completion?(true)
+            expect(sent.value, ["kb:command+shift+b", "kb:o"], "the held letter is replayed")
         }
     }
     test("Claude browser return: Prompt focus news preserves held letters before confirmation") {
