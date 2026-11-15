@@ -25,4 +25,10 @@ func dockModuleTests() {
         check(module.hint(for: list)?.hasPrefix("Left and Right") == true, "the bottom Dock's list: Left and Right")
         check(module.hint(for: TurnOverObject(element: AXReplay.element(1))) == nil, "not the Dock's list: no Dock hint")
     }
+
+    test("dock: an item in the Dock's list is said by its name alone") {
+        expect(DockAppModule.itemWords(name: "Safari"), "Safari", "the name, with no role or state")
+        expect(DockAppModule.itemWords(name: "  Finder \n"), "Finder", "trimmed")
+        expect(DockAppModule.itemWords(name: ""), nil, "no name: the general wording is kept")
+    }
 }
