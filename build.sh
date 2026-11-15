@@ -59,7 +59,7 @@ mkdir -p "$BUILD"
 # A failed compile must not install yesterday's binary.
 # (Every product, the Settings app and the test runners too: a stale one of those installed or ran as if new. From an
 # outside audit, pull request 13, 26 Oct 2026.)
-for f in turnover turnover-probe turnover-plugin turnover-key turnover-settings turnover-tests turnover-coretest libTurnOverCore.dylib; do
+for f in turnover turnover-probe turnover-plugin turnover-plugin-host turnover-key turnover-settings turnover-tests turnover-coretest libTurnOverCore.dylib; do
   rm -f "$BUILD/release/$f"
 done
 # The recipes and official listings, built into the program (make-embedded.py).
@@ -78,6 +78,10 @@ BUILD_STATUS=${PIPESTATUS[0]}
 set -e
 [ "$BUILD_STATUS" -eq 0 ] || { echo "build failed"; exit "$BUILD_STATUS"; }
 [ -x "$BUILD/release/turnover" ] && [ -x "$BUILD/release/turnover-key" ] && [ -f "$BUILD/release/libTurnOverCore.dylib" ] || { echo "build failed"; exit 1; }
+# The script host (docs/PLUGIN-SCRIPTS-PLAN.md, 15 Nov 2026) must be able to lock itself in its sandbox on this Mac: its
+# self-test tries to read the home folder, write /tmp, reach the network and start a program, and fails unless the
+# sandbox refuses all of them. A host that cannot sandbox itself would mean scripts either do not run or run unlocked.
+[ -x "$BUILD/release/turnover-plugin-host" ] && "$BUILD/release/turnover-plugin-host" --self-test || { echo "STOP: turnover-plugin-host failed to build or its sandbox self-test failed"; exit 1; }
 # The unit tests (Sources/TurnOverTests): a failing test stops the install (8 Oct 2026). TURNOVER_SKIP_TESTS=1 to skip.
 if [ "$TURNOVER_SKIP_TESTS" != 1 ]; then
   "$BUILD/release/turnover-tests" || { echo "build.sh: tests failed; not installing"; exit 1; }
@@ -88,7 +92,7 @@ fi
 BIN="$BUILD/release"
 if [ "$TURNOVER_UNIVERSAL" = 1 ]; then
   X86="$BUILD-x86_64"
-  for f in turnover turnover-probe turnover-plugin turnover-key turnover-settings turnover-tests turnover-coretest libTurnOverCore.dylib; do
+  for f in turnover turnover-probe turnover-plugin turnover-plugin-host turnover-key turnover-settings turnover-tests turnover-coretest libTurnOverCore.dylib; do
     rm -f "$X86/release/$f"
   done
   set +e
@@ -99,7 +103,7 @@ if [ "$TURNOVER_UNIVERSAL" = 1 ]; then
   [ -x "$X86/release/turnover" ] && [ -x "$X86/release/turnover-key" ] && [ -f "$X86/release/libTurnOverCore.dylib" ] || { echo "Intel build failed"; exit 1; }
   BIN="$BUILD/universal"
   rm -rf "$BIN"; mkdir -p "$BIN"
-  for f in turnover turnover-plugin turnover-key turnover-settings libTurnOverCore.dylib; do
+  for f in turnover turnover-plugin turnover-plugin-host turnover-key turnover-settings libTurnOverCore.dylib; do
     lipo -create "$BUILD/release/$f" "$X86/release/$f" -output "$BIN/$f"
   done
   echo "Universal: $(lipo -archs "$BIN/turnover")"
@@ -113,6 +117,8 @@ done
 # built, its self-test run, carried in the bundle and signed with TurnOver. A release build stops without them.
 HELPERSRC="$(cd "$(dirname "$0")" && pwd)/Helpers"
 HELPERBINS=()
+# The plugin script host: built with the main build above, self-tested there, carried in Helpers like the rest.
+HELPERBINS+=("turnover-plugin-host:$BIN/turnover-plugin-host")
 for H in steam-speech trackpad-gestures voiceover-quiet; do
   SRC="$HELPERSRC/$H"
   if [ ! -f "$SRC/Package.swift" ]; then
@@ -254,6 +260,8 @@ done
 sign --force --sign "$IDENTITY" --identifier com.turnover.core "$APP/Contents/Frameworks/libTurnOverCore.dylib"
 [ -f "$APP/Contents/MacOS/turnover-plugin" ] && sign --force --sign "$IDENTITY" --identifier com.turnover.plugin-tool "$APP/Contents/MacOS/turnover-plugin"
 for h in steam-speech trackpad-gestures voiceover-quiet phonon-helper; do [ -f "$APP/Contents/Helpers/$h" ] && sign --force --sign "$IDENTITY" --identifier "com.turnover.$h" "$APP/Contents/Helpers/$h"; done
+# The script host needs no entitlement: it sandboxes itself at start and runs JavaScriptCore without its compiler under the hardened runtime.
+[ -f "$APP/Contents/Helpers/turnover-plugin-host" ] && sign --force --sign "$IDENTITY" --identifier com.turnover.plugin-host "$APP/Contents/Helpers/turnover-plugin-host"
 sign --force --sign "$IDENTITY" --identifier "$BUNDLEID" "$APP"
 
 # Never install a TurnOver macOS will not trust: it would come up with no permissions and no speech.

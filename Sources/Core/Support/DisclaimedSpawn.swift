@@ -6,7 +6,8 @@
 import Foundation
 import Darwin
 
-public enum DisclaimedSpawn {
+// nonisolated: ScriptHost starts its host from several threads (15 Nov 2026); nothing here touches main-actor state.
+nonisolated public enum DisclaimedSpawn {
     public struct Child { public let pid: pid_t; public let stdin: FileHandle; public let stdout: FileHandle; public let stderr: FileHandle }
 
     private typealias SetDisclaim = @convention(c) (UnsafeMutablePointer<posix_spawnattr_t?>, Int32) -> Int32
