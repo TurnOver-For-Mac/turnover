@@ -106,6 +106,7 @@ func progressOutputTests() {
         // again by the next test's page of the same ids.
         let buffer = WebBuffer(webArea: AXReplay.root!)
         buffer.build()
+        waitForBuffer(buffer)
         let line = buffer.lines.first { $0.isControl }
         check(line != nil, "the bar has a control line")
         expect(line.map { buffer.text.substring(with: NSRange(location: $0.start, length: $0.end - $0.start)) }, "Test progress")

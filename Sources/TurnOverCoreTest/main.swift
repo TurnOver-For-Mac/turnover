@@ -8,6 +8,7 @@ import Foundation
 import AppKit
 import ApplicationServices
 import TurnOverCore
+import TurnOverAX
 import TurnOverSpeech
 import AXFixtures
 
@@ -39,6 +40,141 @@ if args.contains("--record") {
     // Masked: the window's title is the user's too (a Ulysses sheet's first line, 10 Oct 2026), so it is not printed.
     let shownTitle = args.contains("--mask") ? "title masked" : (window.string(kAXTitleAttribute) ?? "untitled")
     print("recorded \(t.value.nodes.count) elements of \(app.localizedName ?? "") (\(shownTitle)) in \(Int(t.ms)) ms")
+    exit(0)
+}
+if args.contains("--root") {
+    // How browse mode finds a window's current page when its own has been replaced (followCurrentRoot): the window
+    // collected as it does, then the page looked for in the collection, beside the same search asked live.
+    // Counts and roles only. --root <bundle id>  (10 Nov 2026)
+    guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: opt("--root") ?? "").first else { print("not running"); exit(1) }
+    let ax = AXUIElementCreateApplication(app.processIdentifier)
+    guard let window = ax.element(kAXFocusedWindowAttribute) ?? ax.element(kAXMainWindowAttribute) else { print("no window"); exit(1) }
+    let live = timed { window.firstDescendant(role: "AXWebArea", maxVisited: 400) }
+    print(String(format: "asked live: page %@ in %.0f ms", live.value == nil ? "not found" : "found", live.ms))
+    let c = timed { WebBufferCollection.collect(root: window, focus: nil, request: AXWalkRequest()) }
+    print(String(format: "the window collected: %d elements in %.0f ms, stop %@, skipped %d", c.value.snapshot.nodes.count, c.ms, c.value.stop?.rawValue ?? "none", c.value.skippedElements))
+    let inSnapshot: (found: Bool, visited: Int, windowRole: String) = c.value.snapshot.with {
+        var queue: [AXUIElement] = [window], visited = 0, found = false
+        while !queue.isEmpty { let e = queue.removeFirst(); visited += 1; if e.role == "AXWebArea" { found = true; break }; queue.append(contentsOf: e.elements(kAXChildrenAttribute)) }
+        return (found, visited, window.role)
+    }
+    print("in the collection: window's role \(inSnapshot.windowRole); page \(inSnapshot.found ? "found" : "not found") after \(inSnapshot.visited) elements, breadth first (the reader looks at 400)")
+    exit(0)
+}
+if args.contains("--collect-cost") {
+    // Where collecting a page spends its time: --collect-cost <bundle id>. For up to 400 of the page's elements, each
+    // of the questions the collection asks, timed apart, and each attribute timed alone. Names, counts and
+    // milliseconds only. (10 Nov 2026)
+    guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: opt("--collect-cost") ?? "").first else { print("not running"); exit(1) }
+    let ax = AXUIElementCreateApplication(app.processIdentifier)
+    guard let window = ax.element(kAXFocusedWindowAttribute) ?? ax.element(kAXMainWindowAttribute),
+          let web = window.firstDescendant(role: "AXWebArea", maxVisited: 2000) else { print("no page"); exit(1) }
+    var sample: [AXUIElement] = [], queue = [web]
+    while !queue.isEmpty, sample.count < 400 { let e = queue.removeFirst(); sample.append(e); queue.append(contentsOf: e.elements(kAXChildrenAttribute)) }
+    var namesMs = 0.0, allMs = 0.0, actionsMs = 0.0, shortMs = 0.0, nameCount = 0
+    var perName: [String: (ms: Double, n: Int)] = [:]
+    let short = [kAXChildrenAttribute, kAXRoleAttribute, kAXSubroleAttribute, kAXValueAttribute, kAXTitleAttribute, kAXParentAttribute,
+                 kAXFocusedAttribute, kAXDescriptionAttribute, kAXSelectedAttribute, "AXInvalid", kAXModalAttribute, kAXEnabledAttribute,
+                 kAXDisclosingAttribute, "AXRequired", kAXMenuItemMarkCharAttribute, kAXMenuItemCmdCharAttribute]
+    for e in sample {
+        let n = timed { (e.attributeNamesResult().value as? [String]) ?? [] }
+        namesMs += n.ms; nameCount += n.value.count
+        allMs += timed { _ = e.attributesResult(Array(n.value.prefix(128))) }.ms
+        actionsMs += timed { _ = e.actionNamesResult() }.ms
+        shortMs += timed { _ = e.attributesResult(short) }.ms
+    }
+    for e in sample.prefix(120) {
+        for name in (e.attributeNamesResult().value as? [String]) ?? [] {
+            let t = timed { _ = e.attr(name) }.ms
+            let was = perName[name] ?? (0, 0); perName[name] = (was.ms + t, was.n + 1)
+        }
+    }
+    let k = Double(sample.count)
+    print(String(format: "%d elements, %.0f attributes each on average", sample.count, Double(nameCount) / k))
+    print(String(format: "per element: attribute names %.3f ms; all of them in one batch %.3f ms; action names %.3f ms; the short list of 16 in one batch %.3f ms", namesMs / k, allMs / k, actionsMs / k, shortMs / k))
+    print("the dearest attributes, mean ms each asked alone (over the elements that have them):")
+    for (name, v) in perName.sorted(by: { $0.value.ms / Double($0.value.n) > $1.value.ms / Double($1.value.n) }).prefix(22) {
+        print(String(format: "  %@ %.3f (%d)", name, v.ms / Double(v.n), v.n))
+    }
+    // Which of the attributes these elements have does TurnOver's source never name? --known <file of names, one a line>
+    if let file = opt("--known"), let text = try? String(contentsOfFile: file, encoding: .utf8) {
+        let known = Set(text.split(separator: "\n").map(String.init))
+        let unknown = perName.keys.filter { !known.contains($0) }.sorted()
+        var keptMs = 0.0
+        for e in sample { let n = ((e.attributeNamesResult().value as? [String]) ?? []).filter { known.contains($0) }; keptMs += timed { _ = e.attributesResult(n) }.ms }
+        print(String(format: "only the attributes TurnOver names, in one batch: %.3f ms an element", keptMs / k))
+        print("never named by TurnOver (\(unknown.count)): " + unknown.map { n in String(format: "%@ %.3f", n, perName[n]!.ms / Double(perName[n]!.n)) }.joined(separator: ", "))
+    }
+    let total = perName.values.reduce(0.0) { $0 + $1.ms }
+    print(String(format: "all attributes asked alone: %.3f ms an element", total / 120))
+    exit(0)
+}
+if args.contains("--page-needs") {
+    // What reading a page asks of each kind of element: --page-needs <bundle id>. The page is collected and laid out
+    // as browse mode does, then every heading, link and control line is looked up as the quick navigation keys do.
+    // Roles, attribute names and counts only. (10 Nov 2026)
+    guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: opt("--page-needs") ?? "").first else { print("not running"); exit(1) }
+    let ax = AXUIElementCreateApplication(app.processIdentifier)
+    guard let window = ax.element(kAXFocusedWindowAttribute) ?? ax.element(kAXMainWindowAttribute) else { print("no window"); exit(1) }
+    let whole = WebBufferCollection.collect(root: window, focus: nil, request: AXWalkRequest())
+    let areas: [AXUIElement] = whole.snapshot.with {
+        var out: [AXUIElement] = [], queue = [window]
+        while !queue.isEmpty { let e = queue.removeFirst(); if e.role == "AXWebArea" { out.append(e) }; queue.append(contentsOf: e.elements(kAXChildrenAttribute)) }
+        return out
+    }
+    guard let web = areas.last else { print("no page"); exit(1) }
+    let buffer = WebBuffer(webArea: web)
+    let counted = AXSnapshot.counting {
+        buffer.buildForInspection()
+        let roles: Set<String> = ["AXHeading", "AXLink", "AXButton", "AXTextField", "AXCheckBox", "AXList", "AXTable", "AXLandmark", "AXImage", "AXListItem", "AXBlockQuote"]
+        var at = -1
+        while let hit = buffer.find(from: at, forward: true, roles: roles), hit.offset > at { at = hit.offset }
+        _ = buffer.findText(from: 0, forward: true, kind: .paragraph)
+    }
+    print("the page: \(buffer.lines.count) lines")
+    for (role, names) in counted.asked.sorted(by: { $0.value.values.reduce(0, +) > $1.value.values.reduce(0, +) }).prefix(14) {
+        print("\(role): " + names.sorted { $0.value > $1.value }.map { "\($0.key) \($0.value)" }.joined(separator: ", "))
+    }
+    exit(0)
+}
+if args.contains("--collect-compare") {
+    // A page collected in full and with its plain elements read short, timed, and the two pages compared:
+    // --collect-compare <bundle id>. Counts and timings only. (10 Nov 2026)
+    guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: opt("--collect-compare") ?? "").first else { print("not running"); exit(1) }
+    let ax = AXUIElementCreateApplication(app.processIdentifier)
+    guard let window = ax.element(kAXFocusedWindowAttribute) ?? ax.element(kAXMainWindowAttribute) else { print("no window"); exit(1) }
+    let whole = WebBufferCollection.collect(root: window, focus: nil, request: AXWalkRequest())
+    let areas: [AXUIElement] = whole.snapshot.with {
+        var out: [AXUIElement] = [], queue = [window]
+        while !queue.isEmpty { let e = queue.removeFirst(); if e.role == "AXWebArea" { out.append(e) }; queue.append(contentsOf: e.elements(kAXChildrenAttribute)) }
+        return out
+    }
+    guard let web = areas.last else { print("no page"); exit(1) }
+    WebBuffer.fillsOn = false
+    func read(short: Bool) -> (text: String, lines: Int, elements: Int, plain: Int, ms: Double, stop: String) {
+        // Ten seconds, so that both read the whole page and can be compared.
+        var limits = WebBufferCollection.Limits(); limits.plainElementsShort = short; limits.duration = 10_000_000_000; limits.elements = 30_000; limits.queries = 200_000
+        let fixed = limits
+        let c = timed { WebBufferCollection.collect(root: web, focus: nil, request: AXWalkRequest(), limits: fixed) }
+        let collected = c.value
+        let was = (WebBuffer.maxElements, WebBuffer.layoutSeconds)
+        WebBuffer.maxElements = 30_000; WebBuffer.layoutSeconds = 10
+        defer { WebBuffer.maxElements = was.0; WebBuffer.layoutSeconds = was.1 }
+        let b = WebBuffer(webArea: web) { _, _, _ in collected }
+        b.build()
+        let until = Date().addingTimeInterval(15)
+        while b.isLoading, Date() < until { RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01)) }
+        return (b.text as String, b.lines.count, c.value.snapshot.nodes.count, c.value.plainElements, c.ms, c.value.stop?.rawValue ?? "none")
+    }
+    for round in 1...2 {
+        let full = read(short: false), short = read(short: true)
+        print("round \(round)")
+        print(String(format: "  in full: %d elements in %.0f ms (%.2f ms each), stop %@, %d lines", full.elements, full.ms, full.ms / Double(max(1, full.elements)), full.stop, full.lines))
+        print(String(format: "  plain elements short: %d elements, %d of them plain, in %.0f ms (%.2f ms each), stop %@, %d lines", short.elements, short.plain, short.ms, short.ms / Double(max(1, short.elements)), short.stop, short.lines))
+        print(full.text == short.text ? "  the two pages are the same" : "  the two pages differ")
+    }
+    let missed = AXSnapshot.takeMissed()
+    print("asked of plain elements but not collected: " + (missed.isEmpty ? "nothing" : missed.map { "\($0.key) \($0.value)" }.joined(separator: ", ")))
     exit(0)
 }
 if args.contains("--redact") {

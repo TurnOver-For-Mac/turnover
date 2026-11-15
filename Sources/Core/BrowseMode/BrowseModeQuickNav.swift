@@ -30,14 +30,16 @@ extension BrowseModeDocument {
         "Control": ["AXButton", "AXTextField", "AXTextArea", "AXCheckBox", "AXRadioButton", "AXPopUpButton", "AXComboBox", "AXSlider", "AXMenuButton", "AXDisclosureTriangle"],
     ]
 
-    func quickNav(_ q: QuickNavType, forward: Bool) {
+    func quickNav(_ q: QuickNavType, forward: Bool, afterRefresh: Bool = false) {
+        positionMovedAt = Date()
         refreshIfNavigated()
         clearSelection()
-        guard ensureContent() else { return }
-        rebuildIfCheap(stale: 20)
+        guard ensureContent({ [weak self] in self?.quickNav(q, forward: forward, afterRefresh: afterRefresh) }) else { return }
+        refreshBufferIfNeeded(stale: 20)
         /// Search the buffer by role (headings, buttons, links…): no WebKit to ask, or WebKit's answer is unusable.
         /// Nothing further this way: from the other end of the page (wrapping on), or "no next heading".
         func wrapOrStop() {
+            if buffer.isPartial || buffer.isLoading { reportBufferEnd(forward: forward); return }
             guard config.virtualBuffers.wrapQuickNav, let roles = BrowseModeDocument.quickNavRoles[q.name] else {
                 Speech.speakMessage(Phrases.noNext(q.spoken, forward: forward)); return
             }
@@ -63,11 +65,24 @@ extension BrowseModeDocument {
             guard let roles = BrowseModeDocument.quickNavRoles[q.name] else { Speech.speakMessage(String(localized: "not available here", comment: "Spoken message")); return }
             let level = headingLevel(for: q)
             var hit = buffer.find(from: position, forward: forward, roles: roles, headingLevel: level)
-            // Nothing ahead on a page that may have more below: read on (a long chat, issue 227), or once, the page read
-            // again from its end.
-            if hit == nil, forward { hit = readingOn { buffer.find(from: position, forward: forward, roles: roles, headingLevel: level) } }
-            // Still nothing, with more of a long page not yet read: said, rather than wrapping to the top past it.
-            if hit == nil, forward, buffer.isPartial { Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")); return }
+            // A long page read only in part (a long chat, issue 227): read on first; with more still not read, said,
+            // rather than wrapping to the top past it.
+            if hit == nil, forward, buffer.canReadOn {
+                readOnUntil({ [weak self] in
+                    guard let self else { return true }
+                    return buffer.find(from: position, forward: forward, roles: roles, headingLevel: level) != nil
+                }) { [weak self] found in
+                    guard let self else { return }
+                    if !found, buffer.stoppedAtLimit { Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")); return }
+                    quickNav(q, forward: forward, afterRefresh: afterRefresh)
+                }
+                return
+            }
+            // Nothing ahead on a page that may have more below: once, the page read again from its end.
+            if hit == nil, forward, !afterRefresh, reachForMore({ [weak self] more in
+                guard let self else { return }
+                if more { quickNav(q, forward: forward, afterRefresh: true) } else { wrapOrStop() }
+            }) { return }
             guard let (at, el) = hit else {
                 wrapOrStop(); return
             }
@@ -86,13 +101,22 @@ extension BrowseModeDocument {
             let kind: WebBuffer.TextKind = q.name == "Paragraph" ? .paragraph : .afterLinks
             var hit = buffer.findText(from: position, forward: forward, kind: kind)
             // The rest of a long page read on first (issue 227); with more still not read, said rather than wrapping.
-            if hit == nil, forward, buffer.isPartial { hit = readingOn { buffer.findText(from: position, forward: forward, kind: kind) } }
-            if hit == nil, forward, buffer.isPartial { Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")); return }
-            if hit == nil, config.virtualBuffers.wrapQuickNav,
+            if hit == nil, forward, buffer.canReadOn {
+                readOnUntil({ [weak self] in
+                    guard let self else { return true }
+                    return buffer.findText(from: position, forward: forward, kind: kind) != nil
+                }) { [weak self] found in
+                    guard let self else { return }
+                    if !found, buffer.stoppedAtLimit { Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")); return }
+                    quickNav(q, forward: forward, afterRefresh: afterRefresh)
+                }
+                return
+            }
+            if hit == nil, !buffer.isPartial, !buffer.isLoading, config.virtualBuffers.wrapQuickNav,
                let w = buffer.findText(from: forward ? -1 : buffer.text.length + 1, forward: forward, kind: kind), w.offset != position {
                 Tones.edge(); Speech.speakMessage(forward ? String(localized: "wrapped to the top", comment: "Spoken message") : String(localized: "wrapped to the bottom", comment: "Spoken message")); hit = w
             }
-            guard let (at, el) = hit else { Speech.speakMessage(Phrases.noNext(q.spoken, forward: forward)); return }
+            guard let (at, el) = hit else { if buffer.isPartial || buffer.isLoading { reportBufferEnd(forward: forward) } else { Speech.speakMessage(Phrases.noNext(q.spoken, forward: forward)) }; return }
             position = at
             if let el { lastQuickNavTarget = el }
             speakQuickNavText(at: at, link: false, element: el)
@@ -100,10 +124,14 @@ extension BrowseModeDocument {
         }
         // VoiceOver's D with no WebKit search: the next line that is a different kind of thing from this one.
         if q.name == "DifferentItem", !hasWebKitSearch {
-            let here = buffer.lineIndex(at: position).flatMap { buffer.lines[$0].element?.role }
-            let order = forward ? Array(((buffer.lineIndex(at: position) ?? 0) + 1)..<buffer.lines.count) : Array((0..<(buffer.lineIndex(at: position) ?? 0)).reversed())
-            guard let j = order.first(where: { !buffer.lineContinues($0) && buffer.lines[$0].element?.role != here }) else {
-                Speech.speakMessage(forward ? String(localized: "no next different item", comment: "Spoken message") : String(localized: "no previous different item", comment: "Spoken message")); return
+            let different = buffer.withSnapshot {
+                let here = buffer.lineIndex(at: position).flatMap { buffer.lines[$0].element?.role }
+                let order = forward ? Array(((buffer.lineIndex(at: position) ?? 0) + 1)..<buffer.lines.count) : Array((0..<(buffer.lineIndex(at: position) ?? 0)).reversed())
+                return order.first { !buffer.lineContinues($0) && buffer.lines[$0].element?.role != here }
+            }
+            guard let j = different else {
+                if buffer.isPartial || buffer.isLoading { reportBufferEnd(forward: forward) }
+                else { Speech.speakMessage(forward ? String(localized: "no next different item", comment: "Spoken message") : String(localized: "no previous different item", comment: "Spoken message")) }; return
             }
             position = buffer.lines[j].start
             speakQuickNavText(at: position, link: false, element: buffer.lines[j].element)
@@ -130,7 +158,15 @@ extension BrowseModeDocument {
             Log.io("browse mode: the page's search found nothing \(forward ? "ahead" : "back"); searching the buffer"); bufferSearch(); return
         }
         var found = buffer.offset(of: target)
-        if found == nil { buffer.build(); clampPosition(); found = buffer.offset(of: target) }
+        if found == nil {
+            if afterRefresh { bufferSearch(); return }
+            let epoch = pageGeneration, intent = bufferIntent, movedAt = positionMovedAt
+            buffer.build { [weak self] in
+                guard let self, pageGeneration == epoch, bufferIntent == intent, positionMovedAt == movedAt, API.focusTreeInterceptor === self else { return }
+                if let at = buffer.offset(of: target), at != position { land(at, target) } else { bufferSearch() }
+            }
+            return
+        }
         if found == position, let again = bridge.search(key: q.searchKey, from: target, forward: forward, limit: 1).first, let at = buffer.offset(of: again) {
             found = at   // WebKit handed back the element we are on; the one past it is the move
         }
@@ -216,12 +252,19 @@ extension BrowseModeDocument {
         refreshIfNavigated()
         clearSelection()
         guard ensureContent() else { return }
-        rebuildIfCheap(stale: 20)
+        refreshBufferIfNeeded(stale: 20)
         guard let c = buffer.containers.filter({ $0.start <= position && position < $0.end }).min(by: { $0.end - $0.start < $1.end - $1.start }) else {
             Speech.speakMessage(String(localized: "not in a container", comment: "Spoken message")); return
         }
         if end {
-            guard c.end < buffer.text.length else { Speech.speakMessage(String(localized: "no more text after the \(ObjectFactory.make(c.element).role.displayString)", comment: "Moving past an element with no text after it: %@ is its role")); return }
+            guard c.end < buffer.text.length else {
+                if buffer.isPartial || buffer.isLoading { reportBufferEnd(forward: true) }
+                else {
+                    let role = buffer.withSnapshot { ObjectFactory.make(c.element).role.displayString }
+                    Speech.speakMessage(String(localized: "no more text after the \(role)", comment: "Moving past an element with no text after it: %@ is its role"))
+                }
+                return
+            }
             position = c.end
         } else {
             position = c.start
@@ -232,6 +275,9 @@ extension BrowseModeDocument {
     /// The heading level a quick key wants: "Heading3" is 3; VoiceOver's M is the level of the heading the caret is
     /// in or last passed; anything else, none.
     func headingLevel(for q: QuickNavType) -> Int? {
+        buffer.withSnapshot { headingLevelInSnapshot(for: q) }
+    }
+    private func headingLevelInSnapshot(for q: QuickNavType) -> Int? {
         if q.name.hasPrefix("Heading"), q.name.count > 7 { return Int(q.name.dropFirst(7)) }
         guard q.name == "SameLevelHeading", let i = buffer.lineIndex(at: position) else { return nil }
         for j in stride(from: i, through: 0, by: -1) {
