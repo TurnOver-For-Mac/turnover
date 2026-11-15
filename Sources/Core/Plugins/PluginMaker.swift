@@ -355,20 +355,28 @@ extension PluginMaker {
     }
 }
 
-/// A line typed into TurnOver itself, with no dialog: each character echoed, Backspace deletes, Return finishes,
+/// A line typed into TurnOver itself, with no dialog: what is typed is echoed as the person's typing-echo settings say
+/// (characters, words, both or nothing: the same code a text field uses), Backspace deletes, Return finishes,
 /// Escape cancels (the keyboard commands editor's capture, one key at a time).
 public enum LineInput {
+    /// A character typed: echoed by the shared typing echo, as in an edit control.
+    public static func echoTyped(_ ch: Character) { Speech.speakTypedCharacter(ch, inEditable: true) }
+    /// Return: the word being typed is finished, and said if words are echoed.
+    public static func echoFinished() { Speech.finishTypedWord() }
+    /// Backspace: the word being typed loses its last letter; what was deleted is said, as a text field does.
+    public static func echoDeleted(_ ch: Character) { Speech.speakTypedCharacter("\u{8}", inEditable: true); Speech.speakMessage(Symbols.name(of: ch)) }
+
     public static func ask(_ prompt: String, initial: String = "", done: @escaping (String?) -> Void) {
         var text = initial
         func next() {
             InputManager.captureNext = { g in
-                guard let g else { Speech.speakMessage(String(localized: "cancelled", comment: "Spoken message")); done(nil); return }
+                guard let g else { Speech.clearTypedWordBuffer(); Speech.speakMessage(String(localized: "cancelled", comment: "Spoken message")); done(nil); return }
                 switch g.keyName {
-                case "enter", "numpadEnter": done(text); return
+                case "enter", "numpadEnter": echoFinished(); done(text); return
                 case "backspace":
-                    if let c = text.popLast() { Speech.speakMessage(Symbols.name(of: c)) } else { Tones.edge() }
+                    if let c = text.popLast() { echoDeleted(c) } else { Tones.edge() }
                 default:
-                    if let ch = g.typedCharacter, g.modifiers.subtracting(.shift).isEmpty { text.append(ch); Speech.speakMessage(Symbols.name(of: ch)) }
+                    if let ch = g.typedCharacter, g.modifiers.subtracting(.shift).isEmpty { text.append(ch); echoTyped(ch) }
                     else if !g.modifiers.contains(.turnover), !g.modifiers.subtracting(.shift).isEmpty { g.send() }   // Control Space: the keyboard language
                     else { Tones.edge() }
                 }
@@ -376,6 +384,7 @@ public enum LineInput {
             }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            Speech.clearTypedWordBuffer()
             Speech.speakMessage(String(localized: "\(prompt). Type it, then Return. Escape cancels", comment: "Waiting for typed words: %@ says what for"))
             next()
         }

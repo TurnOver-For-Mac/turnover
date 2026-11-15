@@ -10,6 +10,8 @@ import Darwin
 nonisolated public struct ConvertFailure: Error, CustomStringConvertible {
     public let description: String
     public init(_ d: String) { description = d }
+    /// A reason with the full stops and spaces at its end taken off, so a sentence built round it ends once.
+    public static func sentenceEnd(_ s: String) -> String { String(s.reversed().drop(while: { $0 == "." || $0.isWhitespace }).reversed()) }
 }
 
 nonisolated public enum ConvertLimits {
@@ -185,7 +187,7 @@ nonisolated public enum ConvertSource {
         guard let url = httpsURL(entry.downloadURL) else { throw ConvertFailure("The store's address for \"\(id)\" is not an https address, so it was not fetched.") }
         guard let expected = entry.sha256, expected.count == 64 else { throw ConvertFailure("The store's list gives no SHA-256 for \"\(id)\", so it was not fetched.") }
         let data: Data
-        do { data = try fetch(url, ConvertLimits.downloadBytes) } catch { throw ConvertFailure("The download failed: \(error).") }
+        do { data = try fetch(url, ConvertLimits.downloadBytes) } catch { throw ConvertFailure("The download failed: \(ConvertFailure.sentenceEnd("\(error)")).") }
         guard data.count <= ConvertLimits.downloadBytes else { throw ConvertFailure("The download is larger than 50 MB; nothing was read.") }
         if sha256Hex(data) != expected.lowercased() {
             throw ConvertFailure("The download's SHA-256 does not match the store's list, so it is not what the store published, and nothing was read.")

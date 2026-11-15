@@ -128,6 +128,8 @@ nonisolated public final class ScriptHost: @unchecked Sendable {
     /// The commands the script registered (empty until it is ready).
     public var commands: [String] { lock.lock(); defer { lock.unlock() }; return _commands }
     public var isRunning: Bool { lock.lock(); defer { lock.unlock() }; return running }
+    /// True while a question has gone unanswered past its deadline: `ask` says `.late` without asking again. The tests wait for this to clear.
+    public var isAwaitingLateAnswer: Bool { lock.lock(); defer { lock.unlock() }; return lateQuestion != nil }
     /// Whether the host's input has been closed and every later write does nothing (for the tests of the write-after-exit race).
     package var inputIsClosed: Bool { writer.sync { inputClosed } }
     public var processID: pid_t? { lock.lock(); defer { lock.unlock() }; return child?.pid }

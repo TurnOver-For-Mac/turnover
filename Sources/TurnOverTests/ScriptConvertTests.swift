@@ -76,8 +76,17 @@ private func makeZip(_ entries: [(String, String)], links: [String] = [], at url
     let code = "import sys, json, zipfile\nspec = json.loads(sys.argv[1])\nz = zipfile.ZipFile(spec['path'], 'w')\nfor e in spec['entries']:\n    zi = zipfile.ZipInfo(e['name'])\n    if e['link']:\n        zi.external_attr = 0o120777 << 16\n    z.writestr(zi, e['data'])\nz.close()\n"
     let p = Process()
     p.executableURL = URL(fileURLWithPath: "/usr/bin/python3"); p.arguments = ["-I", "-c", code, json]
-    p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
-    try? p.run(); p.waitUntilExit()
+    // The environment the tool's own Python runs in: the test runner's DYLD_INSERT_LIBRARIES (its replay shim) must not reach it.
+    p.environment = ["PATH": "/usr/bin:/bin", "LANG": "en_US.UTF-8"]
+    let err = Pipe()
+    p.standardOutput = FileHandle.nullDevice; p.standardError = err
+    do { try p.run() } catch { Harness.fail("makeZip: python3 could not start: \(error)"); return }
+    let stderr = String(decoding: err.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+    p.waitUntilExit()
+    let size = ((try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.intValue ?? 0
+    if p.terminationStatus != 0 || size == 0 {
+        Harness.fail("makeZip: no zip was made at \(url.path) (exit status \(p.terminationStatus), \(size) bytes). python3 said: \(stderr)")
+    }
 }
 
 nonisolated private func storeList(id: String, name: String = "Hello Add-on", sha: String, channel: String = "stable", description: String = "Says hello", url: String = "https://example.test/hello.nvda-addon") -> String {
@@ -639,6 +648,87 @@ func nvdaStoreTests() {
         let r = NVDAStore.fetchList(search: "clock", connected: true, run: { a, t in asked.append(a); return result(status: 1, err: "boom") })
         if case .failure(let f) = r { check(f.words.contains("boom"), f.words) } else { check(false, "a failed run is a failure") }
         expect(asked.first ?? [], ["store", "search", "clock", "--json"], "the search was put as separate words")
+    }
+
+    test("nvda store: a failed download is one plain sentence, with no doubled full stop") {
+        func said(_ err: String) -> String {
+            guard case .failed(let f) = NVDAStore.convert(NVDAStore.Item(id: "clock", name: "Clock Thing", version: "1", author: "", description: "", verdict: .notLookedAt, reason: nil),
+                                                         convertedBy: "T", base: FileManager.default.temporaryDirectory, connected: true, run: { _, _ in NVDAStore.ToolResult(status: 1, out: Data(), err: err) }) else { return "no failure" }
+            return f.words
+        }
+        @MainActor func plainSentence(_ w: String) { check(!w.contains("..") && !w.contains(" ."), "no doubled full stop: \(w)"); check(w.first?.isUppercase == true && w.hasSuffix("."), "capital first letter and one full stop at the end: \(w)"); check(w.hasSuffix("Nothing was changed."), "says nothing changed: \(w)") }
+        let missing = said("The download failed: the server answered 404.\n")
+        expect(missing, "Clock Thing could not be fetched: its download address no longer exists. That is at its author's end, not yours. Nothing was changed.", "a 404")
+        plainSentence(missing); plainSentence(said("The download failed: the server answered 410."))
+        let busy = said("The download failed: the server answered 503."); plainSentence(busy); check(busy.contains("had a problem (503)") && busy.contains("Try again later"), busy)
+        let odd = said("The download failed: the server answered 418."); plainSentence(odd); check(odd.contains("418"), odd)
+        let refused = said("The download failed: the server answered 403."); plainSentence(refused); check(refused.contains("refused"), refused)
+        let offline = said("The download failed: The Internet connection appears to be offline.."); plainSentence(offline); check(offline.contains("could not reach the internet"), offline)
+        let slow = said("The download failed: The request timed out."); plainSentence(slow); check(slow.contains("took too long"), slow)
+        let host = said("The download failed: A server with the specified hostname could not be found."); plainSentence(host); check(host.contains("could not be found"), host)
+        let sum = said("The download's SHA-256 does not match the store's list, so it is not what the store published, and nothing was read."); plainSentence(sum); check(sum.hasPrefix("Clock Thing was not used"), sum)
+        let big = said("The download is larger than 50 MB; nothing was read."); plainSentence(big); check(big.contains("50 megabytes"), big)
+        let other = said("The download failed: something strange."); plainSentence(other); check(other.contains("something strange"), other)
+        let generic = said("A file in it could not be read.\nmore"); check(!generic.contains(".."), "the generic sentence has no doubled stop either: \(generic)")
+        let t = NVDAStore.failure(result(status: 1, err: "It broke."), what: "asking NVDA's store").words
+        check(!t.contains(".."), t)
+        expect(ConvertFailure.sentenceEnd("offline.. "), "offline", "the tool's own sentences end once")
+        expect(ConvertFailure("The download failed: \(ConvertFailure.sentenceEnd("the server answered 404.")).").description, "The download failed: the server answered 404.", "")
+    }
+
+    test("nvda store: author addresses are not read aloud, and the full string is kept") {
+        expect(NVDAStore.speakableAuthor("Ann Author <ann@example.org>, Bob B <bob@example.com>"), "Ann Author, Bob B", "angle brackets and what is in them")
+        expect(NVDAStore.speakableAuthor("Ann (ann@example.org)"), "Ann", "a bare address in brackets")
+        expect(NVDAStore.speakableAuthor("ann@example.org"), "", "an address alone leaves nothing")
+        expect(NVDAStore.speakableAuthor("Ann Author <ann@exa"), "Ann Author", "an address cut off by the length limit")
+        expect(NVDAStore.speakableAuthor("Ann; Bob <b@x.io>"), "Ann, Bob", "separators are made commas")
+        expect(NVDAStore.speakableAuthor("Plain Name"), "Plain Name", "a plain name is untouched")
+        let raw = "Ann Author <ann@example.org>, Bob <b@example.com>"
+        let item = NVDAStore.Item(id: "clock", name: "Clock", version: "1.0", author: raw, description: "Says the time.", verdict: .notLookedAt, reason: nil)
+        expect(NVDAStore.title(item), "Clock, by Ann Author, Bob. Says the time.", "the list title")
+        let json = "{\"id\":\"clock\",\"name\":\"Clock\",\"version\":\"1.0\",\"author\":\"Ann Author <ann@example.org>, Bob <b@example.com>\",\"description\":\"Says the time.\",\"license\":\"GPL\"}"
+        guard case .success(let detail) = NVDAStore.parseDetail(Data(json.utf8)) else { check(false, "the detail reads"); return }
+        expect(detail.item.author, raw, "the detail keeps the full author string too")
+        let facts = NVDAStore.facts(detail)
+        check(!facts.contains("@") && !facts.contains("<") && facts.contains("By Ann Author, Bob."), "the About facts: \(facts)")
+        expect(item.author, raw, "the item keeps the full author string for the files the converter writes")
+        let onlyEmail = NVDAStore.Item(id: "x", name: "X", version: "", author: "<a@b.c>", description: "", verdict: .notLookedAt, reason: nil)
+        expect(NVDAStore.title(onlyEmail), "X", "no \"by\" with nothing to say")
+    }
+
+    test("text entry: typing is echoed as the typing-echo settings say") {
+        let savedConfig = config, savedSink = Speech.sink, savedMode = Speech.mode, savedFocus = API.focusObject, savedAncestors = API.focusAncestors, savedInterceptor = API.focusTreeInterceptor
+        defer { config = savedConfig; Speech.sink = savedSink; Speech.mode = savedMode; API.setFocusObject(savedFocus, ancestors: savedAncestors, interceptor: savedInterceptor); Speech.clearTypedWordBuffer() }
+        Speech.mode = .off
+        API.setFocusObject(nil, ancestors: [])
+        @MainActor func typing(_ chars: TypingEcho, _ words: TypingEcho, _ text: String, ending: Bool = true) -> [String] {
+            config.keyboard.speakTypedCharacters = chars; config.keyboard.speakTypedWords = words
+            nonisolated(unsafe) var said: [String] = []
+            Speech.sink = { said.append($0) }
+            Speech.clearTypedWordBuffer()
+            for c in text { LineInput.echoTyped(c) }
+            if ending { LineInput.echoFinished() }
+            Speech.clearTypedWordBuffer()
+            return said
+        }
+        expect(typing(.always, .off, "clk"), ["c", "l", "k"], "characters on: each letter, and Return says no word")
+        expect(typing(.editControls, .off, "ab"), ["a", "b"], "characters in edit controls: a text entry is one")
+        expect(typing(.off, .off, "clock"), [], "echo off: nothing at all")
+        expect(typing(.off, .always, "clock", ending: false), [], "words only: nothing until the word ends")
+        expect(typing(.off, .always, "clock"), ["clock"], "words only: Return says the finished word")
+        expect(typing(.off, .always, "clock "), ["clock"], "words only: Space says the word, and Return then adds nothing")
+        expect(typing(.off, .always, "one two"), ["one", "two"], "words only: each word as it ends")
+        expect(typing(.always, .always, "hi "), ["h", "i", "hi", "space"], "both: letters, then the word, then the space that ended it")
+        // Backspace takes the letter off the word being typed, so the word said is the corrected one.
+        config.keyboard.speakTypedCharacters = .off; config.keyboard.speakTypedWords = .always
+        nonisolated(unsafe) var said: [String] = []
+        Speech.sink = { said.append($0) }
+        Speech.clearTypedWordBuffer()
+        for c in "cats" { LineInput.echoTyped(c) }
+        LineInput.echoDeleted("s")
+        LineInput.echoFinished()
+        expect(said.last, "cat", "words only: a deleted letter is not in the word said")
+        check(said.contains("s"), "and what was deleted is still said, as in a text field")
     }
 
     test("nvda store: converting hands over a folder, or says nothing came across") {

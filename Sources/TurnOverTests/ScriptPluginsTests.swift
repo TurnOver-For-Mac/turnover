@@ -689,6 +689,7 @@ func scriptPluginsTests() {
             fire(plugins, .gainFocus, el(nameField))
             check(waitFor { entry.strikes.count == strike }, "strike \(strike) was counted")
             settle(0.4)   // the host answers late, and is asked again only then
+            check(waitFor(15) { !(entry.host?.isAwaitingLateAnswer ?? false) }, "the host has finished its late answer")
         }
         check(entry.host != nil && !entry.turnedOff, "two strikes leave it running")
         expect(mac.spoken.filter { $0.contains("kept going wrong") }.count, 0, "and nothing is said yet")
@@ -714,6 +715,7 @@ func scriptPluginsTests() {
             let last = entry.strikes.last
             fire(plugins, .gainFocus, el(nameField))
             check(waitFor { entry.strikes.last != last }, "strike \(strike) arrived")
+            check(waitFor(15) { !(entry.host?.isAwaitingLateAnswer ?? false) }, "the host has finished its late answer")
             settle(0.5)   // each is past the window by the time the next arrives
         }
         check(!entry.turnedOff, "three spread out over more than the window do not turn it off")
