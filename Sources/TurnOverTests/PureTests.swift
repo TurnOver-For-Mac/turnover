@@ -12,6 +12,19 @@ import TurnOverControl
 import AXFixtures
 
 func pureTests() {
+    test("status menus: failed AX press remembers a menu that opened and closed before the check") {
+        let before = Date(timeIntervalSinceReferenceDate: 100)
+        let opened = before.addingTimeInterval(0.002)
+        check(!StatusMenus.shouldReportOpenFailure(menuStartBeforePress: before, latestMenuStart: opened,
+                                                  isMenuOpen: false), "a menu opened, then closed: no false failure")
+        check(!StatusMenus.shouldReportOpenFailure(menuStartBeforePress: before, latestMenuStart: opened,
+                                                  isMenuOpen: true), "a menu remains open: no failure")
+        check(StatusMenus.shouldReportOpenFailure(menuStartBeforePress: before, latestMenuStart: before,
+                                                 isMenuOpen: false), "no new menu opened: report the failure")
+        check(!StatusMenus.shouldReportOpenFailure(menuStartBeforePress: before, latestMenuStart: before,
+                                                  isMenuOpen: true), "an already open menu preserves the existing fallback")
+    }
+
     test("Help make TurnOver: every way to help named, by the menu's own words, and it opens by itself once") {
         let body = HelpMakeTurnOver.body
         for words in ["Send feedback", "Help improve this app", "Fix the item I'm on", "VO-Slash", "Translate", "CONTRIBUTING.md",

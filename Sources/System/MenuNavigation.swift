@@ -269,11 +269,7 @@ final class MenuNavigationPlugin: GlobalPlugin {
                 let name = st.names[h.index], owner = st.pids[h.index]
                 heldBar = nil; heldStatus = nil
                 if owner == getpid() { DispatchQueue.main.async { TurnOverMenu.shared.open() }; return }   // TurnOver's own: its menu
-                AXHandler.shared.observe(owner)
-                StatusMenus.lastOpened = (name, Date())
-                let r = AXUIElementPerformAction(title, kAXPressAction as CFString)
-                Log.io("status menus: press \"\(Log.words(name))\" → \(r.rawValue)")
-                if r != .success { DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { if !AXHandler.shared.isMenuOpen { Speech.speakMessage(String(localized: "could not open \(name)", comment: "A menu could not be opened: %@ is its name")) } } }
+                StatusMenus.press(title, owner: owner, name: name)
                 return
             }
             heldBar = nil
