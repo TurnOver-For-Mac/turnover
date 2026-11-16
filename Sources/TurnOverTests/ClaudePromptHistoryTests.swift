@@ -137,8 +137,24 @@ func claudePromptHistoryTests() {
             trial.now = trial.now.addingTimeInterval(ClaudePromptText.historyValueChangeWindow + 0.01)
             replace("Late live update", caret: 0)
             field.event_valueChange()
+            expect(trial.spoken, [], "a notice after the window does not read the line itself")
+            // Past the window the timer decides, as for a change with no notice: the line now at the caret (review,
+            // 16 Nov 2026; until then this notice cancelled the read).
             expire(trial)
-            expect(trial.spoken, [], "a late update cannot become caret feedback")
+            expect(trial.spoken, ["Late live update"], "the timer reads the changed value's line")
+        }
+    }
+    // Review, 16 Nov 2026: with the main thread busy, the value notice can be handled after the window but before the
+    // timer fires. It used to drop the pending read, so the timer read nothing and the recalled message was silent.
+    test("Claude prompt history: a notice handled after the window, before the timer, still reads the recall") {
+        withPrompt { field, _, _, trial in
+            arrow(field)
+            trial.now = trial.now.addingTimeInterval(ClaudePromptText.historyValueChangeWindow + 0.05)
+            replace("Public recalled line", caret: 20)
+            field.event_valueChange()
+            expect(trial.spoken, [], "the late notice leaves the decision to the timer")
+            expire(trial)
+            expect(trial.spoken, ["Public recalled line"], "the timer reads the recalled line once")
         }
     }
     test("Claude prompt history: an unreported replacement reads the new line, never the removed one") {

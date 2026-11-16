@@ -86,7 +86,10 @@ package final class ClaudePromptText: EditableText {
         guard stillOwns(pending) else { pendingEdge = nil; return }
         let elapsed = historyNow().timeIntervalSince(pending.sentAt)
         let withinWindow = elapsed >= 0 && elapsed <= Self.historyValueChangeWindow
-        guard withinWindow else { pendingEdge = nil; return }
+        // Past the window, the timer decides: with the main thread busy this notice can be handled before the timer
+        // fires, and dropping the pending read here left the timer nothing to read, so a recalled message was silent
+        // (review, 16 Nov 2026).
+        guard withinWindow else { return }
         let valueNow = element.string(kAXValueAttribute)
         // A notice with the value unchanged (the caret's own) is not the recall: keep waiting.
         guard valueNow != pending.value else { return }
