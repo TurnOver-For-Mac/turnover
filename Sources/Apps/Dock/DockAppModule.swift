@@ -9,6 +9,7 @@
 // AXFocusedUIElementChanged (the list) when it appears, AXUIElementDestroyed
 // when it goes. The Dock never activates, so the core observes it always.
 import Foundation
+import AppKit
 import ApplicationServices
 
 package final class DockAppModule: AppModule {
@@ -45,10 +46,17 @@ package final class DockAppModule: AppModule {
         if event.kind == .gainFocus, event.obj is AppSwitcherList {
             // As VoiceOver does: just the highlighted application's name, not "application switcher, list" first.
             // (The first highlighted item is marked before the list reports focus.)
+            AppSwitcherDiagnostics.lastAnnounced = nil
             if let item = event.obj.element.elements(kAXChildrenAttribute).first(where: { ($0.attr(kAXFocusedAttribute) as? Bool) == true }) {
-                Speech.speakObject(ObjectFactory.make(item), reason: .focus)
+                let object = ObjectFactory.make(item)
+                AppSwitcherDiagnostics.lastAnnounced = object.name
+                Speech.speakObject(object, reason: .focus)
             }
             return
+        }
+        // The next item's name, for the switcher's log line (16 Nov 2026); it is read as any focus is.
+        if event.kind == .gainFocus, event.obj is AppSwitcherItem {
+            AppSwitcherDiagnostics.lastAnnounced = event.obj.name
         }
         // Escape in the Dock: the keys are back with the application, but the Dock reports its list as focused with
         // nothing selected ("list, 13 items, nothing selected", and the arrows then went back into the Dock). Read the
@@ -78,4 +86,61 @@ final class AppSwitcherItem: TurnOverObject {
     override var role: Role { .listItem }
     /// Just the name, as VoiceOver says it: no "2 of 8".
     override var positionInfo: PositionInfo? { nil }
+}
+
+/// Log lines only (16 Nov 2026). On 15 Nov 2026 (16:20:57 UTC) the switcher opened and TurnOver said one app's name,
+/// and Command-Q half a second later reached a different app; nothing in the log could say whether the switcher's
+/// selection had moved or the name was stale (the named app had stopped answering). Each key pressed while the
+/// switcher is open now logs the item the switcher reports as selected at that moment, its process found from the
+/// running applications (by the item's URL, or else its name), beside the name TurnOver last announced. Only the
+/// Dock, which owns the switcher and is already being asked, is asked; never the application itself (31bd95f).
+package enum AppSwitcherDiagnostics {
+    /// The switcher item TurnOver last announced (its name), since the switcher opened.
+    package static var lastAnnounced: String?
+
+    package struct RunningApp {
+        let name: String?
+        let pid: pid_t
+        let bundleURL: URL?
+        package init(name: String?, pid: pid_t, bundleURL: URL?) {
+            self.name = name
+            self.pid = pid
+            self.bundleURL = bundleURL
+        }
+    }
+
+    /// The process for a switcher item: by its URL when it has one, else by its name; nil unless exactly one matches.
+    package static func process(name: String, url: URL?, among apps: [RunningApp]) -> String? {
+        if let url {
+            let matching = apps.filter { $0.bundleURL?.standardizedFileURL == url.standardizedFileURL }
+            guard matching.count == 1 else { return nil }
+            return "pid \(matching[0].pid) by its URL"
+        }
+        let matching = apps.filter { $0.name == name }
+        guard matching.count == 1 else { return nil }
+        return "pid \(matching[0].pid) by its name"
+    }
+
+    package static func line(key: String, selectedName: String?, process: String?, lastAnnounced: String?) -> String {
+        let selected = selectedName.map { "\"\($0)\"" } ?? "unknown"
+        let announced = lastAnnounced.map { "\"\($0)\"" } ?? "nothing"
+        return "switcher key \(key): selected \(selected), \(process ?? "pid unknown"); last announced \(announced)"
+    }
+
+    /// From the main thread as each key is decided (InputManager.handleKeyDown), before the key reaches the Dock.
+    package static func keyDown(_ gesture: KeyboardGesture) {
+        guard let list = API.focusObject as? AppSwitcherList else { return }
+        // Bounded, as a diagnostic must be: the switcher holds one item per running app.
+        let selected = list.element.elements(kAXChildrenAttribute).prefix(64).first { ($0.attr(kAXFocusedAttribute) as? Bool) == true }
+        let name = selected?.string(kAXTitleAttribute)
+        let url = selected?.attr(kAXURLAttribute) as? URL
+        var process: String?
+        if let name {
+            let apps = NSWorkspace.shared.runningApplications.map {
+                RunningApp(name: $0.localizedName, pid: $0.processIdentifier, bundleURL: $0.bundleURL)
+            }
+            process = Self.process(name: name, url: url, among: apps)
+        }
+        Log.io(line(key: gesture.logDescription(), selectedName: name, process: process, lastAnnounced: lastAnnounced))
+    }
 }
