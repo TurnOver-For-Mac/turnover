@@ -18,7 +18,10 @@ func claudeSessionDeletionTests() {
             .init(id: 6, attrs: ["AXRole": .string("AXButton"), "AXTitle": .string("Cancel"), "AXParent": .element(3)]),
             .init(id: 7, attrs: ["AXRole": .string("AXButton"), "AXTitle": .string("Another public session"), "AXParent": .element(0)]),
             .init(id: 8, attrs: ["AXRole": .string("AXMenuItem"), "AXTitle": .string("Delete"), "AXParent": .element(0)]),
-            .init(id: 9, attrs: ["AXRole": .string("AXTextArea"), "AXTitle": .string("Prompt"), "AXParent": .element(0)])
+            .init(id: 9, attrs: ["AXRole": .string("AXTextArea"), "AXTitle": .string("Prompt"), "AXParent": .element(0)]),
+            .init(id: 10, attrs: ["AXRole": .string("AXButton"), "AXTitle": .string("Delete"), "AXParent": .element(3)]),
+            .init(id: 11, attrs: ["AXRole": .string("AXGroup"), "AXTitle": .string("More options for Public session"), "AXParent": .element(0)]),
+            .init(id: 12, attrs: ["AXRole": .string("AXGroup"), "AXTitle": .string("More options for Another public session"), "AXParent": .element(0)])
         ]))
         let page = BrowseModeDocument(webArea: AXReplay.element(0))
         let owner = ClaudeSessionDeletion()
@@ -38,6 +41,24 @@ func claudeSessionDeletionTests() {
             AXReplay.unload()
         }
         body(owner, focus, { words }, sent)
+    }
+
+    test("Claude deletion: single-session Delete survives menu and dialog navigation and acknowledges once") {
+        fixture { owner, focus, words, sent in
+            focus(2, false)
+            focus(11, false)
+            focus(8, false)
+            focus(10, true)
+            focus(6, true)
+            check(!owner.canActivate, "Cancel retains its native action")
+            focus(10, true)
+            let key = KeyboardGesture(identifier: "kb:enter")!
+            check(owner.activate(key), "the single-session Delete button is recognized")
+            check(!owner.activate(key), "a repeated Return cannot reuse the submitted subject")
+            expect(sent.value, ["kb:enter"], "the deletion sends one native Return")
+            expect(words(), ["Deleting Public session"], "one acknowledgement names the requested session")
+            check(AXReplay.actions.isEmpty, "there is no destructive AXPress retry")
+        }
     }
 
     test("Claude deletion: both confirmation scopes send one native key and name the requested session") {
@@ -74,6 +95,13 @@ func claudeSessionDeletionTests() {
             focus(9, false)
             focus(4, true)
             check(!owner.canActivate, "returning to Prompt invalidates the captured subject")
+            focus(2, false)
+            focus(10, false)
+            check(!owner.canActivate, "Delete outside the confirmation is left native")
+            focus(2, false)
+            focus(12, false)
+            focus(10, true)
+            check(!owner.canActivate, "another session's menu group invalidates the captured subject")
             expect(words(), [], "observing focus alone never claims success")
             expect(sent.value, [], "guards do not send keys")
         }
@@ -120,7 +148,9 @@ func claudeSessionDeletionTests() {
             let key = KeyboardGesture(identifier: "kb:numpadEnter")!
             focus(2, false)
             check(module.script(for: key) == nil, "ordinary session controls retain existing routing")
-            focus(4, true)
+            focus(11, false)
+            focus(8, false)
+            focus(10, true)
             guard let script = module.script(for: key) else { Harness.fail("the confirmation script is available"); return }
             script.handler(key)
             expect(sent.value, ["kb:numpadEnter"], "numpad Return is preserved")

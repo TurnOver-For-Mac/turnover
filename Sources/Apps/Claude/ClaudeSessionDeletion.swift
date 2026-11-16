@@ -31,6 +31,13 @@ package final class ClaudeSessionDeletion {
             target = name.isEmpty ? nil : (name, page)
             return
         }
+        // Claude moves focus from the session popup to its matching menu group
+        // before Delete (observed 15 November 2026). Preserve only this subject/page.
+        if object.axRole == "AXGroup",
+           let target,
+           object.name == prefix + target.name,
+           let page = API.focusTreeInterceptor?.webArea,
+           target.page.isSame(page) { return }
         // Menu navigation and the confirmation's own fields retain the known subject.
         // Another session, Prompt, or any unrelated control ends this operation's context.
         if object.axRole == "AXMenuItem" || isConfirmation(object) || insideConfirmation { return }
@@ -48,7 +55,7 @@ package final class ClaudeSessionDeletion {
               target.page.isSame(page), insideConfirmation,
               let focus = API.focusObject, focus.axRole == "AXButton" else { return nil }
         switch focus.name {
-        case "Delete this session": return "one"
+        case "Delete", "Delete this session": return "one"
         case "Delete 2 sessions": return "two"
         default: return nil
         }
