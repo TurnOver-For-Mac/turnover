@@ -10,12 +10,6 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   deleted character or word lower, as VoiceOver does, without the word "deleted". Off by default. A deleted capital
   is lowered too when capitals are raised.
 
-### Fixed
-
-- TurnOver no longer tells you that secure input is on when the Mac goes on hiding your keys after a password
-  field, as beside a password field on a sign-in page in Safari or at a password prompt in Terminal. The log still
-  records it. If TurnOver's own keys stop answering after a password, Command-Tab twice still brings them back.
-
 ## 2.0, build 24.1
 
 ### New to try
@@ -25,6 +19,10 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- TurnOver no longer says "Secure input is on, so TurnOver cannot hear your keys" when the Mac goes on hiding the
+  keys after a password field. It cut in on ordinary sign-in pages: in Safari, while moving through the controls
+  beside the password field, and at a password prompt in Terminal. The log still records it. If TurnOver's own keys
+  stop answering after a password, Command-Tab twice brings them back.
 - In a toolbar, in any app, Left and Right move to the previous or next control, with the edge sound at either end
   instead of silence, and Escape goes back to the window's content (the place you were before the toolbar; in Finder
   the files, in System Settings the pane or the sidebar). A text field in the toolbar keeps its own keys. Up, Down,

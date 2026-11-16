@@ -102,13 +102,14 @@ public enum SecureEcho {
 
 /// E17: Secure Input left on after a password field (Safari, 3 Oct 2026) hides every key from TurnOver, so its reading
 /// keys silently stop. Checked four times a second while TurnOver leads: on, for ten seconds running, with the focus not
-/// in a password field, TurnOver used to say so and how to get the keys back, but the warning cut in on ordinary
-/// sign-in pages (Safari, beside a password field; a Terminal password prompt) and was dropped (16 Nov 2026): the
-/// condition is now only logged, once each time, with which process holds secure input. (Two seconds until 31 Oct
-/// 2026: Chrome keeps secure input on while the "Show password" box after its password field has the focus, and
-/// each Tab out of the field triggered the check.) A password field the application shows from another process
-/// (SecureEcho.otherProcessField) is one too: its length is looked at from the first quarter second, so it is never
-/// mistaken for this condition.
+/// in a password field, it is logged once, with the process the session names. Until 16 Nov 2026 TurnOver also said so
+/// and how to get the keys back. That warning cut in on ordinary sign-in pages (Safari keeps secure input on while the
+/// controls beside a password field have the focus; Terminal has it on at a password prompt), and it was taken out:
+/// TurnOver should not have to say anything there. (Two seconds until 31 Oct 2026: Chrome keeps secure input on
+/// while the "Show password" box after its password field has the focus, and each Tab out of the field brought the
+/// warning.) A password field the application shows from another process (SecureEcho.otherProcessField) is one too:
+/// its length is looked at from the first quarter second, and it is not logged as this (System Settings' password
+/// sheet said "Press Command Tab twice" three times while the password was typed).
 public enum SecureInputWatch {
     private static var timer: Timer?
     private static var looks = 0
@@ -145,9 +146,10 @@ public enum SecureInputWatch {
             focusSeen = f
         }
         // The focus moving again and again while no key reaches TurnOver: someone is pressing keys it cannot hear, and
-        // is told at once, not after ten seconds. Signing in to App Store Connect in the Claude app, the focus moved 15
-        // times in the 9.8 s before the warning came (14 Nov 2026). Chrome's "Show password" box after its field is
-        // one move, and goes on waiting the ten seconds (31 Oct 2026).
+        // it is logged at once, not after ten seconds (until 16 Nov 2026 they were also told at once). Signing in to
+        // App Store Connect in the Claude app, the focus moved 15 times in the 9.8 s before the warning came (14 Nov
+        // 2026). Chrome's "Show password" box after its field is one move, and goes on waiting the ten seconds (31 Oct
+        // 2026).
         let since = onSince ?? Date()
         let keysUnheard = focusMoves >= 3 && InputManager.lastKeyDownAt < since && Date().timeIntervalSince(since) >= 2
         guard looks >= 40 || keysUnheard, !warned else { return }
