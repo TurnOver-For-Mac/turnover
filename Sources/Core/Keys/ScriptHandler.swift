@@ -87,8 +87,35 @@ public enum ScriptHandler {
     nonisolated private static let keysArrived = Locked(0)
     nonisolated public static var keysArrivedCount: Int { keysArrived.value }
 
-    nonisolated public static func askMain(_ gesture: KeyboardGesture) -> KeyDecision {
+    /// The keys that can end a request for a field's focus, counted on the keyboard thread with the count above
+    /// (16 Nov 2026). A typing key that may be held for the field (see `setCaretHoldGate`) is not counted: the main
+    /// thread holds it, or, if the focus event came first, the field takes it. Counted at the tap, so a key still on its
+    /// way to the main thread when the focus event is handled is never mistaken for one that ended the request.
+    nonisolated private static let supersedingKeys = Locked(0)
+    nonisolated public static var supersedingKeysCount: Int { supersedingKeys.value }
+    private struct CaretHoldGate: Sendable {
+        var holding = false
+        var navigationKeyCode: Int64 = -1
+        var navigationModifiers = Modifiers()
+    }
+    nonisolated private static let caretHoldGate = Locked(CaretHoldGate())
+    /// Set when a request for the focus of an editable field is made (`holding`), with the quick navigation key that
+    /// made it: that key, pressed again, is a command and is never held.
+    nonisolated public static func setCaretHoldGate(holding: Bool, navigation: KeyboardGesture?) {
+        caretHoldGate.value = CaretHoldGate(holding: holding, navigationKeyCode: navigation?.keyCode ?? -1,
+                                            navigationModifiers: navigation?.modifiers ?? [])
+    }
+    /// The tap's own accounting for a key that has arrived (askMain; a hook for tests, which do not go through it).
+    nonisolated package static func noteKeyArrived(_ gesture: KeyboardGesture) {
         keysArrived.lock.lock(); keysArrived.unsafeValue &+= 1; keysArrived.lock.unlock()
+        let gate = caretHoldGate.value
+        let sameNavigationKey = gesture.keyCode == gate.navigationKeyCode && gesture.modifiers == gate.navigationModifiers
+        if gate.holding, gesture.isTypingKeyForCaretFocus, !sameNavigationKey { return }
+        supersedingKeys.lock.lock(); supersedingKeys.unsafeValue &+= 1; supersedingKeys.lock.unlock()
+    }
+
+    nonisolated public static func askMain(_ gesture: KeyboardGesture) -> KeyDecision {
+        noteKeyArrived(gesture)
         guard !(mainStuck?() ?? false) else { Log.warning("keyboard: the main thread is not beating; \(gesture.logDescription()) goes through"); return .passed }
         let state = Locked(Wait.waiting); let done = DispatchSemaphore(value: 0)
         let started = DispatchTime.now()

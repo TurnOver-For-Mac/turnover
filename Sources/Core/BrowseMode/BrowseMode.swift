@@ -374,6 +374,9 @@ public final class BrowseModeDocument: ScriptableObject {
 
     let activationRecovery = BrowseActivationRecovery()
     var caretFocusRequest: CaretFocusRequest?
+    /// The latest request, kept while its native event may still come (caretFocusRequest is cleared when the
+    /// confirmation gives up, which is not the end of the request). Typing keys are held for it (16 Nov 2026).
+    package var newestCaretRequest: CaretFocusRequest?
     // Retain requested native events after their caret intent is superseded, until delivered or the page changes.
     var outstandingCaretFocus: [ElementKey: CaretFocusRequest] = [:]
     /// NVDA's passThrough: true is focus mode (keys go to the application).

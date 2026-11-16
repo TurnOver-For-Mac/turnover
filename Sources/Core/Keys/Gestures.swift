@@ -140,6 +140,18 @@ nonisolated public struct KeyboardGesture: CustomStringConvertible, Sendable {
         return isPrintingKey
     }
 
+    /// Whether this key is plain typing that can wait for a field's focus (16 Nov 2026): a printing character (with
+    /// Shift or not), Space, and plain Backspace or Forward Delete. Never Return, Tab, Escape, the arrows, the other
+    /// special keys, the modifiers themselves, or any key with Command, Control, Option or the TurnOver key (VoiceOver's
+    /// keys): those are commands, and they end a request for the field's focus as they always did.
+    public var isTypingKeyForCaretFocus: Bool {
+        guard modifiers.subtracting(.shift).isEmpty else { return false }
+        if keyCode == 51 || keyCode == 117 { return modifiers.isEmpty }   // Backspace, Forward Delete
+        if keyCode == 49 { return true }   // Space
+        if KeyNames.isSpecial(keyCode) || (54...63).contains(keyCode) { return false }
+        return characters.unicodeScalars.contains { !CharacterSet.controlCharacters.contains($0) }
+    }
+
     /// NVDA's shouldReportAsCommand: keys with modifiers or special keys, never plain typing.
     public var shouldReportAsCommand: Bool {
         if isTurnOverModifier { return false }

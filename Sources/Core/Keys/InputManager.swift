@@ -90,6 +90,12 @@ public enum InputManager {
         set { lock.lock(); _lastKeyIdentifier = newValue; lock.unlock() }
     }
     private static var _lastKeyIdentifier = ""
+    /// The last key pressed, whole: the quick navigation key behind a request for a field's focus (16 Nov 2026).
+    public static var lastKeyGesture: KeyboardGesture? {
+        get { lock.lock(); defer { lock.unlock() }; return _lastKeyGesture }
+        set { lock.lock(); _lastKeyGesture = newValue; lock.unlock() }
+    }
+    private static var _lastKeyGesture: KeyboardGesture?
 
     public static func handleKeyDown(_ gesture: KeyboardGesture) -> Bool {
         Hints.cancel()
@@ -106,6 +112,7 @@ public enum InputManager {
             return true
         }
         lastKeyIdentifier = gesture.identifier
+        lastKeyGesture = gesture
         // A browser's Back or Forward: the page coming back resumes where it was read (BrowseModeDocument).
         if ["kb:command+[", "kb:command+]"].contains(gesture.identifier) { BrowseModeHandler.historyKeyAt = Date() }
         if passNextKey, !gesture.isRepeat {
@@ -129,6 +136,14 @@ public enum InputManager {
             Speech.cancel()
             if saysWord { Speech.finishTypedWord() } else if endsWord { Speech.clearTypedWordBuffer() }
             SayAll.stop(byGesture: true)
+        }
+        // A typing key while the focus of an editable field, just asked for by quick navigation, has not arrived: held
+        // here, before any lookup, so no lookup can end the request, and sent to the field once it has the focus
+        // (16 Nov 2026). Any other key sends the held ones on first, as the commands they would have been.
+        if !isInputHelpActive, !TurnOverMenu.shared.isOpen, !FindPrompt.shared.isOpen, !ScreenRecognition.shared.isOpen,
+           BrowseModeDocument.offerKeyToCaretFocus(gesture) {
+            Log.io("input \(gesture.logDescription()) held until the field takes the focus")
+            return true
         }
         // On the main thread since Swift 6 (10 Oct 2026): the keyboard thread waits for this answer, bounded
         // (ScriptHandler.askMain), so the availability checks may talk to the application freely.
@@ -205,16 +220,20 @@ public enum InputManager {
         // A clipboard key going to the application: say what it did (TurnOver's own copy speaks for itself).
         ClipboardAnnouncer.keyDown(gesture)
         FormattingFeedback.shared.keyWillPassThrough(gesture)
-        DispatchQueue.main.async {
-            ScriptHandler.clearLastScript()
-            onPassThrough?(gesture)
-            for w in passThroughWatchers { w(gesture) }
-            if let c = gesture.typedCharacter, let focus = API.focusObject {
-                EventHandler.queue(Event(.typedCharacter, focus, character: c))
-            }
-        }
+        DispatchQueue.main.async { notePassedThrough(gesture) }
         // An unbound TurnOver chord does nothing; the letter must not reach the document.
         return gesture.isTurnOverModifier
+    }
+
+    /// What follows a key that goes to the application: the watchers, and the typed character for the echo. Also for a key
+    /// held for a field's focus and sent on later, which is typed as any other (16 Nov 2026). Main thread.
+    static func notePassedThrough(_ gesture: KeyboardGesture) {
+        ScriptHandler.clearLastScript()
+        onPassThrough?(gesture)
+        for w in passThroughWatchers { w(gesture) }
+        if let c = gesture.typedCharacter, let focus = API.focusObject {
+            EventHandler.queue(Event(.typedCharacter, focus, character: c))
+        }
     }
 
     /// NVDA: _handleInputHelp — the key's name, then what it does.

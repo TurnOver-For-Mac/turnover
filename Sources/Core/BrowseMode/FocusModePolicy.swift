@@ -77,7 +77,7 @@ extension BrowseModeDocument {
         }
     }
 
-    struct CaretFocusRequest {
+    package struct CaretFocusRequest {
         let id = UUID()
         let started = Date()
         let clicks = caretFocusClicks()
@@ -85,11 +85,26 @@ extension BrowseModeDocument {
         let position: Int
         let page: Int
         let intent: Int
-        let keys: Int
+        /// ScriptHandler.supersedingKeysCount when the request was made: the keys that end it are the ones counted
+        /// since (16 Nov 2026: this was every key that reached the tap, so a Backspace 8 ms after the Prompt's focus
+        /// event, handled a moment after it, ended a request the focus event had just answered).
+        let supersedingKeys: Int
         let focusBefore: AXUIElement?
         let expires: Date
+        /// An editable field: typing keys that come before its focus event are held for it, not run.
+        let editable: Bool
+        /// The quick navigation key that made the request. Pressed again, it is a command and is not held.
+        let navigation: KeyboardGesture?
         var confirmed = false
     }
+
+    /// The keys held for a request's field (16 Nov 2026): kept here, not on a document, so that a page that goes away
+    /// before the request runs out cannot lose them. Main thread.
+    struct CaretHold {
+        let id: UUID
+        var keys: [KeyboardGesture]
+    }
+    static var caretHold: CaretHold?
 
     package static var caretFocusClicks: () -> [UInt32] = {
         [CGEventType.leftMouseDown, .rightMouseDown, .otherMouseDown].map {
@@ -100,7 +115,11 @@ extension BrowseModeDocument {
     /// NVDA separates CARET from FOCUS settings and honours a manual mode override. Quick navigation
     /// uses this same arrival policy here so a field is ready for typing after its words (14 Nov 2026).
     func caretArrived(_ object: TurnOverObject) {
+        // A new caret move ends the older request; keys held for it run as they would have (16 Nov 2026).
+        Self.releaseCaretHold(because: "a newer caret move replaced the request for the field")
+        if let older = caretFocusRequest { Log.io("browse mode: caret focus on \(older.element.role) replaced by a newer caret move") }
         caretFocusRequest = nil
+        newestCaretRequest = nil
         // 14 Nov 2026: the saved copy can be read while its provider is unresponsive. Caret policy
         // includes live player/menu queries and native focus writes, so none is safe on that path.
         guard !pageSilent else { return }
@@ -111,16 +130,28 @@ extension BrowseModeDocument {
             setPassThrough(true, announce: true)
             return
         }
+        // The quick navigation key is the last key pressed (the page's own copy may be read after it, but any key in
+        // between would have ended this move). It may be nil, or not typing, in which case nothing is excluded.
+        let navigationKey = InputManager.lastKeyGesture.flatMap { $0.isTypingKeyForCaretFocus ? $0 : nil }
+        let editable = object.states.contains(.editable)
         let request = CaretFocusRequest(element: object.element, position: position, page: pageGeneration,
-            intent: bufferIntent, keys: ScriptHandler.keysArrivedCount, focusBefore: API.focusObject?.element,
-            expires: Date().addingTimeInterval(0.5))
+            intent: bufferIntent, supersedingKeys: ScriptHandler.supersedingKeysCount, focusBefore: API.focusObject?.element,
+            expires: Date().addingTimeInterval(0.5), editable: editable, navigation: navigationKey)
+        ScriptHandler.setCaretHoldGate(holding: editable, navigation: navigationKey)
         caretFocusRequest = request
+        newestCaretRequest = request
         outstandingCaretFocus = outstandingCaretFocus.filter { $0.value.page == pageGeneration }
         outstandingCaretFocus[ElementKey(object.element)] = request
         Self.confirmFocus(object.element) { [weak self] confirmed in
             guard let self, let active = caretFocusRequest,
                   active.id == request.id, !active.confirmed else { return }
-            guard confirmed, caretFocusIsCurrent(request) else { caretFocusRequest = nil; return }
+            // Not a failure of the request: its native event may still come, until it runs out (keys held for it wait).
+            guard confirmed, caretFocusIsCurrent(request) else {
+                let why = confirmed ? (caretFocusFailure(request) ?? "it was no longer current") : "the application did not report the field focused in time"
+                Log.io("browse mode: caret focus on \(request.element.role) not confirmed: \(why)")
+                caretFocusRequest = nil
+                return
+            }
             // Some providers update native focus without posting AXFocusedUIElementChanged.
             // Attach to the already-spoken virtual item; a later native event is consumed once below.
             caretFocusRequest?.confirmed = true
@@ -128,9 +159,90 @@ extension BrowseModeDocument {
             // Adopt through the normal focus rules: an ignored or redirected native focus cannot enable typing.
             guard API.focusTreeInterceptor === self,
                   API.focusObject?.isSameElement(as: object.element) == true,
-                  let adopted = caretFocusRequest, caretFocusIsCurrent(adopted) else { caretFocusRequest = nil; return }
+                  let adopted = caretFocusRequest, caretFocusIsCurrent(adopted) else {
+                // The focus event itself may have been accepted by the call above, and so have sent the held keys.
+                if Self.caretHold?.id == request.id {
+                    Log.io("browse mode: caret focus on \(request.element.role) not adopted after the native focus was seen")
+                }
+                caretFocusRequest = nil
+                return
+            }
             setPassThrough(true, announce: true)
             ModeAnnouncement.readingReported(self)
+            if passThrough { Self.deliverCaretHold(request.id) }
+        }
+    }
+
+    /// Why a request is no longer current, for the log (16 Nov 2026: a Backspace 8 ms after the Prompt's focus event left
+    /// browse mode on, and the log had no line for the request that was thrown away). nil when it is current.
+    package func caretFocusFailure(_ request: CaretFocusRequest) -> String? {
+        if API.focusTreeInterceptor !== self { return "the page no longer has the keyboard" }
+        if AXHandler.shared.activePid != webArea.pid { return "the application is no longer in front" }
+        if request.page != pageGeneration { return "the page changed" }
+        if request.position != position { return "the reading position moved" }
+        if request.intent != bufferIntent { return "another command came after it" }
+        if request.supersedingKeys != ScriptHandler.supersedingKeysCount { return "a key that is not typing came after it" }
+        if Date() >= request.expires { return "it ran out of time" }
+        if !config.virtualBuffers.autoPassThroughOnCaretMove || disableAutoPassThrough { return "automatic focus mode is off" }
+        if let current = API.focusObject?.element,
+           !current.isSame(request.element), request.focusBefore?.isSame(current) != true { return "the focus is on another control" }
+        return nil
+    }
+
+    /// The keyboard thread's question's answer, on the main thread, asked before any lookup of a key (16 Nov 2026). True:
+    /// the key is held for the field whose focus has been asked for, and the caller must not look it up or run it.
+    /// False: the key goes on as ever; keys held for an earlier request are first run as the commands they would have been,
+    /// so that they come before this key.
+    package static func offerKeyToCaretFocus(_ gesture: KeyboardGesture) -> Bool {
+        if let page = API.focusTreeInterceptor as? BrowseModeDocument, page.holdKeyForCaretFocus(gesture) { return true }
+        releaseCaretHold(because: "a key that is not typing, or the same quick navigation key, came before the field's focus")
+        return false
+    }
+
+    private func holdKeyForCaretFocus(_ gesture: KeyboardGesture) -> Bool {
+        guard gesture.isTypingKeyForCaretFocus,
+              let request = newestCaretRequest, request.editable, !request.confirmed,
+              outstandingCaretFocus[ElementKey(request.element)]?.id == request.id,
+              request.navigation.map({ $0.keyCode != gesture.keyCode || $0.modifiers != gesture.modifiers }) ?? true,
+              caretFocusIsCurrent(request) else { return false }
+        if Self.caretHold?.id != request.id {
+            Self.releaseCaretHold(because: "a newer request began")
+            Self.caretHold = CaretHold(id: request.id, keys: [])
+            // The request's own lifetime bounds the hold: when it runs out, the keys run as they would have.
+            let id = request.id
+            DispatchQueue.main.asyncAfter(deadline: .now() + max(0, request.expires.timeIntervalSinceNow) + 0.02) {
+                Self.releaseCaretHold(id, because: "the field's focus did not arrive in time")
+            }
+        }
+        Self.caretHold?.keys.append(gesture)
+        Log.io("browse mode: a typing key held for the field's focus (\(Self.caretHold?.keys.count ?? 0) held)")
+        return true
+    }
+
+    /// The field has the focus and focus mode is on: the held keys go to it, in order, once (16 Nov 2026). Main thread.
+    static func deliverCaretHold(_ id: UUID) {
+        guard let hold = caretHold, hold.id == id else { return }
+        caretHold = nil
+        Log.io("browse mode: \(hold.keys.count) held typing key(s) sent to the field, which took the focus")
+        for key in hold.keys {
+            key.send()
+            DispatchQueue.main.async { InputManager.notePassedThrough(key) }
+        }
+    }
+
+    /// The field did not take the focus, or the request ended some other way: the held keys run as they would have, in
+    /// order, once (16 Nov 2026). `id` nil is any request's keys. Main thread.
+    package static func releaseCaretHold(_ id: UUID? = nil, because reason: String) {
+        guard let hold = caretHold, id == nil || hold.id == id else { return }
+        caretHold = nil
+        Log.io("browse mode: \(hold.keys.count) held typing key(s) run as ordinary keys: \(reason)")
+        for key in hold.keys {
+            if let script = ScriptHandler.findScript(for: key) {
+                ScriptHandler.queueScript(script, gesture: key)
+            } else {
+                key.send()
+                DispatchQueue.main.async { InputManager.notePassedThrough(key) }
+            }
         }
     }
 
@@ -138,7 +250,7 @@ extension BrowseModeDocument {
         guard API.focusTreeInterceptor === self, AXHandler.shared.activePid == webArea.pid,
               request.page == pageGeneration,
               request.position == position, request.intent == bufferIntent,
-              request.keys == ScriptHandler.keysArrivedCount, Date() < request.expires,
+              request.supersedingKeys == ScriptHandler.supersedingKeysCount, Date() < request.expires,
               config.virtualBuffers.autoPassThroughOnCaretMove, !disableAutoPassThrough else { return false }
         if let current = API.focusObject?.element,
            !current.isSame(request.element), request.focusBefore?.isSame(current) != true { return false }
@@ -156,12 +268,26 @@ extension BrowseModeDocument {
         let nativeTab = InputManager.lastKeyDownAt > request.started &&
             ["kb:tab", "kb:shift+tab"].contains(InputManager.lastKeyIdentifier)
         if nativeTab || Self.lastTabFromCaretAt > request.started ||
-           Self.caretFocusClicks() != request.clicks || focusFromOutside { return nil }
-        guard caretFocusIsCurrent(request) else { return false }
+           Self.caretFocusClicks() != request.clicks || focusFromOutside {
+            Self.releaseCaretHold(request.id, because: "the focus came from a Tab, a click or another application")
+            return nil
+        }
+        guard caretFocusIsCurrent(request) else {
+            // SHORTCOMINGS rule 3: the request was thrown away without a word in the log (16 Nov 2026).
+            let why = caretFocusFailure(request) ?? "it was no longer current"
+            Log.io("browse mode: focus on \(object.element.role) from an earlier caret move is left alone: \(why)")
+            Self.releaseCaretHold(request.id, because: why)
+            return false
+        }
         setPassThrough(shouldPassThrough(object, caret: true), announce: true)
         lastFocusElement = object.element
         positionAtFocus = position
         if let field = object as? EditableText { field.initAutoSelectDetection() }
+        if passThrough {
+            Self.deliverCaretHold(request.id)
+        } else {
+            Self.releaseCaretHold(request.id, because: "focus mode did not go on for the field")
+        }
         return true
     }
 
