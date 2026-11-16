@@ -92,6 +92,11 @@ nonisolated public struct KeyboardGesture: CustomStringConvertible, Sendable {
         let mayType = modifiers.intersection([.control, .command, .turnover]).isEmpty &&
             (typedCharacter != nil || (!KeyNames.isSpecial(keyCode) && !(54...62).contains(keyCode)))
         if mayType, commandName == nil || secure { return "(a typed key)" }
+        // A key browse mode keeps because it would type and has no command is text the user meant to type: logged
+        // like typing, without its name, but marked as kept (review, 16 Nov 2026: symbols and Option characters typed
+        // in browse mode were named in the log). The trap's own line still says when.
+        let keptByTrap = commandName == BrowseModeDocument.trapScriptName
+        if mayType, keptByTrap { return "(a kept key) → \(BrowseModeDocument.trapScriptName)" }
         return identifier + (commandName.map { " → \($0)" } ?? "")
     }
 

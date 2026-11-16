@@ -206,7 +206,7 @@ public final class BrowseModeDocument: ScriptableObject {
     var lastURL = ""
     /// The name of the script that keeps a typing key with no command from the page; ScriptHandler asks every later
     /// handler before it runs (16 Nov 2026).
-    public static let trapScriptName = "browseModeTrap"
+    nonisolated public static let trapScriptName = "browseModeTrap"
     /// When a letter with no command was last kept from the page in browse mode (any page).
     static var lastLetterKeptAt = Date.distantPast
     /// "browse mode", a third of a second after the last of a run of letters kept from the page (or at once if the run

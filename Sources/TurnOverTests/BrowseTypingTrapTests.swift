@@ -185,6 +185,17 @@ func browseTypingTrapTests() {
         }
     }
 
+    // Kept keys are what the user meant to type, so the log does not name them (review, 16 Nov 2026).
+    test("browse typing trap: a kept key is logged without its name, a command key with it") {
+        for (name, gesture) in textKeys {
+            expect(gesture.logDescription(commandName: "browseModeTrap"), "(a kept key) → browseModeTrap", "\(name) is not named")
+            expect(gesture.logDescription(commandName: "browseModeTrap", secure: true), "(a typed key)", "\(name) in a password field")
+        }
+        expect(key(43, [], ",").logDescription(commandName: "pastEndOfContainer"), "kb:, → pastEndOfContainer", "a command on comma is named")
+        expect(key(2, .option, "∂").logDescription(commandName: "showDesktop"), "kb:option+d → showDesktop", "Option D's command is named")
+        expect(key(4, [], "h").logDescription(commandName: "nextHeading"), "kb:h → nextHeading", "a letter command is named")
+    }
+
     test("browse typing trap: a kept symbol on its own says nothing") {
         withPage { _, _, trial, _ in
             // (Setting up the replayed page can say something of its own; only what the keys say counts.)
