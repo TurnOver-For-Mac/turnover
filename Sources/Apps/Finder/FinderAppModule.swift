@@ -108,6 +108,20 @@ final class FinderAppModule: AppModule {
         return find(w, 0)
     }
 
+    /// Escape from a toolbar control goes to the window's file view (ToolbarKeys; 15 Nov 2026).
+    override func toolbarEscapeTarget(in window: AXUIElement) -> AXUIElement? { Self.fileView(in: window) }
+
+    /// The window's file view (list, icon, column or table view), outside the toolbar and the sidebar.
+    static func fileView(in window: AXUIElement) -> AXUIElement? {
+        func find(_ e: AXUIElement, _ d: Int) -> AXUIElement? {
+            if ["AXOutline", "AXBrowser", "AXTable", "AXList"].contains(e.role), (e.string(kAXDescriptionAttribute) ?? "").lowercased() != "sidebar" { return e }
+            guard d < 8 else { return nil }
+            for c in e.elements(kAXChildrenAttribute) where c.role != "AXToolbar" { if let f = find(c, d + 1) { return f } }
+            return nil
+        }
+        return find(window, 0)
+    }
+
     private func focusSearch() -> Bool {
         guard let tb = window()?.elements(kAXChildrenAttribute).first(where: { $0.role == "AXToolbar" }) else { return false }
         func find(_ e: AXUIElement, _ d: Int) -> AXUIElement? {
@@ -264,6 +278,8 @@ final class FinderColumnItem: TurnOverObject {
 
 /// Finder's list rows as text, for the rules above and their tests.
 public enum FinderRows {
+    /// The window's file view, outside the sidebar and the toolbar (the toolbar rule's way back, and its test).
+    public static func fileView(in window: AXUIElement) -> AXUIElement? { FinderAppModule.fileView(in: window) }
     /// A folder: the Kind cell says Folder, or the Size cell holds the folder's dashes (the Kind column may be hidden).
     nonisolated public static func isFolderRow(cellTexts: [String]) -> Bool {
         cellTexts.contains("Folder") || (cellTexts.count >= 3 && cellTexts[2] == "--")
