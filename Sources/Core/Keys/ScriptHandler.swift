@@ -12,7 +12,26 @@ import TurnOverAX
 
 public enum ScriptHandler {
     private static let lock = NSLock()
-    private static var queued: [(Script, KeyboardGesture, Bool)] = []
+    /// A queued key: a script to run, or (16 Nov 2026, review) a key in the ordered lane, looked up when its turn
+    /// comes or sent on to the application in its turn (`queueInOrder`).
+    private struct Queued {
+        enum Kind { case script(Script), lookUp, send }
+        let kind: Kind
+        let gesture: KeyboardGesture
+        let wasInSayAll: Bool
+        /// In the ordered lane: the keys the script sends are sent in order too (`sendInOrder`).
+        var inOrder = false
+        /// A key typed for a field: the log names its command, never the key.
+        var masked = false
+        /// After it is sent: the watchers and the typed character's echo (a key that was not noted on its way in).
+        var notes = false
+        /// Why the key may no longer go anywhere (nil: it may), asked when its turn comes with the command it would run
+        /// (nil: it is to be sent on).
+        var refusal: ((Script?) -> String?)?
+    }
+    private static var queued: [Queued] = []
+    /// An entry of the ordered lane is running (a script that waits for the caret lets keys in meanwhile).
+    private static var runningInOrder = false
     private static var _running = false
     private static var lastScript: Script?
     private static var lastScriptTime = Date.distantPast
@@ -96,20 +115,19 @@ public enum ScriptHandler {
     private struct CaretHoldGate: Sendable {
         var holding = false
         var navigationKeyCode: Int64 = -1
-        var navigationModifiers = Modifiers()
     }
     nonisolated private static let caretHoldGate = Locked(CaretHoldGate())
     /// Set when a request for the focus of an editable field is made (`holding`), with the quick navigation key that
-    /// made it: that key, pressed again, is a command and is never held.
+    /// made it: that key, pressed again, with Shift or without, is a command and is never held.
     nonisolated public static func setCaretHoldGate(holding: Bool, navigation: KeyboardGesture?) {
-        caretHoldGate.value = CaretHoldGate(holding: holding, navigationKeyCode: navigation?.keyCode ?? -1,
-                                            navigationModifiers: navigation?.modifiers ?? [])
+        caretHoldGate.value = CaretHoldGate(holding: holding, navigationKeyCode: navigation?.keyCode ?? -1)
     }
     /// The tap's own accounting for a key that has arrived (askMain; a hook for tests, which do not go through it).
     nonisolated package static func noteKeyArrived(_ gesture: KeyboardGesture) {
         keysArrived.lock.lock(); keysArrived.unsafeValue &+= 1; keysArrived.lock.unlock()
         let gate = caretHoldGate.value
-        let sameNavigationKey = gesture.keyCode == gate.navigationKeyCode && gesture.modifiers == gate.navigationModifiers
+        // The key itself, Shift or not (16 Nov 2026, review): Shift F after F is the previous field, a command.
+        let sameNavigationKey = gesture.keyCode == gate.navigationKeyCode
         if gate.holding, gesture.isTypingKeyForCaretFocus, !sameNavigationKey { return }
         supersedingKeys.lock.lock(); supersedingKeys.unsafeValue &+= 1; supersedingKeys.lock.unlock()
     }
@@ -159,7 +177,11 @@ public enum ScriptHandler {
     /// Queue a script for the main thread (NVDA: queueScript). Any thread.
     public static func queueScript(_ script: Script, gesture: KeyboardGesture) {
         let wasInSayAll = SayAll.isRunning
-        lock.lock(); queued.append((script, gesture, wasInSayAll)); lock.unlock()
+        lock.lock()
+        // Queued while the ordered lane is busy: in it, so that what the script sends keeps its place (16 Nov 2026, review).
+        let inOrder = laneBusyLocked
+        queued.append(Queued(kind: .script(script), gesture: gesture, wasInSayAll: wasInSayAll, inOrder: inOrder))
+        lock.unlock()
         DispatchQueue.main.async { runQueued() }
     }
 
@@ -168,20 +190,122 @@ public enum ScriptHandler {
     /// NVDA: isScriptWaiting — another gesture's script is queued behind the running one.
     public static var isScriptWaiting: Bool { lock.lock(); defer { lock.unlock() }; return !queued.isEmpty }
 
+    // The ordered lane (16 Nov 2026, review of the caret-focus hold). A key TurnOver sends on later, as the keys held for
+    // a field's focus are, is posted into the keyboard's stream behind any real key already waiting at the tap for the
+    // main thread; let through, that real key reached the app first ("lhe" for "hel"). So keys sent on later go into the
+    // lane: one at a time, each only once the keys sent before it have passed the tap (`orderedKeySeen`), and any key
+    // that comes while the lane is busy joins it at the back, whether it runs a script or would have gone straight to the
+    // application. The scripts in the lane send their keys the same way. A key sent while the tap does not see it (the
+    // tap switched off, TurnOver handing over) is given up on after `orderedKeyLimit`, so nothing waits longer.
+    private struct OrderedKeys: Sendable {
+        var onTheirWay = 0
+        var lastSentNs: UInt64 = 0
+    }
+    nonisolated private static let orderedKeys = Locked(OrderedKeys())
+    /// The longest the lane waits for a key it sent to pass the tap.
+    nonisolated(unsafe) package static var orderedKeyLimit: TimeInterval = 0.3
+    /// While an entry of the ordered lane runs, `KeyboardGesture.send` sends in order (main thread only).
+    nonisolated(unsafe) static var sendingInOrder = false
+
+    /// Sends a key on to the application so that it reaches it after every key sent this way before it. Any thread.
+    nonisolated public static func sendInOrder(_ gesture: KeyboardGesture) {
+        orderedKeys.lock.lock()
+        orderedKeys.unsafeValue.onTheirWay += 1
+        orderedKeys.unsafeValue.lastSentNs = DispatchTime.now().uptimeNanoseconds
+        orderedKeys.lock.unlock()
+        if let poster = KeyboardGesture.orderedPoster { poster(gesture) } else { KeyboardGesture.poster?(gesture) }
+        // Should the tap never see it, the lane goes on after the limit.
+        DispatchQueue.main.asyncAfter(deadline: .now() + orderedKeyLimit + 0.01) { MainActor.assumeIsolated { runQueued() } }
+    }
+
+    /// The keyboard thread: a key sent by `sendInOrder` has passed the tap, so keys typed after it are behind it now.
+    nonisolated public static func orderedKeySeen() {
+        orderedKeys.lock.lock()
+        orderedKeys.unsafeValue.onTheirWay = max(0, orderedKeys.unsafeValue.onTheirWay - 1)
+        let none = orderedKeys.unsafeValue.onTheirWay == 0
+        orderedKeys.lock.unlock()
+        if none { DispatchQueue.main.async { MainActor.assumeIsolated { runQueued() } } }
+    }
+
+    /// Keys sent in order that have not yet passed the tap, within the limit (main thread).
+    private static var keysOnTheirWay: Bool {
+        orderedKeys.lock.lock(); defer { orderedKeys.lock.unlock() }
+        guard orderedKeys.unsafeValue.onTheirWay > 0 else { return false }
+        let waited = Double(DispatchTime.now().uptimeNanoseconds &- orderedKeys.unsafeValue.lastSentNs) / 1e9
+        if waited < orderedKeyLimit { return true }
+        Log.warning("keyboard: \(orderedKeys.unsafeValue.onTheirWay) key(s) sent in order were not seen at the tap in \(Int(orderedKeyLimit * 1000)) ms; the keys behind them go on")
+        orderedKeys.unsafeValue.onTheirWay = 0
+        return false
+    }
+    /// Under `lock`.
+    private static var laneBusyLocked: Bool { runningInOrder || queued.contains { $0.inOrder } || keysOnTheirWay }
+
+    /// Whether a key that would go straight to the application must take its turn in the ordered lane (main thread).
+    public static var keysMustWaitTheirTurn: Bool { lock.lock(); defer { lock.unlock() }; return laneBusyLocked }
+
+    /// A key into the ordered lane (main thread). `lookUp`: its command is found when its turn comes and runs, or the
+    /// key is sent on if it has none, as a key typed then would; otherwise it is sent on. `refusal` is asked first.
+    package static func queueInOrder(_ gesture: KeyboardGesture, lookUp: Bool, notes: Bool, masked: Bool,
+                                     refusal: ((Script?) -> String?)? = nil) {
+        lock.lock()
+        queued.append(Queued(kind: lookUp ? .lookUp : .send, gesture: gesture, wasInSayAll: SayAll.isRunning,
+                             inOrder: true, masked: masked, notes: notes, refusal: refusal))
+        lock.unlock()
+        DispatchQueue.main.async { runQueued() }
+    }
+
+    /// Tests: the lane forgets keys still on their way and empties.
+    package static func resetOrderedLane() {
+        orderedKeys.value = OrderedKeys()
+        lock.lock(); queued.removeAll { $0.inOrder }; runningInOrder = false; lock.unlock()
+    }
+
+    private static var lastRefusalEdge = Date.distantPast
+
     private static func runQueued() {
         guard !_running else { return }
         while true {
+            // Keys sent in order still on their way: whatever is queued waits for them (`orderedKeySeen` or the limit).
+            if keysOnTheirWay { break }
             lock.lock()
             guard !queued.isEmpty else { lock.unlock(); break }
-            let (script, gesture, wasInSayAll) = queued.removeFirst()
+            let entry = queued.removeFirst()
+            runningInOrder = entry.inOrder
             lock.unlock()
-            executeScript(script, gesture: gesture, wasInSayAll: wasInSayAll)
+            run(entry)
+            lock.lock(); runningInOrder = false; lock.unlock()
         }
         EventHandler.drain()
     }
 
-    /// NVDA: executeScript, with the repeat count for "press twice".
-    public static func executeScript(_ script: Script, gesture: KeyboardGesture, wasInSayAll: Bool = false) {
+    private static func run(_ entry: Queued) {
+        let gesture = entry.gesture
+        var script: Script?
+        switch entry.kind {
+        case .script(let s): script = s
+        case .lookUp: script = findScript(for: gesture)
+        case .send: script = nil
+        }
+        if let why = entry.refusal?(script) {
+            // Never typed into another application or field, nor run on another page: dropped, with the edge sound.
+            Log.io("input \(entry.masked ? "(a typed key)" : gesture.logDescription()) dropped: \(why)")
+            if Date().timeIntervalSince(lastRefusalEdge) > 0.5 { lastRefusalEdge = Date(); Tones.edge() }
+            return
+        }
+        if let script {
+            let before = sendingInOrder
+            sendingInOrder = entry.inOrder
+            defer { sendingInOrder = before }
+            executeScript(script, gesture: gesture, wasInSayAll: entry.wasInSayAll, maskKey: entry.masked)
+        } else {
+            sendInOrder(gesture)
+            if entry.notes { InputManager.notePassedThrough(gesture) }
+        }
+    }
+
+    /// NVDA: executeScript, with the repeat count for "press twice". `maskKey`: a key typed for a field (held for its
+    /// focus), which the log does not name.
+    public static func executeScript(_ script: Script, gesture: KeyboardGesture, wasInSayAll: Bool = false, maskKey: Bool = false) {
         BrailleInput.flushForKey()   // a word half typed on the display goes in before any command runs
         if _running, lastScript === script { gesture.send(); return }
         _running = true
@@ -189,7 +313,7 @@ public enum ScriptHandler {
         if now.timeIntervalSince(lastScriptTime) * 1000 <= Double(config.keyboard.multiPressTimeoutMs), lastScript === script { lastScriptCount += 1 } else { lastScriptCount = 0 }
         lastScript = script
         lastScriptTime = now
-        Log.io("script \(script.name) for \(gesture.identifier)\(lastScriptCount > 0 ? " (repeat \(lastScriptCount))" : "")")
+        Log.io("script \(script.name) for \(maskKey ? "(a typed key)" : gesture.identifier)\(lastScriptCount > 0 ? " (repeat \(lastScriptCount))" : "")")
         let resume = wasInSayAll && script.resumesSayAll
         let (calls0, ms0, t0) = (AXStats.calls, AXStats.ms, DispatchTime.now().uptimeNanoseconds)
         SayAll.resuming = resume

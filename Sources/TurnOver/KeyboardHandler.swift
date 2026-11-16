@@ -35,6 +35,9 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
     /// key can't hold it; 14 Oct 2026).
     static let typedMarker: Int64 = 0xB05B
     static let typedTurnOverMarker: Int64 = 0xB05C
+    /// Keys sent on in order (ScriptHandler.sendInOrder: the keys held for a field's focus, and keys typed while they are
+    /// on their way; 16 Nov 2026, review): counted as they pass the tap, then let through as the key typed would be.
+    static let orderedMarker: Int64 = 0xB05D
 
     var onCapsLockToggled: (@MainActor (Bool) -> Void)?
     var onReadinessChanged: (@MainActor (UInt64, Bool) -> Void)?
@@ -123,6 +126,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
 
     init() {
         KeyboardGesture.poster = { g in KeyboardHandler.post(g) }
+        KeyboardGesture.orderedPoster = { g in KeyboardHandler.post(g, ordered: true) }
         KeyboardGesture.typedPoster = { g in KeyboardHandler.postTyped(g) }
         KeyboardGesture.chordPoster = { codes in KeyboardHandler.postChord(codes) }
         KeyboardGesture.turnOverHeld = {
@@ -403,6 +407,13 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         }
         // Our own re-posted keys (gesture.send) pass untouched.
         if event.getIntegerValueField(.eventSourceUserData) == Self.marker { return Unmanaged.passUnretained(event) }
+        // A key sent on in order: the keys typed after it may go now. Routed as the key typed would have been (an arrow
+        // to the app in front while coexisting, every key to a game TurnOver leads), since it was posted unrouted so as
+        // to come through here in its place.
+        if event.getIntegerValueField(.eventSourceUserData) == Self.orderedMarker {
+            if type == .keyDown { ScriptHandler.orderedKeySeen() }
+            return passOrRedirect(event)
+        }
         let code = event.getIntegerValueField(.keyboardEventKeycode)
         // VoiceOver's own on-and-off shortcut goes straight on, never held for TurnOver's decision: held for a main
         // thread that was busy, Option Apostrophe (the maintainer's) reached macOS a second late, or not at all, and
@@ -736,8 +747,10 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         }
     }
 
-    /// NVDA's gesture.send: the key down and up, marked so the tap ignores them.
-    static func post(_ g: KeyboardGesture) {
+    /// NVDA's gesture.send: the key down and up, marked so the tap ignores them. `ordered`: marked so the tap counts
+    /// the key and routes it (ScriptHandler.sendInOrder), and a typed character carries its own text, so a capital sent
+    /// a moment after it was typed is still a capital whatever the hand now holds (16 Nov 2026, review).
+    static func post(_ g: KeyboardGesture, ordered: Bool = false) {
         let src = CGEventSource(stateID: .hidSystemState)
         // Modifiers the hand still holds that the key sent must not carry (Control and Option under VO-Left, when the
         // key sent is a bare Left): Word asked the keyboard itself and saw them held, and did nothing with the arrow
@@ -754,11 +767,15 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
             e.post(tap: .cghidEventTap)
         }
         for (f, code) in lift { state.remove(f); modifier(code, down: false, flags: state) }
-        let toApp = arrowTarget(code: Int64(g.keyCode), flags: g.flags)
+        let toApp = ordered ? nil : arrowTarget(code: Int64(g.keyCode), flags: g.flags)
+        let text = Array(g.characters.utf16)
+        let ownText = ordered && g.isTypingKeyForCaretFocus && !text.isEmpty && text.count <= 8 &&
+            !g.characters.unicodeScalars.contains { CharacterSet.controlCharacters.contains($0) }
         for down in [true, false] {
             guard let e = CGEvent(keyboardEventSource: src, virtualKey: CGKeyCode(g.keyCode), keyDown: down) else { continue }
             e.flags = g.flags
-            e.setIntegerValueField(.eventSourceUserData, value: marker)
+            if ownText { var t = text; e.keyboardSetUnicodeString(stringLength: t.count, unicodeString: &t) }
+            e.setIntegerValueField(.eventSourceUserData, value: ordered ? orderedMarker : marker)
             if let toApp { e.postToPid(toApp) } else { e.post(tap: .cghidEventTap) }
         }
         // Put back only what the hand still holds: a release in between was overwritten by a synthetic press, and

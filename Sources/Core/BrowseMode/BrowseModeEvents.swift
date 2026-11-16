@@ -162,6 +162,8 @@ extension BrowseModeDocument {
             }
             positionAtFocus = position
             lastChain = []
+            // Keys held for a field's focus that came on another element (16 Nov 2026, review): not left waiting.
+            settleCaretHold(afterFocusOn: event.obj)
             next()
         default:
             next()

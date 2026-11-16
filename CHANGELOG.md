@@ -27,8 +27,11 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 - Browse mode: after F, or another quick navigation key, says the name of a text field, what you type straight away
   goes into the field. Before, a key pressed in the instant between the field's name and the field taking the keyboard
   (a Backspace, a letter, Space) left TurnOver in browse mode, so that the next letters ran as commands. Those keys are
-  now held for a moment and typed into the field once it has the keyboard; if it does not take it, they run as they
-  would have. Return, Tab, the arrows, Escape, VoiceOver's keys and F pressed again still move on, as before.
+  now held for a moment and typed into the field once it has the keyboard, in the order you typed them and ahead of
+  anything typed after them, a Backspace saying what it deleted as usual; if it does not take it, they run as they
+  would have. If the focus goes to another field, or the page or the app goes away first, they are not typed anywhere:
+  the edge sound plays instead. Return, Tab, the arrows, Escape, VoiceOver's keys and F or Shift F pressed again still
+  move on, as before.
 
 - TurnOver no longer says "Secure input is on, so TurnOver cannot hear your keys" when the Mac goes on hiding the
   keys after a password field. It cut in on ordinary sign-in pages: in Safari, while moving through the controls

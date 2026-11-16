@@ -172,11 +172,16 @@ nonisolated public struct KeyboardGesture: CustomStringConvertible, Sendable {
 
     /// Send the key on to the system (NVDA: gesture.send): re-posted as a HID-level
     /// event carrying TurnOver's marker so the tap lets it through. Down and up.
+    /// A script in the ordered lane sends its key in order (ScriptHandler.sendInOrder, 16 Nov 2026, review).
     public func send() {
+        if Thread.isMainThread, ScriptHandler.sendingInOrder { ScriptHandler.sendInOrder(self); return }
         KeyboardGesture.poster?(self)
     }
     /// Installed by the keyboard handler (the Mac-specific layer).
     nonisolated(unsafe) public static var poster: (@Sendable (KeyboardGesture) -> Void)?   // set once at start
+    /// The same, marked so that the tap counts the key as it passes (ScriptHandler.orderedKeySeen) and then lets it
+    /// through as it would the key typed (16 Nov 2026, review). nil: `poster`.
+    nonisolated(unsafe) public static var orderedPoster: (@Sendable (KeyboardGesture) -> Void)?
     /// Whether the TurnOver key is held now (Caps Lock, or Control and Option): the trackpad's on and off.
     nonisolated(unsafe) public static var turnOverHeld: (@Sendable () -> Bool)?
     /// Presses a key as if typed (an AI trying a plugin, PluginTry): TurnOver handles it like the owner's own key.

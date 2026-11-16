@@ -98,6 +98,19 @@ public enum InputManager {
     private static var _lastKeyGesture: KeyboardGesture?
 
     public static func handleKeyDown(_ gesture: KeyboardGesture) -> Bool {
+        let taken = decideKeyDown(gesture)
+        // A key that would go straight to the application while keys TurnOver sends on later are still ahead of it
+        // (the keys held for a field's focus, 16 Nov 2026, review): let through, it would reach the app before them, as
+        // it is already in the keyboard's stream ahead of what they are posted into. It takes its turn behind them.
+        if !taken, ScriptHandler.keysMustWaitTheirTurn {
+            Log.io("input \(gesture.logDescription()) sent on behind the keys TurnOver is still sending")
+            ScriptHandler.queueInOrder(gesture, lookUp: false, notes: false, masked: false)
+            return true
+        }
+        return taken
+    }
+
+    private static func decideKeyDown(_ gesture: KeyboardGesture) -> Bool {
         Hints.cancel()
         ObjectNavigator.shared.cancelWindowSearch()
         FormattingFeedback.shared.cancel()
