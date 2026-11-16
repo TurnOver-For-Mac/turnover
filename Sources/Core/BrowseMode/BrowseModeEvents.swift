@@ -142,11 +142,16 @@ extension BrowseModeDocument {
                         // its keys back, and a Space pressed its link after all).
                         let address = addressNow
                         if case .address(let now) = address, !now.isEmpty, !waiting.isEmpty, now != waiting {
-                            endPageOnItsWay(because: "the page's address changed", token: token)
+                            // The page is rebuilt here, not only the mark ended (16 Nov 2026, second review): a key looked up
+                            // before this ran dropped nothing, and Space on the old copy could still press (pageGeneration).
+                            if !refreshIfNavigated(announce: !passThrough) { endPageOnItsWay(because: "the page's address changed", token: token) }
                             return
                         }
                         var known = false
                         if case .address(let now) = address { known = !now.isEmpty && !waiting.isEmpty }
+                        // Outside the mark an answer, even an empty one, counts as before (16 Nov 2026, second review): an
+                        // app whose page has no address had its line read after Return. No answer still waits.
+                        if token == nil, case .address = address { known = true }
                         let keyed = keyArrived || ScriptHandler.keysArrivedCount != keys
                         let busy = (webArea.attr("AXElementBusy") as? Bool) == true
                         // The last check falls before the ceiling, so the keys never come back unsaid (pageIsOnItsWay ends there).
@@ -154,7 +159,11 @@ extension BrowseModeDocument {
                         if !last, waited < 1.5 || busy || !known { readIfStayed(waited + 0.5, keyArrived: keyed); return }
                         let refused = pageOnItsWay?.refused ?? 0
                         if busy || !known {
-                            let why = busy ? "the page was still loading" : "the page's address had no answer"
+                            // An empty address is an answer, but the web area may be gone (16 Nov 2026, second review): the mark
+                            // ends all the same, but the old page's line is not read, and the log says what was seen.
+                            let empty: Bool
+                            if case .address(let now) = address { empty = now.isEmpty } else { empty = false }
+                            let why = busy ? "the page was still loading" : (empty ? "the page's address was empty (its web area may be gone)" : "the page's address had no answer")
                             guard token != nil else {
                                 // Without the mark, as before: the new page announces itself when it comes; the old one's line
                                 // is not read (Codex's second review, 14 Nov 2026).
@@ -163,8 +172,8 @@ extension BrowseModeDocument {
                             }
                             // The keys come back to a page that never changed: said by reading its line, so Oliver knows the
                             // keys act on it again (16 Nov 2026, review). A new page that comes later still announces itself.
-                            endPageOnItsWay(because: "\(why) after \(Int(ceiling)) seconds; its line is read", token: token)
-                            speakUnit(.line)
+                            endPageOnItsWay(because: "\(why) after \(Int(ceiling)) seconds\(empty ? "" : "; its line is read")", token: token)
+                            if !empty { speakUnit(.line) }
                             return
                         }
                         // A refused key acted on nothing, so the page staying is said as if no key had come (16 Nov 2026,

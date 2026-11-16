@@ -321,6 +321,47 @@ func pageOnItsWayTests() {
             check(old.pageIsOnItsWay, "Safari's address field: marked")
         }
     }
+    // 16 Nov 2026, second review: the three small faults left after the first repair.
+    test("page on its way: an empty address at the limit ends the mark and does not read the old page's line") {
+        withPageLeft { old, _, said, _ in
+            // The limit falls at the first stay check (0.5 s), before anything else rebuilds the page for its empty address.
+            BrowseModeDocument.pageOnItsWayLimit = 0.9
+            BrowseModeDocument.pageOnItsWayRepeat = 0.5
+            old.position = old.buffer.offset(of: AXReplay.element(3)) ?? 0
+            backOnPage(old)
+            // The web area is still the focus document but answers its address with nothing (it may be gone).
+            AXUIElementSetAttributeValue(old.webArea, "AXURL" as CFString, "" as CFString)
+            let before = said.value.count
+            RunLoop.current.run(until: Date().addingTimeInterval(0.75))
+            check(!old.pageIsOnItsWay, "the limit ends the mark")
+            expect(said.value.count, before, "the old page's line is not read: its page may have gone")
+        }
+    }
+    test("page on its way: outside the mark, a page with an empty address has its line read as before") {
+        withPageLeft { old, _, said, _ in
+            ProfileStore.shared.replayBundle = "test.another-web-view"
+            old.position = old.buffer.offset(of: AXReplay.element(3)) ?? 0
+            AXUIElementSetAttributeValue(old.webArea, "AXURL" as CFString, "" as CFString)
+            let before = said.value.count
+            backOnPage(old)
+            check(!old.pageIsOnItsWay, "no mark outside Safari")
+            RunLoop.current.run(until: Date().addingTimeInterval(2.4))
+            let after = Array(said.value.dropFirst(before))
+            check(!after.isEmpty, "an answer, even an empty one, lets the line be read at about two seconds")
+        }
+    }
+    test("page on its way: a changed address at the stay check rebuilds the page, not only ends the mark") {
+        withPageLeft { old, _, _, _ in
+            old.position = old.buffer.offset(of: AXReplay.element(3)) ?? 0
+            backOnPage(old)
+            check(old.pageIsOnItsWay, "marked")
+            expect(old.lastURL, "https://example.com/old", "the old address is the one read")
+            AXUIElementSetAttributeValue(old.webArea, "AXURL" as CFString, "https://example.com/new" as CFString)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.8))
+            check(!old.pageIsOnItsWay, "the changed address ended the mark")
+            expect(old.lastURL, "https://example.com/new", "and the page was rebuilt for it, so a key looked up before is dropped")
+        }
+    }
     test("page on its way: the Claude navigation wait is separate and unchanged") {
         withPageLeft { old, _, _, _ in
             old.beginNavigationWait()
