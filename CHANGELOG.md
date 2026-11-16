@@ -30,6 +30,10 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   beside the password field, and at a password prompt in Terminal. The log still records it. If TurnOver's own keys
   stop answering after a password, Command-Tab twice brings them back.
 - Arrowing along the Dock's own list says an item's name alone, "Safari", not "Safari, dock item, selected".
+- The Dock's hint names the keys that move along it: Left and Right for a Dock at the bottom of the screen, Up and
+  Down for a Dock at the side. It said Up and Down wherever the Dock was.
+- In browse mode a page is now gathered in the background. A slow or large page should no longer hold up the keys
+  while it is read in.
 
 ## 2.0, build 24
 
