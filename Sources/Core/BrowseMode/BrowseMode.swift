@@ -208,7 +208,8 @@ public final class BrowseModeDocument: ScriptableObject {
     /// handler before it runs (16 Nov 2026).
     nonisolated public static let trapScriptName = "browseModeTrap"
     /// When a letter with no command was last kept from the page in browse mode (any page).
-    static var lastLetterKeptAt = Date.distantPast
+    /// (Any kept typing key sets it now, not only a letter; the name is left as it was.)
+    package static var lastLetterKeptAt = Date.distantPast
     /// "browse mode", a third of a second after the last of a run of letters kept from the page (or at once if the run
     /// goes on for more than two seconds), so a fast run of keys does not cancel it.
     /// Only for the page the letters were kept on, and only while it is still in browse mode: Space after a kept letter
@@ -1070,14 +1071,12 @@ public final class BrowseModeDocument: ScriptableObject {
         let lettersAreCommands = singleLetterNavigation
         let wouldTypeText = gesture.wouldTypeTextInBrowseMode
         if inBrowseMode, lettersAreCommands, wouldTypeText {
-            // Only plain letters and digits say "browse mode" when the run stops, as before; any other kept key is silent, since
-            // whether it should make a sound is not yet decided (16 Nov 2026).
-            let isLetterOrDigit = gesture.typedCharacter.map { $0.isLetter || $0.isNumber } ?? false
-            let isPlainKey = gesture.modifiers.subtracting(.shift).isEmpty
-            let saysBrowseMode = isLetterOrDigit && isPlainKey
+            // Every kept typing key says "browse mode" when the run stops, as a letter does (Oliver's decision, 16 Nov
+            // 2026, evening): at 19:18 UTC a slash was typed twice in browse mode with the keyboard still in a prompt
+            // field; both were kept without a sound, and Return then said "nothing to activate". Until then only plain
+            // letters and digits said it and other kept keys were silent.
             return Script(name: BrowseModeDocument.trapScriptName, description: String(localized: "A key that would type, with no command in browse mode: nothing", comment: "A command, as the key list and keyboard help say it"), category: "navigation", owner: self) { _ in
                 Log.io("browse mode: a typing key with no command; kept from the page")
-                guard saysBrowseMode else { return }
                 // Said once a run: typing into a field TurnOver was still in browse mode on, "Okay" went nowhere without
                 // a sound, and the message went with only the comma and what followed it (13 Nov 2026). The word, not
                 // a sound: it says why the letters were not typed. Said once the letters stop, so the next key does not

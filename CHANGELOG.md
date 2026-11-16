@@ -10,6 +10,12 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   deleted character or word lower, as VoiceOver does, without the word "deleted". Off by default. A deleted capital
   is lowered too when capitals are raised.
 
+### Fixed
+
+- Browse mode: a key that would type something but has no command, such as a slash, a comma, a dash or an Option
+  symbol, is kept from the page, and now says "browse mode" once the keys stop, as a letter does. Before, only
+  letters and digits did, so a punctuation key kept from a field that still had the keyboard was silent.
+
 ## 2.0, build 24.1
 
 ### New to try

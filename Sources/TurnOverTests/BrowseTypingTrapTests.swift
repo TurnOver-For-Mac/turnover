@@ -154,7 +154,7 @@ func browseTypingTrapTests() {
                     let logged = key(43, [], ",").logDescription(commandName: "browseModeTrap", secure: true)
                     expect(logged, "(a typed key)", "a kept key in a password field is not named in the log")
                 } else {
-                    check(trial.words.dropFirst(before).allSatisfy { $0 == "browse mode" }, "nothing is said for a kept key but the existing words for letters")
+                    check(trial.words.dropFirst(before).allSatisfy { $0 == "browse mode" }, "a kept key says nothing but the words for a letter")
                 }
             }
         }
@@ -196,17 +196,22 @@ func browseTypingTrapTests() {
         expect(key(4, [], "h").logDescription(commandName: "nextHeading"), "kb:h → nextHeading", "a letter command is named")
     }
 
-    test("browse typing trap: a kept symbol on its own says nothing") {
+    // Decided 16 Nov 2026, evening: a kept punctuation key says "browse mode" as a letter does, once a run.
+    test("browse typing trap: a kept slash and comma say browse mode once, as a letter does") {
         withPage { _, _, trial, _ in
-            // (Setting up the replayed page can say something of its own; only what the keys say counts.)
-            trial.drain()
-            let before = trial.words.count
-            for (name, gesture) in symbolKeys {
-                check(InputManager.handleKeyDown(gesture), "\(name) is kept")
+            for (label, keys) in [("letter", [key(6, [], "z"), key(6, [], "z")]),
+                                  ("slash and comma", [key(44, [], "/"), key(43, [], ","), key(44, [], "/")]),
+                                  ("Option symbol", [key(1, .option, "ß")])] {
+                // (Setting up the replayed page can say something of its own; only what the keys say counts.)
+                trial.drain()
+                BrowseModeDocument.lastLetterKeptAt = .distantPast
+                let before = trial.words.count
+                for gesture in keys { check(InputManager.handleKeyDown(gesture), "\(label) is kept") }
+                trial.drain()
+                RunLoop.current.run(until: Date().addingTimeInterval(1.2))
+                trial.drain()
+                expect(trial.words.dropFirst(before).filter { $0 == "browse mode" }.count, 1, "\(label): said once, when the run stops")
             }
-            trial.drain()
-            RunLoop.current.run(until: Date().addingTimeInterval(0.6))
-            expect(Array(trial.words.dropFirst(before)), [], "no new speech for a kept symbol")
         }
     }
 
