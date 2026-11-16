@@ -96,6 +96,8 @@ public enum InputManager {
         ObjectNavigator.shared.cancelWindowSearch()
         FormattingFeedback.shared.cancel()
         lastKeyDownAt = Date()
+        // A log line only, with the switcher open or a TurnOver key seemingly lost (16 Nov 2026).
+        KeyboardModifierDiagnostics.record(gesture)
         // The keyboard commands editor is waiting for a key: this one is it (Escape cancels). Nothing else runs.
         if let capture = captureNext, !gesture.isRepeat {
             captureNext = nil
