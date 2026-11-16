@@ -11,7 +11,7 @@
 import Foundation
 import ApplicationServices
 
-final class DockAppModule: AppModule {
+package final class DockAppModule: AppModule {
     /// The Dock's own list of apps (Control F3, or Option alone in the Windows style): Left and Right move, Up opens
     /// the item's menu, Return opens, Escape leaves. TurnOver's list keys (Up and Down walking rows, 6 Oct 2026) do
     /// not belong here: they reselected an item after Escape and kept the Dock half open, so the arrows go to the Dock.
@@ -19,14 +19,29 @@ final class DockAppModule: AppModule {
         element.role == "AXList" && element.elements(kAXChildrenAttribute).contains { $0.role == "AXDockItem" }
     }
 
-    override func objectClass(for element: AXUIElement, role: Role, subrole: String?) -> TurnOverObject.Type? {
+    package override func objectClass(for element: AXUIElement, role: Role, subrole: String?) -> TurnOverObject.Type? {
         if Self.isDockList(element) { return DockList.self }
         if element.role == "AXList", subrole == "AXProcessSwitcherList" { return AppSwitcherList.self }
         if element.role == "AXButton", element.element(kAXParentAttribute)?.string(kAXSubroleAttribute) == "AXProcessSwitcherList" { return AppSwitcherItem.self }
         return nil
     }
 
-    override func handleEvent(_ event: Event, next: () -> Void) {
+    package override func hint(for object: TurnOverObject) -> String? {
+        guard object is DockList else { return nil }
+        return Self.listHint(orientation: object.element.string(kAXOrientationAttribute))
+    }
+
+    /// The keys that move through the Dock run the way it does: Left and Right at the bottom of the screen, Up and
+    /// Down on the left or right side. No orientation reported is taken as the bottom, the Dock's default. The item's
+    /// menu is left out: tried by ear on 9 Nov 2026 (build 24, macOS 27.2), Up at the bottom said "nothing selected".
+    package static func listHint(orientation: String?) -> String {
+        if orientation == (kAXVerticalOrientationValue as String) {
+            return String(localized: "Up and Down move through the items; Return opens one.", comment: "A hint in the Dock on the side of the screen")
+        }
+        return String(localized: "Left and Right move through the items; Return opens one.", comment: "A hint in the Dock at the bottom of the screen")
+    }
+
+    package override func handleEvent(_ event: Event, next: () -> Void) {
         if event.kind == .gainFocus, event.obj is AppSwitcherList {
             // As VoiceOver does: just the highlighted application's name, not "application switcher, list" first.
             // (The first highlighted item is marked before the list reports focus.)
@@ -50,8 +65,8 @@ final class DockAppModule: AppModule {
 }
 
 /// The Dock's list of apps: a plain list, its keys the Dock's own.
-final class DockList: TurnOverObject {
-    override var role: Role { .list }
+package final class DockList: TurnOverObject {
+    package override var role: Role { .list }
 }
 
 final class AppSwitcherList: TurnOverObject {
