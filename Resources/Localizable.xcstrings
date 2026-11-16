@@ -4370,7 +4370,21 @@
       }
     },
     "A key that would type, with no command in browse mode: nothing" : {
-      "comment" : "A command, as the key list and keyboard help say it"
+      "comment" : "A command, as the key list and keyboard help say it",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Клавиша, вводящая текст, без команды в режиме просмотра: ничего"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tarama kipinde komutu olmayan, yazı yazacak tuş: hiçbir şey"
+          }
+        }
+      }
     },
     "A list has 1 to %lld items." : {
       "comment" : "Said to a plugin author; the placeholder is a number"
