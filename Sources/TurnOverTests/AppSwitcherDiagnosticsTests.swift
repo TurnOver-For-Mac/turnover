@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import Foundation
+import ApplicationServices
+import AXFixtures
 import TurnOverCore
 
 /// The switcher's log line (16 Nov 2026). Unhappy cases: two apps with the same name, an item with no URL, an item
@@ -30,5 +32,40 @@ func appSwitcherDiagnosticsTests() {
         expect(line, "switcher key kb:command+q: selected \"Public Two\", pid 202 by its URL; last announced \"Public One\"")
         let unknown = AppSwitcherDiagnostics.line(key: "kb:command+q", selectedName: nil, process: nil, lastAnnounced: nil)
         expect(unknown, "switcher key kb:command+q: selected unknown, pid unknown; last announced nothing")
+    }
+
+    // Review, 16 Nov 2026: the Dock sends a selection for every Tab, so the name last announced follows it; and Tab and
+    // Shift-Tab, which only move the selection, do not ask the Dock about every item.
+    test("app switcher diagnostics: a selection event updates the name last announced") {
+        guard AXReplay.isAvailable else { return }
+        AXReplay.load(.init(app: "Dock", bundle: "com.apple.dock", recorded: "synthetic switcher", root: 1,
+                            application: nil, focus: 2, nodes: [
+            .init(id: 1, attrs: ["AXRole": .string("AXList"), "AXSubrole": .string("AXProcessSwitcherList"), "AXChildren": .elements([2, 3])]),
+            .init(id: 2, attrs: ["AXRole": .string("AXButton"), "AXTitle": .string("Public One"), "AXParent": .element(1)]),
+            .init(id: 3, attrs: ["AXRole": .string("AXButton"), "AXTitle": .string("Public Two"), "AXParent": .element(1)]),
+        ]))
+        let saved = AppSwitcherDiagnostics.lastAnnounced
+        defer { AppSwitcherDiagnostics.lastAnnounced = saved; AXReplay.unload() }
+        let module = DockAppModule(pid: 0, bundleIdentifier: "com.apple.dock", appName: "Dock")
+        @MainActor func item(_ id: Int) -> TurnOverObject? {
+            let element = AXReplay.element(id)
+            return module.objectClass(for: element, role: .button, subrole: nil).map { $0.init(element: element) }
+        }
+        guard let one = item(2), let two = item(3) else { check(false, "the switcher's buttons are switcher items"); return }
+        AppSwitcherDiagnostics.lastAnnounced = nil
+        module.handleEvent(Event(.gainFocus, one)) {}
+        expect(AppSwitcherDiagnostics.lastAnnounced, "Public One", "a focus sets it")
+        module.handleEvent(Event(.selection, two)) {}
+        expect(AppSwitcherDiagnostics.lastAnnounced, "Public Two", "a selection (one Tab) sets it")
+    }
+
+    test("app switcher diagnostics: Tab and Shift-Tab write no line, other keys do") {
+        for identifier in ["kb:command+tab", "kb:command+shift+tab", "kb:tab", "kb:shift+tab"] {
+            check(!AppSwitcherDiagnostics.logsLine(for: KeyboardGesture(identifier: identifier)!), "\(identifier): no line")
+        }
+        for identifier in ["kb:command+q", "kb:command+h", "kb:command+escape", "kb:command+option+tab", "kb:command+grave"] {
+            guard let gesture = KeyboardGesture(identifier: identifier) else { continue }
+            check(AppSwitcherDiagnostics.logsLine(for: gesture), "\(identifier): a line")
+        }
     }
 }
