@@ -126,7 +126,13 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
 
     init() {
         KeyboardGesture.poster = { g in KeyboardHandler.post(g) }
-        KeyboardGesture.orderedPoster = { g in KeyboardHandler.post(g, ordered: true) }
+        // Under secure input the tap is not shown the keys TurnOver posts, so the ordered lane would wait its 0.3 s
+        // for each one and a key typed meanwhile could go in ahead of it; the key counts as seen at once there
+        // (second review, 16 Nov 2026).
+        KeyboardGesture.orderedPoster = { g in
+            KeyboardHandler.post(g, ordered: true)
+            if IsSecureEventInputEnabled() { ScriptHandler.orderedKeySeen() }
+        }
         KeyboardGesture.typedPoster = { g in KeyboardHandler.postTyped(g) }
         KeyboardGesture.chordPoster = { codes in KeyboardHandler.postChord(codes) }
         KeyboardGesture.turnOverHeld = {
