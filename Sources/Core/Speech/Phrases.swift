@@ -71,7 +71,7 @@ nonisolated public enum Phrases {
     public static func deleted(_ text: String) -> String { String(localized: "deleted \(text)", comment: "Text deleted: %@ is the text") }
 
     /// "45 percent".
-    public static func percent(_ n: Int) -> String { String(localized: "\(String(n)) percent", comment: "A percentage: 45 percent") }
+    public static func percent(_ n: Int) -> String { String(localized: "\(n) percent", comment: "A percentage: 45 percent") }
 
     /// "on" or "off", as a setting is.
     public static func onOff(_ on: Bool) -> String { on ? State.on.displayString : State.off.displayString }

@@ -1,0 +1,16 @@
+{
+  "images": [
+    {
+      "filename": "MenuBar.svg",
+      "idiom": "mac"
+    }
+  ],
+  "info": {
+    "author": "turnover",
+    "version": 1
+  },
+  "properties": {
+    "preserves-vector-representation": true,
+    "template-rendering-intent": "template"
+  }
+}

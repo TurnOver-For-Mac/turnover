@@ -131,7 +131,7 @@ open class TurnOverObject: ScriptableObject {
         var visited = 0
         // Each element's role, value, title, description and children in one question (SwiftUI apps are slow to
         // answer: Contacts' rows took 80 ms each to name, 10 Oct 2026).
-        let names = [kAXRoleAttribute, kAXValueAttribute, kAXTitleAttribute, kAXDescriptionAttribute, kAXChildrenAttribute]
+        let names = [kAXRoleAttribute, kAXSubroleAttribute, kAXValueAttribute, kAXTitleAttribute, kAXDescriptionAttribute, kAXChildrenAttribute]
         func trimmed(_ v: AnyObject?) -> String? {
             guard let t = (v as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty else { return nil }
             return t
@@ -142,9 +142,16 @@ open class TurnOverObject: ScriptableObject {
             let r = (a[kAXRoleAttribute] as? String) ?? "?"
             let kids = { (a[kAXChildrenAttribute] as? [AXUIElement]) ?? [] }
             let value = a[kAXValueAttribute], title = trimmed(a[kAXTitleAttribute]), desc = trimmed(a[kAXDescriptionAttribute])
-            if r == "AXCheckBox", let t = title {
+            if r == "AXCheckBox" {
+                // A switch says on or off; a check box says checked or not. One with no name of its own (System
+                // Settings' permission lists: the app's name is a text beside a nameless AXSwitch, so each row was
+                // only "Claude", 8 Nov 2026) still says its role and state after the texts.
                 let on = (value as? NSNumber)?.intValue == 1
-                parts.append("\(t), \(on ? State.checked.displayString : State.checked.negativeDisplayString)")
+                let isSwitch = (a[kAXSubroleAttribute] as? String) == "AXSwitch"
+                let state = isSwitch ? (on ? State.on.displayString : State.on.negativeDisplayString)
+                                     : (on ? State.checked.displayString : State.checked.negativeDisplayString)
+                if let t = title ?? desc { parts.append("\(t), \(state)") }
+                else { parts.append("\((isSwitch ? Role.switchControl : Role.checkBox).displayString), \(state)") }
             } else if r == "AXStaticText" || r == "AXTextField" {
                 if let v = trimmed(value) { parts.append(String(v.prefix(300))) }
                 else if r == "AXTextField" { queue.append(contentsOf: kids()) }
@@ -157,7 +164,7 @@ open class TurnOverObject: ScriptableObject {
                 parts.append(String(d.prefix(300)))
             } else if r == "AXImage" {
                 if let d = desc { images.append(d) }
-            } else if r == "AXButton" || r == "AXCheckBox" {
+            } else if r == "AXButton" {
                 if let d = desc ?? title { parts.append(d) }
             } else {
                 queue.append(contentsOf: kids())
@@ -297,9 +304,7 @@ open class TurnOverObject: ScriptableObject {
         if let e = element.attr(kAXExpandedAttribute) as? Bool { s.insert(e ? .expanded : .collapsed) }
         if let d = element.attr("AXDisclosing") as? Bool, role == .treeViewItem {
             // Finder's list view: only a row that can disclose (a folder) is expanded or collapsed.
-            var settable: DarwinBoolean = false
-            AXUIElementIsAttributeSettable(element, "AXDisclosing" as CFString, &settable)
-            if settable.boolValue || d { s.insert(d ? .expanded : .collapsed) }
+            if element.attributeSettableResult("AXDisclosing").value == true || d { s.insert(d ? .expanded : .collapsed) }
         }
         if let m = element.string("AXMenuItemMarkChar"), !m.isEmpty { s.insert(.checked) }
         if role == .menuItem, element.elements(kAXChildrenAttribute).contains(where: { $0.role == "AXMenu" }) { s.insert(.hasPopup) }
@@ -338,9 +343,8 @@ open class TurnOverObject: ScriptableObject {
         var p = PositionInfo()
         if role == .treeViewItem, let level = element.int("AXDisclosureLevel"), level > 0 { p.level = level + 1 }   // NVDA-style: the top level goes without saying
         if let parent = element.element(kAXParentAttribute) {
-            var count: CFIndex = 0
             let attr = parent.role == "AXTable" || parent.role == "AXOutline" ? "AXRows" : kAXChildrenAttribute
-            if AXUIElementGetAttributeValueCount(parent, attr as CFString, &count) == .success, count > 0 {
+            if let count = parent.attributeValueCountResult(attr).value, count > 0 {
                 if count <= 200, let siblings = parent.attr(attr) as? [AXUIElement] {
                     // Only siblings of the same role count, and a menu's separators (untitled, disabled items) don't.
                     let same = siblings.filter { s in
@@ -443,7 +447,7 @@ open class TurnOverObject: ScriptableObject {
         reportFocus()
     }
     open func event_loseFocus() { Speech.clearTypedWordBuffer() }
-    open func event_focusEntered() { Speech.speakObject(self, reason: .focusEntered) }
+    open func event_focusEntered() { if !ToolbarKeys.sayEntering(self) { Speech.speakObject(self, reason: .focusEntered) } }
     open func event_focusExited() {}
     open func event_foreground() { Speech.cancel() }
     open func event_valueChange() {
@@ -590,7 +594,7 @@ open class TurnOverObject: ScriptableObject {
             return
         }
         if event.kind == .gainFocus, role == .passwordEdit { SecureEcho.focused(element) }
-        if event.kind == .gainFocus { SettingsPanePlugin.focusMoved(to: self) }
+        if event.kind == .gainFocus { SettingsPanePlugin.focusMoved(to: self); ToolbarKeys.focusMoved(to: self) }
         switch event.kind {
         case .gainFocus: event_gainFocus()
         case .loseFocus: event_loseFocus()

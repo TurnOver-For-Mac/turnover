@@ -9,6 +9,7 @@ import ServiceManagement
 import ApplicationServices
 import IOKit.hid
 import TurnOverCore
+import TurnOverControl
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     fileprivate(set) var app: TurnOverApp?
@@ -42,6 +43,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // switched to F1 to F12).
         // The function keys are the Mac's own, always: TurnOver never changes them (10 Oct 2026). Earlier
         // builds switched the top row with the reader and put it back wrongly (a tester, 9 Oct 2026).
+        // Help make TurnOver, from the TurnOver menu's Help: the page by itself, its button opening GitHub.
+        HelpMakeTurnOver.show = { [weak self] in self?.showPages([HelpMakeTurnOver.page], lastLink: (HelpMakeTurnOver.buttonTitle, HelpMakeTurnOver.githubURL)) }
         welcomeOnFirstRun()
         // Opened from Finder or Spotlight, TurnOver comes to the front with no window: VoiceOver said "TurnOver has no
         // windows", and Command Tab was needed to get back (a tester, 10 Oct 2026). A moment after launch, with no
@@ -92,7 +95,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // welcomed never got it).
         let keyboardNavigationTurnedOn = turnOnKeyboardNavigation()
         // Nothing new: no version welcome due, this build's pages already seen, and nothing changed on the Mac.
-        guard !versionWelcomed || NewToTry.pagesDue || keyboardNavigationTurnedOn else { return }
+        guard !versionWelcomed || NewToTry.pagesDue || keyboardNavigationTurnedOn || HelpMakeTurnOver.due else { return }
         // VoiceOver on for the pages, or nobody reads them (a code review, 17 Oct 2026; again on 24 Oct, when CoExist
         // went). TurnOver's own launch hand-over turns it off after, by the swap setting.
         // VoiceOver's flag can stay on with VoiceOver gone (quit by script, or crashed): then it is started, since the
@@ -108,24 +111,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // macOS 27 renamed Accessibility in Privacy and Security to Device Control and Data Access.
         let accessName = ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 27 ? String(localized: "Device Control and Data Access", comment: "macOS 27's name for the Accessibility list in Privacy and Security") : String(localized: "Accessibility", comment: "macOS's Accessibility list in Privacy and Security")
-        let version = String(describing: Edition.version)
         let updated = UserDefaults.standard.bool(forKey: "welcomed-1.0") || versionWelcomed
         // One page for the keys when the version changes (it was four, of nineteen: "a bit much").
         let keysPages: [(String, String)] = [
-            (String(localized: "Keys in \(version)", comment: "A welcome page's title: %@ is the version"),
-             String(localized: "TurnOver is a full screen reader now: while it is on, it reads everything and VoiceOver is off. Command Control Period starts it and quits it.\n\nThe keys are VoiceOver's, NVDA's or JAWS's: Command Control Comma, then K, changes the style. Command Control M opens the TurnOver menu; Command Control Comma, then S, the Settings window.", comment: "A welcome page")),
+            (String(localized: "The keys", comment: "A welcome page's title after an update"),
+             String(localized: "Command Control Period turns TurnOver on and off, from anywhere.\nCommand Control Comma is the way in to everything: then M for the menu, S for Settings, K for your keyboard style, H for the guides.\nThe keys are VoiceOver's, NVDA's or JAWS's: Command Control Comma, then K, changes the style.", comment: "The welcome page about keys after an update")),
         ]
+        // The order (7 Nov 2026, Oliver): the two keys everything hangs on come straight after the welcome, before the
+        // permissions and the rest. One point a line, read with Up and Down (WelcomeWindow).
         let firstRunPages: [(String, String)] = [
-            (String(localized: "Welcome to TurnOver \(version)", comment: "A welcome page's title: %@ is the version"),
-             String(localized: "TurnOver is a screen reader for the Mac. It reads every app, with its own voice and the keys you already know. These few pages explain the start. Next and Back move between them.", comment: "A welcome page")),
-            (String(localized: "TurnOver takes over", comment: "A welcome page's title"),
-             String(localized: "While TurnOver is on, it reads everything and VoiceOver is off. TurnOver turns VoiceOver off as it starts and back on as it quits, so you are never without speech. To change that, Settings, Screen reader behaviour.", comment: "A welcome page")),
+            (String(localized: "Welcome to TurnOver", comment: "The first welcome page's title"),
+             String(localized: "TurnOver is a screen reader for the Mac. It reads every app with its own voice, and the keys you already know.\nRead each page with the Up and Down arrows.\nTab reaches the buttons: Next, Back and Skip. Return goes to the next page, Escape skips the rest.", comment: "The first welcome page")),
+            (String(localized: "Two keys to remember", comment: "A welcome page's title"),
+             String(localized: "Command Control Period turns TurnOver on and off, from anywhere. When it's off, VoiceOver reads as usual.\nCommand Control Comma is the way in to everything. Press it, hear TurnOver, then a letter:\nM, the TurnOver menu.\nS, the Settings window.\nK, your keyboard style.\nH, the guides.\nPress Command Control Comma twice to hear every letter.\nCommand Control M opens the menu in one press.", comment: "A welcome page: the two keys")),
             (String(localized: "Two permissions", comment: "A welcome page's title"),
-             String(localized: "Next, TurnOver needs two permissions, \(accessName) and Input Monitoring. macOS asks for the first. For the second, if no question appears, TurnOver shows you where to turn it on. Both are in System Settings, Privacy and Security.", comment: "A welcome page: %@ is macOS's name for the Accessibility permission")),
-            (String(localized: "Keys", comment: "A welcome page's title"),
-             String(localized: "Choose the keys you know: VoiceOver's, NVDA's or JAWS's. Command Control Comma, then K, changes the style; the VO keys do what they do in VoiceOver. Command Control M opens the TurnOver menu. Every setting is in the Settings window: Command Control Comma, then S. To bring your VoiceOver voice and speed with you: Command Control Comma, then V.", comment: "A welcome page")),
-            (String(localized: "Starting, quitting and help", comment: "A welcome page's title"),
-             String(localized: "Command Control Period starts TurnOver and quits it, from anywhere. If TurnOver ever stops responding, VoiceOver comes on within a few seconds and TurnOver starts again. Command Control Comma, then H, opens the guides. To report a problem, use Send feedback in the TurnOver menu.", comment: "A welcome page")),
+             String(localized: "Next, TurnOver needs two permissions: \(accessName), and Input Monitoring.\nmacOS asks for the first.\nFor the second, if no question appears, TurnOver shows you where to turn it on.\nBoth are in System Settings, Privacy and Security.", comment: "A welcome page: the permissions; %@ is macOS's name for Accessibility")),
+            (String(localized: "Your keys", comment: "A welcome page's title"),
+             String(localized: "TurnOver speaks VoiceOver's keys, NVDA's or JAWS's. Command Control Comma, then K, moves between them.\nThe VO keys do what they do in VoiceOver.", comment: "A welcome page: keyboard styles")),
+            (String(localized: "TurnOver and VoiceOver", comment: "A welcome page's title"),
+             String(localized: "While TurnOver is on, it reads everything, and VoiceOver is off.\nTurnOver turns VoiceOver off as it starts and back on as it quits, so you are never without speech. To change that: Settings, Screen reader behaviour.\nCommand Control Shift T keeps the app in front with VoiceOver, or gives it back to TurnOver, and remembers it.", comment: "A welcome page: TurnOver and VoiceOver")),
+            (String(localized: "Help, and helping", comment: "A welcome page's title"),
+             String(localized: "Command Control Comma, then H, opens the guides.\nIf TurnOver ever stops responding, VoiceOver comes on within a few seconds and TurnOver starts again.\nTo report a problem: Send feedback, in the TurnOver menu.\nTo help TurnOver read an app better: This app, then Help improve this app, in the TurnOver menu.", comment: "The last welcome page")),
         ]
         // An update: the version's pages (keys that moved, once per version), then this build's new things and what
         // to test. A first install: the first-run pages, and this build's are marked seen.
@@ -136,17 +142,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             pages = versionWelcomed ? [] : keysPages
             pages += NewToTry.pagesDue || !versionWelcomed ? NewToTry.summaryPages() : []
-            if !pages.isEmpty { pages.insert((String(localized: "Welcome to TurnOver \(version), build \(String(build))", comment: "A welcome page's title after an update: the version and build"),
-                          String(localized: "A few short pages: what's new and what to test. Next and Back move; Skip closes them. The details are in the TurnOver menu (Command Control Comma, then M), under What to test in build \(String(build)).", comment: "A welcome page")), at: 0) }
+            if !pages.isEmpty { pages.insert((String(localized: "Welcome to TurnOver build \(String(build))", comment: "A welcome page's title after an update: the build"),
+                          String(localized: "A few short pages: what's new, and what to test.\nRead each page with the Up and Down arrows. Return goes to the next page, Escape skips the rest.\nThe details are in the TurnOver menu (Command Control Comma, then M), under What to test in build \(String(build)).", comment: "A welcome page")), at: 0) }
         }
         if keyboardNavigationTurnedOn {
             pages.append((String(localized: "Tab reaches every control", comment: "A welcome page's title"),
                           String(localized: "Keyboard navigation was off on this Mac, so Tab reached only text fields and lists. TurnOver has turned it on: Tab now reaches buttons, pop-ups and sliders too, as on Windows. Apps already open pick it up when they next start. It is in System Settings, Keyboard, if you want it off.", comment: "A welcome page")))
         }
+        // Help make TurnOver (9 Nov 2026, Oliver: "a call to action to really get this open sourced"): once on this Mac,
+        // the last page, after an update's pages or a new user's first welcome; its button opens TurnOver on GitHub.
+        let helpMake = HelpMakeTurnOver.due
+        if helpMake { pages.append(HelpMakeTurnOver.page) }
         NSApp.activate(ignoringOtherApps: true)
-        showPages(pages)
+        showPages(pages, lastLink: helpMake ? (HelpMakeTurnOver.buttonTitle, HelpMakeTurnOver.githubURL) : nil)
         UserDefaults.standard.set(true, forKey: key)
         NewToTry.markSeen()
+        if helpMake { HelpMakeTurnOver.markShown() }
     }
 
     /// Keyboard navigation (System Settings, Keyboard) off: Tab reaches text fields and lists only, and a Tab through a
@@ -166,26 +177,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Pages as ordinary alerts, so VoiceOver (still running) reads each: a heading and "n of m", then Next (Return),
     /// Back and Skip; the last has Done, Back and Read the guide (12 Oct 2026).
-    func showPages(_ pages: [(String, String)]) {
-        guard !pages.isEmpty else { return }
-        let back = String(localized: "Back", comment: "A welcome page's button"), skip = String(localized: "Skip", comment: "A welcome page's button")
-        let readGuide = String(localized: "Read the guide", comment: "A welcome page's button")
-        var i = 0
-        while true {
-            let alert = NSAlert()
-            alert.messageText = pages[i].0 + " (\(Phrases.position(i + 1, of: pages.count)))"
-            alert.informativeText = pages[i].1
-            let last = i == pages.count - 1
-            alert.addButton(withTitle: last ? String(localized: "Done", comment: "A welcome page's button") : String(localized: "Next", comment: "A welcome page's button"))
-            alert.addButton(withTitle: i > 0 ? back : (last ? readGuide : skip))
-            if i > 0 { alert.addButton(withTitle: last ? readGuide : skip) }
-            let r = alert.runModal()
-            if r == .alertFirstButtonReturn { if last { break }; i += 1; continue }
-            if r == .alertSecondButtonReturn, i > 0 { i -= 1; continue }
-            // Here the button pressed is Skip or Read the guide: the guide on the last page (by its place, not its words).
-            if last, let guide = Bundle.main.url(forResource: Edition.guideName, withExtension: "txt") { NSWorkspace.shared.open(guide) }
-            break
-        }
+    func showPages(_ pages: [(String, String)], lastLink: (title: String, url: URL)? = nil) {
+        WelcomeWindow.run(pages, lastLink: lastLink)
     }
 
     private func startReader() {
@@ -254,6 +247,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// TurnOver Key (Command+Control+T starts and quits TurnOver) runs from login, apart from TurnOver: register it
     /// as a login item, and start it now if it is not running.
     private func startKeyHelper() {
+        // The copy that starts is the one in use: Command Control Period starts and stops it (issue 248, 7 Nov 2026).
+        let me = Bundle.main.bundleIdentifier ?? ActiveReader.published
+        ActiveReader.record(me)
+        // TurnOver Developer beside the published TurnOver: the published copy's helper answers the key for both, and
+        // this copy's never runs (only one program can hold the key, and the published copy's would be stopped as
+        // "another copy's" below). Started if it isn't running; not registered from here.
+        if me == ActiveReader.developer, NSWorkspace.shared.urlForApplication(withBundleIdentifier: ActiveReader.published) != nil {
+            guard NSRunningApplication.runningApplications(withBundleIdentifier: "com.turnover.key").isEmpty else {
+                Log.info("TurnOver Key: the published TurnOver's helper answers Command Control Period for this developer build")
+                return
+            }
+            let p = Process(); p.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+            p.arguments = ["kickstart", "gui/\(getuid())/com.turnover.key"]
+            p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
+            let started = (try? p.run()) != nil
+            Log.info("TurnOver Key: \(started ? "asked launchd to start" : "could not ask launchd to start") the published TurnOver's helper, for this developer build")
+            return
+        }
         // A helper from another copy of TurnOver (run from Downloads, then moved and deleted): it looks for
         // TurnOver in the wrong place. Stop it, and register and start this copy's.
         let mine = Bundle.main.bundleURL.appendingPathComponent("Contents/Library/LoginItems/TurnOver Key.app").standardizedFileURL.path

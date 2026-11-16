@@ -18,7 +18,7 @@ public enum PluginPolicy {
         "com.apple.CoreServicesUIAgent": "macOS dialogs", "com.apple.UserNotificationCenter": "macOS dialogs",
         "com.apple.Terminal": "Terminal", "com.googlecode.iterm2": "iTerm", "dev.warp.Warp-Stable": "Warp",
         "net.kovidgoyal.kitty": "kitty", "com.github.wez.wezterm": "WezTerm", "com.mitchellh.ghostty": "Ghostty",
-        "com.turnover.reader": "TurnOver",
+        "com.turnover.reader": "TurnOver", "com.turnover.reader.developer": "TurnOver Developer",
         "com.apple.Safari": "Safari", "com.google.Chrome": "Chrome", "org.mozilla.firefox": "Firefox",
         "com.microsoft.edgemac": "Edge", "com.brave.Browser": "Brave", "company.thebrowser.Browser": "Arc",
         "com.operasoftware.Opera": "Opera", "com.vivaldi.Vivaldi": "Vivaldi",

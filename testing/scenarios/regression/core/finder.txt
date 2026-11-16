@@ -10,6 +10,17 @@ press: control+option+right
 expect-script: (vo_next|reviewNext)
 press: control+option+left
 expect-script: (vo_previous|reviewPrevious)
+# The toolbar rule (15 Nov 2026): Shift+Tab from the files to the search field, Shift+Tab again to the button before it,
+# Right and Right along the toolbar, Escape back to the files. Not yet run on a live Mac.
+press: shift+tab shift+tab
+expect: tool bar
+press: right
+expect-script: toolbar_next
+press: right
+expect-script: toolbar_next
+press: escape
+expect-script: toolbar_escape
+expect: \d+ items|\d+ of \d+|list view|empty|nothing selected
 press: clearmods command+up
 expect-not: VoiceOver
 wait: 2

@@ -43,7 +43,7 @@ format cannot say.
 
 Items 1 to 5 (the gate) are built and tested in the developer build; the plugins stay off for testers until
 the maintainer switches Edition.pluginsInBeta.
-- 1: TurnOver Shift Slash (PluginMaker): what is this, label, key, watch, silence, undo, my changes, share. Tested
+- 1: VO-Slash, or This app in the menu (PluginMaker; written TurnOver Shift Slash until 7 Nov 2026, which is the guide): what is this, label, key, watch, silence, undo, my changes, share. Tested
   on Bambu Studio's unnamed home icons (turnover-coretest --maker-test): matched "unnamed graphic inside the document
   homepage, number 1 of 11", read as "…, button", the other ten untouched, the plugin loads with no warnings, undo
   removes it. Labels, silence and watch now respect nth (they did not: one label named all eleven).

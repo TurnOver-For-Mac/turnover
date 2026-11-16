@@ -69,7 +69,7 @@ final class WordAppModule: AppModule {
         // In a sheet, Tab and Shift+Tab are TurnOver's: every control in the sheet, in order, round.
         for forward in [true, false] {
             script(forward ? "word_sheetNext" : "word_sheetPrevious",
-                   forward ? "In a sheet: the next control, its buttons included" : "In a sheet: the previous control, its buttons included",
+                   forward ? String(localized: "In a sheet: the next control, its buttons included", comment: "A command, as the key list and keyboard help say it") : String(localized: "In a sheet: the previous control, its buttons included", comment: "A command, as the key list and keyboard help say it"),
                    gestures: [forward ? "kb:tab" : "kb:shift+tab"], category: "Microsoft Word") { [weak self] g in
                 self?.sheetMove(g, forward: forward)
             }.isAvailable = { [weak self] in

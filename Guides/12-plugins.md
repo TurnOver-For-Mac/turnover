@@ -7,8 +7,9 @@ installing it.
 
 ## Using one
 
-- **The plugin library** (the TurnOver menu, Tools, Plugins, Plugin library) lists the plugins others have made.
-  Each one is checked and signed before it appears, and says what it does before you install it.
+- **Fixes that come with TurnOver**: ones people shared and the project accepted. They're simply there, and listed in
+  the plugins menu as "comes with TurnOver".
+- **The plugin library** (the TurnOver menu, Tools, Plugins, Plugin library) is paused for now.
 - **Install from a folder or the clipboard**, in the same menu, for one someone sent you.
 - **Reload plugins** after editing one.
 
@@ -26,9 +27,11 @@ manifest holds, how a rule names a control, how a key is given a command, and th
 
 ## Sharing one
 
-Plugins are shared through the plugins repository on GitHub: send yours as a pull request, where everyone can read
-it. The checker runs on it, it is reviewed, and then the library's signed list carries it to everyone. The plugins
-repository is at github.com/TurnOver-For-Mac/turnover-plugins.
+The quickest way is a fix made in TurnOver itself (VO-Slash with VoiceOver keys, or This app, Change the item I'm on):
+choose **Share my changes on GitHub** in its list. TurnOver copies the fix and opens a short form. Fixes the project
+accepts come with TurnOver for everyone. [Helping TurnOver read your apps](helping-turnover.html) has the steps.
+
+The plugin library is paused for now (since October 2026): shared fixes reach people with TurnOver itself instead.
 
 ## What a plugin can't do
 

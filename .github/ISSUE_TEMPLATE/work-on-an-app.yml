@@ -1,0 +1,30 @@
+name: Work on an app
+description: Claim an app to make or improve its module, so two people don't build the same thing
+labels: [app module]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you. MODULE-GUIDE.md takes you from here to a pull request. Each app's record is in Sources/Apps/README.md; check it says Unclaimed first.
+        A claim isn't ownership: if you stop, say so here, and the app goes back to Unclaimed.
+  - type: input
+    id: app
+    attributes:
+      label: Which app?
+    validations:
+      required: true
+  - type: textarea
+    id: plan
+    attributes:
+      label: What will you try first?
+      description: The tasks that go wrong today, and what you'd like a user to be able to do.
+    validations:
+      required: true
+  - type: dropdown
+    id: help
+    attributes:
+      label: How are you working?
+      options:
+        - On my own
+        - With an AI assistant
+        - With someone else

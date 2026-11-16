@@ -132,7 +132,10 @@ package final class SystemSettingsAppModule: AppModule {
             dependencies.speak(String(localized: "could not locate the \(value.request.part.name)", comment: "Spoken message: %@ is a part of System Settings")); finish(value.work); return
         }
         pending?.target = result.target
-        if result.canFocus {
+        // Keyboard focus already in the part: no write, so no check against TurnOver's own idea of the focus. That
+        // could be the window while the sidebar held the keys, and the command ended in silence with the review
+        // cursor left in the pane (issue 256, 8 Nov 2026). Verification below still reads the actual focus.
+        if result.canFocus, !result.focusInside {
             guard acceptsEffect(value, focus: value.context.focus) else { finish(value.work); return }
             _ = dependencies.setFocus(result.target)
         }
@@ -169,6 +172,17 @@ package final class SystemSettingsAppModule: AppModule {
         dependencies.review(target)
         dependencies.speak(String(localized: "\(value.request.part.name), review cursor. Keyboard focus is elsewhere", comment: "Spoken message: %@ is a part of System Settings"))
         finish(value.work)
+    }
+
+    /// Escape from a toolbar control goes to the current pane, else the sidebar (ToolbarKeys; 15 Nov 2026), as the
+    /// part commands find them, with a short limit as this runs while the key waits.
+    package override func toolbarEscapeTarget(in window: AXUIElement) -> AXUIElement? {
+        let deadline = DispatchTime.now().uptimeNanoseconds + 400_000_000
+        let current: @Sendable () -> Bool = { DispatchTime.now().uptimeNanoseconds < deadline }
+        for part in [SystemSettingsPart.pane, .sidebar] {
+            if let r = dependencies.resolver.resolve(.init(pid: pid, window: window, part: part), current: current), r.canFocus { return r.target }
+        }
+        return nil
     }
 
     package override func objectClass(for element: AXUIElement, role: Role, subrole: String?) -> TurnOverObject.Type? {

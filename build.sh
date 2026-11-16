@@ -23,6 +23,15 @@ IDENTITY="${TURNOVER_IDENTITY:-${DEVID:--}}"
 APPNAME="TurnOver"
 SWIFTFLAGS=""
 BUNDLEID="com.turnover.reader"; FEEDURL="https://doll-eye.github.io/turnover-updates/appcast.xml"; MARKER="TURNOVER-EDITION-BETA"
+# A contributor's build is TurnOver Developer (issue 248, 7 Nov 2026): installed beside the published TurnOver, not over
+# it, with its own identity, so each copy keeps its own permissions and the TurnOver menu switches between them. Any
+# build not signed by the project's own team (AV65T28PQ7) is one; TURNOVER_DEVELOPER=1 or 0 decides it instead.
+DEVELOPER="${TURNOVER_DEVELOPER:-auto}"
+if [ "$DEVELOPER" = auto ]; then case "$IDENTITY" in *"(AV65T28PQ7)"*) DEVELOPER=0 ;; *) DEVELOPER=1 ;; esac; fi
+if [ "$DEVELOPER" = 1 ]; then
+  APPNAME="TurnOver Developer"; BUNDLEID="com.turnover.reader.developer"; FEEDURL=""
+  echo "build.sh: building TurnOver Developer, to sit beside the published TurnOver (TURNOVER_DEVELOPER=0 builds TurnOver itself)"
+fi
 APP="$BUILD/$APPNAME.app"
 INSTALL="/Applications/$APPNAME.app"
 # Signing asks Apple's time server for a timestamp; with the network down it fails and leaves the app unsigned, and
@@ -167,6 +176,8 @@ cp "Resources/TurnOver Guide.txt" "$APP/Contents/Resources/TurnOver Guide.txt"
 cp "$BIN/turnover-plugin" "$APP/Contents/MacOS/turnover-plugin"
 cp PLUGIN-GUIDE.md "$APP/Contents/Resources/PLUGIN-GUIDE.md"
 rm -rf "$APP/Contents/Resources/plugin-schema"; cp -R Resources/plugin-schema "$APP/Contents/Resources/plugin-schema"
+# The fixes people shared and the project accepted (Resources/fixes, 7 Nov 2026): loaded for everyone (ProfileStore).
+rm -rf "$APP/Contents/Resources/fixes"; [ -d Resources/fixes ] && cp -R Resources/fixes "$APP/Contents/Resources/fixes"
 # Left by older builds: the beta guide (the guides replaced it) and the listings (built into the program now,
 # make-embedded.py).
 rm -rf "$APP/Contents/Resources/official" "$APP/Contents/Resources/TurnOver Beta Guide.txt"
@@ -179,8 +190,16 @@ SPARKLE="$BUILD/release/Sparkle.framework"
 [ -d "$SPARKLE" ] || { echo "Sparkle.framework missing from the build"; exit 1; }
 ditto "$SPARKLE" "$APP/Contents/Frameworks/Sparkle.framework"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+# Icon Composer supplies the layered icon and the .icns fallback for older Macs. The same asset catalog carries
+# the monochrome menu-bar mark; compiling both together keeps them in one Assets.car.
+xcrun actool Resources/TurnOver.icon Resources/Assets.xcassets \
+  --compile "$APP/Contents/Resources" --platform macosx --minimum-deployment-target 14.0 \
+  --app-icon TurnOver --output-partial-info-plist "$BUILD/icon-info.plist" --output-format human-readable-text
+/usr/libexec/PlistBuddy -c "Merge \"$BUILD/icon-info.plist\"" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $BUNDLEID" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :SUFeedURL $FEEDURL" "$APP/Contents/Info.plist"
+# A developer build never takes updates: the published copy beside it does.
+[ -z "$FEEDURL" ] && /usr/libexec/PlistBuddy -c "Delete :SUFeedURL" "$APP/Contents/Info.plist"
 if [ "$APPNAME" != "TurnOver" ]; then
   /usr/libexec/PlistBuddy -c "Set :CFBundleName $APPNAME" "$APP/Contents/Info.plist"
   /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName $APPNAME" "$APP/Contents/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string $APPNAME" "$APP/Contents/Info.plist"
@@ -188,14 +207,17 @@ fi
 # A build not stripped for release is a developer's build: only it honours the developer switches (Edition.isDevBuild).
 [ "$TURNOVER_STRIP" = 1 ] || /usr/libexec/PlistBuddy -c "Add :TODevBuild bool true" "$APP/Contents/Info.plist"
 # A development build (installed here) takes no updates: a published build would replace the work in progress.
-[ "$1" = "--no-install" ] || /usr/libexec/PlistBuddy -c "Delete :SUFeedURL" "$APP/Contents/Info.plist"
+[ "$1" = "--no-install" ] || /usr/libexec/PlistBuddy -c "Delete :SUFeedURL" "$APP/Contents/Info.plist" 2>/dev/null || true   # gone already from a developer build
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 # TurnOver Key (Command+Control+Period starts and quits TurnOver): a login-item helper inside the bundle.
 # TurnOver Settings: the settings in a window, an app of its own inside TurnOver.app (18 Oct 2026).
 SETAPP="$APP/Contents/Applications/TurnOver Settings.app"
-rm -rf "$SETAPP"; mkdir -p "$SETAPP/Contents/MacOS"
+rm -rf "$SETAPP"; mkdir -p "$SETAPP/Contents/MacOS" "$SETAPP/Contents/Resources"
 cp "$BIN/turnover-settings" "$SETAPP/Contents/MacOS/turnover-settings"
 cp Resources/TurnOverSettings-Info.plist "$SETAPP/Contents/Info.plist"
+# Settings has a Dock presence of its own, so it uses the reader's icon too.
+cp "$APP/Contents/Resources/Assets.car" "$APP/Contents/Resources/TurnOver.icns" "$SETAPP/Contents/Resources/"
+/usr/libexec/PlistBuddy -c "Merge \"$BUILD/icon-info.plist\"" "$SETAPP/Contents/Info.plist"
 printf 'APPL????' > "$SETAPP/Contents/PkgInfo"
 KEYAPP="$APP/Contents/Library/LoginItems/TurnOver Key.app"
 mkdir -p "$KEYAPP/Contents/MacOS"
@@ -254,7 +276,8 @@ if [ "$1" != "--no-install" ]; then
   # A Settings window left open from the copy being replaced: the new TurnOver turns it away (its signature is checked
   # against files no longer there) and it shows TurnOver as off until reopened (issue 77; again on 25 Oct 2026).
   pkill -x turnover-settings 2>/dev/null || true
-  pkill -f "com.turnover.key" 2>/dev/null || true
+  # Not for a developer build beside the published TurnOver: the published copy's helper answers the key for both.
+  if [ "$DEVELOPER" != 1 ] || [ ! -d "/Applications/TurnOver.app" ]; then pkill -f "com.turnover.key" 2>/dev/null || true; fi
   pkill -x turnover 2>/dev/null || true
   sleep 0.5
   rm -rf "$INSTALL"

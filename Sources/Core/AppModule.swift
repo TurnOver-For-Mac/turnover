@@ -69,6 +69,24 @@ open class AppModule: ScriptableObject {
     /// True when it did.
     open func takeFocus(_ element: AXUIElement) -> Bool { false }
 
+    /// The roles this app's pages answer by the keyboard and not by accessibility's press: browse mode puts the
+    /// keyboard on such a control and sends Return, where it would have pressed it. Empty: the press, as everywhere.
+    open var rolesPressedByKeyboard: Set<String> { [] }
+
+    /// Adopt the destination of a linked-item or window-spot jump. Return the element the reader can continue
+    /// from, or nil when the destination is outside this reader. The caller places and announces the review cursor.
+    open func adoptReading(_ element: AXUIElement, within region: AXUIElement?) -> AXUIElement? { nil }
+
+    /// Where this module's own reader is reading, and when it last moved, when it keeps a position of its own that its
+    /// arrows move (the media reader's pane and item): a linked-item jump starts there if it moved after the review
+    /// cursor. Nil when the review cursor and the focus say it, or when the reader doesn't have the keys.
+    open func readingPosition() -> (element: AXUIElement, movedAt: Date)? { nil }
+
+    /// Where Escape from a toolbar control goes in this window (ToolbarKeys): the window's main content as this app
+    /// knows it, or nil for the general rule (the place the keyboard was before the toolbar, else the first control
+    /// outside the toolbar).
+    open func toolbarEscapeTarget(in window: AXUIElement) -> AXUIElement? { nil }
+
     /// Where the app misreports its focus, the element that really has it.
     open func redirectFocus(_ element: AXUIElement) -> AXUIElement? { nil }
 

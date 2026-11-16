@@ -39,8 +39,8 @@ public enum TextTables {
         case (let l, .some(let n)):
             let cell = "\(Phrases.row(n.row + 1)), \(Phrases.column(n.column + 1))"
             guard let l, l.table == n.table else {
-                let rows = n.rows == 1 ? String(localized: "1 row", comment: "A table's size") : String(localized: "\(String(n.rows)) rows", comment: "A table's size")
-                let columns = n.columns == 1 ? String(localized: "1 column", comment: "A table's size") : String(localized: "\(String(n.columns)) columns", comment: "A table's size")
+                let rows = n.rows == 1 ? String(localized: "1 row", comment: "A table's size") : String(localized: "\(n.rows) rows", comment: "A table's size")
+                let columns = n.columns == 1 ? String(localized: "1 column", comment: "A table's size") : String(localized: "\(n.columns) columns", comment: "A table's size")
                 return String(localized: "table with \(rows) and \(columns), \(cell)", comment: "A table entered: its rows, its columns, then the cell")
             }
             if l.row != n.row && l.column != n.column { return cell }

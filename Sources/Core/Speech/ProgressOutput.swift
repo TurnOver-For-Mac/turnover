@@ -29,7 +29,7 @@ public struct ProgressOutput {
         if s.beep { beeped = percent; Tones.progress(percent) }
         if var words = s.say {
             said = percent
-            if let itemName, !s.done { words = String(localized: "\(itemName), \(String(percent)) percent", comment: "A download's progress: the app, then the percentage") }
+            if let itemName, !s.done { words = String(localized: "\(itemName), \(percent) percent", comment: "A download's progress: the app, then the percentage") }
             Speech.speakMessage(words)
         }
         return s.done

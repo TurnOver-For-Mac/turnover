@@ -70,11 +70,10 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
     private var echoAt: UInt64 = 0
     private var echoCount = 0
     private var controlAlone = false
-    private var shiftAlone = false
-    private var shiftDownAt = Date.distantPast
+    private var loneShift = LoneModifier()
     /// Option pressed and released with nothing else, quickly: left Option is the Windows key (the Dock),
     /// right Option the Applications key (Control+Return, the context menu).
-    private var optionAlone = false
+    private var loneOption = LoneModifier()
     /// Arrow-key Quick Nav (VoiceOver's): the arrow held, waiting to see whether a second joins it (a chord).
     private var arrowHeld: Int64?
     private var arrowChorded = false
@@ -110,9 +109,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
     /// Command pressed and released alone: Alt in Windows, the menus.
     private var disabledAt: [Date] = []
     private var lastDisableSpoken = Date.distantPast
-    private var commandAlone = false
-    private var commandDownAt = Date.distantPast
-    private var optionDownAt = Date.distantPast
+    private var loneCommand = LoneModifier()
 
     private static let machToNs: Double = {
         var info = mach_timebase_info(numer: 0, denom: 0)
@@ -212,7 +209,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         // would swallow the next real key-up, and the app would see a key held down (a code review, 14 Oct 2026).
         quarantined.removeAll(); remapped.removeAll(); capsDown = false; chordFired = false; keypadZeroDown = false
         Self.capsHeld.value = false
-        controlAlone = false; shiftAlone = false; optionAlone = false; commandAlone = false
+        controlAlone = false; loneShift.cancel(); loneOption.cancel(); loneCommand.cancel()
         let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching(kIOHIDSystemClass))
         if service != 0 {
             let r = IOServiceOpen(service, mach_task_self_, UInt32(kIOHIDParamConnectType), &mine.connect)
@@ -406,7 +403,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         // VoiceOver seemed not to answer its key (25 Oct 2026). TurnOver has no command on it.
         if (type == .keyDown || type == .keyUp), Self.isVoiceOverToggle(code: code, flags: event.flags) {
             // A modifier pressed with it isn't a modifier pressed alone: no Dock or menu when it is let go.
-            controlAlone = false; shiftAlone = false; optionAlone = false; commandAlone = false
+            controlAlone = false; loneShift.cancel(); loneOption.cancel(); loneCommand.cancel()
             return Unmanaged.passUnretained(event)
         }
         // A direct app in front (Command Control Comma, D): every key goes to it alone, before TurnOver's commands and
@@ -437,25 +434,27 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
                     if !InputManager.isInputHelpActive { onMain { if stop { SayAll.stop(); Speech.cancel() } else { Speech.togglePause() } } }
                 }
             } else { controlAlone = false }
+            // While secure input is on no key between is heard, so Shift, Command and Option are not pressed alone then
+            // (LoneModifier). Control, above, is left as it was: it is all there is to quiet speech then, and left out as
+            // well it couldn't, while Chrome held secure input (1 Nov 2026).
+            let secure = IsSecureEventInputEnabled()
             // Shift pressed and released alone, Windows style: NVDA's pause and resume.
             if code == 56 || code == 60 {
                 if event.flags.contains(.maskShift) {
-                    shiftAlone = event.flags.intersection([.maskControl, .maskAlternate, .maskCommand]).isEmpty && !capsDown
-                    shiftDownAt = Date()
+                    loneShift.down(alone: event.flags.intersection([.maskControl, .maskAlternate, .maskCommand]).isEmpty && !capsDown, secureInput: secure)
                 } else {
-                    let tapped = shiftAlone && Date().timeIntervalSince(shiftDownAt) < 0.6
-                    shiftAlone = false
+                    let tapped = loneShift.up(secureInput: secure)
+                    if loneShift.setAsideForSecureInput, settings.windowsKeys { Log.io("shift released alone with secure input on: not taken") }
                     if tapped, settings.windowsKeys, !InputManager.isInputHelpActive { onMain { Speech.togglePause() } }
                 }
-            } else { shiftAlone = false }
+            } else { loneShift.cancel() }
             if code == 55 || code == 54 {
                 let others: CGEventFlags = [.maskControl, .maskAlternate, .maskShift]
                 if event.flags.contains(.maskCommand) {
-                    commandAlone = event.flags.intersection(others).isEmpty && !capsDown
-                    commandDownAt = Date()
+                    loneCommand.down(alone: event.flags.intersection(others).isEmpty && !capsDown, secureInput: secure)
                 } else {
-                    let tapped = commandAlone && Date().timeIntervalSince(commandDownAt) < 0.6
-                    commandAlone = false
+                    let tapped = loneCommand.up(secureInput: secure)
+                    if loneCommand.setAsideForSecureInput, settings.windowsKeys { Log.io("command released alone with secure input on: not taken") }
                     if tapped, settings.windowsKeys {
                         Log.io("command released alone")
                         onMain {
@@ -466,19 +465,18 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
                         }
                     }
                 }
-            } else { commandAlone = false }
+            } else { loneCommand.cancel() }
             if code == 58 || code == 61 {
                 let others: CGEventFlags = [.maskControl, .maskCommand, .maskShift]
                 if event.flags.contains(.maskAlternate) {
                     // Down. (Both Options down at once is not a tap of either.)
-                    optionAlone = event.flags.intersection(others).isEmpty && !capsDown && optionCode == 0
+                    loneOption.down(alone: event.flags.intersection(others).isEmpty && !capsDown && optionCode == 0, secureInput: secure)
                     optionCode = code
-                    optionDownAt = Date()
                 } else {
-                    let tapped = optionAlone && Date().timeIntervalSince(optionDownAt) < 0.6
+                    let tapped = loneOption.up(secureInput: secure)
                     let which = optionCode
-                    optionAlone = false; optionCode = 0
-                    Log.io("option \(which == 61 ? "right" : "left") released\(tapped ? " alone" : "")")
+                    optionCode = 0
+                    Log.io("option \(which == 61 ? "right" : "left") released\(tapped ? " alone" : loneOption.setAsideForSecureInput ? " alone with secure input on: not taken" : "")")
                     if tapped, settings.windowsKeys {
                         let name = which == 61 ? "contextMenu" : "focusDock"
                         let g = KeyboardGesture(keyCode: which, modifiers: .option, characters: "", timestamp: 0, isRepeat: false, flags: [])
@@ -488,14 +486,11 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
                         }
                     }
                 }
-            } else { optionAlone = false }
+            } else { loneOption.cancel() }
             if !event.flags.contains(.maskAlternate) { optionCode = 0 }
             return Unmanaged.passUnretained(event)
         }
-        controlAlone = false
-        shiftAlone = false
-        optionAlone = false
-        commandAlone = false
+        controlAlone = false; loneShift.cancel(); loneOption.cancel(); loneCommand.cancel()
         if let r = keypad(type, event, code, settings) { return r }
         if let r = quickNavArrow(type, event, code, settings) { return r }
         if type == .keyUp {

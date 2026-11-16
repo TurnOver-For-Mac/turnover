@@ -177,7 +177,8 @@ case "try":
     }
     let consents = PluginTry.currentConsents()
     if let why = PluginTry.refusal(bundle: bundle, steps: steps, consents: consents) { fail("Not tried: \(why).") }
-    guard NSWorkspace.shared.runningApplications.contains(where: { $0.bundleIdentifier == "com.turnover.reader" }) else { fail("TurnOver isn't running.") }
+    // Either copy: the published TurnOver, or TurnOver Developer beside it (issue 248).
+    guard NSWorkspace.shared.runningApplications.contains(where: { [ActiveReader.published, ActiveReader.developer].contains($0.bundleIdentifier ?? "") }) else { fail("TurnOver isn't running.") }
     let id = UUID().uuidString
     let result = PluginTry.resultsFolder.appendingPathComponent("\(id).json")
     // Through TurnOver's control channel, which takes only programs signed by TurnOver's developer.

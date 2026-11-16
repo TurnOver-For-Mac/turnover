@@ -32,6 +32,7 @@ public enum BuiltInModules {
         h.register(ContactsAppModule.self, for: ContactsAppModule.bundleID)
         h.register(BooksAppModule.self, for: BooksAppModule.bundleID)
         h.register(CalculatorAppModule.self, for: CalculatorAppModule.bundleID)
+        h.register(SpotifyAppModule.self, for: SpotifyAppModule.bundleID)
         h.register(MapsAppModule.self, for: MapsAppModule.bundleID)
         h.register(FaceTimeAppModule.self, for: FaceTimeAppModule.bundleID)
         h.register(FreeformAppModule.self, for: FreeformAppModule.bundleID)

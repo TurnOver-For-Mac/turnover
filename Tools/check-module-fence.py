@@ -9,6 +9,7 @@ Lists what a branch changes since <base ref> and says whether all of it is app-m
 - anything under Sources/Apps/<App>/ (the module, its record, tests, experiments);
 - Sources/Apps/README.md (the generated index);
 - tests and recorded windows (Sources/TurnOverTests/, Tests/Fixtures/): they run in the build, never ship in the app;
+- shared fixes (Resources/fixes/): data, checked by TurnOver's plugin checks as it loads them;
 - in Package.swift, only lines naming files under Apps/ (coreSources and the generated exclusions);
 - in Sources/System/BuiltInModules.swift, only `h.register(...)` lines;
 - in Resources/Localizable.xcstrings, only added strings (the build adds a module's new words).
@@ -34,6 +35,7 @@ for f in files:
     if m: apps.add(m.group(1)); continue
     if f == "Sources/Apps/README.md": continue
     if f.startswith(("Sources/TurnOverTests/", "Tests/Fixtures/")): continue
+    if f.startswith("Resources/fixes/"): continue   # a shared fix: data TurnOver checks as it loads it (7 Nov 2026)
     if f == "Package.swift":
         lines, _ = changed_lines(f)
         if all(re.search(r'"Apps/[^"]+"', l) or not l.strip() for l in lines): continue

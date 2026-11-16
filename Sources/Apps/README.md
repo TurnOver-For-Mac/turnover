@@ -59,7 +59,7 @@ Run `python3 Tools/build-app-index.py` after editing app records or documentatio
 - [Script Editor](ScriptEditor/STATUS.md) — Effort: None; being worked on: Unclaimed.
 - [Shortcuts](Shortcuts/STATUS.md) — Effort: Module; being worked on: Unclaimed.
 - [Slack](Slack/STATUS.md) — Effort: not assessed; being worked on: Unclaimed.
-- [Spotify](Spotify/STATUS.md) — Effort: not assessed; being worked on: Unclaimed.
+- [Spotify](Spotify/STATUS.md) — Effort: Module; being worked on: eleganckidenis, [#226](https://github.com/TurnOver-For-Mac/turnover/issues/226).
 - [Steam](Steam/STATUS.md) — Effort: Module; being worked on: Unclaimed.
 - [System Settings](SystemSettings/STATUS.md) — Effort: Module; being worked on: Unclaimed.
 - [TextEdit](TextEdit/STATUS.md) — Effort: Module; being worked on: Codex for Oliver, issue 212.

@@ -585,12 +585,10 @@ final class LeadWatcher {
     }
 
     func switchCurrent(toTurnOver wanted: Bool? = nil) {
-        // Without readers per app there is nothing to give an app to: TurnOver is on or off (22 Oct 2026).
-        guard config.applications.perAppReaders else {
-            Log.info("switch reader: readers per app are off; nothing to switch")
-            Speech.speakMessage(String(localized: "Readers per app are off: TurnOver reads everywhere while it is on. Command Control Period turns it off and on; Settings, Experimental, turns readers per app on.", comment: "Spoken message"))
-            return
-        }
+        // Keeping an app with VoiceOver is one key (Oliver, 7 Nov 2026: yes to Command Control Shift T working without
+        // the setting). Readers per app off, the key turns them on (once it has an app to give), TurnOver everywhere but the apps VoiceOver keeps,
+        // and goes on to give the app in front away. Before, it said readers per app were off and did nothing, while the
+        // welcome and the guides said the key gave the app to VoiceOver (22 Oct 2026 to 7 Nov 2026).
         guard let app = NSWorkspace.shared.frontmostApplication, app.activationPolicy == .regular,
               let bundle = app.bundleIdentifier ?? Games.leadKey(for: app), bundle != Bundle.main.bundleIdentifier else {
             Log.info("switch reader: nothing to switch in front"); Tones.edge(); return
@@ -598,6 +596,11 @@ final class LeadWatcher {
         let name = app.localizedName ?? bundle
         guard !locked else { return }
         guard InputAccess.granted else { Log.info("switch reader: no Input Monitoring"); Tones.edge(); return }
+        if !config.applications.perAppReaders {
+            config.applications.perAppReaders = true
+            config.applications.leadMode = "everywhere"
+            Log.info("switch reader: readers per app turned on by the key")
+        }
         let toTurnOver = wanted ?? !shouldLead(bundle)
         // Saved in the mode's own list: TurnOver's apps, or (everywhere) the apps VoiceOver keeps.
         if config.applications.leadMode == "voiceover" {

@@ -116,7 +116,7 @@ extension VoiceOverKeysPlugin {
             let items = NotificationHistory.items.reversed().map { n -> MenuItem in
                 let mins = Int(Date().timeIntervalSince(n.at) / 60)
                 let when = mins < 1 ? String(localized: "just now", comment: "When a notification came") : mins == 1 ? String(localized: "1 minute ago", comment: "When a notification came")
-                    : mins < 60 ? String(localized: "\(String(mins)) minutes ago", comment: "When a notification came") : String(localized: "\(String(mins / 60)) hours ago", comment: "When a notification came")
+                    : mins < 60 ? String(localized: "\(mins) minutes ago", comment: "When a notification came") : String(localized: "\(mins / 60) hours ago", comment: "When a notification came")
                 return MenuItem(verbatim: "\(n.text), \(when)", .action { Speech.speakPrivate(n.text) })
             }
             guard !items.isEmpty else { Speech.speakMessage(String(localized: "no notifications", comment: "Spoken message")); return }
