@@ -204,6 +204,9 @@ public final class BrowseModeDocument: ScriptableObject {
     }
     private var noAnswerLoggedAt = Date.distantPast
     var lastURL = ""
+    /// The name of the script that keeps a typing key with no command from the page; ScriptHandler asks every later
+    /// handler before it runs (16 Nov 2026).
+    public static let trapScriptName = "browseModeTrap"
     /// When a letter with no command was last kept from the page in browse mode (any page).
     static var lastLetterKeptAt = Date.distantPast
     /// "browse mode", a third of a second after the last of a run of letters kept from the page (or at once if the run
@@ -1060,7 +1063,7 @@ public final class BrowseModeDocument: ScriptableObject {
             let isLetterOrDigit = gesture.typedCharacter.map { $0.isLetter || $0.isNumber } ?? false
             let isPlainKey = gesture.modifiers.subtracting(.shift).isEmpty
             let saysBrowseMode = isLetterOrDigit && isPlainKey
-            return Script(name: "browseModeTrap", description: String(localized: "A key that would type, with no command in browse mode: nothing", comment: "A command, as the key list and keyboard help say it"), category: "navigation", owner: self) { _ in
+            return Script(name: BrowseModeDocument.trapScriptName, description: String(localized: "A key that would type, with no command in browse mode: nothing", comment: "A command, as the key list and keyboard help say it"), category: "navigation", owner: self) { _ in
                 Log.io("browse mode: a typing key with no command; kept from the page")
                 guard saysBrowseMode else { return }
                 // Said once a run: typing into a field TurnOver was still in browse mode on, "Okay" went nowhere without

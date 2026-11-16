@@ -160,6 +160,31 @@ func browseTypingTrapTests() {
         }
     }
 
+    // The trap is the last resort: a key that a handler asked after the page would run is not kept (review, 16 Nov
+    // 2026: Option D and Option B did nothing on a web page in browse mode). The scripts are found, not run, so no
+    // Finder window or status menu list opens.
+    test("browse typing trap: a global command on a typing key reaches its command") {
+        withPage { page, _, _, _ in
+            let optionD = key(2, .option, "∂")
+            let optionB = key(11, .option, "∫")
+            let unbound = key(6, [], "z")
+            for style in ["windows", "jaws"] {
+                config.general.keyboardStyle = style
+                KeySettings.refresh()
+                expect(page.script(for: optionD)?.name, "browseModeTrap", "\(style): the page alone would keep Option D")
+                expect(ScriptHandler.findScript(for: optionD)?.name, "showDesktop", "\(style): Option D is Show Desktop")
+                expect(ScriptHandler.findScript(for: optionB)?.name, "focusStatusMenus", "\(style): Option B is Status Menus")
+                expect(ScriptHandler.findScript(for: unbound)?.name, "browseModeTrap", "\(style): a key with no command anywhere is still kept")
+            }
+            config.general.keyboardStyle = "mac"
+            KeySettings.refresh()
+            expect(ScriptHandler.findScript(for: optionD)?.name, "browseModeTrap", "mac: Option D has no command, so it is kept")
+            page.passThrough = true
+            check(ScriptHandler.findScript(for: unbound) == nil, "focus mode: a key with no command goes to the field")
+            check(ScriptHandler.findScript(for: optionD) == nil, "focus mode, mac: Option D goes to the field")
+        }
+    }
+
     test("browse typing trap: a kept symbol on its own says nothing") {
         withPage { _, _, trial, _ in
             // (Setting up the replayed page can say something of its own; only what the keys say counts.)

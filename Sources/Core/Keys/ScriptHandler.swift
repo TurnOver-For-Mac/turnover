@@ -30,12 +30,21 @@ public enum ScriptHandler {
         if styleTable, let s = StyleKeymap.script(for: gesture) { return s }
         for p in GlobalPluginHandler.shared.plugins { if let s = p.script(for: gesture) { return s } }
         if let pid = API.focusPid, let s = AppModuleHandler.shared.appModule(for: pid).script(for: gesture) { return s }
-        if let d = API.focusTreeInterceptor, let s = d.script(for: gesture) { return s }
+        // Browse mode's trap for a typing key with no command is the last resort, not an answer: every handler asked
+        // after the page still gets the key first. Asked in the page's turn, it took Option D (Show Desktop) and
+        // Option B (Status Menus) from the global commands in the Windows and JAWS styles (review, 16 Nov 2026).
+        var browseModeTrap: Script?
+        if let d = API.focusTreeInterceptor, let s = d.script(for: gesture) {
+            let isTrap = s.name == BrowseModeDocument.trapScriptName
+            if !isTrap { return s }
+            browseModeTrap = s
+        }
         if let focus = API.focusObject {
             if let s = focus.script(for: gesture) { return s }
             for a in API.focusAncestors { if let s = a.script(for: gesture), s.canPropagate { return s } }
         }
-        return GlobalCommands.shared.script(for: gesture)
+        if let s = GlobalCommands.shared.script(for: gesture) { return s }
+        return browseModeTrap
     }
 
     /// How the keyboard thread asks (8 Oct 2026, from the team review; redone for Swift 6, 10 Oct 2026). The
