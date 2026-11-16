@@ -4369,22 +4369,8 @@
         }
       }
     },
-    "A letter or digit with no command in browse mode: nothing" : {
-      "comment" : "A command, as the key list and keyboard help say it",
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Буква или цифра без команды в режиме просмотра: ничего"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tarama kipinde komutu olmayan harf ya da rakam: hiçbir şey"
-          }
-        }
-      }
+    "A key that would type, with no command in browse mode: nothing" : {
+      "comment" : "A command, as the key list and keyboard help say it"
     },
     "A list has 1 to %lld items." : {
       "comment" : "Said to a plugin author; the placeholder is a number"

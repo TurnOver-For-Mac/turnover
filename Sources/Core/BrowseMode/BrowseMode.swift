@@ -518,7 +518,7 @@ public final class BrowseModeDocument: ScriptableObject {
                 previous.isAvailable = { config.general.windowsKeys == windows }
             }
         }
-        // NVDA's; VoiceOver has none, so the Mac style leaves comma to the page.
+        // NVDA's; VoiceOver has none, so in the Mac style comma is kept from the page like any key with no command.
         script("pastEndOfContainer", String(localized: "Moves past the end of the list, table or other container (NVDA: comma)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:,"], category: "Quick navigation") { [weak self] g in
             guard let self else { return }
             if !singleLetterNavigation { g.send(); return }
@@ -1044,17 +1044,25 @@ public final class BrowseModeDocument: ScriptableObject {
             if passThrough && s.name != "disablePassThrough" { return nil }
             return contentScript(s)
         }
-        // A letter or digit with no command of its own (z, 0) is kept from the page in browse mode, as NVDA's trap
-        // non-command gestures does: otherwise it would reach a field that still has the keyboard after Escape.
-        // Punctuation and Backspace still reach the page (a page's own ? for its shortcut help). Not with single-letter
-        // navigation off, when the page's own letter keys are wanted (a second reviewer, 23 Oct 2026).
+        // A key that would type a character and has no command of its own (z, 0, comma, dash, an Option symbol) is
+        // kept from the page in browse mode, as NVDA's trap non-command gestures does: otherwise it would reach a field
+        // that still has the keyboard after Escape. Not with single-letter navigation off, when the page's own keys are
+        // wanted (a second reviewer, 23 Oct 2026).
+        // Punctuation was left to the page until 16 Nov 2026: in the Claude app's Prompt, in browse mode, the letters of
+        // a word were kept but the comma after them went into the field (15 Nov 2026, 20:43 UTC), and a dash typed while
+        // reading (20:46 UTC) sat in the field for hours and was sent with a message.
         let inBrowseMode = !passThrough
         let lettersAreCommands = singleLetterNavigation
-        let isLetterOrDigit = gesture.typedCharacter.map { $0.isLetter || $0.isNumber } ?? false
-        let isPlainKey = gesture.modifiers.subtracting(.shift).isEmpty
-        if inBrowseMode, lettersAreCommands, isLetterOrDigit, isPlainKey {
-            return Script(name: "browseModeTrap", description: String(localized: "A letter or digit with no command in browse mode: nothing", comment: "A command, as the key list and keyboard help say it"), category: "navigation", owner: self) { _ in
-                Log.io("browse mode: a letter or digit with no command; kept from the page")
+        let wouldTypeText = gesture.wouldTypeTextInBrowseMode
+        if inBrowseMode, lettersAreCommands, wouldTypeText {
+            // Only plain letters and digits say "browse mode" when the run stops, as before; any other kept key is silent, since
+            // whether it should make a sound is not yet decided (16 Nov 2026).
+            let isLetterOrDigit = gesture.typedCharacter.map { $0.isLetter || $0.isNumber } ?? false
+            let isPlainKey = gesture.modifiers.subtracting(.shift).isEmpty
+            let saysBrowseMode = isLetterOrDigit && isPlainKey
+            return Script(name: "browseModeTrap", description: String(localized: "A key that would type, with no command in browse mode: nothing", comment: "A command, as the key list and keyboard help say it"), category: "navigation", owner: self) { _ in
+                Log.io("browse mode: a typing key with no command; kept from the page")
+                guard saysBrowseMode else { return }
                 // Said once a run: typing into a field TurnOver was still in browse mode on, "Okay" went nowhere without
                 // a sound, and the message went with only the comma and what followed it (13 Nov 2026). The word, not
                 // a sound: it says why the letters were not typed. Said once the letters stop, so the next key does not

@@ -114,6 +114,27 @@ nonisolated public struct KeyboardGesture: CustomStringConvertible, Sendable {
 
     public var isTurnOverModifier: Bool { modifiers.contains(.turnover) }
 
+    /// Whether browse mode keeps this key from the page when it has no command: it would type a character (letters,
+    /// digits, punctuation, symbols, with Shift or Option, a dead key that has not composed yet) and has no Command,
+    /// Control or TurnOver key. Return, Space, Tab, Escape, the arrows, Backspace, the function keys and the
+    /// modifiers themselves are not typing keys here and keep what they do (16 Nov 2026: a comma and a dash reached
+    /// the Claude app's Prompt in browse mode, 15 Nov 2026).
+    public var wouldTypeTextInBrowseMode: Bool {
+        let hasCommandModifier = !modifiers.intersection([.turnover, .command, .control]).isEmpty
+        if hasCommandModifier { return false }
+        let isSpace = keyCode == 49
+        if isSpace { return false }
+        if KeyNames.isSpecial(keyCode) { return false }
+        let isModifierKey = (54...62).contains(keyCode)
+        if isModifierKey { return false }
+        let producesText = characters.unicodeScalars.contains { !CharacterSet.controlCharacters.contains($0) }
+        if producesText { return true }
+        // A dead key (Option E) can arrive with no characters yet: a printing key still starts text. An unknown key
+        // with no characters (a keyboard's input-mode switch) is not typing, and keeps its own action.
+        let isPrintingKey = keyName.count == 1 || keyName == "section" || keyName.hasPrefix("numpad")
+        return isPrintingKey
+    }
+
     /// NVDA's shouldReportAsCommand: keys with modifiers or special keys, never plain typing.
     public var shouldReportAsCommand: Bool {
         if isTurnOverModifier { return false }
