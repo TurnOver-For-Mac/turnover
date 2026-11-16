@@ -102,11 +102,14 @@ public enum SecureEcho {
 
 /// E17: Secure Input left on after a password field (Safari, 3 Oct 2026) hides every key from TurnOver, so its reading
 /// keys silently stop. Checked four times a second while TurnOver leads: on, for ten seconds running, with the focus not
-/// in a password field, TurnOver says so once and how to get the keys back, and logs which process holds it. (Two seconds
-/// until 31 Oct 2026: Chrome keeps secure input on while the "Show password" box after its password field has the focus,
-/// and each Tab out of the field brought the warning.) A password field the application shows from another process
-/// (SecureEcho.otherProcessField) is one too: its length is looked at from the first quarter second, and it gives no
-/// warning (System Settings' password sheet said "Press Command Tab twice" three times while the password was typed).
+/// in a password field, it is logged once, with the process the session names. Until 16 Nov 2026 TurnOver also said so
+/// and how to get the keys back. That warning cut in on ordinary sign-in pages (Safari keeps secure input on while the
+/// controls beside a password field have the focus; Terminal has it on at a password prompt), and it was taken out:
+/// TurnOver should not have to say anything there. (Two seconds until 31 Oct 2026: Chrome keeps secure input on
+/// while the "Show password" box after its password field has the focus, and each Tab out of the field brought the
+/// warning.) A password field the application shows from another process (SecureEcho.otherProcessField) is one too:
+/// its length is looked at from the first quarter second, and it is not logged as this (System Settings' password
+/// sheet said "Press Command Tab twice" three times while the password was typed).
 public enum SecureInputWatch {
     private static var timer: Timer?
     private static var looks = 0
@@ -136,6 +139,5 @@ public enum SecureInputWatch {
         // The session's "holder" is not reliable (a test program holding it was reported as Mail, 4 Oct 2026): logged,
         // not spoken.
         Log.error("secure input: on outside a password field (session names \(name)); TurnOver cannot hear the keys")
-        Speech.speakMessage(String(localized: "Secure input is on, so TurnOver cannot hear your keys. Press Command Tab twice to get them back.", comment: "Spoken message"))
     }
 }

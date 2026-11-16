@@ -25,6 +25,10 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 - A menu bar item whose menu does open, such as a VPN app's, no longer says "could not open" first. The press can
   report an error and the menu still appear a moment later, and a menu that opened and closed quickly was counted as
   one that never opened.
+- TurnOver no longer says "Secure input is on, so TurnOver cannot hear your keys" when the Mac goes on hiding the
+  keys after a password field. It cut in on ordinary sign-in pages: in Safari, while moving through the controls
+  beside the password field, and at a password prompt in Terminal. The log still records it. If TurnOver's own keys
+  stop answering after a password, Command-Tab twice brings them back.
 - Arrowing along the Dock's own list says an item's name alone, "Safari", not "Safari, dock item, selected".
 
 ## 2.0, build 24
