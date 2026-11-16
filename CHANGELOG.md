@@ -10,6 +10,12 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   deleted character or word lower, as VoiceOver does, without the word "deleted". Off by default. A deleted capital
   is lowered too when capitals are raised.
 
+### Fixed
+
+- TurnOver no longer tells you that secure input is on when the Mac goes on hiding your keys after a password
+  field, as beside a password field on a sign-in page in Safari or at a password prompt in Terminal. The log still
+  records it. If TurnOver's own keys stop answering after a password, Command-Tab twice still brings them back.
+
 ## 2.0, build 24.1
 
 ### New to try
