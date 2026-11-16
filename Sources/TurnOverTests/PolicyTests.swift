@@ -258,6 +258,19 @@ func policyTests() {
             expect(MenuBarOwner.leaving(focusPid: pid, focusNamed: named, focusIsWhereItCameFrom: cameFrom, barPid: bar, windowNamed: window), want, what)
         }
     }
+    test("menu bar: after Escape closes a status menu the front app's focus is read, not the menu owner's (16 Nov 2026)") {
+        // (what, the menu's pid, the front app's pid, the key, whose focus is asked)
+        let table: [(String, pid_t, pid_t, String, pid_t)] = [
+            ("Escape in another process's status menu: the front app", 673, 1352, "escape", 1352),
+            ("Escape in the front app's own menu: that app, as before", 1352, 1352, "escape", 1352),
+            ("Return chose a status menu item: its effect speaks, the menu's app as before", 673, 1352, "enter", 673),
+            ("Space chose a status menu item: the menu's app as before", 673, 1352, "space", 673),
+            ("Escape with no front app known: the menu's app", 673, 0, "escape", 673),
+        ]
+        for (what, menu, front, key, want) in table {
+            expect(MenuBarOwner.focusOwnerAfterMenu(menuPid: menu, frontPid: front, key: key), want, what)
+        }
+    }
 }
 
 func activityTests() {

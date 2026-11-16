@@ -42,6 +42,19 @@ public enum MenuBarOwner {
         if let p = focusPid, p == barPid, focusNamed { return .focus }
         return windowNamed ? .window : .app
     }
+
+    /// Whose focus is read once a menu has closed after `key` went to it. A status menu belongs to its own process
+    /// (Karabiner's, say), which has no focus of its own: after Escape that process was asked, gave nothing, and
+    /// nothing was said, though the keys had gone back to the front app (16 Nov 2026, the status menus held with
+    /// VO M M). So after Escape the front app is asked instead. After Return or Space the menu's own app, as before:
+    /// the chosen item's effect speaks for itself, and asking the front app too would say it twice.
+    public static func focusOwnerAfterMenu(menuPid: pid_t, frontPid: pid_t, key: String) -> pid_t {
+        let closedWithEscape = key == "escape"
+        let frontKnown = frontPid != 0
+        let menuIsAnotherApps = menuPid != frontPid
+        if closedWithEscape, frontKnown, menuIsAnotherApps { return frontPid }
+        return menuPid
+    }
 }
 
 final class MenuNavigationPlugin: GlobalPlugin {
@@ -175,7 +188,8 @@ final class MenuNavigationPlugin: GlobalPlugin {
     /// Return, Space or Escape went to the application: watch for the menu to close, then read the focus.
     private func passedThrough(_ g: KeyboardGesture) {
         guard AXHandler.shared.isMenuOpen, ["enter", "numpadEnter", "space", "escape"].contains(g.keyName) else { return }
-        let pid = AXHandler.shared.openMenus.last?.pid ?? Self.menuBarPid
+        let menuPid = AXHandler.shared.openMenus.last?.pid ?? Self.menuBarPid
+        let pid = MenuBarOwner.focusOwnerAfterMenu(menuPid: menuPid, frontPid: AXHandler.shared.activePid, key: g.keyName)
         watchToken += 1
         let token = watchToken
         var done = false
