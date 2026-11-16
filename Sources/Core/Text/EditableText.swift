@@ -287,6 +287,15 @@ open class EditableText: TurnOverObject {
         }
     }
 
+    /// A caret key at a known edge: sent on unwaited, the edge sound, and the line read in a one-line box. A field whose
+    /// application answers an edge arrow by replacing its text (Claude's Prompt recalling a message, 16 Nov 2026)
+    /// overrides this to read the line once the value has changed.
+    open func sendUnwaitedCaretKeyAtEdge(_ gesture: KeyboardGesture, unit: TextUnit, info: TextInfo) {
+        gesture.send()
+        Tones.edge(keySent: true, sound: appModule.playsNativeCaretBoundarySound)
+        caretMoved(speak: unit == .line && readsLineAtEdge ? .line : nil, gesture: gesture, info: info)
+    }
+
     func caretMovement(_ gesture: KeyboardGesture, _ unit: TextUnit) {
         // Google Docs, Sheets, Slides: the text box is a hidden typing target; Google says the move itself.
         if GoogleDocs.isEditor(element) { gesture.send(); return }
@@ -322,9 +331,7 @@ open class EditableText: TurnOverObject {
             && Self.sidewaysEdge(key: key, caret: info.start, lineStart: oldLine.start, lineEnd: oldLine.end, length: length, fieldIsEmpty: fieldIsEmpty)
         if noRoom || noRoomSideways {
             Log.io("edge: nothing \(backwards || key == "leftArrow" ? "before" : "after") the caret (\(info.start) of \(length)); sent unwaited")
-            gesture.send()
-            Tones.edge(keySent: true, sound: boundarySound)
-            caretMoved(speak: unit == .line && readsLineAtEdge ? .line : nil, gesture: gesture, info: info)
+            sendUnwaitedCaretKeyAtEdge(gesture, unit: unit, info: info)
             return
         }
         gesture.send()

@@ -28,6 +28,14 @@ package final class ClaudeAppModule: AppModule {
     private lazy var browserReturn = ClaudeBrowserReturn(pid: pid)
     private var readReplies: Bool { config.appSetting(ClaudeTranscript.bundleID, "readReplies", default: "on") == "on" }
 
+    /// The Prompt reads its line after Up or Down at its edge recall a message (ClaudePromptText, 16 Nov 2026).
+    package override func objectClass(for element: AXUIElement, role: Role, subrole: String?) -> TurnOverObject.Type? {
+        guard role == .editableText else { return nil }
+        guard element.role == "AXTextArea" else { return nil }
+        guard element.string(kAXTitleAttribute) == "Prompt" else { return nil }
+        return ClaudePromptText.self
+    }
+
     package required init(pid: pid_t, bundleIdentifier: String, appName: String) {
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
         sessionDeletion.installScripts(on: self)
