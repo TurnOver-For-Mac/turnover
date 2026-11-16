@@ -1332,16 +1332,14 @@ public final class ObjectNavigator {
     public func moveTo(_ e: AXUIElement) { land(on: e) }
 
     /// What the mouse pointer is over, said. The keyboard focus never follows (a sweep of the pointer across a window
-    /// must not move where typing goes); the review cursor goes there only when asked. What is said is private: text on
+    /// must not move where typing goes); the review cursor goes there. What is said is private: text on
     /// the screen (a message) is not kept in the speech history, and goes only to a voice that may hear it.
-    package func hover(_ reading: PointerReading, movingCursor: Bool) {
-        if movingCursor {
-            landedByStep = false
-            current = reading.element
-            currentPid = reading.element.pid
-            // (No label source: finding it asks the profile store about the element, which is for the keyboard path.)
-            labelSource = nil
-        }
+    package func hover(_ reading: PointerReading) {
+        landedByStep = false
+        current = reading.element
+        currentPid = reading.element.pid
+        // (No label source: finding it asks the profile store about the element, which is for the keyboard path.)
+        labelSource = nil
         Speech.asSource(MouseTracking.speechSource) { Speech.asPrivate { Speech.speakItem(reading.text, processed: true) } }
     }
 
