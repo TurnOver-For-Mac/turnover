@@ -4,6 +4,12 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ## 2.0, build 24.1
 
+### New to try
+
+- Zoom: in a meeting, Zoom's own keys speak. Mute, video, raising your hand and reactions say what they did:
+  "muted", "video on", "hand raised", or the reaction sent. Command Shift 2 says who is speaking. Zoom itself
+  said nothing for any of them.
+
 ### Fixed
 
 - In a toolbar, in any app, Left and Right move to the previous or next control, with the edge sound at either end

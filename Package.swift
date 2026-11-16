@@ -94,6 +94,8 @@ let coreSources: [String] = [
     "Apps/Word/WordTableNavigation.swift",
     "Apps/Word/WordTextArea.swift",
     "Apps/Word/WordTextInfo.swift",
+    "Apps/Zoom/ZoomAppModule.swift",
+    "Apps/Zoom/ZoomWords.swift",
 ]
 
 let package = Package(
@@ -325,6 +327,7 @@ let package = Package(
                 "Apps/Xcode/STATUS.md",
                 "Apps/Zoom/Experiments",
                 "Apps/Zoom/STATUS.md",
+                "Apps/Zoom/Tests",
                 "Apps/iPhoneMirroring/Experiments",
                 "Apps/iPhoneMirroring/STATUS.md",
                 "Apps/iTerm2/Experiments",

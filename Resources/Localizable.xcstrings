@@ -44317,6 +44317,48 @@
     },
     "Write code: TurnOver is on GitHub, and CONTRIBUTING.md there is the place to start." : {
       "comment" : "Help make TurnOver: contributing code"
+    },
+    "Mutes or unmutes your microphone in the meeting, and says which" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
+    "Starts or stops your video in the meeting, and says which" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
+    "Raises or lowers your hand in the meeting, and says which" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
+    "Sends a reaction in the meeting, and says it" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
+    "muted" : {
+      "comment" : "Zoom: your microphone after the mute key"
+    },
+    "unmuted" : {
+      "comment" : "Zoom: your microphone after the mute key"
+    },
+    "video off" : {
+      "comment" : "Zoom: your camera after the video key"
+    },
+    "video on" : {
+      "comment" : "Zoom: your camera after the video key"
+    },
+    "hand raised" : {
+      "comment" : "Zoom: your hand after the raise hand key, and in the state command"
+    },
+    "hand lowered" : {
+      "comment" : "Zoom: your hand after the raise hand key"
+    },
+    "sent %@" : {
+      "comment" : "Zoom: a reaction was sent; the value is the reaction, such as a thumbs up"
+    },
+    "Says who is speaking in the meeting" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
+    "%@ is speaking" : {
+      "comment" : "Zoom: the answer to who is speaking; the value is a person's name"
+    },
+    "No one is speaking" : {
+      "comment" : "Zoom: the answer to who is speaking, when Zoom marks nobody"
     }
   },
   "version" : "1.0"
