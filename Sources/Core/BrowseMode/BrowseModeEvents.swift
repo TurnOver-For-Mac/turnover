@@ -109,17 +109,37 @@ extension BrowseModeDocument {
                 lastChain = []
                 Log.io("browse mode: back on the page after Return in the address field; its line waits for the new page")
                 let waiting = url, epoch = pageGeneration, keys = ScriptHandler.keysArrivedCount
+                // The page being left is also marked as left (16 Nov 2026, Safari: a Space 0.3 s before the new page came
+                // pressed a link at the old page's reading position). Until the mark is cleared, a key meant for the page's
+                // content is refused and "loading page" said (refuseIfPageOnItsWay).
+                let token = beginPageOnItsWay()
                 // While the page says it is busy (loading), up to eight seconds: a slow load is not a page that stayed
                 // (Codex's review, 14 Nov 2026).
-                func readIfStayed(_ waited: Double) {
+                // A key that arrives no longer ends the wait early (16 Nov 2026): the old page's line is not read then, but the
+                // mark stays until this check has decided, or the first refused key would have given the old page its keys back
+                // at the next half second while the new one was still on its way.
+                func readIfStayed(_ waited: Double, keyArrived: Bool = false) {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                        guard let self, API.focusTreeInterceptor === self, pageGeneration == epoch, url == waiting else { return }
-                        guard ScriptHandler.keysArrivedCount == keys else { return }
+                        guard let self else { return }
+                        guard API.focusTreeInterceptor === self, pageGeneration == epoch, url == waiting else {
+                            endPageOnItsWay(because: "the page or its document changed", token: token)
+                            return
+                        }
+                        let keyed = keyArrived || ScriptHandler.keysArrivedCount != keys
                         let busy = (webArea.attr("AXElementBusy") as? Bool) == true
-                        if waited < 1.5 || (busy && waited < 8) { readIfStayed(waited + 0.5); return }
+                        if waited < 1.5 || (busy && waited < 8) { readIfStayed(waited + 0.5, keyArrived: keyed); return }
                         // Still loading after eight seconds: the new page announces itself when it comes; the old one's
                         // line is not read (Codex's second review, 14 Nov 2026).
-                        if busy { Log.io("browse mode: the page is still loading; the old page's line is not read"); return }
+                        if busy {
+                            Log.io("browse mode: the page is still loading; the old page's line is not read")
+                            endPageOnItsWay(because: "the page was still loading after eight seconds", token: token)
+                            return
+                        }
+                        if keyed {
+                            endPageOnItsWay(because: "the page stayed (a key had arrived, so its line is not read)", token: token)
+                            return
+                        }
+                        endPageOnItsWay(because: "the page stayed", token: token)
                         speakUnit(.line)
                     }
                 }
@@ -146,5 +166,68 @@ extension BrowseModeDocument {
         default:
             next()
         }
+    }
+}
+
+// A page asked for from the address field (16 Nov 2026).
+extension BrowseModeDocument {
+    /// How long the mark may stand: the longest the stay check waits on a busy page. A test shortens it.
+    package static var pageOnItsWayLimit: TimeInterval = 8
+    /// How long before "loading page" is said again to further refused keys. A test shortens it.
+    package static var pageOnItsWayRepeat: TimeInterval = 2
+
+    /// Marks this document as the page being left. Returns the mark's ticket, which only the check that made it, or the
+    /// eight second limit, may use to clear it again (a newer mark is never cleared by an older check).
+    func beginPageOnItsWay() -> Int {
+        pageOnItsWayTicket += 1
+        let token = pageOnItsWayTicket
+        pageOnItsWay = PageOnItsWay(token: token, since: Date(), saidAt: nil)
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.pageOnItsWayLimit) { [weak self] in
+            self?.endPageOnItsWay(because: "the limit of \(Int(Self.pageOnItsWayLimit)) seconds passed", token: token)
+        }
+        return token
+    }
+
+    /// Gives the keys back to this document. With a ticket, only that mark is cleared.
+    package func endPageOnItsWay(because reason: String, token: Int? = nil) {
+        guard let mark = pageOnItsWay, token == nil || token == mark.token else { return }
+        pageOnItsWay = nil
+        Log.io("browse mode: keys act on this page again: \(reason)")
+    }
+
+    /// Whether keys for the content are refused now. Looks only; the limit's timer clears the mark itself.
+    package var pageIsOnItsWay: Bool {
+        guard let mark = pageOnItsWay else { return false }
+        return Date().timeIntervalSince(mark.since) < Self.pageOnItsWayLimit
+    }
+
+    /// A key meant for the page's content while the new page is on its way: nothing is pressed, nothing moves, and it
+    /// says so (once, and again only after two seconds). The key is refused, not held: it would have to be handed to a
+    /// document that may not exist yet, and a held Space would press whatever is at the top of a page not yet heard.
+    @discardableResult
+    func refuseIfPageOnItsWay(_ gesture: KeyboardGesture, command: String) -> Bool {
+        guard pageIsOnItsWay, var mark = pageOnItsWay else { return false }
+        let due = mark.saidAt.map { Date().timeIntervalSince($0) > Self.pageOnItsWayRepeat } ?? true
+        Log.io("browse mode: \(gesture.logDescription(commandName: command, secure: API.focusObject?.role == .passwordEdit)) refused; a new page is on its way after Return in the address field\(due ? "" : " (not said again)")")
+        if due {
+            mark.saidAt = Date()
+            pageOnItsWay = mark
+            Speech.speakMessage(String(localized: "loading page", comment: "Spoken message"))
+        }
+        return true
+    }
+
+    /// The script that stands in for a browse mode command while the page is on its way: it keeps the command's name,
+    /// description and key, so keyboard help is unchanged, and refuses when it runs.
+    func refusingScript(for script: Script) -> Script {
+        let refusing = Script(name: script.name, description: script.description, category: script.category, owner: self) { [weak self] gesture in
+            guard let self else { return }
+            // The wait may have ended between the key's lookup and its run: then the command is the real one.
+            if !refuseIfPageOnItsWay(gesture, command: script.name) { script.handler(gesture) }
+        }
+        refusing.canPropagate = script.canPropagate
+        refusing.bypassInputHelp = script.bypassInputHelp
+        refusing.isAvailable = script.isAvailable
+        return refusing
     }
 }

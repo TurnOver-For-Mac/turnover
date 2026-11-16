@@ -25,7 +25,7 @@ public final class BrowseModeHandler {
     static var cameBackByHistory: Bool { Date().timeIntervalSince(historyKeyAt) < 10 }
     /// Return in an address field outside the page gave the keys back to the page (Safari's, after it is typed): when,
     /// and to which page. A new page is most likely on its way (BrowseModeDocument's gain focus).
-    static var backFromAddressField: (at: Date, page: AXUIElement)?
+    package static var backFromAddressField: (at: Date, page: AXUIElement)?
     var documents: [BrowseModeDocument] = []
     let lock = NSLock()
 

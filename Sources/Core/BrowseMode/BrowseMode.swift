@@ -203,7 +203,7 @@ public final class BrowseModeDocument: ScriptableObject {
         Speech.speakMessage(String(localized: "the page is not responding", comment: "Spoken message: a web page has stopped answering"))
     }
     private var noAnswerLoggedAt = Date.distantPast
-    var lastURL = ""
+    package var lastURL = ""
     /// The name of the script that keeps a typing key with no command from the page; ScriptHandler asks every later
     /// handler before it runs (16 Nov 2026).
     nonisolated public static let trapScriptName = "browseModeTrap"
@@ -242,6 +242,12 @@ public final class BrowseModeDocument: ScriptableObject {
     var announceWhenReady = false
     // Opted into only by Claude's session shortcuts (14 Nov 2026): the old page must not answer the next key.
     var navigationWaiting = false
+    /// 16 Nov 2026: set when Return in Safari's address field gave the keys back to this page and a new one is most likely
+    /// on its way: this document is the page being left. Content keys are refused while it stands (BrowseModeEvents).
+    /// Separate from the navigation wait, which holds keys and replays them on the same document.
+    struct PageOnItsWay { let token: Int; let since: Date; var saidAt: Date? }
+    var pageOnItsWay: PageOnItsWay?
+    var pageOnItsWayTicket = 0
     // Claude owns automatic switch speech even after queued content commands have been released.
     package var navigationTitleOwned = false
     var navigationRetries: [() -> Void] = []
@@ -272,6 +278,7 @@ public final class BrowseModeDocument: ScriptableObject {
             navigationHadCommand = false
         }
         lastURL = now
+        endPageOnItsWay(because: "the address changed in this web area")
         rootRunner.cancel(); discoveringRoot = false; followingRootFailure = false; watchingFor = nil
         buffer.newPage()
         pageGeneration += 1
@@ -311,7 +318,7 @@ public final class BrowseModeDocument: ScriptableObject {
         }
     }
     /// The page last announced (its title and its reading), so a page is announced once as it arrives.
-    var announcedURL = ""
+    package var announcedURL = ""
 
     /// NVDA: a page arriving says its title, then is read (automatic say all, on by default), or, with that off,
     /// its first line (or the line it resumes at).
@@ -1033,7 +1040,8 @@ public final class BrowseModeDocument: ScriptableObject {
         guard let script = super.script(named: name) else { return nil }
         // VoiceOver's arrows resolve browse commands by name, rather than by gesture.
         guard navigationWaiting ||
-              earlyTitleURL != nil else { return script }
+              earlyTitleURL != nil ||
+              pageIsOnItsWay else { return script }
         bufferIntent += 1
         return contentScript(script)
     }

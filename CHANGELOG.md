@@ -19,6 +19,11 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- Safari: after Return in the address field, a key pressed before the new page has arrived no longer acts on the page
+  you have just left. Before, Space, Return, a quick navigation letter or Tab pressed in that moment could press a link
+  on the old page, or move through it, a fraction of a second before the new page appeared. Now TurnOver says "loading
+  page" and does nothing with the key; once the new page has arrived, or the old one is seen to stay, keys work again.
+
 - Browse mode: after F, or another quick navigation key, says the name of a text field, what you type straight away
   goes into the field. Before, a key pressed in the instant between the field's name and the field taking the keyboard
   (a Backspace, a letter, Space) left TurnOver in browse mode, so that the next letters ran as commands. Those keys are

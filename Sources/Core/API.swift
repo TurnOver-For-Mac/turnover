@@ -30,7 +30,12 @@ public enum API {
     public static func setFocusObject(_ obj: TurnOverObject?, ancestors: [TurnOverObject], interceptor: BrowseModeDocument? = nil) {
         FormattingFeedback.shared.cancel()
         let previous = focusTreeInterceptor
-        if previous !== interceptor { previous?.cancelBuffer() }
+        if previous !== interceptor {
+            previous?.cancelBuffer()
+            previous?.endPageOnItsWay(because: "another document has the focus")
+        } else if let interceptor, let obj, !obj.isSameElement(as: interceptor.webArea) {
+            interceptor.endPageOnItsWay(because: "the focus moved to something else on the page")
+        }
         let pid = obj?.pid ?? 0
         lock.lock(); _focus = obj; _ancestors = ancestors; _interceptor = interceptor; lock.unlock()
         focusedPidValue.value = pid

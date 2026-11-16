@@ -50,6 +50,9 @@ extension BrowseModeDocument {
     }
 
     func contentScript(_ script: Script) -> Script {
+        // The page being left after Return in the address field: its keys are refused (16 Nov 2026). Escape, which
+        // switches the mode back, is not about the page's content.
+        if pageIsOnItsWay, script.name != "disablePassThrough" { return refusingScript(for: script) }
         if !passThrough, pageSilent, !buffer.lines.isEmpty { return copyOnlyScript(script) }
         let firstContentIsLoading = !passThrough &&
             buffer.lines.isEmpty &&
