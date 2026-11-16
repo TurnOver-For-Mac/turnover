@@ -29,6 +29,7 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   keys after a password field. It cut in on ordinary sign-in pages: in Safari, while moving through the controls
   beside the password field, and at a password prompt in Terminal. The log still records it. If TurnOver's own keys
   stop answering after a password, Command-Tab twice brings them back.
+- Arrowing along the Dock's own list says an item's name alone, "Safari", not "Safari, dock item, selected".
 
 ## 2.0, build 24
 
