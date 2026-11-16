@@ -10,12 +10,6 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   deleted character or word lower, as VoiceOver does, without the word "deleted". Off by default. A deleted capital
   is lowered too when capitals are raised.
 
-### Fixed
-
-- Browse mode: a key that would type something but has no command, such as a slash, a comma, a dash or an Option
-  symbol, is kept from the page, and now says "browse mode" once the keys stop, as a letter does. Before, only
-  letters and digits did, so a punctuation key kept from a field that still had the keyboard was silent.
-
 ## 2.0, build 24.1
 
 ### New to try
@@ -25,6 +19,9 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- Browse mode: a key that would type something but has no command, such as a slash, a comma, a dash or an Option
+  symbol, is kept from the page, and now says "browse mode" once the keys stop, as a letter does. Before, only
+  letters and digits did, so a punctuation key kept from a field that still had the keyboard was silent.
 - Safari: after Return in the address field, a key pressed before the new page has arrived no longer acts on the page
   you have just left. Before, Space, Return, a quick navigation letter or Tab pressed in that moment could press a link
   on the old page, or move through it, a fraction of a second before the new page appeared. Now TurnOver says "loading
