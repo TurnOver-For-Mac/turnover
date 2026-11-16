@@ -70,8 +70,12 @@ package final class DockAppModule: AppModule {
             }
             return
         }
-        // The next item's name, for the switcher's log line (16 Nov 2026); it is read as any focus is.
-        if event.kind == .gainFocus, event.obj is AppSwitcherItem {
+        // The next item's name, for the switcher's log line (16 Nov 2026); it is read as any focus is. The Dock sends a
+        // selection for every Tab, not a focus, so the selection updates it too, or the name went stale after one Tab
+        // (review, 16 Nov 2026).
+        let isSwitcherItem = event.obj is AppSwitcherItem
+        let isFocusOrSelection = event.kind == .gainFocus || event.kind == .selection
+        if isSwitcherItem, isFocusOrSelection {
             AppSwitcherDiagnostics.lastAnnounced = event.obj.name
         }
         // Escape in the Dock: the keys are back with the application, but the Dock reports its list as focused with
@@ -144,8 +148,19 @@ package enum AppSwitcherDiagnostics {
     }
 
     /// From the main thread as each key is decided (InputManager.handleKeyDown), before the key reaches the Dock.
+    /// Whether a key pressed while the switcher is open gets the line: not Tab or Shift-Tab, which only move the
+    /// selection and are the keys pressed most. The line is for Q, H and anything unexpected; it asks the Dock about
+    /// every item on the main thread while the keyboard thread waits (review, 16 Nov 2026).
+    package static func logsLine(for gesture: KeyboardGesture) -> Bool {
+        let isTab = gesture.keyName == "tab"
+        let onlySwitcherModifiers = gesture.modifiers.subtracting([.command, .shift]).isEmpty
+        let movesSelection = isTab && onlySwitcherModifiers
+        return !movesSelection
+    }
+
     package static func keyDown(_ gesture: KeyboardGesture) {
         guard let list = API.focusObject as? AppSwitcherList else { return }
+        guard logsLine(for: gesture) else { return }
         // Bounded, as a diagnostic must be: the switcher holds one item per running app.
         let selected = list.element.elements(kAXChildrenAttribute).prefix(64).first { ($0.attr(kAXFocusedAttribute) as? Bool) == true }
         let name = selected?.string(kAXTitleAttribute)
