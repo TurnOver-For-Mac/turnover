@@ -22,6 +22,9 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   answers of a questionnaire made without real buttons. They used to say "nothing to activate".
 - Selecting with Shift and the arrows is read again in the Claude app's prompt, or a page's text field, after coming
   back from another app. It said nothing until the focus moved.
+- A menu bar item whose menu does open, such as a VPN app's, no longer says "could not open" first. The press can
+  report an error and the menu still appear a moment later, and a menu that opened and closed quickly was counted as
+  one that never opened.
 
 ## 2.0, build 24
 
