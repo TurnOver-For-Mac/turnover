@@ -25,6 +25,7 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 - A menu bar item whose menu does open, such as a VPN app's, no longer says "could not open" first. The press can
   report an error and the menu still appear a moment later, and a menu that opened and closed quickly was counted as
   one that never opened.
+- Arrowing along the Dock's own list says an item's name alone, "Safari", not "Safari, dock item, selected".
 
 ## 2.0, build 24
 
