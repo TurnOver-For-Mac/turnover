@@ -108,12 +108,20 @@ extension BrowseModeDocument {
                 positionAtFocus = position
                 lastChain = []
                 Log.io("browse mode: back on the page after Return in the address field; its line waits for the new page")
-                let waiting = url, epoch = pageGeneration, keys = ScriptHandler.keysArrivedCount
+                let epoch = pageGeneration, keys = ScriptHandler.keysArrivedCount
+                // The address the page had. A read with no answer is not an address (16 Nov 2026, review): the one last read
+                // stands in for it.
+                let waiting: String
+                if case .address(let now) = addressNow, !now.isEmpty { waiting = now } else { waiting = lastURL }
                 // The page being left is also marked as left (16 Nov 2026, Safari: a Space 0.3 s before the new page came
                 // pressed a link at the old page's reading position). Until the mark is cleared, a key meant for the page's
-                // content is refused and "loading page" said (refuseIfPageOnItsWay).
-                let token = beginPageOnItsWay()
-                // While the page says it is busy (loading), up to eight seconds: a slow load is not a page that stayed
+                // content is refused and "loading page" said (refuseIfPageOnItsWay). Only in Safari, and only after Return
+                // in a field outside the page (16 Nov 2026, review): elsewhere no new page need be coming.
+                let token: Int? = marksPageOnItsWay(back) ? beginPageOnItsWay() : nil
+                let started = token == nil ? Date() : pageOnItsWay?.since ?? Date()
+                // With the mark, the longest it may stand; without it, eight seconds, as before.
+                let ceiling = token == nil ? 8 : Self.pageOnItsWayLimit
+                // While the page says it is busy (loading), up to the ceiling: a slow load is not a page that stayed
                 // (Codex's review, 14 Nov 2026).
                 // A key that arrives no longer ends the wait early (16 Nov 2026): the old page's line is not read then, but the
                 // mark stays until this check has decided, or the first refused key would have given the old page its keys back
@@ -121,25 +129,51 @@ extension BrowseModeDocument {
                 func readIfStayed(_ waited: Double, keyArrived: Bool = false) {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                         guard let self else { return }
-                        guard API.focusTreeInterceptor === self, pageGeneration == epoch, url == waiting else {
+                        // The mark was ended another way (the new document, the focus moving, the limit's own timer): that
+                        // way has said what is said, and this check has nothing left to decide.
+                        if let token, pageOnItsWay?.token != token { return }
+                        guard API.focusTreeInterceptor === self, pageGeneration == epoch else {
                             endPageOnItsWay(because: "the page or its document changed", token: token)
                             return
                         }
-                        let keyed = keyArrived || ScriptHandler.keysArrivedCount != keys
-                        let busy = (webArea.attr("AXElementBusy") as? Bool) == true
-                        if waited < 1.5 || (busy && waited < 8) { readIfStayed(waited + 0.5, keyArrived: keyed); return }
-                        // Still loading after eight seconds: the new page announces itself when it comes; the old one's
-                        // line is not read (Codex's second review, 14 Nov 2026).
-                        if busy {
-                            Log.io("browse mode: the page is still loading; the old page's line is not read")
-                            endPageOnItsWay(because: "the page was still loading after eight seconds", token: token)
+                        // Only a real, different address is a page that changed. No answer (Safari stops answering for the
+                        // address at times, 11 Nov 2026), or an empty one, says nothing either way: the check goes on, and the
+                        // ceiling still ends it (16 Nov 2026, review: the empty answer taken for a new page gave the old page
+                        // its keys back, and a Space pressed its link after all).
+                        let address = addressNow
+                        if case .address(let now) = address, !now.isEmpty, !waiting.isEmpty, now != waiting {
+                            endPageOnItsWay(because: "the page's address changed", token: token)
                             return
                         }
-                        if keyed {
+                        var known = false
+                        if case .address(let now) = address { known = !now.isEmpty && !waiting.isEmpty }
+                        let keyed = keyArrived || ScriptHandler.keysArrivedCount != keys
+                        let busy = (webArea.attr("AXElementBusy") as? Bool) == true
+                        // The last check falls before the ceiling, so the keys never come back unsaid (pageIsOnItsWay ends there).
+                        let last = Date().timeIntervalSince(started) + 0.5 >= ceiling
+                        if !last, waited < 1.5 || busy || !known { readIfStayed(waited + 0.5, keyArrived: keyed); return }
+                        let refused = pageOnItsWay?.refused ?? 0
+                        if busy || !known {
+                            let why = busy ? "the page was still loading" : "the page's address had no answer"
+                            guard token != nil else {
+                                // Without the mark, as before: the new page announces itself when it comes; the old one's line
+                                // is not read (Codex's second review, 14 Nov 2026).
+                                Log.io("browse mode: \(why) after \(Int(ceiling)) seconds; the old page's line is not read")
+                                return
+                            }
+                            // The keys come back to a page that never changed: said by reading its line, so Oliver knows the
+                            // keys act on it again (16 Nov 2026, review). A new page that comes later still announces itself.
+                            endPageOnItsWay(because: "\(why) after \(Int(ceiling)) seconds; its line is read", token: token)
+                            speakUnit(.line)
+                            return
+                        }
+                        // A refused key acted on nothing, so the page staying is said as if no key had come (16 Nov 2026,
+                        // review); a key that did act (Control, which stops speech) keeps the silence it asked for.
+                        if keyed, refused == 0 {
                             endPageOnItsWay(because: "the page stayed (a key had arrived, so its line is not read)", token: token)
                             return
                         }
-                        endPageOnItsWay(because: "the page stayed", token: token)
+                        endPageOnItsWay(because: refused > 0 ? "the page stayed; its line is read after \(refused) refused key(s)" : "the page stayed", token: token)
                         speakUnit(.line)
                     }
                 }
@@ -173,19 +207,40 @@ extension BrowseModeDocument {
 
 // A page asked for from the address field (16 Nov 2026).
 extension BrowseModeDocument {
-    /// How long the mark may stand: the longest the stay check waits on a busy page. A test shortens it.
-    package static var pageOnItsWayLimit: TimeInterval = 8
+    /// How long the mark may stand: the longest the stay check waits on a page that says it is busy, or whose address
+    /// has no answer. Twenty seconds, not eight (16 Nov 2026, review): a page still loading at eight seconds gave the keys
+    /// back to the old page, the fault itself only later. Command-L, another tab, a field on the page or the new
+    /// document end it at once. A test shortens it.
+    package static var pageOnItsWayLimit: TimeInterval = 20
     /// How long before "loading page" is said again to further refused keys. A test shortens it.
     package static var pageOnItsWayRepeat: TimeInterval = 2
+    /// The apps whose new page, after Return in the address field, is known to come while the old one keeps the keys.
+    static let pageOnItsWayBundles: Set<String> = ["com.apple.Safari", "com.apple.SafariTechnologyPreview"]
+
+    /// Whether Return in a field should mark this page as the one being left (16 Nov 2026, review): only Safari's, and
+    /// only when the field that let go was outside the page. Other web views and Electron apps also send a focus event
+    /// for their window after a field lets go, with no new page coming; their keys are left alone (SHORTCOMINGS 13).
+    func marksPageOnItsWay(_ back: (at: Date, page: AXUIElement, fieldOutsidePage: Bool)) -> Bool {
+        let bundle = ProfileStore.shared.bundle(of: webArea.pid)
+        guard back.fieldOutsidePage, Self.pageOnItsWayBundles.contains(bundle) else {
+            Log.io("browse mode: keys not refused for a new page here (\(back.fieldOutsidePage ? "not Safari" : "the field was inside the page"))")
+            return false
+        }
+        return true
+    }
 
     /// Marks this document as the page being left. Returns the mark's ticket, which only the check that made it, or the
-    /// eight second limit, may use to clear it again (a newer mark is never cleared by an older check).
+    /// limit, may use to clear it again (a newer mark is never cleared by an older check).
     func beginPageOnItsWay() -> Int {
         pageOnItsWayTicket += 1
         let token = pageOnItsWayTicket
         pageOnItsWay = PageOnItsWay(token: token, since: Date(), saidAt: nil)
+        // Only if the stay check was lost: it decides just before the limit, and says so itself.
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.pageOnItsWayLimit) { [weak self] in
-            self?.endPageOnItsWay(because: "the limit of \(Int(Self.pageOnItsWayLimit)) seconds passed", token: token)
+            guard let self, pageOnItsWay?.token == token else { return }
+            endPageOnItsWay(because: "the limit of \(Int(Self.pageOnItsWayLimit)) seconds passed; its line is read", token: token)
+            // The keys come back to a page that never changed: its line says so (16 Nov 2026, review).
+            if API.focusTreeInterceptor === self { speakUnit(.line) }
         }
         return token
     }
@@ -209,23 +264,33 @@ extension BrowseModeDocument {
     @discardableResult
     func refuseIfPageOnItsWay(_ gesture: KeyboardGesture, command: String) -> Bool {
         guard pageIsOnItsWay, var mark = pageOnItsWay else { return false }
+        // A Command key is never refused (16 Nov 2026, review): Command-C copies, Command-A selects, and none presses
+        // anything on the page. A key with TurnOver's (VoiceOver's) modifier is a page key, as before.
+        if gesture.modifiers.contains(.command), !gesture.isTurnOverModifier { return false }
         let due = mark.saidAt.map { Date().timeIntervalSince($0) > Self.pageOnItsWayRepeat } ?? true
         Log.io("browse mode: \(gesture.logDescription(commandName: command, secure: API.focusObject?.role == .passwordEdit)) refused; a new page is on its way after Return in the address field\(due ? "" : " (not said again)")")
-        if due {
-            mark.saidAt = Date()
-            pageOnItsWay = mark
-            Speech.speakMessage(String(localized: "loading page", comment: "Spoken message"))
-        }
+        mark.refused += 1
+        if due { mark.saidAt = Date() }
+        pageOnItsWay = mark
+        if due { Speech.speakMessage(String(localized: "loading page", comment: "Spoken message")) }
         return true
     }
 
     /// The script that stands in for a browse mode command while the page is on its way: it keeps the command's name,
     /// description and key, so keyboard help is unchanged, and refuses when it runs.
     func refusingScript(for script: Script) -> Script {
+        let epoch = pageGeneration
         let refusing = Script(name: script.name, description: script.description, category: script.category, owner: self) { [weak self] gesture in
             guard let self else { return }
-            // The wait may have ended between the key's lookup and its run: then the command is the real one.
-            if !refuseIfPageOnItsWay(gesture, command: script.name) { script.handler(gesture) }
+            if refuseIfPageOnItsWay(gesture, command: script.name) { return }
+            // The mark ended between the key's lookup and its run (16 Nov 2026, review). If the page stayed, the command is
+            // the real one. If the new page took over (another document, or a new address here), the command was meant
+            // for the old page and is dropped: it would act on a page not yet heard (Space sends the real key).
+            guard API.focusTreeInterceptor === self, pageGeneration == epoch else {
+                Log.io("browse mode: \(gesture.logDescription(commandName: script.name, secure: API.focusObject?.role == .passwordEdit)) dropped: the page changed between the key and its command")
+                return
+            }
+            script.handler(gesture)
         }
         refusing.canPropagate = script.canPropagate
         refusing.bypassInputHelp = script.bypassInputHelp

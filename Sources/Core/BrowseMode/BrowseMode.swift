@@ -178,7 +178,7 @@ public final class BrowseModeDocument: ScriptableObject {
     /// The address read for a decision about a new page. No answer is not an empty address: Safari stopped
     /// answering four seconds after a page loaded, the empty answer was taken for a new address, and the page
     /// already read was thrown away, with the reader's place in it (11 Nov 2026).
-    var addressNow: AddressRead {
+    package var addressNow: AddressRead {
         let read = webArea.attributeResult("AXURL")
         if read.isNoAnswer { return .noAnswer }
         return .address((read.value as? URL)?.absoluteString ?? (read.value as? String) ?? "")
@@ -245,7 +245,8 @@ public final class BrowseModeDocument: ScriptableObject {
     /// 16 Nov 2026: set when Return in Safari's address field gave the keys back to this page and a new one is most likely
     /// on its way: this document is the page being left. Content keys are refused while it stands (BrowseModeEvents).
     /// Separate from the navigation wait, which holds keys and replays them on the same document.
-    struct PageOnItsWay { let token: Int; let since: Date; var saidAt: Date? }
+    /// `refused`: how many keys were refused, so the page staying after one is said (16 Nov 2026, review).
+    struct PageOnItsWay { let token: Int; let since: Date; var saidAt: Date?; var refused = 0 }
     var pageOnItsWay: PageOnItsWay?
     var pageOnItsWayTicket = 0
     // Claude owns automatic switch speech even after queued content commands have been released.

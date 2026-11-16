@@ -24,8 +24,10 @@ public final class BrowseModeHandler {
     nonisolated(unsafe) public static var historyKeyAt = Date.distantPast   // main thread only
     static var cameBackByHistory: Bool { Date().timeIntervalSince(historyKeyAt) < 10 }
     /// Return in an address field outside the page gave the keys back to the page (Safari's, after it is typed): when,
-    /// and to which page. A new page is most likely on its way (BrowseModeDocument's gain focus).
-    package static var backFromAddressField: (at: Date, page: AXUIElement)?
+    /// and to which page. A new page is most likely on its way (BrowseModeDocument's gain focus). `fieldOutsidePage`: the
+    /// text field that let go was not inside a web page (an address field, not a page's own search box), which the
+    /// page's keys being refused needs (16 Nov 2026, review).
+    package static var backFromAddressField: (at: Date, page: AXUIElement, fieldOutsidePage: Bool)?
     var documents: [BrowseModeDocument] = []
     let lock = NSLock()
 

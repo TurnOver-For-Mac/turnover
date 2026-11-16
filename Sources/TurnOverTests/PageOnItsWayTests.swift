@@ -14,6 +14,7 @@ func pageOnItsWayTests() {
         let savedPid = AXHandler.shared.activePid, savedPoster = KeyboardGesture.poster, savedSink = Speech.sink
         let savedStyle = config.general.keyboardStyle
         let savedLimit = BrowseModeDocument.pageOnItsWayLimit, savedRepeat = BrowseModeDocument.pageOnItsWayRepeat
+        let savedBundle = ProfileStore.shared.replayBundle
         AXReplay.load(.init(app: "Public page trial", bundle: "test.page-on-its-way", recorded: "synthetic", root: 0, application: 1, focus: 2, nodes: [
             .init(id: 0, attrs: ["AXRole": .string("AXWebArea"), "AXURL": .url("https://example.com/old"), "AXParent": .element(1), "AXChildren": .elements([2, 3])]),
             .init(id: 1, attrs: ["AXRole": .string("AXApplication"), "AXFocusedUIElement": .element(2)]),
@@ -30,8 +31,12 @@ func pageOnItsWayTests() {
             _ = page.refreshIfNavigated()
             waitForBuffer(page.buffer)
             page.announcedURL = page.url
+            // Known to the handler, as a real page is: the line is read from the copy (WebArea.document).
+            BrowseModeHandler.shared.adopt(page)
         }
         config.general.keyboardStyle = "mac"
+        // The page is Safari's: only there does Return in the address field mark the page being left (16 Nov 2026, review).
+        ProfileStore.shared.replayBundle = "com.apple.Safari"
         AXHandler.shared.activePid = root.pid
         let said = Locked<[String]>([]), sent = Locked<[String]>([])
         Speech.sink = { said.value.append($0) }
@@ -47,15 +52,19 @@ func pageOnItsWayTests() {
             KeyboardGesture.poster = savedPoster
             Speech.sink = savedSink
             config.general.keyboardStyle = savedStyle
+            ProfileStore.shared.replayBundle = savedBundle
+            AXHealth.forget(pid: root.pid)
+            BrowseModeHandler.shared.forget(pid: old.webArea.pid)
+            BrowseModeHandler.shared.forget(pid: new.webArea.pid)
             AXReplay.unload()
         }
         body(old, new, said, sent)
     }
     /// Return in the address field gave the page the focus: the event the branch answers.
-    func backOnPage(_ page: BrowseModeDocument) {
+    func backOnPage(_ page: BrowseModeDocument, fieldOutsidePage: Bool = true) {
         let web = ObjectFactory.make(page.webArea)
         API.setFocusObject(web, ancestors: [], interceptor: page)
-        BrowseModeHandler.backFromAddressField = (Date(), page.webArea)
+        BrowseModeHandler.backFromAddressField = (Date(), page.webArea, fieldOutsidePage)
         page.passThrough = false
         page.handleEvent(Event(.gainFocus, web), next: {})
     }
@@ -176,12 +185,140 @@ func pageOnItsWayTests() {
         }
     }
     test("page on its way: Escape and a typing key with no command are not refused") {
+        withPageLeft { old, _, said, sent in
+            backOnPage(old)
+            // Escape is pressed, not only looked up (16 Nov 2026, review): in browse mode its command sends it on to Safari.
+            check(press(old, "kb:escape"), "Escape has its command")
+            expect(loadingCount(said), 0, "Escape is not refused")
+            expect(sent.value, ["kb:escape"], "Escape still reaches the app")
+            _ = press(old, "kb:z")
+            expect(loadingCount(said), 0, "a typed key kept from the page says nothing about loading")
+            check(old.pageIsOnItsWay, "neither ends the wait")
+        }
+    }
+    test("page on its way: Command-A and Command-C are never refused") {
+        withPageLeft { old, _, said, sent in
+            backOnPage(old)
+            // Command-C first, with nothing selected: Safari's own copy, so the test copies nothing itself.
+            check(press(old, "kb:command+c"), "Command-C has its command")
+            check(sent.value.contains("kb:command+c"), "Command-C reached Safari's own copy")
+            check(press(old, "kb:command+a"), "Command-A has its command")
+            check(said.value.contains("all selected"), "Command-A selected the page")
+            expect(loadingCount(said), 0, "no Command key says the page is loading")
+            expect(pressed(), 0, "and none pressed anything")
+            check(old.pageIsOnItsWay, "the page is still marked for its other keys")
+        }
+    }
+    test("page on its way: VoiceOver's arrows, which look commands up by name, are refused") {
+        withPageLeft { old, _, said, _ in
+            old.position = old.buffer.offset(of: AXReplay.element(2)) ?? 0
+            let at = old.position
+            backOnPage(old)
+            let voDown = KeyboardGesture(identifier: "kb:turnover+downArrow")!
+            ScriptHandler.noteKeyArrived(voDown)
+            guard let script = old.script(named: "moveByLine_forward") else { check(false, "the line command is there by name"); return }
+            script.handler(voDown)
+            expect(old.position, at, "VO-Down does not move the reading position on the old page")
+            expect(loadingCount(said), 1, "VO-Down says the page is loading")
+        }
+    }
+    test("page on its way: an address read with no answer keeps the mark, and the page staying is said after a refused key") {
+        withPageLeft { old, _, said, _ in
+            let schedules = AXHealth.schedulesChecks, unresponsive = AXHealth.onUnresponsive
+            AXHealth.schedulesChecks = false; AXHealth.onUnresponsive = nil
+            defer { AXHealth.schedulesChecks = schedules; AXHealth.onUnresponsive = unresponsive }
+            old.position = old.buffer.offset(of: AXReplay.element(3)) ?? 0
+            backOnPage(old)
+            // Safari stops answering: one question waits out the timeout, and the page is left alone for three seconds,
+            // so every read of its address in that time has no answer.
+            var ticks: [UInt64] = [100, 100 + 2_000_000_000]
+            _ = AXHealth.query(pid: old.webArea.pid, element: nil, clock: { ticks.removeFirst() }) { .cannotComplete }
+            check(old.addressNow == .noAnswer, "the address has no answer now")
+            RunLoop.current.run(until: Date().addingTimeInterval(0.9))
+            check(old.pageIsOnItsWay, "no answer for the address is not a new page: the mark stands")
+            _ = press(old, "kb:space")
+            expect(pressed(), 0, "Space at 0.9 s presses nothing on the old page")
+            expect(loadingCount(said), 1, "it is refused, and said")
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+            check(old.pageIsOnItsWay, "still marked while the address has no answer")
+            AXHealth.forget(pid: old.webArea.pid)   // Safari answers again, with the same address: the page stayed
+            let before = said.value.count
+            RunLoop.current.run(until: Date().addingTimeInterval(1.4))
+            check(!old.pageIsOnItsWay, "the page stayed, so its keys are its own again")
+            let after = Array(said.value.dropFirst(before))
+            check(!after.isEmpty && !after.contains("loading page"), "the old page's line is read, so the keys are known to be back")
+        }
+    }
+    test("page on its way: a key that was not refused keeps the silence after the page stays") {
         withPageLeft { old, _, said, _ in
             backOnPage(old)
-            check(old.script(named: "disablePassThrough") != nil, "Escape's command is there")
-            let before = loadingCount(said)
-            _ = press(old, "kb:z")
-            expect(loadingCount(said), before, "a typed key kept from the page says nothing about loading")
+            ScriptHandler.noteKeyArrived(KeyboardGesture(identifier: "kb:command+tab")!)
+            let before = said.value.count
+            RunLoop.current.run(until: Date().addingTimeInterval(2.4))
+            check(!old.pageIsOnItsWay, "the page stayed")
+            expect(said.value.count, before, "nothing is read: the key did what it was pressed for")
+        }
+    }
+    test("page on its way: a page still loading keeps the mark past the stay check, and at the limit its line says the keys are back") {
+        withPageLeft { old, _, said, sent in
+            expect(BrowseModeDocument.pageOnItsWayLimit, 20, "a page may load for twenty seconds before the keys come back")
+            BrowseModeDocument.pageOnItsWayLimit = 3.2
+            BrowseModeDocument.pageOnItsWayRepeat = 0.5
+            old.position = old.buffer.offset(of: AXReplay.element(3)) ?? 0
+            AXUIElementSetAttributeValue(old.webArea, "AXElementBusy" as CFString, kCFBooleanTrue)
+            backOnPage(old)
+            RunLoop.current.run(until: Date().addingTimeInterval(2.4))
+            check(old.pageIsOnItsWay, "a busy page is not a page that stayed")
+            _ = press(old, "kb:space")
+            expect(pressed(), 0, "Space is still refused")
+            let before = said.value.count
+            RunLoop.current.run(until: Date().addingTimeInterval(1.1))
+            check(!old.pageIsOnItsWay, "the limit ends it: no page stays refused without end")
+            let after = Array(said.value.dropFirst(before))
+            check(!after.isEmpty && !after.contains("loading page"), "the old page's line is read as the keys come back")
+            _ = press(old, "kb:space")
+            check(pressed() + sent.value.count > 0, "after that, Space acts on the page")
+        }
+    }
+    test("page on its way: a key looked up while marked, run after the new page took over, is dropped") {
+        withPageLeft { old, new, said, sent in
+            old.position = old.buffer.offset(of: AXReplay.element(3)) ?? 0
+            backOnPage(old)
+            let space = KeyboardGesture(identifier: "kb:space")!
+            ScriptHandler.noteKeyArrived(space)
+            guard let script = old.script(for: space) else { check(false, "Space has a command"); return }
+            API.setFocusObject(ObjectFactory.make(new.webArea), ancestors: [], interceptor: new)
+            script.handler(space)
+            expect(pressed(), 0, "the old page's command does not run")
+            expect(sent.value, [], "and no real Space reaches the new page")
+            expect(loadingCount(said), 0, "nothing is refused aloud: the new page is announcing itself")
+        }
+    }
+    test("page on its way: a key looked up while marked, run after the page stayed, does its command") {
+        withPageLeft { old, _, said, sent in
+            old.position = old.buffer.offset(of: AXReplay.element(3)) ?? 0
+            backOnPage(old)
+            let space = KeyboardGesture(identifier: "kb:space")!
+            ScriptHandler.noteKeyArrived(space)
+            guard let script = old.script(for: space) else { check(false, "Space has a command"); return }
+            old.endPageOnItsWay(because: "the test: the page stayed")
+            script.handler(space)
+            expect(loadingCount(said), 0, "not refused")
+            check(pressed() + sent.value.count > 0, "Space acted on the page that stayed")
+        }
+    }
+    test("page on its way: no mark outside Safari, or after Return in a field on the page") {
+        withPageLeft { old, _, said, _ in
+            ProfileStore.shared.replayBundle = "test.another-web-view"
+            backOnPage(old)
+            check(!old.pageIsOnItsWay, "another app's web view: no new page need be coming")
+            _ = press(old, "kb:k")
+            expect(loadingCount(said), 0, "its keys are not refused")
+            ProfileStore.shared.replayBundle = "com.apple.Safari"
+            backOnPage(old, fieldOutsidePage: false)
+            check(!old.pageIsOnItsWay, "a field inside the page: not the address field")
+            backOnPage(old)
+            check(old.pageIsOnItsWay, "Safari's address field: marked")
         }
     }
     test("page on its way: the Claude navigation wait is separate and unchanged") {

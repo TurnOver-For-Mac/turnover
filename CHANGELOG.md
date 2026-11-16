@@ -23,6 +23,9 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   you have just left. Before, Space, Return, a quick navigation letter or Tab pressed in that moment could press a link
   on the old page, or move through it, a fraction of a second before the new page appeared. Now TurnOver says "loading
   page" and does nothing with the key; once the new page has arrived, or the old one is seen to stay, keys work again.
+  If a key was refused and the old page turns out to have stayed, its current line is read, so you know the keys work
+  on it again. A page still loading waits up to twenty seconds; if nothing new has come by then, the old page's line is
+  read and its keys work again. Command keys, such as Command-C and Command-A, and Escape are never refused.
 
 - Browse mode: after F, or another quick navigation key, says the name of a text field, what you type straight away
   goes into the field. Before, a key pressed in the instant between the field's name and the field taking the keyboard

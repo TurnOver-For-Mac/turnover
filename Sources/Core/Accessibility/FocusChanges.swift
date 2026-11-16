@@ -543,7 +543,8 @@ extension AXHandler {
         if let web = target.firstWebArea() {
             Log.io("focus to the window \"\(Log.words(name))\" after \(f.axRole) let go; to its page")
             if f.axRole == "AXTextField", InputManager.lastKeyIdentifier == "kb:enter", Date().timeIntervalSince(InputManager.lastKeyDownAt) < 1 {
-                BrowseModeHandler.backFromAddressField = (Date(), web)
+                // Whether the field was outside any page is asked only here, once a Return (16 Nov 2026, review).
+                BrowseModeHandler.backFromAddressField = (Date(), web, f.element.enclosingWebArea() == nil)
             }
             return .follow(web)
         }
