@@ -213,6 +213,10 @@ package final class ClaudeAppModule: AppModule {
     private var conversationStartingTitle = ""
     /// The destination title the pending switch has said, or empty before it has said one (17 Nov 2026).
     private var conversationAnnouncedTitle = ""
+    /// Keys counted when the pending switch's shortcut arrived; a later key means the user moved on (17 Nov 2026).
+    private var conversationSwitchKeys = 0
+    /// Command and a number, not Command N: a new conversation's Prompt is still said (17 Nov 2026).
+    private var conversationSwitchIsNumbered = false
     private var conversationSwitch = 0
     private weak var conversationPage: BrowseModeDocument?
     private let conversationReader = AXWalkRunner<AXSnapshot>()
@@ -261,6 +265,7 @@ package final class ClaudeAppModule: AppModule {
         let arrivedTitle = earlierSwitchHasArrived ? conversationAnnouncedTitle : ""
         let previousTitle = earlierSwitchOwnsPage ? conversationStartingTitle : ""
         conversationAnnouncedTitle = ""
+        conversationSwitchKeys = ScriptHandler.keysArrivedCount
         if let previous = conversationPage,
            previous !== page {
             previous.navigationTitleOwned = false
@@ -286,6 +291,7 @@ package final class ClaudeAppModule: AppModule {
         }
         conversationStartingTitle = title
         let number = Int(gesture.identifier.components(separatedBy: "+").last ?? "")
+        conversationSwitchIsNumbered = number != nil
         let target = page.buffer.withSnapshot { () -> SwitchTarget in
             guard page.url == address, !address.isEmpty else { return .unknown }
             return Self.switchTarget(number: number, root: root, title: title)
@@ -609,11 +615,40 @@ package final class ClaudeAppModule: AppModule {
     // 14 Nov 2026; native Return opened its dialog. Use one confirmed key, with no action retry.
     package override var rolesPressedByKeyboard: Set<String> { ["AXButton", "AXMenuItem"] }
 
+    /// 17 Nov 2026 (log, three switches): Claude puts the keyboard in the destination's Prompt as it
+    /// arrives. When that focus came after the unchanged-address settle had released the wait, its own
+    /// announcement was said just before the title, though a switch says only the destination's title.
+    private func isSwitchPromptFocus(_ event: Event) -> Bool {
+        guard event.kind == .gainFocus else { return false }
+        let isPrompt = event.obj.axRole == "AXTextArea" && event.obj.name == "Prompt"
+        guard isPrompt else { return false }
+        guard let page = conversationPage,
+              API.focusTreeInterceptor === page else { return false }
+        let switchStillPending = page.navigationTitleOwned
+        let noKeySinceShortcut = ScriptHandler.keysArrivedCount == conversationSwitchKeys
+        return switchStillPending && noKeySinceShortcut && conversationSwitchIsNumbered
+    }
+
+    package override func ignoresFocus(_ event: Event) -> Bool {
+        // Not said, so it must not cut off speech either, such as a title already being said.
+        isSwitchPromptFocus(event)
+    }
+
     package override func handleEvent(_ event: Event, next: () -> Void) {
         browserReturn.handleEvent(event)
         sessionDeletion.observe(event)
         if event.kind == .gainFocus,
            API.focusTreeInterceptor?.navigationWaiting == true { return }
+        if isSwitchPromptFocus(event),
+           let page = conversationPage {
+            // The wait was already released, so nothing else will put the Prompt in focus mode.
+            // Do it here, with the usual sound, and leave the words to the title.
+            Log.io("claude: Prompt focus during a conversation switch is not said")
+            if page.shouldPassThrough(event.obj) {
+                page.setPassThrough(true, announce: true)
+            }
+            return
+        }
         // A menu may disappear without a close notification. A different field/page owns
         // subsequent keys; a native menu item can still own its own focus and confirmation.
         if event.kind == .gainFocus, popup != nil,

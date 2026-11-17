@@ -18,6 +18,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 - Claude: moving to another conversation with Command and a number soon after arriving in a long one now says the
   new conversation's title. Before, it could say the title of the conversation you were leaving, and then nothing.
+- Claude: when Command and a number puts you in the new conversation's Prompt, you now hear only its title and the
+  focus mode sound. Before, the start of the Prompt's own announcement was heard just before the title.
 - TurnOver no longer stops answering for several seconds when an app in the background, such as Mail, is slow to
   answer while its list changes. Before, keys and speech could stop for six seconds and VoiceOver came on.
 - Browse mode: a key that would type something but has no command, such as a slash, a comma, a dash or an Option

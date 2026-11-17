@@ -511,6 +511,40 @@ func claudeNavigationTests() {
         }
     }
 
+    // 17 Nov 2026 (log): the destination's Prompt took the keyboard after the unchanged settle had released
+    // the wait, and its own announcement was said just before the title.
+    test("Claude navigation: the destination's Prompt focus is not said during a numbered switch") {
+        withConversationTest { page, module, _ in
+            let savedSink = Speech.sink
+            var said: [String] = []
+            Speech.sink = { said.append($0) }
+            defer { Speech.sink = savedSink }
+            let key = KeyboardGesture(identifier: "kb:command+2")!
+            module.script(for: key)?.handler(key)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.34))
+            check(!page.deferInitialContent({}), "the unchanged settle has released the wait")
+            check(page.navigationTitleOwned, "the switch is still waiting for its destination")
+            var destination = conversationPage("Prompt public destination", address: "https://example.com/prompt")
+            destination.nodes[3].attrs["AXTitle"] = .string("Prompt")
+            destination.nodes[1].attrs["AXFocusedUIElement"] = .element(3)
+            AXReplay.load(destination)
+            let field = ObjectFactory.make(AXReplay.element(3))
+            API.setFocusObject(field, ancestors: field.ancestors, interceptor: page)
+            let focus = Event(.gainFocus, field)
+            check(module.ignoresFocus(focus), "the Prompt's focus does not cut off speech during the switch")
+            var passedOn = false
+            module.handleEvent(focus) { passedOn = true }
+            check(!passedOn, "the Prompt's own announcement is not made during the switch")
+            check(page.passThrough, "the Prompt is still in focus mode for typing")
+            waitForConversation { said.contains("Prompt public destination") }
+            waitForBuffer(page.buffer)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+            expect(said, ["Prompt public destination"], "only the title is said")
+            check(page.passThrough, "focus mode stays on in the Prompt after the switch")
+            check(!module.ignoresFocus(focus), "after the switch the Prompt's focus is said as usual")
+        }
+    }
+
     test("Claude navigation: an unknown starting title is taken from the first unchanged answer, silently") {
         withConversationTest { page, module, sent in
             let savedSink = Speech.sink
