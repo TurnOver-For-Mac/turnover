@@ -234,7 +234,7 @@ func claudeNavigationTests() {
         let right = KeyboardGesture(identifier: "kb:rightArrow")!
         page.script(for: right)?.handler(right)
         // The address and complete body arrive first; AXTitle still describes the departed conversation.
-        AXReplay.load(conversationPage("Old conversation", address: "https://example.com/new", body: "New public body"))
+        AXReplay.load(conversationPage("Old conversation", address: "https://example.com/new", body: "New public body", recents: ["Old conversation", "Late new title"]))
         RunLoop.current.run(until: Date().addingTimeInterval(0.15))
         waitForBuffer(buffer)
         RunLoop.current.run(until: Date().addingTimeInterval(0.1))
@@ -243,7 +243,7 @@ func claudeNavigationTests() {
         expect(sent.value, ["kb:command+2"], "the queued Tab focuses the new copy rather than posting into the departed page")
         check(page.position > 0, "the latest waiting movement runs on the completed new content")
 
-        AXReplay.load(conversationPage("Late new title", address: "https://example.com/new", body: "New public body"))
+        AXReplay.load(conversationPage("Late new title", address: "https://example.com/new", body: "New public body", recents: ["Old conversation", "Late new title"]))
         RunLoop.current.run(until: Date().addingTimeInterval(0.15))
         expect(said.filter { $0 == "Late new title" }.count, 1, "the late title is announced once")
         buffer.build()
@@ -321,8 +321,8 @@ func claudeNavigationTests() {
             let returned = OSAllocatedUnfairLock(initialState: false)
             let release = DispatchSemaphore(value: 0)
             let read = module.conversationRead
-            module.conversationRead = { root in
-                let snapshot = read(root)
+            module.conversationRead = { root, recents in
+                let snapshot = read(root, recents)
                 entered.withLock { $0 = true }
                 _ = release.wait(timeout: .now() + 2)
                 returned.withLock { $0 = true }
@@ -350,7 +350,7 @@ func claudeNavigationTests() {
         }
     }
 
-    test("Claude navigation: verified current fourth row preserves the copy and speaks immediately") {
+    test("Claude navigation: the open conversation at row 4, read fresh, keeps the copy and is said after the settle") {
         withConversationTest(recents: ["Public first", "Public second", "Public third", "Old conversation"]) { page, module, sent in
             let savedSink = Speech.sink
             var said: [String] = []
@@ -362,9 +362,11 @@ func claudeNavigationTests() {
             let shortcut = KeyboardGesture(identifier: "kb:command+4")!
             let before = AXStats.calls
             module.script(for: shortcut)?.handler(shortcut)
-            expect(AXStats.calls, before, "the captured sidebar requires no live provider calls on main")
-            expect(said, ["Old conversation"], "the verified current row speaks immediately once")
-            check(!page.deferInitialContent({}), "a verified current target does not start a navigation wait")
+            expect(AXStats.calls, before, "the key makes no provider call on main")
+            expect(said, [], "nothing is said from the published copy at the key")
+            waitForConversation { said == ["Old conversation"] }
+            check(!page.navigationTitleOwned, "already here ends the switch")
+            check(!page.deferInitialContent({}), "no wait is left behind")
             expect(page.buffer.text as String, text, "the existing copy survives")
             expect(page.position, position, "the existing reading position survives")
             expect(sent.value, ["kb:command+4"])
@@ -381,9 +383,9 @@ func claudeNavigationTests() {
             let returned = OSAllocatedUnfairLock(initialState: false)
             let offMain = OSAllocatedUnfairLock(initialState: false)
             let read = module.conversationRead
-            module.conversationRead = { root in
+            module.conversationRead = { root, recents in
                 offMain.withLock { $0 = !Thread.isMainThread }
-                let snapshot = read(root)
+                let snapshot = read(root, recents)
                 entered.signal()
                 _ = release.wait(timeout: .now() + 2)
                 returned.withLock { $0 = true }
@@ -423,8 +425,8 @@ func claudeNavigationTests() {
             let releases = [DispatchSemaphore(value: 0), DispatchSemaphore(value: 0)]
             let returned = OSAllocatedUnfairLock(initialState: 0)
             let read = module.conversationRead
-            module.conversationRead = { root in
-                let snapshot = read(root)
+            module.conversationRead = { root, recents in
+                let snapshot = read(root, recents)
                 let index = entered.withLock { value in let old = value; value += 1; return old }
                 if index < releases.count { _ = releases[index].wait(timeout: .now() + 2) }
                 returned.withLock { $0 += 1 }
@@ -481,8 +483,8 @@ func claudeNavigationTests() {
         }
     }
 
-    // 17 Nov 2026 (log): a shortcut pressed while a long copy was still read in, after the earlier switch
-    // had said its title, said the conversation being left again and then nothing for the destination.
+    // 17 Nov 2026: a shortcut pressed while a long copy is still read in, after the earlier switch has said its title.
+    // With the sidebar hidden, the first fresh answer at the old address names the conversation being left.
     test("Claude navigation: a shortcut pressed after arrival but before the copy is complete leaves silently") {
         withConversationTest { page, module, sent in
             let savedSink = Speech.sink
@@ -545,9 +547,8 @@ func claudeNavigationTests() {
         }
     }
 
-    // 17 Nov 2026 (log review, the part 72efdf2 left open): a second shortcut pressed before the first had said anything,
-    // with the page's copy being read in, started from the first switch's own starting title. The conversation the first
-    // switch had reached since differed from that and was said as the destination of the second.
+    // 17 Nov 2026: a second shortcut before the first has said anything, with the sidebar hidden. The later shortcut
+    // supersedes the first, and the conversation the first reached is the one being left.
     test("Claude navigation: a second shortcut before the first has said anything does not say the first's destination") {
         withConversationTest { page, module, sent in
             let savedSink = Speech.sink
@@ -707,9 +708,9 @@ func claudeNavigationTests() {
             let returned = OSAllocatedUnfairLock(initialState: false)
             let release = DispatchSemaphore(value: 0)
             let read = module.conversationRead
-            module.conversationRead = { root in
+            module.conversationRead = { root, recents in
                 let index = entered.withLock { value in let old = value; value += 1; return old }
-                let snapshot = read(root)
+                let snapshot = read(root, recents)
                 if index == 0 {
                     _ = release.wait(timeout: .now() + 2)
                     returned.withLock { $0 = true }
@@ -752,10 +753,9 @@ func claudeNavigationTests() {
                 defer { Speech.sink = savedSink }
                 page.passThrough = true
                 let key = KeyboardGesture(identifier: "kb:command+\(number)")!
-                let before = AXStats.calls
                 module.script(for: key)?.handler(key)
-                expect(AXStats.calls, before, "missing-target handling uses only the captured sidebar")
-                expect(said, ["no conversation \(number)"], "the missing target is announced immediately with its number")
+                waitForConversation { !said.isEmpty }
+                expect(said, ["no conversation \(number)"], "the first fresh read of Recents answers with the number")
                 check(page.passThrough, "focus mode remains unchanged, avoiding a mode sound")
                 check(!page.deferInitialContent({}), "a missing target does not begin a wait")
                 expect(sent.value, ["kb:command+\(number)"])
@@ -771,9 +771,8 @@ func claudeNavigationTests() {
             defer { Speech.sink = savedSink }
             page.passThrough = true
             let key = KeyboardGesture(identifier: "kb:command+9")!
-            let before = AXStats.calls
             module.script(for: key)?.handler(key)
-            expect(AXStats.calls, before, "the collapsed count comes only from complete captured rows")
+            waitForConversation { !said.isEmpty }
             expect(said, ["no conversation 9"], "known missing numbers do not wait for a ceiling")
             check(page.passThrough, "the Prompt stays in focus mode")
             check(!page.deferInitialContent({}), "a known missing number never starts a navigation wait")
@@ -825,18 +824,20 @@ func claudeNavigationTests() {
         }
     }
 
-    test("Claude navigation: verified current third row speaks immediately") {
+    test("Claude navigation: the open conversation at row 3 is said once, without a wait") {
         withConversationTest(recents: ["Public first", "Public second", "Old conversation"]) { page, module, _ in
             let savedSink = Speech.sink
             var said: [String] = []
             Speech.sink = { said.append($0) }
             defer { Speech.sink = savedSink }
+            page.passThrough = true
             let key = KeyboardGesture(identifier: "kb:command+3")!
-            let before = AXStats.calls
             module.script(for: key)?.handler(key)
-            expect(AXStats.calls, before)
+            check(!page.deferInitialContent({}), "in the Prompt, the key starts no wait")
+            waitForConversation { !said.isEmpty }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
             expect(said, ["Old conversation"])
-            check(!page.deferInitialContent({}), "the captured current row does not wait")
+            check(page.passThrough, "the Prompt stays in focus mode")
         }
     }
 
@@ -911,10 +912,10 @@ func claudeNavigationTests() {
             let returned = OSAllocatedUnfairLock(initialState: false)
             let release = DispatchSemaphore(value: 0)
             let read = module.conversationRead
-            module.conversationRead = { root in
+            module.conversationRead = { root, recents in
                 entered.withLock { $0 = true }
                 _ = release.wait(timeout: .now() + 2)
-                let snapshot = read(root)
+                let snapshot = read(root, recents)
                 returned.withLock { $0 = true }
                 return snapshot
             }
@@ -947,8 +948,8 @@ func claudeNavigationTests() {
             let returned = OSAllocatedUnfairLock(initialState: false)
             let release = DispatchSemaphore(value: 0)
             let read = module.conversationRead
-            module.conversationRead = { root in
-                let snapshot = read(root)
+            module.conversationRead = { root, recents in
+                let snapshot = read(root, recents)
                 entered.withLock { $0 = true }
                 _ = release.wait(timeout: .now() + 2)
                 returned.withLock { $0 = true }
@@ -988,13 +989,118 @@ func claudeNavigationTests() {
             defer { Speech.sink = savedSink }
             page.passThrough = true
             let key = KeyboardGesture(identifier: "kb:command+1")!
-            let before = AXStats.calls
             module.script(for: key)?.handler(key)
-            expect(AXStats.calls, before, "the expanded empty section is read from the captured tree")
+            waitForConversation { !said.isEmpty }
             expect(said, ["no conversation 1"])
             check(page.passThrough, "the empty section leaves focus mode unchanged")
             check(!page.deferInitialContent({}), "a proven absent first row does not wait")
         }
+    }
+
+    // 17 Nov 2026 (log review): the target is row N of Recents read fresh after the key, never the published copy's.
+    test("Claude navigation: a message just sent reorders Recents; the fresh row is the destination") {
+        withConversationTest(recents: ["Public first", "Old conversation", "Public third"]) { page, module, sent in
+            let savedSink = Speech.sink
+            var said: [String] = []
+            Speech.sink = { said.append($0) }
+            defer { Speech.sink = savedSink }
+            let fresh = ["Old conversation", "Public first", "Public third"]
+            AXReplay.load(conversationPage("Old conversation", address: "https://example.com/old", recents: fresh))
+            let key = KeyboardGesture(identifier: "kb:command+2")!
+            module.script(for: key)?.handler(key)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.4))
+            expect(said, [], "the stale row 2 (the open conversation) is not said")
+            AXReplay.load(conversationPage("Public first", address: "https://example.com/first", recents: fresh))
+            waitForConversation { said.contains("Public first") }
+            waitForBuffer(page.buffer)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+            expect(said, ["Public first"], "only the fresh row's conversation is said")
+            expect(sent.value, ["kb:command+2"])
+        }
+    }
+
+    test("Claude navigation: two quick presses say only the second press's arrival") {
+        let rows = ["Old conversation", "Public second", "Public third"]
+        withConversationTest(recents: rows) { page, module, sent in
+            let savedSink = Speech.sink
+            var said: [String] = []
+            Speech.sink = { said.append($0) }
+            defer { Speech.sink = savedSink }
+            let first = KeyboardGesture(identifier: "kb:command+2")!
+            module.script(for: first)?.handler(first)
+            let second = KeyboardGesture(identifier: "kb:command+3")!
+            module.script(for: second)?.handler(second)
+            AXReplay.load(conversationPage("Public second", address: "https://example.com/second", recents: rows))
+            RunLoop.current.run(until: Date().addingTimeInterval(0.4))
+            expect(said, [], "the first press's arrival is not said")
+            AXReplay.load(conversationPage("Public third", address: "https://example.com/third", recents: rows))
+            waitForConversation { said.contains("Public third") }
+            waitForBuffer(page.buffer)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+            expect(said, ["Public third"], "only the last press's arrival is said, once")
+            expect(sent.value, ["kb:command+2", "kb:command+3"])
+        }
+    }
+
+    test("Claude navigation: a generic title arriving first is not said; the conversation's own title is") {
+        let rows = ["Old conversation", "Public second"]
+        withConversationTest(recents: rows) { page, module, _ in
+            let savedSink = Speech.sink
+            var said: [String] = []
+            Speech.sink = { said.append($0) }
+            defer { Speech.sink = savedSink }
+            let key = KeyboardGesture(identifier: "kb:command+2")!
+            module.script(for: key)?.handler(key)
+            AXReplay.load(conversationPage("Claude", address: "https://example.com/second", recents: rows))
+            RunLoop.current.run(until: Date().addingTimeInterval(0.4))
+            expect(said, [], "Claude's generic title is not the destination")
+            AXReplay.load(conversationPage("Public second - Claude", address: "https://example.com/second", recents: rows))
+            waitForConversation { said.contains("Public second") }
+            waitForBuffer(page.buffer)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+            expect(said, ["Public second"], "the title is said once, without \" - Claude\"")
+        }
+    }
+
+    test("Claude navigation: a page still generic at the ceiling says the row's own name once") {
+        let rows = ["Old conversation", "Public slow"]
+        withConversationTest(recents: rows) { page, module, _ in
+            let savedSink = Speech.sink
+            var said: [String] = []
+            Speech.sink = { said.append($0) }
+            defer { Speech.sink = savedSink }
+            module.conversationWaitLimit = 0.5
+            let key = KeyboardGesture(identifier: "kb:command+2")!
+            module.script(for: key)?.handler(key)
+            AXReplay.load(conversationPage("Claude", address: "https://example.com/slow", recents: rows))
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+            expect(said, [], "nothing is guessed before the ceiling")
+            waitForConversation { !said.isEmpty }
+            AXReplay.load(conversationPage("Public slow", address: "https://example.com/slow", recents: rows))
+            RunLoop.current.run(until: Date().addingTimeInterval(0.4))
+            expect(said, ["Public slow"], "the row's name is said once at the ceiling, and the late title adds nothing")
+            check(!page.navigationTitleOwned, "the ceiling ends the switch")
+        }
+    }
+
+    test("Claude navigation: the decision rule, step by step") {
+        var arrival = ClaudeConversationSwitch(number: 2, titleAtKey: "")
+        arrival.recents(["Open", "Next"])
+        expect(arrival.answer(title: "Open", busy: false, changed: false, loaded: false, settled: true), .wait, "the open conversation is being left")
+        expect(arrival.answer(title: "Claude", busy: false, changed: true, loaded: false, settled: true), .wait, "a generic title is skipped")
+        expect(arrival.answer(title: "Other", busy: false, changed: true, loaded: true, settled: true), .wait, "a title that is not row 2 is skipped")
+        expect(arrival.answer(title: "Next", busy: false, changed: true, loaded: false, settled: true), .say("Next"))
+        var here = ClaudeConversationSwitch(number: 1, titleAtKey: "")
+        here.recents(["Open", "Next"])
+        for _ in 0..<2 { expect(here.answer(title: "Open", busy: false, changed: false, loaded: false, settled: true), .wait) }
+        expect(here.answer(title: "Open", busy: false, changed: false, loaded: false, settled: true), .alreadyHere("Open"))
+        var missing = ClaudeConversationSwitch(number: 7, titleAtKey: "")
+        missing.recents(["Open", "Next"])
+        expect(missing.answer(title: "Open", busy: false, changed: false, loaded: false, settled: false), .noConversation(7))
+        var slow = ClaudeConversationSwitch(number: 2, titleAtKey: "Open")
+        slow.recents(["Open", "Next"])
+        expect(slow.ceiling(title: "Claude", changed: true), .say("Next"), "the row's own name at the ceiling")
+        check(ClaudeConversationSwitch.isGeneric("Claude Code"), "Claude Code is generic")
     }
 
     test("Claude navigation: other modules retain native session keys") {

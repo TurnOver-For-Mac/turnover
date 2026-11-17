@@ -210,21 +210,24 @@ package final class ClaudeAppModule: AppModule {
         return true
     }
 
-    private var conversationStartingTitle = ""
-    /// The destination title the pending switch has said, or empty before it has said one (17 Nov 2026).
-    private var conversationAnnouncedTitle = ""
     /// Keys counted when the pending switch's shortcut arrived; a later key means the user moved on (17 Nov 2026).
     private var conversationSwitchKeys = 0
     /// Command and a number, not Command N: a new conversation's Prompt is still said (17 Nov 2026).
     private var conversationSwitchIsNumbered = false
     private var conversationSwitch = 0
     private weak var conversationPage: BrowseModeDocument?
-    private let conversationReader = AXWalkRunner<AXSnapshot>()
-    /// The production reader is replaceable so a held provider can be tested without opening Claude.
-    package var conversationRead: @Sendable (AXUIElement) -> AXSnapshot = ClaudeAppModule.readConversation
-    package var conversationWaitLimit: TimeInterval = 8
+    private let conversationReader = AXWalkRunner<ConversationReading>()
+    package struct ConversationReading: Sendable {
+        package let snapshot: AXSnapshot
+        /// Recents' rows read fresh from the app, or nil when not asked for or not readable whole.
+        package let recents: [String]?
+    }
+    /// The production reader is replaceable so a held provider can be tested without opening Claude. Its Bool asks
+    /// for Recents as well as the page.
+    package var conversationRead: @Sendable (AXUIElement, Bool) -> ConversationReading = ClaudeAppModule.readConversation
+    package var conversationWaitLimit: TimeInterval = 3
 
-    nonisolated private static func readConversation(_ root: AXUIElement) -> AXSnapshot {
+    nonisolated private static func readConversation(_ root: AXUIElement, wantsRecents: Bool) -> ConversationReading {
         // 14 Nov 2026 review: timer callbacks still queried Claude on main. Every provider read now runs
         // on the AX worker, with a timeout on this exact reference, and returns only captured values.
         AXUIElementSetMessagingTimeout(root, 0.05)
@@ -248,22 +251,17 @@ package final class ClaudeAppModule: AppModule {
                 current = element.element(kAXParentAttribute)
             }
         }
-        return AXSnapshot(nodes: nodes)
+        let recents = wantsRecents ? recentRows(root) : nil
+        return ConversationReading(snapshot: AXSnapshot(nodes: nodes), recents: recents)
     }
 
-    /// Only the destination owns switch speech. An unchanged poll can release queued keys after the
-    /// existing settle, but cannot establish that the shortcut chose the already-open conversation.
+    /// Command and a number, or Command N (17 Nov 2026): the title is said only when the conversation the key chose
+    /// has arrived (ClaudeConversationSwitch). Every answer comes from a fresh read on the AX worker, Recents included,
+    /// never from the page's published copy. A later shortcut supersedes this one.
     package func prepareConversationSwitch(_ gesture: KeyboardGesture) {
         sessionDeletion.cancel()
         guard let page = API.focusTreeInterceptor,
               page.webArea.pid == pid else { return }
-        let earlierSwitchOwnsPage = conversationPage === page && page.navigationTitleOwned
-        let earlierSwitchHasArrived = earlierSwitchOwnsPage && !conversationAnnouncedTitle.isEmpty
-        // 17 Nov 2026 (log, five wrong titles): a switch that has said its destination has arrived there,
-        // although it owns the page until a long copy is read in. A shortcut pressed then starts from the
-        // conversation it is leaving, the one just announced, not the earlier switch's own starting title.
-        let arrivedTitle = earlierSwitchHasArrived ? conversationAnnouncedTitle : ""
-        conversationAnnouncedTitle = ""
         conversationSwitchKeys = ScriptHandler.keysArrivedCount
         if let previous = conversationPage,
            previous !== page {
@@ -276,60 +274,29 @@ package final class ClaudeAppModule: AppModule {
         let request = conversationSwitch
         let root = page.webArea
         let address = page.lastURL
-        let capturedTitle = page.buffer.withSnapshot { Self.switchTitle(root.string(kAXTitleAttribute) ?? "") }
-        // newPage empties the snapshot while collecting. A repeated shortcut still starts from the
-        // title owned by the pending switch, never that temporarily empty copy (14 Nov 2026 review).
-        let title: String
-        if !arrivedTitle.isEmpty {
-            title = arrivedTitle
-            Log.io("claude: switch starts from the title the earlier switch announced")
-        } else if !capturedTitle.isEmpty {
-            title = capturedTitle
-        } else {
-            // Nothing captured and no earlier switch has said where it arrived (17 Nov 2026): the earlier switch's own
-            // starting title is the conversation before that one, so any conversation it had reached since would differ
-            // from it and be said as the destination of this switch. Unknown: the first answer whose address has not
-            // changed names the conversation being left, silently (below).
-            if earlierSwitchOwnsPage { Log.io("claude: an earlier switch has said nothing yet; the starting title is taken from the first unchanged answer") }
-            title = ""
-        }
-        conversationStartingTitle = title
-        let number = Int(gesture.identifier.components(separatedBy: "+").last ?? "")
-        conversationSwitchIsNumbered = number != nil
-        let target = page.buffer.withSnapshot { () -> SwitchTarget in
-            guard page.url == address, !address.isEmpty else { return .unknown }
-            return Self.switchTarget(number: number, root: root, title: title)
-        }
-        // Resolve a verified no-op before beginning the wait: beginNavigationWait changes mode, which
-        // would add a sound to a missing shortcut and disturb the already-open conversation's position.
-        if target == .missing || target == .current {
-            page.navigationTitleOwned = false
-            page.finishNavigationWait(title: nil, announce: false)
-            if target == .missing, let number {
-                Speech.speakMessage(String(localized: "no conversation \(number)", comment: "Spoken when Claude has no conversation at this shortcut number"))
-            } else {
-                page.announceNavigationTitle(title)
-            }
-            return
-        }
-        let unresolvedNumber = target == .unknown ? number : nil
-        var titleAnnounced = false
+        let typed = Int(gesture.identifier.components(separatedBy: "+").last ?? "")
+        let number = typed.flatMap { (1...9).contains($0) ? $0 : nil }
+        conversationSwitchIsNumbered = typed != nil
+        // The conversation being left, as the published copy names it. Empty while a copy is read in: then the first
+        // fresh answer at the old address names it.
+        let titleAtKey = page.buffer.withSnapshot { Self.switchTitle(root.string(kAXTitleAttribute) ?? "") }
+        var arrival = ClaudeConversationSwitch(number: number, titleAtKey: titleAtKey)
         var ceilingReached = false
         var releasedContent = false
         var unchangedAnswers = 0
         var observedAddressChange = false
+        var latestAddress = address
+        var recentsReadAt: String?
+        var skippedTitle = ""
         var latestSnapshot: AXSnapshot?
         var latestFocus: TurnOverObject?
         var latestKeys = 0
         var restoredFocusURL: String?
-        // The title of the conversation being left. It can be unknown at the key (17 Nov 2026): a copy
-        // still being read in has an empty snapshot, and no earlier switch owns the page.
-        var baselineTitle = title
         let settleUntil = ProcessInfo.processInfo.systemUptime + 0.25
         page.navigationTitleOwned = true
-        // An unavailable sidebar cannot prove that a numbered shortcut will navigate. Keep typing
-        // in the Prompt until navigation is observed; an ignored key must not enable browse commands.
-        if unresolvedNumber == nil || !page.passThrough { page.beginNavigationWait() }
+        // Nothing yet proves that a numbered shortcut will navigate. Keep typing in the Prompt until navigation
+        // is observed; a missing number or the open conversation must not enable browse commands or a mode sound.
+        if typed == nil || !page.passThrough { page.beginNavigationWait() }
 
         func releaseContent() {
             page.announcedURL = page.lastURL
@@ -370,6 +337,22 @@ package final class ClaudeAppModule: AppModule {
             page.navigationTitleOwned = false
             releaseContent()
         }
+        /// Says the answer. True when it ends the switch: the key chose nothing, or the conversation already open.
+        func say(_ answer: ClaudeConversationSwitch.Answer) -> Bool {
+            switch answer {
+            case .wait, .silent:
+                return false
+            case .say(let title):
+                page.announceNavigationTitle(title)
+                return false
+            case .alreadyHere(let title):
+                page.announceNavigationTitle(title)
+                return true
+            case .noConversation(let number):
+                Speech.speakMessage(String(localized: "no conversation \(number)", comment: "Spoken when Claude has no conversation at this shortcut number"))
+                return true
+            }
+        }
         // The deadline releases keys independently of the provider. Its announcement comes from a NEW
         // worker read, never the captured pre-key title or an in-flight answer from before the deadline.
         DispatchQueue.main.asyncAfter(deadline: .now() + conversationWaitLimit) { [weak self, weak page] in
@@ -377,13 +360,13 @@ package final class ClaudeAppModule: AppModule {
                   let page,
                   conversationSwitch == request else { return }
             ceilingReached = true
-            Log.io("claude: conversation switch ceiling; addressChanged=\(observedAddressChange), titleAnnounced=\(titleAnnounced)")
+            Log.io("claude: conversation switch ceiling; addressChanged=\(observedAddressChange), titleAnnounced=\(arrival.announced)")
             conversationReader.cancel()
             releaseContent()
             guard conversationSwitch == request else { return }
             guard API.focusTreeInterceptor === page,
                   AXHandler.shared.activePid == pid,
-                  !titleAnnounced else { finish(); return }
+                  !arrival.announced else { finish(); return }
             // A timed-out provider may also block this serial lane. The final read gets a bounded
             // grace period; it must never leave automatic page speech owned by a dead switch.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
@@ -392,23 +375,17 @@ package final class ClaudeAppModule: AppModule {
                 finish()
             }
             let read = conversationRead
-            conversationReader.submit(collect: { _ in read(root) }, publish: { [weak self, weak page] snapshot in
+            let wantsRecents = number != nil && arrival.rows == nil
+            conversationReader.submit(collect: { _ in read(root, wantsRecents) }, publish: { [weak self, weak page] reading in
                 guard let self,
                       let page,
                       conversationSwitch == request else { return }
                 if API.focusTreeInterceptor === page,
                    AXHandler.shared.activePid == pid {
-                    let now = snapshot.with { page.url }
-                    let name = snapshot.with { Self.switchTitle(root.string(kAXTitleAttribute) ?? "") }
-                    if let number = unresolvedNumber,
-                       !observedAddressChange,
-                       now == address {
-                        Speech.speakMessage(String(localized: "no conversation \(number)", comment: "Spoken when Claude has no conversation at this shortcut number"))
-                    } else if !name.isEmpty {
-                        // A missing URL is not evidence that an unknown numbered target was reached.
-                        let destinationKnown = unresolvedNumber == nil || observedAddressChange || (!now.isEmpty && now != address)
-                        if destinationKnown { page.announceNavigationTitle(name) }
-                    }
+                    let now = reading.snapshot.with { page.url }
+                    let name = reading.snapshot.with { Self.switchTitle(root.string(kAXTitleAttribute) ?? "") }
+                    if wantsRecents { arrival.recents(reading.recents) }
+                    _ = say(arrival.ceiling(title: name, changed: !now.isEmpty && now != address))
                 }
                 finish()
             })
@@ -424,13 +401,16 @@ package final class ClaudeAppModule: AppModule {
                 let read = conversationRead
                 let focus = API.focusObject
                 let keys = ScriptHandler.keysArrivedCount
-                conversationReader.submit(collect: { _ in read(root) }, publish: { [weak self, weak page] snapshot in
+                // Recents while the page has not moved, and once at each new address.
+                let wantsRecents = number != nil && !arrival.announced && (!observedAddressChange || recentsReadAt != latestAddress)
+                conversationReader.submit(collect: { _ in read(root, wantsRecents) }, publish: { [weak self, weak page] reading in
                     guard let self,
                           let page,
                           conversationSwitch == request,
                           !ceilingReached else { return }
                     guard API.focusTreeInterceptor === page,
                           AXHandler.shared.activePid == pid else { finish(); return }
+                    let snapshot = reading.snapshot
                     latestSnapshot = snapshot
                     latestFocus = focus
                     latestKeys = keys
@@ -438,6 +418,12 @@ package final class ClaudeAppModule: AppModule {
                     let changed = !now.isEmpty && now != address
                     let busy = snapshot.with { root.attr("AXElementBusy") as? Bool == true }
                     let name = snapshot.with { Self.switchTitle(root.string(kAXTitleAttribute) ?? "") }
+                    if wantsRecents {
+                        recentsReadAt = now
+                        arrival.recents(reading.recents)
+                        Log.io("claude: switch target read fresh: \(arrival.targets.last ?? "unknown")")
+                    }
+                    latestAddress = now
                     if changed {
                         observedAddressChange = true
                         let needsNavigationWait = releasedContent || !page.navigationWaiting
@@ -450,37 +436,15 @@ package final class ClaudeAppModule: AppModule {
                         _ = snapshot.with { page.refreshIfNavigated() }
                     }
                     let destinationLoaded = changed && page.lastURL == now && !page.buffer.isLoading && !page.buffer.lines.isEmpty
-                    let matchesTarget: Bool
-                    if case .other(let expectedTitle) = target {
-                        matchesTarget = name == expectedTitle
-                    } else {
-                        matchesTarget = true
+                    let settled = ProcessInfo.processInfo.systemUptime >= settleUntil
+                    let answer = arrival.answer(title: name, busy: busy, changed: changed, loaded: destinationLoaded, settled: settled)
+                    if answer == .wait,
+                       !arrival.announced,
+                       name != skippedTitle {
+                        skippedTitle = name
+                        Log.io("claude: switch skips the title \(name.isEmpty ? "(none)" : name)")
                     }
-                    // 17 Nov 2026: with no known title at the key, the first answer whose address has not
-                    // changed names the conversation being left. It becomes the baseline and is not said.
-                    let baselineUnknown = baselineTitle.isEmpty
-                    let addressStillTheSame = !changed && !observedAddressChange
-                    let answerNamesTheConversationLeft = baselineUnknown && addressStillTheSame && !busy && !name.isEmpty
-                    if answerNamesTheConversationLeft {
-                        baselineTitle = name
-                        Log.io("claude: switch baseline taken from the first unchanged answer")
-                    }
-                    // A changed URL and its completed copy establish arrival even for equal titles.
-                    // If the sidebar named a different destination, its old title is still stale.
-                    let arrivalIsProven = destinationLoaded && matchesTarget
-                    // A changed title counts only against a known baseline (17 Nov 2026): against an
-                    // unknown one, the title of the conversation being left looked like a new one.
-                    let titleHasChanged = !baselineTitle.isEmpty && name != baselineTitle
-                    let titleIsReady = !busy && !name.isEmpty && (titleHasChanged || arrivalIsProven)
-                    // Claude can change AXTitle while keeping AXURL (or temporarily omitting it).
-                    // Do not gate that evidence on a changed address, or speak a pre-switch title.
-                    if titleIsReady,
-                       !titleAnnounced {
-                        titleAnnounced = true
-                        // A shortcut pressed before this switch finishes starts from here (17 Nov 2026).
-                        conversationAnnouncedTitle = name
-                        page.announceNavigationTitle(name)
-                    }
+                    if say(answer) { finish(); return }
                     if !changed,
                        !observedAddressChange {
                         unchangedAnswers = busy ? 0 : unchangedAnswers + 1
@@ -497,7 +461,7 @@ package final class ClaudeAppModule: AppModule {
                         // A switch says just its title, not the page's first "Claude Code" line as well.
                         releaseContent()
                     }
-                    if titleAnnounced,
+                    if arrival.announced,
                        releasedContent,
                        observedAddressChange { finish(); return }
                     look()
@@ -507,26 +471,36 @@ package final class ClaudeAppModule: AppModule {
         look()
     }
 
-    private enum SwitchTarget: Equatable { case current, other(String), missing, unknown }
-
     /// Claude 5.1231.2, macOS 27.2, 14 Nov 2026: the complementary sidebar's Recents section has
-    /// a heading group followed by session groups, each with a title button and a popup menu. Use
-    /// only the captured tree; an absent, clipped or unfamiliar section proves nothing. A collapsed
-    /// section can still expose its complete rows; without those rows its count is unknown.
-    private static func switchTarget(number: Int?, root: AXUIElement, title: String) -> SwitchTarget {
-        guard let number, (1...9).contains(number) else { return .unknown }
+    /// a heading group followed by session groups, each with a title button and a popup menu. Read live on the AX
+    /// worker, bounded by nodes and time; an absent, clipped or unfamiliar section proves nothing (nil). A collapsed
+    /// section can still expose its complete rows; without those rows its count is unknown. An expanded empty one is [].
+    nonisolated private static func recentRows(_ root: AXUIElement) -> [String]? {
+        let deadline = Date().addingTimeInterval(0.2)
+        return AXReadScope.with(while: { Date() < deadline }) { () -> [String]? in
+            let rows = readRecentRows(root)
+            // A read cut short by the deadline can drop rows, and a short list must never claim a missing number.
+            guard Date() < deadline else { return nil }
+            return rows
+        }
+    }
+
+    nonisolated private static func readRecentRows(_ root: AXUIElement) -> [String]? {
         var remaining = 512
         var complete = true
         var seen: Set<ElementKey> = []
+        func children(_ node: AXUIElement) -> [AXUIElement] {
+            AXUIElementSetMessagingTimeout(node, 0.05)
+            return node.elements(kAXChildrenAttribute)
+        }
         func descendants(_ element: AXUIElement) -> [AXUIElement] {
             var result: [AXUIElement] = []
             func walk(_ node: AXUIElement) {
                 guard remaining > 0,
-                      AXSnapshot.holds(node),
                       seen.insert(ElementKey(node)).inserted else { complete = false; return }
                 remaining -= 1
                 result.append(node)
-                for child in node.elements(kAXChildrenAttribute) { walk(child) }
+                for child in children(node) { walk(child) }
             }
             walk(element)
             return result
@@ -536,16 +510,17 @@ package final class ClaudeAppModule: AppModule {
         var sidebar: AXUIElement?
         var searched: Set<ElementKey> = []
         while let node = pending.popLast(), searched.count < 256 {
-            guard AXSnapshot.holds(node), searched.insert(ElementKey(node)).inserted else { continue }
+            guard searched.insert(ElementKey(node)).inserted else { continue }
+            AXUIElementSetMessagingTimeout(node, 0.05)
             if node.string(kAXSubroleAttribute) == "AXLandmarkComplementary" {
                 sidebar = node
                 break
             }
-            pending.append(contentsOf: node.elements(kAXChildrenAttribute).reversed())
+            pending.append(contentsOf: children(node).reversed())
         }
-        guard let sidebar else { return .unknown }
+        guard let sidebar else { return nil }
         let nodes = descendants(sidebar)
-        guard complete else { return .unknown }
+        guard complete else { return nil }
         func label(_ node: AXUIElement) -> String {
             for attribute in [kAXTitleAttribute, kAXValueAttribute, kAXDescriptionAttribute] {
                 if let text = node.string(attribute), !text.isEmpty { return text }
@@ -581,25 +556,22 @@ package final class ClaudeAppModule: AppModule {
                 guard buttons.count == 1,
                       rowNodes.contains(where: { $0.role == "AXPopUpButton" }),
                       let text = subtree(buttons[0]).first(where: { $0.role == "AXStaticText" }),
-                      !label(text).isEmpty else { return .unknown }
-                titles.append(label(text))
+                      !label(text).isEmpty else { return nil }
+                titles.append(switchTitle(label(text)))
             }
             // With no rows, require explicit expansion rather than guessing about a collapsed list.
             if titles.isEmpty {
-                if collapsed { return .unknown }
-                return headerNodes.contains(where: { ($0.attr("AXExpanded") as? Bool) == true }) ? .missing : .unknown
+                if collapsed { return nil }
+                return headerNodes.contains(where: { ($0.attr("AXExpanded") as? Bool) == true }) ? [] : nil
             }
-            if number > titles.count { return .missing }
-            let target = switchTitle(titles[number - 1])
-            if target == title,
-               titles.filter({ switchTitle($0) == title }).count == 1 { return .current }
-            return .other(target)
+            return titles
         }
-        return .unknown
+        return nil
     }
 
-    private static func switchTitle(_ raw: String) -> String {
-        raw.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: #"(?:\s+- Claude Code)+(?:\s+Claude Code)*$"#,
+    /// A conversation's name as said: Claude's " - Claude Code" and " - Claude" suffixes are not part of it.
+    nonisolated private static func switchTitle(_ raw: String) -> String {
+        raw.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: #"(?:\s+- Claude(?: Code)?)+(?:\s+Claude Code)*$"#,
                                  with: "", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }

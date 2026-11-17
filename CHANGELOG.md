@@ -29,8 +29,13 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   TurnOver reads as before.
 - TurnOver's own menu: Turnover with Right Arrow and Left Arrow now move to the next and previous item, as Down
   Arrow and Up Arrow do. Before, they gave the edge sound and nothing was said.
-- Claude: two Command and number presses in quick succession, the second before the first has said anything, now say
-  only the final conversation's title. Before, the title of the conversation in between could be said instead.
+- Claude: Command and a number now says a conversation's title only once the conversation it chose has arrived, so
+  the title you hear is the one you are in. Before, it could say the wrong one: the conversation you were leaving
+  when you pressed the key just after sending a message, the one in between when you pressed two numbers quickly,
+  or "Claude" while the page was still loading; sometimes it said nothing. Now TurnOver reads the sidebar's Recents
+  afresh after the key, waits for the page to take that row's title, and says only the last key's arrival. A slow
+  page still has the row's name said after three seconds, and "no conversation" and the conversation already open
+  are said as before.
 - The log now says how long each step of an app coming to the front takes, and what the main thread was busy with
   when a key was answered late, so that a slow first switch to an app such as WhatsApp can be traced to its cause.
   Nothing is said differently; this is the first step towards fixing that stall.
@@ -48,8 +53,6 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   selection moved to. Before, the keys moved the selection under Quick Look and TurnOver said nothing.
 - Finder: with Quick Look open, Up Arrow on the first file and Down Arrow on the last now say "top" or "bottom" at
   once. Before, TurnOver waited almost half a second for a selection that could not move and then said nothing.
-- Claude: moving to another conversation with Command and a number soon after arriving in a long one now says the
-  new conversation's title. Before, it could say the title of the conversation you were leaving, and then nothing.
 - Claude: when Command and a number puts you in the new conversation's Prompt, you now hear only its title and the
   focus mode sound. Before, the start of the Prompt's own announcement was heard just before the title.
 - TurnOver no longer stops answering for several seconds when an app in the background, such as Mail, is slow to
