@@ -263,7 +263,6 @@ package final class ClaudeAppModule: AppModule {
         // although it owns the page until a long copy is read in. A shortcut pressed then starts from the
         // conversation it is leaving, the one just announced, not the earlier switch's own starting title.
         let arrivedTitle = earlierSwitchHasArrived ? conversationAnnouncedTitle : ""
-        let previousTitle = earlierSwitchOwnsPage ? conversationStartingTitle : ""
         conversationAnnouncedTitle = ""
         conversationSwitchKeys = ScriptHandler.keysArrivedCount
         if let previous = conversationPage,
@@ -287,7 +286,12 @@ package final class ClaudeAppModule: AppModule {
         } else if !capturedTitle.isEmpty {
             title = capturedTitle
         } else {
-            title = previousTitle
+            // Nothing captured and no earlier switch has said where it arrived (17 Nov 2026): the earlier switch's own
+            // starting title is the conversation before that one, so any conversation it had reached since would differ
+            // from it and be said as the destination of this switch. Unknown: the first answer whose address has not
+            // changed names the conversation being left, silently (below).
+            if earlierSwitchOwnsPage { Log.io("claude: an earlier switch has said nothing yet; the starting title is taken from the first unchanged answer") }
+            title = ""
         }
         conversationStartingTitle = title
         let number = Int(gesture.identifier.components(separatedBy: "+").last ?? "")

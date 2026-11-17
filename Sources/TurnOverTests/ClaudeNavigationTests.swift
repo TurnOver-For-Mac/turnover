@@ -545,6 +545,42 @@ func claudeNavigationTests() {
         }
     }
 
+    // 17 Nov 2026 (log review, the part 72efdf2 left open): a second shortcut pressed before the first had said anything,
+    // with the page's copy being read in, started from the first switch's own starting title. The conversation the first
+    // switch had reached since differed from that and was said as the destination of the second.
+    test("Claude navigation: a second shortcut before the first has said anything does not say the first's destination") {
+        withConversationTest { page, module, sent in
+            let savedSink = Speech.sink
+            var said: [String] = []
+            Speech.sink = { said.append($0) }
+            defer { Speech.sink = savedSink }
+            let first = KeyboardGesture(identifier: "kb:command+3")!
+            module.script(for: first)?.handler(first)
+            // The first switch has reached its conversation, which is still busy: nothing said yet.
+            var busyPage = conversationPage("Intermediate public conversation", address: "https://example.com/intermediate")
+            busyPage.nodes[0].attrs["AXElementBusy"] = .bool(true)
+            AXReplay.load(busyPage)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+            expect(said, [], "the first switch has said nothing")
+            check(page.navigationTitleOwned, "the first switch still owns the page")
+            page.buffer.newPage()
+            page.buffer.build()
+            check(page.buffer.isLoading, "the copy is being read in at the second key")
+            let second = KeyboardGesture(identifier: "kb:command+4")!
+            module.script(for: second)?.handler(second)
+            // The first conversation settles: it is the one being left, not the destination.
+            AXReplay.load(conversationPage("Intermediate public conversation", address: "https://example.com/intermediate"))
+            RunLoop.current.run(until: Date().addingTimeInterval(0.4))
+            expect(said, [], "the conversation the first switch reached is not said as the second's destination")
+            AXReplay.load(conversationPage("Final public destination", address: "https://example.com/final"))
+            waitForConversation { said.contains("Final public destination") }
+            waitForBuffer(page.buffer)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+            expect(said, ["Final public destination"], "only the final destination is said, once")
+            expect(sent.value, ["kb:command+3", "kb:command+4"])
+        }
+    }
+
     test("Claude navigation: an unknown starting title is taken from the first unchanged answer, silently") {
         withConversationTest { page, module, sent in
             let savedSink = Speech.sink

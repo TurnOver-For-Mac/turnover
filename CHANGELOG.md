@@ -14,6 +14,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- Claude: two Command and number presses in quick succession, the second before the first has said anything, now say
+  only the final conversation's title. Before, the title of the conversation in between could be said instead.
 - The log now says how long each step of an app coming to the front takes, and what the main thread was busy with
   when a key was answered late, so that a slow first switch to an app such as WhatsApp can be traced to its cause.
   Nothing is said differently; this is the first step towards fixing that stall.
