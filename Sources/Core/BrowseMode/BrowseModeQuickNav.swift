@@ -183,11 +183,11 @@ extension BrowseModeDocument {
         var found = buffer.offset(of: target)
         if found == nil {
             if afterRefresh { bufferSearch(); return }
-            let epoch = pageGeneration, intent = bufferIntent, movedAt = positionMovedAt
+            let wait = startCopyWait()
             waitingForResult = true
             buffer.build { [weak self] in
                 guard let self else { return }
-                guard pageGeneration == epoch, bufferIntent == intent, positionMovedAt == movedAt, API.focusTreeInterceptor === self else {
+                guard copyWaitAnswers(wait, "next or previous \(q.name)") else {
                     ModeAnnouncement.navigationFinished(self, ticket: navigationTicket)
                     return
                 }
@@ -215,6 +215,39 @@ extension BrowseModeDocument {
         } else {
             speakQuickNavText(at: r.0, link: q.name.contains("Link"))
         }
+    }
+
+    /// A key that waits for a fresh copy of the page: what has to stay the same for it still to be answered.
+    struct CopyWait { let epoch: Int; let movedAt: Date; let intent: Int; let keys: Int; let ticket: Int }
+    func startCopyWait() -> CopyWait {
+        copyWaitTicket += 1
+        return CopyWait(epoch: pageGeneration, movedAt: positionMovedAt, intent: bufferIntent, keys: ScriptHandler.keysArrivedCount, ticket: copyWaitTicket)
+    }
+    /// Whether a key that waited for a fresh copy is still answered when the copy comes (17 Nov 2026). Until then any
+    /// later key dropped it without a word: F in a long Claude chat said nothing when Tab or Shift came while the page
+    /// was read (17 Nov 2026 log). Now it is dropped only when something else has answered or will: a later key moved the
+    /// reading, the page changed or lost the keyboard, a later key is itself waiting for the copy, or focus mode came on.
+    /// A later key that did none of these leaves it to be answered. Each drop has a log line.
+    func copyWaitAnswers(_ wait: CopyWait, _ what: String) -> Bool {
+        let stillThePage = API.focusTreeInterceptor === self
+        let samePage = pageGeneration == wait.epoch
+        let readingStayed = positionMovedAt == wait.movedAt
+        let newestWait = copyWaitTicket == wait.ticket
+        let lookedUpSince = bufferIntent != wait.intent
+        let arrivedSince = ScriptHandler.keysArrivedCount != wait.keys
+        let keysCame = lookedUpSince || arrivedSince
+        let modeStayed = !keysCame || !passThrough
+        if stillThePage, samePage, readingStayed, newestWait, modeStayed {
+            if keysCame { Log.io("browse mode: \(what) waited for the page's copy; later keys moved nothing, so it is answered") }
+            return true
+        }
+        let why = !stillThePage ? "the page lost the keyboard"
+            : !samePage ? "the page changed"
+            : !readingStayed ? "the reading moved"
+            : !newestWait ? "a later key is waiting for the copy"
+            : "focus mode came on"
+        Log.io("browse mode: \(what) waited for the page's copy and is not answered: \(why)")
+        return false
     }
 
     /// Whether quick navigation may wrap round from the copy held: it is not read in part, and it holds the page (a

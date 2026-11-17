@@ -32,6 +32,11 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   page whose focus is not a text field they still go to the page.
 - Browse mode: "browse mode" for a kept key is said at once, not about half a second later once the keys had stopped.
   A kept key soon after it neither cuts it off nor says it again; any other key still stops it.
+- Browse mode: on a long page that keeps changing, such as a long Claude chat, VoiceOver's find keys (VO Command H and
+  the like) answer from the copy of the page TurnOver already holds, and wait for a fresh copy only when what they look
+  for is not in it yet. Before, they waited two to four seconds for a fresh copy whenever the page had changed. A key
+  waiting for a fresh copy, F included, is no longer dropped without a word because another key came first: it is
+  answered, unless a later key has moved the reading or is waiting itself, and then that key is answered.
 - Safari: after Return in the address field, a key pressed before the new page has arrived no longer acts on the page
   you have just left. Before, Space, Return, a quick navigation letter or Tab pressed in that moment could press a link
   on the old page, or move through it, a fraction of a second before the new page appeared. Now TurnOver says "loading

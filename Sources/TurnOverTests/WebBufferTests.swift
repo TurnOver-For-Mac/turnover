@@ -38,6 +38,17 @@ private func threeHeadingsPage() -> AXFixture {
     return f
 }
 
+/// A page with an introduction and a heading (17 Nov 2026 find tests).
+nonisolated private func headingCollection(_ root: AXUIElement, base: Int32) -> WebBufferCollection {
+    let ordinary = AXUIElementCreateApplication(base + 1), heading = AXUIElementCreateApplication(base + 2), text = AXUIElementCreateApplication(base + 3)
+    return WebBufferCollection(snapshot: AXSnapshot(nodes: [
+        ElementKey(root): .init(attributes: ["AXRole": .string("AXWebArea"), "AXChildren": .array([.element(ordinary), .element(heading)])]),
+        ElementKey(ordinary): .init(attributes: ["AXRole": .string("AXStaticText"), "AXValue": .string("Public introduction.")]),
+        ElementKey(heading): .init(attributes: ["AXRole": .string("AXHeading"), "AXValue": .number(2), "AXChildren": .array([.element(text)])]),
+        ElementKey(text): .init(attributes: ["AXRole": .string("AXStaticText"), "AXValue": .string("New public heading.")]),
+    ]), documentText: "", focusedPart: nil, stop: nil, elapsedMs: 0)
+}
+
 func webBufferTests() {
     test("focus mode: a pop up button that opens a menu stays in browse mode; a choice list goes to focus mode (14 Nov 2026)") {
         AXReplay.load(AXFixture(app: "Public sample", bundle: "test.popup", recorded: "", root: 0, application: nil, focus: nil, nodes: [
@@ -755,6 +766,67 @@ func webBufferTests() {
         release.signal(); waitForBuffer(buffer)
         expect(page.position, buffer.find(from: -1, forward: true, roles: ["AXHeading"])?.offset ?? -1)
         check(page.position > 0 && !heard.contains("no next heading"), "find lands on the refreshed heading")
+    }
+
+    // 17 Nov 2026: VoiceOver's find answers from the copy held when what it looks for is there, and a find waiting for a
+    // fresh copy is not dropped by a later key that moved nothing. Logic only: no timing on a real long page.
+    test("VoiceOver find: a dirty page answers at once from the copy it holds") {
+        let root = AXUIElementCreateApplication(911_000)
+        let calls = OSAllocatedUnfairLock(initialState: 0)
+        let release = DispatchSemaphore(value: 0)
+        let buffer = WebBuffer(webArea: root, collect: { root, _, _ in
+            let n = calls.withLock { $0 += 1; return $0 }
+            if n > 1 { _ = release.wait(timeout: .now() + 3) }
+            return headingCollection(root, base: 911_000)
+        })
+        let page = BrowseModeDocument(webArea: root, buffer: buffer)
+        API.setFocusObject(nil, ancestors: [], interceptor: page)
+        let sink = Speech.sink; var heard = ""
+        Speech.sink = { heard += $0 }
+        defer { release.signal(); waitForBuffer(buffer); API.setFocusObject(nil, ancestors: []); Speech.sink = sink }
+        waitForBuffer(buffer)
+        buffer.isDirty = true
+        page.searchKey("AXHeadingSearchKey", spoken: "heading", forward: true)
+        let heading = buffer.find(from: -1, forward: true, roles: ["AXHeading"])?.offset ?? -1
+        // (What is said there is not checked: the made-up elements give no text to read. The landing is what changed.)
+        expect(page.position, heading, "the heading in the copy held is reached at once, without waiting for a fresh copy")
+        check(!heard.contains("no next heading"), "and nothing says there is none")
+    }
+
+    for laterKeyMoves in [false, true] {
+        test("VoiceOver find: a find waiting for the copy, a later key that \(laterKeyMoves ? "moves the reading" : "moves nothing")") {
+            let root = AXUIElementCreateApplication(912_000)
+            let calls = OSAllocatedUnfairLock(initialState: 0)
+            let entered = DispatchSemaphore(value: 0), release = DispatchSemaphore(value: 0)
+            let buffer = WebBuffer(webArea: root, collect: { root, _, _ in
+                let n = calls.withLock { $0 += 1; return $0 }
+                if n == 1 { return sampleCollection(root, text: "Public introduction.") }
+                entered.signal(); _ = release.wait(timeout: .now() + 3)
+                return headingCollection(root, base: 912_000)
+            })
+            let page = BrowseModeDocument(webArea: root, buffer: buffer)
+            API.setFocusObject(nil, ancestors: [], interceptor: page)
+            let sink = Speech.sink; var heard = ""
+            Speech.sink = { heard += $0 }
+            defer { API.setFocusObject(nil, ancestors: []); Speech.sink = sink }
+            waitForBuffer(buffer)
+            buffer.isDirty = true
+            page.searchKey("AXHeadingSearchKey", spoken: "heading", forward: true)
+            check(entered.wait(timeout: .now() + 2) == .success, "the heading is not in the copy held, so a fresh copy is waited for")
+            // A later key: counted as arrived, and looked up on the page, as every key is.
+            let later = KeyboardGesture(identifier: "kb:z")!
+            ScriptHandler.noteKeyArrived(later)
+            _ = page.script(for: later)
+            if laterKeyMoves { page.position = 1 }
+            release.signal(); waitForBuffer(buffer)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+            if laterKeyMoves {
+                expect(page.position, 1, "a later key that moved the reading has answered; the find is not")
+                check(!heard.contains("New public heading"), "and is not read")
+            } else {
+                expect(page.position, buffer.find(from: -1, forward: true, roles: ["AXHeading"])?.offset ?? -1, "the waiting find is answered, not dropped")
+            }
+        }
     }
 
     test("document refresh: scrolling shares AX health and cancellation admission") {

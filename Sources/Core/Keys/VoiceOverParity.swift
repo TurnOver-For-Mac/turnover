@@ -522,21 +522,33 @@ extension BrowseModeDocument {
     public func searchKey(_ key: String, spoken: String, forward: Bool) {
         if deferInitialContent({ [weak self] in self?.searchKey(key, spoken: spoken, forward: forward) }) { return }
         guard ensureContent() else { return }
-        if buffer.isDirty || buffer.isLoading {
-            let epoch = pageGeneration, intent = bufferIntent, movedAt = positionMovedAt, keys = ScriptHandler.keysArrivedCount
-            buffer.build { [weak self] in
-                guard let self, pageGeneration == epoch, bufferIntent == intent, ScriptHandler.keysArrivedCount == keys, positionMovedAt == movedAt, API.focusTreeInterceptor === self else { return }
-                searchPublishedKey(key, spoken: spoken, forward: forward)
-            }
-            return
-        }
-        searchPublishedKey(key, spoken: spoken, forward: forward)
+        // Answered from the copy held, with a fresh one asked for in the background, as quick navigation is (17 Nov 2026).
+        // It waited for a fresh copy whenever the page had changed: on a long Claude chat that took two to four seconds,
+        // and another key nearly always came first. It waits now only when what it finds is not in the copy held.
+        refreshBufferIfNeeded()
+        searchPublishedKey(key, spoken: spoken, forward: forward, mayWait: true)
     }
 
-    private func searchPublishedKey(_ key: String, spoken: String, forward: Bool) {
+    private func searchPublishedKey(_ key: String, spoken: String, forward: Bool, mayWait: Bool) {
         let from = lastQuickNavTarget ?? (buffer.segment(at: position)?.element ?? buffer.lineIndex(at: position).flatMap { buffer.lines[$0].element }) ?? bridge.webArea
         var found = bridge.search(key: key, from: from, forward: forward, limit: 1).first
         var at = found.flatMap { buffer.offset(of: $0) }
+        // Not in a copy older than the page (17 Nov 2026): a fresh copy is waited for, rather than climbing to a parent
+        // the old copy holds (a field in the newest reply is not in it) or saying there is none.
+        let copyIsOld = buffer.isDirty || buffer.isLoading
+        let roles = Self.voiceOverQuickNav.first(where: { $0.searchKey == key }).flatMap { Self.quickNavRoles[$0.name] }
+        let copyHasOneByRole = roles.flatMap { buffer.find(from: position, forward: forward, roles: $0) } != nil
+        let pageFoundItInCopy = at != nil
+        let pageFoundNothingButCopyHasOne = found == nil && copyHasOneByRole
+        let inCopy = pageFoundItInCopy || pageFoundNothingButCopyHasOne
+        if mayWait, copyIsOld, !inCopy {
+            let wait = startCopyWait()
+            buffer.build { [weak self] in
+                guard let self, copyWaitAnswers(wait, "VoiceOver's find (\(spoken))") else { return }
+                searchPublishedKey(key, spoken: spoken, forward: forward, mayWait: false)
+            }
+            return
+        }
         // A run of styled text inside a paragraph: the buffer knows the paragraph.
         var hops = 0
         while at == nil, let f = found, hops < 4 { found = f.element(kAXParentAttribute); at = found.flatMap { buffer.offset(of: $0) }; hops += 1 }

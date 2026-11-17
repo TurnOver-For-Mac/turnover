@@ -246,6 +246,8 @@ public final class BrowseModeDocument: ScriptableObject {
     }
     var pageGeneration = 0
     var bufferIntent = 0
+    /// The newest key waiting for a fresh copy of the page (startCopyWait), 17 Nov 2026.
+    var copyWaitTicket = 0
     /// The page (by its generation) whose end was seen to load more when it was reached, such as a feed or a cinema's
     /// showtimes: quick navigation waits there for the end to be read again before it wraps (quickWrapWaits).
     package var loadsMoreAtItsEnd: Int?
