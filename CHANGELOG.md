@@ -37,6 +37,9 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   for is not in it yet. Before, they waited two to four seconds for a fresh copy whenever the page had changed. A key
   waiting for a fresh copy, F included, is no longer dropped without a word because another key came first: it is
   answered, unless a later key has moved the reading or is waiting itself, and then that key is answered.
+- Browse mode: on a page read only in part, such as a long Claude chat, pressing VO Shift End or Command Down Arrow
+  again while TurnOver is still reading on to the bottom no longer cancels the first press. Before, each press cancelled
+  the one before, and three presses said nothing. Now the read goes on and the bottom line is said once.
 - Safari: after Return in the address field, a key pressed before the new page has arrived no longer acts on the page
   you have just left. Before, Space, Return, a quick navigation letter or Tab pressed in that moment could press a link
   on the old page, or move through it, a fraction of a second before the new page appeared. Now TurnOver says "loading

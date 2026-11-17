@@ -248,6 +248,25 @@ public final class BrowseModeDocument: ScriptableObject {
     var bufferIntent = 0
     /// The newest key waiting for a fresh copy of the page (startCopyWait), 17 Nov 2026.
     var copyWaitTicket = 0
+    /// The read on to the bottom of a page read in part that a key started, while it is under way (17 Nov 2026).
+    package var bottomReadOn: ReadOnKey?
+    /// What a key that reads a long page on saw when it began: the read stops if they change (readOnUntil). A repeat of
+    /// the key moves them on (toBottom), 17 Nov 2026.
+    @MainActor package final class ReadOnKey {
+        var intent: Int
+        var keys: Int
+        var epoch = 0
+        var movedAt = Date.distantPast
+        init(intent: Int, keys: Int) { self.intent = intent; self.keys = keys }
+        /// Whether, since the read began, the only key to arrive is the one asking now, on the same page and reading.
+        func repeatedOnce(on page: BrowseModeDocument) -> Bool {
+            let stillThePage = API.focusTreeInterceptor === page
+            let samePage = page.pageGeneration == epoch
+            let readingStayed = page.positionMovedAt == movedAt
+            let onlyThisKey = ScriptHandler.keysArrivedCount == keys + 1
+            return stillThePage && samePage && readingStayed && onlyThisKey
+        }
+    }
     /// The page (by its generation) whose end was seen to load more when it was reached, such as a feed or a cinema's
     /// showtimes: quick navigation waits there for the end to be read again before it wraps (quickWrapWaits).
     package var loadsMoreAtItsEnd: Int?
@@ -929,15 +948,16 @@ public final class BrowseModeDocument: ScriptableObject {
 
     /// A page read only in part (a long chat, issue 227): read on in the background, pass after pass, until `found`
     /// says yes, the page's end, or two seconds of passes; then `done`, on main, if this is still the key's reading.
-    func readOnUntil(_ found: @escaping () -> Bool, _ done: @escaping (Bool) -> Void) {
-        let epoch = pageGeneration, intent = bufferIntent, movedAt = positionMovedAt
-        let keys = ScriptHandler.keysArrivedCount
+    /// `key`: what the key saw when it started the read (toBottom keeps it, so that a repeat of the key carries the read on).
+    func readOnUntil(startedBy key: ReadOnKey? = nil, _ found: @escaping () -> Bool, _ done: @escaping (Bool) -> Void) {
+        let epoch = pageGeneration, movedAt = positionMovedAt
+        let key = key ?? ReadOnKey(intent: bufferIntent, keys: ScriptHandler.keysArrivedCount)
         let until = Date().addingTimeInterval(2)
         func current() -> Bool {
             pageGeneration == epoch &&
-            bufferIntent == intent &&
+            bufferIntent == key.intent &&
             positionMovedAt == movedAt &&
-            ScriptHandler.keysArrivedCount == keys &&
+            ScriptHandler.keysArrivedCount == key.keys &&
             API.focusTreeInterceptor === self
         }
         func pass() {
@@ -965,8 +985,21 @@ public final class BrowseModeDocument: ScriptableObject {
             speakUnit(.line, caretMoved: true)
         }
         guard buffer.canReadOn else { land(); return }
-        readOnUntil({ false }) { [weak self] _ in
+        // Pressed again while the read on is under way, with no other key between (17 Nov 2026): the same request. Each
+        // VO Shift End cancelled the one before, and three presses on a long Claude chat said nothing at all.
+        if let under = bottomReadOn, under.repeatedOnce(on: self) {
+            under.intent = bufferIntent
+            under.keys = ScriptHandler.keysArrivedCount
+            Log.io("browse mode: the bottom of the page asked for again while it is read on; the read goes on")
+            return
+        }
+        let key = ReadOnKey(intent: bufferIntent, keys: ScriptHandler.keysArrivedCount)
+        key.epoch = pageGeneration
+        key.movedAt = positionMovedAt
+        bottomReadOn = key
+        readOnUntil(startedBy: key, { false }) { [weak self] _ in
             guard let self else { return }
+            if bottomReadOn === key { bottomReadOn = nil }
             if buffer.stoppedAtLimit { Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")) }
             land()
         }
