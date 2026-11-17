@@ -59,7 +59,14 @@ public enum ScriptHandler {
             browseModeTrap = s
         }
         if let focus = API.focusObject {
-            if let s = focus.script(for: gesture) { return s }
+            if let s = focus.script(for: gesture) {
+                // In browse mode the trap comes before the field's own delete commands (17 Nov 2026): Backspace and
+                // Delete reached a field that kept the keyboard while the page was being read. The page asked for the
+                // trap only when browse mode is on and the field's command deletes.
+                let deletesInBrowseMode = browseModeTrap != nil && BrowseModeDocument.deletingScriptNames.contains(s.name)
+                if deletesInBrowseMode { return browseModeTrap }
+                return s
+            }
             for a in API.focusAncestors { if let s = a.script(for: gesture), s.canPropagate { return s } }
         }
         if let s = GlobalCommands.shared.script(for: gesture) { return s }

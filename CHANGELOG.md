@@ -26,6 +26,10 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 - Browse mode: a key that would type something but has no command, such as a slash, a comma, a dash or an Option
   symbol, is kept from the page, and now says "browse mode" once the keys stop, as a letter does. Before, only
   letters and digits did, so a punctuation key kept from a field that still had the keyboard was silent.
+- Browse mode: Backspace and Delete, with Shift, Option or Command, are kept from the page and say "browse mode", as a
+  letter does. Before, a text field that still had the keyboard while you read, such as the Claude app's Prompt after
+  VO arrows crossed it, had a character, a word or a line deleted from it. In focus mode they edit as before, and on a
+  page whose focus is not a text field they still go to the page.
 - Safari: after Return in the address field, a key pressed before the new page has arrived no longer acts on the page
   you have just left. Before, Space, Return, a quick navigation letter or Tab pressed in that moment could press a link
   on the old page, or move through it, a fraction of a second before the new page appeared. Now TurnOver says "loading

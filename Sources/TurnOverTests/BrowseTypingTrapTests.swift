@@ -215,6 +215,65 @@ func browseTypingTrapTests() {
         }
     }
 
+    // 17 Nov 2026: Backspace, Delete and their kin edited the Claude app's Prompt while browse mode read on. Unhappy cases
+    // first: a page or app with its own use for the key (the focus has no delete command: a link, Mail's message), a
+    // field with browse mode off (focus mode, or single-letter navigation off), and the Windows styles beside the Mac's.
+    let deleteKeys: [(String, String)] = [
+        ("kb:backspace", "caret_backspaceCharacter"), ("kb:shift+backspace", "caret_backspaceCharacter"),
+        ("kb:option+backspace", "caret_backspaceWord"), ("kb:command+backspace", "caret_backspaceLine"),
+        ("kb:delete", "caret_deleteCharacter"), ("kb:option+delete", "caret_deleteWord"),
+    ]
+    test("browse typing trap: delete keys are kept from a field in browse mode and say browse mode once") {
+        withPage { page, field, trial, sent in
+            for style in styles {
+                config.general.keyboardStyle = style
+                KeySettings.refresh()
+                trial.drain()
+                BrowseModeDocument.lastLetterKeptAt = .distantPast
+                let before = trial.words.count
+                for (identifier, fieldCommand) in deleteKeys {
+                    let gesture = KeyboardGesture(identifier: identifier)!
+                    expect(field.script(for: gesture)?.name, fieldCommand, "\(style): the field's own command for \(identifier)")
+                    expect(ScriptHandler.findScript(for: gesture)?.name, "browseModeTrap", "\(style): \(identifier) is kept")
+                    check(InputManager.handleKeyDown(gesture), "\(style): \(identifier) is taken, not passed to the field")
+                }
+                trial.drain()
+                RunLoop.current.run(until: Date().addingTimeInterval(0.6))
+                trial.drain()
+                expect(trial.words.dropFirst(before).filter { $0 == "browse mode" }.count, 1, "\(style): the word once for the run")
+                check(trial.words.dropFirst(before).allSatisfy { $0 == "browse mode" }, "\(style): nothing else is said")
+            }
+            check(sent.value.isEmpty, "no delete key is posted to the application")
+            check(!page.passThrough, "still in browse mode")
+        }
+    }
+
+    test("browse typing trap: delete keys still edit in focus mode and with single-letter navigation off") {
+        withPage { page, _, _, _ in
+            page.passThrough = true
+            for (identifier, fieldCommand) in deleteKeys {
+                expect(ScriptHandler.findScript(for: KeyboardGesture(identifier: identifier)!)?.name, fieldCommand, "focus mode: \(identifier)")
+            }
+            page.passThrough = false
+            page.singleLetterNavigation = false
+            for (identifier, fieldCommand) in deleteKeys {
+                expect(ScriptHandler.findScript(for: KeyboardGesture(identifier: identifier)!)?.name, fieldCommand, "letters off: \(identifier)")
+            }
+        }
+    }
+
+    test("browse typing trap: delete keys with no field focused go to the page as before") {
+        withPage { page, _, _, _ in
+            // The focus on the page itself, as on a link or Mail's message: no delete command, so the page keeps its key.
+            API.setFocusObject(TurnOverObject(element: page.webArea), ancestors: [], interceptor: page)
+            for (identifier, _) in deleteKeys {
+                let gesture = KeyboardGesture(identifier: identifier)!
+                check(page.script(for: gesture) == nil, "\(identifier): the page asks for no trap")
+                check(ScriptHandler.findScript(for: gesture)?.name != "browseModeTrap", "\(identifier) is not kept")
+            }
+        }
+    }
+
     test("browse typing trap: single-letter navigation off leaves punctuation to the page") {
         withPage { page, field, trial, _ in
             page.singleLetterNavigation = false

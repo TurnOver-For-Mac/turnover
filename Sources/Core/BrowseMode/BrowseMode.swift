@@ -207,6 +207,15 @@ public final class BrowseModeDocument: ScriptableObject {
     /// The name of the script that keeps a typing key with no command from the page; ScriptHandler asks every later
     /// handler before it runs (16 Nov 2026).
     nonisolated public static let trapScriptName = "browseModeTrap"
+    /// The focused field's commands that delete text (EditableText): kept from the field in browse mode, as a typing key
+    /// is (17 Nov 2026). ScriptHandler gives the trap the key before the field's own command for these alone.
+    nonisolated public static let deletingScriptNames: Set<String> = ["caret_backspaceCharacter", "caret_backspaceWord",
+        "caret_backspaceLine", "caret_deleteCharacter", "caret_deleteWord"]
+    /// Whether the focus's own command for this key deletes text (17 Nov 2026).
+    static func focusWouldDelete(_ gesture: KeyboardGesture) -> Bool {
+        guard let name = API.focusObject?.script(for: gesture)?.name else { return false }
+        return deletingScriptNames.contains(name)
+    }
     /// When a letter with no command was last kept from the page in browse mode (any page).
     /// (Any kept typing key sets it now, not only a letter; the name is left as it was.)
     package static var lastLetterKeptAt = Date.distantPast
@@ -1070,7 +1079,13 @@ public final class BrowseModeDocument: ScriptableObject {
         let inBrowseMode = !passThrough
         let lettersAreCommands = singleLetterNavigation
         let wouldTypeText = gesture.wouldTypeTextInBrowseMode
-        if inBrowseMode, lettersAreCommands, wouldTypeText {
+        // A delete key the focused field would act on (Backspace, Delete, with Shift, Option, Command or Function) is
+        // kept as well (17 Nov 2026): in the Claude app the Prompt kept the keyboard while browse mode read on, and
+        // Backspace deleted an "f" in it, Delete a new line, Command Backspace a line. Only when the focus's own command
+        // for the key is one that deletes, so a page or app with its own use for the key (Mail's message, a web app)
+        // keeps it.
+        let fieldWouldDelete = inBrowseMode && BrowseModeDocument.focusWouldDelete(gesture)
+        if inBrowseMode, lettersAreCommands, wouldTypeText || fieldWouldDelete {
             // Every kept typing key says "browse mode" when the run stops, as a letter does (Oliver's decision, 16 Nov
             // 2026, evening): at 19:18 UTC a slash was typed twice in browse mode with the keyboard still in a prompt
             // field; both were kept without a sound, and Return then said "nothing to activate". Until then only plain
