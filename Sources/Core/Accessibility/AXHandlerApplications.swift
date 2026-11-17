@@ -32,11 +32,25 @@ extension AXHandler {
             Log.io("menus of the application that left the front dropped: \(openMenus.filter { $0.pid == old }.count)")
             openMenus.removeAll { $0.pid == old }
         }
+        // The time each stage of the activation takes, for the log (17 Nov 2026): Command Tab through WhatsApp held keys for
+        // 0.96 s and 0.76 s, and the log could not say which call was slow. Logged once, however the activation ends.
+        let began = DispatchTime.now().uptimeNanoseconds
+        var lap = began
+        var stages: [String] = []
+        func took(_ stage: String) {
+            let now = DispatchTime.now().uptimeNanoseconds
+            stages.append("\(stage) \((now &- lap) / 1_000_000) ms")
+            lap = now
+        }
+        defer { Log.info("app activation stages (pid \(pid)): \(stages.joined(separator: ", ")); \((DispatchTime.now().uptimeNanoseconds &- began) / 1_000_000) ms in all") }
         ProfileStore.shared.reload()   // a plugin just written or edited applies on the next visit to its app
+        took("profiles")
         observe(pid)
+        took("observe")
         let module = AppModuleHandler.shared.appModule(for: pid)
         if old != 0, let oldModule = observers[old].map({ _ in AppModuleHandler.shared.appModule(for: old) }) { oldModule.event_appModuleLoseFocus() }
         module.event_appModuleGainFocus()
+        took("module")
         let appEl = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(appEl, 1.0)
         lastForegroundTitle = ""
@@ -49,8 +63,10 @@ extension AXHandler {
         }
         // A system prompt (UserNotificationCenter's "wants access to control…") has a window but no focused window.
         let firstWindow = appEl.element(kAXFocusedWindowAttribute) ?? appEl.elements(kAXWindowsAttribute).first
+        took("first window")
         if let win = firstWindow {
             foregroundChanged(win, appName: app.localizedName)
+            took("foreground")
         } else {
             // Just launched and no window yet: say so, so the wait is not mistaken for silence.
             let launching = app.launchDate.map { Date().timeIntervalSince($0) < 10 } ?? false
@@ -59,6 +75,7 @@ extension AXHandler {
         if let focused = appEl.element(kAXFocusedUIElementAttribute) { focusChanged(focused, pid: pid) }
         else if let win = firstWindow { focusChanged(win, pid: pid) }
         else { waitForFirstWindow(pid: pid, name: app.localizedName, tries: 12) }
+        took("focus")
         if API.focusObject?.pid == pid, API.focusObject?.role == .window { settleFocus(pid: pid, tries: 6) }
         // A system prompt still open behind this app: said after the app, with the way back to it.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { SystemPrompts.shared.remindIfWaiting(activated: pid) }
@@ -150,6 +167,7 @@ extension AXHandler {
         let t0 = Date()
         _ = app.set("AXEnhancedUserInterface", kCFBooleanTrue)
         _ = app.set("AXManualAccessibility", kCFBooleanTrue)
+        let setsMs = Int(Date().timeIntervalSince(t0) * 1000)
         // The observer and the handler's pointer go to another thread: the accessibility client API takes them from
         // any thread (as TurnOver's walks already do).
         nonisolated(unsafe) let refcon = Unmanaged.passUnretained(self).toOpaque()
@@ -169,8 +187,9 @@ extension AXHandler {
         // more than 30 ms (the questions alone missed it: an app can answer those at once and the sign-ups slowly).
         // Its first moments' news may be missed; the focus is read as the app comes forward anyway.
         let firstFailed = register(names.prefix(1))
+        let firstMs = Int(Date().timeIntervalSince(t0) * 1000) - setsMs
         if Date().timeIntervalSince(t0) > 0.03 {
-            Log.info("pid \(pid): slow to answer; its notifications are asked for in the background")
+            Log.info("pid \(pid): slow to answer (the two settings \(setsMs) ms, the first notification \(firstMs) ms); its notifications are asked for in the background")
             DispatchQueue.global(qos: .userInitiated).async {
                 let failed = firstFailed + register(names.dropFirst())
                 DispatchQueue.main.async { MainActor.assumeIsolated { settle(failed) } }
@@ -183,7 +202,7 @@ extension AXHandler {
         CFRunLoopAddSource(CFRunLoopGetMain(), source, EventHandler.runLoopMode)
         observers[pid] = obs
         ForeignChildren.check(pid: pid)
-        Log.info("observing pid \(pid)\(ForeignChildren.contains(pid) ? "; its windows list each other's elements (Qt Quick): filtered" : "")")
+        Log.info("observing pid \(pid) (settings \(setsMs) ms, first notification \(firstMs) ms, in all \(Int(Date().timeIntervalSince(t0) * 1000)) ms)\(ForeignChildren.contains(pid) ? "; its windows list each other's elements (Qt Quick): filtered" : "")")
     }
 
     func retryNotifications(pid: pid_t, obs: AXObserver, names: [String], delays: [Double]) {

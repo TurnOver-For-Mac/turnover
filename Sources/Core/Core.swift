@@ -31,7 +31,8 @@ public enum Core {
     /// What the main thread last began, and when, for the watchdog's trip line (17 Nov 2026): twice on 16 Nov the main
     /// thread stopped 6 s and the log could not say in what (it was Mail's selection questions). Set at each notification
     /// and script, read on the watchdog's thread; a lock and a store, nothing formatted until a trip.
-    nonisolated public struct MainWork: Sendable { public var what: String; public var pid: pid_t; public var at: UInt64 }
+    nonisolated public struct MainWork: Sendable { public var what: String; public var pid: pid_t; public var at: UInt64
+        public init(what: String, pid: pid_t, at: UInt64) { self.what = what; self.pid = pid; self.at = at } }
     nonisolated public static let mainWork = Locked(MainWork(what: "", pid: 0, at: 0))
     nonisolated public static func noteMainWork(_ what: String, pid: pid_t = 0) {
         mainWork.value = MainWork(what: what, pid: pid, at: DispatchTime.now().uptimeNanoseconds)
@@ -39,7 +40,9 @@ public enum Core {
     /// For the trip line: "notification AXRowCountChanged (pid 123), begun 6.0 s ago". Old news is still said, with its
     /// age: work that sets no label may have come after it.
     nonisolated public static func mainWorkDescription(now: UInt64 = DispatchTime.now().uptimeNanoseconds) -> String {
-        let w = mainWork.value
+        describe(mainWork.value, now: now)
+    }
+    nonisolated public static func describe(_ w: MainWork, now: UInt64) -> String {
         guard !w.what.isEmpty else { return "nothing labelled yet" }
         return "\(w.what)\(w.pid > 0 ? " (pid \(w.pid))" : ""), begun \(String(format: "%.1f", Double(now &- w.at) / 1e9)) s ago"
     }

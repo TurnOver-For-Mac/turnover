@@ -14,6 +14,9 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- The log now says how long each step of an app coming to the front takes, and what the main thread was busy with
+  when a key was answered late, so that a slow first switch to an app such as WhatsApp can be traced to its cause.
+  Nothing is said differently; this is the first step towards fixing that stall.
 - Mail: Command and a number that chooses the mailbox already showing now reads its list at once. Before, it waited
   a second and a half for a new window title that could not come. A mailbox key is known this way after it has been
   used once in the session; the first use still waits for the title, as before.

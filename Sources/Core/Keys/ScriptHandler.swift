@@ -145,6 +145,9 @@ public enum ScriptHandler {
         let state = Locked(Wait.waiting); let done = DispatchSemaphore(value: 0)
         let started = DispatchTime.now()
         DispatchQueue.main.async { MainActor.assumeIsolated {
+            // What the main thread had begun before this key got its turn: the likely cause of a late answer (17 Nov 2026,
+            // WhatsApp's first activation held two keys for 0.8 and 1.0 s with nothing in the log to say what).
+            let busyWith = Core.mainWork.value, turnCameAt = DispatchTime.now().uptimeNanoseconds   // formatted only if it is late
             let taken = InputManager.handleKeyDown(gesture)
             var late = false
             state.lock.lock()
@@ -152,7 +155,7 @@ public enum ScriptHandler {
             state.lock.unlock()
             if late {
                 let ms = Double(DispatchTime.now().uptimeNanoseconds - started.uptimeNanoseconds) / 1e6
-                Log.warning("keyboard: \(gesture.logDescription()) answered after \(Int(ms)) ms: \(taken ? "its script runs now" : "sent on to the application now")")
+                Log.warning("keyboard: \(gesture.logDescription()) answered after \(Int(ms)) ms: \(taken ? "its script runs now" : "sent on to the application now"); before it the main thread had begun: \(Core.describe(busyWith, now: turnCameAt))")
                 if !taken { gesture.send() }
             } else { done.signal() }
         } }
