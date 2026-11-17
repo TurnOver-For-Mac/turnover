@@ -55,6 +55,16 @@ func silentAppTests() {
         check(!skips(regular: false), "a process that never comes to the front (the Dock's switcher) is always asked")
     }
 
+    test("silent app: the watchdog can say what the main thread last began, and how long ago") {
+        let saved = Core.mainWork.value
+        defer { Core.mainWork.value = saved }
+        Core.noteMainWork("AXSelectedRowsChanged", pid: 70699)
+        let at = Core.mainWork.value.at
+        expect(Core.mainWorkDescription(now: at + 6 * second), "AXSelectedRowsChanged (pid 70699), begun 6.0 s ago")
+        Core.noteMainWork("script vo_nextHeading")
+        check(Core.mainWorkDescription().hasPrefix("script vo_nextHeading, begun "), "a script names no pid")
+    }
+
     test("silent app: after one unanswered question, a selection count is not asked at all") {
         withCheck(appAnswers: { false }, elementAnswers: { false }) {
             _ = ask(.cannotComplete, took: 2 * second, of: nil)

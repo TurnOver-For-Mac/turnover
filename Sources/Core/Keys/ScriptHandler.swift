@@ -313,6 +313,7 @@ public enum ScriptHandler {
         if now.timeIntervalSince(lastScriptTime) * 1000 <= Double(config.keyboard.multiPressTimeoutMs), lastScript === script { lastScriptCount += 1 } else { lastScriptCount = 0 }
         lastScript = script
         lastScriptTime = now
+        Core.noteMainWork("script \(script.name)")   // for the watchdog's trip line (17 Nov 2026)
         Log.io("script \(script.name) for \(maskKey ? "(a typed key)" : gesture.identifier)\(lastScriptCount > 0 ? " (repeat \(lastScriptCount))" : "")")
         let resume = wasInSayAll && script.resumesSayAll
         let (calls0, ms0, t0) = (AXStats.calls, AXStats.ms, DispatchTime.now().uptimeNanoseconds)

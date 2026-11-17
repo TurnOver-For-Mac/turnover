@@ -28,6 +28,22 @@ public enum Core {
     /// voices left TurnOver silent for five hours on 17 Oct 2026 (the log stopped at "recipes loaded").
     nonisolated(unsafe) public static var startStep = "not started"
 
+    /// What the main thread last began, and when, for the watchdog's trip line (17 Nov 2026): twice on 16 Nov the main
+    /// thread stopped 6 s and the log could not say in what (it was Mail's selection questions). Set at each notification
+    /// and script, read on the watchdog's thread; a lock and a store, nothing formatted until a trip.
+    nonisolated public struct MainWork: Sendable { public var what: String; public var pid: pid_t; public var at: UInt64 }
+    nonisolated public static let mainWork = Locked(MainWork(what: "", pid: 0, at: 0))
+    nonisolated public static func noteMainWork(_ what: String, pid: pid_t = 0) {
+        mainWork.value = MainWork(what: what, pid: pid, at: DispatchTime.now().uptimeNanoseconds)
+    }
+    /// For the trip line: "notification AXRowCountChanged (pid 123), begun 6.0 s ago". Old news is still said, with its
+    /// age: work that sets no label may have come after it.
+    nonisolated public static func mainWorkDescription(now: UInt64 = DispatchTime.now().uptimeNanoseconds) -> String {
+        let w = mainWork.value
+        guard !w.what.isEmpty else { return "nothing labelled yet" }
+        return "\(w.what)\(w.pid > 0 ? " (pid \(w.pid))" : ""), begun \(String(format: "%.1f", Double(now &- w.at) / 1e9)) s ago"
+    }
+
     public static func start() throws {
         guard !started else { return }
         startStep = "settings"

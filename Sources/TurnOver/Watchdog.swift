@@ -128,6 +128,8 @@ final class Watchdog: @unchecked Sendable {   // its state is under `lock`
         // VoiceOver left as it is and nothing announced. Each wake said "TurnOver is not responding" in the
         // system's voice, several copies over each other (Oliver, 22 Oct 2026), while TurnOver was simply waking.
         Log.error("watchdog: the main thread has not run for \(Int(stuck)) s\(sleeping ? " (the Mac asleep, locked or just awake)" : ""); letting keys through\(sleeping ? "" : " and turning VoiceOver back on")")
+        // What it was in (17 Nov 2026: two 6 s stalls on 16 Nov left no trace of their cause).
+        Log.error("watchdog: the main thread last began \(Core.mainWorkDescription())")
         KeyboardHandler.bypass = true
         // Coexisting: VoiceOver's sound back first, since the tap silencing it would otherwise outlive a hang (18 Oct
         // 2026), and the warning in the system's own voice, the only one left.

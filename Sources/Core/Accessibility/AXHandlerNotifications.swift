@@ -41,6 +41,7 @@ extension AXHandler {
     }
 
     func notification(_ name: String, _ element: AXUIElement, _ info: [String: Any]?) {
+        Core.noteMainWork(name, pid: element.pid)   // for the watchdog's trip line (17 Nov 2026)
         lastNewsAt[element.pid] = Date()
         AXHealth.heardFrom(pid: element.pid)   // a sign of life: what was silent in the app is looked at again now
         guard running else { return }
