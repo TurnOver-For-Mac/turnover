@@ -141,12 +141,16 @@ public enum InputManager {
         let endsWord = !typing && gesture.keyName != "backspace"
         let saysWord = ["enter", "numpadEnter", "tab"].contains(gesture.keyName) && gesture.modifiers.isEmpty
         SayAll.keyArrivedDuringSayAll.value = SayAll.isRunning
+        // Set by the lookup below, which runs before this block does (17 Nov 2026).
+        let sparesSpeech = Locked(false)
         DispatchQueue.main.async {
             // Where say all had got to, before the cancel forgets it (the caret goes to that word: 18 Oct 2026).
             SayAll.noteStopPoint()
             // NVDA's "interrupt speech for typed characters": every key cuts what is being said, so the echo keeps
             // up with fast typing (letting each echo finish first left it seconds behind an e-mail address, 3 Oct).
-            Speech.cancel()
+            // Except a kept key while "browse mode" for the one before is still said (17 Nov 2026), so the word can
+            // come at once. Say all still stops, below.
+            if !sparesSpeech.value { Speech.cancel() }
             if saysWord { Speech.finishTypedWord() } else if endsWord { Speech.clearTypedWordBuffer() }
             SayAll.stop(byGesture: true)
         }
@@ -161,6 +165,7 @@ public enum InputManager {
         // On the main thread since Swift 6 (10 Oct 2026): the keyboard thread waits for this answer, bounded
         // (ScriptHandler.askMain), so the availability checks may talk to the application freely.
         let script = ScriptHandler.findScript(for: gesture)
+        sparesSpeech.value = BrowseModeDocument.keptKeySparesSpeech(script)
         // What the user types is never written down: a password typed where TurnOver thought a password field was
         // went into the log character by character (5 Oct 2026), and every e-mail typed was there too. A typed key
         // is logged as just that; a key that runs a script (browse mode's single letters) by its name.

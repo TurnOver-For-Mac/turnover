@@ -30,6 +30,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   letter does. Before, a text field that still had the keyboard while you read, such as the Claude app's Prompt after
   VO arrows crossed it, had a character, a word or a line deleted from it. In focus mode they edit as before, and on a
   page whose focus is not a text field they still go to the page.
+- Browse mode: "browse mode" for a kept key is said at once, not about half a second later once the keys had stopped.
+  A kept key soon after it neither cuts it off nor says it again; any other key still stops it.
 - Safari: after Return in the address field, a key pressed before the new page has arrived no longer acts on the page
   you have just left. Before, Space, Return, a quick navigation letter or Tab pressed in that moment could press a link
   on the old page, or move through it, a fraction of a second before the new page appeared. Now TurnOver says "loading

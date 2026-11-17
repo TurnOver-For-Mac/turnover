@@ -219,21 +219,30 @@ public final class BrowseModeDocument: ScriptableObject {
     /// When a letter with no command was last kept from the page in browse mode (any page).
     /// (Any kept typing key sets it now, not only a letter; the name is left as it was.)
     package static var lastLetterKeptAt = Date.distantPast
-    /// "browse mode", a third of a second after the last of a run of letters kept from the page (or at once if the run
-    /// goes on for more than two seconds), so a fast run of keys does not cancel it.
-    /// Only for the page the letters were kept on, and only while it is still in browse mode: Space after a kept letter
-    /// can switch to focus mode first (Codex's second review, 14 Nov 2026). Given up after three seconds of keys.
-    static func sayBrowseModeWhenLettersStop(waited: Double = 0) {
-        let page = API.focusTreeInterceptor
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            guard let page, API.focusTreeInterceptor === page, !page.passThrough else { return }
-            let quiet = Date().timeIntervalSince(lastLetterKeptAt) >= 0.35 && Date().timeIntervalSince(InputManager.lastKeyDownAt) >= 0.35
-            guard quiet else {
-                if waited < 3 { sayBrowseModeWhenLettersStop(waited: waited + 0.15) }
-                return
-            }
-            Speech.speakMessage(String(localized: "browse mode", comment: "Spoken message"))
-        }
+    /// "browse mode" for a kept key, said at once on the first key of a run (17 Nov 2026). Until then it waited for the
+    /// keys to stop for a third of a second, so the word came about 470 ms after a lone key; it waited because every key
+    /// cut speech, which InputManager no longer does to this word for a kept key (keptKeySparesSpeech).
+    static func sayBrowseModeForKeptKey() {
+        let started = Date()
+        keptKeyWordSince = started
+        Speech.speakMessage(String(localized: "browse mode", comment: "Spoken message"), completion: { _ in
+            DispatchQueue.main.async { MainActor.assumeIsolated {
+                if keptKeyWordSince == started { keptKeyWordSince = nil }
+            } }
+        })
+    }
+    /// When the word for a kept key began, until it ends (17 Nov 2026).
+    package static var keptKeyWordSince: Date?
+    /// Whether the word for a kept key is still being said. Two seconds at most, should a voice never report its end.
+    package static var keptKeyWordIsSpeaking: Bool {
+        guard let since = keptKeyWordSince else { return false }
+        return Date().timeIntervalSince(since) < 2
+    }
+    /// Whether this key, about to run `script`, leaves speech alone (17 Nov 2026): a second kept key while the word for
+    /// the first is still being said, so the word is neither cut off nor said again. Any other key cuts speech as ever.
+    package static func keptKeySparesSpeech(_ script: Script?) -> Bool {
+        let kept = script?.name == trapScriptName
+        return kept && keptKeyWordIsSpeaking
     }
     var pageGeneration = 0
     var bufferIntent = 0
@@ -1096,9 +1105,12 @@ public final class BrowseModeDocument: ScriptableObject {
                 // a sound, and the message went with only the comma and what followed it (13 Nov 2026). The word, not
                 // a sound: it says why the letters were not typed. Said once the letters stop, so the next key does not
                 // cut it off (Codex's review, 14 Nov 2026); again after three seconds without one.
+                // Said at once since 17 Nov 2026 (sayBrowseModeForKeptKey); not if focus mode came on while the key was on
+                // its way (Space after a kept letter can switch first: Codex's second review, 14 Nov 2026).
+                guard !self.passThrough else { return }
                 let startsRun = Date().timeIntervalSince(BrowseModeDocument.lastLetterKeptAt) > 3
                 BrowseModeDocument.lastLetterKeptAt = Date()
-                if startsRun { BrowseModeDocument.sayBrowseModeWhenLettersStop() }
+                if startsRun { BrowseModeDocument.sayBrowseModeForKeptKey() }
             }
         }
         return nil

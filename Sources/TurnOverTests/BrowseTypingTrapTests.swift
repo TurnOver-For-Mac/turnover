@@ -210,7 +210,7 @@ func browseTypingTrapTests() {
                 trial.drain()
                 RunLoop.current.run(until: Date().addingTimeInterval(1.2))
                 trial.drain()
-                expect(trial.words.dropFirst(before).filter { $0 == "browse mode" }.count, 1, "\(label): said once, when the run stops")
+                expect(trial.words.dropFirst(before).filter { $0 == "browse mode" }.count, 1, "\(label): said once for the run")
             }
         }
     }
@@ -271,6 +271,46 @@ func browseTypingTrapTests() {
                 check(page.script(for: gesture) == nil, "\(identifier): the page asks for no trap")
                 check(ScriptHandler.findScript(for: gesture)?.name != "browseModeTrap", "\(identifier) is not kept")
             }
+        }
+    }
+
+    // 17 Nov 2026: the word came about 470 ms after a lone kept key. It is said at once, and a kept key soon after
+    // neither cuts it nor says it again; a command key still cuts it. Logic only: the voice here is the test driver.
+    test("browse typing trap: the word for a kept key is said at once, and a second kept key leaves it alone") {
+        withPage { _, _, trial, _ in
+            trial.drain()
+            BrowseModeDocument.lastLetterKeptAt = .distantPast
+            trial.finish = false   // the word is still being said until the test ends it
+            let before = trial.words.count
+            let z = key(6, [], "z")
+            check(InputManager.handleKeyDown(z), "z is kept")
+            trial.drain()
+            expect(Array(trial.words.dropFirst(before)), ["browse mode"], "said at once, without waiting for the keys to stop")
+            check(BrowseModeDocument.keptKeyWordIsSpeaking, "the word is being said")
+            check(BrowseModeDocument.keptKeySparesSpeech(ScriptHandler.findScript(for: z)), "a second kept key leaves it alone")
+            for _ in 0..<4 {
+                RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+                check(InputManager.handleKeyDown(z), "each kept key is kept")
+            }
+            trial.drain()
+            expect(trial.words.dropFirst(before).filter { $0 == "browse mode" }.count, 1, "five kept keys 100 ms apart: one word")
+            let heading = KeyboardGesture(identifier: "kb:h")!
+            check(!BrowseModeDocument.keptKeySparesSpeech(ScriptHandler.findScript(for: heading)), "a command key cuts the word")
+            trial.queued.last?.1?(true)
+            trial.drain()
+            check(!BrowseModeDocument.keptKeyWordIsSpeaking, "the word has ended")
+            check(!BrowseModeDocument.keptKeySparesSpeech(ScriptHandler.findScript(for: z)), "once it has ended, a kept key cuts speech as any key does")
+            BrowseModeDocument.keptKeyWordSince = Date().addingTimeInterval(-2.5)
+            check(!BrowseModeDocument.keptKeyWordIsSpeaking, "a word never reported finished frees the keys after two seconds")
+            BrowseModeDocument.keptKeyWordSince = nil
+            BrowseModeDocument.lastLetterKeptAt = Date().addingTimeInterval(-3.5)
+            let again = trial.words.count
+            check(InputManager.handleKeyDown(z), "a kept key after three seconds")
+            trial.drain()
+            expect(Array(trial.words.dropFirst(again)), ["browse mode"], "says the word again")
+            trial.finish = true
+            trial.queued.last?.1?(true)
+            trial.drain()
         }
     }
 
