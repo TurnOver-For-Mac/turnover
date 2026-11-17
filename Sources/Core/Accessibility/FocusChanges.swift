@@ -695,7 +695,14 @@ extension AXHandler {
         } else { Speech.joined([appName ?? "", shownTitle, (isDialog ? Role.dialog : Role.window).displayString]) }
         // The app module may say its own words for the window, or none (an empty string) (17 Nov 2026).
         let moduleWords = obj.appModule.windowAnnouncement(for: window, title: title)
-        if obj is Dialog { EventHandler.queue(Event(.focusEntered, obj)) } else if let moduleWords { if !moduleWords.isEmpty { Speech.speakOnly(moduleWords) } } else { Speech.speakOnly(text) }   // a window's name: the display shows the focus in it
+        // a window's name: the display shows the focus in it
+        if obj is Dialog {
+            EventHandler.queue(Event(.focusEntered, obj))
+        } else if let moduleWords {
+            if !moduleWords.isEmpty { Speech.speakOnly(moduleWords) }
+        } else {
+            Speech.speakOnly(text)
+        }
         // A window with nothing to read (OpenGL, custom drawing): said a moment later, with the recognition key (issue 74).
         if !(obj is Dialog), window.pid != ProcessInfo.processInfo.processIdentifier { EmptyWindowNotice.check(window, pid: window.pid) }
     }
