@@ -14,6 +14,9 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- Finder: arrowing into a list that is still reloading no longer says "empty" just before the file it comes to. Before,
+  a list with no rows for a moment was called empty at once. Now TurnOver waits a tenth of a second for the list to
+  answer, and a folder that really is empty still says so.
 - Finder: with Quick Look open, Up Arrow and Down Arrow (and Left and Right in an icon view) now say the file the
   selection moved to. Before, the keys moved the selection under Quick Look and TurnOver said nothing.
 - Claude: moving to another conversation with Command and a number soon after arriving in a long one now says the

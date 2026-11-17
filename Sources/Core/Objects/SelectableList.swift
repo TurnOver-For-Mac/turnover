@@ -108,6 +108,19 @@ open class SelectableList: TurnOverObject {
         return false
     }
 
+    public enum ReloadOutcome: Equatable { case event, rows, empty }
+    /// After a key was sent to a list with no rows: waits up to `limit` for the application's own news or for rows to
+    /// come back; nothing means the list is empty.
+    public static func settleReload(limit: TimeInterval, eventPending: () -> Bool, rowsBack: () -> Bool) -> ReloadOutcome {
+        var outcome = ReloadOutcome.empty
+        Poll.pumping(every: 0.01, limit: limit) {
+            if eventPending() { outcome = .event; return true }
+            if rowsBack() { outcome = .rows; return true }
+            return false
+        }
+        return outcome
+    }
+
     private func waitForSelection() -> Bool {
         Poll.pumping(limit: 0.3) { EventHandler.isPending(.selection) || EventHandler.isPending(.gainFocus) }
     }
@@ -136,6 +149,16 @@ open class SelectableList: TurnOverObject {
         let plainUpOrDown = g.modifiers.isEmpty && (key == "upArrow" || key == "downArrow")
         if plainUpOrDown, rowsAndKey.0.isEmpty {
             g.send()
+            // Finder only (17 Nov 2026): a list that is reloading has no rows for a moment, and "empty" was said just
+            // before the row it came to (175 ms key, rows back about 90 ms later). Its own selection or focus event, or
+            // its rows coming back, within 150 ms means it was not empty; Mail's empty Junk list keeps its quick answer.
+            if appModule.bundleIdentifier == "com.apple.finder" {
+                switch Self.settleReload(limit: 0.15, eventPending: { EventHandler.isPending(.selection) || EventHandler.isPending(.gainFocus) }, rowsBack: { !self.rowsAndKey.0.isEmpty }) {
+                case .event: Log.io("list: Finder's list was reloading, not empty (an event came)"); return
+                case .rows: Log.io("list: Finder's list was reloading, not empty (rows came back)"); readSelection(); return
+                case .empty: break
+                }
+            }
             Log.io("list: empty (\(emptyListDetail))")
             Speech.speakMessage(String(localized: "empty", comment: "Spoken message"))
             return
