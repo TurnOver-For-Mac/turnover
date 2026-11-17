@@ -285,11 +285,34 @@ package final class FinderAppModule: AppModule {
         let before = Self.firstSelected(in: view)
         let focus = API.focusObject
         Log.io("finder: \(g.keyName) with the focus on a window (\(focus?.element.string(kAXSubroleAttribute) ?? "no subrole"), \(focus?.element.string(kAXTitleAttribute)?.prefix(1) ?? "")…); watching the file list")
+        // On the first or last row, Up or Down cannot move the selection: said at once, without the 400 ms wait that
+        // ended in silence (28 times in Oliver's log, 17 Nov 2026). The key still goes on, for the system's own bump.
+        if let end = Self.listEnd(of: view, key: g.keyName, modifiers: g.modifiers, selected: before) {
+            g.send()
+            Log.io("finder: at the \(end.log) of the list under Quick Look")
+            Speech.speakMessage(end.said)
+            return
+        }
         g.send()
         var after = before
         let moved = Poll.pumping(every: 0.02, limit: 0.4) { after = Self.firstSelected(in: view); return Self.selectionMoved(from: before, to: after) }
-        guard moved, let row = after else { Log.io("finder: the selection did not move within 400 ms of \(g.keyName)"); return }
+        guard moved, let row = after else {
+            Log.io("finder: the selection did not move within 400 ms of \(g.keyName)")
+            // A list that was not known to be at its end before the key (rows still loading) may be known now.
+            if let end = Self.listEnd(of: view, key: g.keyName, modifiers: g.modifiers, selected: after) { Speech.speakMessage(end.said) }
+            return
+        }
         Speech.speakObject(ObjectFactory.make(row), reason: .focus)
+    }
+
+    /// "top" or "bottom" (the words the lists and browse mode say at their ends) when a plain Up or Down Arrow cannot
+    /// move the selection of a list view: it is on the first row and the key is Up, or on the last and it is Down.
+    /// Nil in an icon or column view (no rows to know the end by), with a modifier, or for any other key.
+    static func listEnd(of view: AXUIElement, key: String, modifiers: Modifiers, selected: AXUIElement?) -> (said: String, log: String)? {
+        guard modifiers.isEmpty, key == "upArrow" || key == "downArrow", let selected else { return nil }
+        let rows = view.elements(kAXRowsAttribute)
+        guard let end = key == "upArrow" ? rows.first : rows.last, selected.isSame(end) else { return nil }
+        return key == "upArrow" ? (String(localized: "top", comment: "Spoken message"), "top") : (String(localized: "bottom", comment: "Spoken message"), "bottom")
     }
 
     private func inFileView() -> Bool {

@@ -41,6 +41,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   answer, and a folder that really is empty still says so.
 - Finder: with Quick Look open, Up Arrow and Down Arrow (and Left and Right in an icon view) now say the file the
   selection moved to. Before, the keys moved the selection under Quick Look and TurnOver said nothing.
+- Finder: with Quick Look open, Up Arrow on the first file and Down Arrow on the last now say "top" or "bottom" at
+  once. Before, TurnOver waited almost half a second for a selection that could not move and then said nothing.
 - Claude: moving to another conversation with Command and a number soon after arriving in a long one now says the
   new conversation's title. Before, it could say the title of the conversation you were leaving, and then nothing.
 - Claude: when Command and a number puts you in the new conversation's Prompt, you now hear only its title and the

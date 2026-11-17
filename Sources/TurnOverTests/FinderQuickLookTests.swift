@@ -37,8 +37,26 @@ func finderQuickLookTests() {
         check(said.joined(separator: " ").contains("Second file"), "the new file is said: \(said)")
         said = []
         KeyboardGesture.poster = { _ in }
+        script?.handler(KeyboardGesture(identifier: "kb:upArrow")!)
+        expect(said, [], "a key that moved nothing, away from the ends, says nothing")
+        // On the last row Down cannot move: "bottom" at once (no 400 ms wait), the key still sent. On the first, Up: "top".
+        var sent = 0
+        KeyboardGesture.poster = { _ in sent += 1 }
+        var start = Date()
         script?.handler(KeyboardGesture(identifier: "kb:downArrow")!)
-        expect(said, [], "a key that moved nothing says nothing")
+        check(Date().timeIntervalSince(start) < 0.2, "the end is said without waiting")
+        expect(said, ["bottom"], "Down on the last row says bottom")
+        expect(sent, 1, "the key still went on")
+        said = []
+        _ = AXReplay.element(1).set(kAXSelectedRowsAttribute, [AXReplay.element(2)] as CFArray)
+        start = Date()
+        script?.handler(KeyboardGesture(identifier: "kb:upArrow")!)
+        check(Date().timeIntervalSince(start) < 0.2, "the top is said without waiting")
+        expect(said, ["top"], "Up on the first row says top")
+        said = []
+        script?.handler(KeyboardGesture(identifier: "kb:option+upArrow")!)
+        check(said != ["top"], "with a modifier the end is not this script's to say")
+        _ = AXReplay.element(1).set(kAXSelectedRowsAttribute, [AXReplay.element(3)] as CFArray)
         API.setFocusObject(ObjectFactory.make(AXReplay.element(1)), ancestors: [])
         check(script?.isAvailable?() == false, "not available with the list itself focused: its own arrows speak")
     }
