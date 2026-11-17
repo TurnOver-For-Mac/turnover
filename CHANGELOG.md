@@ -14,6 +14,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- Claude: pressing "Copy code" from browse mode now says only "Copied". Before, it first read out the groups round the
+  button ("Side chat, grouping; Chat messages, grouping; ..."), and "Copied" could come seconds late or not at all.
 - A slider's value is no longer said twice when the page announces the same change twice in a few milliseconds, as a
   video's seek slider did at every second. A different value, or the same one a moment later, is still said.
 - Finder: arrowing into a list that is still reloading no longer says "empty" just before the file it comes to. Before,

@@ -631,7 +631,26 @@ package final class ClaudeAppModule: AppModule {
 
     package override func ignoresFocus(_ event: Event) -> Bool {
         // Not said, so it must not cut off speech either, such as a title already being said.
-        isSwitchPromptFocus(event)
+        isSwitchPromptFocus(event) || isOwnCopyPressFocus(event)
+    }
+
+    /// 17 Nov 2026 (log, two presses of "Copy code"): TurnOver puts the keyboard on the button itself before it
+    /// presses it, and the focus announcement said the three groups round it ("Side chat, grouping; Chat messages,
+    /// grouping; bash code, grouping; Copy code, button"). Only the page's "Copied" is news. Claude's module only.
+    package var ownPressWatching: (AXUIElement) -> Bool = { element in BrowseModeDocument.watches.contains { $0.element.isSame(element) } }
+    /// When TurnOver last put the keyboard on a Copy button to press it.
+    private var ownCopyPressAt: Date?
+    private func isOwnCopyPressFocus(_ event: Event) -> Bool {
+        guard event.kind == .gainFocus, event.obj.axRole == "AXButton", event.obj.name.hasPrefix("Copy"),
+              ownPressWatching(event.obj.element) else { return false }
+        ownCopyPressAt = progressNow()
+        return true
+    }
+    /// The page's word for the copy ("Copied"), a single short word soon after TurnOver's own press of the button:
+    /// said at once, not held for quiet keys (it was held, then lost to Command Tab, and said 1.5 s or 35 s late).
+    package static func isCopyResult(text: String, sincePress: TimeInterval?) -> Bool {
+        guard let sincePress, sincePress >= 0, sincePress < 1.5 else { return false }
+        return !text.isEmpty && text.count <= 16 && !text.contains(where: \.isWhitespace)
     }
 
     package override func handleEvent(_ event: Event, next: () -> Void) {
@@ -639,6 +658,10 @@ package final class ClaudeAppModule: AppModule {
         sessionDeletion.observe(event)
         if event.kind == .gainFocus,
            API.focusTreeInterceptor?.navigationWaiting == true { return }
+        if isOwnCopyPressFocus(event) {
+            Log.io("claude: the keyboard TurnOver put on a Copy button is not announced")
+            return
+        }
         if isSwitchPromptFocus(event),
            let page = conversationPage {
             // The wait was already released, so nothing else will put the Prompt in focus mode.
@@ -717,6 +740,15 @@ package final class ClaudeAppModule: AppModule {
             let text = ClaudeTranscript.text(of: event.obj.element, skipHidden: false)
             let session = sidebarSession ?? currentConversation()
             guard !text.isEmpty else { return }
+            if Self.isCopyResult(text: text, sincePress: ownCopyPressAt.map { progressNow().timeIntervalSince($0) }) {
+                // Said again for each copy, though the words are the same ones: a press is news every time.
+                Log.io("claude: the result of TurnOver's own Copy press is said at once")
+                heldProgress.removeValue(forKey: session)
+                deliveredProgress.removeValue(forKey: session)
+                deliverProgress(text, session: session)
+                startWatching()
+                return
+            }
             if deliveredProgress[session] == String(text.prefix(500)) {
                 // 14 Nov 2026 (third review): the line already said is the newest again, so a held,
                 // older line is out of date. Drop it rather than say it later.
