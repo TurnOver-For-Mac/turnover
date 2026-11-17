@@ -211,6 +211,8 @@ package final class ClaudeAppModule: AppModule {
     }
 
     private var conversationStartingTitle = ""
+    /// The destination title the pending switch has said, or empty before it has said one (17 Nov 2026).
+    private var conversationAnnouncedTitle = ""
     private var conversationSwitch = 0
     private weak var conversationPage: BrowseModeDocument?
     private let conversationReader = AXWalkRunner<AXSnapshot>()
@@ -251,7 +253,14 @@ package final class ClaudeAppModule: AppModule {
         sessionDeletion.cancel()
         guard let page = API.focusTreeInterceptor,
               page.webArea.pid == pid else { return }
-        let previousTitle = conversationPage === page && page.navigationTitleOwned ? conversationStartingTitle : ""
+        let earlierSwitchOwnsPage = conversationPage === page && page.navigationTitleOwned
+        let earlierSwitchHasArrived = earlierSwitchOwnsPage && !conversationAnnouncedTitle.isEmpty
+        // 17 Nov 2026 (log, five wrong titles): a switch that has said its destination has arrived there,
+        // although it owns the page until a long copy is read in. A shortcut pressed then starts from the
+        // conversation it is leaving, the one just announced, not the earlier switch's own starting title.
+        let arrivedTitle = earlierSwitchHasArrived ? conversationAnnouncedTitle : ""
+        let previousTitle = earlierSwitchOwnsPage ? conversationStartingTitle : ""
+        conversationAnnouncedTitle = ""
         if let previous = conversationPage,
            previous !== page {
             previous.navigationTitleOwned = false
@@ -266,7 +275,15 @@ package final class ClaudeAppModule: AppModule {
         let capturedTitle = page.buffer.withSnapshot { Self.switchTitle(root.string(kAXTitleAttribute) ?? "") }
         // newPage empties the snapshot while collecting. A repeated shortcut still starts from the
         // title owned by the pending switch, never that temporarily empty copy (14 Nov 2026 review).
-        let title = capturedTitle.isEmpty ? previousTitle : capturedTitle
+        let title: String
+        if !arrivedTitle.isEmpty {
+            title = arrivedTitle
+            Log.io("claude: switch starts from the title the earlier switch announced")
+        } else if !capturedTitle.isEmpty {
+            title = capturedTitle
+        } else {
+            title = previousTitle
+        }
         conversationStartingTitle = title
         let number = Int(gesture.identifier.components(separatedBy: "+").last ?? "")
         let target = page.buffer.withSnapshot { () -> SwitchTarget in
@@ -295,6 +312,9 @@ package final class ClaudeAppModule: AppModule {
         var latestFocus: TurnOverObject?
         var latestKeys = 0
         var restoredFocusURL: String?
+        // The title of the conversation being left. It can be unknown at the key (17 Nov 2026): a copy
+        // still being read in has an empty snapshot, and no earlier switch owns the page.
+        var baselineTitle = title
         let settleUntil = ProcessInfo.processInfo.systemUptime + 0.25
         page.navigationTitleOwned = true
         // An unavailable sidebar cannot prove that a numbered shortcut will navigate. Keep typing
@@ -426,14 +446,29 @@ package final class ClaudeAppModule: AppModule {
                     } else {
                         matchesTarget = true
                     }
+                    // 17 Nov 2026: with no known title at the key, the first answer whose address has not
+                    // changed names the conversation being left. It becomes the baseline and is not said.
+                    let baselineUnknown = baselineTitle.isEmpty
+                    let addressStillTheSame = !changed && !observedAddressChange
+                    let answerNamesTheConversationLeft = baselineUnknown && addressStillTheSame && !busy && !name.isEmpty
+                    if answerNamesTheConversationLeft {
+                        baselineTitle = name
+                        Log.io("claude: switch baseline taken from the first unchanged answer")
+                    }
                     // A changed URL and its completed copy establish arrival even for equal titles.
                     // If the sidebar named a different destination, its old title is still stale.
-                    let titleIsReady = !busy && !name.isEmpty && (name != title || (destinationLoaded && matchesTarget))
+                    let arrivalIsProven = destinationLoaded && matchesTarget
+                    // A changed title counts only against a known baseline (17 Nov 2026): against an
+                    // unknown one, the title of the conversation being left looked like a new one.
+                    let titleHasChanged = !baselineTitle.isEmpty && name != baselineTitle
+                    let titleIsReady = !busy && !name.isEmpty && (titleHasChanged || arrivalIsProven)
                     // Claude can change AXTitle while keeping AXURL (or temporarily omitting it).
                     // Do not gate that evidence on a changed address, or speak a pre-switch title.
                     if titleIsReady,
                        !titleAnnounced {
                         titleAnnounced = true
+                        // A shortcut pressed before this switch finishes starts from here (17 Nov 2026).
+                        conversationAnnouncedTitle = name
                         page.announceNavigationTitle(name)
                     }
                     if !changed,

@@ -481,6 +481,60 @@ func claudeNavigationTests() {
         }
     }
 
+    // 17 Nov 2026 (log): a shortcut pressed while a long copy was still read in, after the earlier switch
+    // had said its title, said the conversation being left again and then nothing for the destination.
+    test("Claude navigation: a shortcut pressed after arrival but before the copy is complete leaves silently") {
+        withConversationTest { page, module, sent in
+            let savedSink = Speech.sink
+            var said: [String] = []
+            Speech.sink = { said.append($0) }
+            defer { Speech.sink = savedSink }
+            let first = KeyboardGesture(identifier: "kb:command+3")!
+            module.script(for: first)?.handler(first)
+            AXReplay.load(conversationPage("Arrived public conversation", address: "https://example.com/arrived"))
+            waitForConversation { said.contains("Arrived public conversation") }
+            // The earlier switch has spoken and still owns the page while its copy is being read in.
+            page.buffer.newPage()
+            page.buffer.build()
+            check(page.buffer.isLoading, "the arrived conversation's copy is still being read in")
+            check(page.navigationTitleOwned, "the earlier switch still owns the page")
+            let second = KeyboardGesture(identifier: "kb:command+4")!
+            module.script(for: second)?.handler(second)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.34))
+            expect(said, ["Arrived public conversation"], "the conversation being left is not said again")
+            AXReplay.load(conversationPage("Next public destination", address: "https://example.com/next"))
+            waitForConversation { said.contains("Next public destination") }
+            waitForBuffer(page.buffer)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+            expect(said, ["Arrived public conversation", "Next public destination"], "the destination is said exactly once")
+            expect(sent.value, ["kb:command+3", "kb:command+4"])
+        }
+    }
+
+    test("Claude navigation: an unknown starting title is taken from the first unchanged answer, silently") {
+        withConversationTest { page, module, sent in
+            let savedSink = Speech.sink
+            var said: [String] = []
+            Speech.sink = { said.append($0) }
+            defer { Speech.sink = savedSink }
+            // No switch owns the page and its copy is being read in: the title is unknown at the key.
+            page.buffer.newPage()
+            page.buffer.build()
+            check(page.buffer.isLoading, "the copy is being read in at the key")
+            check(!page.navigationTitleOwned, "no earlier switch owns the page")
+            let key = KeyboardGesture(identifier: "kb:command+2")!
+            module.script(for: key)?.handler(key)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.34))
+            expect(said, [], "the conversation being left is not announced as the destination")
+            AXReplay.load(conversationPage("Later public destination", address: "https://example.com/later"))
+            waitForConversation { said.contains("Later public destination") }
+            waitForBuffer(page.buffer)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+            expect(said, ["Later public destination"], "only the destination is said, once")
+            expect(sent.value, ["kb:command+2"])
+        }
+    }
+
     test("Claude navigation: Command 2 keeps watching beyond the unchanged settle without old speech") {
         withConversationTest { page, module, sent in
             let savedSink = Speech.sink
