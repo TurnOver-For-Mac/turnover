@@ -382,6 +382,8 @@ package final class MailAppModule: AppModule {
             if Self.isViewerSaidToBeDialog(axRole: axRole, role: role, title: title) {
                 Log.io("mail: the viewer window \(axRole) reported subrole \(subrole ?? "none") (role \(role)); read as a window, not a dialog (cause unknown)")
                 return MailViewerWindow.self
+            } else if axRole == "AXWindow" {
+                Log.io("mail: Mail reported an AXWindow as a dialog (subrole \(subrole ?? "none"), title empty: \(title?.isEmpty ?? true)); left a dialog, not taken for the viewer")
             }
         }
         return nil
