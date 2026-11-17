@@ -50,6 +50,10 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 - Mail: switching to Mail now says its window, such as "Mail, Inbox – Personal – 495 messages, window", every time.
   Before, now and then Mail's main window was read as a dialog, its whole message list was read out, and when Mail was
   slow TurnOver could stop answering until VoiceOver came on.
+- Mail: in Save Attachments and any other sheet or dialog, Tab and Shift Tab now move through the panel, from its
+  search field to its list of files and its buttons. Before, the panel's list of files was taken for Mail's mailbox
+  list, and Tab tried to go to the message list, found nothing and was lost. Mail's other keys (Return in the search
+  field, Command Shift N, Escape and the rest) are left to the panel too, so Command Shift N there makes a new folder.
 - Web pages: when a reading key or a quick navigation key (such as F) lands on a text field and TurnOver moves the
   keyboard into it for you, you now hear the field's name and the focus mode sound only. Before, the name of the group
   the field sits in was said after it, as if you had moved into that group yourself. Tab and clicks still say the group.

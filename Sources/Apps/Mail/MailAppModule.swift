@@ -4,6 +4,7 @@
 // the compose body has a name.
 import Foundation
 import ApplicationServices
+import AppKit
 
 package final class MailAppModule: AppModule {
     static let bundleID = "com.apple.mail"
@@ -40,7 +41,11 @@ package final class MailAppModule: AppModule {
                 else if title.lowercased().contains("search") { Speech.speakMessage(String(localized: "no results", comment: "Spoken message")) }
                 if let f = API.focusObject?.element { self.focusList("messages", from: f) }
             }
-        }.isAvailable = { API.focusObject?.role == .searchField }
+        }.isAvailable = {
+            // Not the Open and Save panel's own search field (17 Nov 2026): Return there is the panel's.
+            guard Self.isInMailsOwnContent else { return false }
+            return API.focusObject?.role == .searchField
+        }
         // Command Shift D sends: say so once the compose window has gone (nothing confirmed it; a tester, 8 Oct 2026).
         script("mail_send", String(localized: "Writing a message: Command Shift D sends it, and says so", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+shift+d"], category: "Mail") { g in
             g.send()
@@ -76,12 +81,13 @@ package final class MailAppModule: AppModule {
             self.leaveMessage(from: d.webArea, g)
         }.isAvailable = {
             guard let d = API.focusTreeInterceptor, !d.passThrough, d.webArea.pid == pid else { return false }
+            guard Self.isInMailsOwnContent else { return false }
             return !Self.place.hasPrefix("compose:") && !AXHandler.shared.isMenuOpen
         }
         script("mail_getNewMail", String(localized: "Checks for new mail and says so", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+shift+n"], category: "Mail") { g in
             g.send()
             Speech.speakMessage(String(localized: "checking for new mail", comment: "Spoken message"))
-        }
+        }.isAvailable = { Self.isInMailsOwnContent }   // Command Shift N in a Save panel is New Folder (17 Nov 2026)
         script("mail_toggleRead", String(localized: "Marks the message read or unread, and says which", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+shift+u"], category: "Mail") { g in
             g.send()
             // The focus is the message list (its rows are read as its selection) or, rarely, a row.
@@ -95,14 +101,16 @@ package final class MailAppModule: AppModule {
                     : unread == rows.count ? String(localized: "\(String(rows.count)) messages marked unread", comment: "Mail messages marked unread: how many") : String(localized: "\(String(rows.count)) messages marked read", comment: "Mail messages marked read: how many")
                 Speech.speakMessage(said)
             }
-        }
+        }.isAvailable = { Self.isInMailsOwnContent }
     }
 
     // Tab between the mailbox list and the message list. Mail puts its mailbox list in the Tab order only while
     // VoiceOver runs: with TurnOver, Shift Tab from the messages went to the favourites bar and the toolbar, and the
     // mailboxes could not be reached (5 Oct 2026). Worked out as the focus moves; read by the keyboard thread.
     private static let placeLock = NSLock()
-    private static var _place = ""   // "messages", "mailboxes" or ""
+    private static var _place = ""   // "messages", "mailboxes", "reading", "compose:…", "panel" (a sheet, dialog or Open and Save panel) or ""
+    /// Not in a sheet, a dialog or the Open and Save panel (17 Nov 2026): Mail's keys that are not tied to a place.
+    static var isInMailsOwnContent: Bool { place != "panel" }
     static var place: String { placeLock.lock(); defer { placeLock.unlock() }; return _place }
 
     /// A message being written: its header in the order a person expects. Mail's own Tab skips the three pop-ups
@@ -149,10 +157,41 @@ package final class MailAppModule: AppModule {
         }
     }
 
+    /// The bundle of the system service that draws every app's Open and Save panels.
+    nonisolated package static let panelServiceBundle = "com.apple.appkit.xpc.openAndSavePanelService"
+
+    /// 17 Nov 2026: inside Save Attachments the panel's file list (an outline drawn by the panel service) was taken for
+    /// Mail's mailbox list, and every Tab ran the Tab to the message list, searched Mail's window, found nothing and was
+    /// lost. A sheet, a dialog or anything the panel service draws is not Mail's own window content: none of Mail's
+    /// keys apply there, and Tab and Shift Tab go to the panel. No question to Mail: the focus's ancestors are known.
+    package nonisolated static func isOutsideMailsOwnContent(ancestorRoles: [Role], ownerBundle: String?) -> Bool {
+        let drawnByThePanelService = ownerBundle == panelServiceBundle
+        let inASheet = ancestorRoles.contains(.sheet)
+        let inADialog = ancestorRoles.contains(.dialog)
+        return drawnByThePanelService || inASheet || inADialog
+    }
+
+    /// Whether the focus `e` is in a sheet, a dialog or the Open and Save panel, from the ancestors already known.
+    private func isInPanelOrSheet(_ e: AXUIElement) -> Bool {
+        guard let focus = API.focusObject else { return false }
+        guard focus.element.isSame(e) else { return false }
+        let ancestors = API.focusAncestors
+        var ownerBundle: String?
+        if let top = ancestors.last, top.axRole == "AXApplication" {
+            ownerBundle = NSRunningApplication(processIdentifier: top.pid)?.bundleIdentifier
+        }
+        let outside = Self.isOutsideMailsOwnContent(ancestorRoles: ancestors.map(\.role), ownerBundle: ownerBundle)
+        if outside, Self.place != "panel" {
+            Log.io("mail: the focus is in a sheet, dialog or Open and Save panel (owner \(ownerBundle ?? "Mail")); Mail's own keys are off there")
+        }
+        return outside
+    }
+
     private func notePlace(_ e: AXUIElement) {
         var p = ""
         let id = e.string(kAXIdentifierAttribute) ?? ""
-        if Self.composeOrder.contains(id) { p = "compose:" + id }
+        if isInPanelOrSheet(e) { p = "panel" }   // "panel": none of the places below, whatever the element looks like
+        else if Self.composeOrder.contains(id) { p = "compose:" + id }
         // Mail names the body "message body" both when writing and when reading: only an editable one is writing.
         else if e.role == "AXWebArea", e.string(kAXDescriptionAttribute) == "message body", EditableWebArea.isEditable(e) { p = "compose:body" }
         else if e.role == "AXWebArea" { p = "reading" }
@@ -294,7 +333,7 @@ package final class MailAppModule: AppModule {
         // The focus on the scroll area around a message (Mail can come back to it after Command Tab; nothing in it is
         // TurnOver's to read, and the arrows only scrolled, 13 Oct 2026): reading starts in the message, as
         // when a message opens in its own window.
-        if event.kind == .gainFocus, event.obj.element.role == "AXScrollArea", let web = Self.messageIn(event.obj.element) {
+        if event.kind == .gainFocus, Self.isInMailsOwnContent, event.obj.element.role == "AXScrollArea", let web = Self.messageIn(event.obj.element) {
             Log.io("mail: focus on the message's scroll area; reading starts in the message")
             DispatchQueue.main.async { [pid] in AXHandler.shared.focusChanged(web, pid: pid) }
             return
