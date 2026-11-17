@@ -26,6 +26,7 @@ Speech.mode = .off
 Speech.sink = { _ in }
 
 pureTests()
+finderQuickLookTests()
 notesPaneTests()
 notesViewKeyTests()
 speechQueueWatchTests()

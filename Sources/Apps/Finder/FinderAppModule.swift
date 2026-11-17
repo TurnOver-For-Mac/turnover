@@ -38,6 +38,12 @@ final class FinderAppModule: AppModule {
             guard let self, inFileView(), let f = API.focusObject else { return false }
             return !(f.element.elements(kAXSelectedRowsAttribute) + f.element.elements(kAXSelectedChildrenAttribute)).isEmpty
         }
+        // Quick Look open (17 Nov 2026): the window has the focus, not the list, so Finder moved the selection under it
+        // and the arrow said nothing (two stretches in the log). The key goes on; the file the selection moved to is said.
+        script("finder_quickLookArrows", String(localized: "With Quick Look open, an arrow says the file the selection moved to", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:upArrow", "kb:downArrow", "kb:leftArrow", "kb:rightArrow"], category: cat) { [weak self] g in
+            guard let self else { g.send(); return }
+            self.arrowUnderQuickLook(g)
+        }.isAvailable = { [weak self] in self?.quickLookHasFocus() ?? false }
         script("finder_enclosingFolder", String(localized: "Goes to the enclosing folder (Command Up); asked for again if Finder ignored it", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+upArrow"], category: cat) { [weak self] g in
             self?.sendAgainIfIgnored(g, what: "Command Up", foldersOnly: false)
         }.isAvailable = { [weak self] in self?.inFileView() ?? false }
@@ -189,6 +195,50 @@ final class FinderAppModule: AppModule {
         return FinderRows.isFolderRow(cellTexts: texts)
     }
 
+    /// Finder's own window itself has the focus (Quick Look's panel), and it is not a file window or a dialog.
+    /// A text field or a button in a dialog is not the window itself, so the arrows there stay Finder's own.
+    func quickLookHasFocus() -> Bool {
+        guard let f = API.focusObject, f.pid == pid, f.axRole == "AXWindow" else { return false }
+        let sub = f.element.string(kAXSubroleAttribute) ?? ""
+        guard !["AXDesktop", "AXDialog", "AXSystemDialog"].contains(sub), Self.fileView(in: f.element) == nil else { return false }
+        return Self.mainFileView(pid: pid) != nil
+    }
+
+    /// The file view of Finder's main window, or of the first standard window that has one.
+    static func mainFileView(pid: pid_t) -> AXUIElement? {
+        let app = AXUIElementCreateApplication(pid)
+        if let w = app.element(kAXMainWindowAttribute), let v = fileView(in: w) { return v }
+        for w in app.elements(kAXWindowsAttribute) where w.string(kAXSubroleAttribute) == "AXStandardWindow" {
+            if let v = fileView(in: w) { return v }
+        }
+        return nil
+    }
+
+    static func firstSelected(in view: AXUIElement) -> AXUIElement? {
+        (view.elements(kAXSelectedRowsAttribute) + view.elements(kAXSelectedChildrenAttribute)).first
+    }
+
+    /// Whether the selection is on another row than before (nothing before, something now, counts).
+    static func selectionMoved(from before: AXUIElement?, to after: AXUIElement?) -> Bool {
+        switch (before, after) {
+        case (_, nil): return false
+        case (nil, _?): return true
+        case let (x?, y?): return !x.isSame(y)
+        }
+    }
+
+    private func arrowUnderQuickLook(_ g: KeyboardGesture) {
+        guard let view = Self.mainFileView(pid: pid) else { g.send(); return }
+        let before = Self.firstSelected(in: view)
+        let focus = API.focusObject
+        Log.io("finder: \(g.keyName) with the focus on a window (\(focus?.element.string(kAXSubroleAttribute) ?? "no subrole"), \(focus?.element.string(kAXTitleAttribute)?.prefix(1) ?? "")…); watching the file list")
+        g.send()
+        var after = before
+        let moved = Poll.pumping(every: 0.02, limit: 0.4) { after = Self.firstSelected(in: view); return Self.selectionMoved(from: before, to: after) }
+        guard moved, let row = after else { Log.io("finder: the selection did not move within 400 ms of \(g.keyName)"); return }
+        Speech.speakObject(ObjectFactory.make(row), reason: .focus)
+    }
+
     private func inFileView() -> Bool {
         guard let f = API.focusObject, f.pid == pid else { return false }
         let fileRoles: [Role] = [.outline, .list, .browser, .table, .tableRow, .listItem, .treeViewItem]
@@ -309,6 +359,7 @@ public enum FinderRows {
 
     /// The window's file view, outside the sidebar and the toolbar (the toolbar rule's way back, and its test).
     public static func fileView(in window: AXUIElement) -> AXUIElement? { FinderAppModule.fileView(in: window) }
+    public static func selectionMoved(from before: AXUIElement?, to after: AXUIElement?) -> Bool { FinderAppModule.selectionMoved(from: before, to: after) }
     /// A folder: the Kind cell says Folder, or the Size cell holds the folder's dashes (the Kind column may be hidden).
     nonisolated public static func isFolderRow(cellTexts: [String]) -> Bool {
         cellTexts.contains("Folder") || (cellTexts.count >= 3 && cellTexts[2] == "--")
