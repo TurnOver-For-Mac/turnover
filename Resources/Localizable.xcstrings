@@ -3451,6 +3451,28 @@
         }
       }
     },
+    "%lld controls: %@" : {
+      "comment" : "VO-Space on a line holding several controls, none pressed: how many, then their names",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld controls: %2$@"
+          }
+        }
+      }
+    },
+    "%lld fields: %@" : {
+      "comment" : "VO-Space on a label for several fields, none acted on: how many, then their names",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld fields: %2$@"
+          }
+        }
+      }
+    },
     "%lld hours" : {
       "comment" : "A battery's time: hours",
       "localizations" : {
@@ -3529,6 +3551,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld saat önce"
+          }
+        }
+      }
+    },
+    "%lld links: %@" : {
+      "comment" : "VO-Space on a line holding several links, none pressed: how many, then their names",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld links: %2$@"
           }
         }
       }

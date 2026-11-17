@@ -47,6 +47,10 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   letter does. Before, a text field that still had the keyboard while you read, such as the Claude app's Prompt after
   VO arrows crossed it, had a character, a word or a line deleted from it. In focus mode they edit as before, and on a
   page whose focus is not a text field they still go to the page.
+- Browse mode: VO-Space on a line of text with one link in it, such as Mail's "Unsubscribe." line, now presses the
+  link, as VoiceOver does. With several links it presses none and says their names, and on a label the page pairs
+  with its field it goes to the field. On plain text it says "nothing to activate" at once. Before, it waited and
+  then said "nothing to activate". Return and Space are unchanged.
 - Browse mode: "browse mode" for a kept key is said at once, not about half a second later once the keys had stopped.
   A kept key soon after it neither cuts it off nor says it again; any other key still stops it.
 - Browse mode: on a long page that keeps changing, such as a long Claude chat, VoiceOver's find keys (VO Command H and

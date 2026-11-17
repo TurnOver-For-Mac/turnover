@@ -105,9 +105,18 @@ extension BrowseModeDocument {
         // among the actions of text that is listened to for clicks, on it or on what holds it, and of no other text
         // (Safari 27.2, a test page, 11 Nov 2026), so text nothing listens to still says there is nothing there.
         if pressClickableText(from: e) { return }
+        // 17 Nov 2026, VO-Space only (Mail's "Unsubscribe." line, Steam's "Sign in to add…"): VoiceOver stops on a link
+        // inside a line as an item of its own, and VO-Space presses it; this copy reads the line whole, so VO-Space
+        // looks along the line that was heard. Enter and Space keep NVDA's rule: only what is under the caret.
+        let lineIndex = buffer.lineIndex(at: position)
+        if byAccessibility, let i = lineIndex, pressOrNameOnLine(i) { return }
+        // 17 Nov 2026: VO-Space on plain text says so at once. Recovery is for a control the copy held and the page has
+        // since rebuilt (Claude's "Copy code"); plain text never matches one, yet waited out its 150 ms to say so.
+        let heldControl = lineIndex.map { i in buffer.lines[i].isControl || !linksOnLine(i).isEmpty } ?? false
         // 14 Nov 2026, Claude: the dead button can be beyond thousands of older messages. Search its cached
         // ancestors and the page's end off main; a single fresh-copy retry shares the key's short deadline.
-        if let e, !text.isEmpty {
+        if let e, !text.isEmpty,
+           !byAccessibility || heldControl {
             activationRecovery.start(document: self, element: e, name: text)
             return
         }
@@ -544,6 +553,53 @@ extension BrowseModeDocument {
         guard r == .success else { return false }
         Tones.press()
         watchStateChange(x, before: before)   // the page is read again: a chosen answer often changes what follows
+        return true
+    }
+
+    /// The copy's link pieces on line i, as heard: the wrapped piece, not the whole paragraph (17 Nov 2026).
+    func linksOnLine(_ i: Int) -> [WebBuffer.Segment] {
+        let line = buffer.lines[i]
+        return buffer.segments.filter { $0.isLink && $0.start < line.end && $0.end > line.start }
+    }
+
+    /// VO-Space on a line of text (17 Nov 2026). True when it was dealt with: the one link or control on the line
+    /// pressed, or several named and none pressed, since a guess could act unwanted. With none, the field a label on
+    /// the line names, only as the page itself pairs them (AXServesAsTitleForUIElements, as VO-J reads it).
+    func pressOrNameOnLine(_ i: Int) -> Bool {
+        let line = buffer.lines[i]
+        let pieces = buffer.segments.filter { $0.start < line.end && $0.end > line.start }
+        var found: [(element: AXUIElement, name: String)] = []
+        for s in pieces {
+            // The piece itself or what holds it, two levels up: a link's text, or its text in a span. A picture is
+            // not a control of its own; the link around it is.
+            var x: AXUIElement? = s.element; var hops = 0
+            while let y = x, hops < 3, !(Self.actionable(y) && y.role != "AXImage") { x = y.element(kAXParentAttribute); hops += 1 }
+            guard let c = x, hops < 3 else { continue }
+            let heard = buffer.text.substring(with: NSRange(location: max(s.start, line.start), length: min(s.end, line.end) - max(s.start, line.start)))
+            if let k = found.firstIndex(where: { $0.element.isSame(c) }) { found[k].name += heard } else { found.append((c, heard)) }
+        }
+        var kind = found.allSatisfy { $0.element.role == "AXLink" } ? "links" : "controls"
+        if found.isEmpty {
+            for s in pieces where s.element.role == "AXStaticText" {
+                for f in s.element.elements("AXServesAsTitleForUIElements") where f.role != "?" && !found.contains(where: { $0.element.isSame(f) }) {
+                    found.append((f, f.string(kAXTitleAttribute) ?? f.string(kAXDescriptionAttribute) ?? f.string(kAXPlaceholderValueAttribute) ?? ""))
+                }
+            }
+            kind = "fields"
+        }
+        if found.count == 1 {
+            Log.io("browse mode: VO-Space on a line with one \(kind == "fields" ? "labelled field" : "control"): \(found[0].element.role) \"\(Log.words(found[0].name))\"")
+            return press(nearestTo: found[0].element)
+        }
+        guard found.count > 1 else { return false }
+        let names = found.map { $0.name.trimmingCharacters(in: .whitespacesAndNewlines) }.joined(separator: ", ")
+        Log.io("browse mode: VO-Space on a line with \(found.count) \(kind); none pressed: \(Log.words(names))")
+        let n = found.count
+        switch kind {
+        case "links": Speech.speakMessage(String(localized: "\(n) links: \(names)", comment: "VO-Space on a line holding several links, none pressed: how many, then their names"))
+        case "fields": Speech.speakMessage(String(localized: "\(n) fields: \(names)", comment: "VO-Space on a label for several fields, none acted on: how many, then their names"))
+        default: Speech.speakMessage(String(localized: "\(n) controls: \(names)", comment: "VO-Space on a line holding several controls, none pressed: how many, then their names"))
+        }
         return true
     }
 
