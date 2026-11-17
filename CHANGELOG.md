@@ -14,6 +14,10 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- When an app leaves the Mac's secure input on after you leave a password field, as Safari did on Steam's sign-in
+  page, VoiceOver now takes the keys a second later, and TurnOver takes them back a second after secure input goes
+  off. Before, TurnOver heard none of your keys until you left the page. Nothing is said, and inside a password field
+  TurnOver reads as before.
 - Claude: two Command and number presses in quick succession, the second before the first has said anything, now say
   only the final conversation's title. Before, the title of the conversation in between could be said instead.
 - The log now says how long each step of an app coming to the front takes, and what the main thread was busy with

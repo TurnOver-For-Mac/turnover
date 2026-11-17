@@ -121,6 +121,9 @@ public enum SecureInputWatch {
     /// Secure input came on or went off while TurnOver leads (the app lifts VoiceOver's mute for a password field).
     public static var onChange: ((Bool) -> Void)?
     private static var wasOn = false
+    /// Each look, with whether the focus is in a password field: the lead watcher hands the keys to VoiceOver when secure
+    /// input stays on outside one (SecureInputHandOver, 17 Nov 2026).
+    public static var onLook: ((_ inPasswordField: Bool) -> Void)?
 
     public static func start() {
         timer?.invalidate()
@@ -138,6 +141,7 @@ public enum SecureInputWatch {
         let other = on ? SecureEcho.otherProcessField(of: AXHandler.shared.activePid) : nil
         SecureEcho.watch(other)
         let inPassword = API.focusObject?.role == .passwordEdit || other != nil
+        onLook?(inPassword)
         guard on, !inPassword else { looks = 0; warned = false; onSince = nil; focusSeen = nil; focusMoves = 0; return }
         if onSince == nil { onSince = Date() }
         looks += 1
