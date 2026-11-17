@@ -8,10 +8,10 @@ import UniformTypeIdentifiers
 import ApplicationServices
 import AppKit
 
-final class FinderAppModule: AppModule {
+package final class FinderAppModule: AppModule {
     static let bundleID = "com.apple.finder"
 
-    required init(pid: pid_t, bundleIdentifier: String, appName: String) {
+    package required init(pid: pid_t, bundleIdentifier: String, appName: String) {
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
         let cat = "Finder"
         // Command Down with nothing selected (after Command Up to the top: Finder selects nothing there) does nothing
@@ -92,10 +92,63 @@ final class FinderAppModule: AppModule {
         }
     }
 
+    // View > Sort By (Oliver's decision, 17 Nov 2026): choosing an order says "sorted by <its name>" once the menu has
+    // closed, and nothing more. Return in a menu must reach Finder untouched (a key TurnOver re-posts is ignored by menu
+    // menus, measured on Word, 1 Oct 2026), so this is no script: the key is only looked at, as it passes.
+    // Finder gives no sign that the list has re-sorted (nothing recorded; its notifications are unknown), so the words
+    // come a moment after the menu closes, once the focus has read the list again.
+    /// The open menu that is Finder's, if any; a test puts in its own.
+    package lazy var openMenu: () -> AXUIElement? = { [pid] in
+        guard AXHandler.shared.isMenuOpen else { return nil }
+        guard let menu = AXHandler.shared.openMenus.last else { return nil }
+        return menu.pid == pid ? menu : nil
+    }
+    /// How long after the menu closes the words are said: the list's first row is read in that time (0.44 s in the log).
+    package var sortSayDelay: TimeInterval = 0.6
+    private var sortWatch = 0
+
+    package override func script(for gesture: KeyboardGesture) -> Script? {
+        noteSortChoice(gesture)
+        return super.script(for: gesture)
+    }
+
+    private func noteSortChoice(_ gesture: KeyboardGesture) {
+        let chooses = ["enter", "numpadEnter", "space"].contains(gesture.keyName)
+        guard chooses, gesture.modifiers.isEmpty else { return }
+        guard let menu = openMenu() else { return }
+        guard let order = Self.sortOrder(inMenu: menu) else { return }
+        sortWatch += 1
+        let token = sortWatch
+        let began = Date()
+        func look() {
+            guard token == sortWatch else { return }
+            if openMenu() != nil, Date().timeIntervalSince(began) < 3 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { look() }
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + sortSayDelay) { [weak self] in
+                guard let self, token == sortWatch else { return }
+                Log.io("Finder: sort order chosen, \"\(Log.words(order))\"")
+                Speech.speakMessage(String(localized: "sorted by \(order)", comment: "Spoken message after choosing an order in Finder's View, Sort By menu: %@ is the order's name, such as Date Created"))
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { look() }
+    }
+
+    /// The order the highlighted item of Finder's Sort By submenu names, nil in any other menu.
+    package static func sortOrder(inMenu menu: AXUIElement) -> String? {
+        guard let parent = menu.element(kAXParentAttribute) else { return nil }
+        guard parent.role == "AXMenuItem" else { return nil }
+        guard parent.string(kAXTitleAttribute) == "Sort By" else { return nil }
+        guard let item = menu.elements(kAXSelectedChildrenAttribute).first else { return nil }
+        guard let title = item.string(kAXTitleAttribute), !title.isEmpty else { return nil }
+        return title
+    }
+
     private func window() -> AXUIElement? { AXUIElementCreateApplication(pid).element(kAXFocusedWindowAttribute) }
 
     /// The desktop's icons and an icon view's are pictures to accessibility ("graphic"): read them as files, by kind.
-    override func objectClass(for element: AXUIElement, role: Role, subrole: String?) -> TurnOverObject.Type? {
+    package override func objectClass(for element: AXUIElement, role: Role, subrole: String?) -> TurnOverObject.Type? {
         // A file's picture has a file address (AXURL), or at least its name (AXFilename); on the Desktop every picture is
         // a file. A tester's Desktop items have no AXURL, so the fallback in `kind` was never reached (19 Oct 2026).
         if element.role == "AXImage", FinderItem.fileURL(of: element) != nil || element.attr("AXFilename") != nil
@@ -118,7 +171,7 @@ final class FinderAppModule: AppModule {
     }
 
     /// Escape from a toolbar control goes to the window's file view (ToolbarKeys; 15 Nov 2026).
-    override func toolbarEscapeTarget(in window: AXUIElement) -> AXUIElement? { Self.fileView(in: window) }
+    package override func toolbarEscapeTarget(in window: AXUIElement) -> AXUIElement? { Self.fileView(in: window) }
 
     /// The window's file view (list, icon, column or table view), outside the toolbar and the sidebar.
     static func fileView(in window: AXUIElement) -> AXUIElement? {

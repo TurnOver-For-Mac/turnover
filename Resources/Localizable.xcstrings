@@ -41267,6 +41267,9 @@
         }
       }
     },
+    "sorted by %@" : {
+      "comment" : "Spoken message after choosing an order in Finder's View, Sort By menu: %@ is the order's name, such as Date Created"
+    },
     "space" : {
       "comment" : "Spoken message",
       "localizations" : {

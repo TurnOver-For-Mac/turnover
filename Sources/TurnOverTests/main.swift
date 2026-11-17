@@ -27,6 +27,7 @@ Speech.sink = { _ in }
 
 pureTests()
 finderQuickLookTests()
+finderSortTests()
 listReloadTests()
 sliderValueRepeatTests()
 claudeCopyPressTests()
