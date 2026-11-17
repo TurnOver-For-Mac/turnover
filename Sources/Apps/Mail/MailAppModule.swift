@@ -311,6 +311,18 @@ package final class MailAppModule: AppModule {
             let window = table.element(kAXWindowAttribute)
             let titleThen = window?.string(kAXTitleAttribute) ?? ""
             let keys = ScriptHandler.keysArrivedCount
+            // The mailbox this key chose last time is the one shown now (17 Nov 2026: Command 1 on the Inbox waited the whole
+            // second and a half for a title that could not change, 1.7 s in all). Learned from earlier switches, so a key
+            // not yet seen takes the wait below. A short look first, in case Mail changed the title before the rows.
+            let mailboxKey = InputManager.lastKeyIdentifier
+            if Self.mailboxKeys.isShown(key: mailboxKey, title: titleThen) {
+                Log.io("mail: the mailbox this key chooses is already shown; its list is read without waiting for a new title")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    guard API.focusObject?.element.isSame(table) == true, ScriptHandler.keysArrivedCount == keys else { return }
+                    Speech.speakObject(ObjectFactory.make(table), reason: .focus)
+                }
+                return
+            }
             // The window's title names the new mailbox once Mail has switched ("Junk – Personal"): looked at every tenth of
             // a second for a second and a half, then the list is read as it is (Codex's review, 14 Nov 2026: a fixed
             // wait could read the old list on a slow switch). Not after another key, nor once the focus has moved.
@@ -319,6 +331,7 @@ package final class MailAppModule: AppModule {
                     guard API.focusObject?.element.isSame(table) == true, ScriptHandler.keysArrivedCount == keys else { return }
                     let titleNow = window?.string(kAXTitleAttribute) ?? ""
                     guard titleNow != titleThen || tries >= 15 else { readWhenShown(tries + 1); return }
+                    Self.mailboxKeys.learn(key: mailboxKey, title: titleNow)
                     // (No snapshot again here: by now Mail may have marked the row read, and a fresh snapshot would lose
                     // its "unread"; Codex's second review, 14 Nov 2026.)
                     Speech.speakObject(ObjectFactory.make(table), reason: .focus)
@@ -338,6 +351,16 @@ package final class MailAppModule: AppModule {
             let table = MailMessageRow.isMessageRow(el) ? el.element(kAXParentAttribute) : (el.string(kAXDescriptionAttribute) == "messages" ? el : nil)
             if let table { MailUnread.snapshot(table) }
         }
+    }
+
+    /// The window title each mailbox key led to, as last seen (17 Nov 2026). Main thread.
+    static var mailboxKeys = MailboxKeys()
+    package struct MailboxKeys {
+        package init() {}
+        private var titles: [String: String] = [:]
+        package mutating func learn(key: String, title: String) { if !title.isEmpty { titles[key] = title } }
+        /// This key chose the mailbox whose title the window has now.
+        package func isShown(key: String, title: String) -> Bool { !title.isEmpty && titles[key] == title }
     }
 
     /// The last key, a moment ago, was Command and a number: Mail's keys for its mailboxes.

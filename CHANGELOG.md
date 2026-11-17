@@ -14,6 +14,9 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- Mail: Command and a number that chooses the mailbox already showing now reads its list at once. Before, it waited
+  a second and a half for a new window title that could not come. A mailbox key is known this way after it has been
+  used once in the session; the first use still waits for the title, as before.
 - Claude: pressing "Copy code" from browse mode now says only "Copied". Before, it first read out the groups round the
   button ("Side chat, grouping; Chat messages, grouping; ..."), and "Copied" could come seconds late or not at all.
 - A slider's value is no longer said twice when the page announces the same change twice in a few milliseconds, as a
