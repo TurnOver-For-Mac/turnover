@@ -16,6 +16,10 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 - Automatic focus mode for caret movement is on by default. Arrows, quick navigation and VoiceOver's keys put
   the keyboard in the field you reach; VO-Left and VO-Right can move on. Turn it off in Settings, Web pages.
 
+- Finder: with Quick Look open on an audio or video file, which plays by itself, each Up or Down Arrow says only the
+  file's name, with no date, size or kind, and the Quick Look window says nothing else when it takes the focus.
+  Other files are read as before.
+
 ### Fixed
 
 - When an app leaves the Mac's secure input on after you leave a password field, as Safari did on Steam's sign-in

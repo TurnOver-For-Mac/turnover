@@ -302,7 +302,41 @@ package final class FinderAppModule: AppModule {
             if let end = Self.listEnd(of: view, key: g.keyName, modifiers: g.modifiers, selected: after) { Speech.speakMessage(end.said) }
             return
         }
-        Speech.speakObject(ObjectFactory.make(row), reason: .focus)
+        let spoken = ObjectFactory.make(row)
+        // A clip that plays by itself (audio or video, 17 Nov 2026, Oliver): its name alone, nothing to talk over it.
+        if Self.isMedia(row: row) { Speech.speakMessage(spoken.name) } else { Speech.speakObject(spoken, reason: .focus) }
+    }
+
+    /// Whether the row is an audio or video file, by its file address or else the extension in its name (a name shown
+    /// without its extension is not known: not media).
+    package static func isMedia(row: AXUIElement) -> Bool {
+        var url: URL?
+        var queue = [row]; var n = 0
+        while url == nil, !queue.isEmpty, n < 12 {
+            let e = queue.removeFirst(); n += 1
+            url = FinderItem.fileURL(of: e)
+            queue.append(contentsOf: e.elements(kAXChildrenAttribute).prefix(8))
+        }
+        let ext = url?.pathExtension.isEmpty == false ? url!.pathExtension : (ObjectFactory.make(row).name as NSString).pathExtension
+        guard !ext.isEmpty, let type = UTType(filenameExtension: ext) else { return false }
+        return type.conforms(to: .audio) || type.conforms(to: .movie) || type.conforms(to: .audiovisualContent)
+    }
+
+    /// Whether the element is Quick Look's own window or inside it.
+    private func inQuickLookWindow(_ obj: TurnOverObject) -> Bool {
+        guard obj.pid == pid else { return false }
+        let w = obj.axRole == "AXWindow" ? obj.element : obj.element.element(kAXWindowAttribute)
+        return w?.string(kAXSubroleAttribute) == "AXSystemFloatingWindow" && w?.string(kAXTitleAttribute) == "Quick Look"
+    }
+
+    /// Quick Look open on an audio or video file (17 Nov 2026, Oliver): the clip plays by itself, so nothing from its
+    /// window is said but the file's name, which the window taking the focus says (the "Quick Look, window" before it is
+    /// said by the shared window announcement, which this module cannot hold back).
+    package override func handleEvent(_ event: Event, next: () -> Void) {
+        guard inQuickLookWindow(event.obj), let view = Self.mainFileView(pid: pid), let row = Self.firstSelected(in: view),
+              Self.isMedia(row: row) else { super.handleEvent(event, next: next); return }
+        if event.kind == .gainFocus, event.obj.axRole == "AXWindow" { Speech.speakMessage(ObjectFactory.make(row).name) }
+        Log.io("finder: Quick Look is playing \"\(String(ObjectFactory.make(row).name.prefix(1)))…\"; \(event.kind.rawValue) from its window not said")
     }
 
     /// "top" or "bottom" (the words the lists and browse mode say at their ends) when a plain Up or Down Arrow cannot
