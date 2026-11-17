@@ -172,6 +172,25 @@ func itemChooserTests() {
         check(!menu.isOpen, "a fill after the list closed does nothing")
     }
 
+    test("TurnOver's menu: Turnover with Right and Left move to the next and previous item, as Down and Up do") {
+        let menu = TurnOverMenu.shared
+        let speechMode = Speech.mode; Speech.mode = .off; defer { Speech.mode = speechMode; if menu.isOpen { menu.close() } }
+        let items = ["One", "Two", "Three"].map { MenuItem(verbatim: $0, .action {}) }
+        menu.openList(verbatim: "Things", items: items)
+        guard let right = KeyboardGesture(identifier: "kb:turnover+rightArrow"), let left = KeyboardGesture(identifier: "kb:turnover+leftArrow"),
+              let plainRight = KeyboardGesture(identifier: "kb:rightArrow") else { return Harness.fail("no gestures") }
+        menu.handle(right)
+        expect(menu.debugPosition?.title, "Two", "Turnover Right is the next item")
+        menu.handle(right)
+        expect(menu.debugPosition?.title, "Three", "and the next")
+        menu.handle(left)
+        expect(menu.debugPosition?.title, "Two", "Turnover Left is the previous item")
+        menu.handle(plainRight)
+        expect(menu.debugPosition?.title, "Two", "plain Right on an action keeps its bump, and does not move")
+        check(menu.isOpen, "the menu stays open")
+        // Logic evidence only (a gesture made by name, not a key from the keyboard tap).
+    }
+
     test("chooser: opened on part of its items it says no count, and positions only once the rest is in") {
         let menu = TurnOverMenu.shared
         let said = Locked<[String]>([])

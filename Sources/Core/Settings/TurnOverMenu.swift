@@ -279,6 +279,11 @@ public final class TurnOverMenu {
 
     /// A key while the menu is open (main thread).
     public func handle(_ g: KeyboardGesture) {
+        // Turnover with Right or Left act as plain Down and Up do here: next and previous item, as VoiceOver's own
+        // VO-Right and VO-Left move along items (Oliver's decision, 17 Nov 2026). Plain Right and Left keep their meanings.
+        let turnoverOnly = g.modifiers == [.turnover]
+        if turnoverOnly, g.keyName == "rightArrow", let down = KeyboardGesture(identifier: "kb:downArrow") { handle(down); return }
+        if turnoverOnly, g.keyName == "leftArrow", let up = KeyboardGesture(identifier: "kb:upArrow") { handle(up); return }
         if let r = rotor, stack.count == 1, g.modifiers.isEmpty, g.keyName == "leftArrow" || g.keyName == "rightArrow" {
             rotorIndex = (rotorIndex + (g.keyName == "rightArrow" ? 1 : r.count - 1)) % r.count
             Speech.cancel()

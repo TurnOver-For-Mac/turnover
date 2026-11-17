@@ -22,6 +22,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   page, VoiceOver now takes the keys a second later, and TurnOver takes them back a second after secure input goes
   off. Before, TurnOver heard none of your keys until you left the page. Nothing is said, and inside a password field
   TurnOver reads as before.
+- TurnOver's own menu: Turnover with Right Arrow and Left Arrow now move to the next and previous item, as Down
+  Arrow and Up Arrow do. Before, they gave the edge sound and nothing was said.
 - Claude: two Command and number presses in quick succession, the second before the first has said anything, now say
   only the final conversation's title. Before, the title of the conversation in between could be said instead.
 - The log now says how long each step of an app coming to the front takes, and what the main thread was busy with
