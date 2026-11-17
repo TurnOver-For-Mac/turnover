@@ -628,7 +628,15 @@ extension AXHandler {
         } else {
             beforeNamelessStop = nil
         }
+        let interceptor = BrowseModeHandler.shared.document(for: obj, ancestors: ancestors)
+        let fromOutside = interceptor !== API.focusTreeInterceptor
+        // Automatic focus mode moving the keyboard to the field it has just named (17 Nov 2026: VO Right and F onto a
+        // field in a named group said the group after the field, from the focus passing into it). The move is TurnOver's,
+        // not the person's: no group it passes into is said. Tab, a click or the app's own move is said as ever.
+        let ownFocusMove = interceptor?.isOwnCaretFocusMove(to: target, fromOutside: fromOutside) ?? false
+        if ownFocusMove { Log.io("focus: automatic focus mode's own move to the \(target.role) it named; groups entered not said") }
         for a in ancestors.reversed() where a.isPresentableFocusAncestor {
+            if ownFocusMove { continue }
             if known.contains(where: { $0.isSameElement(as: a) }) || old?.isSameElement(as: a) == true { continue }
             if let w = focusWindow, a.isSameElement(as: w) { continue }   // the window was presented as the foreground
             if let (el, at) = lastEntered, el.isSame(a.element), Date().timeIntervalSince(at) < 1.5 { continue }   // a sheet announced on creation
@@ -640,10 +648,9 @@ extension AXHandler {
             EventHandler.queue(Event(.focusEntered, a))
         }
         lastGainFocus = (target, Date())
-        let interceptor = BrowseModeHandler.shared.document(for: obj, ancestors: ancestors)
         // Into a document from outside it (another app, the window around the page): its focus event is told, as NVDA's
         // tree interceptor is (_enteringFromOutside).
-        interceptor?.focusFromOutside = interceptor !== API.focusTreeInterceptor
+        interceptor?.focusFromOutside = fromOutside
         API.setFocusObject(obj, ancestors: ancestors, interceptor: interceptor)
         ObjectNavigator.shared.focusMoved(to: obj.element, pid: pid)
         EventHandler.queue(Event(.gainFocus, obj))

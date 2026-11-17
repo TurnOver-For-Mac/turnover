@@ -40,6 +40,14 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 - Mail: switching to Mail now says its window, such as "Mail, Inbox – Personal – 495 messages, window", every time.
   Before, now and then Mail's main window was read as a dialog, its whole message list was read out, and when Mail was
   slow TurnOver could stop answering until VoiceOver came on.
+- Web pages: when a reading key or a quick navigation key (such as F) lands on a text field and TurnOver moves the
+  keyboard into it for you, you now hear the field's name and the focus mode sound only. Before, the name of the group
+  the field sits in was said after it, as if you had moved into that group yourself. Tab and clicks still say the group.
+- Safari: Tab and Shift-Tab pressed while a new page is still being read in now say "loading page", as the heading key
+  does. Before, they went to the page, which was not answering yet, and said nothing.
+- Typing: Backspace at the very start of a field, or in an empty one, now plays the edge sound at once. Before, it waited
+  a fraction of a second for a caret that could not move and then made no sound at all. The key still goes to the
+  application. Not used where the line has right-to-left text, or when Backspace deletes a word or a line.
 - Browse mode: a key that would type something but has no command, such as a slash, a comma, a dash or an Option
   symbol, is kept from the page, and now says "browse mode" once the keys stop, as a letter does. Before, only
   letters and digits did, so a punctuation key kept from a field that still had the keyboard was silent.

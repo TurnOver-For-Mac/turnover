@@ -884,7 +884,7 @@ func focusRuleTests() {
     }
 
     // 14 Nov 2026: these assertions observe output after Speech.enqueue's real gates, not Speech.sink.
-    func withModeWords(role: String = "AXTextArea", buttonTitle: String = "Copy", value: String = "", trailing: Bool = false, detachedApp: Bool = false, automatic: Bool = true, _ body: (ModeWordsTrial, BrowseModeDocument) -> Void) {
+    func withModeWords(role: String = "AXTextArea", buttonTitle: String = "Copy", value: String = "", trailing: Bool = false, detachedApp: Bool = false, automatic: Bool = true, grouped: Bool = false, _ body: (ModeWordsTrial, BrowseModeDocument) -> Void) {
         var fixture = conversation()
         let button = fixture.nodes.firstIndex { $0.id == 65 }!
         fixture.nodes[button].attrs["AXTitle"] = .string(buttonTitle)
@@ -904,6 +904,18 @@ func focusRuleTests() {
             fixture.nodes[field].attrs[kAXFocusedUIElementAttribute] = .element(66)
             let root = fixture.nodes.firstIndex { $0.id == 60 }!
             fixture.nodes[root].attrs["AXReplayReadOnlyAttributes"] = .strings([kAXValueAttribute])
+        }
+        if grouped {
+            // 17 Nov 2026: the field inside two named groups (68 around 69), as a chat's side panel holds its prompt.
+            let root = fixture.nodes.firstIndex { $0.id == 60 }!
+            if case .elements(let kids)? = fixture.nodes[root].attrs["AXChildren"] {
+                fixture.nodes[root].attrs["AXChildren"] = .elements(kids.map { $0 == 66 ? 68 : $0 })
+            }
+            fixture.nodes[field].attrs["AXParent"] = .element(69)
+            fixture.nodes.append(.init(id: 68, attrs: ["AXRole": .string("AXGroup"), "AXDescription": .string("Chat panel"), "AXParent": .element(60),
+                                                       "AXWindow": .element(59), "AXChildren": .elements([69])]))
+            fixture.nodes.append(.init(id: 69, attrs: ["AXRole": .string("AXGroup"), "AXDescription": .string("Composer"), "AXParent": .element(68),
+                                                       "AXWindow": .element(59), "AXChildren": .elements([66])]))
         }
         AXReplay.load(fixture)
         let activePidBefore = AXHandler.shared.activePid
@@ -1111,6 +1123,89 @@ func focusRuleTests() {
             trial.advance(0.4)
             check(!page.passThrough, "lagging API focus does not authorize entry after app departure")
             check(!trial.events.contains("focus sound"), "departed app has no caret mode announcement")
+        }
+    }
+
+    // 17 Nov 2026: VO Right and F onto a field in a named group said the field, then the group, as automatic focus mode
+    // moved the keyboard into it. Logic evidence only: the decision, as a pure function, for each way a focus can come.
+    test("caret focus: only automatic focus mode's own move keeps the groups entered quiet") {
+        func own(requested: Bool = true, samePage: Bool = true, person: Bool = false, outside: Bool = false) -> Bool {
+            BrowseModeDocument.isOwnCaretFocusMove(requested: requested, samePage: samePage, personMovedFocus: person, fromOutside: outside)
+        }
+        check(own(), "the reply to the request, however late (a slow app, or after another key): quiet")
+        check(!own(requested: false), "the focus went somewhere else, or nothing was asked: the groups are said")
+        check(!own(samePage: false), "the page changed under the request: said")
+        check(!own(person: true), "a Tab or a click since the request: the person's move, said")
+        check(!own(outside: true), "from another application or outside the page: said")
+    }
+
+    // Wiring evidence, with a fixture page (not timing): what the page answers for a pending request, and what a focus
+    // event that the request did not cause still answers.
+    test("caret focus: the page knows its own focus move until the event comes, and only for the field asked for") {
+        withModeWords(grouped: true) { trial, page in
+            config.virtualBuffers.autoPassThroughOnCaretMove = true
+            config.virtualBuffers.autoFocusMode = false
+            page.position = page.buffer.offset(of: AXReplay.element(65)) ?? 0
+            let plugin = VoiceOverKeysPlugin()
+            guard let find = plugin.script(named: "vo_nextFormField"), let next = plugin.script(named: "vo_next") else { Harness.fail("VO commands"); return }
+            check(!page.isOwnCaretFocusMove(to: AXReplay.element(66), fromOutside: false), "nothing asked yet: a focus on the field is the person's")
+            ScriptHandler.executeScript(find, gesture: KeyboardGesture(identifier: "kb:turnover+command+j")!)
+            check(AXReplay.sets.contains { $0.id == 66 && $0.attribute == kAXFocusedAttribute }, "the field's focus was asked for")
+            check(page.isOwnCaretFocusMove(to: AXReplay.element(66), fromOutside: false), "the field asked for: its focus is TurnOver's move")
+            check(!page.isOwnCaretFocusMove(to: AXReplay.element(65), fromOutside: false), "the focus somewhere else: not the move asked for")
+            check(!page.isOwnCaretFocusMove(to: AXReplay.element(66), fromOutside: true), "from outside the page: not the move asked for")
+            // The field does not take the focus in time, and another key comes before it does: a late event is still the
+            // request's reply, which acceptCaretFocus takes without a word, so its groups are not said either.
+            RunLoop.current.run(until: Date().addingTimeInterval(0.55))
+            ScriptHandler.executeScript(next, gesture: KeyboardGesture(identifier: "kb:turnover+rightArrow")!)
+            trial.advance(0.1)
+            check(page.isOwnCaretFocusMove(to: AXReplay.element(66), fromOutside: false), "after a time-out and another key: still the request's reply")
+            modeFocus(66, page: page)
+            check(!page.isOwnCaretFocusMove(to: AXReplay.element(66), fromOutside: false), "used up: a second focus event on the field is ordinary")
+        }
+    }
+
+    // Wiring evidence through the focus path itself (present), with the fixture's app answering the field focused at once.
+    test("caret focus: automatic focus mode's move into nested groups enters none; the person's move enters both") {
+        for ownMove in [true, false] {
+            withModeWords(trailing: true, detachedApp: true, grouped: true) { trial, page in
+                config.virtualBuffers.autoPassThroughOnCaretMove = true
+                config.virtualBuffers.autoFocusMode = false
+                page.position = page.buffer.offset(of: AXReplay.element(65)) ?? 0
+                let lines = Locked<[String]>([])
+                let savedObserver = Log.observer, savedLevel = Log.level, savedTab = BrowseModeDocument.lastTabFromCaretAt
+                Log.level = .debug
+                Log.observer = { line in lines.value.append(line) }
+                BrowseModeDocument.lastTabFromCaretAt = .distantPast
+                defer {
+                    Log.observer = savedObserver
+                    Log.level = savedLevel
+                    BrowseModeDocument.lastTabFromCaretAt = savedTab
+                }
+                if ownMove {
+                    guard let find = VoiceOverKeysPlugin().script(named: "vo_nextFormField") else { Harness.fail("VO command"); return }
+                    ScriptHandler.executeScript(find, gesture: KeyboardGesture(identifier: "kb:turnover+command+j")!)
+                } else {
+                    // Tab, a click or the app: a focus no request asked for. The page's own pid, as the request's
+                    // confirmation sends it (the fixture's nodes do not answer to 900_060). The first pass's focus on the
+                    // same field is still AXHandler's last, and within half a second "reported twice" sets this one aside:
+                    // wait that out, as a person's Tab after it would.
+                    RunLoop.current.run(until: Date().addingTimeInterval(0.55))
+                    AXHandler.shared.focusChanged(AXReplay.element(66), pid: page.webArea.pid)
+                }
+                trial.advance(0.1)
+                check(API.focusObject?.isSameElement(as: AXReplay.element(66)) == true, "the field has the focus")
+                let entered = lines.value.filter { $0.contains("event focusEntered") }
+                if ownMove {
+                    expect(entered, [], "automatic focus mode's own move: no group entered is said")
+                    check(lines.value.contains { $0.contains("groups entered not said") }, "the log says why")
+                    check(page.passThrough, "focus mode is on")
+                    expect(trial.events.filter { $0 == "focus sound" }.count, 1, "the mode sound once, as before")
+                } else {
+                    expect(entered.count, 2, "the person's move: both groups entered are said, as ever")
+                    if entered.count != 2 { for l in lines.value { print("DIAG \(l)") } }
+                }
+            }
         }
     }
 

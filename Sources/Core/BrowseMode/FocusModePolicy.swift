@@ -347,6 +347,37 @@ extension BrowseModeDocument {
         return true
     }
 
+    /// A Tab, Shift Tab or click since the request was made: the person moved the focus, not the request.
+    static func personMovedFocus(since request: CaretFocusRequest) -> Bool {
+        let nativeTab = InputManager.lastKeyDownAt > request.started &&
+            ["kb:tab", "kb:shift+tab"].contains(InputManager.lastKeyIdentifier)
+        if nativeTab { return true }
+        if lastTabFromCaretAt > request.started { return true }
+        return caretFocusClicks() != request.clicks
+    }
+
+    /// Whether a focus event is automatic focus mode's own move, the reply to its request for that element (17 Nov
+    /// 2026). The same tests acceptCaretFocus makes before it takes an event as the reply (true here: it will answer true
+    /// or false, and say nothing of the field); any other focus event is the person's or the application's.
+    nonisolated package static func isOwnCaretFocusMove(requested: Bool, samePage: Bool, personMovedFocus: Bool,
+                                            fromOutside: Bool) -> Bool {
+        guard requested else { return false }   // nothing asked for this element: the focus went somewhere else
+        guard samePage else { return false }   // the page changed under the request
+        guard !personMovedFocus else { return false }   // a Tab or a click since the request
+        guard !fromOutside else { return false }   // from another application, or from outside the page
+        return true
+    }
+
+    /// The question above for a focus event on `element`, asked before its groups are said, without using the request up
+    /// (17 Nov 2026: F and VO Right onto a field in a named group said the group after the field, as the focus came).
+    package func isOwnCaretFocusMove(to element: AXUIElement, fromOutside: Bool) -> Bool {
+        let request = outstandingCaretFocus[ElementKey(element)]
+        return Self.isOwnCaretFocusMove(requested: request != nil,
+                                        samePage: request?.page == pageGeneration,
+                                        personMovedFocus: request.map(Self.personMovedFocus(since:)) ?? false,
+                                        fromOutside: fromOutside)
+    }
+
     /// nil is ordinary native focus; false consumes an obsolete caret request without following or reporting it.
     func acceptCaretFocus(_ object: TurnOverObject) -> Bool? {
         guard let request = outstandingCaretFocus.removeValue(forKey: ElementKey(object.element)) else { return nil }
@@ -359,10 +390,7 @@ extension BrowseModeDocument {
         // A provider may never post the requested event. A later deliberate native focus move owns
         // its own event; do not swallow that Tab/click/app return as the old caret's reply. Merely
         // waiting is not a new intent: a late obsolete reply must still leave the reading place alone.
-        let nativeTab = InputManager.lastKeyDownAt > request.started &&
-            ["kb:tab", "kb:shift+tab"].contains(InputManager.lastKeyIdentifier)
-        if nativeTab || Self.lastTabFromCaretAt > request.started ||
-           Self.caretFocusClicks() != request.clicks || focusFromOutside {
+        if Self.personMovedFocus(since: request) || focusFromOutside {
             Self.releaseCaretHold(request.id, because: "the focus came from a Tab, a click or another application")
             return nil
         }
