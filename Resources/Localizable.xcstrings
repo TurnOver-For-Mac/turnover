@@ -39796,6 +39796,9 @@
     "read what you copy" : {
       "comment" : "Part of the reason a plugin needs the highest review"
     },
+    "reading on" : {
+      "comment" : "Spoken message: the bottom of a long page is being read on before it is said"
+    },
     "reading the screen's controls" : {
       "comment" : "Spoken message",
       "localizations" : {

@@ -6,6 +6,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Changed
 
+- VoiceOver Shift End on a long page that is read only in part says "reading on" at once while the rest is read, then
+  the bottom line when it gets there. It is not said when the bottom is already read, nor again for a repeat press.
 - Deleted text by pitch: Settings, Speech, "Lower the pitch for deleted text, instead of saying deleted" says a
   deleted character or word lower, as VoiceOver does, without the word "deleted". Off by default. A deleted capital
   is lowered too when capitals are raised.

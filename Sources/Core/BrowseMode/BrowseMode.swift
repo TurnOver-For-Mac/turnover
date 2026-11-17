@@ -997,6 +997,9 @@ public final class BrowseModeDocument: ScriptableObject {
         key.epoch = pageGeneration
         key.movedAt = positionMovedAt
         bottomReadOn = key
+        // The read on has to wait (Oliver's decision, 17 Nov 2026): say so at once, then the bottom line when it comes. Not said
+        // for a repeat press (returned above), nor when the bottom is in the copy already (landed above).
+        Speech.speakMessage(String(localized: "reading on", comment: "Spoken message: the bottom of a long page is being read on before it is said"))
         readOnUntil(startedBy: key, { false }) { [weak self] _ in
             guard let self else { return }
             if bottomReadOn === key { bottomReadOn = nil }

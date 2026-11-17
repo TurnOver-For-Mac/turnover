@@ -524,10 +524,12 @@ func longPageTests() {
             ScriptHandler.noteKeyArrived(shiftEnd); bottom.handler(shiftEnd)
             let first = page.bottomReadOn
             check(first != nil, "the first press reads the page on")
+            check(said().contains("reading on"), "the wait is announced at once: \(said())")
             ScriptHandler.noteKeyArrived(shiftEnd); bottom.handler(shiftEnd)
             check(page.bottomReadOn === first, "the second press carries the first read on, rather than cancelling it")
             ScriptHandler.noteKeyArrived(shiftEnd); bottom.handler(shiftEnd)
             check(page.bottomReadOn === first, "and so does a third")
+            expect(said().components(separatedBy: "reading on").count - 1, 1, "\"reading on\" is said once, not again for the repeats")
             waitForBottomRead(page)
             // (The line said there is not checked: in this fixture the bottom line's reading says nothing. The read's end,
             // which lands and reads the line, is what is checked.)
@@ -548,6 +550,26 @@ func longPageTests() {
             while Date() < until { RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01)) }
             check(page.position != page.buffer.text.length - 1, "a different key after it stops the read, as before")
         }
+    }
+
+    test("long page: nothing is announced when the bottom is in the copy already") {
+        AXReplay.load(page(headings: 5))
+        let sink = Speech.sink
+        let savedFocus = API.focusObject, savedAncestors = API.focusAncestors, savedPage = API.focusTreeInterceptor
+        var said = ""
+        Speech.sink = { said += $0 + "\n" }
+        defer { API.setFocusObject(savedFocus, ancestors: savedAncestors, interceptor: savedPage); AXReplay.unload(); Speech.sink = sink }
+        let page = BrowseModeDocument(webArea: AXReplay.root!)
+        page.buffer.buildForInspection()
+        waitForBuffer(page.buffer)
+        API.setFocusObject(nil, ancestors: [], interceptor: page)
+        page.passThrough = false
+        check(!page.buffer.canReadOn, "the whole page is in the copy")
+        guard let bottom = page.script(named: "bottomOfDocument") else { return check(false, "the bottom command") }
+        said = ""
+        ScriptHandler.noteKeyArrived(shiftEnd); bottom.handler(shiftEnd)
+        check(!said.contains("reading on"), "no wait to announce: \(said)")
+        expect(page.position, page.buffer.text.length - 1, "the reading is at the bottom at once")
     }
 
     test("long page: its first reading carries on to the end by itself, and nothing is said about its length") {
