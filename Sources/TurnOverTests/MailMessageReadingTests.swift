@@ -85,4 +85,22 @@ func mailMessageReadingTests() {
         let s1 = ahead.serial; ahead.readingAhead(a, now: 3)
         expect(ahead.serial, s1 + 1, "each row read ahead is counted")
     }
+
+    test("Mail viewer window reported as a dialog is read as a window; real dialogs are not") {
+        func viewer(_ axRole: String, _ role: Role, _ title: String?) -> Bool {
+            MailAppModule.isViewerSaidToBeDialog(axRole: axRole, role: role, title: title)
+        }
+        check(viewer("AXWindow", .dialog, "Inbox – Personal – 495 messages"), "the viewer with a dialog subrole")
+        check(viewer("AXWindow", .dialog, "Inbox – Personal – 489 messages, 1 unread"), "with unread messages")
+        check(viewer("AXWindow", .dialog, "Sent – Personal – 3,297 messages"), "a count with a thousands comma")
+        check(viewer("AXWindow", .dialog, "Gelen Kutusu – Kişisel – 12 ileti"), "in another language")
+        check(!viewer("AXWindow", .window, "Inbox – Personal – 495 messages"), "an ordinary window is left alone")
+        check(!viewer("AXSheet", .dialog, "Inbox – Personal – 495 messages"), "a sheet stays a dialog")
+        check(!viewer("AXWindow", .dialog, "General"), "Settings stays a dialog")
+        check(!viewer("AXWindow", .dialog, "Accounts"), "Settings, Accounts, stays a dialog")
+        check(!viewer("AXWindow", .dialog, ""), "an untitled alert stays a dialog")
+        check(!viewer("AXWindow", .dialog, nil), "no title stays a dialog")
+        check(!viewer("AXWindow", .dialog, "Enter the password for the account “Personal”."), "an account prompt stays a dialog")
+        check(!viewer("AXWindow", .dialog, "Your order – All Inboxes"), "a message window is left as Mail reports it")
+    }
 }

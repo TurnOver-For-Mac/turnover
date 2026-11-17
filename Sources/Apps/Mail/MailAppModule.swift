@@ -352,8 +352,35 @@ package final class MailAppModule: AppModule {
         if role == .tableRow, MailMessageRow.isMessageRow(element) { return MailMessageRow.self }
         if role == .webArea, EditableWebArea.isEditable(element) { return MailMessageBody.self }
         if element.string(kAXIdentifierAttribute) == "popup_priority" { return MailPriorityPopup.self }
+        // Only for the rare dialog subrole: the two questions below are never asked of an ordinary window.
+        if role == .dialog {
+            let axRole = element.role
+            let title = element.string(kAXTitleAttribute)
+            if Self.isViewerSaidToBeDialog(axRole: axRole, role: role, title: title) {
+                Log.io("mail: the viewer window \(axRole) reported subrole \(subrole ?? "none") (role \(role)); read as a window, not a dialog (cause unknown)")
+                return MailViewerWindow.self
+            }
+        }
         return nil
     }
+
+    /// 17 Nov 2026, a symptom fix (cause unknown): about once in sixteen activations Mail reports its main viewer
+    /// window ("Inbox – Personal – 495 messages") with a dialog subrole. As a Dialog its opening walked the whole window
+    /// on the main thread, and with Mail slow that froze TurnOver until the watchdog acted. The viewer's title ends in
+    /// its message count after an en dash, in any language; Mail's real dialogs (Settings, an account prompt, an
+    /// alert) are not titled so and keep their dialog reading.
+    package nonisolated static func isViewerSaidToBeDialog(axRole: String, role: Role, title: String?) -> Bool {
+        guard axRole == "AXWindow" else { return false }   // a sheet is a real dialog
+        guard role == .dialog else { return false }
+        guard let parts = title?.components(separatedBy: " – "), parts.count >= 2 else { return false }
+        guard let count = parts.last?.first, count.isNumber else { return false }
+        return true
+    }
+}
+
+/// Mail's viewer window when Mail has called it a dialog: read as the window it is.
+final class MailViewerWindow: TurnOverObject {
+    override var role: Role { .window }
 }
 
 /// The message window's priority pop-up, which Mail describes by its icon ("Exclamation mark").

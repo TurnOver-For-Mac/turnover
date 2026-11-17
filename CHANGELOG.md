@@ -20,6 +20,9 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   focus mode sound. Before, the start of the Prompt's own announcement was heard just before the title.
 - TurnOver no longer stops answering for several seconds when an app in the background, such as Mail, is slow to
   answer while its list changes. Before, keys and speech could stop for six seconds and VoiceOver came on.
+- Mail: switching to Mail now says its window, such as "Mail, Inbox – Personal – 495 messages, window", every time.
+  Before, now and then Mail's main window was read as a dialog, its whole message list was read out, and when Mail was
+  slow TurnOver could stop answering until VoiceOver came on.
 - Browse mode: a key that would type something but has no command, such as a slash, a comma, a dash or an Option
   symbol, is kept from the page, and now says "browse mode" once the keys stop, as a letter does. Before, only
   letters and digits did, so a punctuation key kept from a field that still had the keyboard was silent.
