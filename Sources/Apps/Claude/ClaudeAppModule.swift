@@ -629,9 +629,23 @@ package final class ClaudeAppModule: AppModule {
         return !text.isEmpty && text.count <= 16 && !text.contains(where: \.isWhitespace)
     }
 
+    /// 17 Nov 2026 (log, 25 of 25 returns to Claude): "Claude, window" was followed by "Claude, grouping". The focus
+    /// passes into the group round the whole app, which has the window's own name, just said. Claude's module only.
+    package func isWindowNamedGroup(_ event: Event) -> Bool {
+        guard event.kind == .focusEntered else { return false }
+        guard event.obj.axRole == "AXGroup" else { return false }
+        let name = event.obj.name
+        guard !name.isEmpty else { return false }
+        return name == appName || name == API.foregroundObject?.name
+    }
+
     package override func handleEvent(_ event: Event, next: () -> Void) {
         browserReturn.handleEvent(event)
         sessionDeletion.observe(event)
+        if isWindowNamedGroup(event) {
+            Log.io("claude: the group named as the window is not said")
+            return
+        }
         if event.kind == .gainFocus,
            API.focusTreeInterceptor?.navigationWaiting == true { return }
         if isOwnCopyPressFocus(event) {

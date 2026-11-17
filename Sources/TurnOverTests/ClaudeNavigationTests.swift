@@ -1103,6 +1103,26 @@ func claudeNavigationTests() {
         check(ClaudeConversationSwitch.isGeneric("Claude Code"), "Claude Code is generic")
     }
 
+    // 17 Nov 2026 (log): returning to Claude said "Claude, window" and then "Claude, grouping".
+    test("Claude: the group named as the window is not said when the focus enters it") {
+        AXReplay.load(AXFixture(app: "Claude", bundle: "test.claude-group", recorded: "", root: 0, application: 1, focus: 0, nodes: [
+            .init(id: 0, attrs: ["AXRole": .string("AXGroup"), "AXTitle": .string("Claude"), "AXParent": .element(1), "AXChildren": .elements([2])]),
+            .init(id: 1, attrs: ["AXRole": .string("AXApplication"), "AXChildren": .elements([0])]),
+            .init(id: 2, attrs: ["AXRole": .string("AXGroup"), "AXTitle": .string("Side chat"), "AXParent": .element(0)]),
+        ]))
+        defer { AXReplay.unload() }
+        let module = ClaudeAppModule(pid: AXReplay.element(0).pid, bundleIdentifier: "com.anthropic.claudefordesktop", appName: "Claude")
+        let wrapper = Event(.focusEntered, ObjectFactory.make(AXReplay.element(0)))
+        var passedOn = false
+        module.handleEvent(wrapper) { passedOn = true }
+        check(!passedOn, "\"Claude, grouping\" is not said after the window")
+        let sideChat = Event(.focusEntered, ObjectFactory.make(AXReplay.element(2)))
+        passedOn = false
+        module.handleEvent(sideChat) { passedOn = true }
+        check(passedOn, "another named group entered is still said")
+        check(!module.isWindowNamedGroup(Event(.gainFocus, ObjectFactory.make(AXReplay.element(0)))), "only entering, not focus on the group itself")
+    }
+
     test("Claude navigation: other modules retain native session keys") {
         let ordinary = AppModule(pid: 0, bundleIdentifier: "test.other", appName: "Other")
         for key in ["kb:command+1", "kb:command+4", "kb:command+n"] {

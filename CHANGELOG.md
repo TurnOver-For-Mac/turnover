@@ -53,6 +53,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   selection moved to. Before, the keys moved the selection under Quick Look and TurnOver said nothing.
 - Finder: with Quick Look open, Up Arrow on the first file and Down Arrow on the last now say "top" or "bottom" at
   once. Before, TurnOver waited almost half a second for a selection that could not move and then said nothing.
+- Claude: coming back to the Claude app now says "Claude, window" and then where you are. Before, "Claude,
+  grouping" was said after the window every time, from the group round the whole app, which has the window's name.
 - Claude: when Command and a number puts you in the new conversation's Prompt, you now hear only its title and the
   focus mode sound. Before, the start of the Prompt's own announcement was heard just before the title.
 - TurnOver no longer stops answering for several seconds when an app in the background, such as Mail, is slow to
