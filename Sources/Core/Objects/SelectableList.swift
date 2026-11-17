@@ -136,7 +136,7 @@ open class SelectableList: TurnOverObject {
         let plainUpOrDown = g.modifiers.isEmpty && (key == "upArrow" || key == "downArrow")
         if plainUpOrDown, rowsAndKey.0.isEmpty {
             g.send()
-            Log.io("list: empty")
+            Log.io("list: empty (\(emptyListDetail))")
             Speech.speakMessage(String(localized: "empty", comment: "Spoken message"))
             return
         }
@@ -153,7 +153,7 @@ open class SelectableList: TurnOverObject {
         if waitForSelection() { return }   // the selection event reads the row
         // An empty list: the arrow has nothing to move to; say so rather than nothing (Finder's empty folder).
         if g.modifiers.isEmpty, ["upArrow", "downArrow"].contains(key), rowsAndKey.0.isEmpty {
-            Log.io("list: empty")
+            Log.io("list: empty (\(emptyListDetail))")
             Speech.speakMessage(String(localized: "empty", comment: "Spoken message"))
             return
         }
@@ -169,6 +169,15 @@ open class SelectableList: TurnOverObject {
         // when it comes. In a grid, Up and Down at the top or bottom row do nothing: the edge (Freeform's boards).
         Log.io("list: no selection change yet after \(g.keyName) (VoiceOver process \(NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.VoiceOver").isEmpty ? "absent" : "running"), VoiceOver flag \(NSWorkspace.shared.isVoiceOverEnabled ? "on" : "off"))")
         if axSubrole == "AXCollectionList" { Tones.edge(keySent: true) }
+    }
+
+    /// What a list called empty holds, for the log (17 Nov 2026): Notes' gallery list was called empty by the arrows while
+    /// it held notes a few seconds later, and the log could not say why. Roles and counts only, never the text.
+    private var emptyListDetail: String {
+        let rows = element.elements(kAXRowsAttribute).count
+        let children = element.elements(kAXChildrenAttribute)
+        let firstChildRole = children.first?.role ?? "none"
+        return "role \(element.role), subrole \(axSubrole ?? "none"), rows \(rows), children \(children.count), first child \(firstChildRole)"
     }
 
     /// The row TurnOver is on, in a list that will not move its own selection (-1: before the first).
