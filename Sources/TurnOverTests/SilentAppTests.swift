@@ -42,6 +42,30 @@ func silentAppTests() {
         check(asked == 1 && front == "AXRow \"x\"", "the front app is described as before")
     }
 
+    // Mail, in the background and busy, held the main thread 6 s over its list's selection (16 Nov 2026).
+    test("silent app: a background app's selection change is asked about only where it can matter") {
+        func skips(pid: pid_t = 70699, active: pid_t = 4242, holds: Bool = false, focusPid: pid_t? = 4242, regular: Bool = true) -> Bool {
+            AXHandler.skipsSelectionQuestions(pid: pid, activePid: active, containerHoldsFocus: holds, focusPid: focusPid, comesToFront: regular)
+        }
+        check(skips(), "an ordinary app behind, its list not the focus's, the focus elsewhere: nothing asked")
+        check(skips(focusPid: nil), "nothing asked when there is no focus at all")
+        check(!skips(active: 70699, focusPid: nil), "the active app is always asked")
+        check(!skips(holds: true), "the list holding the focus is always asked")
+        check(!skips(focusPid: 70699), "a list in the app that holds the focus is always asked")
+        check(!skips(regular: false), "a process that never comes to the front (the Dock's switcher) is always asked")
+    }
+
+    test("silent app: after one unanswered question, a selection count is not asked at all") {
+        withCheck(appAnswers: { false }, elementAnswers: { false }) {
+            _ = ask(.cannotComplete, took: 2 * second, of: nil)
+            let counted = page.attributeValueCountResult(kAXSelectedRowsAttribute)
+            check(!counted.wasAttempted, "the resting app is not asked again")
+            check(counted.isNoAnswer && (counted.value ?? 0) == 0, "no answer, read as no rows selected")
+            let fetched = page.attributeValuesResult(kAXSelectedChildrenAttribute, index: 0, maxValues: 200)
+            check(!fetched.wasAttempted && fetched.value == nil, "nor are the rows fetched")
+        }
+    }
+
     test("silent app: no answer is told apart from no value") {
         check(AXHealth.isNoAnswer(.returned(.cannotComplete), elapsedNanoseconds: 2 * second), "a question that waited out the timeout")
         check(AXHealth.isNoAnswer(.deferred(AXBackoff(reason: .timeout, remainingNanoseconds: 1)), elapsedNanoseconds: 0), "a question not asked of a resting app")

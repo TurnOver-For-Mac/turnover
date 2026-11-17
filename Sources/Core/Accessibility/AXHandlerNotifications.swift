@@ -26,6 +26,20 @@ extension AXHandler {
         pid == activePid ? describe() : "(pid \(pid), in the background; not asked)"
     }
 
+    /// Whether a selection change is left unasked: an app in the background, busy, made the main thread wait 6 s in
+    /// three unanswered questions about its list's selection, before the focus was even looked at (Mail, 16 Nov 2026
+    /// at about 10:02 and 19:38 UTC; fixed 17 Nov 2026). Nothing is asked only when all four hold. Processes that
+    /// never come to the front (the Dock's Command Tab switcher, menu extras, Notification Centre, system prompts)
+    /// show their lists while another app is in front, and keep today's path untouched (the 15 Oct rule).
+    nonisolated public static func skipsSelectionQuestions(pid: pid_t, activePid: pid_t, containerHoldsFocus: Bool,
+                                                           focusPid: pid_t?, comesToFront: Bool) -> Bool {
+        let notTheActiveApp = pid != activePid            // the app the keys go to is always asked
+        let notTheFocusContainer = !containerHoldsFocus   // the list holding the focus is always asked
+        let focusNotInThisApp = focusPid != pid           // a selection landing on the focus is always asked
+        let anOrdinaryApp = comesToFront                  // agents and the Dock stay on today's path
+        return notTheActiveApp && notTheFocusContainer && focusNotInThisApp && anOrdinaryApp
+    }
+
     func notification(_ name: String, _ element: AXUIElement, _ info: [String: Any]?) {
         lastNewsAt[element.pid] = Date()
         AXHealth.heardFrom(pid: element.pid)   // a sign of life: what was silent in the app is looked at again now
@@ -82,7 +96,9 @@ extension AXHandler {
             // The front window's title changing because of a key (Control+Tab to another tab, Command+1 to another
             // mailbox) is the news of where you are (NVDA reads a foreground name change). Not without a key: Mail
             // retitles its window as mail arrives.
-            if element.role == "AXWindow", let w = focusWindow, w.isSame(element), pid == activePid,
+            // The app in front first: Mail retitles its window as mail arrives, and asking a busy background app its
+            // role cost the main thread a wait (17 Nov 2026). Only the order changed; each test is free of side effects.
+            if pid == activePid, let w = focusWindow, w.isSame(element), element.role == "AXWindow",
                Date().timeIntervalSince(InputManager.lastKeyDownAt) < 2, Self.switchesView(InputManager.lastKeyIdentifier),
                let t = element.string(kAXTitleAttribute), !t.isEmpty, t != lastForegroundTitle {
                 lastForegroundTitle = t
@@ -190,12 +206,24 @@ extension AXHandler {
             // Several rows highlighted at once (Shift Down, Command click): the row that just changed is said, then
             // how many are selected, as VoiceOver does; the first selected row was said every time (16 Oct
             // 2026). Counted first, so a whole column of a million never comes across; at most 200 rows fetched.
-            let key = { () -> String in var n: CFIndex = 0; AXUIElementGetAttributeValueCount(element, kAXSelectedRowsAttribute as CFString, &n); return n > 0 ? kAXSelectedRowsAttribute : kAXSelectedChildrenAttribute }()
-            var count: CFIndex = 0
-            AXUIElementGetAttributeValueCount(element, key as CFString, &count)
-            var all: [AXUIElement] = []
-            if count > 0 { var arr: CFArray?; if AXUIElementCopyAttributeValues(element, key as CFString, 0, min(count, 200), &arr) == .success { all = (arr as? [AXUIElement]) ?? [] } }
+            // Whether the focus is in this list is known without asking the app, so it is decided first (17 Nov 2026).
             let focused = API.focusObject.map { f in f.isSameElement(as: element) || API.focusAncestors.contains(where: { $0.isSameElement(as: element) }) } ?? false
+            if Self.skipsSelectionQuestions(pid: pid, activePid: activePid, containerHoldsFocus: focused, focusPid: API.focusObject?.pid,
+                                            comesToFront: NSRunningApplication(processIdentifier: pid)?.activationPolicy == .regular) {
+                Log.io("selection changed: (pid \(pid), in the background; not asked)")
+                // What was known of this list's selection is out of date now.
+                if lastSelectedRows?.container.isSame(element) == true { lastSelectedRows = nil }
+                return
+            }
+            // Through the health check (17 Nov 2026): these were raw calls, each waiting the full 2 s on an app that
+            // did not answer, unnoted, so the next one waited again. Now a timeout rests the app and the rest fail at
+            // once. An answer gives what the raw calls gave: the rows if any are selected, else the children; the
+            // count; at most 200 fetched. A failed count is 0, as before.
+            let rowCount = element.attributeValueCountResult(kAXSelectedRowsAttribute).value ?? 0
+            let key = rowCount > 0 ? kAXSelectedRowsAttribute : kAXSelectedChildrenAttribute
+            let count = key == kAXSelectedRowsAttribute ? rowCount : (element.attributeValueCountResult(key).value ?? 0)
+            var all: [AXUIElement] = []
+            if count > 0 { all = (element.attributeValuesResult(key, index: 0, maxValues: min(count, 200)).value as? [AXUIElement]) ?? [] }
             let before = lastSelectedRows?.container.isSame(element) == true ? (lastSelectedRows?.rows ?? []) : []
             lastSelectedRows = (element, all)
             if count > 1 {
