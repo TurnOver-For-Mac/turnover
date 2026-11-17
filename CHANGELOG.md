@@ -17,8 +17,9 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   the keyboard in the field you reach; VO-Left and VO-Right can move on. Turn it off in Settings, Web pages.
 
 - Finder: with Quick Look open on an audio or video file, which plays by itself, each Up or Down Arrow says only the
-  file's name, with no date, size or kind, and the Quick Look window says nothing else when it takes the focus.
-  Other files are read as before.
+  file's name, with no date, size or kind, and nothing else from the Quick Look window is said. Other files are read
+  as before.
+- Finder: opening Quick Look with Space now says the selected file's name in place of "Quick Look, window".
 
 ### Fixed
 

@@ -98,6 +98,10 @@ open class AppModule: ScriptableObject {
     /// A tester, 16 Oct 2026).
     open func ignoresFocus(_ event: Event) -> Bool { false }
 
+    /// What to say when this window comes to the front, in place of "<app>, <title>, window" (17 Nov 2026: Finder's Quick
+    /// Look says the selected file's name). Nil: the announcement exactly as the reader makes it. An empty string: nothing.
+    open func windowAnnouncement(for window: AXUIElement, title: String) -> String? { nil }
+
     /// Events for every object in the app pass here first (NVDA: event_* with nextHandler).
     open func handleEvent(_ event: Event, next: () -> Void) {
         switch event.kind {

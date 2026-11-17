@@ -81,12 +81,33 @@ func finderQuickLookTests() {
         expect(passed, 0, "a window event is held back while a clip is selected")
         expect(said, [], "and nothing said")
         module.handleEvent(Event(.gainFocus, ObjectFactory.make(AXReplay.element(9)))) { passed += 1 }
-        expect(said, ["Song.m4a"], "the window taking the focus says the name only")
+        expect(module.windowAnnouncement(for: AXReplay.element(9), title: "Quick Look"), "Song.m4a", "Quick Look's window says the clip's name")
+        expect(module.windowAnnouncement(for: AXReplay.element(0), title: "Docs"), nil, "another window keeps the reader's words")
+        expect(module.windowAnnouncement(for: AXReplay.element(9), title: "Other"), nil, "a floating window with another title too")
+        let plain = AppModule(pid: 900_010, bundleIdentifier: "com.example.plain", appName: "Plain")
+        expect(plain.windowAnnouncement(for: AXReplay.element(0), title: "Docs"), nil, "the default leaves every announcement as it is")
+        expect(said, [], "the window taking the focus adds nothing (its name is its announcement)")
         module.handleEvent(Event(.gainFocus, ObjectFactory.make(AXReplay.element(1)))) { passed += 1 }
         expect(passed, 1, "an event from the file list is passed on as usual")
         _ = AXReplay.element(1).set(kAXSelectedRowsAttribute, [AXReplay.element(2)] as CFArray)
         module.handleEvent(Event(.valueChange, ObjectFactory.make(AXReplay.element(9)))) { passed += 1 }
         expect(passed, 2, "with a file that is not a clip, the window's events are passed on")
+    }
+    test("Finder Quick Look: the end of a list is known from the selected row's place, without its rows") {
+        let fixture = AXFixture(app: "Finder", bundle: "com.apple.finder", recorded: "synthetic", root: 1, application: 8, focus: nil, nodes: [
+            .init(id: 1, attrs: ["AXRole": .string("AXOutline"), "AXRowCount": .number(3), "AXSelectedRows": .elements([2])]),
+            .init(id: 2, attrs: ["AXRole": .string("AXRow"), "AXIndex": .number(0), "AXParent": .element(1)]),
+            .init(id: 3, attrs: ["AXRole": .string("AXRow"), "AXIndex": .number(2), "AXParent": .element(1)]),
+            .init(id: 4, attrs: ["AXRole": .string("AXRow"), "AXIndex": .number(1), "AXParent": .element(1)]),
+            .init(id: 8, attrs: ["AXRole": .string("AXApplication")]),
+        ])
+        AXReplay.load(fixture)
+        defer { AXReplay.unload() }
+        let list = AXReplay.element(1)
+        expect(FinderAppModule.listEnd(of: list, key: "upArrow", modifiers: [], selected: AXReplay.element(2))?.said, String(localized: "top", comment: "Spoken message"), "index 0 and Up: top")
+        expect(FinderAppModule.listEnd(of: list, key: "downArrow", modifiers: [], selected: AXReplay.element(3))?.said, String(localized: "bottom", comment: "Spoken message"), "the last index and Down: bottom")
+        check(FinderAppModule.listEnd(of: list, key: "downArrow", modifiers: [], selected: AXReplay.element(4)) == nil, "a middle row is not an end")
+        check(FinderAppModule.listEnd(of: list, key: "upArrow", modifiers: [], selected: AXReplay.element(3)) == nil, "Up on the last row is not an end")
     }
     test("Finder Quick Look: the selection test") {
         AXReplay.load(tree())

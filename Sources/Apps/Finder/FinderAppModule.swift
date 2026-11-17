@@ -330,22 +330,35 @@ package final class FinderAppModule: AppModule {
     }
 
     /// Quick Look open on an audio or video file (17 Nov 2026, Oliver): the clip plays by itself, so nothing from its
-    /// window is said but the file's name, which the window taking the focus says (the "Quick Look, window" before it is
-    /// said by the shared window announcement, which this module cannot hold back).
+    /// window is said (the file's name is said as the window comes to the front: windowAnnouncement).
     package override func handleEvent(_ event: Event, next: () -> Void) {
         guard inQuickLookWindow(event.obj), let view = Self.mainFileView(pid: pid), let row = Self.firstSelected(in: view),
               Self.isMedia(row: row) else { super.handleEvent(event, next: next); return }
-        if event.kind == .gainFocus, event.obj.axRole == "AXWindow" { Speech.speakMessage(ObjectFactory.make(row).name) }
         Log.io("finder: Quick Look is playing \"\(String(ObjectFactory.make(row).name.prefix(1)))…\"; \(event.kind.rawValue) from its window not said")
+    }
+
+    /// Quick Look coming to the front says the selected file's name in place of "Quick Look, window" (17 Nov 2026).
+    /// Any other window, or no selection known, keeps the reader's own words.
+    package override func windowAnnouncement(for window: AXUIElement, title: String) -> String? {
+        guard window.string(kAXSubroleAttribute) == "AXSystemFloatingWindow", title == "Quick Look" else { return nil }
+        guard let view = Self.mainFileView(pid: pid), let row = Self.firstSelected(in: view) else { return nil }
+        let name = ObjectFactory.make(row).name
+        return name.isEmpty ? nil : name
     }
 
     /// "top" or "bottom" (the words the lists and browse mode say at their ends) when a plain Up or Down Arrow cannot
     /// move the selection of a list view: it is on the first row and the key is Up, or on the last and it is Down.
     /// Nil in an icon or column view (no rows to know the end by), with a modifier, or for any other key.
-    static func listEnd(of view: AXUIElement, key: String, modifiers: Modifiers, selected: AXUIElement?) -> (said: String, log: String)? {
+    package static func listEnd(of view: AXUIElement, key: String, modifiers: Modifiers, selected: AXUIElement?) -> (said: String, log: String)? {
         guard modifiers.isEmpty, key == "upArrow" || key == "downArrow", let selected else { return nil }
-        let rows = view.elements(kAXRowsAttribute)
-        guard let end = key == "upArrow" ? rows.first : rows.last, selected.isSame(end) else { return nil }
+        // By the selected row's place when Finder gives it, so a big folder's rows are not all fetched (17 Nov 2026);
+        // its real values for a list view were not recorded, so a place that is not known falls back to the rows.
+        if let place = (selected.attr("AXIndex") as? NSNumber)?.intValue, let count = (view.attr(kAXRowCountAttribute) as? NSNumber)?.intValue, count > 0 {
+            guard place == (key == "upArrow" ? 0 : count - 1) else { return nil }
+        } else {
+            let rows = view.elements(kAXRowsAttribute)
+            guard let end = key == "upArrow" ? rows.first : rows.last, selected.isSame(end) else { return nil }
+        }
         return key == "upArrow" ? (String(localized: "top", comment: "Spoken message"), "top") : (String(localized: "bottom", comment: "Spoken message"), "bottom")
     }
 
