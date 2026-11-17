@@ -54,6 +54,9 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   search field to its list of files and its buttons. Before, the panel's list of files was taken for Mail's mailbox
   list, and Tab tried to go to the message list, found nothing and was lost. Mail's other keys (Return in the search
   field, Command Shift N, Escape and the rest) are left to the panel too, so Command Shift N there makes a new folder.
+- Open and Save panels, in any app: as the panel opens you hear its title and the folder it is in, for example "open,
+  dialog, Downloads", said once. Before, TurnOver looked through the whole panel for words to read, which held keys up
+  for as much as a second, found none, and then said the panel's inner window as a second dialog.
 - Web pages: when a reading key or a quick navigation key (such as F) lands on a text field and TurnOver moves the
   keyboard into it for you, you now hear the field's name and the focus mode sound only. Before, the name of the group
   the field sits in was said after it, as if you had moved into that group yourself. Tab and clicks still say the group.

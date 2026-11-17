@@ -204,6 +204,7 @@ public enum Core {
         GlobalPluginHandler.shared.register(VoiceOverKeysPlugin.self)
         GlobalPluginHandler.shared.register(HeldListPlugin.self)
         GlobalPluginHandler.shared.register(SettingsPanePlugin.self)
+        GlobalPluginHandler.shared.register(FilePanelPlugin.self)   // the Open and Save panels, read the light way (17 Nov 2026)
         started = true
     }
 
