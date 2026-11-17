@@ -37,6 +37,24 @@ package enum FilePanel {
         return recently && saidPartStillShows
     }
 
+    /// The panel's folder as it changes (Option Command L, Command Shift D, a folder chosen, Go to Folder): the new
+    /// folder's name, once it has held for 0.3 s and is not the one said last. Fed the folder pop-up's value.
+    package struct FolderChange {
+        package private(set) var said: String?
+        private var pending: (value: String, since: Double)?
+        package init(said: String?) { self.said = said }
+
+        package mutating func note(_ value: String?, at now: Double) -> String? {
+            let v = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard !v.isEmpty else { pending = nil; return nil }   // the pop-up gone or between values
+            guard v != said else { pending = nil; return nil }
+            guard let p = pending, p.value == v else { pending = (v, now); return nil }
+            guard now - p.since >= 0.3 else { return nil }
+            said = v
+            pending = nil
+            return v
+        }
+    }
 }
 
 /// Which dialogs are the panel. Main thread or any: the answers are kept under a lock.
@@ -125,6 +143,7 @@ final class FilePanelDialog: Dialog {
         let reading = Self.lightReading(of: element)
         let title = name.isEmpty ? reading.innerTitle : name
         Speech.speakMessage(FilePanel.openingWords(title: title, dialogWord: Role.dialog.displayString, folder: reading.folder))
+        FilePanelFolderWatch.start(panel: element, popUp: reading.folderPopUp, folder: reading.folder)
     }
 
     /// The light walk: at most 30 elements, never into the file list, the sidebar or a text area.
@@ -156,3 +175,57 @@ final class FilePanelDialog: Dialog {
     }
 }
 
+/// While a panel is open: its folder pop-up looked at five times a second (two questions), and a new folder said once
+/// while the focus is in the panel. Ends when the panel closes, another opens, or after ten minutes.
+enum FilePanelFolderWatch {
+    private static var timer: DispatchSourceTimer?
+    private static var panel: AXUIElement?
+    private static var popUp: AXUIElement?
+    private static var change = FilePanel.FolderChange(said: nil)
+    private static var startedAt = Date()
+    private static var lookedAgainAt = Date.distantPast
+
+    static func start(panel: AXUIElement, popUp: AXUIElement?, folder: String?) {
+        stop()
+        Self.panel = panel
+        Self.popUp = popUp
+        Self.change = FilePanel.FolderChange(said: folder)
+        Self.startedAt = Date()
+        // A busy app answers late: a quarter of a second, then the look is skipped.
+        AXUIElementSetMessagingTimeout(panel, 0.25)
+        if let popUp { AXUIElementSetMessagingTimeout(popUp, 0.25) }
+        let t = DispatchSource.makeTimerSource(queue: .main)
+        t.schedule(deadline: .now() + 0.2, repeating: 0.2)
+        t.setEventHandler { tick() }
+        t.resume()
+        timer = t
+    }
+
+    static func stop() {
+        timer?.cancel()
+        timer = nil
+        panel = nil
+        popUp = nil
+    }
+
+    private static func tick() {
+        guard let panel else { stop(); return }
+        let tooLong = Date().timeIntervalSince(startedAt) > 600
+        let closed = panel.role == "?"
+        if tooLong || closed { stop(); return }
+        var value = popUp?.string(kAXValueAttribute)
+        // The pop-up gone or never found (the panel redrawn, its toolbar changed): looked for again, once a second.
+        if value == nil, Date().timeIntervalSince(lookedAgainAt) > 1 {
+            lookedAgainAt = Date()
+            popUp = FilePanelDialog.lightReading(of: panel).folderPopUp
+            if let popUp { AXUIElementSetMessagingTimeout(popUp, 0.25) }
+            value = popUp?.string(kAXValueAttribute)
+        }
+        guard let folder = change.note(value, at: ProcessInfo.processInfo.systemUptime) else { return }
+        // Said only while the focus is in the panel; a change seen meanwhile is not said later.
+        let focusInPanel = API.focusObject is FilePanelDialog || API.focusAncestors.contains { $0 is FilePanelDialog }
+        guard focusInPanel else { return }
+        Log.io("file panel: the folder changed; saying it")
+        Speech.speakMessage(folder)
+    }
+}

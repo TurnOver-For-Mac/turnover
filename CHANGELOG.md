@@ -57,6 +57,9 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 - Open and Save panels, in any app: as the panel opens you hear its title and the folder it is in, for example "open,
   dialog, Downloads", said once. Before, TurnOver looked through the whole panel for words to read, which held keys up
   for as much as a second, found none, and then said the panel's inner window as a second dialog.
+- Open and Save panels: when the panel goes to another folder, with Option Command L, Command Shift D, Go to Folder
+  or a folder you choose, the new folder's name is said once. Before, nothing was said, so you could not tell where
+  the file would be saved.
 - Web pages: when a reading key or a quick navigation key (such as F) lands on a text field and TurnOver moves the
   keyboard into it for you, you now hear the field's name and the focus mode sound only. Before, the name of the group
   the field sits in was said after it, as if you had moved into that group yourself. Tab and clicks still say the group.
