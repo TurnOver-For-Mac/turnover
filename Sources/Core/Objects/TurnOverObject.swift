@@ -472,7 +472,23 @@ open class TurnOverObject: ScriptableObject {
         // The value is read afresh: this is the focus object, made when the control took the focus, and its value
         // is remembered from then (a slider said 0.9 at every step, in a game, 9 Oct 2026).
         let fresh = ObjectFactory.make(element)
+        // The same value on the same control twice within a few milliseconds is one change, not two (17 Nov 2026: a
+        // video's seek slider sent its value twice, 4 to 15 ms apart, and each second was said twice). Narrow on purpose:
+        // a slider, the same element, the same words, 150 ms (a text field repeating a value keeps saying it).
+        if role == .slider, let text = fresh.value, !text.isEmpty {
+            let now = Date()
+            if Self.repeatsValueJustSaid(last: TurnOverObject.lastValueSaid, element: element, text: text, now: now) {
+                Log.io("value: the same value on the same control \(Int(now.timeIntervalSince(TurnOverObject.lastValueSaid!.at) * 1000)) ms after it was said; not said again")
+                return
+            }
+            TurnOverObject.lastValueSaid = (element, text, now)
+        }
         Speech.speakObjectProperty(fresh, value: true)
+    }
+    public static var lastValueSaid: (element: AXUIElement, text: String, at: Date)?
+    public static func repeatsValueJustSaid(last: (element: AXUIElement, text: String, at: Date)?, element: AXUIElement, text: String, now: Date, within: TimeInterval = 0.15) -> Bool {
+        guard let last, CFEqual(last.element, element), last.text == text else { return false }
+        return now.timeIntervalSince(last.at) < within
     }
     open func event_nameChange() {
         guard role != .window, API.focusObject?.isSameElement(as: self) == true else { return }

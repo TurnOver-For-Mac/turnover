@@ -14,6 +14,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- A slider's value is no longer said twice when the page announces the same change twice in a few milliseconds, as a
+  video's seek slider did at every second. A different value, or the same one a moment later, is still said.
 - Finder: arrowing into a list that is still reloading no longer says "empty" just before the file it comes to. Before,
   a list with no rows for a moment was called empty at once. Now TurnOver waits a tenth of a second for the list to
   answer, and a folder that really is empty still says so.
