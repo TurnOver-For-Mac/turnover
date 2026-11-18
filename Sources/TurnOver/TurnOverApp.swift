@@ -368,6 +368,17 @@ final class TurnOverApp {
         let byInputRecovery = inputActivation.takeAutomaticVoiceOverRestore(on: on, readerChoice: HandOver.choice.value)
         HandOver.newChoice()   // VoiceOver turned on or off, by hand too: a recovery's late fallback stands down
         Log.info("VoiceOver is \(on ? "on" : "off")")
+        // TurnOver's own start of VoiceOver (its watchdog, quit or a failure), in this process or the one before a
+        // restart: taken by this "on", so the person's own toggle after it is theirs; any "off" cancels it (18 Nov 2026).
+        var byOwnStart = false
+        if on {
+            let verdict = HandOver.ownStart.take()
+            byOwnStart = verdict == .ours
+            if byOwnStart { Log.info("VoiceOver on: TurnOver's own start (its watchdog, quit or a failure); no choice by hand") }
+            else if verdict == .stale { Log.info("VoiceOver on: TurnOver's own start was too long ago, or the clock went back; taken as a change by hand") }
+        } else {
+            HandOver.ownStart.cancel()
+        }
         let starting = !sawVoiceOverState
         sawVoiceOverState = true
         defer { refreshWindowsLayer() }
@@ -382,7 +393,7 @@ final class TurnOverApp {
             if let front = NSWorkspace.shared.frontmostApplication { lead.look(at: front) }
             return
         }
-        lead.voiceOverChanged(on: on, byLock: byLock, byInputRecovery: byInputRecovery)
+        lead.voiceOverChanged(on: on, byLock: byLock, byInputRecovery: byInputRecovery, byOwnStart: byOwnStart)
         // Screen reader behaviour (22 Oct 2026): the swap is a setting. Off, VoiceOver's key changes nothing of TurnOver's.
         // VoiceOver going off ends any yielding, whatever the swap setting says.
         if !on { lead.yieldedToVoiceOverByHand = false }
@@ -416,7 +427,7 @@ final class TurnOverApp {
         // Only a change made by hand counts as yielding: a hand-over TurnOver posted itself (the lock screen) does not.
         // Nor one noticed while the Mac is locked or asleep: the lock's own, its notice held back until the wake, long
         // after the three-second window (26 Oct 2026; the lead watcher clears the flag again on the unlock as well).
-        if on, !starting, !lead.isOurChange, !lead.locked, !byLock, !byInputRecovery {
+        if on, !starting, !lead.isOurChange, !lead.locked, !byLock, !byInputRecovery, !byOwnStart {
             lead.yieldedToVoiceOverByHand = true
             Log.info("VoiceOver turned on by hand: TurnOver steps back until it goes off or TurnOver's key")
         }

@@ -469,6 +469,7 @@ final class LeadWatcher {
         }
         Log.info("hand-over: asked for VoiceOver \(voiceOverOn ? "on" : "off") (app in front: \(NSWorkspace.shared.frontmostApplication?.localizedName ?? "none"), VoiceOver was \(NSWorkspace.shared.isVoiceOverEnabled ? "on" : "off"), after a hand \(yieldedToVoiceOverByHand), lock \(lockTurnedVoiceOverOn)")
         if Uninstaller.running && !voiceOverOn { completion?(false); return }   // uninstalling: VoiceOver stays on
+        HandOver.ownStart.cancel()   // the next change of VoiceOver is this hand-over's, not a start of TurnOver's own
         if !voiceOverOn { ScreenCurtain.noteVoiceOverCurtain() }   // before VoiceOver goes, and its curtain with it
         lastHandOverAt = Date()
         ourChangeUntil = Date().addingTimeInterval(3)
@@ -794,7 +795,8 @@ final class LeadWatcher {
 
     /// `byLock`: the lock's own VoiceOver, noticed late; no pin and no choice of the user's.
     /// `byInputRecovery`: one matching notification owned by the permission fallback, not a manual reader pin.
-    func voiceOverChanged(on: Bool, byLock: Bool = false, byInputRecovery: Bool = false) {
+    /// `byOwnStart`: TurnOver's own start of VoiceOver (OwnVoiceOverStart), taken by the app; no pin.
+    func voiceOverChanged(on: Bool, byLock: Bool = false, byInputRecovery: Bool = false, byOwnStart: Bool = false) {
         if !on {
             lockTurnedVoiceOverOn = false
             if wakeRestoration.pending { initialTakeOverPending = false }
@@ -808,12 +810,9 @@ final class LeadWatcher {
         }
         guard !byLock, !byInputRecovery, !locked else { return }
         guard Date().timeIntervalSince(startedAt) > 3 else { return }
-        // TurnOver's own watchdog, quit or failure asked for VoiceOver, in this process or the one before a restart:
-        // its arrival is no choice of the person's (10:16 on 17 Nov 2026 pinned Mail; 18 Nov 2026).
-        if on, let asked = HandOver.ownStartAskedAt, OwnVoiceOverStart.isOurs(askedAt: asked, now: Date().timeIntervalSince1970) {
-            Log.info("lead watcher: VoiceOver on, \(Int(Date().timeIntervalSince1970 - asked)) s after TurnOver itself asked for it (watchdog, quit or failure); no pin")
-            return
-        }
+        // TurnOver's own watchdog, quit or failure started VoiceOver, in this process or the one before a restart: its
+        // arrival is no choice of the person's (10:16 on 17 Nov 2026 pinned Mail; 18 Nov 2026).
+        guard !byOwnStart else { return }
         if let t = Watchdog.shared.lastTrip, Date().timeIntervalSince(t) < 30 { return }
         guard Date() > ourChangeUntil, config.applications.switchesAsAppsChange else { return }
         guard let app = NSWorkspace.shared.frontmostApplication, app.activationPolicy == .regular, let b = app.bundleIdentifier, b != Bundle.main.bundleIdentifier else { return }

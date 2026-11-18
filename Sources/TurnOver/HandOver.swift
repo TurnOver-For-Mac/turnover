@@ -70,15 +70,10 @@ enum HandOver {
         }
     }
 
-    /// When TurnOver last asked for VoiceOver outside a hand-over (OwnVoiceOverStart), in a file, so the TurnOver
-    /// started after a watchdog restart or a quit knows it too.
-    nonisolated private static let ownStartFile = AppPaths.file("voiceover-asked-by-turnover")
-    nonisolated static func noteOwnStart() {
-        try? OwnVoiceOverStart.encode(Date().timeIntervalSince1970).write(to: ownStartFile, atomically: true, encoding: .utf8)
-    }
-    nonisolated static var ownStartAskedAt: TimeInterval? {
-        (try? String(contentsOf: ownStartFile, encoding: .utf8)).flatMap(OwnVoiceOverStart.decode)
-    }
+    /// TurnOver's own start of VoiceOver outside a hand-over (OwnVoiceOverStart), in a file, so the TurnOver started
+    /// after a watchdog restart or a quit knows it too. Taken by the next "VoiceOver is on" (TurnOverApp).
+    nonisolated static let ownStart = OwnVoiceOverStart.Record(url: AppPaths.file("voiceover-asked-by-turnover"))
+    nonisolated static func noteOwnStart() { ownStart.note() }
 
     nonisolated static func postToggle() {
         let s = toggleShortcut()
