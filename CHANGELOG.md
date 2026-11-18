@@ -52,6 +52,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   and does what it always does. Before, the prompt stayed open until Return or Escape, and took every such key
   without a word, even after Command Tab to another app, so Tab, the arrows and Turnover's keys seemed dead until
   TurnOver was turned off. Typing, Backspace, Return and Escape work in the prompt as before.
+- Safari: VoiceOver Space on a link that opens its page in the same tab now reads the new page as soon as it has
+  loaded. Before, nothing was said until you pressed a key.
 - When an app leaves the Mac's secure input on after you leave a password field, as Safari did on Steam's sign-in
   page, VoiceOver now takes the keys a second later, and TurnOver takes them back a second after secure input goes
   off. Before, TurnOver heard none of your keys until you left the page. Nothing is said, and inside a password field

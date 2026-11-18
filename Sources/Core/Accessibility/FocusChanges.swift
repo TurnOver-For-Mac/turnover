@@ -419,7 +419,41 @@ extension AXHandler {
             }
             Log.io("focus on a nameless AXUnknown with no document inside; ignored"); return .ignore
         }
+        if Self.isSafariPageHostBetweenPages(target, pid: pid) {
+            Log.io("focus on a nameless AXGroup with no page in it yet, in the window of the page in hand; ignored, watching for the new page")
+            if let document = API.focusTreeInterceptor { followIfPageWent(document, tries: 12) }
+            return .ignore
+        }
         return .go(target)
+    }
+
+    /// Safari, after a link is pressed: the focus goes to a nameless group outside any page, with no page in it yet,
+    /// while the new page loads; the new page then takes the focus only as a blank frame (about:blank, ignored by its
+    /// rule) and posts nothing more. Presented, the group said nothing, browse mode let go of the page, and nothing was
+    /// said of the new page until a key was pressed (Oliver, 18 Nov 2026 at 07:13:28 and 07:18:31: VO Space on a link,
+    /// then silence until Tab three seconds later). Left alone, the page in hand keeps the keys and the new page is
+    /// followed as soon as it has content (followIfPageWent), as a reloaded page is. Only Safari (the other browsers
+    /// were not seen to do it, SHORTCOMINGS 13), only with a page in hand in the same window, and not after Tab, which
+    /// moves into Safari's own controls.
+    package static func isSafariPageHostBetweenPages(_ target: AXUIElement, pid: pid_t) -> Bool {
+        guard target.role == "AXGroup" else { return false }
+        guard BrowseModeDocument.pageOnItsWayBundles.contains(ProfileStore.shared.bundle(of: pid)) else { return false }
+        guard let document = API.focusTreeInterceptor else { return false }
+        guard document.webArea.pid == pid else { return false }
+        let key = InputManager.lastKeyIdentifier
+        let afterTab = key == "kb:tab" || key == "kb:shift+tab"
+        guard !afterTab else { return false }
+        // Outside any page: a nameless group on a page is the page's own.
+        var p = target.element(kAXParentAttribute); var hops = 0
+        while let x = p, hops < 40 {
+            if x.role == "AXWebArea" { return false }
+            p = x.element(kAXParentAttribute); hops += 1
+        }
+        guard let targetWindow = target.element(kAXWindowAttribute) else { return false }
+        if let documentWindow = document.webArea.element(kAXWindowAttribute) { return targetWindow.isSame(documentWindow) }
+        // The page in hand has gone and can no longer name its window: the same process is taken as the same window,
+        // as the empty web area rule does.
+        return !document.isAlive
     }
 
     /// Whether `field`, where the focus is, is a text field in `page` that still says it has the keyboard, so a report
