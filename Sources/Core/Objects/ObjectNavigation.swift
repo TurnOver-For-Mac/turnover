@@ -1340,7 +1340,7 @@ public final class ObjectNavigator {
         currentPid = reading.element.pid
         // (No label source: finding it asks the profile store about the element, which is for the keyboard path.)
         labelSource = nil
-        Speech.asSource(MouseTracking.speechSource) { Speech.asPrivate { Speech.speakItem(reading.text, processed: true) } }
+        Speech.asPrivate { Speech.speakItem(reading.text, processed: true) }
     }
 
     /// Puts the review cursor on an element without a word: what already said it (a dialog's Tab) keeps the two

@@ -92,8 +92,6 @@ public struct LookState: Equatable {
 }
 
 public enum MouseTracking {
-    /// Tags the pointer's own speech.
-    nonisolated static var speechSource: String { "mouse" }
     /// The longest between one look and the next while the pointer moves.
     nonisolated static var interval: TimeInterval { 0.1 }
 
