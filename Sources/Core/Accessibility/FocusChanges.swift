@@ -295,8 +295,8 @@ extension AXHandler {
     /// if the page in hand has gone (its web area dead or emptied) and the window has a new one with content, that
     /// one is followed. Now, not at the next key, which would have read the old buffer (a second reviewer, 23 Oct
     /// 2026).
-    func followIfPageWent(_ document: BrowseModeDocument, tries: Int) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+    func followIfPageWent(_ document: BrowseModeDocument, tries: Int, gaveUp: (() -> Void)? = nil) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.pageWatchInterval) { [weak self] in
             guard let self, API.focusTreeInterceptor === document else { return }
             let app = AXUIElementCreateApplication(document.webArea.pid)
             if let focused = app.element(kAXFocusedUIElementAttribute), focused.role == "AXWebArea",
@@ -308,13 +308,16 @@ extension AXHandler {
             let oldGone = !document.isAlive || document.webArea.elements(kAXChildrenAttribute).isEmpty
             if oldGone {
                 document.followCurrentRoot(requireEmpty: false) { [weak self] followed in
-                    if !followed, tries > 1 { self?.followIfPageWent(document, tries: tries - 1) }
+                    guard !followed else { return }
+                    if tries > 1 { self?.followIfPageWent(document, tries: tries - 1, gaveUp: gaveUp) } else { gaveUp?() }
                 }
                 return
             }
-            if tries > 1 { self.followIfPageWent(document, tries: tries - 1) }
+            if tries > 1 { self.followIfPageWent(document, tries: tries - 1, gaveUp: gaveUp) } else { gaveUp?() }
         }
     }
+    /// How often followIfPageWent looks (a test shortens it).
+    package static var pageWatchInterval: TimeInterval = 0.4
 
     /// Safari reports the page focused while its address bar, with the suggestions popup up, still has the keyboard.
     /// (Only a field you can type in: Mail's message window starts its focus on the read-only header, a text area,
@@ -419,41 +422,68 @@ extension AXHandler {
             }
             Log.io("focus on a nameless AXUnknown with no document inside; ignored"); return .ignore
         }
-        if Self.isSafariPageHostBetweenPages(target, pid: pid) {
-            Log.io("focus on a nameless AXGroup with no page in it yet, in the window of the page in hand; ignored, watching for the new page")
-            if let document = API.focusTreeInterceptor { followIfPageWent(document, tries: 12) }
+        if Self.isSafariPageHostBetweenPages(target, pid: pid), let document = API.focusTreeInterceptor {
+            // The press is the evidence for one page change only.
+            BrowseModeDocument.lastNavigationPress = nil
+            Log.io("focus on a nameless AXGroup with no page in it yet, just after a link or button was pressed; set aside, watching for the new page")
+            let setAside = target
+            followIfPageWent(document, tries: Self.pageHostWatchTries) { [weak self] in
+                // No new page came: the focus set aside is presented, if the app still has it there.
+                guard let self else { return }
+                guard let now = AXUIElementCreateApplication(pid).element(kAXFocusedUIElementAttribute), now.isSame(setAside) else {
+                    Log.io("focus: no new page came, and the app's focus has moved on from the group set aside; not presented")
+                    return
+                }
+                Log.io("focus: no new page came; the nameless group set aside is presented")
+                self.present(setAside, pid: pid)
+            }
             return .ignore
         }
         return .go(target)
     }
 
-    /// Safari, after a link is pressed: the focus goes to a nameless group outside any page, with no page in it yet,
-    /// while the new page loads; the new page then takes the focus only as a blank frame (about:blank, ignored by its
-    /// rule) and posts nothing more. Presented, the group said nothing, browse mode let go of the page, and nothing was
-    /// said of the new page until a key was pressed (Oliver, 18 Nov 2026 at 07:13:28 and 07:18:31: VO Space on a link,
-    /// then silence until Tab three seconds later). Left alone, the page in hand keeps the keys and the new page is
-    /// followed as soon as it has content (followIfPageWent), as a reloaded page is. Only Safari (the other browsers
-    /// were not seen to do it, SHORTCOMINGS 13), only with a page in hand in the same window, and not after Tab, which
-    /// moves into Safari's own controls.
-    package static func isSafariPageHostBetweenPages(_ target: AXUIElement, pid: pid_t) -> Bool {
+    /// How many looks, at pageWatchInterval, for the new page after Safari's page host takes the focus (about 5 s).
+    package static var pageHostWatchTries = 12
+    /// How long a press of a link or button stands as evidence of a page change.
+    package static let pageHostPressWindow: TimeInterval = 4
+
+    /// Safari, after VO Space or Return on a link or button: the focus goes to a nameless group outside any page, with
+    /// no page in it yet, while the new page loads; the new page then takes the focus only as a blank frame
+    /// (about:blank, ignored by its rule) and posts nothing more. Presented, the group said nothing, browse mode let go of
+    /// the page, and nothing was said of the new page until a key was pressed (Oliver, 18 Nov 2026 at 07:13:28 and
+    /// 07:18:31: VO Space on a link, then silence until Tab three seconds later). Set aside, the page in hand keeps the
+    /// keys and the new page is followed as soon as it has content (followIfPageWent), as a reloaded page is; with no new
+    /// page in about five seconds the group is presented after all. Only with positive evidence (a link or button
+    /// pressed by VO Space or Return in this window within the last few seconds), only Safari (SHORTCOMINGS 13), only in
+    /// the very window of that press, never in a dialog, a sheet or anything inside one.
+    package static func isSafariPageHostBetweenPages(_ target: AXUIElement, pid: pid_t, now: Date = Date()) -> Bool {
         guard target.role == "AXGroup" else { return false }
         guard BrowseModeDocument.pageOnItsWayBundles.contains(ProfileStore.shared.bundle(of: pid)) else { return false }
         guard let document = API.focusTreeInterceptor else { return false }
         guard document.webArea.pid == pid else { return false }
+        guard let press = BrowseModeDocument.lastNavigationPress else { return false }
+        guard press.pid == pid else { return false }
+        guard now.timeIntervalSince(press.at) < pageHostPressWindow else { return false }
+        // Not after Tab or Shift Tab since: that is a move into Safari's own controls.
         let key = InputManager.lastKeyIdentifier
-        let afterTab = key == "kb:tab" || key == "kb:shift+tab"
-        guard !afterTab else { return false }
-        // Outside any page: a nameless group on a page is the page's own.
+        guard key != "kb:tab", key != "kb:shift+tab" else { return false }
+        // The very window the press was in, by identity.
+        guard let targetWindow = target.element(kAXWindowAttribute) else { return false }
+        guard targetWindow.isSame(press.window) else { return false }
+        guard targetWindow.string(kAXSubroleAttribute) == "AXStandardWindow" else { return false }
+        // Outside any page (a nameless group on a page is the page's own), and in no sheet or dialog.
+        let dialogSubroles: Set<String> = ["AXDialog", "AXSystemDialog", "AXFloatingWindow", "AXSystemFloatingWindow"]
         var p = target.element(kAXParentAttribute); var hops = 0
         while let x = p, hops < 40 {
-            if x.role == "AXWebArea" { return false }
+            let role = x.role
+            if role == "AXWebArea" { return false }
+            if role == "AXSheet" { return false }
+            if let sub = x.string(kAXSubroleAttribute), dialogSubroles.contains(sub) { return false }
+            if role == "AXWindow" { break }
             p = x.element(kAXParentAttribute); hops += 1
         }
-        guard let targetWindow = target.element(kAXWindowAttribute) else { return false }
-        if let documentWindow = document.webArea.element(kAXWindowAttribute) { return targetWindow.isSame(documentWindow) }
-        // The page in hand has gone and can no longer name its window: the same process is taken as the same window,
-        // as the empty web area rule does.
-        return !document.isAlive
+        guard p != nil else { return false }   // the window was never reached: not known to be outside a page
+        return true
     }
 
     /// Whether `field`, where the focus is, is a text field in `page` that still says it has the keyboard, so a report

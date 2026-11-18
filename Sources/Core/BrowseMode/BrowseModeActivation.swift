@@ -21,6 +21,8 @@ extension BrowseModeDocument {
     /// `byAccessibility`: VO-Space. The control with the keyboard is pressed through accessibility, as VoiceOver's
     /// VO-Space presses it, where Enter and Space send the real key (below): a page that ignores one answers the other.
     package func activate(_ gesture: KeyboardGesture, byAccessibility: Bool = false) {
+        let voSpaceOrReturn = byAccessibility || ["enter", "numpadEnter"].contains(gesture.keyName)
+        Self.activationKeyAt = voSpaceOrReturn ? Date() : .distantPast
         // VO-Space reaches here without a script lookup; Return and Space were refused there already (16 Nov 2026).
         if refuseIfPageOnItsWay(gesture, command: "activatePosition") { return }
         if navigationWaiting ||
@@ -71,6 +73,7 @@ extension BrowseModeDocument {
             Log.io("browse mode: \(gesture.keyName) to the focused \(f.axRole) (the keyboard moved there after the reading position)")
             let before = ControlState(y)
             gesture.send()
+            notePressForNavigation(y, role: f.axRole)
             if ["AXButton", "AXLink", "AXMenuButton"].contains(f.axRole) { Tones.press() }
             watchStateChange(y, before: before)
             return
@@ -90,6 +93,7 @@ extension BrowseModeDocument {
                     Log.io("browse mode: \(gesture.keyName) to the focused \(y.role) itself")
                     let before = ControlState(y)
                     gesture.send()
+                    notePressForNavigation(y, role: y.role)
                     if ["AXButton", "AXLink", "AXMenuButton"].contains(y.role) { Tones.press() }
                     watchStateChange(y, before: before)
                     return
@@ -426,6 +430,19 @@ extension BrowseModeDocument {
         positionLeftIt || (focusMovedElsewhere && keyArrived)
     }
 
+    /// When VO-Space or Return last asked browse mode to activate something (distant past for Space and the rest).
+    static var activationKeyAt = Date.distantPast
+    /// A link or button pressed by VO-Space or Return, with the window of its page, for the focus rules: Safari's
+    /// nameless page host taking the focus just after is the page changing, not a move (18 Nov 2026). Used once.
+    package static var lastNavigationPress: (window: AXUIElement, pid: pid_t, at: Date)?
+
+    func notePressForNavigation(_ x: AXUIElement, role: String) {
+        guard role == "AXLink" || role == "AXButton" else { return }
+        guard Date().timeIntervalSince(Self.activationKeyAt) < 2 else { return }
+        guard let window = x.element(kAXWindowAttribute) ?? webArea.element(kAXWindowAttribute) else { return }
+        Self.lastNavigationPress = (window, webArea.pid, Date())
+    }
+
     /// True means an activation started; completion reports whether it actually sent a key or pressed.
     /// Recovery supplies its absolute deadline, shared by focus confirmation and the final action.
     func press(nearestTo start: AXUIElement?, deadline: Date? = nil, valid: @escaping () -> Bool = { true },
@@ -501,6 +518,7 @@ extension BrowseModeDocument {
                             guard r == .success else { completion(false); return }
                         }
                         Tones.press()
+                        self.notePressForNavigation(x, role: role)
                         self.watchStateChange(x, before: before)
                         completion(true)
                     }
@@ -511,6 +529,7 @@ extension BrowseModeDocument {
                 Log.io("browse mode: press \(role) \"\(Log.words(x.string(kAXTitleAttribute) ?? x.string(kAXDescriptionAttribute) ?? ""))\" → \(describeError(r))")
                 if r == .success {
                     Tones.press()
+                    notePressForNavigation(x, role: role)
                     // A press often changes the page without loading another (AppleVis's Main Menu opens its links;
                     // the old copy still had the closed menu's text, with nothing to press, 3 Oct 2026): the watch
                     // reads it again, and says the control's new state (a check box pressed from the page gets no
