@@ -49,6 +49,7 @@ enum HandOver {
         // the flag on but VoiceOver gone the toggle would turn the flag off.
         Log.info("\(why): \(NSWorkspace.shared.isVoiceOverEnabled ? "VoiceOver's flag is on but it isn't running" : "VoiceOver off"); opening VoiceOver")
         let mine = newChoice()
+        noteOwnStart()   // its arrival, even in the next TurnOver, is no pin by hand (18 Nov 2026)
         openVoiceOver(why)
         // VoiceOver.app failed to bring it: the shortcut, only once VoiceOver is wholly off (flag and process both), so
         // a slow start isn't toggled back off (a code review, 25 Oct 2026). Waited for here when asked, else later.
@@ -67,6 +68,16 @@ enum HandOver {
         } else {
             DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 3) { fallBack() }
         }
+    }
+
+    /// When TurnOver last asked for VoiceOver outside a hand-over (OwnVoiceOverStart), in a file, so the TurnOver
+    /// started after a watchdog restart or a quit knows it too.
+    nonisolated private static let ownStartFile = AppPaths.file("voiceover-asked-by-turnover")
+    nonisolated static func noteOwnStart() {
+        try? OwnVoiceOverStart.encode(Date().timeIntervalSince1970).write(to: ownStartFile, atomically: true, encoding: .utf8)
+    }
+    nonisolated static var ownStartAskedAt: TimeInterval? {
+        (try? String(contentsOf: ownStartFile, encoding: .utf8)).flatMap(OwnVoiceOverStart.decode)
     }
 
     nonisolated static func postToggle() {

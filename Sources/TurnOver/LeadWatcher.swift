@@ -738,6 +738,12 @@ final class LeadWatcher {
         }
         guard !byLock, !byInputRecovery, !locked else { return }
         guard Date().timeIntervalSince(startedAt) > 3 else { return }
+        // TurnOver's own watchdog, quit or failure asked for VoiceOver, in this process or the one before a restart:
+        // its arrival is no choice of the person's (10:16 on 17 Nov 2026 pinned Mail; 18 Nov 2026).
+        if on, let asked = HandOver.ownStartAskedAt, OwnVoiceOverStart.isOurs(askedAt: asked, now: Date().timeIntervalSince1970) {
+            Log.info("lead watcher: VoiceOver on, \(Int(Date().timeIntervalSince1970 - asked)) s after TurnOver itself asked for it (watchdog, quit or failure); no pin")
+            return
+        }
         if let t = Watchdog.shared.lastTrip, Date().timeIntervalSince(t) < 30 { return }
         guard Date() > ourChangeUntil, config.applications.switchesAsAppsChange else { return }
         guard let app = NSWorkspace.shared.frontmostApplication, app.activationPolicy == .regular, let b = app.bundleIdentifier, b != Bundle.main.bundleIdentifier else { return }

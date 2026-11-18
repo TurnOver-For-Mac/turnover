@@ -233,6 +233,9 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 - Up and Down in an empty list say "empty" at once, and Backspace in an empty field answers at once.
 - The link sound plays once for a line, not once for each link on it.
 - The app you are leaving is no longer read over the Command Tab app switcher.
+- VoiceOver started by TurnOver itself, when it stops responding, restarts or quits, no longer counts as you
+  choosing VoiceOver for the app in front. Before, after a restart Mail could be kept with VoiceOver as if you had
+  turned it on there by hand. Turning VoiceOver on yourself still keeps that app with VoiceOver until TurnOver quits.
 
 ## 2.0, build 24.1
 
