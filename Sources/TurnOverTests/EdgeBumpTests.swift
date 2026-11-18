@@ -22,4 +22,10 @@ func edgeBumpTests() {
         check(edge("rightArrow", caret: 0, lineEnd: 0, length: 0, empty: true), "an empty field")
         check(!edge("upArrow", caret: 0), "other keys are not sideways")
     }
+    test("edge bump: Mail's lists say top and bottom at their ends, other apps' lists keep the bump alone (18 Nov 2026)") {
+        expect(SelectableList.edgeWords(bundle: "com.apple.mail", key: "upArrow"), String(localized: "top", comment: "Spoken message"), "Mail, Up")
+        expect(SelectableList.edgeWords(bundle: "com.apple.mail", key: "downArrow"), String(localized: "bottom", comment: "Spoken message"), "Mail, Down")
+        check(SelectableList.edgeWords(bundle: "com.apple.notes", key: "upArrow") == nil, "another app")
+        check(SelectableList.edgeWords(bundle: "com.apple.mail", key: "leftArrow") == nil, "not an up or down key")
+    }
 }

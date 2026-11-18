@@ -23,6 +23,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- Mail: Up Arrow on the first message and Down Arrow on the last now say "top" and "bottom", as Finder's lists do.
+  Before, you heard the edge sound and nothing was said.
 - When an app leaves the Mac's secure input on after you leave a password field, as Safari did on Steam's sign-in
   page, VoiceOver now takes the keys a second later, and TurnOver takes them back a second after secure input goes
   off. Before, TurnOver heard none of your keys until you left the page. Nothing is said, and inside a password field

@@ -169,6 +169,9 @@ open class SelectableList: TurnOverObject {
         if g.modifiers.isEmpty, key == "upArrow" || key == "downArrow", atEnd(top: key == "upArrow") {
             g.send()
             Log.io("list: at the \(key == "upArrow" ? "top" : "bottom")")
+            // Mail only (18 Nov 2026): its message list gave the bump and no word, 14 times in one log (17 Nov 2026), where
+            // Finder's lists and browse mode say "top" and "bottom". Other apps' lists keep the system's bump alone.
+            if let words = Self.edgeWords(bundle: appModule.bundleIdentifier, key: key) { Speech.speakMessage(words) }
             return
         }
         if virtualRow != nil, g.modifiers.isEmpty, ["upArrow", "downArrow", "home", "end"].contains(key) { moveVirtually(key); return }
@@ -229,6 +232,12 @@ open class SelectableList: TurnOverObject {
     }
 
     /// Whether the selection is on the first (or last) row.
+    /// What is said when a plain Up or Down Arrow meets the end of a list: "top" or "bottom" in Mail's lists, nil elsewhere.
+    public static func edgeWords(bundle: String?, key: String) -> String? {
+        guard bundle == "com.apple.mail", key == "upArrow" || key == "downArrow" else { return nil }
+        return key == "upArrow" ? String(localized: "top", comment: "Spoken message") : String(localized: "bottom", comment: "Spoken message")
+    }
+
     private func atEnd(top: Bool) -> Bool {
         let (rows, key) = rowsAndKey
         guard let end = top ? rows.first : rows.last, let selected = element.elements(key).first else { return false }
