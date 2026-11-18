@@ -144,10 +144,14 @@ package enum AppSwitcherDiagnostics {
         return "pid \(matching[0].pid) by its name"
     }
 
-    package static func line(key: String, selectedName: String?, process: String?, lastAnnounced: String?) -> String {
+    /// `items`: how many apps the switcher lists, given when nothing is selected. None means the switcher had already
+    /// closed while TurnOver's focus was still on it: on 18 Nov 2026 (07:32:54 to 07:33:01) the keys read as "in the
+    /// switcher" went to Safari, in front and not answering, the switcher gone with Safari's activation (18 Nov 2026).
+    package static func line(key: String, selectedName: String?, process: String?, lastAnnounced: String?, items: Int? = nil) -> String {
         let selected = selectedName.map { "\"\($0)\"" } ?? "unknown"
         let announced = lastAnnounced.map { "\"\($0)\"" } ?? "nothing"
-        return "switcher key \(key): selected \(selected), \(process ?? "pid unknown"); last announced \(announced)"
+        let listed = selectedName == nil ? items.map { $0 == 0 ? " (the switcher lists no apps: it has closed)" : " (the switcher lists \($0) apps)" } ?? "" : ""
+        return "switcher key \(key): selected \(selected)\(listed), \(process ?? "pid unknown"); last announced \(announced)"
     }
 
     /// From the main thread as each key is decided (InputManager.handleKeyDown), before the key reaches the Dock.
@@ -165,7 +169,8 @@ package enum AppSwitcherDiagnostics {
         guard let list = API.focusObject as? AppSwitcherList else { return }
         guard logsLine(for: gesture) else { return }
         // Bounded, as a diagnostic must be: the switcher holds one item per running app.
-        let selected = list.element.elements(kAXChildrenAttribute).prefix(64).first { ($0.attr(kAXFocusedAttribute) as? Bool) == true }
+        let items = list.element.elements(kAXChildrenAttribute).prefix(64)
+        let selected = items.first { ($0.attr(kAXFocusedAttribute) as? Bool) == true }
         let name = selected?.string(kAXTitleAttribute)
         let url = selected?.attr(kAXURLAttribute) as? URL
         var process: String?
@@ -175,6 +180,6 @@ package enum AppSwitcherDiagnostics {
             }
             process = Self.process(name: name, url: url, among: apps)
         }
-        Log.io(line(key: gesture.logDescription(), selectedName: name, process: process, lastAnnounced: lastAnnounced))
+        Log.io(line(key: gesture.logDescription(), selectedName: name, process: process, lastAnnounced: lastAnnounced, items: items.count))
     }
 }
