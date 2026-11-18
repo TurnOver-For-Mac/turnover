@@ -178,6 +178,8 @@ final class LeadWatcher {
     private var lockRequest = LockVoiceOverRequest()
 
     private func goingAway(_ why: String) {
+        // Find's prompt does not wait behind the lock for letters typed after it (18 Nov 2026).
+        FindPrompt.shared.close(because: why)
         // Sleep's second notice, while the first one's request for VoiceOver is under way: toggled again, VoiceOver went
         // on and straight off behind the lock (13 Nov 2026). It leaves the first request, and its checks, to finish.
         if locked, lockRequest.isUnderWay(now: ProcessInfo.processInfo.systemUptime) {

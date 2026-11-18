@@ -48,7 +48,14 @@ public final class TurnOverMenu {
     public static let shared = TurnOverMenu()
     /// Read on the keyboard thread as well; written here, on the main thread.
     private let _isOpen = Locked(false)
-    nonisolated public private(set) var isOpen: Bool { get { _isOpen.value } set { _isOpen.value = newValue; Self.anyOpen.value = newValue } }
+    nonisolated public private(set) var isOpen: Bool {
+        get { _isOpen.value }
+        set {
+            _isOpen.value = newValue; Self.anyOpen.value = newValue
+            // The menu, a list, the chooser or the rotor opening closes Find's prompt: the keys are the menu's now (18 Nov 2026).
+            if newValue { FindPrompt.shared.close(because: "TurnOver's menu opened") }
+        }
+    }
     /// The same, without the shared menu itself (main actor): for the key tap's thread.
     nonisolated public static let anyOpen = Locked(false)
     private var stack: [(title: String, items: [MenuItem], index: Int)] = []

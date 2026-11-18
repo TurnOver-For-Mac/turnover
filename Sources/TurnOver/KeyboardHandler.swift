@@ -681,6 +681,8 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
             }
         }
         guard bare else { return nil }
+        // Quick Nav's arrows never reach InputManager: an arrow closes Find's prompt here and moves (18 Nov 2026).
+        FindPrompt.shared.close(because: "a Quick Nav arrow")
         if let first = arrowHeld, first != code, let firstName = Self.arrowNames[first] {
             arrowChorded = true
             quarantined.insert(code)

@@ -21,6 +21,9 @@ extension AXHandler {
 
     func appActivated(_ app: NSRunningApplication) {
         let pid = app.processIdentifier
+        // Find's prompt belongs to the app it was opened over: any other app coming to the front, TurnOver's own
+        // included, however it came (Command Tab, the mouse, the Dock), closes it (18 Nov 2026).
+        if pid != activePid { FindPrompt.shared.close(because: "another app came to the front") }
         guard pid != getpid() else { return }
         if pid == activePid { return }
         let old = activePid

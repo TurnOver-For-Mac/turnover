@@ -8,16 +8,25 @@
 import Foundation
 import ApplicationServices
 
-public final class FindPrompt {
-    public static let shared = FindPrompt()
+// Sendable by hand: the open state and the opening number are behind locks and read from any thread (the keyboard's
+// way in, Quick Nav's arrows, the menu); everything else is touched on the main thread only.
+public final class FindPrompt: @unchecked Sendable {
+    nonisolated public static let shared = FindPrompt()
     /// Read on the keyboard thread as well; written here, on the main thread.
     private let _isOpen = Locked(false)
     public private(set) var isOpen: Bool { get { _isOpen.value } set { _isOpen.value = newValue } }
+    /// Which opening of the prompt a key was given to (18 Nov 2026, Codex's review): a key is decided on the keyboard's
+    /// way in and handled later on the main thread, and in between the prompt can close (Command Tab, an app switch)
+    /// or be opened again. A handler acts only on the opening its key was given to, while it is still open: a queued
+    /// Return no longer searches for half-typed or old text after the prompt has gone.
+    private let _generation = Locked(0)
+    nonisolated public var generation: Int { _generation.value }
     private var typed = ""
     public private(set) var lastSearch = ""
 
     public func open() {
         typed = ""
+        _generation.lock.lock(); _generation.unsafeValue += 1; _generation.lock.unlock()
         isOpen = true
         Speech.speakMessage(lastSearch.isEmpty ? String(localized: "find", comment: "Find opened") : String(localized: "find, last \(lastSearch)", comment: "Find opened: %@ is the last search"))
     }
@@ -51,17 +60,31 @@ public final class FindPrompt {
         return ch
     }
 
-    /// The prompt is left for a key it does not take (`keeps`), which then goes on as it would have. Any thread: the
-    /// keyboard's way in calls it, so the next key already finds the prompt closed.
-    nonisolated package func leave() {
-        guard _isOpen.value else { return }
-        _isOpen.value = false
-        // The key itself is on the input line that follows (a typed key is never named in the log).
-        Log.io("find: the prompt is left without a search; the next key goes on as it would have")
+    /// The prompt is closed without a search, from any thread: a key it does not take (`keeps`), which then goes on as
+    /// it would have; Quick Nav's arrows, which never reach InputManager; another app coming to the front however it
+    /// came (Command Tab, the mouse, the Dock), which is also TurnOver's own app giving up the front; TurnOver's menu
+    /// opening; the lock, sleep or a user switch; secure input coming on (TurnOver hears no keys then). Any queued key
+    /// for this opening is then dropped (`generation`). Nothing is said.
+    nonisolated package func close(because why: String) {
+        _generation.lock.lock()
+        let wasOpen = _isOpen.value
+        if wasOpen { _isOpen.value = false; _generation.unsafeValue += 1 }
+        _generation.lock.unlock()
+        guard wasOpen else { return }
+        // The key itself, when there is one, is on the input line that follows (a typed key is never named in the log).
+        Log.io("find: the prompt closed without a search (\(why))")
     }
 
-    /// Every key while the prompt is open that it takes (InputManager routes them here, on the main thread).
-    public func handle(_ g: KeyboardGesture) {
+    /// Every key while the prompt is open that it takes (InputManager routes them here, on the main thread), with the
+    /// opening it was given to.
+    public func handle(_ g: KeyboardGesture, generation given: Int) {
+        // Control or Option with a key is the Mac's (Control Space switches the keyboard language): it goes on, and the
+        // next letters come in that language (a tester, 14 Oct 2026: the prompt kept English). Sent even when the
+        // prompt has gone since: the key was kept from the Mac for the prompt, and is the Mac's.
+        let macKey = !["escape", "enter", "numpadEnter", "backspace"].contains(g.keyName) && !g.modifiers.subtracting(.shift).isEmpty
+        if macKey { g.send(); return }
+        // A key given to an opening that has closed, or been replaced by a new one: nothing is done with it.
+        guard given == generation, isOpen else { return }
         switch g.keyName {
         case "escape":
             isOpen = false; Speech.speakMessage(String(localized: "find cancelled", comment: "Spoken message"))
@@ -74,17 +97,15 @@ public final class FindPrompt {
         case "backspace":
             if let c = typed.popLast() { Speech.speakSpelling(String(c)) } else { Speech.speakMessage(String(localized: "blank", comment: "Spoken message")) }
         default:
-            // Control or Option with a key is the Mac's (Control Space switches the keyboard language): it goes on,
-            // and the next letters come in that language (a tester, 14 Oct 2026: the prompt kept English).
-            guard g.modifiers.subtracting(.shift).isEmpty else { g.send(); return }
-            // A key left behind the prompt by one that closed it (keys queued for the main thread): not typed.
-            guard isOpen else { return }
             let ch = Self.typedText(g)
             guard !ch.isEmpty else { return }
             typed += ch
             if ch == " " { Speech.speakMessage(String(localized: "space", comment: "Spoken message")) } else { Speech.speakSpelling(ch) }
         }
     }
+
+    /// What has been typed into the open prompt (tests).
+    package var typedSoFar: String { typed }
 
     /// TurnOver+G / TurnOver+Shift+G.
     public func again(forward: Bool) {

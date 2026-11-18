@@ -32,32 +32,76 @@ func findPromptTests() {
         expect(FindPrompt.typedText(tab), "")
     }
 
-    test("A key Find's prompt does not take closes it, so the keys after it work again") {
-        let savedPoster = KeyboardGesture.poster
-        let sent = Locked<[String]>([])
+    test("Find's prompt: what is typed is searched, other keys close it and go on, queued keys of a closed prompt do nothing") {
+        let savedPoster = KeyboardGesture.poster, savedObserver = Log.observer, savedLevel = Log.level
+        let sent = Locked<[String]>([]), lines = Locked<[String]>([])
         KeyboardGesture.poster = { g in sent.value.append(g.identifier) }
-        defer { KeyboardGesture.poster = savedPoster }
+        Log.level = .io
+        Log.observer = { line in lines.value.append(line) }
+        defer {
+            if FindPrompt.shared.isOpen { FindPrompt.shared.close(because: "the test is over") }
+            if TurnOverMenu.shared.isOpen { TurnOverMenu.shared.close() }
+            KeyboardGesture.poster = savedPoster; Log.observer = savedObserver; Log.level = savedLevel
+        }
+        func drain() { RunLoop.current.run(until: Date().addingTimeInterval(0.05)) }
+        func searches() -> [String] { lines.value.filter { $0.contains("find next:") || $0.contains("find previous:") } }
 
+        // Typed, then Return: the typed text is what is searched for.
         FindPrompt.shared.open()
-        check(FindPrompt.shared.isOpen, "the prompt opened")
-        // A letter typed into it: taken, and the prompt stays open.
-        check(InputManager.handleKeyDown(key("kb:b")), "the letter went to the prompt")
-        check(FindPrompt.shared.isOpen, "still open after a letter")
-        // Tab: leaves the prompt at once, on the keyboard's way in.
+        for id in ["kb:b", "kb:u", "kb:y"] { check(InputManager.handleKeyDown(key(id)), "\(id) taken for the prompt") }
+        drain()
+        expect(FindPrompt.shared.typedSoFar, "buy", "the letters went into the prompt")
+        check(InputManager.handleKeyDown(key("kb:enter")), "Return taken for the prompt")
+        drain()
+        expect(FindPrompt.shared.lastSearch, "buy", "Return searched for what was typed")
+        check(!FindPrompt.shared.isOpen, "Return closed the prompt")
+        expect(sent.value, [], "nothing typed into the prompt was posted to the app")
+
+        // A letter and Return decided, then the prompt closed (Command Tab, an app switch) before the main thread got
+        // to them: the queued Return does not search, and the letter is not typed.
+        FindPrompt.shared.open()
+        check(InputManager.handleKeyDown(key("kb:x")), "x taken for the prompt")
+        check(InputManager.handleKeyDown(key("kb:enter")), "Return taken for the prompt")
+        let before = searches().count
+        FindPrompt.shared.close(because: "the test: an app switch")
+        drain()
+        expect(searches().count, before, "the queued Return of a closed prompt searched nothing")
+        expect(FindPrompt.shared.lastSearch, "buy", "the last search is unchanged")
+
+        // A key queued for one opening is not typed into the next.
+        FindPrompt.shared.open()
+        check(InputManager.handleKeyDown(key("kb:z")), "z taken for the prompt")
+        FindPrompt.shared.open()
+        drain()
+        expect(FindPrompt.shared.typedSoFar, "", "the letter for the replaced opening was dropped")
+
+        // Tab: the prompt closes on the keyboard's way in; Tab is not typed and not posted by the prompt.
+        sent.value = []
         _ = InputManager.handleKeyDown(key("kb:tab"))
-        check(!FindPrompt.shared.isOpen, "Tab left the prompt")
-        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
-        check(!FindPrompt.shared.isOpen, "the queued letter did not reopen it")
+        check(!FindPrompt.shared.isOpen, "Tab closed the prompt")
+        drain()
+        expect(FindPrompt.shared.typedSoFar, "", "Tab typed nothing")
+        check(!sent.value.contains("kb:tab"), "the prompt did not post Tab")
 
-        // Command Tab: the prompt closes too (it stayed open in Finder and back in Safari).
+        // Control Space is the Mac's: posted, and the prompt stays open for the letters in the new language.
         FindPrompt.shared.open()
-        _ = InputManager.handleKeyDown(key("kb:command+tab"))
-        check(!FindPrompt.shared.isOpen, "Command Tab left the prompt")
+        sent.value = []
+        check(InputManager.handleKeyDown(key("kb:control+space")), "Control Space kept from the app for the prompt")
+        drain()
+        expect(sent.value, ["kb:control+space"], "Control Space posted on to the Mac")
+        check(FindPrompt.shared.isOpen, "the prompt stays open after Control Space")
 
-        // Escape still cancels, through the prompt.
+        // Command Tab: not taken, so the Mac's switcher gets it; the prompt is closed.
+        sent.value = []
+        check(!InputManager.handleKeyDown(key("kb:command+tab")), "Command Tab goes on to the Mac")
+        check(!FindPrompt.shared.isOpen, "Command Tab closed the prompt")
+        drain()
+        expect(sent.value, [], "Command Tab was not posted again by the prompt")
+
+        // TurnOver's menu opening closes it.
         FindPrompt.shared.open()
-        check(InputManager.handleKeyDown(key("kb:escape")), "Escape went to the prompt")
-        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
-        check(!FindPrompt.shared.isOpen, "Escape closed the prompt")
+        TurnOverMenu.shared.open()
+        check(!FindPrompt.shared.isOpen, "the menu opening closed the prompt")
+        TurnOverMenu.shared.close()
     }
 }

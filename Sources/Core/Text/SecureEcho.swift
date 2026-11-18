@@ -151,7 +151,12 @@ public enum SecureInputWatch {
     private static func check() {
         let on = IsSecureEventInputEnabled()
         noteLook(on: on)
-        if on != wasOn { wasOn = on; onChange?(on) }
+        if on != wasOn {
+            wasOn = on
+            // TurnOver hears no keys while secure input is on: Find's prompt is closed, not left waiting (18 Nov 2026).
+            if on { FindPrompt.shared.close(because: "secure input came on") }
+            onChange?(on)
+        }
         let other = on ? SecureEcho.otherProcessField(of: AXHandler.shared.activePid) : nil
         SecureEcho.watch(other)
         let inPassword = API.focusObject?.role == .passwordEdit || other != nil
