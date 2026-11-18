@@ -624,6 +624,11 @@ public enum Speech {
     /// A typed word as it is echoed: a one-letter word ("I") is named, its capital lowered in the typing language.
     public static func typedWordSpeech(_ word: String, locale: Locale?) -> String { processed(word, locale: locale) }
 
+    /// Whether a line of one whitespace character is a field's whole value, so the field is empty to the ear.
+    public nonisolated static func wholeValueIsWhitespace(lineText: String, storyLength: Int, isField: Bool) -> Bool {
+        isField && storyLength == lineText.count && !lineText.isEmpty && lineText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     public static func textInfoSpeech(_ info: TextInfo, unit: TextUnit?, reason: OutputReason) -> String {
         var blank = false
         return textInfoSpeech(info, unit: unit, reason: reason, onlyBlank: &blank)
@@ -726,7 +731,11 @@ public enum Speech {
             // NVDA: a line of only whitespace is "blank"; a lone space or tab is named.
             // (Not a lone non-breaking space: Mail fills each empty line of a message with one, and it was read as
             // "non breaking space" on every blank line, 5 Oct 2026.)
-            if text.count == 1, let c = text.first, c != "\r", c != "\n", c != "\u{2029}", c != "\u{a0}" { return (prefix + [Symbols.name(of: c)]).joined(separator: " ") }
+            // A text field whose whole value is whitespace is an empty field (PayPal's code box holds one space: "space"
+            // was said for each empty box, 18 Nov 2026). A space typed or deleted inside text is still named, by character.
+            let isField = ["AXTextField", "AXTextArea", "AXComboBox", "AXSearchField"].contains(info.obj.element.role)
+            if text.count == 1, let c = text.first, c != "\r", c != "\n", c != "\u{2029}", c != "\u{a0}",
+               !wholeValueIsWhitespace(lineText: text, storyLength: info.storyLength(), isField: isField) { return (prefix + [Symbols.name(of: c)]).joined(separator: " ") }
             onlyBlank = prefix.isEmpty
             return (prefix + [Phrases.blank]).joined(separator: " ")
         }

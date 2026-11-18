@@ -6,6 +6,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Changed
 
+- A text field that holds only a space, such as PayPal's empty code boxes, is now read as "blank", the word for an
+  empty field, not "space". A space typed or deleted inside text is still named.
 - Finder: choosing an order in View, Sort By says "sorted by" and its name, for example "sorted by Date Created",
   once the menu has closed.
 - VoiceOver Shift End on a long page that is read only in part says "reading on" at once while the rest is read, then

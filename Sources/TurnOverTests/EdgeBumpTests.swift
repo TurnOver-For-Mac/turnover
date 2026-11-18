@@ -64,4 +64,11 @@ func edgeBumpTests() {
         check(!EditableText.isOneCharacterBox(length: 1, isTextField: false, inWebContent: true, key: "downArrow"), "a text area")
         check(!EditableText.isOneCharacterBox(length: 1, isTextField: true, inWebContent: false, key: "downArrow"), "not on the web")
     }
+    test("speech: a text field whose whole value is one space is blank; a space inside text is still named (18 Nov 2026)") {
+        check(Speech.wholeValueIsWhitespace(lineText: " ", storyLength: 1, isField: true), "a field holding one space")
+        check(!Speech.wholeValueIsWhitespace(lineText: " ", storyLength: 5, isField: true), "a space that is a line of longer text")
+        check(!Speech.wholeValueIsWhitespace(lineText: " ", storyLength: 1, isField: false), "not a field")
+        check(!Speech.wholeValueIsWhitespace(lineText: "", storyLength: 0, isField: true), "empty is the old rule's")
+        check(!Speech.wholeValueIsWhitespace(lineText: "a", storyLength: 1, isField: true), "a letter")
+    }
 }
