@@ -87,6 +87,9 @@ public enum Speech {
     static var hasPendingOutput: Bool { !outputSubmissions.isEmpty }
     package static var voiceOverEnabledForOutput: () -> Bool = { NSWorkspace.shared.isVoiceOverEnabled }
     package static var coexistingForOutput: () -> Bool = { Coexist.on }
+    /// macOS's flag says VoiceOver is on, but VoiceOver has gone (VoiceOverGoneWatch decided it): the flag no longer
+    /// keeps TurnOver quiet, or nobody speaks at all, the recovery's own words included (Codex's review, 18 Nov 2026).
+    public static var voiceOverGoneForOutput = false
 
     /// TurnOver's own words inside text being read ("link", "heading level 2"): marked, so that on a page in another
     /// language they are said by the reader's own voice, not by the page's ("link" read by the Arabic voice as a
@@ -157,7 +160,7 @@ public enum Speech {
         }
         // While VoiceOver is on it does the talking: TurnOver speaking too (its own menu-bar menu, read item by
         // item over VoiceOver, 3 Oct 2026) is two voices at once.
-        if voiceOverEnabledForOutput(), !coexistingForOutput() { completion?(false); return }   // (coexisting, VoiceOver is on and silent in TurnOver's apps)
+        if voiceOverEnabledForOutput(), !voiceOverGoneForOutput, !coexistingForOutput() { completion?(false); return }   // (coexisting, VoiceOver is on and silent in TurnOver's apps)
         let s = cleaned(text)
         // Nothing left to say (zero-width marks, a bidi mark): it still "starts", or say all's count of queued
         // chunks never came down and three such lines stopped it for good (a code review, 14 Oct 2026).

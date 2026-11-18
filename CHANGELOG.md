@@ -233,6 +233,9 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 - Up and Down in an empty list say "empty" at once, and Backspace in an empty field answers at once.
 - The link sound plays once for a line, not once for each link on it.
 - The app you are leaving is no longer read over the Command Tab app switcher.
+- When VoiceOver stops without turning itself off (it crashes, or is stopped from outside), TurnOver now speaks once
+  it takes over, starting with "VoiceOver stopped. TurnOver is speaking." Before, it took the keys but said nothing,
+  because macOS still said VoiceOver was on, so the Mac was silent.
 - VoiceOver started by TurnOver itself, when it stops responding, restarts or quits, no longer counts as you
   choosing VoiceOver for the app in front. Before, after a restart Mail could be kept with VoiceOver as if you had
   turned it on there by hand. Turning VoiceOver on yourself still keeps that app with VoiceOver until TurnOver quits.

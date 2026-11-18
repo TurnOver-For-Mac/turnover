@@ -24,7 +24,7 @@ final class TurnOverApp {
     private var activation: UInt64? { inputActivation.generation }
     private var voiceOverGoneTimer: Timer?
     private var testSayObserver: NSObjectProtocol?
-    private var voiceOverGoneChecks = 0
+    private let goneWatch = VoiceOverGoneWatch()
     private var announcedAtLaunch = CommandLine.arguments.contains("--announced")
     private let launchedAt = Date()
 
@@ -321,6 +321,8 @@ final class TurnOverApp {
         voiceOverGoneTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
+                // The flag on and no VoiceOver, four looks in a row: gone. The speech gate follows the same decision.
+                let decidedGone = self.goneWatch.look(flagOn: NSWorkspace.shared.isVoiceOverEnabled, running: HandOver.voiceOverRunning)
                 // Coexisting, VoiceOver's process coming or going under a flag that stays on sends no change notice:
                 // the app in front is looked at afresh when it does, so TurnOver reads it while VoiceOver isn't there.
                 let reading = HandOver.voiceOverReading
@@ -341,9 +343,7 @@ final class TurnOverApp {
                     return
                 }
                 self.voiceOverOnChecks = 0
-                guard NSWorkspace.shared.isVoiceOverEnabled, !HandOver.voiceOverRunning else { self.voiceOverGoneChecks = 0; return }
-                self.voiceOverGoneChecks += 1
-                guard self.voiceOverGoneChecks == 4 else { return }
+                guard decidedGone else { return }
                 // Coexisting, VoiceOver is the reader everywhere else: started again (a code review on 17 Oct 2026).
                 if Coexist.on {
                     Log.warning("VoiceOver: macOS says it's on but it isn't running; starting it again")
