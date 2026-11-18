@@ -896,6 +896,7 @@ public final class BrowseModeDocument: ScriptableObject {
                 Log.io("browse mode: Tab brought no news of the focus, and it is where it was")
                 return
             }
+            AXHandler.shared.lastNewsAt[pid] = Date()   // FIX2
             Log.io("browse mode: Tab brought no news of the focus; the page's focus is on \(f.role), read from there (\(Int(Date().timeIntervalSince(sentAt) * 1000)) ms)")
             AXHandler.shared.focusChanged(f, pid: f.pid)
         }

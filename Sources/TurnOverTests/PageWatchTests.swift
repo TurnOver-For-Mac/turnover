@@ -102,6 +102,8 @@ func pageWatchTests() {
                 }
                 let took = Date().timeIntervalSince(sent)
                 check(queries() > 0 && took < 0.2, "the focus is asked for well before the old fixed 0.35 s (took \(Int(took * 1000)) ms)")
+                check((AXHandler.shared.lastNewsAt[root.pid] ?? .distantPast) >= sent,
+                      "a focus TurnOver read itself counts as news from the page, so no false \"please wait\"")
             } else {
                 RunLoop.current.run(until: Date().addingTimeInterval(0.6))
                 check(queries() >= 3, "an unmoved focus is asked for again, not once (asked \(queries()) times)")
