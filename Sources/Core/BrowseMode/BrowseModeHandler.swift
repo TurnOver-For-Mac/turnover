@@ -72,6 +72,11 @@ public final class BrowseModeHandler {
         guard let w = webAreaObj else { return nil }
         // An editable web area (Mail's compose body) is typed into, not browsed.
         if EditableWebArea.isEditable(w.element) { return nil }
+        // Safari's pop-up button list (18 Nov 2026) is no page: see isPopUpButtonsList.
+        if Self.isPopUpButtonsList(address: (w.element.attr("AXURL") as? URL)?.absoluteString ?? w.element.string("AXURL"), children: w.element.elements(kAXChildrenAttribute).map { ($0.role, $0.elements(kAXChildrenAttribute).map(\.role)) }) {
+            Log.io("browse mode: the web area is a pop-up button's list, not a page; no document made for it")
+            return nil
+        }
         // The lock only around the list: looking up, and adding. The questions to the page and the building happen
         // outside it, so nothing reached during a build can deadlock on it (E6, 1 Oct; tightened 4 Oct 2026).
         lock.lock()
@@ -89,6 +94,17 @@ public final class BrowseModeHandler {
         lock.unlock()
         Log.info("browse mode document for \"\(Log.words(w.name))\" in pid \(w.pid)")
         return d
+    }
+
+    /// Whether a web area is the list a pop-up button opened (Safari's Quantity pop-up on Amazon, 17 Nov 2026), not a page.
+    /// The log showed a nameless web area of 33 elements, a document of its own with no text lines, so the heading keys said
+    /// "nothing on this page yet" over the Quantity list. That the pop-up's list hangs under a web area of its own is read
+    /// from that count (the web area, the list, and 31 options) and not yet seen in the page's tree. The signature is
+    /// narrow: no address, and one child only, a list whose children are all static text.
+    public nonisolated static func isPopUpButtonsList(address: String?, children: [(role: String, childRoles: [String])]) -> Bool {
+        guard (address ?? "").isEmpty, children.count == 1, children[0].role == "AXList" else { return false }
+        let options = children[0].childRoles
+        return !options.isEmpty && options.allSatisfy { $0 == "AXStaticText" }
     }
 
     /// Chromium (Electron apps: Claude, Slack…) exposes AXManualAccessibility on the application.

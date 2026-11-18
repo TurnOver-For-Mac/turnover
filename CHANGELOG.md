@@ -23,6 +23,9 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- Safari: the list a pop-up button opens (Amazon's Quantity) is no longer taken for a page of its own, so the heading
+  and other browse keys no longer say "nothing on this page yet" over it. Why the Down Arrows after the second were
+  silent in that list is not yet known.
 - Mail: Up Arrow on the first message and Down Arrow on the last now say "top" and "bottom", as Finder's lists do.
   Before, you heard the edge sound and nothing was said.
 - When an app leaves the Mac's secure input on after you leave a password field, as Safari did on Steam's sign-in

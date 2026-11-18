@@ -28,4 +28,14 @@ func edgeBumpTests() {
         check(SelectableList.edgeWords(bundle: "com.apple.notes", key: "upArrow") == nil, "another app")
         check(SelectableList.edgeWords(bundle: "com.apple.mail", key: "leftArrow") == nil, "not an up or down key")
     }
+    test("browse mode: a pop-up button's list is no page; a page with an address or with more than a list is (18 Nov 2026)") {
+        let options = Array(repeating: "AXStaticText", count: 31)
+        check(BrowseModeHandler.isPopUpButtonsList(address: nil, children: [("AXList", options)]), "no address, one list of static text")
+        check(BrowseModeHandler.isPopUpButtonsList(address: "", children: [("AXList", options)]), "an empty address")
+        check(!BrowseModeHandler.isPopUpButtonsList(address: "https://www.amazon.co.uk/", children: [("AXList", options)]), "a page with an address")
+        check(!BrowseModeHandler.isPopUpButtonsList(address: nil, children: [("AXList", options + ["AXLink"])]), "a list holding a link")
+        check(!BrowseModeHandler.isPopUpButtonsList(address: nil, children: [("AXList", options), ("AXGroup", [])]), "more than the list")
+        check(!BrowseModeHandler.isPopUpButtonsList(address: nil, children: []), "an empty web area")
+        check(!BrowseModeHandler.isPopUpButtonsList(address: nil, children: [("AXList", [])]), "a list with nothing in it")
+    }
 }
