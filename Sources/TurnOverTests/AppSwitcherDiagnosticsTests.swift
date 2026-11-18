@@ -35,9 +35,9 @@ func appSwitcherDiagnosticsTests() {
     }
 
     // 18 Nov 2026, 07:32:56: "selected unknown" for five keys, the switcher already closed with Safari's activation.
-    test("app switcher diagnostics: nothing selected says whether the switcher still lists any apps") {
+    test("app switcher diagnostics: nothing selected says how many apps could be read, and no more than that") {
         let closed = AppSwitcherDiagnostics.line(key: "kb:escape", selectedName: nil, process: nil, lastAnnounced: "Safari", items: 0)
-        expect(closed, "switcher key kb:escape: selected unknown (the switcher lists no apps: it has closed), pid unknown; last announced \"Safari\"")
+        expect(closed, "switcher key kb:escape: selected unknown (no apps could be read from the switcher: closed, or the Dock not answering), pid unknown; last announced \"Safari\"")
         let open = AppSwitcherDiagnostics.line(key: "kb:escape", selectedName: nil, process: nil, lastAnnounced: "Safari", items: 7)
         expect(open, "switcher key kb:escape: selected unknown (the switcher lists 7 apps), pid unknown; last announced \"Safari\"")
         let chosen = AppSwitcherDiagnostics.line(key: "kb:command+q", selectedName: "Mail", process: "pid 1 by its name", lastAnnounced: "Mail", items: 7)

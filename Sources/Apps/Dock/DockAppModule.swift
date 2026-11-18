@@ -144,13 +144,14 @@ package enum AppSwitcherDiagnostics {
         return "pid \(matching[0].pid) by its name"
     }
 
-    /// `items`: how many apps the switcher lists, given when nothing is selected. None means the switcher had already
-    /// closed while TurnOver's focus was still on it: on 18 Nov 2026 (07:32:54 to 07:33:01) the keys read as "in the
-    /// switcher" went to Safari, in front and not answering, the switcher gone with Safari's activation (18 Nov 2026).
+    /// `items`: how many apps could be read from the switcher, given when nothing is selected. None is either the
+    /// switcher already closed while TurnOver's focus was still on it, or the Dock not answering: the children read
+    /// gives nothing either way, so the line says both (Codex's review, 18 Nov 2026). On 18 Nov 2026 (07:32:54 to
+    /// 07:33:01) the keys logged as "in the switcher" went to Safari, in front and not answering, after its activation.
     package static func line(key: String, selectedName: String?, process: String?, lastAnnounced: String?, items: Int? = nil) -> String {
         let selected = selectedName.map { "\"\($0)\"" } ?? "unknown"
         let announced = lastAnnounced.map { "\"\($0)\"" } ?? "nothing"
-        let listed = selectedName == nil ? items.map { $0 == 0 ? " (the switcher lists no apps: it has closed)" : " (the switcher lists \($0) apps)" } ?? "" : ""
+        let listed = selectedName == nil ? items.map { $0 == 0 ? " (no apps could be read from the switcher: closed, or the Dock not answering)" : " (the switcher lists \($0) apps)" } ?? "" : ""
         return "switcher key \(key): selected \(selected)\(listed), \(process ?? "pid unknown"); last announced \(announced)"
     }
 
