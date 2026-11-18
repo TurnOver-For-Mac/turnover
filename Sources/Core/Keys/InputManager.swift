@@ -154,6 +154,18 @@ public enum InputManager {
             if saysWord { Speech.finishTypedWord() } else if endsWord { Speech.clearTypedWordBuffer() }
             SayAll.stop(byGesture: true)
         }
+        // Find's prompt (TurnOver+F) is open: a key it takes goes to it before any command is looked up for the key, so
+        // the log no longer names browse mode's command for a letter typed into it ("kb:b → vo_nextButton" was logged
+        // while "b" was typed into Find, 17 Nov 2026, and read as the command having run). Any other key leaves the
+        // prompt and goes on below as it would have (FindPrompt.keeps).
+        if FindPrompt.shared.isOpen {
+            if FindPrompt.keeps(gesture) {
+                Log.io("input \(gesture.logDescription(secure: true)) to the Find prompt")
+                DispatchQueue.main.async { FindPrompt.shared.handle(gesture) }
+                return true
+            }
+            FindPrompt.shared.leave()
+        }
         // A typing key while the focus of an editable field, just asked for by quick navigation, has not arrived: held
         // here, before any lookup, so no lookup can end the request, and sent to the field once it has the focus
         // (16 Nov 2026). Any other key sends the held ones on first, as the commands they would have been.
@@ -197,10 +209,6 @@ public enum InputManager {
                 return false
             }
             DispatchQueue.main.async { ScreenRecognition.shared.handle(gesture) }
-            return true
-        }
-        if FindPrompt.shared.isOpen {
-            DispatchQueue.main.async { FindPrompt.shared.handle(gesture) }
             return true
         }
         if TurnOverMenu.shared.isOpen {

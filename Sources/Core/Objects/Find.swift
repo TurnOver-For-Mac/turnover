@@ -22,7 +22,45 @@ public final class FindPrompt {
         Speech.speakMessage(lastSearch.isEmpty ? String(localized: "find", comment: "Find opened") : String(localized: "find, last \(lastSearch)", comment: "Find opened: %@ is the last search"))
     }
 
-    /// Every key while the prompt is open (InputManager routes them here, on the main thread).
+    /// Whether the open prompt takes this key: what can be typed into it, Backspace, Return and Escape, and a Control or
+    /// Option key it sends on to the Mac while it stays open (Control Space switches the keyboard language). Any other
+    /// key (Tab, an arrow, a Command or TurnOver key) leaves the prompt and does what it always does: before, the
+    /// prompt took them all and said nothing, and left without Return it stayed open through Command Tab and in every
+    /// app, with Tab, the arrows and TurnOver's keys silent until TurnOver was turned off (Oliver, Safari, 17 Nov 2026
+    /// at 20:42). Asked on the keyboard's way in (InputManager), before any command is looked up for the key.
+    nonisolated package static func keeps(_ g: KeyboardGesture) -> Bool {
+        if g.modifiers.contains(.turnover) { return false }
+        if g.modifiers.contains(.command) { return false }
+        if ["escape", "enter", "numpadEnter", "backspace"].contains(g.keyName) { return true }
+        // Control or Option with a key: sent on by the prompt, which stays open (handle, below).
+        if !g.modifiers.subtracting(.shift).isEmpty { return true }
+        return !typedText(g).isEmpty
+    }
+
+    /// What a key types into the prompt: its own character; a synthetic or first key can arrive without one, so the
+    /// key's name stands in. Tab, the arrows, the function keys and the like type nothing (an arrow's character is a
+    /// private-use one, not a control character, and would have gone into the search).
+    nonisolated package static func typedText(_ g: KeyboardGesture) -> String {
+        if KeyNames.isSpecial(g.keyCode) { return "" }
+        var ch = g.characters
+        let hasControl = ch.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) })
+        if ch.isEmpty || hasControl {
+            ch = g.keyName == "space" ? " " : g.keyName.count == 1 ? g.keyName : ""
+            if g.modifiers.contains(.shift) { ch = ch.uppercased() }
+        }
+        return ch
+    }
+
+    /// The prompt is left for a key it does not take (`keeps`), which then goes on as it would have. Any thread: the
+    /// keyboard's way in calls it, so the next key already finds the prompt closed.
+    nonisolated package func leave() {
+        guard _isOpen.value else { return }
+        _isOpen.value = false
+        // The key itself is on the input line that follows (a typed key is never named in the log).
+        Log.io("find: the prompt is left without a search; the next key goes on as it would have")
+    }
+
+    /// Every key while the prompt is open that it takes (InputManager routes them here, on the main thread).
     public func handle(_ g: KeyboardGesture) {
         switch g.keyName {
         case "escape":
@@ -36,16 +74,12 @@ public final class FindPrompt {
         case "backspace":
             if let c = typed.popLast() { Speech.speakSpelling(String(c)) } else { Speech.speakMessage(String(localized: "blank", comment: "Spoken message")) }
         default:
-            // The key's own character; a synthetic or first key can arrive without one, so the key's name stands in.
-            var ch = g.characters
-            if ch.isEmpty || ch.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) {
-                ch = g.keyName == "space" ? " " : g.keyName.count == 1 ? g.keyName : ""
-                if g.modifiers.contains(.shift) { ch = ch.uppercased() }
-            }
-            // Command or Control with a key is the Mac's (Control Space switches the keyboard language): it goes on,
+            // Control or Option with a key is the Mac's (Control Space switches the keyboard language): it goes on,
             // and the next letters come in that language (a tester, 14 Oct 2026: the prompt kept English).
-            guard !g.modifiers.contains(.turnover) else { Tones.edge(); return }
             guard g.modifiers.subtracting(.shift).isEmpty else { g.send(); return }
+            // A key left behind the prompt by one that closed it (keys queued for the main thread): not typed.
+            guard isOpen else { return }
+            let ch = Self.typedText(g)
             guard !ch.isEmpty else { return }
             typed += ch
             if ch == " " { Speech.speakMessage(String(localized: "space", comment: "Spoken message")) } else { Speech.speakSpelling(ch) }
