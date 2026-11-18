@@ -22,6 +22,24 @@ func ownVoiceOverStartTests() {
         expect(new.take(now: 36_990.146), .ours)
         check(!new.isPending, "the record is used up by the start it describes")
     }
+    test("own VoiceOver start: the restarted TurnOver's first report, VoiceOver still off, keeps the record") {
+        // Codex's second review (18 Nov 2026): the startup "VoiceOver is off" deleted the record, and the watchdog's
+        // VoiceOver, arriving 4 s later, pinned Mail by hand again. Driven through the app's own call, report(on:starting:).
+        let old = freshRecord()
+        old.note(now: 36_980.331)   // the watchdog in the old TurnOver
+        let new = OwnVoiceOverStart.Record(url: old.url)
+        expect(new.report(on: false, starting: true, now: 36_986.4), .none, "the first report as it starts")
+        check(new.isPending, "the start it records may still be coming")
+        expect(new.report(on: true, starting: false, now: 36_990.146), .ours, "VoiceOver's arrival is TurnOver's own")
+        check(!new.isPending, "used up")
+    }
+    test("own VoiceOver start: VoiceOver going off after the start still cancels the record") {
+        let r = freshRecord()
+        r.note(now: 1000)
+        expect(r.report(on: false, starting: false, now: 1002), .none)
+        check(!r.isPending, "a change to off: the start is no longer what comes next")
+        expect(r.report(on: true, starting: false, now: 1005), .none, "so the next on is the person's")
+    }
     test("own VoiceOver start: after the recovery's start is taken, Oliver's own Option-quote within 20 s is his") {
         let r = freshRecord()
         r.note(now: 1000)

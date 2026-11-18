@@ -246,6 +246,9 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 - Quitting TurnOver, or stopping it with Command Control Period, just after it changed reader for an app no longer
   risks leaving the Mac with no speech. Before, a check of the reader that was still waiting could turn VoiceOver off
   again while TurnOver was bringing it back as it quit.
+- After TurnOver restarted itself because it had stopped responding, VoiceOver that its watchdog had started could
+  still keep Mail, or the app in front, with VoiceOver as if you had chosen it by hand. TurnOver now remembers its own
+  start across the restart even when VoiceOver is still off as the new TurnOver begins.
 
 ## 2.0, build 24.1
 

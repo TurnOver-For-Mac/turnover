@@ -60,5 +60,16 @@ nonisolated public enum OwnVoiceOverStart {
         }
 
         public var isPending: Bool { FileManager.default.fileExists(atPath: url.path) }
+
+        /// A report of VoiceOver's state at `now`, the app's first (`starting`) or a change: an "on" takes the record,
+        /// a changed "off" cancels it. The first report, as TurnOver starts, is no change: after a watchdog restart
+        /// VoiceOver is often still off with the old TurnOver's start on its way, and deleting the record then left
+        /// that start to pin the app in front by hand after all (Codex's second review, 18 Nov 2026).
+        public func report(on: Bool, starting: Bool, now: TimeInterval = Date().timeIntervalSince1970) -> Verdict {
+            if on { return take(now: now) }
+            if starting { return .none }
+            cancel()
+            return .none
+        }
     }
 }

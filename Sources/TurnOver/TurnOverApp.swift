@@ -368,19 +368,15 @@ final class TurnOverApp {
         let byInputRecovery = inputActivation.takeAutomaticVoiceOverRestore(on: on, readerChoice: HandOver.choice.value)
         HandOver.newChoice()   // VoiceOver turned on or off, by hand too: a recovery's late fallback stands down
         Log.info("VoiceOver is \(on ? "on" : "off")")
-        // TurnOver's own start of VoiceOver (its watchdog, quit or a failure), in this process or the one before a
-        // restart: taken by this "on", so the person's own toggle after it is theirs; any "off" cancels it (18 Nov 2026).
-        var byOwnStart = false
-        if on {
-            let verdict = HandOver.ownStart.take()
-            byOwnStart = verdict == .ours
-            if byOwnStart { Log.info("VoiceOver on: TurnOver's own start (its watchdog, quit or a failure); no choice by hand") }
-            else if verdict == .stale { Log.info("VoiceOver on: TurnOver's own start was too long ago, or the clock went back; taken as a change by hand") }
-        } else {
-            HandOver.ownStart.cancel()
-        }
         let starting = !sawVoiceOverState
         sawVoiceOverState = true
+        // TurnOver's own start of VoiceOver (its watchdog, quit or a failure), in this process or the one before a
+        // restart: taken by this "on", so the person's own toggle after it is theirs; an "off" cancels it, except the
+        // first report as TurnOver starts, when that start may still be coming (18 Nov 2026).
+        let verdict = HandOver.ownStart.report(on: on, starting: starting)
+        let byOwnStart = verdict == .ours
+        if byOwnStart { Log.info("VoiceOver on: TurnOver's own start (its watchdog, quit or a failure); no choice by hand") }
+        if verdict == .stale { Log.info("VoiceOver on: TurnOver's own start was too long ago, or the clock went back; taken as a change by hand") }
         defer { refreshWindowsLayer() }
         // Coexisting (experimental): VoiceOver off means TurnOver reads every app (LeadWatcher.shouldLead), on again
         // means it goes back to its own; the app in front is looked at afresh either way (19 Oct 2026).
