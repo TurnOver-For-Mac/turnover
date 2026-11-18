@@ -28,7 +28,10 @@ final class LeadWatcher {
     func start() {
         token = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] n in
             guard let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
-            MainActor.assumeIsolated { self?.appActivated(app) }
+            MainActor.assumeIsolated {
+                self?.settleRetried = false   // a new switch: a failed hand-over may be tried once more again
+                self?.appActivated(app)
+            }
         }
         // The app in front as TurnOver starts: started over Claude with VoiceOver off (after a crash), it left VoiceOver
         // off, as it only acted on a switch (4 Oct 2026). Look once, when the start-up has settled.
@@ -350,26 +353,85 @@ final class LeadWatcher {
         guard Date() > AppWake.nudgingUntil else { return }
         // Locked or asleep: VoiceOver keeps the screen until it is unlocked.
         guard !locked else { return }
+        // Coexisting there is no toggle to wait for: the guard gave 1.7 s of silence into a TurnOver app and 1.6 s of
+        // two voices out of one (a code review on 17 Oct 2026). It stays only while a game's VoiceOver toggle is under way.
+        let toggling = !Coexist.on || !NSWorkspace.shared.isVoiceOverEnabled || Games.leads(bundle)
+        // Not while anything is moving (Command held for the switcher, a hand-over under way, VoiceOver starting or
+        // stopping): one check waits and then decides for whatever app is in front, so the reader settles on the last
+        // app alone (18 Nov 2026, seven switches in 40 s). Looked at before "already the right reader", which a
+        // VoiceOver still coming on would otherwise answer wrongly. Left alone for good, VoiceOver stayed off in Claude
+        // (which TurnOver does not read) until the next switch (4 Oct 2026): the check always decides in the end.
+        if toggling, !settleOverride, let moving = HandOverSettle.moving(settleStanding) {
+            settleThenDecide("\(app.localizedName ?? bundle) activated while \(moving)")
+            return
+        }
         let lead = shouldLead(bundle)
         // Coexisting: who reads is whether TurnOver is active, since VoiceOver is always on.
         let reading = Coexist.on ? turnOverActive() : !NSWorkspace.shared.isVoiceOverEnabled
         guard lead != reading else { return }   // already the right reader
-        // Coexisting there is no toggle to wait for: the guard gave 1.7 s of silence into a TurnOver app and 1.6 s of
-        // two voices out of one (a code review on 17 Oct 2026). It stays only while a game's VoiceOver toggle is under way.
-        let toggling = !Coexist.on || !NSWorkspace.shared.isVoiceOverEnabled || Games.leads(bundle)
-        guard !toggling || Date().timeIntervalSince(lastHandOverAt) > 1.5 else {
-            // Not now, but not never: once the hand-over settles, look at whatever is in front then. Left alone for
-            // good, VoiceOver stayed off in Claude (which TurnOver does not read) until the next switch (4 Oct 2026).
-            Log.io("lead watcher: \(app.localizedName ?? bundle) activated during a hand-over; checking again when it settles")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
-                guard let self, let front = NSWorkspace.shared.frontmostApplication else { return }
-                self.appActivated(front)
-            }
-            return
-        }
-        Log.info("lead watcher: \(app.localizedName ?? bundle) is \(lead ? "TurnOver's" : "VoiceOver's"); turning VoiceOver \(lead ? "off" : "on")")
+        let name = app.localizedName ?? bundle
+        Log.info("lead watcher: \(name) is \(lead ? "TurnOver's" : "VoiceOver's"); turning VoiceOver \(lead ? "off" : "on")")
         if lead { initialTakeOverPending = false }
-        handOver(voiceOverOn: !lead)
+        // A hand-over that ends without its answer ("VoiceOver still changing after 2 s; not toggled") left Safari with
+        // the wrong reader until the next switch (18 Nov 2026): once per switch, the check decides again when settled.
+        handOver(voiceOverOn: !lead, completion: { [weak self] done in
+            guard let self, !done, !self.settleRetried else { return }
+            self.settleRetried = true
+            self.settleThenDecide("the hand-over for \(name) did not finish")
+        })
+    }
+
+    // MARK: Settling before a hand-over (18 Nov 2026; HandOverSettle)
+
+    private var settleWaiting = false
+    private var settleStartedAt = Date.distantPast
+    /// A failed hand-over has been tried again since the last app switch.
+    private var settleRetried = false
+    /// The hand-over that has posted and not yet had its answer, with a bound in case no answer ever comes.
+    private var inFlightGeneration: Int?
+    private var inFlightUntil = Date.distantPast
+    private var handOverUnderWay: Bool { inFlightGeneration == handOverGeneration && Date() < inFlightUntil }
+
+    private var settleStanding: HandOverSettle.Standing {
+        .init(commandHeld: CGEventSource.flagsState(.combinedSessionState).contains(.maskCommand),
+              handOverUnderWay: handOverUnderWay,
+              voiceOverSettled: NSWorkspace.shared.isVoiceOverEnabled == HandOver.voiceOverRunning,
+              sinceLastHandOver: Date().timeIntervalSince(lastHandOverAt))
+    }
+
+    /// One check at a time: later activations find it waiting, and it decides for the app in front when it runs.
+    private func settleThenDecide(_ why: String) {
+        guard !settleWaiting else { Log.io("lead watcher: \(why); the waiting check decides"); return }
+        settleWaiting = true
+        settleStartedAt = Date()
+        Log.io("lead watcher: \(why); deciding once it settles, for the app in front then")
+        DispatchQueue.main.asyncAfter(deadline: .now() + HandOverSettle.interval) { [weak self] in self?.settleCheck() }
+    }
+
+    private func settleCheck() {
+        let standing = settleStanding
+        let waited = Date().timeIntervalSince(settleStartedAt)
+        switch HandOverSettle.decide(standing, waited: waited) {
+        case .wait:
+            DispatchQueue.main.asyncAfter(deadline: .now() + HandOverSettle.interval) { [weak self] in self?.settleCheck() }
+        case .giveUp:
+            settleWaiting = false
+            Log.info("lead watcher: Command still held after \(Int(waited)) s; the next app switch decides")
+        case .decideNow:
+            settleWaiting = false
+            if let still = HandOverSettle.moving(standing) { Log.info("lead watcher: \(still) after \(Int(waited)) s; deciding anyway") }
+            guard let front = NSWorkspace.shared.frontmostApplication else { return }
+            Log.io("lead watcher: settled after \(Int(waited * 1000)) ms; \(front.localizedName ?? "the app") in front decides")
+            if HandOverSettle.moving(standing) != nil { decideUnsettled(front) } else { appActivated(front) }
+        }
+    }
+
+    /// Past the limit with VoiceOver never settling: decided as before the gate (the hand-over's own checks follow).
+    private var settleOverride = false
+    private func decideUnsettled(_ front: NSRunningApplication) {
+        settleOverride = true
+        defer { settleOverride = false }
+        appActivated(front)
     }
 
     /// Post the toggle and time it: the flag flip, and VoiceOver's process appearing or going. Nothing here waits on
@@ -416,6 +478,13 @@ final class LeadWatcher {
         HandOver.newChoice()   // a recovery's late fallback stands down
         let generation = handOverGeneration
         if preservingWakeIntent { wakeHandoverGeneration = generation }
+        // Under way until its answer, for the settling of app switches (HandOverSettle, 18 Nov 2026).
+        inFlightGeneration = generation
+        inFlightUntil = Date().addingTimeInterval(15)
+        let finish: (Bool) -> Void = { [weak self] answered in
+            if self?.inFlightGeneration == generation { self?.inFlightGeneration = nil }
+            completion?(answered)
+        }
         let t0 = Date()
         let isOn = { NSWorkspace.shared.isVoiceOverEnabled }
         let running = { HandOver.voiceOverRunning }
@@ -424,15 +493,16 @@ final class LeadWatcher {
         if voiceOverOn, isOn(), !running() {
             Log.info("hand-over: VoiceOver's flag is on but it isn't running; opening it")
             HandOver.openVoiceOver("hand-over")
+            inFlightGeneration = nil   // no answer is waited for here; VoiceOver starting is what the settling sees
             return
         }
         // 1. VoiceOver wholly on or wholly off before the toggle (toggling mid-change could leave it off).
         poll(generation, every: 0.05, upTo: 2, whileAllowed: whileAllowed, until: { isOn() == running() }) { [weak self] settled in
             guard let self else { return }
-            guard whileAllowed() else { completion?(false); return }
-            if isOn() == voiceOverOn { Log.info("hand-over: VoiceOver already \(voiceOverOn ? "on" : "off")"); completion?(true); return }
+            guard whileAllowed() else { finish(false); return }
+            if isOn() == voiceOverOn { Log.info("hand-over: VoiceOver already \(voiceOverOn ? "on" : "off")"); finish(true); return }
             // Toggled mid-change, VoiceOver can end up off for good: left for the next activation to try again.
-            guard settled else { Log.warning("hand-over: VoiceOver still changing after 2 s; not toggled"); completion?(false); return }
+            guard settled else { Log.warning("hand-over: VoiceOver still changing after 2 s; not toggled"); finish(false); return }
             self.ourChangeUntil = Date().addingTimeInterval(3)   // the change about to come is ours, not a pin by hand
             // The shortcut both ways: it flips the flag in about 100 ms. VoiceOver.app is the fallback for on, for when
             // the shortcut doesn't reach macOS (25 Oct 2026); opened first, it took ten seconds to bring VoiceOver
@@ -441,14 +511,14 @@ final class LeadWatcher {
             // 2. The flag flips.
             self.poll(generation, every: 0.05, upTo: voiceOverOn ? 1.2 : 2, whileAllowed: whileAllowed, until: { isOn() == voiceOverOn }) { [weak self] flipped in
                 guard let self else { return }
-                guard whileAllowed() else { completion?(false); return }
+                guard whileAllowed() else { finish(false); return }
                 let flagMs = Int(Date().timeIntervalSince(t0) * 1000)
                 if !flipped, voiceOverOn, !isOn(), !running() {
                     Log.info("hand-over: the shortcut did not turn VoiceOver on in \(flagMs) ms; opening VoiceOver.app")
                     self.ourChangeUntil = Date().addingTimeInterval(15)   // a slow start is still ours, not a choice by hand
                     HandOver.openVoiceOver("hand-over")
                     self.poll(generation, every: 0.1, upTo: 12, whileAllowed: whileAllowed, until: { isOn() && running() }) { came in
-                        completion?(came)
+                        finish(came)
                         Log.info("hand-over timing: VoiceOver on by VoiceOver.app: \(came ? "reading after \(Int(Date().timeIntervalSince(t0) * 1000)) ms" : "not reading within 12 s")")
                     }
                     return
@@ -458,19 +528,19 @@ final class LeadWatcher {
                     // is swallowed; VoiceOver stayed off in Claude for 6 s (4 Oct 2026). Let it finish, then once more.
                     Log.info("hand-over: VoiceOver did not go \(voiceOverOn ? "on" : "off"); waiting for it to settle, then again")
                     self.poll(generation, every: 0.1, upTo: 6, whileAllowed: whileAllowed, until: { isOn() == running() }) { settled in
-                        guard whileAllowed() else { completion?(false); return }
-                        guard isOn() != voiceOverOn else { completion?(true); return }
-                        guard settled else { Log.warning("hand-over: VoiceOver still changing after 6 s more; not toggled again"); completion?(false); return }
+                        guard whileAllowed() else { finish(false); return }
+                        guard isOn() != voiceOverOn else { finish(true); return }
+                        guard settled else { Log.warning("hand-over: VoiceOver still changing after 6 s more; not toggled again"); finish(false); return }
                         self.ourChangeUntil = Date().addingTimeInterval(3)   // (a late second toggle was read as the user's choice and pinned the app, 8 Oct 2026)
                         if voiceOverOn { HandOver.openVoiceOver("hand-over, again") } else { HandOver.postToggle() }
                         self.poll(generation, every: 0.05, upTo: 2, whileAllowed: whileAllowed, until: { isOn() == voiceOverOn }) { again in
-                            completion?(again)
+                            finish(again)
                             Log.info("hand-over: second toggle \(again ? "worked" : "did not work either"): VoiceOver \(isOn() ? "on" : "off")")
                         }
                     }
                     return
                 }
-                completion?(true)   // the requested flag state was observed, not merely requested
+                finish(true)   // the requested flag state was observed, not merely requested
                 // 3. VoiceOver's process appears or goes (timing only).
                 self.poll(generation, every: 0.05, upTo: 6, until: { running() == voiceOverOn }) { seen in
                     let processMs = Int(Date().timeIntervalSince(t0) * 1000)

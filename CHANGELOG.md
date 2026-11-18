@@ -236,6 +236,10 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 - VoiceOver started by TurnOver itself, when it stops responding, restarts or quits, no longer counts as you
   choosing VoiceOver for the app in front. Before, after a restart Mail could be kept with VoiceOver as if you had
   turned it on there by hand. Turning VoiceOver on yourself still keeps that app with VoiceOver until TurnOver quits.
+- Command Tab back and forth between an app TurnOver reads and one VoiceOver reads now changes reader once, for the
+  app you end up in, after you let go of Command and VoiceOver has finished starting or stopping. Before, each switch
+  started its own change, so the readers could swap several times in a row, and one could give up and leave the app
+  with the wrong reader until you switched again.
 
 ## 2.0, build 24.1
 
