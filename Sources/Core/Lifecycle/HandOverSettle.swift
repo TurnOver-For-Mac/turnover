@@ -74,21 +74,36 @@ public final class HandOverSettler {
         self.standing = standing; self.now = now; self.schedule = schedule; self.decide = decide; self.log = log
     }
 
+    /// TurnOver is going (ReaderShutdown, 18 Nov 2026): the waiting check is dropped, and no later request waits.
+    public private(set) var stopped = false
+    private var round = 0
+
+    /// Stop for good: a check already scheduled finds its round gone and decides nothing.
+    public func stop() {
+        stopped = true
+        waiting = false
+        round += 1
+    }
+
     /// Something may need a hand-over: make sure one check is waiting. Later requests find it waiting.
     public func request(_ why: String) {
+        guard !stopped else { log("lead watcher: \(why); TurnOver is quitting, nothing is decided"); return }
         guard !waiting else { log("lead watcher: \(why); the waiting check decides"); return }
         waiting = true
         startedAt = now()
         log("lead watcher: \(why); deciding once it settles, for the app in front then")
-        schedule(HandOverSettle.interval) { [weak self] in self?.check() }
+        let mine = round
+        schedule(HandOverSettle.interval) { [weak self] in self?.check(mine) }
     }
 
-    private func check() {
+    private func check(_ mine: Int) {
+        guard mine == round else { return }   // stopped since it was scheduled
+        guard !stopped else { return }
         let s = standing()
         let waited = now() - startedAt
         switch HandOverSettle.decide(s, waited: waited) {
         case .wait:
-            schedule(waited < HandOverSettle.limit ? HandOverSettle.interval : HandOverSettle.slowInterval) { [weak self] in self?.check() }
+            schedule(waited < HandOverSettle.limit ? HandOverSettle.interval : HandOverSettle.slowInterval) { [weak self] in self?.check(mine) }
         case .decideNow:
             waiting = false
             log("lead watcher: settled after \(Int(waited * 1000)) ms; the app in front decides")

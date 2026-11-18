@@ -243,6 +243,9 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   app you end up in, after you let go of Command and VoiceOver has finished starting or stopping. Before, each switch
   started its own change, so the readers could swap several times in a row, and one could give up and leave the app
   with the wrong reader until you switched again.
+- Quitting TurnOver, or stopping it with Command Control Period, just after it changed reader for an app no longer
+  risks leaving the Mac with no speech. Before, a check of the reader that was still waiting could turn VoiceOver off
+  again while TurnOver was bringing it back as it quit.
 
 ## 2.0, build 24.1
 

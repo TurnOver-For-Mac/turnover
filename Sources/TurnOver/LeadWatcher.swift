@@ -436,6 +436,16 @@ final class LeadWatcher {
     /// Past the limit with VoiceOver never settling: decided as before the gate (the hand-over's own checks follow).
     private var settleOverride = false
 
+    /// TurnOver is quitting (the menu, Command Q or stopped from outside): every lead decision still waiting is dropped,
+    /// the settling check and a hand-over's own waits alike, so none runs while the quit brings VoiceOver back (Codex's
+    /// second review, 18 Nov 2026). Called on main by the app's shutDown, after HandOver.shutdown has begun.
+    func stopForShutdown() {
+        settler.stop()
+        handOverGeneration += 1   // a hand-over's waits find a newer generation and stop
+        inFlightGeneration = nil
+        Log.info("lead watcher: quitting; every waiting reader decision dropped")
+    }
+
     /// Post the toggle and time it: the flag flip, and VoiceOver's process appearing or going. Nothing here waits on
     /// the main thread: each wait is a short check repeated by timer (it used to hold the main thread for up to 2 s
     /// of sleeping and 8 s of nested run loop, events and scripts running inside it: E6 audit, 4 Oct 2026). A newer
@@ -450,8 +460,11 @@ final class LeadWatcher {
         // An ordinary handover can also be waiting when a new lock arrives. Its old off request stays retired
         // even if a quick lock and unlock both finish before its next callback.
         let cycle = lockCycle
+        // TurnOver quitting: the quit brings VoiceOver back, and nothing here may turn it off, or count as a new choice
+        // that stops the quit's fallback (ReaderShutdown; Codex's second review, 18 Nov 2026). Looked at before each step.
         let whileAllowed = { [weak self] in
             guard let self else { return false }
+            guard HandOver.shutdown.allowsHandOver else { return false }
             return callerAllows() && (voiceOverOn || (cycle == self.lockCycle && !self.locked && !Self.screenIsLocked))
         }
         guard whileAllowed() else { completion?(false); return }

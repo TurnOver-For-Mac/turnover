@@ -632,6 +632,9 @@ final class TurnOverApp {
     /// Quitting: the tap and the watchdog go first, before VoiceOver is turned on. The tap stayed up through the
     /// hand-over and swallowed keys for up to 4 s at a menu quit (code review, 16 Oct 2026).
     func shutDown() {
+        // No reader decision runs from here on: the quit brings VoiceOver back (Codex's second review, 18 Nov 2026).
+        HandOver.shutdown.begin()
+        lead.stopForShutdown()
         inputActivation.cancel()
         KeyboardHandler.bypass = true
         Watchdog.shared.active = false

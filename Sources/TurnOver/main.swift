@@ -216,6 +216,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        HandOver.shutdown.begin()   // first: no hand-over may turn VoiceOver off from here on (18 Nov 2026)
         ScreenCurtain.off()   // macOS would restore the displays anyway; say so in the log
         app?.shutDown()   // the tap first: nothing of TurnOver's takes a key once it is going
         // TurnOver gone: VoiceOver comes back so the user is never left with no speech (the guide promised it;
@@ -321,6 +322,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // thread is stuck (VoiceOver on, then gone).
         let src = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .global(qos: .userInteractive))
         src.setEventHandler { @Sendable in
+            // First, off main: a lead decision already scheduled on main may run before the hop below; from now on it
+            // can turn VoiceOver neither off nor on (ReaderShutdown; Codex's second review, 18 Nov 2026).
+            HandOver.shutdown.begin()
             Log.info("stopped from outside")
             // The same tidying as a quit from the menu (applicationWillTerminate is skipped on a signal). What is the
             // main actor's (the curtain, the plugins' terminate) by a bounded hop, never a wait on a main thread that

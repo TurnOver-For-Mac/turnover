@@ -75,6 +75,9 @@ enum HandOver {
     nonisolated static let ownStart = OwnVoiceOverStart.Record(url: AppPaths.file("voiceover-asked-by-turnover"))
     nonisolated static func noteOwnStart() { ownStart.note() }
 
+    /// TurnOver is going: no hand-over runs from now on, the quit owns VoiceOver (ReaderShutdown, 18 Nov 2026).
+    nonisolated static let shutdown = ReaderShutdown()
+
     nonisolated static func postToggle() {
         let s = toggleShortcut()
         let src = CGEventSource(stateID: .hidSystemState)

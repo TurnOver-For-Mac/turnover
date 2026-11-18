@@ -89,4 +89,26 @@ func handOverSettleTests() {
         w.run(to: 2)
         expect(w.decisions.count, 2)
     }
+    // Codex's second review (18 Nov 2026): a hand-over's answer asked for a check after it; stopped from outside
+    // (SIGTERM) meanwhile, that check could turn VoiceOver off while the quit brought it back.
+    test("hand-over settle: quitting drops the check a finished hand-over asked for, and any asked after") {
+        let w = World()
+        let shutdown = ReaderShutdown()
+        w.lastHandOverAt = 0
+        w.settler.request("the hand-over for Mail finished")   // waits out the 1.5 s spacing
+        w.run(to: 0.5)
+        shutdown.begin()   // SIGTERM: begun off main
+        w.settler.stop()   // then the app's shutDown on main
+        w.run(to: 5)
+        expect(w.decisions.count, 0, "no reader decided while the quit brings VoiceOver back")
+        check(!w.settler.waiting, "nothing waiting")
+        w.settler.request("Safari activated")   // an activation during the quit
+        w.run(to: 10)
+        expect(w.decisions.count, 0, "nothing after the quit began")
+        expect(w.timers.count, 0, "nothing even scheduled")
+        check(!shutdown.allowsHandOver, "and no hand-over, either way, may post or go on waiting")
+    }
+    test("hand-over settle: before a quit, hand-overs are allowed") {
+        check(ReaderShutdown().allowsHandOver, "a fresh TurnOver hands over as before")
+    }
 }
