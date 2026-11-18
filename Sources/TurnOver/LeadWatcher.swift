@@ -31,6 +31,9 @@ final class LeadWatcher {
     private var wantedOn: Bool?
     /// The current hand-over posted a second toggle: the first may still land, so a change either way is its own.
     private var secondTogglePosted = false
+    /// Counts the person's own choices of reader by VoiceOver's key: a hand-over begun before one stops waiting (and
+    /// never opens VoiceOver over it; Codex's third review, 18 Nov 2026).
+    private var manualChoices = 0
 
     func start() {
         token = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] n in
@@ -469,9 +472,13 @@ final class LeadWatcher {
         let cycle = lockCycle
         // TurnOver quitting: the quit brings VoiceOver back, and nothing here may turn it off, or count as a new choice
         // that stops the quit's fallback (ReaderShutdown; Codex's second review, 18 Nov 2026). Looked at before each step.
+        // Nor once the person has chosen a reader by VoiceOver's key since it began (HandOverOwnership.mayGoOn).
+        let choiceAtStart = manualChoices
         let whileAllowed = { [weak self] in
             guard let self else { return false }
-            guard HandOver.shutdown.allowsHandOver else { return false }
+            let mayGoOn = HandOverOwnership.mayGoOn(shutdownBegun: HandOver.shutdown.begun,
+                                                    manualChoiceAtStart: choiceAtStart, manualChoiceNow: self.manualChoices)
+            guard mayGoOn else { return false }
             return callerAllows() && (voiceOverOn || (cycle == self.lockCycle && !self.locked && !Self.screenIsLocked))
         }
         guard whileAllowed() else { completion?(false); return }
@@ -839,7 +846,16 @@ final class LeadWatcher {
         // TurnOver's own watchdog, quit or failure started VoiceOver, in this process or the one before a restart: its
         // arrival is no choice of the person's (10:16 on 17 Nov 2026 pinned Mail; 18 Nov 2026).
         guard !byOwnStart else { return }
-        if let t = Watchdog.shared.lastTrip, Date().timeIntervalSince(t) < 30 { return }
+        // Known to be the person's (their key heard, or against the hand-over's own change): a hand-over still waiting
+        // stops, and the watchdog's grace below does not swallow it (Codex's third review, 18 Nov 2026).
+        let knownPersons = HandOverOwnership.isKnownPersons(on: on, wanted: wantedOn, windowOpen: Date() < ourChangeUntil,
+                                                            secondToggle: secondTogglePosted, byPerson: byPerson)
+        if knownPersons {
+            manualChoices += 1
+            Log.info("lead watcher: VoiceOver \(on ? "on" : "off") is your own choice; a hand-over still waiting stops")
+        }
+        let inWatchdogGrace = Watchdog.shared.lastTrip.map { Date().timeIntervalSince($0) < 30 } ?? false
+        if inWatchdogGrace, !knownPersons { return }
         // A change within a hand-over's window is still the person's when it went the other way, or their key was heard:
         // pinned, so the hand-over's own check after it does not turn VoiceOver back (Codex's second review, 18 Nov 2026).
         guard !ours else { return }

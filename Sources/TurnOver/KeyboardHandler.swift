@@ -235,6 +235,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
 
         openHIDManager(into: mine)
 
+        _ = Self.toggleKeyCode   // the shortcut read from macOS's defaults now, not on the tap's first key
         let mask = CGEventMask(1 << CGEventType.flagsChanged.rawValue | 1 << CGEventType.keyDown.rawValue | 1 << CGEventType.keyUp.rawValue)
         // Coexisting with VoiceOver: at the head of the HID level, before VoiceOver sees a chord (TapProbe, 16 Oct 2026).
         guard let t = CGEvent.tapCreate(tap: Coexist.on ? .cghidEventTap : .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap,
@@ -346,15 +347,20 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
 
     /// A key down that is VoiceOver's toggle shortcut, pressed by the person: not one TurnOver posted (its own toggle
     /// and its re-posted keys carry a marker), and not a key repeat.
+    /// The key code alone is read first, against one already read at the tap's start (`toggleKeyCode`); only the toggle's
+    /// own key reads anything more (Codex's third review, 18 Nov 2026: as little as possible on the tap's thread).
     private static func notePersonToggle(_ event: CGEvent) {
+        guard event.getIntegerValueField(.keyboardEventKeycode) == toggleKeyCode else { return }
         let source = event.getIntegerValueField(.eventSourceUserData)
         guard source != marker else { return }
         guard source != orderedMarker else { return }
         guard event.getIntegerValueField(.keyboardEventAutorepeat) == 0 else { return }
-        let code = event.getIntegerValueField(.keyboardEventKeycode)
-        guard isVoiceOverToggle(code: code, flags: event.flags) else { return }
+        guard isVoiceOverToggle(code: toggleKeyCode, flags: event.flags) else { return }
         HandOver.personToggle.pressed()
     }
+    /// The toggle's key code, read once (with the shortcut from macOS's defaults) before the tap is created, never on
+    /// the first key.
+    nonisolated static let toggleKeyCode = Int64(voiceOverToggle.keyCode)
 
     /// VoiceOver's toggle shortcut as macOS has it (Keyboard Shortcuts, Accessibility), read once at launch.
     nonisolated static let voiceOverToggle = HandOver.toggleShortcut()

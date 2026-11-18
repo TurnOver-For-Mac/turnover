@@ -10,6 +10,7 @@
 //   makes it his. Where the tap was not listening long enough to know, the change cannot be told apart, and it is
 //   taken as his: TurnOver never overrides the person on a guess.
 import Foundation
+import os
 
 /// The person's own presses of VoiceOver's toggle shortcut, as the key tap heard them. Any thread: the tap runs on its own.
 nonisolated public final class PersonVoiceOverToggle: @unchecked Sendable {
@@ -24,8 +25,11 @@ nonisolated public final class PersonVoiceOverToggle: @unchecked Sendable {
     }
 
     private let lock = NSLock()
-    private var pressedAt: TimeInterval?
     private var listeningSince: TimeInterval?
+    /// Written on the key tap's thread (Codex's third review, 18 Nov 2026: as little there as can be): an unfair lock,
+    /// taken only for a press of the toggle itself and never contended for long. Swift's own atomics need macOS 15;
+    /// TurnOver runs on 14.
+    private let press = OSAllocatedUnfairLock<TimeInterval?>(initialState: nil)
     public init() {}
 
     /// The tap is up and hearing keys (`true`), or gone (`false`). Up again after being switched off by macOS, it
@@ -37,16 +41,18 @@ nonisolated public final class PersonVoiceOverToggle: @unchecked Sendable {
 
     /// The person pressed VoiceOver's toggle shortcut (not one TurnOver posted).
     public func pressed(now: TimeInterval = Date().timeIntervalSince1970) {
-        lock.lock(); defer { lock.unlock() }
-        pressedAt = now
+        press.withLock { $0 = now }
     }
 
     /// A change of VoiceOver came at `now`: was it the person's press? A press answers for one change only.
     public func take(now: TimeInterval = Date().timeIntervalSince1970) -> Verdict {
+        let pressedAt = press.withLock { held -> TimeInterval? in
+            let was = held
+            held = nil
+            return was
+        }
+        if let pressedAt, now - pressedAt >= 0, now - pressedAt < Self.window { return .person }
         lock.lock(); defer { lock.unlock() }
-        let press = pressedAt
-        pressedAt = nil
-        if let press, now - press >= 0, now - press < Self.window { return .person }
         guard let since = listeningSince else { return .unheard }
         let heardAllWindow = now - since >= Self.window
         return heardAllWindow ? .notPerson : .unheard
@@ -63,6 +69,28 @@ nonisolated public enum HandOverOwnership {
         guard let wanted else { return false }
         if on == wanted { return true }
         return secondToggle
+    }
+}
+
+extension HandOverOwnership {
+    /// Whether a change is known to be the person's own: their press heard, or a change the other way from the one a
+    /// hand-over in its window asked for (and no second toggle of its own that could bring it). Known, it is pinned
+    /// even within the 30 s after a watchdog trip, whose grace is only for changes that may be the watchdog's own
+    /// VoiceOver (Codex's third review, 18 Nov 2026).
+    public static func isKnownPersons(on: Bool, wanted: Bool?, windowOpen: Bool, secondToggle: Bool, byPerson: Bool) -> Bool {
+        if byPerson { return true }
+        if !windowOpen { return false }
+        guard let wanted else { return false }
+        if on == wanted { return false }
+        return !secondToggle
+    }
+
+    /// Whether a hand-over may go on with its next step: not once TurnOver is quitting, and not once the person has
+    /// made a choice of reader since it began (`manualChoiceAtStart` against `manualChoiceNow`): a waiting hand-over
+    /// opened VoiceOver over the person turning it off (Codex's third review, 18 Nov 2026).
+    public static func mayGoOn(shutdownBegun: Bool, manualChoiceAtStart: Int, manualChoiceNow: Int) -> Bool {
+        if shutdownBegun { return false }
+        return manualChoiceAtStart == manualChoiceNow
     }
 }
 

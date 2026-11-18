@@ -51,4 +51,30 @@ func voiceOverChangeOriginTests() {
         keys.pressed(now: 80)
         expect(keys.take(now: 83), .unheard, "a press too long before is no evidence")
     }
+    // Codex's third review (18 Nov 2026).
+    test("change origin: Oliver's off 1 s after a hand-over, within the watchdog's 30 s grace, is known to be his") {
+        check(HandOverOwnership.isKnownPersons(on: false, wanted: true, windowOpen: true, secondToggle: false, byPerson: false),
+              "against the hand-over's change: his, so it is pinned even inside the grace")
+        check(HandOverOwnership.isKnownPersons(on: true, wanted: nil, windowOpen: false, secondToggle: false, byPerson: true),
+              "his key heard: his")
+        check(!HandOverOwnership.isKnownPersons(on: true, wanted: false, windowOpen: false, secondToggle: false, byPerson: false),
+              "outside any window with no key heard: not known, so the grace still covers the watchdog's own VoiceOver")
+        check(!HandOverOwnership.isKnownPersons(on: true, wanted: false, windowOpen: true, secondToggle: true, byPerson: false),
+              "a hand-over's second toggle may bring it: not known")
+        check(!HandOverOwnership.isKnownPersons(on: true, wanted: true, windowOpen: true, secondToggle: false, byPerson: false),
+              "the hand-over's own change: not his")
+    }
+    test("change origin: a hand-over begun before Oliver's own choice goes no further, so its fallback never opens VoiceOver") {
+        check(HandOverOwnership.mayGoOn(shutdownBegun: false, manualChoiceAtStart: 3, manualChoiceNow: 3), "nothing since: it goes on")
+        check(!HandOverOwnership.mayGoOn(shutdownBegun: false, manualChoiceAtStart: 3, manualChoiceNow: 4),
+              "his choice since it began: its waits stop before the VoiceOver.app fallback")
+        check(!HandOverOwnership.mayGoOn(shutdownBegun: true, manualChoiceAtStart: 3, manualChoiceNow: 3), "quitting: it stops")
+    }
+    test("change origin: presses noted from another thread are taken whole") {
+        let keys = PersonVoiceOverToggle()
+        keys.listening(true, now: 0)
+        DispatchQueue.concurrentPerform(iterations: 200) { i in keys.pressed(now: 100 + Double(i) / 1000) }
+        expect(keys.take(now: 100.5), .person)
+        expect(keys.take(now: 100.6), .notPerson, "taken once")
+    }
 }
