@@ -37,94 +37,6 @@ final class LeadWatcher {
         }
         Log.info("lead watcher: TurnOver leads in \(config.applications.leadBundles.joined(separator: ", "))\(config.applications.leadEverywhereElse ? " (and everywhere else)" : "")")
         watchSleepAndLock()
-        SecureInputWatch.onLook = { [weak self] inPasswordField in self?.secureInputLook(inPasswordField: inPasswordField) }
-    }
-
-    // MARK: Secure input left on outside a password field (17 Nov 2026)
-    // Oliver's decision: a bug to fix, not a warning to give. The keys go to VoiceOver, which still hears them, through
-    // the ordinary hand-over, and come back once secure input is off (SecureInputHandOver decides when). Nothing is said,
-    // no app is pinned and no reader choice is saved: VoiceOver's own start is the cue.
-
-    private let secureInput = SecureInputHandOver()
-    private var secureInputTimer: Timer?
-    /// What the reader was at the hand-over: a change in any of them since is someone else's, and stops the hand-back.
-    private var secureInputGeneration = 0
-    private var secureInputChoice = 0
-    private var secureInputApp: pid_t?
-    private var secureInputAt = Date.distantPast
-
-    /// Nothing else owns the reader, so secure input may hand the keys over.
-    private var secureInputMayHandOver: Bool {
-        if Coexist.on { return false }                  // VoiceOver is on all along there
-        if locked { return false }                      // the lock has its own hand-over
-        if wakeRestoration.pending { return false }     // the lock's hand-back owns the reader
-        if suspended { return false }                   // TurnOver off by its key
-        if !turnOverActive() { return false }           // only TurnOver's keys are lost
-        return true
-    }
-
-    /// Why the reader is no longer the one secure input handed over to, or nil.
-    private var secureInputReaderChange: String? {
-        if handOverGeneration != secureInputGeneration { return "another hand-over came since" }
-        if choiceGeneration != secureInputChoice { return "a reader was chosen since" }
-        if yieldedToVoiceOverByHand { return "VoiceOver was turned on by hand" }
-        if locked { return "the Mac is locked" }
-        if wakeRestoration.pending { return "the lock's hand-back owns the reader" }
-        if suspended { return "TurnOver is off by its key" }
-        if let trip = Watchdog.shared.lastTrip, trip > secureInputAt { return "the watchdog acted" }
-        return nil
-    }
-
-    /// The app in front is the one secure input was handed over in, or one TurnOver leads.
-    private var secureInputFrontIsTurnOvers: Bool {
-        guard let front = NSWorkspace.shared.frontmostApplication else { return false }
-        if front.processIdentifier == secureInputApp { return true }
-        guard let bundle = front.bundleIdentifier else { return false }
-        return shouldLead(bundle)
-    }
-
-    private func secureInputLook(inPasswordField: Bool) {
-        let decision = secureInput.lookWhileReading(inPasswordField: inPasswordField, mayHandOver: secureInputMayHandOver)
-        guard decision == .handOver else { return }
-        let front = NSWorkspace.shared.frontmostApplication
-        Log.info("secure input: on for a second with the focus outside a password field (\(front?.localizedName ?? "no app") in front); the keys go to VoiceOver until it is off")
-        secureInputApp = front?.processIdentifier
-        secureInputAt = Date()
-        secureInputChoice = choiceGeneration
-        handOver(voiceOverOn: true, completion: { [weak self] came in
-            guard let self else { return }
-            self.secureInput.handOverFinished(voiceOverCame: came)
-            if !came { Log.warning("secure input: VoiceOver did not come; TurnOver goes on reading by focus") }
-        })
-        secureInputGeneration = handOverGeneration
-        secureInputTimer?.invalidate()
-        secureInputTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.secureInputLookWhileHandedOver() }
-        }
-    }
-
-    private func secureInputLookWhileHandedOver() {
-        let standing = SecureInputHandOver.Standing(readerUnchanged: secureInputReaderChange == nil,
-                                                    voiceOverOn: NSWorkspace.shared.isVoiceOverEnabled,
-                                                    frontIsTurnOvers: secureInputFrontIsTurnOvers)
-        let why = secureInputReaderChange
-        let decision = secureInput.lookWhileHandedOver(standing)
-        if !secureInput.underWay { secureInputTimer?.invalidate(); secureInputTimer = nil }
-        switch decision {
-        case .wait, .handOver:
-            return
-        case .handBack:
-            Log.info("secure input: off for a second; the keys come back to TurnOver")
-            handOver(voiceOverOn: false)
-        case .standDown(.readerChanged):
-            Log.info("secure input: no hand-back, \(why ?? "the reader changed")")
-        case .standDown(.voiceOverOff):
-            Log.info("secure input: no hand-back, VoiceOver went off by other means")
-        case .standDown(.frontIsVoiceOvers):
-            Log.info("secure input: off, and the app in front is VoiceOver's; no hand-back")
-        case .standDown(.voiceOverNeverCame):
-            Log.warning("secure input: the hand-over never answered and VoiceOver is off; TurnOver goes on reading by focus")
-        }
     }
 
     // MARK: Sleep and the lock screen
@@ -442,12 +354,6 @@ final class LeadWatcher {
         // Coexisting: who reads is whether TurnOver is active, since VoiceOver is always on.
         let reading = Coexist.on ? turnOverActive() : !NSWorkspace.shared.isVoiceOverEnabled
         guard lead != reading else { return }   // already the right reader
-        // Secure input has the keys with VoiceOver (17 Nov 2026): TurnOver would hear none of them, so an app change does
-        // not take them back; secure input going off does.
-        if lead, secureInput.underWay {
-            Log.io("lead watcher: \(app.localizedName ?? bundle) is TurnOver's, but secure input is still on; VoiceOver keeps the keys")
-            return
-        }
         // Coexisting there is no toggle to wait for: the guard gave 1.7 s of silence into a TurnOver app and 1.6 s of
         // two voices out of one (a code review on 17 Oct 2026). It stays only while a game's VoiceOver toggle is under way.
         let toggling = !Coexist.on || !NSWorkspace.shared.isVoiceOverEnabled || Games.leads(bundle)

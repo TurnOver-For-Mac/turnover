@@ -41,6 +41,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   page, VoiceOver now takes the keys a second later, and TurnOver takes them back a second after secure input goes
   off. Before, TurnOver heard none of your keys until you left the page. Nothing is said, and inside a password field
   TurnOver reads as before.
+- When an app leaves the Mac's secure input on after you leave a password field, as Safari does on some sign-in and
+  password pages, TurnOver goes on reading where the focus goes, and VoiceOver no longer comes on in its place.
 - TurnOver's own menu: Turnover with Right Arrow and Left Arrow now move to the next and previous item, as Down
   Arrow and Up Arrow do. Before, they gave the edge sound and nothing was said.
 - Claude: Command and a number now says a conversation's title only once the conversation it chose has arrived, so
