@@ -851,15 +851,23 @@ public final class BrowseModeDocument: ScriptableObject {
     /// A copy shorter than this, in characters, may be a page still filling in.
     static let smallPage = 1500
 
-    /// Tab sent to the page, and no news of the focus a third of a second later: the page is asked where its focus is,
-    /// and that is read if it moved. On App Store Connect's menu every other Tab said nothing (14 Nov 2026): the focus
-    /// went on each time, but Safari sent news of only every other move. If the focus is where it was, nothing is said.
+    /// Tab sent to the page, and no news of the focus: the page is asked where its focus is, and that is read if it
+    /// moved. On App Store Connect's menu every other Tab said nothing (14 Nov 2026): the focus went on each time, but
+    /// Safari sent news of only every other move. If the focus is where it was, nothing is said.
+    /// 18 Nov 2026: the question was asked once, after a fixed third of a second, so every Tab on a Safari that posted
+    /// no focus news took 361 to 368 ms (seven in a row, 07:33 in turnover-2026-11-17T204230Z.log), longer than the
+    /// gap between quick Tabs. It is now asked every 25 ms, and answered as soon as the focus has moved, up to the
+    /// same third of a second.
     func askFocusIfNoNews() {
-        let sentAt = Date()
-        let pid = webArea.pid
-        let keys = ScriptHandler.keysArrivedCount
-        let epoch = pageGeneration
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+        pollFocusAfterTab(sentAt: Date(), pid: webArea.pid, keys: ScriptHandler.keysArrivedCount, epoch: pageGeneration)
+    }
+
+    /// How long after Tab the focus is asked for, and how long the asking goes on.
+    static let focusPollInterval = 0.025
+    static let focusPollCeiling = 0.35
+
+    private func pollFocusAfterTab(sentAt: Date, pid: pid_t, keys: Int, epoch: Int) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.focusPollInterval) { [weak self] in
             guard let self,
                   API.focusTreeInterceptor === self,
                   pageGeneration == epoch,
@@ -880,10 +888,15 @@ public final class BrowseModeDocument: ScriptableObject {
                   API.focusTreeInterceptor === self,
                   pageGeneration == epoch else { return }
             if let current = API.focusObject?.element, f.isSame(current) {
+                // Not moved yet: ask again until the ceiling, as the page may be slow to move it.
+                if Date().timeIntervalSince(sentAt) + Self.focusPollInterval < Self.focusPollCeiling {
+                    pollFocusAfterTab(sentAt: sentAt, pid: pid, keys: keys, epoch: epoch)
+                    return
+                }
                 Log.io("browse mode: Tab brought no news of the focus, and it is where it was")
                 return
             }
-            Log.io("browse mode: Tab brought no news of the focus; the page's focus is on \(f.role), read from there")
+            Log.io("browse mode: Tab brought no news of the focus; the page's focus is on \(f.role), read from there (\(Int(Date().timeIntervalSince(sentAt) * 1000)) ms)")
             AXHandler.shared.focusChanged(f, pid: f.pid)
         }
     }

@@ -61,6 +61,54 @@ func pageWatchTests() {
             }
         }
     }
+    // 18 Nov 2026: Tab with no focus news from the page answered after a fixed 0.35 s (seven Tabs of 361 to 368 ms in a
+    // row in Safari). The page is now asked every 25 ms; and a focus read this way counts as news for PageWatch.
+    for moves in [true, false] {
+        test("page watch: Tab with no focus news \(moves ? "is answered as soon as the focus has moved" : "keeps asking until the ceiling when it has not")") {
+            AXReplay.load(.init(app: "Public sample", bundle: "test.page-watch-poll", recorded: "synthetic",
+                                root: 0, application: 1, focus: nil, nodes: [
+                .init(id: 0, attrs: ["AXRole": .string("AXWebArea"), "AXParent": .element(1),
+                                     "AXURL": .url("https://example.com/page-watch-poll"), "AXChildren": .elements([2])]),
+                .init(id: 1, attrs: ["AXRole": .string("AXApplication"), "AXFocusedUIElement": .element(moves ? 2 : 0)]),
+                .init(id: 2, attrs: ["AXRole": .string("AXLink"), "AXParent": .element(0), "AXChildren": .elements([])]),
+            ]))
+            let savedWaiting = PageWatch.waiting
+            let savedPoster = KeyboardGesture.poster
+            let savedSink = Speech.sink
+            let savedReads = AXReplay.reads
+            let root = AXReplay.element(0)
+            let page = BrowseModeDocument(webArea: root)
+            waitForBuffer(page.buffer)
+            API.setFocusObject(ObjectFactory.make(root), ancestors: [], interceptor: page)
+            KeyboardGesture.poster = { _ in }
+            Speech.sink = { _ in }
+            PageWatch.waiting = .init()
+            AXReplay.reads = []
+            defer {
+                API.setFocusObject(nil, ancestors: [])
+                RunLoop.current.run(until: Date().addingTimeInterval(1.3))
+                PageWatch.waiting = savedWaiting
+                KeyboardGesture.poster = savedPoster
+                Speech.sink = savedSink
+                AXReplay.reads = savedReads
+                AXReplay.unload()
+            }
+            func queries() -> Int { AXReplay.reads?.filter { $0.attribute == "AXFocusedUIElement" }.count ?? 0 }
+            let sent = Date()
+            page.script(named: "tabFromCaret")?.handler(KeyboardGesture(identifier: "kb:tab")!)
+            if moves {
+                while queries() == 0, Date().timeIntervalSince(sent) < 0.6 {
+                    RunLoop.current.run(until: Date().addingTimeInterval(0.005))
+                }
+                let took = Date().timeIntervalSince(sent)
+                check(queries() > 0 && took < 0.2, "the focus is asked for well before the old fixed 0.35 s (took \(Int(took * 1000)) ms)")
+            } else {
+                RunLoop.current.run(until: Date().addingTimeInterval(0.6))
+                check(queries() >= 3, "an unmoved focus is asked for again, not once (asked \(queries()) times)")
+                check(queries() <= 15, "and the asking stops at the ceiling (asked \(queries()) times)")
+            }
+        }
+    }
     let firstKey = Date(timeIntervalSinceReferenceDate: 100)
     let secondKey = firstKey.addingTimeInterval(0.5)
     let noNews = Date.distantPast

@@ -32,6 +32,9 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   silent in that list is not yet known.
 - Mail: Up Arrow on the first message and Down Arrow on the last now say "top" and "bottom", as Finder's lists do.
   Before, you heard the edge sound and nothing was said.
+- Safari: Tab on a page answers as soon as the new focus can be read, not after a fixed third of a second. After Safari
+  was relaunched, every Tab took about 0.36 s because Safari sent no news of the focus; TurnOver now asks Safari
+  every 25 ms and speaks the control as soon as it has moved.
 - When an app leaves the Mac's secure input on after you leave a password field, as Safari did on Steam's sign-in
   page, VoiceOver now takes the keys a second later, and TurnOver takes them back a second after secure input goes
   off. Before, TurnOver heard none of your keys until you left the page. Nothing is said, and inside a password field
