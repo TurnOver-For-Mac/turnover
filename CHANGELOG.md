@@ -254,6 +254,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   was not kept with the reader you chose, and TurnOver could change it back; and turning VoiceOver on just after
   TurnOver had restarted VoiceOver itself was taken as TurnOver's start. When TurnOver cannot tell whose it was, it
   now takes it as yours.
+- When VoiceOver comes back after it had stopped without turning itself off, TurnOver now stops speaking at once.
+  Before, TurnOver could go on talking over VoiceOver for up to about four seconds.
 
 ## 2.0, build 24.1
 

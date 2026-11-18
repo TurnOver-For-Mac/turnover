@@ -25,6 +25,7 @@ final class TurnOverApp {
     private var voiceOverGoneTimer: Timer?
     private var testSayObserver: NSObjectProtocol?
     private let goneWatch = VoiceOverGoneWatch()
+    private var voiceOverLaunchObserver: NSObjectProtocol?
     private var announcedAtLaunch = CommandLine.arguments.contains("--announced")
     private let launchedAt = Date()
 
@@ -318,6 +319,18 @@ final class TurnOverApp {
     private var voiceOverOnChecks = 0
     private var voiceOverWasReading = HandOver.voiceOverReading
     private func watchForVoiceOverGone() {
+        // VoiceOver's process starting while TurnOver speaks for it under its flag: TurnOver stops at once, not at the
+        // next look 2 s on (Codex's second review, 18 Nov 2026).
+        voiceOverLaunchObserver = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main) { [weak self] n in
+            guard let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
+            guard app.bundleIdentifier == "com.apple.VoiceOver" else { return }
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let wasGone = self.goneWatch.gone
+                self.goneWatch.voiceOverStarted(flagOn: NSWorkspace.shared.isVoiceOverEnabled)
+                if wasGone { Log.info("VoiceOver's process started again: TurnOver's speech stopped; VoiceOver speaks") }
+            }
+        }
         voiceOverGoneTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }

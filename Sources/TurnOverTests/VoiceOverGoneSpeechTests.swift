@@ -41,4 +41,29 @@ func voiceOverGoneSpeechTests() {
         expect(said.last, "still gone", "VoiceOver back: TurnOver quiet again")
         expect(watch.looks, 0)
     }
+    test("VoiceOver gone: its process seen again stops TurnOver's speech already let through, at once") {
+        // Codex's second review (18 Nov 2026): clearing the gate left admitted speech playing over VoiceOver for up to
+        // about 4 s. Here the speech is admitted and still playing (never completed) when VoiceOver comes back.
+        let goneBefore = Speech.voiceOverGoneForOutput
+        defer { Speech.voiceOverGoneForOutput = goneBefore }
+        var stops = 0
+        let watch = VoiceOverGoneWatch(stopSpeech: { stops += 1 })
+        for _ in 1...VoiceOverGoneWatch.looksToDecide { watch.look(flagOn: true, running: false) }
+        check(watch.gone, "decided gone: TurnOver speaks")
+        watch.voiceOverStarted(flagOn: true)   // macOS: VoiceOver's process launched, between two timer looks
+        expect(stops, 1, "TurnOver's speech stopped at once")
+        check(!Speech.voiceOverGoneForOutput, "and nothing new is let through under the flag")
+        watch.look(flagOn: true, running: true)
+        expect(stops, 1, "stopped once, not at every look while VoiceOver runs")
+    }
+    test("VoiceOver gone: VoiceOver merely starting, or its flag going off, stops nothing") {
+        var stops = 0
+        let watch = VoiceOverGoneWatch(stopSpeech: { stops += 1 })
+        watch.look(flagOn: true, running: false)
+        watch.voiceOverStarted(flagOn: true)   // not yet decided gone: TurnOver was quiet anyway
+        expect(stops, 0)
+        for _ in 1...VoiceOverGoneWatch.looksToDecide { watch.look(flagOn: true, running: false) }
+        watch.look(flagOn: false, running: false)   // the flag off: TurnOver is the reader, it keeps speaking
+        expect(stops, 0)
+    }
 }
