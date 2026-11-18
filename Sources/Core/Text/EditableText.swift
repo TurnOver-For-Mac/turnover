@@ -287,6 +287,11 @@ open class EditableText: TurnOverObject {
         }
     }
 
+    /// A one-line web box that holds a single character, and the key is a plain Up or Down Arrow: no other line to go to.
+    public nonisolated static func isOneCharacterBox(length: Int, isTextField: Bool, inWebContent: Bool, key: String) -> Bool {
+        isTextField && inWebContent && length == 1 && (key == "upArrow" || key == "downArrow")
+    }
+
     /// A caret key at a known edge: sent on unwaited, the edge sound, and the line read in a one-line box. A field whose
     /// application answers an edge arrow by replacing its text (Claude's Prompt recalling a message, 16 Nov 2026)
     /// overrides this to read the line once the value has changed.
@@ -319,8 +324,12 @@ open class EditableText: TurnOverObject {
         var up: AXUIElement? = element.element(kAXParentAttribute)
         for _ in 0..<4 { guard let e = up, !inCell else { break }; if ["AXCell", "AXRow", "AXTable"].contains(e.role) { inCell = true }; up = e.element(kAXParentAttribute) }
         if !inCell, appModule.isTableCellText(element) { inCell = true }
+        // A web box of one character (PayPal's six code boxes, 18 Nov 2026: Up was at once, Down waited 320 ms and made 170
+        // accessibility calls, because the caret stood before the character, not after it): Up and Down have no other line
+        // to go to, whichever side of it the caret is on.
+        let oneCharacterBox = Self.isOneCharacterBox(length: length, isTextField: element.role == "AXTextField", inWebContent: isInWebContent, key: key)
         let noRoom = collapsed && !inCell && !gesture.modifiers.contains(.shift) && unit == .line
-            && ((backwards && oldLine.start <= 0 && info.start <= 0) || (forwards && length > 0 && oldLine.end >= length && info.start >= length))
+            && (oneCharacterBox || (backwards && oldLine.start <= 0 && info.start <= 0) || (forwards && length > 0 && oldLine.end >= length && info.start >= length))
         // Plain Left and Right at either end of left-to-right text are as sure an edge, so the bump is at once, as
         // VoiceOver's is: a web field made them wait three times the caret's patience, over 300 ms (9 Nov 2026). Not where
         // the line has right-to-left text, in which the arrows go the other way round.

@@ -23,6 +23,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- Safari: Up and Down Arrow in a box that holds one character (the digit boxes on PayPal's code page) now answer at
+  once, as they do at the top of any line. Before, Down waited about a third of a second.
 - Safari: the list a pop-up button opens (Amazon's Quantity) is no longer taken for a page of its own, so the heading
   and other browse keys no longer say "nothing on this page yet" over it. Why the Down Arrows after the second were
   silent in that list is not yet known.

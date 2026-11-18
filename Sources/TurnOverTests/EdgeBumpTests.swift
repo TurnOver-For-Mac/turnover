@@ -38,4 +38,13 @@ func edgeBumpTests() {
         check(!BrowseModeHandler.isPopUpButtonsList(address: nil, children: []), "an empty web area")
         check(!BrowseModeHandler.isPopUpButtonsList(address: nil, children: [("AXList", [])]), "a list with nothing in it")
     }
+    test("edge bump: Up and Down are at once an edge in a web box of one character, whichever side the caret is (18 Nov 2026)") {
+        check(EditableText.isOneCharacterBox(length: 1, isTextField: true, inWebContent: true, key: "downArrow"), "Down")
+        check(EditableText.isOneCharacterBox(length: 1, isTextField: true, inWebContent: true, key: "upArrow"), "Up")
+        check(!EditableText.isOneCharacterBox(length: 1, isTextField: true, inWebContent: true, key: "home"), "Home moves the caret")
+        check(!EditableText.isOneCharacterBox(length: 2, isTextField: true, inWebContent: true, key: "downArrow"), "two characters")
+        check(!EditableText.isOneCharacterBox(length: 0, isTextField: true, inWebContent: true, key: "downArrow"), "empty")
+        check(!EditableText.isOneCharacterBox(length: 1, isTextField: false, inWebContent: true, key: "downArrow"), "a text area")
+        check(!EditableText.isOneCharacterBox(length: 1, isTextField: true, inWebContent: false, key: "downArrow"), "not on the web")
+    }
 }
