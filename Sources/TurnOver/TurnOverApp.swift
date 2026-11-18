@@ -365,7 +365,13 @@ final class TurnOverApp {
     private var heldForVoiceOver = false
 
     private func voiceOverChanged(_ on: Bool) {
-        let byInputRecovery = inputActivation.takeAutomaticVoiceOverRestore(on: on, readerChoice: HandOver.choice.value)
+        // The person's own toggle, heard by the key tap just before: theirs, over any recovery or hand-over of TurnOver's
+        // (VoiceOverChangeOrigin; Codex's second review, 18 Nov 2026).
+        let person = HandOver.personToggle.take()
+        let byPerson = person == .person
+        if byPerson { Log.info("VoiceOver \(on ? "on" : "off"): your own toggle, heard by the keys") }
+        let recoveryClaims = inputActivation.takeAutomaticVoiceOverRestore(on: on, readerChoice: HandOver.choice.value)
+        let byInputRecovery = recoveryClaims && !byPerson
         HandOver.newChoice()   // VoiceOver turned on or off, by hand too: a recovery's late fallback stands down
         Log.info("VoiceOver is \(on ? "on" : "off")")
         let starting = !sawVoiceOverState
@@ -374,8 +380,11 @@ final class TurnOverApp {
         // restart: taken by this "on", so the person's own toggle after it is theirs; an "off" cancels it, except the
         // first report as TurnOver starts, when that start may still be coming (18 Nov 2026).
         let verdict = HandOver.ownStart.report(on: on, starting: starting)
-        let byOwnStart = verdict == .ours
+        // Its start claims the "on" only when the keys were heard all the while with no press of the person's: one
+        // heard, or keys not heard long enough to know, leaves it theirs (never overridden on a guess).
+        let byOwnStart = OwnVoiceOverStart.isOwnStart(verdict, person: person)
         if byOwnStart { Log.info("VoiceOver on: TurnOver's own start (its watchdog, quit or a failure); no choice by hand") }
+        if verdict == .ours, person == .unheard { Log.info("VoiceOver on: TurnOver had started it, but the keys were not heard long enough to tell it from your toggle; taken as yours") }
         if verdict == .stale { Log.info("VoiceOver on: TurnOver's own start was too long ago, or the clock went back; taken as a change by hand") }
         defer { refreshWindowsLayer() }
         // Coexisting (experimental): VoiceOver off means TurnOver reads every app (LeadWatcher.shouldLead), on again
@@ -389,7 +398,7 @@ final class TurnOverApp {
             if let front = NSWorkspace.shared.frontmostApplication { lead.look(at: front) }
             return
         }
-        lead.voiceOverChanged(on: on, byLock: byLock, byInputRecovery: byInputRecovery, byOwnStart: byOwnStart)
+        lead.voiceOverChanged(on: on, byLock: byLock, byInputRecovery: byInputRecovery, byOwnStart: byOwnStart, byPerson: byPerson)
         // Screen reader behaviour (22 Oct 2026): the swap is a setting. Off, VoiceOver's key changes nothing of TurnOver's.
         // VoiceOver going off ends any yielding, whatever the swap setting says.
         if !on { lead.yieldedToVoiceOverByHand = false }
@@ -423,7 +432,7 @@ final class TurnOverApp {
         // Only a change made by hand counts as yielding: a hand-over TurnOver posted itself (the lock screen) does not.
         // Nor one noticed while the Mac is locked or asleep: the lock's own, its notice held back until the wake, long
         // after the three-second window (26 Oct 2026; the lead watcher clears the flag again on the unlock as well).
-        if on, !starting, !lead.isOurChange, !lead.locked, !byLock, !byInputRecovery, !byOwnStart {
+        if on, !starting, !lead.isOurChange(on: on, byPerson: byPerson), !lead.locked, !byLock, !byInputRecovery, !byOwnStart {
             lead.yieldedToVoiceOverByHand = true
             Log.info("VoiceOver turned on by hand: TurnOver steps back until it goes off or TurnOver's key")
         }

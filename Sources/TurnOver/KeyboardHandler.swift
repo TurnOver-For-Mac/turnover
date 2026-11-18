@@ -248,6 +248,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         mine.tap = t
         CFRunLoopAddSource(CFRunLoopGetCurrent(), CFMachPortCreateRunLoopSource(nil, t, 0), .defaultMode)
         Log.info("keyboard: active session tap up on its own thread")
+        HandOver.personToggle.listening(true)   // the person's toggle is heard from now (VoiceOverChangeOrigin, 18 Nov 2026)
         return mine
     }
 
@@ -284,6 +285,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
     }
 
     private func tearDown(_ mine: Layer) {
+        HandOver.personToggle.listening(false)   // the person's toggle is no longer heard (VoiceOverChangeOrigin)
         if let t = mine.tap {
             CGEvent.tapEnable(tap: t, enable: false)
             CFMachPortInvalidate(t)
@@ -342,6 +344,18 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         set { bypassLock.lock(); _bypass = newValue; bypassLock.unlock() }
     }
 
+    /// A key down that is VoiceOver's toggle shortcut, pressed by the person: not one TurnOver posted (its own toggle
+    /// and its re-posted keys carry a marker), and not a key repeat.
+    private static func notePersonToggle(_ event: CGEvent) {
+        let source = event.getIntegerValueField(.eventSourceUserData)
+        guard source != marker else { return }
+        guard source != orderedMarker else { return }
+        guard event.getIntegerValueField(.keyboardEventAutorepeat) == 0 else { return }
+        let code = event.getIntegerValueField(.keyboardEventKeycode)
+        guard isVoiceOverToggle(code: code, flags: event.flags) else { return }
+        HandOver.personToggle.pressed()
+    }
+
     /// VoiceOver's toggle shortcut as macOS has it (Keyboard Shortcuts, Accessibility), read once at launch.
     nonisolated static let voiceOverToggle = HandOver.toggleShortcut()
     nonisolated static func isVoiceOverToggle(code: Int64, flags: CGEventFlags) -> Bool {
@@ -386,6 +400,9 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
     }
 
     private func tapEvent(_ type: CGEventType, _ event: CGEvent) -> Unmanaged<CGEvent>? {
+        // The person's own press of VoiceOver's toggle, heard whatever else the tap is doing: the change of VoiceOver
+        // after it is theirs, never TurnOver's (VoiceOverChangeOrigin; Codex's second review, 18 Nov 2026).
+        if type == .keyDown { Self.notePersonToggle(event) }
         guard let generation = layer?.generation, isRequested(generation) else { return Unmanaged.passUnretained(event) }
         if Self.bypass, type != .tapDisabledByTimeout, type != .tapDisabledByUserInput {
             if !quarantined.isEmpty { quarantined.removeAll() }   // their key-ups pass now; none must be swallowed later
@@ -393,6 +410,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         }
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             Log.warning("keyboard: tap disabled (\(type.rawValue)), re-enabling")
+            HandOver.personToggle.listening(true)   // keys while it was off were not heard: listening starts afresh
             arrowDownWhileOff.clear()   // a key-up may have been lost while the tap was off (15 Nov 2026)
             if let t = tap { CGEvent.tapEnable(tap: t, enable: true) }
             guard let t = tap, CGEvent.tapIsEnabled(tap: t) else {

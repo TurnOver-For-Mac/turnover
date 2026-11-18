@@ -249,6 +249,11 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 - After TurnOver restarted itself because it had stopped responding, VoiceOver that its watchdog had started could
   still keep Mail, or the app in front, with VoiceOver as if you had chosen it by hand. TurnOver now remembers its own
   start across the restart even when VoiceOver is still off as the new TurnOver begins.
+- Turning VoiceOver on or off yourself with its own key is always taken as your choice for the app in front. Before,
+  doing it within three seconds of TurnOver changing reader for an app was taken as TurnOver's own change, so the app
+  was not kept with the reader you chose, and TurnOver could change it back; and turning VoiceOver on just after
+  TurnOver had restarted VoiceOver itself was taken as TurnOver's start. When TurnOver cannot tell whose it was, it
+  now takes it as yours.
 
 ## 2.0, build 24.1
 

@@ -19,11 +19,18 @@ final class LeadWatcher {
     private var pins: [String: Bool] = [:]
     private var warnedNoInput = false          // bundle → true means TurnOver leads
     private var ourChangeUntil = Date.distantPast
-    /// Whether a VoiceOver change arriving now is TurnOver's own (a hand-over it posted, within its window), not the hand's.
-    var isOurChange: Bool { Date() < ourChangeUntil }
+    /// Whether VoiceOver changing to `on` now is TurnOver's own (a hand-over it posted, within its window, the way it
+    /// asked for), not the hand's. The person's press heard by the key tap (`byPerson`), or a change the other way from
+    /// the hand-over's, is theirs (HandOverOwnership; Codex's second review, 18 Nov 2026).
+    func isOurChange(on: Bool, byPerson: Bool) -> Bool {
+        HandOverOwnership.isHandOvers(on: on, wanted: wantedOn, windowOpen: Date() < ourChangeUntil,
+                                      secondToggle: secondTogglePosted, byPerson: byPerson)
+    }
     private var lastHandOverAt = Date.distantPast
     private var postedAt: Date?
     private var wantedOn: Bool?
+    /// The current hand-over posted a second toggle: the first may still land, so a change either way is its own.
+    private var secondTogglePosted = false
 
     func start() {
         token = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] n in
@@ -490,6 +497,7 @@ final class LeadWatcher {
         ourChangeUntil = Date().addingTimeInterval(3)
         postedAt = Date()
         wantedOn = voiceOverOn
+        secondTogglePosted = false
         handOverGeneration += 1
         HandOver.newChoice()   // a recovery's late fallback stands down
         let generation = handOverGeneration
@@ -548,6 +556,7 @@ final class LeadWatcher {
                         guard isOn() != voiceOverOn else { finish(true); return }
                         guard settled else { Log.warning("hand-over: VoiceOver still changing after 6 s more; not toggled again"); finish(false); return }
                         self.ourChangeUntil = Date().addingTimeInterval(3)   // (a late second toggle was read as the user's choice and pinned the app, 8 Oct 2026)
+                        if !voiceOverOn { self.secondTogglePosted = true }   // VoiceOver.app opened only ever brings it on
                         if voiceOverOn { HandOver.openVoiceOver("hand-over, again") } else { HandOver.postToggle() }
                         self.poll(generation, every: 0.05, upTo: 2, whileAllowed: whileAllowed, until: { isOn() == voiceOverOn }) { again in
                             finish(again)
@@ -811,14 +820,16 @@ final class LeadWatcher {
     /// `byLock`: the lock's own VoiceOver, noticed late; no pin and no choice of the user's.
     /// `byInputRecovery`: one matching notification owned by the permission fallback, not a manual reader pin.
     /// `byOwnStart`: TurnOver's own start of VoiceOver (OwnVoiceOverStart), taken by the app; no pin.
-    func voiceOverChanged(on: Bool, byLock: Bool = false, byInputRecovery: Bool = false, byOwnStart: Bool = false) {
+    /// `byPerson`: the key tap heard the person press VoiceOver's toggle just before: theirs, whatever else was under way.
+    func voiceOverChanged(on: Bool, byLock: Bool = false, byInputRecovery: Bool = false, byOwnStart: Bool = false, byPerson: Bool = false) {
+        let ours = isOurChange(on: on, byPerson: byPerson)
         if !on {
             lockTurnedVoiceOverOn = false
             if wakeRestoration.pending { initialTakeOverPending = false }
             cancelWakeRestoration()
         }
         // This must precede the per-app/swap guards: manual VoiceOver also wins with automatic switching off.
-        if on, !byLock, !byInputRecovery, !locked, !isOurChange { cancelWakeRestoration() }
+        if on, !byLock, !byInputRecovery, !locked, !ours { cancelWakeRestoration() }
         if on {
             wakeRestoration.observedVoiceOverOn()
             if !locked { watchWakeRestoration() }
@@ -829,7 +840,10 @@ final class LeadWatcher {
         // arrival is no choice of the person's (10:16 on 17 Nov 2026 pinned Mail; 18 Nov 2026).
         guard !byOwnStart else { return }
         if let t = Watchdog.shared.lastTrip, Date().timeIntervalSince(t) < 30 { return }
-        guard Date() > ourChangeUntil, config.applications.switchesAsAppsChange else { return }
+        // A change within a hand-over's window is still the person's when it went the other way, or their key was heard:
+        // pinned, so the hand-over's own check after it does not turn VoiceOver back (Codex's second review, 18 Nov 2026).
+        guard !ours else { return }
+        guard config.applications.switchesAsAppsChange else { return }
         guard let app = NSWorkspace.shared.frontmostApplication, app.activationPolicy == .regular, let b = app.bundleIdentifier, b != Bundle.main.bundleIdentifier else { return }
         if shouldLead(b) == on {   // the user went against the list for this app
             pins[b] = !on

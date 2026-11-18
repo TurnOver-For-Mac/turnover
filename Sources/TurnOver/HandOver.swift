@@ -78,6 +78,9 @@ enum HandOver {
     /// TurnOver is going: no hand-over runs from now on, the quit owns VoiceOver (ReaderShutdown, 18 Nov 2026).
     nonisolated static let shutdown = ReaderShutdown()
 
+    /// The person's own presses of VoiceOver's toggle, heard by the key tap: a change after one is theirs (18 Nov 2026).
+    nonisolated static let personToggle = PersonVoiceOverToggle()
+
     nonisolated static func postToggle() {
         let s = toggleShortcut()
         let src = CGEventSource(stateID: .hidSystemState)
