@@ -434,13 +434,13 @@ extension BrowseModeDocument {
     static var activationKeyAt = Date.distantPast
     /// A link or button pressed by VO-Space or Return, with the window of its page, for the focus rules: Safari's
     /// nameless page host taking the focus just after is the page changing, not a move (18 Nov 2026). Used once.
-    package static var lastNavigationPress: (window: AXUIElement, pid: pid_t, at: Date)?
+    package static var lastNavigationPress: (window: AXUIElement, pid: pid_t, at: Date, keyAt: Date)?
 
     func notePressForNavigation(_ x: AXUIElement, role: String) {
         guard role == "AXLink" || role == "AXButton" else { return }
         guard Date().timeIntervalSince(Self.activationKeyAt) < 2 else { return }
         guard let window = x.element(kAXWindowAttribute) ?? webArea.element(kAXWindowAttribute) else { return }
-        Self.lastNavigationPress = (window, webArea.pid, Date())
+        Self.lastNavigationPress = (window, webArea.pid, Date(), InputManager.lastKeyDownAt)
     }
 
     /// True means an activation started; completion reports whether it actually sent a key or pressed.

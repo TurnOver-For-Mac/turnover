@@ -422,13 +422,22 @@ extension AXHandler {
             }
             Log.io("focus on a nameless AXUnknown with no document inside; ignored"); return .ignore
         }
-        if Self.isSafariPageHostBetweenPages(target, pid: pid), let document = API.focusTreeInterceptor {
+        // The group set aside, reported again while the new page is awaited and no key has been pressed since: still set
+        // aside. Presented, it dropped the page and the watch with it, and the silence came back (Codex's review).
+        if Self.isPageHostSetAside(target) {
+            Log.io("focus on the nameless AXGroup set aside, reported again; still set aside")
+            return .ignore
+        }
+        if Self.isSafariPageHostBetweenPages(target, pid: pid), let document = API.focusTreeInterceptor,
+           let press = BrowseModeDocument.lastNavigationPress {
             // The press is the evidence for one page change only.
             BrowseModeDocument.lastNavigationPress = nil
+            Self.pageHostSetAside = (target, document, press.keyAt)
             Log.io("focus on a nameless AXGroup with no page in it yet, just after a link or button was pressed; set aside, watching for the new page")
             let setAside = target
             followIfPageWent(document, tries: Self.pageHostWatchTries) { [weak self] in
                 // No new page came: the focus set aside is presented, if the app still has it there.
+                Self.pageHostSetAside = nil
                 guard let self else { return }
                 guard let now = AXUIElementCreateApplication(pid).element(kAXFocusedUIElementAttribute), now.isSame(setAside) else {
                     Log.io("focus: no new page came, and the app's focus has moved on from the group set aside; not presented")
@@ -442,10 +451,25 @@ extension AXHandler {
         return .go(target)
     }
 
+    /// The page host set aside, the page it was set aside for, and the key that pressed the link: while the page is still
+    /// TurnOver's and no key has come since, a report of the same group again is set aside too. Ended by the watch
+    /// giving up, by the new page being followed (the page is no longer TurnOver's), or by any key.
+    package static var pageHostSetAside: (element: AXUIElement, document: BrowseModeDocument, keyAt: Date)?
+
+    package static func isPageHostSetAside(_ target: AXUIElement) -> Bool {
+        guard let held = pageHostSetAside else { return false }
+        guard held.element.isSame(target) else { return false }
+        guard API.focusTreeInterceptor === held.document else { return false }
+        guard InputManager.lastKeyDownAt == held.keyAt else { return false }
+        return true
+    }
+
     /// How many looks, at pageWatchInterval, for the new page after Safari's page host takes the focus (about 5 s).
     package static var pageHostWatchTries = 12
     /// How long a press of a link or button stands as evidence of a page change.
     package static let pageHostPressWindow: TimeInterval = 4
+    /// How far up the walk from the group to its window goes before it gives up (a test lowers it).
+    package static var pageHostAncestorLimit = 40
 
     /// Safari, after VO Space or Return on a link or button: the focus goes to a nameless group outside any page, with
     /// no page in it yet, while the new page loads; the new page then takes the focus only as a blank frame
@@ -464,26 +488,27 @@ extension AXHandler {
         guard let press = BrowseModeDocument.lastNavigationPress else { return false }
         guard press.pid == pid else { return false }
         guard now.timeIntervalSince(press.at) < pageHostPressWindow else { return false }
-        // Not after Tab or Shift Tab since: that is a move into Safari's own controls.
-        let key = InputManager.lastKeyIdentifier
-        guard key != "kb:tab", key != "kb:shift+tab" else { return false }
+        // No key since the one that pressed it: a Tab (a move into Safari's own controls) or any other key ends the
+        // evidence for good (Codex's review: VO Space, Tab, then another key made the old press count again).
+        guard InputManager.lastKeyDownAt == press.keyAt else { return false }
         // The very window the press was in, by identity.
         guard let targetWindow = target.element(kAXWindowAttribute) else { return false }
         guard targetWindow.isSame(press.window) else { return false }
         guard targetWindow.string(kAXSubroleAttribute) == "AXStandardWindow" else { return false }
         // Outside any page (a nameless group on a page is the page's own), and in no sheet or dialog.
         let dialogSubroles: Set<String> = ["AXDialog", "AXSystemDialog", "AXFloatingWindow", "AXSystemFloatingWindow"]
+        // The walk must reach that very window: one stopped by its limit has not shown the group is outside a page.
         var p = target.element(kAXParentAttribute); var hops = 0
-        while let x = p, hops < 40 {
+        var reachedWindow = false
+        while let x = p, hops < Self.pageHostAncestorLimit {
             let role = x.role
             if role == "AXWebArea" { return false }
             if role == "AXSheet" { return false }
             if let sub = x.string(kAXSubroleAttribute), dialogSubroles.contains(sub) { return false }
-            if role == "AXWindow" { break }
+            if role == "AXWindow" { reachedWindow = x.isSame(targetWindow); break }
             p = x.element(kAXParentAttribute); hops += 1
         }
-        guard p != nil else { return false }   // the window was never reached: not known to be outside a page
-        return true
+        return reachedWindow
     }
 
     /// Whether `field`, where the focus is, is a text field in `page` that still says it has the keyboard, so a report

@@ -231,6 +231,8 @@ public enum Core {
 
     /// The reader is quiet (VoiceOver has the keyboard).
     public static func deactivate() {
+        // VoiceOver has the keyboard: Find's prompt closes, and keys already queued for it do nothing (Codex's review).
+        FindPrompt.shared.close(because: "the reader stopped")
         FormattingFeedback.shared.cancel()
         ObjectNavigator.shared.cancelWindowSearch()
         BrowseModeHandler.shared.cancelBufferBuilds()

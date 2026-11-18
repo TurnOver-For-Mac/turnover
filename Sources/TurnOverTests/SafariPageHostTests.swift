@@ -13,8 +13,12 @@ func safariPageHostTests() {
     /// (8) holding a nameless group (9), and a second window (10) with a nameless group (11). `appFocus`: what the app
     /// says has its focus; `newPage`: a new page (6, with a link 7) in the window, beside the host.
     func withSafari(appFocus: Int, newPage: Bool = false, _ body: (pid_t) -> Void) {
+        // The made-up elements keep their identities from one load to the next: a group presented by the test before is
+        // "reported twice" for half a second (ruleReportedTwice). That half second goes by first.
+        RunLoop.current.run(until: Date().addingTimeInterval(0.6))
         let savedFocus = API.focusObject, savedAncestors = API.focusAncestors, savedPage = API.focusTreeInterceptor
-        let savedBundle = ProfileStore.shared.replayBundle, savedKey = InputManager.lastKeyIdentifier
+        let savedBundle = ProfileStore.shared.replayBundle, savedKeyAt = InputManager.lastKeyDownAt
+        let savedSetAside = AXHandler.pageHostSetAside, savedLimit = AXHandler.pageHostAncestorLimit
         let savedPid = AXHandler.shared.activePid, savedPress = BrowseModeDocument.lastNavigationPress
         let savedTries = AXHandler.pageHostWatchTries, savedInterval = AXHandler.pageWatchInterval
         let window: [String: AXFixture.Value] = ["AXWindow": .element(0)]
@@ -38,9 +42,10 @@ func safariPageHostTests() {
         API.setFocusObject(ObjectFactory.make(AXReplay.element(4)), ancestors: [], interceptor: page)
         AXHandler.shared.activePid = pid
         ProfileStore.shared.replayBundle = "com.apple.Safari"
-        // VO Space pressed the link just now.
-        InputManager.lastKeyIdentifier = "kb:turnover+space"
-        BrowseModeDocument.lastNavigationPress = (AXReplay.element(0), pid, Date())
+        // VO Space pressed the link just now, and no key since.
+        let keyAt = Date()
+        InputManager.lastKeyDownAt = keyAt
+        BrowseModeDocument.lastNavigationPress = (AXReplay.element(0), pid, Date(), keyAt)
         AXHandler.pageHostWatchTries = 2
         AXHandler.pageWatchInterval = 0.05
         defer {
@@ -48,7 +53,9 @@ func safariPageHostTests() {
             API.setFocusObject(savedFocus, ancestors: savedAncestors, interceptor: savedPage)
             AXHandler.shared.activePid = savedPid
             ProfileStore.shared.replayBundle = savedBundle
-            InputManager.lastKeyIdentifier = savedKey
+            InputManager.lastKeyDownAt = savedKeyAt
+            AXHandler.pageHostSetAside = savedSetAside
+            AXHandler.pageHostAncestorLimit = savedLimit
             BrowseModeDocument.lastNavigationPress = savedPress
             AXHandler.pageHostWatchTries = savedTries
             AXHandler.pageWatchInterval = savedInterval
@@ -68,14 +75,31 @@ func safariPageHostTests() {
             check(!isHost(11, pid), "a group in another window of the process is not this window's")
             check(!isHost(4, pid), "a link is not a group")
             check(!isHost(2, pid, now: Date().addingTimeInterval(5)), "a press five seconds ago is no evidence")
-            InputManager.lastKeyIdentifier = "kb:tab"
-            check(!isHost(2, pid), "after Tab the group is a move into Safari's controls")
-            InputManager.lastKeyIdentifier = "kb:turnover+space"
+            // Any key since the press (Tab into Safari's controls, then another key) ends the evidence for good.
+            let pressedAt = InputManager.lastKeyDownAt
+            InputManager.lastKeyDownAt = pressedAt.addingTimeInterval(0.5)   // Tab
+            check(!isHost(2, pid), "after Tab the press is no evidence")
+            InputManager.lastKeyDownAt = pressedAt.addingTimeInterval(1)     // another key
+            check(!isHost(2, pid), "nor after a key after Tab")
+            InputManager.lastKeyDownAt = pressedAt
+            // A walk stopped by its limit before the window has not shown the group is outside a page.
+            AXHandler.pageHostAncestorLimit = 0
+            check(!isHost(2, pid), "a walk that never reaches the window declines")
+            AXHandler.pageHostAncestorLimit = 40
             ProfileStore.shared.replayBundle = "com.google.Chrome"
             check(!isHost(2, pid), "only Safari")
             ProfileStore.shared.replayBundle = "com.apple.Safari"
             BrowseModeDocument.lastNavigationPress = nil
             check(!isHost(2, pid), "with no press there is no evidence")
+        }
+    }
+
+    test("Safari's page host reported again after a key is no longer set aside") {
+        withSafari(appFocus: 2) { pid in
+            AXHandler.shared.focusChanged(AXReplay.element(2), pid: pid)
+            check(AXHandler.isPageHostSetAside(AXReplay.element(2)), "set aside after the press")
+            InputManager.lastKeyDownAt = Date().addingTimeInterval(1)
+            check(!AXHandler.isPageHostSetAside(AXReplay.element(2)), "a key since ends it: Oliver has moved")
         }
     }
 
@@ -85,6 +109,10 @@ func safariPageHostTests() {
             AXHandler.shared.focusChanged(AXReplay.element(2), pid: pid)
             check(API.focusObject?.element.isSame(AXReplay.element(4)) == true, "the group is set aside: the link keeps the focus")
             check(BrowseModeDocument.lastNavigationPress == nil, "the press is used up")
+            // Safari reports the same group again while the page is awaited: still set aside, the page still TurnOver's.
+            AXHandler.shared.focusChanged(AXReplay.element(2), pid: pid)
+            check(API.focusObject?.element.isSame(AXReplay.element(4)) == true, "the group reported again is still set aside")
+            check(API.focusTreeInterceptor != nil, "the page is still in hand, so the watch goes on")
             RunLoop.current.run(until: Date().addingTimeInterval(0.4))
             check(API.focusObject?.element.isSame(AXReplay.element(2)) == true, "with no new page, the group set aside is presented")
         }

@@ -19,11 +19,21 @@ import TurnOverAX
 extension AXHandler {
     // MARK: Applications
 
+    /// Whether an app coming to the front closes Find's prompt: another app than the one in front, outside AppWake's nudge.
+    nonisolated package static func activationClosesFind(pid: pid_t, activePid: pid_t, now: Date, nudgingUntil: Date) -> Bool {
+        guard pid != activePid else { return false }
+        guard now > nudgingUntil else { return false }
+        return true
+    }
+
     func appActivated(_ app: NSRunningApplication) {
         let pid = app.processIdentifier
         // Find's prompt belongs to the app it was opened over: any other app coming to the front, TurnOver's own
-        // included, however it came (Command Tab, the mouse, the Dock), closes it (18 Nov 2026).
-        if pid != activePid { FindPrompt.shared.close(because: "another app came to the front") }
+        // included, however it came (Command Tab, the mouse, the Dock), closes it (18 Nov 2026). Not TurnOver's own
+        // switch to wake an app's accessibility (AppWake), which is not the user leaving, as the lead watcher has it.
+        if Self.activationClosesFind(pid: pid, activePid: activePid, now: Date(), nudgingUntil: AppWake.nudgingUntil) {
+            FindPrompt.shared.close(because: "another app came to the front")
+        }
         guard pid != getpid() else { return }
         if pid == activePid { return }
         let old = activePid

@@ -22,6 +22,14 @@ func findPromptTests() {
         }
     }
 
+    test("An app coming to the front closes Find's prompt, but not TurnOver's own switch to wake an app") {
+        let now = Date()
+        check(AXHandler.activationClosesFind(pid: 20, activePid: 10, now: now, nudgingUntil: .distantPast), "another app closes it")
+        check(!AXHandler.activationClosesFind(pid: 10, activePid: 10, now: now, nudgingUntil: .distantPast), "the same app does not")
+        check(!AXHandler.activationClosesFind(pid: 20, activePid: 10, now: now, nudgingUntil: now.addingTimeInterval(1)),
+              "TurnOver's own nudge (AppWake), itself or the app coming back, does not")
+    }
+
     test("Find's prompt types a key's character, and nothing for an arrow or Tab") {
         expect(FindPrompt.typedText(key("kb:b")), "b")
         expect(FindPrompt.typedText(key("kb:space")), " ")
@@ -97,6 +105,17 @@ func findPromptTests() {
         check(!FindPrompt.shared.isOpen, "Command Tab closed the prompt")
         drain()
         expect(sent.value, [], "Command Tab was not posted again by the prompt")
+
+        // The reader stopping (VoiceOver takes the keyboard) between a Return's decision and its handling: no search.
+        FindPrompt.shared.open()
+        check(InputManager.handleKeyDown(key("kb:q")), "q taken for the prompt")
+        check(InputManager.handleKeyDown(key("kb:enter")), "Return taken for the prompt")
+        let beforeStop = searches().count
+        Core.deactivate()
+        check(!FindPrompt.shared.isOpen, "the reader stopping closed the prompt")
+        drain()
+        expect(searches().count, beforeStop, "the queued Return searched nothing after the reader stopped")
+        expect(FindPrompt.shared.lastSearch, "buy", "the last search is unchanged after the reader stopped")
 
         // TurnOver's menu opening closes it.
         FindPrompt.shared.open()
