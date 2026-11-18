@@ -618,6 +618,22 @@ open class TurnOverObject: ScriptableObject {
             return
         }
         if event.kind == .gainFocus, role == .passwordEdit { SecureEcho.focused(element) }
+        // Secure input on and none of its keys heard (18 Nov 2026): a text field's own news is read as its key would be.
+        // Its first look, as it takes the focus, only notes where it stands.
+        if SecureInputWatch.keysUnheard,
+           event.kind == .gainFocus,
+           let f = self as? EditableText,
+           role != .passwordEdit {
+            KeylessField.forget()
+            _ = KeylessField.reading(of: f.element)
+        }
+        if SecureInputWatch.keysUnheard,
+           [.caret, .valueChange, .textChange].contains(event.kind),
+           let f = API.focusObject as? EditableText,
+           f.role != .passwordEdit,
+           f.isSameElement(as: self) || axRole == "AXWebArea" {
+            f.readKeylessChange()
+        }
         if event.kind == .gainFocus { SettingsPanePlugin.focusMoved(to: self); ToolbarKeys.focusMoved(to: self) }
         switch event.kind {
         case .gainFocus: event_gainFocus()

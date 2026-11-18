@@ -538,6 +538,10 @@ final class TurnOverApp {
         // Core setup can take time. A failed tap during it must not lead to muting VoiceOver afterwards.
         guard inputActivation.confirm(generation, inputReady: keyboard.isReady(generation)) else { inputUnavailable(generation); return }
         KeyboardHandler.bypass = false
+        // Secure input's start and end (18 Nov 2026): the keyboard lets go of held keys, and the log counts what the
+        // keyboard watch saw meanwhile.
+        SecureInputWatch.onChange = { on in KeyboardHandler.secureInputChanged(on: on) }
+        SecureInputWatch.hidKeyReports = { KeyboardHandler.hidKeyReports.value }
         SecureInputWatch.start()
         if Coexist.on { VoiceOverTap.set(true, why: "TurnOver takes \(NSWorkspace.shared.frontmostApplication?.localizedName ?? "an app")") }
         // VoiceOver's speech settings may have been changed where it read: TurnOver takes them up (SpeechParity).

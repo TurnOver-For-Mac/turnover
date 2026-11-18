@@ -635,6 +635,30 @@ open class EditableText: TurnOverObject {
         if API.focusObject?.isSameElement(as: self) == true, !EventHandler.isPending(.gainFocus) { detectPossibleSelectionChange() }
     }
 
+    /// Secure input is on and none of its keys has reached TurnOver (18 Nov 2026): the field's own news is read as the
+    /// key would have been, a character typed or deleted, or the caret moved by a character, a word or a line.
+    func readKeylessChange() {
+        guard let reading = KeylessField.reading(of: element) else { return }
+        switch reading {
+        case .nothing:
+            return
+        case .typed(let s):
+            if s.count == 1, let ch = s.first { event_typedCharacter(ch); return }
+            Speech.speakText(s)   // AutoFill or a paste: what came, once
+        case .deleted(let s):
+            Speech.clearTypedWordBuffer()
+            Speech.lowerForDeletion()
+            if s.count == 1 { Speech.speakSpelling(s); return }
+            Speech.speakText(Speech.deletionByPitch ? s : Phrases.deleted(s.trimmingCharacters(in: .whitespaces)))
+        case .moved(let unit):
+            guard let caret = try? makeTextInfo(.caret) else { return }
+            Speech.clearTypedWordBuffer()
+            lastSelection = (try? makeTextInfo(.selection)) ?? caret
+            caret.expand(unit)
+            Speech.speakTextInfo(caret, unit: unit, reason: .caret)
+        }
+    }
+
     open override func event_textChange() { hasContentChangedSinceLastSelection = true }
     /// A text control's value changes with every keystroke; that is typing, not a value to announce.
     open override func event_valueChange() { hasContentChangedSinceLastSelection = true }
