@@ -122,15 +122,11 @@ public enum SecureInputWatch {
     private static var onSince: Date?
     private static var focusSeen: AXUIElement?
     private static var focusMoves = 0
-    /// Secure input came on or went off while TurnOver leads: the keyboard watch notes whether it sees keys meanwhile
-    /// (18 Nov 2026).
+    /// Secure input came on or went off while TurnOver leads (the app lifts VoiceOver's mute for a password field).
     public static var onChange: ((Bool) -> Void)?
     private static var wasOn = false
     /// The stretch of secure input under way, for its two log lines (18 Nov 2026).
     private static var episode = SecureInputEpisode()
-    /// Whether the keyboard watch (IOHIDManager, Input Monitoring) saw any key while secure input was on: yes or no,
-    /// never which keys nor how many (a count would tell a password's length; a review, 18 Nov 2026).
-    public static var hidKeysSeen: (() -> Bool)?
 
     public static func start() {
         timer?.invalidate()
@@ -141,7 +137,7 @@ public enum SecureInputWatch {
         timer?.invalidate(); timer = nil; looks = 0; warned = false; SecureEcho.watch(nil)
         onSince = nil; focusSeen = nil; focusMoves = 0
         // No longer watched: the episode ends here for TurnOver, and starts afresh if it is still on when watched again.
-        if let line = episode.look(on: false, now: Date(), inPasswordField: false, hidKeysSeen: hidKeysSeen?(), watched: false) { Log.info(line) }
+        if let line = episode.look(on: false, now: Date(), watched: false) { Log.info(line) }
         if wasOn { wasOn = false; onChange?(false) }
     }
 
@@ -151,7 +147,7 @@ public enum SecureInputWatch {
         let other = on ? SecureEcho.otherProcessField(of: AXHandler.shared.activePid) : nil
         SecureEcho.watch(other)
         let inPassword = API.focusObject?.role == .passwordEdit || other != nil
-        if let line = episode.look(on: on, now: Date(), inPasswordField: inPassword, hidKeysSeen: hidKeysSeen?()) { Log.info(line) }
+        if let line = episode.look(on: on, now: Date(), inPasswordField: inPassword) { Log.info(line) }
         guard on, !inPassword else { looks = 0; warned = false; onSince = nil; focusSeen = nil; focusMoves = 0; return }
         if onSince == nil { onSince = Date() }
         looks += 1
@@ -177,29 +173,23 @@ public enum SecureInputWatch {
 }
 
 /// One stretch of secure input, from on to off, as the looks four times a second see it: a log line at each end and
-/// nothing said (18 Nov 2026). A flicker off and on between two looks is one stretch. Pure, for the tests.
+/// nothing said (18 Nov 2026). A flicker off and on between two looks is one stretch. Nothing about the keyboard is
+/// logged: a line saying whether the keyboard watch saw keys was taken out, since a password field visited between two
+/// looks could not be ruled out (a review, 18 Nov 2026). Pure, for the tests.
 public struct SecureInputEpisode {
     public private(set) var since: Date?
-    /// A password field had the focus at some look of this stretch: then nothing about the keyboard watch is logged.
-    private var passwordSeen = false
     public init() {}
 
     /// A look at secure input; a log line when it has just come on or gone off.
-    public mutating func look(on: Bool, now: Date, inPasswordField: Bool, hidKeysSeen: Bool?, watched: Bool = true) -> String? {
+    public mutating func look(on: Bool, now: Date, inPasswordField: Bool = false, watched: Bool = true) -> String? {
         if on, since == nil {
             since = now
-            passwordSeen = inPasswordField
             return "secure input: on, the focus \(inPasswordField ? "in" : "not in") a password field; TurnOver reads from the focus until it is off"
         }
-        if on, watched, inPasswordField { passwordSeen = true }
-        guard !on || !watched, let began = since else { return nil }
+        guard !on || !watched,
+              let began = since else { return nil }
         since = nil
         let seconds = String(format: "%.1f", now.timeIntervalSince(began))
-        // Yes or no, and only when no password field had the focus (a review, 18 Nov 2026).
-        var hid = ""
-        if !passwordSeen,
-           let seen = hidKeysSeen { hid = ", the keyboard watch saw keys: \(seen ? "yes" : "no")" }
-        passwordSeen = false
-        return watched ? "secure input: off after \(seconds) s\(hid)" : "secure input: no longer watched after \(seconds) s (TurnOver stood aside)\(hid)"
+        return watched ? "secure input: off after \(seconds) s" : "secure input: no longer watched after \(seconds) s (TurnOver stood aside)"
     }
 }

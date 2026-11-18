@@ -69,9 +69,8 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
     private var quarantined = Set<Int64>()
     /// Keys translated on the way down (the Windows style): their release is translated too.
     private var remapped = Set<Int64>()
-    private var echoCode: Int64 = -1
-    private var echoAt: UInt64 = 0
-    private var echoCount = 0
+    /// The echo guard, then the stale release (KeyDownGate, 18 Nov 2026).
+    private var keyDownGate = KeyDownGate()
     private var controlAlone = false
     private var loneShift = LoneModifier()
     /// Option pressed and released with nothing else, quickly: left Option is the Windows key (the Dock),
@@ -88,16 +87,6 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
     /// when it sees a new value (15 Nov 2026).
     nonisolated(unsafe) static var frontAppEpoch: Int = 0
     private var chordEpochSeen = 0
-    /// Secure input on, as the main thread last saw it, and whether the keyboard watch saw any key while it was: yes or
-    /// no, never which keys nor how many (18 Nov 2026). Both behind their locks: written on main, read on this thread.
-    static let secureInputOn = Locked(false)
-    static let hidKeySeen = Locked(false)
-
-    /// Secure input came on or went off (the main thread). The answer is cleared as it comes on, before the watch looks.
-    static func secureInputChanged(on: Bool) {
-        if on { hidKeySeen.value = false }
-        secureInputOn.value = on
-    }
 
     private static let arrowNames: [Int64: String] = [123: "leftArrow", 124: "rightArrow", 125: "downArrow", 126: "upArrow"]
     private var optionCode: Int64 = 0
@@ -321,13 +310,6 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
     private func hidValue(_ value: IOHIDValue) {
         guard let generation = layer?.generation, isReady(generation), !Self.bypass else { return }
         let element = IOHIDValueGetElement(value)
-        // Yes or no, never which key nor how many: does the keyboard watch still see keys while secure input is on?
-        // (18 Nov 2026)
-        if Self.secureInputOn.value,
-           IOHIDElementGetUsagePage(element) == UInt32(kHIDPage_KeyboardOrKeypad),
-           (4...0xE7).contains(IOHIDElementGetUsage(element)) {
-            Self.hidKeySeen.value = true
-        }
         guard IOHIDElementGetUsagePage(element) == UInt32(kHIDPage_KeyboardOrKeypad),
               IOHIDElementGetUsage(element) == UInt32(kHIDUsage_KeyboardCapsLock) else { return }
         // Caps Lock is an ordinary key when the TurnOver key is Control+Option alone.
@@ -532,13 +514,6 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
             return Unmanaged.passUnretained(event)
         }
         controlAlone = false; loneShift.cancel(); loneOption.cancel(); loneCommand.cancel()
-        // A new press of a key whose swallowed release is still awaited: that release was lost (secure input hid it, 18 Nov
-        // 2026), and the entry would swallow this press's own release. Dropped here, per key, on this thread; if this
-        // press is taken too, it is entered again below. Nothing is posted and no other key's entry is touched.
-        if type == .keyDown,
-           SwallowedReleases.dropsStale(&quarantined, code: code, isRepeat: event.getIntegerValueField(.keyboardEventAutorepeat) != 0) {
-            Log.io("keyboard: a key pressed again whose release was not seen; its old release no longer awaited")
-        }
         if let r = keypad(type, event, code, settings) { return r }
         if let r = quickNavArrow(type, event, code, settings) { return r }
         if type == .keyUp {
@@ -551,11 +526,18 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         // (macOS's fastest repeat is about 30 ms). On 4 Oct 2026 Left Arrow came back 394 times in a second while
         // VoiceOver was still shutting down after the hand-over (TurnOver's own re-posted key, its marker gone), and
         // the edge sound played for each. Drop the copies: that breaks the loop.
+        // Then (18 Nov 2026), only for a press past the guard: a new press of a key whose swallowed release is still
+        // awaited means that release was lost (secure input hid it), and the entry would swallow this press's own
+        // release. It is dropped, per key, on this thread; if this press is taken too, it is entered again below.
+        // Nothing is posted, no other key's entry is touched, and an echo copy never drops one (a review).
         let nowNs = DispatchTime.now().uptimeNanoseconds
-        if code == echoCode, nowNs &- echoAt < 8_000_000 { echoCount += 1 } else { echoCount = 0 }
-        echoCode = code; echoAt = nowNs
-        if echoCount >= 2 {
-            if echoCount == 2 {
+        let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+        let outcome = keyDownGate.press(code: code, isRepeat: isRepeat, nowNs: nowNs, awaited: &quarantined)
+        if outcome == .accepted(droppedStale: true) {
+            Log.io("keyboard: a key pressed again whose release was not seen; its old release no longer awaited")
+        }
+        if case .echo(let first) = outcome {
+            if first {
                 // Who posted the copy (E18): the process behind the event, and whether TurnOver's marker survived.
                 let src = pid_t(event.getIntegerValueField(.eventSourceUnixProcessID))
                 let name = NSRunningApplication(processIdentifier: src)?.bundleIdentifier ?? "pid \(src)"
