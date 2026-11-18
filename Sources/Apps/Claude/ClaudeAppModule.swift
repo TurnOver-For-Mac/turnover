@@ -26,6 +26,13 @@ final class ClaudeAppModule: AppModule {
             set: { config.setAppSetting(ClaudeTranscript.bundleID, "readReplies", $0 ? "on" : "off") }))]
     }
 
+    /// Buttons are pressed by the keyboard. Accessibility's press reported success and did nothing on the answer
+    /// buttons under a reply ("Post all five" twice and "Yes, approve them" eight times, 11 Nov 2026, Claude
+    /// 5.1231.2, macOS 27.2) and on the sidebar's session rows (8 and 9 Nov 2026). Return on the same button, once
+    /// Tab had put the keyboard on it, worked at once each time. Other presses of the same kind of button went
+    /// through the same day ("Yes, add it"), so the press is ignored some of the time; why is not known.
+    override var rolesPressedByKeyboard: Set<String> { ["AXButton"] }
+
     override func handleEvent(_ event: Event, next: () -> Void) {
         switch event.kind {
         case .gainFocus where event.obj.element.string(kAXRoleDescriptionAttribute) == "article":

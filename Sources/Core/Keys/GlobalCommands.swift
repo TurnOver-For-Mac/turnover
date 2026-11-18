@@ -393,6 +393,8 @@ public final class GlobalCommands: ScriptableObject {
             Speech.speakMessage(String(localized: "TurnOver quitting", comment: "TurnOver is about to quit"))
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { NSApp.terminate(nil) }
         }
+        // The toolbar rule: Left, Right and Escape on a toolbar control (ToolbarKeys.swift).
+        ToolbarKeys.declare(on: self)
         // NVDA's commands for the Windows style (NVDAParity.swift), last so they answer first there.
         addNVDAParity()
     }

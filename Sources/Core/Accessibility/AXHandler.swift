@@ -106,7 +106,12 @@ public final class AXHandler {
         })
         workspaceTokens.append(nc.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main) { [weak self] n in
             guard let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
-            MainActor.assumeIsolated { self?.appTerminated(app.processIdentifier) }
+            MainActor.assumeIsolated {
+                // 16 Nov 2026: a line when an app ends, from the workspace's own notice (no question to the app), so a
+                // Command-Q in the switcher can be matched to the app it reached.
+                Log.io("app terminated: \(app.localizedName ?? "unnamed") pid \(app.processIdentifier)")
+                self?.appTerminated(app.processIdentifier)
+            }
         })
         // A system agent never activates, so one launched after TurnOver (Siri AI is started on demand and relaunched)
         // is observed when it starts, or Spotlight went unread until TurnOver restarted (code review, 21 Oct 2026).

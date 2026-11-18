@@ -174,6 +174,17 @@ package final class SystemSettingsAppModule: AppModule {
         finish(value.work)
     }
 
+    /// Escape from a toolbar control goes to the current pane, else the sidebar (ToolbarKeys; 15 Nov 2026), as the
+    /// part commands find them, with a short limit as this runs while the key waits.
+    package override func toolbarEscapeTarget(in window: AXUIElement) -> AXUIElement? {
+        let deadline = DispatchTime.now().uptimeNanoseconds + 400_000_000
+        let current: @Sendable () -> Bool = { DispatchTime.now().uptimeNanoseconds < deadline }
+        for part in [SystemSettingsPart.pane, .sidebar] {
+            if let r = dependencies.resolver.resolve(.init(pid: pid, window: window, part: part), current: current), r.canFocus { return r.target }
+        }
+        return nil
+    }
+
     package override func objectClass(for element: AXUIElement, role: Role, subrole: String?) -> TurnOverObject.Type? {
         role == .button ? SystemSettingsLabelledButton.self : nil
     }

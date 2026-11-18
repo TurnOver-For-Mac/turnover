@@ -16,8 +16,8 @@ public enum SayAll {
     private static var blanks = 0
     private static let maxBuffered = 3
     /// The stretch of the story being heard now, for stopping on the word reached (18 Oct 2026).
-    private static var hearing: (obj: TurnOverObject, start: Int, end: Int)?
-    private static var stopPoint: (obj: TurnOverObject, offset: Int)?
+    private static var hearing: (obj: TurnOverObject, start: Int, end: Int, webRange: BufferTextInfo?)?
+    private static var stopPoint: (obj: TurnOverObject, offset: Int, webRange: BufferTextInfo?)?
     private static var firstChunk = true
     private static var generation = 0
     public static var isRunning: Bool { runningLock.lock(); defer { runningLock.unlock() }; return running }
@@ -61,6 +61,7 @@ public enum SayAll {
         let bookmark = r.bookmark
         let obj = r.obj
         let chunk = r.copy()
+        let webRange = chunk as? BufferTextInfo
         r.collapse(toEnd: true)
         var blank = false
         let text = Speech.textInfoSpeech(chunk, unit: .readingChunk, reason: .sayAll, onlyBlank: &blank)
@@ -95,11 +96,16 @@ public enum SayAll {
             Speech.enqueue(part, language: language, onStart: {
                 DispatchQueue.main.async {
                     guard gen == generation else { return }
-                    hearing = (obj, from, to)
+                    hearing = (obj, from, to, webRange)
                     guard isFirst else { return }
                     tones.forEach { $0() }
                     // NVDA: lineReached — move the caret to the chunk now being spoken.
-                    if let at = try? obj.makeTextInfo(.bookmark(bookmark)) { if let r = lineReached { r(at) } else { at.updateCaret() } }
+                    if let webRange {
+                        if let r = lineReached { r(webRange.copy()) }
+                        else { webRange.updateReadingCaret(at: bookmark.start) }
+                    } else if let at = try? obj.makeTextInfo(.bookmark(bookmark)) {
+                        if let r = lineReached { r(at) } else { at.updateCaret() }
+                    }
                     buffered -= 1
                     nextLine(gen)
                 }
@@ -116,20 +122,13 @@ public enum SayAll {
 
     private static func finish(_ gen: Int) {
         guard gen == generation else { return }
-        // The end of the part of a long page read so far (a long chat, issue 227): read on and carry on, pass after
-        // pass while they find no text, for up to two seconds, then again after letting keys through; and an unchanged
-        // page with more after its end since has that added. The copy grows at its end, so the place reached stays.
-        if let buffer = (reader?.obj as? WebArea)?.document?.buffer, buffer.canReadOn, buffer.isPartial || !buffer.isDirty {
-            guard readOnWaiting != gen else { return }
-            let until = Date().addingTimeInterval(2)
-            repeat {
-                if buffer.buildMore(until: until) { Log.io("say all: the page read on"); nextLine(gen); return }
-            } while buffer.isPartial && buffer.canReadOn && Date() < until
-            if buffer.isPartial, buffer.canReadOn {
-                readOnWaiting = gen
-                Log.io("say all: no text yet where the page is read on; on again in a moment")
-                DispatchQueue.main.async { if readOnWaiting == gen { readOnWaiting = nil }; finish(gen) }
-                return
+        // At a long page's edge, join a publication only if the text already read is still its prefix.
+        // A refresh can change the prefix while the pinned reader finishes speaking it.
+        if let webRange = reader as? BufferTextInfo, let buffer = (webRange.obj as? WebArea)?.document?.buffer {
+            let previousLength = webRange.storyLength()
+            if webRange.followReadingOn() {
+                if webRange.storyLength() > previousLength { nextLine(gen); return }
+                if buffer.canReadOn { readOn(buffer, generation: gen); return }
             }
         }
         // The app may go on (Kindle's next page): reader is kept, so a key still stops say all while it turns.
@@ -142,6 +141,22 @@ public enum SayAll {
         }
         if buffered == 0 { reader = nil; restoreRate(); Speech.speakOnly(String(localized: "end of document", comment: "Spoken message")); Log.io("say all finished") }   // (queued as the last line starts: on the display it hid that line)
         // Otherwise the last chunk's onStart will call nextLine again and land here with buffered 0.
+    }
+
+    private static func readOn(_ buffer: WebBuffer, generation gen: Int) {
+        guard readOnWaiting != gen else { return }
+        readOnWaiting = gen
+        if buffer.isLoading {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                if readOnWaiting == gen { readOnWaiting = nil }
+                finish(gen)
+            }
+            return
+        }
+        buffer.buildMore { _ in
+            if readOnWaiting == gen { readOnWaiting = nil }
+            finish(gen)
+        }
     }
 
     /// The end of the first sentence (after its full stop, question or exclamation mark and the space after).
@@ -160,13 +175,15 @@ public enum SayAll {
         Log.io("say all: stop point: hearing \(hearing.map { "\($0.start)-\($0.end)" } ?? "none"), progress \(progress.map { String(format: "%.2f", $0) } ?? "none")")
         guard lineReached == nil, let h = hearing, let p = progress else { stopPoint = nil; return }
         var at = h.start + Int(Double(h.end - h.start) * p)
-        if let info = try? h.obj.makeTextInfo(.bookmark(Bookmark(start: h.start, end: h.end))) {
-            let text = info.text as NSString
+        let spoken = h.webRange?.textRange(h.start, h.end)
+            ?? (try? h.obj.makeTextInfo(.bookmark(Bookmark(start: h.start, end: h.end))))?.text
+        if let spoken {
+            let text = spoken as NSString
             var i = min(max(0, at - h.start), text.length)
             while i > 0, let u = Unicode.Scalar(text.character(at: i - 1)), !CharacterSet.whitespacesAndNewlines.contains(u) { i -= 1 }
             at = h.start + i
         }
-        stopPoint = (h.obj, at)
+        stopPoint = (h.obj, at, h.webRange)
     }
 
     public static func stop(byGesture: Bool = false) {
@@ -177,8 +194,9 @@ public enum SayAll {
         buffered = 0
         hearing = nil
         // A key stopped it: the caret goes to the word the voice had reached, not the start of its paragraph.
-        if byGesture, let s = stopPoint, let at = try? s.obj.makeTextInfo(.bookmark(Bookmark(start: s.offset, end: s.offset))) {
-            at.updateCaret()
+        if byGesture, let s = stopPoint {
+            if let range = s.webRange { range.updateReadingCaret(at: s.offset) }
+            else if let at = try? s.obj.makeTextInfo(.bookmark(Bookmark(start: s.offset, end: s.offset))) { at.updateCaret() }
             Log.io("say all stopped at \(s.offset)")
         } else { Log.io("say all stopped") }
         stopPoint = nil

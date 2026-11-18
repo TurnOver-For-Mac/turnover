@@ -65,6 +65,9 @@ public enum Speech {
     /// The lowest level: text already processed, queued behind what is playing.
     /// Receives everything that would be spoken, before the mode check (tests and the log viewer).
     public static var sink: ((String) -> Void)?
+    /// An in-memory speech queue for lifecycle tests; production leaves this nil. Tests hold the real
+    /// onStart/completion callbacks and deliver them through their existing return-to-main path.
+    package static var enqueueTestDriver: ((String, (@Sendable () -> Void)?, (@Sendable (Bool) -> Void)?) -> Void)?
 
     /// TurnOver's own words inside text being read ("link", "heading level 2"): marked, so that on a page in another
     /// language they are said by the reader's own voice, not by the page's ("link" read by the Arabic voice as a
@@ -123,6 +126,7 @@ public enum Speech {
         // raised the pitch of the next real utterance instead (code review, 16 Oct 2026).
         let pitch = pitchNext; pitchNext = nil
         sink?(cleaned(text))
+        if let enqueueTestDriver { enqueueTestDriver(cleaned(text), onStart, completion); return }
         switch mode {
         case .talk: break
         case .onDemand where Date() < demandedUntil: break
@@ -292,6 +296,12 @@ public enum Speech {
     /// Speak an object the way NVDA does on focus: name, role, value, states, description, shortcut, position; then its text if it has any.
     private static var lastFocusWords = ""
     private static var lastFocusWordsAt = Date.distantPast
+    private static var lastFocusRow: AXUIElement?
+    /// Whether a focus is the one just said, reported again: the same words within half a second, unless they are
+    /// another row's.
+    public static func focusRepeated(words: String, last: String, after seconds: TimeInterval, anotherRow: Bool) -> Bool {
+        words == last && seconds < 0.5 && !anotherRow
+    }
     public static func speakObject(_ obj: TurnOverObject, reason: OutputReason) {
         var parts = objectPropertiesSpeech(obj, reason: reason)
         // A table or list that takes focus on macOS keeps its selection inside it: say the selected row too,
@@ -335,9 +345,14 @@ public enum Speech {
         // The same focus reported twice within half a second says it once (Excel after Return and Up: "12, A1" twice;
         // the stress test of 17 Oct 2026). Compared once the words are whole: compared on the object alone, two
         // "list view" outlines in a row (Finder opening a folder) looked the same with different rows selected.
+        // Another row with the same words is a move, not the same focus twice: two copies of one message in Mail's
+        // list, and Up from the lower to the upper within half a second said nothing, so the upper one seemed not to
+        // be there (Oliver, 11 Nov 2026).
         if reason == .focus {
-            if words == lastFocusWords, Date().timeIntervalSince(lastFocusWordsAt) < 0.5 { Log.io("focus: the same words again within 0.5 s; not repeated"); return }
-            lastFocusWords = words; lastFocusWordsAt = Date()
+            let row = obj.element.role == "AXRow" ? obj.element : nil
+            let anotherRow = row.map { r in lastFocusRow.map { !r.isSame($0) } ?? false } ?? false
+            if focusRepeated(words: words, last: lastFocusWords, after: Date().timeIntervalSince(lastFocusWordsAt), anotherRow: anotherRow) { Log.io("focus: the same words again within 0.5 s; not repeated"); return }
+            lastFocusWords = words; lastFocusWordsAt = Date(); lastFocusRow = row
         }
         if reason == .focus, let until = dropForFocusUntil {
             dropForFocusUntil = nil

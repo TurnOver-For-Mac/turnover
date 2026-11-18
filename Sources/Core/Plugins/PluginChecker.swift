@@ -162,7 +162,7 @@ public enum PluginChecker {
             if areas.isEmpty { line("(no web content in this app's windows)") }
             for a in areas {
                 let b = WebBuffer(webArea: a)
-                b.build()
+                b.buildForInspection()
                 line("-- \(a.string(kAXDescriptionAttribute) ?? a.string(kAXTitleAttribute) ?? "page"): \(b.lines.count) lines")
                 for l in b.lines.prefix(60) { line("  " + b.text.substring(with: NSRange(location: l.start, length: l.end - l.start)) + (l.isControl ? "   [\(l.fields.joined(separator: ", "))]" : "")) }
             }

@@ -20,6 +20,8 @@ if !AXReplay.isAvailable, ProcessInfo.processInfo.environment["TURNOVER_TESTS_RE
     }
 }
 Log.level = .error
+// A long page's rest is not read on by itself while the tests run: a test that wants it turns it on.
+WebBuffer.fillsOn = false
 Speech.mode = .off
 Speech.sink = { _ in }
 
@@ -36,11 +38,13 @@ pointerReaderTests()
 soundsTests()
 characterBoundaryTests()
 keyboardPrivacyTests()
+keyboardModifierDiagnosticsTests()
 braillePrivacyTests()
 feedbackPrivacyTests()
 flatScreenTests()
 axDiagnosticTests()
 axWalkTests()
+webBufferTests()
 axNavigationChildrenTests()
 appStoreNavigationModelTests()
 appStoreFirstContentTests()
@@ -60,7 +64,10 @@ ulyssesFormattingTests()
 mediaWorkTests()
 mediaShelfReadinessTests()
 systemSettingsModuleTests()
+toolbarKeysTests()
 spotifyModuleTests()
+dockModuleTests()
+appSwitcherDiagnosticsTests()
 turnOverSettingsTests()
 controlChannelTests()
 browseTextNavTests()
