@@ -30,13 +30,30 @@ func edgeBumpTests() {
     }
     test("browse mode: a pop-up button's list is no page; a page with an address or with more than a list is (18 Nov 2026)") {
         let options = Array(repeating: "AXStaticText", count: 31)
-        check(BrowseModeHandler.isPopUpButtonsList(address: nil, children: [("AXList", options)]), "no address, one list of static text")
-        check(BrowseModeHandler.isPopUpButtonsList(address: "", children: [("AXList", options)]), "an empty address")
-        check(!BrowseModeHandler.isPopUpButtonsList(address: "https://www.amazon.co.uk/", children: [("AXList", options)]), "a page with an address")
-        check(!BrowseModeHandler.isPopUpButtonsList(address: nil, children: [("AXList", options + ["AXLink"])]), "a list holding a link")
-        check(!BrowseModeHandler.isPopUpButtonsList(address: nil, children: [("AXList", options), ("AXGroup", [])]), "more than the list")
-        check(!BrowseModeHandler.isPopUpButtonsList(address: nil, children: []), "an empty web area")
-        check(!BrowseModeHandler.isPopUpButtonsList(address: nil, children: [("AXList", [])]), "a list with nothing in it")
+        func isList(_ address: String?, _ kids: [(String, [String])]) -> Bool {
+            BrowseModeHandler.isPopUpButtonsList(address: { address }, children: { kids }, role: { $0.0 }, childRoles: { $0.1 })
+        }
+        check(isList(nil, [("AXList", options)]), "no address, one list of static text")
+        check(isList("", [("AXList", options)]), "an empty address")
+        check(!isList("https://www.amazon.co.uk/", [("AXList", options)]), "a page with an address")
+        check(!isList(nil, [("AXList", options + ["AXLink"])]), "a list holding a link")
+        check(!isList(nil, [("AXList", options), ("AXGroup", [])]), "more than the list")
+        check(!isList(nil, []), "an empty web area")
+        check(!isList(nil, [("AXList", [])]), "a list with nothing in it")
+    }
+    test("browse mode: the pop-up test asks nothing of the children of a page with an address or with several children (18 Nov 2026)") {
+        var roleAsked = 0, grandchildrenAsked = 0, childrenAsked = 0
+        func run(_ address: String?, count: Int) -> Bool {
+            roleAsked = 0; grandchildrenAsked = 0; childrenAsked = 0
+            return BrowseModeHandler.isPopUpButtonsList(address: { address }, children: { childrenAsked += 1; return Array(0..<count) },
+                                                        role: { _ in roleAsked += 1; return "AXList" }, childRoles: { _ in grandchildrenAsked += 1; return ["AXStaticText"] })
+        }
+        check(!run("https://example.com/", count: 300), "a page with an address")
+        check(childrenAsked == 0, "an address: the children are not asked for")
+        check(!run(nil, count: 300), "300 children")
+        check(roleAsked == 0 && grandchildrenAsked == 0, "several children: no role and no grandchild asked")
+        check(run(nil, count: 1), "one child that is a list")
+        check(roleAsked == 1 && grandchildrenAsked == 1, "one child: its role and its children's roles, once each")
     }
     test("edge bump: Up and Down are at once an edge in a web box of one character, whichever side the caret is (18 Nov 2026)") {
         check(EditableText.isOneCharacterBox(length: 1, isTextField: true, inWebContent: true, key: "downArrow"), "Down")
