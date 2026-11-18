@@ -88,35 +88,17 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
     /// when it sees a new value (15 Nov 2026).
     nonisolated(unsafe) static var frontAppEpoch: Int = 0
     private var chordEpochSeen = 0
-    /// Bumped on the main thread as secure input comes on and goes off; the keyboard thread then lets go of every key
-    /// it holds for a release it may never see (18 Nov 2026). Under secure input no key reaches the tap, so (read from
-    /// the code, not seen) Caps Lock let go meanwhile would leave every key after it a TurnOver command, and a key
-    /// taken just before it would swallow that key's next release.
-    nonisolated(unsafe) static var secureInputEpoch: Int = 0
-    private var secureInputEpochSeen = 0
-    /// Secure input on, as the main thread last saw it, and the key reports the keyboard watch has counted while it
-    /// was: a count, never which keys (18 Nov 2026).
+    /// Secure input on, as the main thread last saw it, and whether the keyboard watch saw any key while it was: yes or
+    /// no, never which keys nor how many (18 Nov 2026). Both behind their locks: written on main, read on this thread.
     static let secureInputOn = Locked(false)
-    static let hidKeyReports = Locked(0)
+    static let hidKeySeen = Locked(false)
 
-    /// Secure input came on or went off (the main thread).
+    /// Secure input came on or went off (the main thread). The answer is cleared as it comes on, before the watch looks.
     static func secureInputChanged(on: Bool) {
+        if on { hidKeySeen.value = false }
         secureInputOn.value = on
-        secureInputEpoch &+= 1
     }
 
-    /// Everything held for a key's release, let go: secure input came or went, and a release may have been lost.
-    private func letGoOfHeldKeys() {
-        let held = quarantined.count + remapped.count + (capsDown ? 1 : 0) + (arrowHeld == nil ? 0 : 1)
-        quarantined.removeAll(); remapped.removeAll()
-        capsDown = false; chordFired = false; keypadZeroDown = false
-        Self.capsHeld.value = false
-        arrowHeld = nil; arrowChorded = false; arrowRepeated = false
-        arrowDownWhileOff.clear()
-        controlAlone = false; loneShift.cancel(); loneOption.cancel(); loneCommand.cancel()
-        optionCode = 0
-        if held > 0 { Log.io("keyboard: \(held) keys held when secure input came or went; let go") }
-    }
     private static let arrowNames: [Int64: String] = [123: "leftArrow", 124: "rightArrow", 125: "downArrow", 126: "upArrow"]
     private var optionCode: Int64 = 0
     /// Keyboard help: the name of a modifier key as it goes down (keyboard thread; spoken on the main thread).
@@ -339,12 +321,12 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
     private func hidValue(_ value: IOHIDValue) {
         guard let generation = layer?.generation, isReady(generation), !Self.bypass else { return }
         let element = IOHIDValueGetElement(value)
-        // Counted, never named: does the keyboard watch still see keys while secure input is on? (18 Nov 2026)
+        // Yes or no, never which key nor how many: does the keyboard watch still see keys while secure input is on?
+        // (18 Nov 2026)
         if Self.secureInputOn.value,
            IOHIDElementGetUsagePage(element) == UInt32(kHIDPage_KeyboardOrKeypad),
            (4...0xE7).contains(IOHIDElementGetUsage(element)) {
-            let c = Self.hidKeyReports
-            c.lock.lock(); c.unsafeValue += 1; c.lock.unlock()
+            Self.hidKeySeen.value = true
         }
         guard IOHIDElementGetUsagePage(element) == UInt32(kHIDPage_KeyboardOrKeypad),
               IOHIDElementGetUsage(element) == UInt32(kHIDUsage_KeyboardCapsLock) else { return }
@@ -423,7 +405,6 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
 
     private func tapEvent(_ type: CGEventType, _ event: CGEvent) -> Unmanaged<CGEvent>? {
         guard let generation = layer?.generation, isRequested(generation) else { return Unmanaged.passUnretained(event) }
-        if secureInputEpochSeen != Self.secureInputEpoch { secureInputEpochSeen = Self.secureInputEpoch; letGoOfHeldKeys() }
         if Self.bypass, type != .tapDisabledByTimeout, type != .tapDisabledByUserInput {
             if !quarantined.isEmpty { quarantined.removeAll() }   // their key-ups pass now; none must be swallowed later
             return Unmanaged.passUnretained(event)
@@ -551,6 +532,13 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
             return Unmanaged.passUnretained(event)
         }
         controlAlone = false; loneShift.cancel(); loneOption.cancel(); loneCommand.cancel()
+        // A new press of a key whose swallowed release is still awaited: that release was lost (secure input hid it, 18 Nov
+        // 2026), and the entry would swallow this press's own release. Dropped here, per key, on this thread; if this
+        // press is taken too, it is entered again below. Nothing is posted and no other key's entry is touched.
+        if type == .keyDown,
+           SwallowedReleases.dropsStale(&quarantined, code: code, isRepeat: event.getIntegerValueField(.keyboardEventAutorepeat) != 0) {
+            Log.io("keyboard: a key pressed again whose release was not seen; its old release no longer awaited")
+        }
         if let r = keypad(type, event, code, settings) { return r }
         if let r = quickNavArrow(type, event, code, settings) { return r }
         if type == .keyUp {

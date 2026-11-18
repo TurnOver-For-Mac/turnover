@@ -110,9 +110,10 @@ public enum SecureEcho {
 /// warning.) A password field the application shows from another process (SecureEcho.otherProcessField) is one too:
 /// its length is looked at from the first quarter second, and it is not logged as this (System Settings' password
 /// sheet said "Press Command Tab twice" three times while the password was typed).
-/// 18 Nov 2026: each stretch of secure input logs one line as it comes on and one as it goes off, nothing is said, and
-/// while no key is heard the focused field is read from its own news (KeylessField). VoiceOver is never brought in: the
-/// hand-over of 17 Nov 2026 was taken out on Oliver's word ("voiceover shouldn't be coming on").
+/// 18 Nov 2026: each stretch of secure input, as the looks see it come on and go off, logs one line at each end and
+/// nothing is said. VoiceOver is never brought in: the hand-over of 17 Nov 2026 was taken out on Oliver's word
+/// ("voiceover shouldn't be coming on"). Reading a text field from its own news while no key is heard was tried and left
+/// out of the bug-fix build (a review on 18 Nov 2026: flicker, a first paste unread, replayed keys said twice, word echo).
 public enum SecureInputWatch {
     private static var timer: Timer?
     private static var looks = 0
@@ -121,21 +122,15 @@ public enum SecureInputWatch {
     private static var onSince: Date?
     private static var focusSeen: AXUIElement?
     private static var focusMoves = 0
-    /// Secure input came on or went off while TurnOver leads: the keyboard lets go of keys whose release it will not
-    /// see (18 Nov 2026).
+    /// Secure input came on or went off while TurnOver leads: the keyboard watch notes whether it sees keys meanwhile
+    /// (18 Nov 2026).
     public static var onChange: ((Bool) -> Void)?
     private static var wasOn = false
     /// The stretch of secure input under way, for its two log lines (18 Nov 2026).
     private static var episode = SecureInputEpisode()
-    /// How many key reports the keyboard watch (IOHIDManager, Input Monitoring) has seen while secure input was on: a
-    /// count, never which keys. Whether it grows during an episode is the evidence for using it (18 Nov 2026).
-    public static var hidKeyReports: (() -> Int)?
-    /// Secure input is on and no key has reached TurnOver since it came on: the focused field's own news is read as its
-    /// keys would have been (KeylessField, 18 Nov 2026).
-    public static var keysUnheard: Bool {
-        guard let since = episode.since else { return false }
-        return InputManager.lastKeyDownAt < since
-    }
+    /// Whether the keyboard watch (IOHIDManager, Input Monitoring) saw any key while secure input was on: yes or no,
+    /// never which keys nor how many (a count would tell a password's length; a review, 18 Nov 2026).
+    public static var hidKeysSeen: (() -> Bool)?
 
     public static func start() {
         timer?.invalidate()
@@ -146,8 +141,7 @@ public enum SecureInputWatch {
         timer?.invalidate(); timer = nil; looks = 0; warned = false; SecureEcho.watch(nil)
         onSince = nil; focusSeen = nil; focusMoves = 0
         // No longer watched: the episode ends here for TurnOver, and starts afresh if it is still on when watched again.
-        if let line = episode.look(on: false, now: Date(), inPasswordField: false, hidKeyReports: hidKeyReports?(), watched: false) { Log.info(line) }
-        KeylessField.forget()
+        if let line = episode.look(on: false, now: Date(), inPasswordField: false, hidKeysSeen: hidKeysSeen?(), watched: false) { Log.info(line) }
         if wasOn { wasOn = false; onChange?(false) }
     }
 
@@ -157,10 +151,7 @@ public enum SecureInputWatch {
         let other = on ? SecureEcho.otherProcessField(of: AXHandler.shared.activePid) : nil
         SecureEcho.watch(other)
         let inPassword = API.focusObject?.role == .passwordEdit || other != nil
-        if let line = episode.look(on: on, now: Date(), inPasswordField: inPassword, hidKeyReports: hidKeyReports?()) {
-            Log.info(line)
-            KeylessField.forget()
-        }
+        if let line = episode.look(on: on, now: Date(), inPasswordField: inPassword, hidKeysSeen: hidKeysSeen?()) { Log.info(line) }
         guard on, !inPassword else { looks = 0; warned = false; onSince = nil; focusSeen = nil; focusMoves = 0; return }
         if onSince == nil { onSince = Date() }
         looks += 1
@@ -185,24 +176,30 @@ public enum SecureInputWatch {
     }
 }
 
-/// One stretch of secure input, from on to off, as TurnOver saw it: a log line at each end and nothing said
-/// (18 Nov 2026). Pure, for the tests.
+/// One stretch of secure input, from on to off, as the looks four times a second see it: a log line at each end and
+/// nothing said (18 Nov 2026). A flicker off and on between two looks is one stretch. Pure, for the tests.
 public struct SecureInputEpisode {
     public private(set) var since: Date?
-    private var hidAtStart: Int?
+    /// A password field had the focus at some look of this stretch: then nothing about the keyboard watch is logged.
+    private var passwordSeen = false
     public init() {}
 
     /// A look at secure input; a log line when it has just come on or gone off.
-    public mutating func look(on: Bool, now: Date, inPasswordField: Bool, hidKeyReports: Int?, watched: Bool = true) -> String? {
+    public mutating func look(on: Bool, now: Date, inPasswordField: Bool, hidKeysSeen: Bool?, watched: Bool = true) -> String? {
         if on, since == nil {
-            since = now; hidAtStart = hidKeyReports
-            return "secure input: on, the focus \(inPasswordField ? "in" : "not in") a password field; TurnOver reads from the focus and the field until it is off"
+            since = now
+            passwordSeen = inPasswordField
+            return "secure input: on, the focus \(inPasswordField ? "in" : "not in") a password field; TurnOver reads from the focus until it is off"
         }
+        if on, watched, inPasswordField { passwordSeen = true }
         guard !on || !watched, let began = since else { return nil }
         since = nil
         let seconds = String(format: "%.1f", now.timeIntervalSince(began))
-        let hid = hidKeyReports.flatMap { end in hidAtStart.map { ", the keyboard watch saw \(end - $0) key reports meanwhile" } } ?? ""
-        hidAtStart = nil
+        // Yes or no, and only when no password field had the focus (a review, 18 Nov 2026).
+        var hid = ""
+        if !passwordSeen,
+           let seen = hidKeysSeen { hid = ", the keyboard watch saw keys: \(seen ? "yes" : "no")" }
+        passwordSeen = false
         return watched ? "secure input: off after \(seconds) s\(hid)" : "secure input: no longer watched after \(seconds) s (TurnOver stood aside)\(hid)"
     }
 }
