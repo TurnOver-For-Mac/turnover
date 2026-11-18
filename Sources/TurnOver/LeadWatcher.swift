@@ -331,6 +331,12 @@ final class LeadWatcher {
         let direct = app.activationPolicy == .regular && config.applications.directApps.contains(directKey)
         InputManager.directPid = direct && !suspended ? app.processIdentifier : nil
         if direct { Log.info("lead watcher: \(app.localizedName ?? directKey) is direct: its keys go straight to it") }
+        decideReader(for: app, own: own, direct: direct, directKey: directKey)
+    }
+
+    /// Which reader the app in front gets: from an activation, or from the settling check, which looks again without
+    /// touching the key routing above (a waiting Quick Nav chord arrow is not dropped by it).
+    private func decideReader(for app: NSRunningApplication, own: Bool, direct: Bool, directKey: String) {
         // Update input routing even while a pending wake restoration owns the reader decision.
         if !locked, restoreAfterWakeIfNeeded() { return }
         // A Wine program has no bundle at all (CrossOver runs it through a bare loader stub); game speech gives it a key.
@@ -362,7 +368,7 @@ final class LeadWatcher {
         // VoiceOver still coming on would otherwise answer wrongly. Left alone for good, VoiceOver stayed off in Claude
         // (which TurnOver does not read) until the next switch (4 Oct 2026): the check always decides in the end.
         if toggling, !settleOverride, let moving = HandOverSettle.moving(settleStanding) {
-            settleThenDecide("\(app.localizedName ?? bundle) activated while \(moving)")
+            settler.request("\(app.localizedName ?? bundle) activated while \(moving)")
             return
         }
         let lead = shouldLead(bundle)
@@ -372,22 +378,25 @@ final class LeadWatcher {
         let name = app.localizedName ?? bundle
         Log.info("lead watcher: \(name) is \(lead ? "TurnOver's" : "VoiceOver's"); turning VoiceOver \(lead ? "off" : "on")")
         if lead { initialTakeOverPending = false }
-        // A hand-over that ends without its answer ("VoiceOver still changing after 2 s; not toggled") left Safari with
-        // the wrong reader until the next switch (18 Nov 2026): once per switch, the check decides again when settled.
+        // When the hand-over has its answer, the app in front then is looked at again (it may have changed while VoiceOver
+        // was coming or going; Codex's review, 18 Nov 2026). One that ends without its answer ("VoiceOver still changing
+        // after 2 s; not toggled") left Safari with the wrong reader until the next switch (18 Nov 2026): it is decided
+        // again once per switch, so a hand-over that keeps failing does not loop.
         handOver(voiceOverOn: !lead, completion: { [weak self] done in
-            guard let self, !done, !self.settleRetried else { return }
+            guard let self else { return }
+            if done { self.settler.request("the hand-over for \(name) finished"); return }
+            guard !self.settleRetried else { return }
             self.settleRetried = true
-            self.settleThenDecide("the hand-over for \(name) did not finish")
+            self.settler.request("the hand-over for \(name) did not finish")
         })
     }
 
     // MARK: Settling before a hand-over (18 Nov 2026; HandOverSettle)
 
-    private var settleWaiting = false
-    private var settleStartedAt = Date.distantPast
     /// A failed hand-over has been tried again since the last app switch.
     private var settleRetried = false
-    /// The hand-over that has posted and not yet had its answer, with a bound in case no answer ever comes.
+    /// The hand-over that has posted and not yet had its answer, with a bound in case no answer ever comes (its longest
+    /// path: 2 s to settle, 1.2 s for the flag, 12 s for VoiceOver.app).
     private var inFlightGeneration: Int?
     private var inFlightUntil = Date.distantPast
     private var handOverUnderWay: Bool { inFlightGeneration == handOverGeneration && Date() < inFlightUntil }
@@ -400,39 +409,32 @@ final class LeadWatcher {
     }
 
     /// One check at a time: later activations find it waiting, and it decides for the app in front when it runs.
-    private func settleThenDecide(_ why: String) {
-        guard !settleWaiting else { Log.io("lead watcher: \(why); the waiting check decides"); return }
-        settleWaiting = true
-        settleStartedAt = Date()
-        Log.io("lead watcher: \(why); deciding once it settles, for the app in front then")
-        DispatchQueue.main.asyncAfter(deadline: .now() + HandOverSettle.interval) { [weak self] in self?.settleCheck() }
+    private var madeSettler: HandOverSettler?
+    private var settler: HandOverSettler {
+        if let made = madeSettler { return made }
+        let made = makeSettler()
+        madeSettler = made
+        return made
     }
-
-    private func settleCheck() {
-        let standing = settleStanding
-        let waited = Date().timeIntervalSince(settleStartedAt)
-        switch HandOverSettle.decide(standing, waited: waited) {
-        case .wait:
-            DispatchQueue.main.asyncAfter(deadline: .now() + HandOverSettle.interval) { [weak self] in self?.settleCheck() }
-        case .giveUp:
-            settleWaiting = false
-            Log.info("lead watcher: Command still held after \(Int(waited)) s; the next app switch decides")
-        case .decideNow:
-            settleWaiting = false
-            if let still = HandOverSettle.moving(standing) { Log.info("lead watcher: \(still) after \(Int(waited)) s; deciding anyway") }
+    private func makeSettler() -> HandOverSettler { HandOverSettler(
+        standing: { [unowned self] in self.settleStanding },
+        now: { ProcessInfo.processInfo.systemUptime },
+        schedule: { delay, body in Task { @MainActor in try? await Task.sleep(for: .seconds(delay)); body() } },
+        decide: { [unowned self] unsettled in
             guard let front = NSWorkspace.shared.frontmostApplication else { return }
-            Log.io("lead watcher: settled after \(Int(waited * 1000)) ms; \(front.localizedName ?? "the app") in front decides")
-            if HandOverSettle.moving(standing) != nil { decideUnsettled(front) } else { appActivated(front) }
-        }
-    }
+            // Only if the front app's routing is already set (an activation for it was seen): else it decides itself.
+            guard KeyboardHandler.frontPid == front.processIdentifier else { self.appActivated(front); return }
+            let own = front.bundleIdentifier == Bundle.main.bundleIdentifier
+            let directKey = InputManager.directKey(bundle: front.bundleIdentifier, name: front.localizedName)
+            let direct = front.activationPolicy == .regular && config.applications.directApps.contains(directKey)
+            self.settleOverride = unsettled
+            defer { self.settleOverride = false }
+            self.decideReader(for: front, own: own, direct: direct, directKey: directKey)
+        },
+        log: { Log.io($0) }) }
 
     /// Past the limit with VoiceOver never settling: decided as before the gate (the hand-over's own checks follow).
     private var settleOverride = false
-    private func decideUnsettled(_ front: NSRunningApplication) {
-        settleOverride = true
-        defer { settleOverride = false }
-        appActivated(front)
-    }
 
     /// Post the toggle and time it: the flag flip, and VoiceOver's process appearing or going. Nothing here waits on
     /// the main thread: each wait is a short check repeated by timer (it used to hold the main thread for up to 2 s
@@ -481,7 +483,7 @@ final class LeadWatcher {
         if preservingWakeIntent { wakeHandoverGeneration = generation }
         // Under way until its answer, for the settling of app switches (HandOverSettle, 18 Nov 2026).
         inFlightGeneration = generation
-        inFlightUntil = Date().addingTimeInterval(15)
+        inFlightUntil = Date().addingTimeInterval(20)
         let finish: (Bool) -> Void = { [weak self] answered in
             if self?.inFlightGeneration == generation { self?.inFlightGeneration = nil }
             completion?(answered)
