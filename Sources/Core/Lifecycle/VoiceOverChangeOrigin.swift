@@ -26,6 +26,10 @@ nonisolated public final class PersonVoiceOverToggle: @unchecked Sendable {
 
     private let lock = NSLock()
     private var listeningSince: TimeInterval?
+    /// Secure input hides every key from the tap, the toggle included (a password field keeps TurnOver reading): while it
+    /// is on, and for the window after it was last seen on, the tap has not heard all (Codex's fourth review, 18 Nov 2026).
+    private var secureInputOn = false
+    private var secureInputLastSeenAt: TimeInterval?
     /// Written on the key tap's thread (Codex's third review, 18 Nov 2026: as little there as can be): an unfair lock,
     /// taken only for a press of the toggle itself and never contended for long. Swift's own atomics need macOS 15;
     /// TurnOver runs on 14.
@@ -39,13 +43,23 @@ nonisolated public final class PersonVoiceOverToggle: @unchecked Sendable {
         listeningSince = up ? now : nil
     }
 
+    /// A look at secure input (the app looks every quarter second while TurnOver reads): on, or off.
+    public func secureInputSeen(_ on: Bool, now: TimeInterval = Date().timeIntervalSince1970) {
+        lock.lock(); defer { lock.unlock() }
+        let wasOn = secureInputOn
+        secureInputOn = on
+        if on { secureInputLastSeenAt = now; return }
+        if wasOn { secureInputLastSeenAt = now }   // on until this look: it went off just now
+    }
+
     /// The person pressed VoiceOver's toggle shortcut (not one TurnOver posted).
     public func pressed(now: TimeInterval = Date().timeIntervalSince1970) {
         press.withLock { $0 = now }
     }
 
     /// A change of VoiceOver came at `now`: was it the person's press? A press answers for one change only.
-    public func take(now: TimeInterval = Date().timeIntervalSince1970) -> Verdict {
+    /// `secureInputNow`: secure input on as the change is reported (looked at then, between the app's looks).
+    public func take(now: TimeInterval = Date().timeIntervalSince1970, secureInputNow: Bool = false) -> Verdict {
         let pressedAt = press.withLock { held -> TimeInterval? in
             let was = held
             held = nil
@@ -53,6 +67,15 @@ nonisolated public final class PersonVoiceOverToggle: @unchecked Sendable {
         }
         if let pressedAt, now - pressedAt >= 0, now - pressedAt < Self.window { return .person }
         lock.lock(); defer { lock.unlock() }
+        // This look counts as one of the app's: the looks stop when TurnOver stops reading, and an "on" they last saw
+        // would otherwise never be cleared (19 Nov 2026).
+        if secureInputNow { secureInputOn = true; secureInputLastSeenAt = now; return .unheard }
+        // Off now, on at the last look: when it went off is not known, so the keys are not known to have been heard.
+        if secureInputOn { secureInputOn = false; secureInputLastSeenAt = now; return .unheard }
+        if let seen = secureInputLastSeenAt {
+            let secureInWindow = now - seen < Self.window
+            if secureInWindow { return .unheard }   // keys hidden for part of the window: the change may be the person's
+        }
         guard let since = listeningSince else { return .unheard }
         let heardAllWindow = now - since >= Self.window
         return heardAllWindow ? .notPerson : .unheard

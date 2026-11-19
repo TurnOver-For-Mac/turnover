@@ -77,4 +77,34 @@ func voiceOverChangeOriginTests() {
         expect(keys.take(now: 100.5), .person)
         expect(keys.take(now: 100.6), .notPerson, "taken once")
     }
+    // Codex's fourth review (18 Nov 2026): secure input hides keys, the toggle included.
+    test("change origin: Oliver's toggle in a password field after a watchdog restart stays his") {
+        let keys = PersonVoiceOverToggle()
+        keys.listening(true, now: 0.37)   // the restarted TurnOver's tap, up for seconds
+        keys.secureInputSeen(true, now: 3.0)   // a password field: secure input on, his press unheard
+        let person = keys.take(now: 4.1)
+        expect(person, .unheard, "the tap could not hear: not TurnOver's")
+        check(!OwnVoiceOverStart.isOwnStart(.ours, person: person), "the outstanding recovery does not claim it")
+    }
+    test("change origin: secure input on as the change comes, or within the window before it, is not heard") {
+        let keys = PersonVoiceOverToggle()
+        keys.listening(true, now: 0)
+        expect(keys.take(now: 10, secureInputNow: true), .unheard, "on at the report, between the app's looks")
+        keys.secureInputSeen(true, now: 10)
+        keys.secureInputSeen(false, now: 10.25)   // off again
+        expect(keys.take(now: 11), .unheard, "on for part of the 2 s before")
+        expect(keys.take(now: 12.3), .notPerson, "heard for the whole window since")
+    }
+    // 19 Nov 2026: the app's looks stop when TurnOver stops reading; an "on" they last saw is cleared by the next change.
+    test("change origin: secure input last seen on, with no look since, is unheard once and then cleared") {
+        let keys = PersonVoiceOverToggle()
+        keys.listening(true, now: 0)
+        keys.secureInputSeen(true, now: 5)   // the last look before TurnOver stopped reading
+        expect(keys.take(now: 60), .unheard, "off now, but when it went off is not known")
+        expect(keys.take(now: 61), .unheard, "within the window of that")
+        expect(keys.take(now: 63), .notPerson, "heard for the whole window since")
+        expect(keys.take(now: 70, secureInputNow: true), .unheard, "on at the report, with no look")
+        expect(keys.take(now: 75), .unheard, "on at the last report: when it went off is not known")
+        expect(keys.take(now: 78), .notPerson)
+    }
 }

@@ -380,7 +380,7 @@ final class TurnOverApp {
     private func voiceOverChanged(_ on: Bool) {
         // The person's own toggle, heard by the key tap just before: theirs, over any recovery or hand-over of TurnOver's
         // (VoiceOverChangeOrigin; Codex's second review, 18 Nov 2026).
-        let person = HandOver.personToggle.take()
+        let person = HandOver.personToggle.take(secureInputNow: IsSecureEventInputEnabled())
         let byPerson = person == .person
         if byPerson { Log.info("VoiceOver \(on ? "on" : "off"): your own toggle, heard by the keys") }
         let recoveryClaims = inputActivation.takeAutomaticVoiceOverRestore(on: on, readerChoice: HandOver.choice.value)
