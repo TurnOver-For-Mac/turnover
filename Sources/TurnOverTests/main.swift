@@ -3,8 +3,10 @@ import Foundation
 import TurnOverCore
 import AXFixtures
 import PluginTestKit
+import TurnOverSpeech
 
 setvbuf(stdout, nil, _IONBF, 0)
+AudioOutput.muted = true   // first thing: no sound, tone, bell or spoken warning reaches the speakers in a test run
 // The replay shim must be loaded by dyld at launch: start again with it inserted, once.
 if !AXReplay.isAvailable, ProcessInfo.processInfo.environment["TURNOVER_TESTS_RELAUNCHED"] == nil {
     let exe = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath().path
@@ -123,6 +125,7 @@ ownVoiceOverStartTests()
 handOverSettleTests()
 voiceOverGoneSpeechTests()
 voiceOverChangeOriginTests()
+audioMuteTests()
 lockVoiceOverRequestTests()
 keyboardSessionTests()
 quickNavChordTests()

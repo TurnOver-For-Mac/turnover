@@ -6,6 +6,9 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Changed
 
+- The test program no longer plays any audio: one switch (AudioOutput.muted), set first thing in the tests, makes every
+  place that starts a sound file, tone, bell, system alert or spoken warning skip the playing and still log and report
+  as before. Builds that ran tests used to be heard at random. TurnOver itself is unaffected.
 - The log now has one line for every sound TurnOver plays, "sound: <name> (why: <what asked for it>)", so a sound that
   cannot be accounted for can be traced to its cause. Nothing is heard differently.
 - Claude: Return in the prompt, when it sends the message, now says "sent" at once. Claude's own progress lines wait

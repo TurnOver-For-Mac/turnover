@@ -430,6 +430,7 @@ public final class SpeechPlayer: @unchecked Sendable {
                 }
             }
             doing("tone buffer")
+            if AudioOutput.muted { return }   // tests are silent (AudioOutput)
             toneNode.scheduleBuffer(buf, completionHandler: nil)
             play(toneNode)
         }
@@ -447,6 +448,7 @@ public final class SpeechPlayer: @unchecked Sendable {
                 if i > Int(frames) - fade { a *= Float(Int(frames) - i) / Float(fade) }
                 data[i] = a * Float(sin(2 * Double.pi * frequency * Double(i) / format.sampleRate))
             }
+            if AudioOutput.muted { return }   // tests are silent (AudioOutput)
             toneNode.scheduleBuffer(buf, completionHandler: nil)
             play(toneNode)
         }
@@ -771,6 +773,7 @@ public final class SpeechPlayer: @unchecked Sendable {
     /// The check alone wasn't enough: the engine said it was running and the device went a moment later (the lid closed,
     /// 19 Oct 2026, the same crash): the play is also run inside TOCatch, which catches the exception.
     private func play(_ node: AVAudioPlayerNode) {
+        if AudioOutput.muted { return }   // tests are silent (AudioOutput): nothing is rendered to the speakers
         guard engine.isRunning, node.engine != nil else { NSLog("speech: not playing a node while the audio engine is stopped"); return }
         guard !node.isPlaying else { return }
         var reason: NSString?
@@ -868,6 +871,7 @@ public final class SpeechPlayer: @unchecked Sendable {
             lastAlertAt = Date()
             // No speech to say it with: the system alert sound, twice, so the silence is at least explained as a
             // fault (the team review: failures that leave the user without speech are told, 8 Oct 2026).
+            if AudioOutput.muted { return }   // tests are silent (AudioOutput)
             AudioServicesPlaySystemSound(kSystemSoundID_UserPreferredAlert)
             DispatchQueue.global().asyncAfter(deadline: .now() + 0.4) { AudioServicesPlaySystemSound(kSystemSoundID_UserPreferredAlert) }
         }
