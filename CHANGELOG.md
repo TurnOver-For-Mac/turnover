@@ -6,6 +6,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Changed
 
+- The log now has one line for every sound TurnOver plays, "sound: <name> (why: <what asked for it>)", so a sound that
+  cannot be accounted for can be traced to its cause. Nothing is heard differently.
 - Claude: Return in the prompt, when it sends the message, now says "sent" at once. Claude's own progress lines wait
   until it has been said.
 - A text field that holds only a space, such as PayPal's empty code boxes, is now read as "blank", the word for an

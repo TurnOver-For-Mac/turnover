@@ -28,17 +28,18 @@ public enum VoiceOverSounds {
     /// Plays one of VoiceOver's sounds by file name ("LinkBegin.aiff"), or TurnOver's own for it with TurnOver's set
     /// chosen or the file missing; false where there is neither, so the caller's old tone plays.
     @discardableResult
-    public static func play(_ name: String, volume: Float = 0.8) -> Bool {
+    public static func play(_ name: String, volume: Float = 0.8, why: String = #function) -> Bool {
         // "TurnOver's sounds" chosen (17 Oct 2026): TurnOver's own sound stands in for each of VoiceOver's files.
-        if config.general.effectiveSounds == "turnover" { return ownTone(for: name) }
+        if config.general.effectiveSounds == "turnover" { return ownTone(for: name, why: why) }
         if players[name] == nil, let data = levelled(folder.appendingPathComponent(name)), let p = try? AVAudioPlayer(data: data) {
             p.prepareToPlay()
             players[name] = p
         }
-        guard let p = players[name] else { return ownTone(for: name) }
+        guard let p = players[name] else { return ownTone(for: name, why: why) }
         p.volume = volume * min(1.5, max(0.2, Float(config.speech.volume) / 100))   // with TurnOver's own volume
         p.currentTime = 0
         let started = Date()
+        SoundLog.played(name, why: why)
         p.play()
         // Oliver, 14 Nov 2026: on MacRumors "the link sound hangs". Sounds were not logged, so the log could not say
         // how. One that is slow to start, or played again before it ended, is logged now.
@@ -78,7 +79,7 @@ public enum VoiceOverSounds {
 
     /// TurnOver's sound for one of VoiceOver's sound names (the sounds setting "TurnOver's", or the file missing); false
     /// where TurnOver has none, so the caller's own fallback plays.
-    static func ownTone(for asked: String) -> Bool {
+    static func ownTone(for asked: String, why: String = #function) -> Bool {
         guard Tones.own else { return false }   // coexisting, VoiceOver's own stand in for a file that is missing
         // By the sound's name, whatever its file's ending: VoiceOver's Quick Nav sounds are .wav, and asked for as such
         // they matched nothing here, so Quick Nav said its words instead of TurnOver's sound (19 Oct 2026).
@@ -91,7 +92,7 @@ public enum VoiceOverSounds {
             "EmptySpace.aiff": "empty", "Announcement.aiff": "announcement", "SecureCharacter.aiff": "secure",
             "LinkBegin.aiff": "link", "Misspelled.aiff": "spelling", "BrailleDisplayConnected.aiff": "braille_on", "BrailleDisplayDisconnected.aiff": "braille_off",
         ]
-        if let f = fresh[name], TurnOverSounds.play(f) { return true }
+        if let f = fresh[name], TurnOverSounds.play(f, why: why) { return true }
         switch name {
         case "WrapBoundary.aiff": Tones.beep(220, 70); return true
         case "DrillIn.aiff": Tones.beep(660, 30); return true

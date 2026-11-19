@@ -32605,6 +32605,9 @@
         }
       }
     },
+    "did not change" : {
+      "comment" : "Spoken when pressing a switch or tick box in Claude changed nothing"
+    },
     "different item" : {
       "comment" : "A kind of thing to find, after next or previous",
       "localizations" : {

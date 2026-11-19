@@ -14,19 +14,25 @@ public enum Tones {
     /// A sound of TurnOver's own may play: its set is chosen, or VoiceOver is off.
     static var own: Bool { chosen || !Coexist.on }
     /// One of TurnOver's own set, where TurnOver's own may play: false leaves the old tone to play.
-    private static func fresh(_ name: String) -> Bool {
+    private static func fresh(_ name: String, why: String = #function) -> Bool {
         guard own else { return false }
-        return Thread.isMainThread ? MainActor.assumeIsolated { TurnOverSounds.play(name) } : false
+        return Thread.isMainThread ? MainActor.assumeIsolated { TurnOverSounds.play(name, why: why) } : false
     }
-    public static func beep(_ frequency: Double, _ ms: Int, volume: Float = 0.25) {
+    /// A synthesised bell, logged as it plays (19 Nov 2026).
+    private static func bell(frequencies: [Double], spacingMs: Int, ringMs: Int, volume: Float = 0.12, why: String = #function) {
+        SoundLog.played("bell \(frequencies.map { String(Int($0)) }.joined(separator: "+")) Hz", why: why)
+        Speech.player?.playBell(frequencies: frequencies, spacingMs: spacingMs, ringMs: ringMs, volume: volume)
+    }
+    public static func beep(_ frequency: Double, _ ms: Int, volume: Float = 0.25, why: String = #function) {
         guard own else { return }
+        SoundLog.played("tone \(Int(frequency)) Hz \(ms) ms", why: why)
         Speech.player?.playTone(frequency: frequency, durationMs: ms, volume: volume)
     }
     /// Headings: higher for level 1, descending by level.
     public static func heading(level: Int) { if fresh("heading\(min(6, max(1, level)))") { return }; beep(level <= 0 ? 700 : max(440, 1000 - Double(level - 1) * 110), 60) }
     /// VoiceOver's own sound where it has one (17 Oct 2026), or the set's with TurnOver's chosen; false off the main
     /// thread or with neither file, so the old tone plays.
-    private static func voiceOver(_ name: String) -> Bool { Thread.isMainThread ? MainActor.assumeIsolated { VoiceOverSounds.play(name) } : false }
+    private static func voiceOver(_ name: String, why: String = #function) -> Bool { Thread.isMainThread ? MainActor.assumeIsolated { VoiceOverSounds.play(name, why: why) } : false }
     public static func link() { if !voiceOver("LinkBegin.aiff") { beep(1400, 25, volume: 0.18) } }
     public static func list() { if fresh("list") { return }; beep(520, 40) }
     public static func landmark() { if fresh("landmark") { return }; beep(620, 40); DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { beep(780, 40) } }
@@ -60,12 +66,12 @@ public enum Tones {
     /// Short and soft, as it is heard every time an application changes hands.
     /// TurnOver has started while VoiceOver has the Mac: a short rising pair, so a tester with Open at login knows it is
     /// there (NVDA's start-up sound; a tester, 9 Oct 2026). Speech would be silent with VoiceOver on; a tone is not.
-    public static func startup() { if !own { return }; if fresh("startup") { return }; Speech.player?.playBell(frequencies: [659, 880], spacingMs: 90, ringMs: 160, volume: 0.18) }
-    public static func takeOver() { if !own { return }; if fresh("take_over") { return }; Speech.player?.playBell(frequencies: [784, 1175], spacingMs: 70, ringMs: 150) }
+    public static func startup() { if !own { return }; if fresh("startup") { return }; bell(frequencies: [659, 880], spacingMs: 90, ringMs: 160, volume: 0.18) }
+    public static func takeOver() { if !own { return }; if fresh("take_over") { return }; bell(frequencies: [784, 1175], spacingMs: 70, ringMs: 150) }
     /// A braille display connected and gone: VoiceOver's sounds for them, or three notes up and three down.
-    public static func brailleConnected() { if !own { return }; if !voiceOver("BrailleDisplayConnected.aiff") { Speech.player?.playBell(frequencies: [523, 659, 784], spacingMs: 80, ringMs: 220, volume: 0.22) } }
-    public static func brailleDisconnected() { if !own { return }; if !voiceOver("BrailleDisplayDisconnected.aiff") { Speech.player?.playBell(frequencies: [784, 659, 523], spacingMs: 80, ringMs: 220, volume: 0.22) } }
-    public static func handBack() { if !own { return }; if fresh("hand_back") { return }; Speech.player?.playBell(frequencies: [1175, 784], spacingMs: 70, ringMs: 150) }
+    public static func brailleConnected() { if !own { return }; if !voiceOver("BrailleDisplayConnected.aiff") { bell(frequencies: [523, 659, 784], spacingMs: 80, ringMs: 220, volume: 0.22) } }
+    public static func brailleDisconnected() { if !own { return }; if !voiceOver("BrailleDisplayDisconnected.aiff") { bell(frequencies: [784, 659, 523], spacingMs: 80, ringMs: 220, volume: 0.22) } }
+    public static func handBack() { if !own { return }; if fresh("hand_back") { return }; bell(frequencies: [1175, 784], spacingMs: 70, ringMs: 150) }
     /// The focus moved (Tab, a new control): VoiceOver's little tick. Very short, high and quiet.
     public static func focusTick() {
         guard own else { return }
@@ -73,7 +79,7 @@ public enum Tones {
         if Date().timeIntervalSince(lastTick) < 0.05 { return }   // a burst of focus events is one move
         lastTick = Date()
         if fresh("tick") { return }
-        Speech.player?.playBell(frequencies: [2600], spacingMs: 0, ringMs: 18, volume: 0.07)
+        bell(frequencies: [2600], spacingMs: 0, ringMs: 18, volume: 0.07)
     }
     private static var lastTick = Date.distantPast
     /// An item was pressed (a link followed, a button pressed): a fuller click, lower, two partials together.
@@ -81,7 +87,7 @@ public enum Tones {
         guard own else { return }
         guard config.general.navigationSounds else { return }
         if fresh("press") { return }
-        Speech.player?.playBell(frequencies: [1300, 1950], spacingMs: 6, ringMs: 35, volume: 0.09)
+        bell(frequencies: [1300, 1950], spacingMs: 6, ringMs: 35, volume: 0.09)
     }
     /// Into focus mode (typing into the page): two notes rising. Back to browse mode: the same falling. NVDA's
     /// "audio indication of focus and browse modes".
