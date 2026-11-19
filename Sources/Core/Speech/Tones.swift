@@ -13,6 +13,20 @@ public enum Tones {
     static var chosen: Bool { config.general.effectiveSounds == "turnover" }
     /// A sound of TurnOver's own may play: its set is chosen, or VoiceOver is off.
     static var own: Bool { chosen || !Coexist.on }
+    /// THE RULE (19 Nov 2026; SHORTCOMINGS rule 10; Oliver: "the VoiceOver sounds are not correct"). With VoiceOver's
+    /// sounds chosen, TurnOver plays a sound only for an event VoiceOver plays one for, and plays VoiceOver's file for
+    /// it; every tone TurnOver invented (focus tick, press, heading, list, landmark, table, graphic, block quote, focus
+    /// and browse mode, comment, the keystroke beep, the jump beeps, the assorted beeps) is silent. With TurnOver's
+    /// chosen, all play. Every invented tone asks here first. (`own` was always true once CoExist went, so they all
+    /// played with VoiceOver's chosen.) Kept in both sets, outside this gate, because they are TurnOver's own
+    /// lifecycle and tell a blind user which reader is running: startup, take-over, hand-back; and the progress beep.
+    /// A test sets `inventedProbe`: the gate then records the name where it would have played, and plays nothing.
+    nonisolated(unsafe) package static var inventedProbe: ((String) -> Void)?
+    package static func invented(_ name: String) -> Bool {
+        guard chosen else { return false }
+        if let probe = inventedProbe { probe(name); return false }
+        return true
+    }
     /// One of TurnOver's own set, where TurnOver's own may play: false leaves the old tone to play.
     private static func fresh(_ name: String, why: String = #function) -> Bool {
         guard own else { return false }
@@ -29,16 +43,16 @@ public enum Tones {
         Speech.player?.playTone(frequency: frequency, durationMs: ms, volume: volume)
     }
     /// Headings: higher for level 1, descending by level.
-    public static func heading(level: Int) { if fresh("heading\(min(6, max(1, level)))") { return }; beep(level <= 0 ? 700 : max(440, 1000 - Double(level - 1) * 110), 60) }
+    public static func heading(level: Int) { guard invented("heading") else { return }; if fresh("heading\(min(6, max(1, level)))") { return }; beep(level <= 0 ? 700 : max(440, 1000 - Double(level - 1) * 110), 60) }
     /// VoiceOver's own sound where it has one (17 Oct 2026), or the set's with TurnOver's chosen; false off the main
     /// thread or with neither file, so the old tone plays.
     private static func voiceOver(_ name: String, why: String = #function) -> Bool { Thread.isMainThread ? MainActor.assumeIsolated { VoiceOverSounds.play(name, why: why) } : false }
     public static func link() { if !voiceOver("LinkBegin.aiff") { beep(1400, 25, volume: 0.18) } }
-    public static func list() { if fresh("list") { return }; beep(520, 40) }
-    public static func landmark() { if fresh("landmark") { return }; beep(620, 40); DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { beep(780, 40) } }
-    public static func table() { if fresh("table") { return }; beep(400, 50) }
-    public static func graphic() { if fresh("graphic") { return }; beep(1100, 35, volume: 0.18) }
-    public static func blockQuote() { if fresh("blockquote") { return }; beep(560, 45) }
+    public static func list() { guard invented("list") else { return }; if fresh("list") { return }; beep(520, 40) }
+    public static func landmark() { guard invented("landmark") else { return }; if fresh("landmark") { return }; beep(620, 40); DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { beep(780, 40) } }
+    public static func table() { guard invented("table") else { return }; if fresh("table") { return }; beep(400, 50) }
+    public static func graphic() { guard invented("graphic") else { return }; if fresh("graphic") { return }; beep(1100, 35, volume: 0.18) }
+    public static func blockQuote() { guard invented("blockquote") else { return }; if fresh("blockquote") { return }; beep(560, 45) }
     public static func spellingError() { if !voiceOver("Misspelled.aiff") { beep(300, 70) } }
     /// The caret could not leave the line or the document (NVDA re-reads the line; a bump is kinder).
     /// Also felt on the trackpad while trackpad control is on (Trackpad sets it).
@@ -74,7 +88,7 @@ public enum Tones {
     public static func handBack() { if !own { return }; if fresh("hand_back") { return }; bell(frequencies: [1175, 784], spacingMs: 70, ringMs: 150) }
     /// The focus moved (Tab, a new control): VoiceOver's little tick. Very short, high and quiet.
     public static func focusTick() {
-        guard own else { return }
+        guard invented("focus_tick") else { return }
         guard config.general.navigationSounds else { return }
         if Date().timeIntervalSince(lastTick) < 0.05 { return }   // a burst of focus events is one move
         lastTick = Date()
@@ -84,7 +98,7 @@ public enum Tones {
     private static var lastTick = Date.distantPast
     /// An item was pressed (a link followed, a button pressed): a fuller click, lower, two partials together.
     public static func press() {
-        guard own else { return }
+        guard invented("press") else { return }
         guard config.general.navigationSounds else { return }
         if fresh("press") { return }
         bell(frequencies: [1300, 1950], spacingMs: 6, ringMs: 35, volume: 0.09)
@@ -93,12 +107,12 @@ public enum Tones {
     /// "audio indication of focus and browse modes".
     // (The browse and focus mode tones are TurnOver's own idea, NVDA's: VoiceOver plays nothing when a field takes the
     // focus, so its Quick Nav sounds were wrong here: every return to Claude played "Quick Nav off", 17 Oct 2026.)
-    public static func focusMode() { if fresh("focus_mode") { return }; beep(523, 35, volume: 0.18); DispatchQueue.main.asyncAfter(deadline: .now() + 0.045) { beep(784, 45, volume: 0.18) } }
-    public static func browseMode() { if fresh("browse_mode") { return }; beep(784, 35, volume: 0.18); DispatchQueue.main.asyncAfter(deadline: .now() + 0.045) { beep(523, 45, volume: 0.18) } }
+    public static func focusMode() { guard invented("focus_mode") else { return }; if fresh("focus_mode") { return }; beep(523, 35, volume: 0.18); DispatchQueue.main.asyncAfter(deadline: .now() + 0.045) { beep(784, 45, volume: 0.18) } }
+    public static func browseMode() { guard invented("browse_mode") else { return }; if fresh("browse_mode") { return }; beep(784, 35, volume: 0.18); DispatchQueue.main.asyncAfter(deadline: .now() + 0.045) { beep(523, 45, volume: 0.18) } }
     /// A progress bar's beep, NVDA's (ProgressOutput): 40 ms, 110 Hz at 0 percent, an octave higher each 25 percent,
     /// 1760 Hz at 100.
     public static func progress(_ percent: Int) { beep(progressFrequency(percent), 40) }
     package static func progressFrequency(_ percent: Int) -> Double { 110 * pow(2, Double(max(0, min(100, percent))) / 25) }
     /// Commented text in a document (Word): two quick notes.
-    public static func comment() { if fresh("comment") { return }; beep(880, 35, volume: 0.18); DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { beep(1175, 35, volume: 0.18) } }
+    public static func comment() { guard invented("comment") else { return }; if fresh("comment") { return }; beep(880, 35, volume: 0.18); DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { beep(1175, 35, volume: 0.18) } }
 }

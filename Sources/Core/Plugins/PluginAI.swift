@@ -117,7 +117,7 @@ public enum PluginAI: String, CaseIterable {
     private static func brief(pid: pid_t, failure: String, chat: Bool = false, then: @escaping @MainActor (URL, String?) -> Void) {
         let done = Locked(false)
         func tick() {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if !done.value { Tones.beep(880, 30, volume: 0.1); tick() } }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if !done.value { if Tones.invented("waiting_tick") { Tones.beep(880, 30, volume: 0.1) }; tick() } }
         }
         tick()
         DispatchQueue.global(qos: .userInitiated).async {

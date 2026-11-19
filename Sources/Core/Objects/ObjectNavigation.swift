@@ -749,7 +749,7 @@ public final class ObjectNavigator {
     /// VO-Shift-Escape: out to the top level of the window, on its first item.
     public func topLevel() {
         guard let cur = element, let w = window(of: cur), let first = Self.groupItems(w).first else { Tones.edge(); return }
-        Tones.beep(440, 30)
+        if Tones.invented("jump") { Tones.beep(440, 30) }
         land(on: first)
     }
 
@@ -815,13 +815,13 @@ public final class ObjectNavigator {
                 // first item inside; a table's selected row rather than the table.
                 let target = Self.landingPlace(in: linked)
                 Log.io("VO-J: \(y.role) links to \(linked.role); landing on \(target.role) \"\(Log.words(String((target.string(kAXDescriptionAttribute) ?? target.string(kAXTitleAttribute) ?? target.string(kAXValueAttribute) ?? "").prefix(30))))\"")
-                if !target.isSame(cur) { Tones.beep(660, 30); jumpTo(target, within: linked); return }
+                if !target.isSame(cur) { if Tones.invented("jump") { Tones.beep(660, 30) }; jumpTo(target, within: linked); return }
             }
             x = y.element(kAXParentAttribute); hops += 1
         }
         // Nothing linked by the app: between the window's panes, as VoiceOver goes from a sidebar to its content and
         // back (8 Nov 2026, Oliver, with VoiceOver on to compare). One rule for every app: see paneJump.
-        if let target = paneJump(from: cur), !target.isSame(cur) { Tones.beep(660, 30); jumpTo(target, within: Self.lastJump?.to); return }
+        if let target = paneJump(from: cur), !target.isSame(cur) { if Tones.invented("jump") { Tones.beep(660, 30) }; jumpTo(target, within: Self.lastJump?.to); return }
         Speech.speakMessage(String(localized: "no linked item", comment: "Spoken message"))
     }
 

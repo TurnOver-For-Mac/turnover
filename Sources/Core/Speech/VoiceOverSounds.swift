@@ -88,7 +88,7 @@ public enum VoiceOverSounds {
         // TurnOver's own set first (make-sounds.py); the old tones below if a file is missing.
         let fresh: [String: String] = [
             "WrapBoundary.aiff": "edge", "DrillIn.aiff": "drill_in", "DrillOut.aiff": "drill_out",
-            "QuickNavOn.aiff": "quicknav_on", "QuickNavArrowKeyOn.aiff": "quicknav_on", "QuickNavOff.aiff": "quicknav_off", "QuickNavArrowKeyOff.aiff": "quicknav_off",
+            "QuickNavOn.aiff": "quicknav_on", "QuickNavSingleKeyOn.aiff": "quicknav_on", "QuickNavSingleKeyOff.aiff": "quicknav_off", "QuickNavArrowKeyOn.aiff": "quicknav_on", "QuickNavOff.aiff": "quicknav_off", "QuickNavArrowKeyOff.aiff": "quicknav_off",
             "TrackingOn.aiff": "tracking_on", "TrackingOff.aiff": "tracking_off", "PopupAppeared.aiff": "popup", "WebAreaLoaded.aiff": "page_loaded",
             "EmptySpace.aiff": "empty", "Announcement.aiff": "announcement", "SecureCharacter.aiff": "secure",
             "LinkBegin.aiff": "link", "Misspelled.aiff": "spelling", "BrailleDisplayConnected.aiff": "braille_on", "BrailleDisplayDisconnected.aiff": "braille_off",
@@ -98,8 +98,8 @@ public enum VoiceOverSounds {
         case "WrapBoundary.aiff": Tones.beep(220, 70); return true
         case "DrillIn.aiff": Tones.beep(660, 30); return true
         case "DrillOut.aiff": Tones.beep(440, 30); return true
-        case "QuickNavOn.aiff", "QuickNavArrowKeyOn.aiff", "TrackingOn.aiff": Tones.beep(660, 40); DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { Tones.beep(880, 50) }; return true
-        case "QuickNavOff.aiff", "QuickNavArrowKeyOff.aiff", "TrackingOff.aiff": Tones.beep(880, 40); DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { Tones.beep(660, 50) }; return true
+        case "QuickNavOn.aiff", "QuickNavSingleKeyOn.aiff", "QuickNavArrowKeyOn.aiff", "TrackingOn.aiff": Tones.beep(660, 40); DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { Tones.beep(880, 50) }; return true
+        case "QuickNavOff.aiff", "QuickNavSingleKeyOff.aiff", "QuickNavArrowKeyOff.aiff", "TrackingOff.aiff": Tones.beep(880, 40); DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { Tones.beep(660, 50) }; return true
         case "PopupAppeared.aiff": Tones.beep(520, 40); return true
         case "WebAreaLoaded.aiff": Tones.beep(700, 50); return true
         case "EmptySpace.aiff": Tones.beep(300, 40); return true

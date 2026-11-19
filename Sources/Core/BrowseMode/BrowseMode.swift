@@ -245,6 +245,9 @@ public final class BrowseModeDocument: ScriptableObject {
         return kept && keptKeyWordIsSpeaking
     }
     var pageGeneration = 0
+    /// The page load whose sound has played (19 Nov 2026): the sound is once per page load (pageGeneration), not once
+    /// per empty-to-full publication, which a re-made copy of the same page also was.
+    var pageLoadSounded = -1
     var bufferIntent = 0
     /// The newest key waiting for a fresh copy of the page (startCopyWait), 17 Nov 2026.
     var copyWaitTicket = 0
