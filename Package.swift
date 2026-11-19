@@ -59,6 +59,7 @@ let coreSources: [String] = [
     "Apps/Keynote/KeynoteAppModule.swift",
     "Apps/Kindle/KindleAppModule.swift",
     "Apps/Mail/MailAppModule.swift",
+    "Apps/Mail/MailReadAhead.swift",
     "Apps/Maps/MapsAppModule.swift",
     "Apps/Media/MediaAppModule.swift",
     "Apps/Media/MediaShelfReadiness.swift",
