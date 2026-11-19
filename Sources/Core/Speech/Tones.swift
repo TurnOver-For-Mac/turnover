@@ -79,6 +79,14 @@ public enum Tones {
         _ = voiceOver(forward ? "WrapForward.aiff" : "WrapBack.aiff")
         onEdge?()
     }
+    /// A window became the front one, including on an app switch, but not the Finder's desktop: VoiceOver's "Window
+    /// activated" plays WindowActivated.aiff. TurnOver's own set has none.
+    public static func windowActivated() { if !chosen { _ = voiceOver("WindowActivated.aiff") } }
+    /// A dialog or a system prompt appeared: VoiceOver's "System dialog appeared" plays Alert.aiff. TurnOver's own set has none.
+    public static func dialogAppeared() { if !chosen { _ = voiceOver("Alert.aiff") } }
+    /// Text was added to the selection: VoiceOver's "Text added to selection" plays DragShort.aiff. One sound per
+    /// change however many pieces were added. TurnOver's own set has none.
+    public static func selectionAdded() { if !chosen { _ = voiceOver("DragShort.aiff") } }
     public static func link() { if !voiceOver("LinkBegin.aiff") { beep(1400, 25, volume: 0.18, exempt: true) } }
     public static func list() { guard invented("list") else { return }; if fresh("list") { return }; beep(520, 40) }
     public static func landmark() { guard invented("landmark") else { return }; if fresh("landmark") { return }; beep(620, 40); DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { beep(780, 40) } }

@@ -770,6 +770,8 @@ extension AXHandler {
             Log.io("foreground: Notification Centre's panel, for the key; the key says it")
             return
         }
+        if subrole != "AXDesktop" { Tones.windowActivated() }   // not for the Finder's desktop, as VoiceOver
+        if obj is Dialog { Tones.dialogAppeared() }
         let isDialog = obj.role == .dialog || obj.role == .sheet
         let shownTitle = appName == title ? "" : title
         // The app's name alone with the role is one phrase, as the language says it ("Finder penceresi" in Turkish);

@@ -15,6 +15,9 @@ import TurnOverCore
         ("the rotor to its previous setting", "RotorLeft.aiff", { Tones.rotorMoved(forward: false) }),
         ("the rotor to its next setting", "RotorRight.aiff", { Tones.rotorMoved(forward: true) }),
         ("a search wrapping forward", "WrapForward.aiff", { Tones.searchWrapped(forward: true) }),
+        ("a window coming to the front", "WindowActivated.aiff", { Tones.windowActivated() }),
+        ("a dialog appearing", "Alert.aiff", { Tones.dialogAppeared() }),
+        ("text added to the selection", "DragShort.aiff", { Tones.selectionAdded() }),
         ("a search wrapping backward", "WrapBack.aiff", { Tones.searchWrapped(forward: false) }),
     ]
     test("sounds: with VoiceOver's chosen, each wired event asks for VoiceOver's own file") {
@@ -40,8 +43,8 @@ import TurnOverCore
         Tones.contextMenuOpened()
         expect(asked, ["PopupAppeared.aiff/turnover"], "a context menu sounds as before")
         asked = []
-        Tones.rotorMoved(forward: true); Tones.rotorMoved(forward: false); Tones.mouseClick(); Tones.searchWrapped(forward: true)
-        expect(asked.filter { $0.hasPrefix("Rotor") || $0.hasPrefix("SingleClick") || $0.hasPrefix("WrapForward") }, [], "TurnOver's set asks for none of VoiceOver's rotor, click or wrap files")
+        Tones.rotorMoved(forward: true); Tones.rotorMoved(forward: false); Tones.mouseClick(); Tones.searchWrapped(forward: true); Tones.windowActivated(); Tones.dialogAppeared(); Tones.selectionAdded()
+        expect(asked.filter { $0.hasPrefix("Rotor") || $0.hasPrefix("SingleClick") || $0.hasPrefix("WrapForward") || $0.hasPrefix("Window") || $0.hasPrefix("Alert") || $0.hasPrefix("DragShort") }, [], "TurnOver's set asks for none of VoiceOver's rotor, click or wrap files")
         var heard: [String] = []
         Tones.inventedProbe = { heard.append($0) }
         defer { Tones.inventedProbe = nil }

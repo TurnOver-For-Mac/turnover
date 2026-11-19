@@ -920,6 +920,7 @@ public enum Speech {
         }
         let added = outside(after, before).map { new.textRange($0.start, $0.end) }
         let removed = outside(before, after).map { old.textRange($0.start, $0.end) }
+        if added.contains(where: { !$0.isEmpty }) { Tones.selectionAdded() }
         func spoken(_ t: String) -> String { t.count == 1 ? Symbols.name(of: t.first!) : (t.count > 1000 ? Phrases.characters(t.count) : processed(t)) }
         func selected(_ t: String) -> String { String(localized: "selected \(spoken(t))", comment: "Selected text, read: %@ is the text") }
         if generalize {
