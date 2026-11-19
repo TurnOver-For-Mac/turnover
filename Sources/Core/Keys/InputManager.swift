@@ -165,7 +165,7 @@ public enum InputManager {
                 DispatchQueue.main.async { FindPrompt.shared.handle(gesture, generation: opening) }
                 return true
             }
-            FindPrompt.shared.close(because: "a key it does not take")
+            FindPrompt.shared.close(because: "a key it does not take", arrowAt: gesture.timestamp)
         }
         // A typing key while the focus of an editable field, just asked for by quick navigation, has not arrived: held
         // here, before any lookup, so no lookup can end the request, and sent to the field once it has the focus

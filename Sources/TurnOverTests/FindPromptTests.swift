@@ -175,6 +175,20 @@ func findPromptTests() {
         check(FindPrompt.shared.isOpen, "TurnOver+F pressed after the switch opens")
     }
 
+    // 19 Nov 2026, Codex's fifth review: with Find open, TurnOver+F closed it (recording now) and its own opening, asked
+    // with the key's earlier time, was refused, so the key closed Find instead of reopening it.
+    test("TurnOver+F with Find open leaves it open; a key before a later close is still refused") {
+        defer { if FindPrompt.shared.isOpen { FindPrompt.shared.close(because: "the test is over") } }
+        let t = mach_absolute_time()
+        FindPrompt.shared.open(pressedAt: t &- 5_000)
+        FindPrompt.shared.close(because: "a key it does not take", arrowAt: t)
+        FindPrompt.shared.open(pressedAt: t)
+        check(FindPrompt.shared.isOpen, "the key that closed the prompt opens it again")
+        FindPrompt.shared.close(because: "the test: later close", arrowAt: t &+ 2_000)
+        FindPrompt.shared.open(pressedAt: t &+ 1_000)
+        check(!FindPrompt.shared.isOpen, "a key earlier than a later close does not open it")
+    }
+
     // 19 Nov 2026, Codex's fourth review: the opening checked the last arrow and then, after letting go of the lock, set
     // the prompt open; an arrow in between saw it closed, and the opening went on. In either order the prompt ends closed.
     test("A Quick Nav arrow racing a queued opening leaves the prompt closed, whichever comes first") {

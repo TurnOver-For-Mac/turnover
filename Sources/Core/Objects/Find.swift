@@ -41,7 +41,7 @@ public final class FindPrompt: @unchecked Sendable {
     /// menu), which always opens.
     public func open(pressedAt: UInt64 = 0) {
         state.lock.lock()
-        let overtaken = pressedAt != 0 && pressedAt <= state.unsafeValue.cancelledAt
+        let overtaken = pressedAt != 0 && pressedAt < state.unsafeValue.cancelledAt
         if !overtaken { state.unsafeValue.isOpen = true; state.unsafeValue.generation += 1 }
         state.lock.unlock()
         // Closed before it opened: nothing is said, as for any key that closes it; that key or switch goes on.
@@ -84,6 +84,9 @@ public final class FindPrompt: @unchecked Sendable {
     /// came (Command Tab, the mouse, the Dock), which is also TurnOver's own app giving up the front; TurnOver's menu
     /// opening; the lock, sleep or a user switch; secure input coming on (TurnOver hears no keys then). Any queued key
     /// for this opening is then dropped (`generation`). Nothing is said.
+    ///
+    /// A close caused by a key passes that key's own time, so the same key may then open the prompt again (TurnOver+F
+    /// with Find open closes it and asks to open it with the same time, which is not earlier: 19 Nov 2026, Codex's review).
     ///
     /// Every close also stops an opening asked for before it and not yet made (`open`), as of `arrowAt` (a Quick Nav
     /// arrow's own event time, on the gestures' clock) or else now. The log line is written on the main thread: this is called on the
