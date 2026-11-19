@@ -58,7 +58,7 @@ public enum ItemChooser {
     /// The focused window's items in reading order, collected off the main thread (a window can hold thousands of
     /// elements, Mail's message list; a slow walk on the main thread trips the watchdog). Delivered on the main thread:
     /// first what is on screen, so the list opens at once, and then, if rows were scrolled out of sight, everything,
-    /// to fill the open list in (`isFill`). Oliver's idea, 10 Nov 2026: Mail's list opened after two seconds, cut
+    /// to fill the open list in (`isFill`). The owner's idea, 10 Nov 2026: Mail's list opened after two seconds, cut
     /// short; its on-screen part takes a tenth of that. `partial` says the list being opened is only the part on
     /// screen and a fill will follow, so its count is not said; a fill always follows it, fuller or not.
     private static func collect(_ done: @escaping @MainActor (_ found: [Found], _ isFill: Bool, _ partial: Bool) -> Void) {
@@ -84,7 +84,7 @@ public enum ItemChooser {
                 return
             }
             // The list waits a moment for the rows out of sight, so that it opens saying the full count when they
-            // come quickly ("Items, 77 items" and then "2 of 87" 40 ms later, Oliver's trial in Mail, 10 Nov 2026).
+            // come quickly ("Items, 77 items" and then "2 of 87" 40 ms later, the owner's trial in Mail, 10 Nov 2026).
             // When they do not come within `openHold`, it opens on what is on screen, saying no count, and is filled in.
             let opening = Opening()
             DispatchQueue.main.asyncAfter(deadline: .now() + openHold) {

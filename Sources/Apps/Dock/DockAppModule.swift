@@ -43,7 +43,7 @@ package final class DockAppModule: AppModule {
     }
 
     /// An item reached in the Dock's own list is said by its name alone: "Safari", not "Safari, dock item, selected"
-    /// (Oliver, 15 Nov 2026). Nothing for an item with no name, which keeps the general wording. Object navigation does
+    /// (15 Nov 2026). Nothing for an item with no name, which keeps the general wording. Object navigation does
     /// not come through here, so it still says what the item is.
     package static func itemWords(name: String) -> String? {
         let n = name.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -12,7 +12,7 @@ App version is given below only where the source states it. Other missing app/ma
 
 ## Recorded outcome
 
-IntelliJ IDEA 2026.2 ran for more than two minutes without a window in the observed window-server list and did not answer accessibility queries. The process was terminated. The note proposed another attempt with Oliver present; no editor task result was recorded.
+IntelliJ IDEA 2026.2 ran for more than two minutes without a window in the observed window-server list and did not answer accessibility queries. The process was terminated. The note proposed another attempt with the owner present; no editor task result was recorded.
 
 ## Limits and next check
 

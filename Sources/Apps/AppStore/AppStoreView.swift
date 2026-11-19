@@ -126,7 +126,7 @@ public final class AppStoreView {
     /// All"), then the shelves reached by AXNextContentSibling, until there are enough to start with. The rest is read
     /// as the arrows reach it (reading all 529 items of Discover at once took 5 s and froze TurnOver, 6 Oct 2026).
     // MARK: The catalog and the flat view (docs/FLAT-VIEW-PLAN.md)
-    // Behind the developer switch `flatView` from 27 Oct 2026; on for everyone from build 23, after Oliver's trial
+    // Behind the developer switch `flatView` from 27 Oct 2026; on for everyone from build 23, after the owner's trial
     // ("I think we got the catalogue apps all working quite well so switch those on", 2 Nov 2026).
 
     /// The results page's host while a search results page is up; the old page machinery stands down meanwhile.
@@ -919,7 +919,7 @@ public final class AppStoreView {
     /// A download, followed from its button: heard as the Progress bars setting says (ProgressOutput: beeps, or the
     /// percentage each ten with the app's name) while the Store is in front, and the end ("WhatsApp Messenger
     /// installed") wherever the user is.
-    /// The quarters it said before were its own; downloads were silent with beeps chosen (Oliver, 2 Nov 2026). A look
+    /// The quarters it said before were its own; downloads were silent with beeps chosen (2 Nov 2026). A look
     /// each half second while it beeps with its row on screen and the Store in front, so the beeps keep up; otherwise
     /// every two, as before (finding the row again walks the list); for up to an hour. One watch per app: Get and
     /// then Install each started one, and everything was said twice (a review, 2 Nov 2026).

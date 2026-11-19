@@ -820,7 +820,7 @@ public final class ObjectNavigator {
             x = y.element(kAXParentAttribute); hops += 1
         }
         // Nothing linked by the app: between the window's panes, as VoiceOver goes from a sidebar to its content and
-        // back (8 Nov 2026, Oliver, with VoiceOver on to compare). One rule for every app: see paneJump.
+        // back (8 Nov 2026, the owner, with VoiceOver on to compare). One rule for every app: see paneJump.
         if let target = paneJump(from: cur), !target.isSame(cur) { if Tones.invented("jump") { Tones.beep(660, 30) }; jumpTo(target, within: Self.lastJump?.to); return }
         Speech.speakMessage(String(localized: "no linked item", comment: "Spoken message"))
     }
@@ -970,7 +970,7 @@ public final class ObjectNavigator {
         // content, which left "no panes" from the window, 8 Nov 2026). Its panes leave out the splitters and the strips
         // along an edge: Safari's "Open in App Banner" (the whole width, 54 points of 768) lies over the top of the page,
         // so VO-J from the address bar landed on the banner's words and put the keyboard on the page's "Hide sidebar"
-        // under it (Oliver, 9 Nov 2026). With fewer than two, the split view round that one is asked: Finder's file list
+        // under it (9 Nov 2026). With fewer than two, the split view round that one is asked: Finder's file list
         // and its path bar are a split view inside the one that holds the sidebar (Codex, 9 Nov 2026).
         var split = splitAbove(cur) ?? w.firstDescendant(role: "AXSplitGroup", maxVisited: 200)
         var nested = 0
@@ -1114,7 +1114,7 @@ public final class ObjectNavigator {
         (e.attr(kAXFocusedAttribute) as? Bool) == true
     }
 
-    /// After landing, TurnOver's own focus goes where the cursor went (Oliver, 8 Nov 2026: "it's reading where I
+    /// After landing, TurnOver's own focus goes where the cursor went (8 Nov 2026: "it's reading where I
     /// should be going but not actually moving the TurnOver focus there"; the arrows and the app modules' commands
     /// follow TurnOver's focus object, not the review cursor, so Podcasts' Down Arrow went on through the sidebar).
     /// Inside a page that isn't being written in, the focus is the page's document, read from the landed line (Mail

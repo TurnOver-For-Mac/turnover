@@ -47,7 +47,7 @@ final class Watchdog: @unchecked Sendable {   // its state is under `lock`
     /// Whether the grace covers a speech queue stuck since `began`. It is for what the sleep or the wake left stuck. A
     /// queue that got stuck later, with the Mac awake and unlocked, is not the wake's: the sound moved to AirPods Max 17 s
     /// after the unlock, the queue stuck in starting playback, and with the fresh player held back for the grace there
-    /// was no speech until Oliver restarted TurnOver 13 s later (14 Nov 2026). Such a queue gets its fresh player at once;
+    /// was no speech until the owner restarted TurnOver 13 s later (14 Nov 2026). Such a queue gets its fresh player at once;
     /// the relaunch keeps the whole grace (`inGrace`), for the lock screen's sake.
     nonisolated func graceCovers(stallBegan began: Date) -> Bool {
         // The lock screen itself, asked of the session, whatever the notices said: "session active" can come while it is
@@ -126,7 +126,7 @@ final class Watchdog: @unchecked Sendable {   // its state is under `lock`
         lock.lock(); trippedAt = Date(); _lastTrip = trippedAt; voiceOverHeldBack = sleeping; lock.unlock()
         // The Mac asleep, locked or just awake: the beat stopped because the Mac did, not TurnOver. Keys through, but
         // VoiceOver left as it is and nothing announced. Each wake said "TurnOver is not responding" in the
-        // system's voice, several copies over each other (Oliver, 22 Oct 2026), while TurnOver was simply waking.
+        // system's voice, several copies over each other (22 Oct 2026), while TurnOver was simply waking.
         Log.error("watchdog: the main thread has not run for \(Int(stuck)) s\(sleeping ? " (the Mac asleep, locked or just awake)" : ""); letting keys through\(sleeping ? "" : " and turning VoiceOver back on")")
         // What it was in (17 Nov 2026: two 6 s stalls on 16 Nov left no trace of their cause).
         Log.error("watchdog: the main thread last began \(Core.mainWorkDescription())")

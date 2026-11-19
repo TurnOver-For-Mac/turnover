@@ -746,7 +746,7 @@ final class LeadWatcher {
     }
 
     func switchCurrent(toTurnOver wanted: Bool? = nil) {
-        // Keeping an app with VoiceOver is one key (Oliver, 7 Nov 2026: yes to Command Control Shift T working without
+        // Keeping an app with VoiceOver is one key (7 Nov 2026: yes to Command Control Shift T working without
         // the setting). Readers per app off, the key turns them on (once it has an app to give), TurnOver everywhere but the apps VoiceOver keeps,
         // and goes on to give the app in front away. Before, it said readers per app were off and did nothing, while the
         // welcome and the guides said the key gave the app to VoiceOver (22 Oct 2026 to 7 Nov 2026).

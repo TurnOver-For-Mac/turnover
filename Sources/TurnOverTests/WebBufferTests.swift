@@ -88,7 +88,7 @@ func webBufferTests() {
     }
     // 19 Nov 2026: H on a long AppleVis heading said its first wrapped line, Down Arrow the rest (the WebKit-search path
     // passed no element to speakQuickNavText). Logic only: WebKit's search cannot be replayed, so this drives the call that
-    // path now makes (the element given) and the copy's own search; a real page's wording is Oliver's ear.
+    // path now makes (the element given) and the copy's own search; a real page's wording is the owner's ear.
     test("quick navigation: a heading wrapped over several lines, or split into a link and text, is read whole (19 Nov 2026)") {
         let long = (1...14).map { "word\($0)" }.joined(separator: " ") + " " + String(repeating: "and more words here ", count: 8)
         let first = "Announcing the first public beta of Runa TTS for iOS: bringing the high quality, natural sounding"

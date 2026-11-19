@@ -3,7 +3,7 @@
 // has moved (trial, 10 Nov 2026).
 //
 // Why: of the 76 ms between an arrow and the first sound in this list, 45 were Mail moving its selection and loading
-// the message before it told anyone; TurnOver's own reading of the row took 2 (60 presses in Oliver's logs, 10 Nov
+// the message before it told anyone; TurnOver's own reading of the row took 2 (60 presses in the owner's logs, 10 Nov
 // 2026; Finder's lists, which only move a selection, answered in 40 ms in all). The row the arrow will land on is
 // known before Mail gets there: it is the row after the selected one. So it is read at once, by the same path a
 // selection is read by, and Mail's own news a moment later is checked against it: the same row is not read twice,

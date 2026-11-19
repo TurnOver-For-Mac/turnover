@@ -7,7 +7,7 @@ The retained project notes `testing/2026-10-10-notes.md` (Day 2 apps, Excel high
 ## Results
 
 - 10 October: cell value/address checks passed 7/7 in each keyboard style after focus and selected-cell handling were corrected.
-- Selection announcements have separate user evidence: Oliver reported the range feedback worked. The driver's selection keys did not reproduce the same action reliably, so its results are not substituted for that user report.
+- Selection announcements have separate user evidence: The owner reported the range feedback worked. The driver's selection keys did not reproduce the same action reliably, so its results are not substituted for that user report.
 - A cold grid became available after Excel was brought to the foreground under VoiceOver. The implementation temporarily handed over before returning to TurnOver. A query flag alone, background VoiceOver and repeated window walks had not produced the grid in that check.
 - 12 October: the corrected sample-workbook rerun passed 7/7 Windows and 6/7 Mac checks. The initial Mac-style Control-Home arrived during the three-second grid handover; the remaining cells read.
 

@@ -12,7 +12,7 @@ App version is given below only where the source states it. Other missing app/ma
 
 ## Recorded outcome
 
-Audacity 4 used Qt Quick. A microphone prompt initially prevented accessibility replies; after Oliver answered it, observer registration succeeded. A shared fix removed duplicate or foreign-window children. The plugin-validation question still did not move focus on Tab, even when the key bypassed TurnOver, and its buttons offered no Press action. The attempted activation produced no visible result. Audio editing was not tested.
+Audacity 4 used Qt Quick. A microphone prompt initially prevented accessibility replies; after the owner answered it, observer registration succeeded. A shared fix removed duplicate or foreign-window children. The plugin-validation question still did not move focus on Tab, even when the key bypassed TurnOver, and its buttons offered no Press action. The attempted activation produced no visible result. Audio editing was not tested.
 
 ## Limits and next check
 

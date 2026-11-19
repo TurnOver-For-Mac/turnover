@@ -52,7 +52,7 @@ public enum TurnOverSounds {
         let started = Date()
         SoundLog.played(name, why: why)
         if !AudioOutput.muted { p.play() }   // tests are silent (AudioOutput)
-        // Oliver, 14 Nov 2026: on MacRumors "the link sound hangs". Sounds were not logged, so the log could not say
+        // The owner, 14 Nov 2026: on MacRumors "the link sound hangs". Sounds were not logged, so the log could not say
         // how. One that is slow to start, or played again before it ended, is logged now.
         let ms = Int(Date().timeIntervalSince(started) * 1000)
         if ms >= 50 { Log.io("sound: \(name) took \(ms) ms to start") }
@@ -61,7 +61,7 @@ public enum TurnOverSounds {
     }
 }
 
-/// One log line for every sound actually played, so a sound Oliver cannot account for can be found (19 Nov 2026):
+/// One log line for every sound actually played, so a sound the owner cannot account for can be found (19 Nov 2026):
 /// "sound: <name> (why: <caller>)". A play can be asked for on the keyboard tap thread (Tones.beep): the line is then
 /// handed to the main thread, never written there.
 public enum SoundLog {

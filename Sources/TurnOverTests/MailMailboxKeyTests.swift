@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Mail: a mailbox key that chooses the mailbox already shown is read without waiting for a new title (17 Nov 2026).
-// Logic evidence only: the learning and the decision, not Mail's real timing, which is for Oliver's ear.
+// Logic evidence only: the learning and the decision, not Mail's real timing, which is for the owner's ear.
 import Foundation
 import TurnOverCore
 

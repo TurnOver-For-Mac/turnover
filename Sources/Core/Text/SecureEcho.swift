@@ -111,7 +111,7 @@ public enum SecureEcho {
 /// its length is looked at from the first quarter second, and it is not logged as this (System Settings' password
 /// sheet said "Press Command Tab twice" three times while the password was typed).
 /// 18 Nov 2026: each stretch of secure input, as the looks see it come on and go off, logs one line at each end and
-/// nothing is said. VoiceOver is never brought in: the hand-over of 17 Nov 2026 was taken out on Oliver's word
+/// nothing is said. VoiceOver is never brought in: the hand-over of 17 Nov 2026 was taken out on the owner's word
 /// ("voiceover shouldn't be coming on"). Reading a text field from its own news while no key is heard was tried and left
 /// out of the bug-fix build (a review on 18 Nov 2026: flicker, a first paste unread, replayed keys said twice, word echo).
 public enum SecureInputWatch {

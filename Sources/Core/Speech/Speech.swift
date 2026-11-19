@@ -399,7 +399,7 @@ public enum Speech {
         // "list view" outlines in a row (Finder opening a folder) looked the same with different rows selected.
         // Another row with the same words is a move, not the same focus twice: two copies of one message in Mail's
         // list, and Up from the lower to the upper within half a second said nothing, so the upper one seemed not to
-        // be there (Oliver, 11 Nov 2026).
+        // be there (11 Nov 2026).
         if reason == .focus {
             let row = obj.element.role == "AXRow" ? obj.element : nil
             let anotherRow = row.map { r in lastFocusRow.map { !r.isSame($0) } ?? false } ?? false
@@ -685,7 +685,7 @@ public enum Speech {
             if text.count > 1 { return (prefix + [text]).joined(separator: " ") }
             if text.isEmpty { onlyBlank = prefix.isEmpty; return (prefix + [Phrases.blank]).joined(separator: " ") }
             // A capital read by character: lowered in its line's language when the line says it clearly (an English
-            // line under a Turkish TurnOver: I is i), else in TurnOver's (Oliver's review of PR 123, 30 Oct 2026: this
+            // line under a Turkish TurnOver: I is i), else in TurnOver's (the owner's review of PR 123, 30 Oct 2026: this
             // return came before the check, so the line's language never reached it).
             return (prefix + [Symbols.spelled(text, locale: characterLocale(info, text))]).joined(separator: " ")
         }

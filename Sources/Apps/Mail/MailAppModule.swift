@@ -143,7 +143,7 @@ package final class MailAppModule: AppModule {
         Log.io("mail: reading the \(g.keyName == "downArrow" ? "next" : "previous") row ahead of Mail")
         // Read in full before the key goes on, not queued: once Mail has the key it is busy moving its selection and
         // loading the message, and every question about the row waits behind that. Queued, the row's words came 43 ms
-        // after the key and nothing was gained (39 presses in Oliver's trial, 10 Nov 2026: 77 ms to the first sound,
+        // after the key and nothing was gained (39 presses in the owner's trial, 10 Nov 2026: 77 ms to the first sound,
         // against 76 before). Asked first, they cost the 2 ms they always did.
         EventHandler.execute(Event(.selection, ObjectFactory.make(next)))
         g.send()

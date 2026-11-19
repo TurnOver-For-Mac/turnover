@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Whose change of VoiceOver it was: the person's own toggle (Option-quote on Oliver's Mac) or TurnOver's (a hand-over
+// Whose change of VoiceOver it was: the person's own toggle (Option-quote on the owner's Mac) or TurnOver's (a hand-over
 // it posted, or its own start of VoiceOver). The person's always wins (Codex's second review, 18 Nov 2026):
-// - Within 3 s of an automatic hand-over every change counted as TurnOver's, so Oliver turning VoiceOver straight back
+// - Within 3 s of an automatic hand-over every change counted as TurnOver's, so the owner turning VoiceOver straight back
 //   off got no pin, and the hand-over's own check after it could turn VoiceOver on again over his choice. A change
 //   the other way from the one the hand-over asked for is now his; only a hand-over that posted a second toggle (the
 //   first may land late, 8 Oct 2026) can bring the other way itself.

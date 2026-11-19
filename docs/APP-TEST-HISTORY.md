@@ -31,7 +31,7 @@ Dated Experiments summaries record setup, method, result and limits. STATUS.md s
 results and links to those records. Preserve conflicting or unsuccessful observations when they explain a limit.
 
 Earlier app-test lists, the 10–12 October notes, the 14 October parts-sweep notes and the 29 October application-library
-notes are retained privately on Oliver’s Mac. They are not files in this repository. These records contain historical
+notes are retained privately on the owner’s Mac. They are not files in this repository. These records contain historical
 environment and personal-session context. Summarize the relevant result; do not copy them wholesale into the source tree.
 
 A fixture records a sampled window. Link a named test when claiming that the harness exercises it. Use public sample
@@ -64,7 +64,7 @@ The tables' local log line numbers preserve a route back to those originals for 
 
 The 29 October `Application library.txt` is a private working note retained locally, not a repository document.
 The linked app records contain its relevant setup, method, measured result and remaining limits in words. They
-separate structural provider probes, automated checks and Oliver's observations; none implies an unrecorded live
+separate structural provider probes, automated checks and the owner's observations; none implies an unrecorded live
 trial. The source note identifies installed local build `280d7bf` at that checkpoint, but does not identify every
 earlier user trial's binary separately. Personal content and session details remain in the local source.
 

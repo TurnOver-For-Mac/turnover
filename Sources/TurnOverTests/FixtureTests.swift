@@ -329,7 +329,7 @@ func fixtureTests() {
         expect(jump(to: 7).focus, 2, "TurnOver's focus isn't set directly in a page being written in")
         check(AXReplay.sets.contains { $0.id == 7 && $0.attribute == kAXFocusedAttribute }, "the keyboard was asked onto the field")
     }
-    // Safari with its "Open in App Banner" (9 Nov 2026, Oliver: "I can't get into the page"): the banner, the whole width
+    // Safari with its "Open in App Banner" (9 Nov 2026, the owner: "I can't get into the page"): the banner, the whole width
     // and 54 points tall, is a child of the window's split view and lies over the top of the page. VO-J from the address
     // bar took it for a second pane, landed on its words, and put the keyboard on the page's "Hide sidebar" under it.
     /// `decoyFirst`: the page's first layer isn't marked empty and holds an empty wrapper (19), before the site's (Codex).

@@ -26,7 +26,7 @@ Use a Mac with full Xcode 27 and the macOS 27 SDK; the app targets macOS 14 onwa
 
 Both build commands check source membership, the generated app index and app-record exclusions, then compile and run tests; `./build.sh` is not an install-only step. Allow a minute or two, with longer builds possible after larger changes. The last displayed product name can remain unchanged while compilation continues; check compiler activity before treating it as a hang. Running `turnover-tests` directly only reruns tests and does not build anything.
 
-For a byte-identical folder move, verify file hashes/modes, target membership, build and tests; no reinstall or listening trial is required. Behavior changes still require the installed-app loop and Oliver's trial.
+For a byte-identical folder move, verify file hashes/modes, target membership, build and tests; no reinstall or listening trial is required. Behavior changes still require the installed-app loop and the owner's trial.
 
 For real app testing, follow the README's Developing loop: `./build.sh --no-install`, then `./build.sh`, then exercise `/Applications/TurnOver.app` and inspect the newest log in `~/Library/Application Support/TurnOver/logs/`. Do not use `swift run turnover` for this: the app needs its bundle configuration, resources, embedded helpers, and the code signature its permissions are tied to. A bare executable does not reproduce the installed app's behavior.
 

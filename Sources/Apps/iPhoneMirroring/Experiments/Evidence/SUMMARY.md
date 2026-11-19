@@ -4,7 +4,7 @@ Summary prepared from the existing investigation records on 29 October 2026. No 
 
 ## Overall result
 
-No working TurnOver adapter for native mirrored-phone content was demonstrated or installed. The Mac window's own controls were accessible. OCR is excluded at Oliver's request.
+No working TurnOver adapter for native mirrored-phone content was demonstrated or installed. The Mac window's own controls were accessible. OCR is excluded at the owner's request.
 
 The tested setups differ. Success on an unlocked USB-connected phone is not success in a locked wireless Mirroring session.
 
@@ -34,7 +34,7 @@ The signed system tool carries additional private entitlements. Its diagnostic d
 
 ## Phone VoiceOver keyboard trials
 
-Oliver reported no response to either one-key pass-through navigation or Direct-mode keyboard help. Log review corroborated entering and restoring Direct mode. Actual delivery of the commands to iPhone remained unverified; phone modifier configuration, focus and Mirroring forwarding were not eliminated as possible factors.
+The owner reported no response to either one-key pass-through navigation or Direct-mode keyboard help. Log review corroborated entering and restoring Direct mode. Actual delivery of the commands to iPhone remained unverified; phone modifier configuration, focus and Mirroring forwarding were not eliminated as possible factors.
 
 Source records: the original investigation README.md, one-shot-pass-through-audit.md and keyboard-pass-through-findings.md. The original README's later outcome supersedes the earlier audit's pending-test wording. No raw input logs are included here.
 

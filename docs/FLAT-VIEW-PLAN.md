@@ -18,7 +18,7 @@ elements it found, and acts on them later. Each has had the same bugs in turn, f
 - The app's own tree changes shape (a card over the window, a page of its own, the Updates page's nameless rows), and
   each view has a branch for each shape.
 
-Oliver, 27 Oct: "we need something more robust that flattens these sorts of interfaces", "more robust rather than
+The owner, 27 Oct: "we need something more robust that flattens these sorts of interfaces", "more robust rather than
 firefighting in little areas".
 
 Browse mode is the nearest thing TurnOver has: `WebBuffer` is a flat list of a page. It is not the model to copy
@@ -243,7 +243,7 @@ sound; its host is not. Next: the results page gets a host of its own (a small A
 keys, the waits and the flat view, and nothing of the old page machinery), and AppStoreView hands over to it on a
 results page and takes back on leaving. Switch off again; the code stays on main, inert.
 
-### VoiceOver as a buffer (27 Oct 2026, late; Oliver's idea: "if we have to use VoiceOver as a kind of buffer")
+### VoiceOver as a buffer (27 Oct 2026, late; the owner's idea: "if we have to use VoiceOver as a kind of buffer")
 
 Measured with VoiceOver on beside TurnOver and driven by script (its AppleScript dictionary: `vo cursor`, `text
 under cursor`, `last phrase`, `move`; `tell application "VoiceOver"`), the switch "Allow VoiceOver to be controlled
@@ -296,7 +296,7 @@ Two honest routes remain: read the pixels (Vision text recognition on a window c
 a big ask for a screen reader), or leave the results page alone and give the person the catalog directly (the
 public iTunes search API for the term they typed, a plain list, Return opening the product page by id through
 `macappstore://apps.apple.com/app/id…`), which is what Codex suggested the same evening. The second is cheap,
-reliable and private enough (the search term goes to Apple either way). Oliver's call.
+reliable and private enough (the search term goes to Apple either way). The owner's call.
 
 ### The catalog, 28 Oct 2026: Music and Podcasts too
 
@@ -306,11 +306,11 @@ scheme (`music://`, `podcasts://`) from any page, measured. The arrows, Home, En
 while the search field keeps the focus (the letters stay the field's); Return on the same term opens the item.
 TV is left out: Apple TV+ shows are not in the public catalog ("severance" found nothing), and its page reads well
 enough. Music's own search page also reads well through MediaView ("Top Results, 6 items, Radiohead, Artist"), so
-there the catalog is a choice, not a rescue; Oliver is comparing.
+there the catalog is a choice, not a rescue; the owner is comparing.
 
 ### On for everyone, 2 Nov 2026
 
-After a week with the switch on, Oliver: "I think we got the catalogue apps all working quite well so switch those on."
+After a week with the switch on, the owner: "I think we got the catalogue apps all working quite well so switch those on."
 From build 23 the catalog answers searches in the App Store, Music and Podcasts for everyone, and the flat view reads
 the App Store's results page when the catalog can't (no network, nothing found). The `flatView` switch now gates only
 screen recognition's interface reading (the layer's E). The notes above are the record of how it got here. Known

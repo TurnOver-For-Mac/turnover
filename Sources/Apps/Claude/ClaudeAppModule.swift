@@ -600,7 +600,7 @@ package final class ClaudeAppModule: AppModule {
     /// through the same day ("Yes, add it"), so the press is ignored some of the time; why is not known.
     // The session menu's AXPress likewise reported success without an observable effect on
     // 14 Nov 2026; native Return opened its dialog. Use one confirmed key, with no action retry.
-    /// 19 Nov 2026 (Oliver's choice): Return in the prompt sent the message, and nothing said so. "sent" is spoken at once
+    /// 19 Nov 2026 (the owner's choice): Return in the prompt sent the message, and nothing said so. "sent" is spoken at once
     /// as a queued message, so it cuts nothing off; Claude's progress lines wait for idle speech and quiet keys
     /// (ClaudeProgressReadiness) and its bare "Running" is not said, so neither cuts it off. Claude's module only.
     package override func returnSentText(inField fieldName: String) {
@@ -951,7 +951,7 @@ package final class ClaudeAppModule: AppModule {
         Speech.speakNews(spoken)
     }
 
-    /// A finished reply, read unless Oliver is reading it already. The reading position on a line of the reply itself
+    /// A finished reply, read unless the owner is reading it already. The reading position on a line of the reply itself
     /// is reading it: it is not read again from its top over him (twice on 14 Nov 2026). Moving about elsewhere is
     /// not: the reply waits until the reading has been still for two seconds, then it is read (Codex's review: it was
     /// dropped for good). Claude's own "finished" notice still says it is done either way.

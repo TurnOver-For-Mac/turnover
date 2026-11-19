@@ -170,7 +170,7 @@ public final class TurnOverMenu {
     /// A list that narrows as you type (VoiceOver's Item Chooser): every item whose title contains the text.
     /// `partial`: these items are only the first of what is coming (the Item Chooser's rows on screen, with the rows out
     /// of sight to follow in `refillChooser`). No count and no "1 of 23" is said until the rest is in: a small number
-    /// and then a big one was what was heard (Oliver, 10 Nov 2026).
+    /// and then a big one was what was heard (10 Nov 2026).
     public func openChooser(_ title: LocalizedStringResource, items: [MenuItem], partial: Bool = false) { openChooser(verbatim: String(localized: title), items: items, partial: partial) }
     public func openChooser(verbatim title: String, items: [MenuItem], partial: Bool = false) {
         guard !items.isEmpty else { Speech.speakMessage(Self.none(title)); return }
@@ -287,7 +287,7 @@ public final class TurnOverMenu {
     /// A key while the menu is open (main thread).
     public func handle(_ g: KeyboardGesture) {
         // Turnover with Right or Left act as plain Down and Up do here: next and previous item, as VoiceOver's own
-        // VO-Right and VO-Left move along items (Oliver's decision, 17 Nov 2026). Plain Right and Left keep their meanings.
+        // VO-Right and VO-Left move along items (the owner's decision, 17 Nov 2026). Plain Right and Left keep their meanings.
         let turnoverOnly = g.modifiers == [.turnover]
         if turnoverOnly, g.keyName == "rightArrow", let down = KeyboardGesture(identifier: "kb:downArrow") { handle(down); return }
         if turnoverOnly, g.keyName == "leftArrow", let up = KeyboardGesture(identifier: "kb:upArrow") { handle(up); return }
@@ -376,7 +376,7 @@ public final class TurnOverMenu {
 
     /// The menu (docs/MENU-PLAN.md, 12 Oct 2026: "This app" first), in NVDA's shape since 21 Oct 2026: no settings in
     /// the menu, every setting in the Settings window; the menu is This app, Settings, Keys, Tools, Help, Support and
-    /// Quit ("way too busy", Oliver; "should all settings be moved there and the menu cleaned up", a contributor).
+    /// Quit ("way too busy", the owner; "should all settings be moved there and the menu cleaned up", a contributor).
     private func rootItems() -> [MenuItem] {
         var items: [MenuItem] = []
         if let app = thisAppItem() { items.append(app) }
@@ -412,7 +412,7 @@ public final class TurnOverMenu {
         return items
     }
 
-    /// How items are read in this app (28 Oct 2026; Ash's idea, as Oliver read it: the order the pieces of an
+    /// How items are read in this app (28 Oct 2026; Ash's idea, as the owner read it: the order the pieces of an
     /// announcement come in, and which are said, app by app). A list of the pieces in their spoken order; each opens
     /// a short submenu: said or not, move up, move down. Saved for this app; the Settings window keeps the default.
     private func readingOrderItem(bundle: String, name: String) -> MenuItem {

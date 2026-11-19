@@ -95,7 +95,7 @@ final class VoiceLists: ObservableObject {
         let wanted = Set(mine + ["en"])
         let voices = AVSpeechSynthesisVoice.speechVoices()
         all = voices
-        // Not Apple's novelty voices (Bells, Bubbles, Zarvox and the rest, 15 of them: Oliver, 2 Nov 2026, "a big list of
+        // Not Apple's novelty voices (Bells, Bubbles, Zarvox and the rest, 15 of them: The owner, 2 Nov 2026, "a big list of
         // shit nonsense voices that apple like to ship"). A novelty voice already chosen stays selectable (voices).
         let real = voices.filter { !$0.voiceTraits.contains(.isNoveltyVoice) }
         // English and the Mac's own languages, the Mac's languages first and Eloquence before the rest.
@@ -142,7 +142,7 @@ struct SpeechView: View {
             }))
         .accessibilityLabel(name)
     }
-    /// The voice chosen above, in the rotor or not, without Tabbing through every voice's switch (Oliver, 2 Nov 2026:
+    /// The voice chosen above, in the rotor or not, without Tabbing through every voice's switch (2 Nov 2026:
     /// "the menu and selection isn't great"). None ticked is every voice: so switching one off when none or only it is
     /// ticked ticks all the others, and all of them ticked is none.
     private func inRotor(_ id: String) -> some View {
@@ -219,7 +219,7 @@ struct SpeechView: View {
                 }
                 Section("Mac voices") { ForEach(voices, id: \.identifier) { v in Text(voiceLists.label(for: v)).tag(v.identifier) } }
             }
-            // Downloading and removing the natural voices, beside the Voice list they add to (Oliver, 6 Nov 2026: "an
+            // Downloading and removing the natural voices, beside the Voice list they add to (6 Nov 2026: "an
             // option, like in windows, to download natural voices"; "next to voice selection"; "a choice to remove").
             // All 25 at once: the engine they share is most of the size.
             if model.special("_kokoroAvailable") as? Bool == true {
@@ -569,7 +569,7 @@ struct GeneralView: View {
     }
 }
 
-/// Everything TurnOver plays, in one place (Oliver, 2 Nov 2026), as NVDA's Audio panel: whose sounds, the hand-over,
+/// Everything TurnOver plays, in one place (2 Nov 2026), as NVDA's Audio panel: whose sounds, the hand-over,
 /// progress bars, and other apps' sound lowered while TurnOver speaks. Audio graphs will join them.
 struct SoundsView: View {
     @EnvironmentObject var model: Model
@@ -644,7 +644,7 @@ struct ReadersView: View {
                 Text("On: TurnOver turns VoiceOver off as it starts and on as it quits, comes on when VoiceOver turns off and steps aside when VoiceOver comes on. Off: each reader has its own switch and neither turns the other on or off, for VoiceOver reading inside a virtual machine such as Parallels. Either way one reader speaks at a time: while VoiceOver is on, TurnOver is quiet.").font(.caption)
             }
             // A plain section, not a disclosure group: the triangle took the focus but neither Return nor VO Space
-            // opened it (Oliver, 28 Oct 2026: "I can't get into the experimental part").
+            // opened it (28 Oct 2026: "I can't get into the experimental part").
             Section(header: Text("Experimental: readers per app, CoExist")) {
                 Toggle("CoExist: VoiceOver stays running alongside TurnOver", isOn: coexist)
                 Text("VoiceOver is kept quiet by an audio tap where TurnOver reads and keeps passwords and macOS's own prompts. Removed on 24 Oct 2026 and back as an experiment: it can leave a Mac silent if macOS asks for audio permission while VoiceOver is muted. Changing it restarts TurnOver.").font(.caption)

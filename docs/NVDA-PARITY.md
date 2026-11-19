@@ -59,10 +59,10 @@ revert the settings (NVDA+Control+C, R), the log (NVDA+F1), the app module (NVDA
 
 ## Built for build 23
 
-- NVDA+U progress bar output, NVDA's way (asked for by Oliver on 27 Oct 2026: "that's a good thing to have"; built 2
+- NVDA+U progress bar output, NVDA's way (asked for by the owner on 27 Oct 2026: "that's a good thing to have"; built 2
   Nov 2026, ProgressOutput.swift). Beep, Speak, Both or Off, cycled in NVDA's order with NVDA's words. A beep for each
   percent, 40 ms, from 110 Hz at 0 to 1760 Hz at 100; the percentage each 10 percent. Beep is the default, as in NVDA
-  (Oliver's choice once he had heard them, 3 Nov 2026). The Mac style has no key (VO-U is the rotor): Progress bars is in the
+  (the owner's choice once he had heard them, 3 Nov 2026). The Mac style has no key (VO-U is the rotor): Progress bars is in the
   Verbosity list (VO-V) and in Settings, Sounds.
 - A watched bar's own value changes are looked at as they come (at most every 50 ms) while it beeps, so the beeps keep
   up with it; Speak alone keeps to one look a second, as in 22.5. With VoiceOver running alongside and VoiceOver's

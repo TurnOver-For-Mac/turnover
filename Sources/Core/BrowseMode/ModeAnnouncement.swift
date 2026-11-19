@@ -229,7 +229,7 @@ package enum ModeAnnouncement {
         if item.virtual, item.document?.position != item.position { return }
         let current = item.virtual ? item.document?.elementAtPosition() : API.focusObject?.element
         guard current?.isSame(field) == true else { return }
-        // Oliver, 14 Nov 2026: automatic changes always use the sound, independent of navigationSounds.
+        // The owner, 14 Nov 2026: automatic changes always use the sound, independent of navigationSounds.
         // Retire before playing it so repeated reports or cancellation cannot replay a completed cue.
         if !item.manual || config.general.navigationSounds {
             retire(item)

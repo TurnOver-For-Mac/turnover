@@ -150,7 +150,7 @@ final class TurnOverApp {
                 }
             }
             startCoexist()
-            // Password fields and macOS's prompts stay with whichever reader is in charge (28 Oct 2026, Oliver: "we can just
+            // Password fields and macOS's prompts stay with whichever reader is in charge (28 Oct 2026, the owner: "we can just
             // let whichever screen reader that's in charge take the security"; the first CoExist stepped TurnOver aside
             // there, 18 Oct). TurnOver never echoes a password; it keeps the application chooser, force quit and the
             // prompts, which it handles better.
@@ -431,7 +431,7 @@ final class TurnOverApp {
             } else if heldForVoiceOver {
                 // Off while the Mac is still locked or asleep, TurnOver may not take the keys (activate refuses behind
                 // the lock): it stays held, and takes them once the Mac is unlocked (readerAfterUnlock). Cleared here,
-                // nothing brought it back at the unlock (13 Nov 2026: no reader for 16 s, until Oliver restarted it).
+                // nothing brought it back at the unlock (13 Nov 2026: no reader for 16 s, until the owner restarted it).
                 // The lock screen still up, by the session too (the watcher's flag clears at the unlock notice, before the
                 // lock screen has gone; Codex's second review, 14 Nov 2026): the keys wait for readerAfterUnlock's checks.
                 if lead.locked || LeadWatcher.screenIsLocked {

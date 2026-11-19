@@ -261,7 +261,7 @@ extension BrowseModeDocument {
                 } else if let e = now.expanded, e != before.expanded,
                           !(isFocus && Speech.stateSaid(e ? State.expanded.displayString : State.collapsed.displayString, of: element, since: pressedAt)) {
                     // The focus too, unless the page's own event has said it: AppleVis's "Filter posts" sent none, and
-                    // "expanded" came a second later, after Oliver had moved on with Tab (14 Nov 2026).
+                    // "expanded" came a second later, after the owner had moved on with Tab (14 Nov 2026).
                     let word = e ? State.expanded.displayString : State.collapsed.displayString
                     Speech.noteStateSaid(word, of: element)
                     Speech.speakMessage(prefix + word)

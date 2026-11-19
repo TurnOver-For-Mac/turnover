@@ -137,7 +137,7 @@ public final class GlobalCommands: ScriptableObject {
         script("openMenus", String(localized: "Opens the application's menus; closes them if open (Windows: Alt or F10). Also Command on its own", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:f10"], category: win) { _ in
             GlobalCommands.toggleMenus()
         }.isAvailable = windowsOn
-        // Alt F4. Two misses (Oliver, 7 Nov 2026: "command f4 ... doesn't quit apps"): with the top row as media keys (the
+        // Alt F4. Two misses (7 Nov 2026: "command f4 ... doesn't quit apps"): with the top row as media keys (the
         // Mac's default) F4 arrives as Spotlight (key 177; Launchpad, 131, on older keyboards), never as F4; and with Fn,
         // the Command Q sent was heard and Safari stayed open. Both are now Alt F4, and the app is asked to quit
         // directly, as the Dock's Quit does (unsaved work still asks first); the key is the fallback.
@@ -157,7 +157,7 @@ public final class GlobalCommands: ScriptableObject {
         script("recognizeScreen", String(localized: "Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return. Pressed again in the result, recognises again. Pressed twice, its buttons, fields and icons instead", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+r"], category: sys) { _ in
             DispatchQueue.main.async { ScreenRecognition.shared.keyPressed() }
         }
-        // Command Control M, one key for the menu in every style, as NVDA N is (Oliver, 21 Oct 2026); Command Control Comma
+        // Command Control M, one key for the menu in every style, as NVDA N is (21 Oct 2026); Command Control Comma
         // then M is still the layer's way.
         script("turnOverMenu", String(localized: "Opens the TurnOver menu: settings, keys, tools, help, quit", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+n", "kb:command+control+m"], category: sys) { _ in
             TurnOverMenu.shared.open()
@@ -699,7 +699,7 @@ public final class GlobalCommands: ScriptableObject {
             return
         }
         // The app's own Quit item first, pressed as a hand would choose it: Safari ignored both the quit request and
-        // the Command Q sent, and stayed open, where TextEdit quit (Oliver's trial, 7 Nov 2026).
+        // the Command Q sent, and stayed open, where TextEdit quit (the owner's trial, 7 Nov 2026).
         // Its Quit item dimmed (Safari, 7 Nov 2026: a window waiting for an answer) means the app won't quit by any
         // route, by hand included; it is said, rather than nothing happening.
         switch pressQuitItem(app.processIdentifier) {

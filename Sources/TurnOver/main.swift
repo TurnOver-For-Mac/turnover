@@ -117,7 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             (String(localized: "The keys", comment: "A welcome page's title after an update"),
              String(localized: "Command Control Period turns TurnOver on and off, from anywhere.\nCommand Control Comma is the way in to everything: then M for the menu, S for Settings, K for your keyboard style, H for the guides.\nThe keys are VoiceOver's, NVDA's or JAWS's: Command Control Comma, then K, changes the style.", comment: "The welcome page about keys after an update")),
         ]
-        // The order (7 Nov 2026, Oliver): the two keys everything hangs on come straight after the welcome, before the
+        // The order (7 Nov 2026, the owner): the two keys everything hangs on come straight after the welcome, before the
         // permissions and the rest. One point a line, read with Up and Down (WelcomeWindow).
         let firstRunPages: [(String, String)] = [
             (String(localized: "Welcome to TurnOver", comment: "The first welcome page's title"),
@@ -149,7 +149,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             pages.append((String(localized: "Tab reaches every control", comment: "A welcome page's title"),
                           String(localized: "Keyboard navigation was off on this Mac, so Tab reached only text fields and lists. TurnOver has turned it on: Tab now reaches buttons, pop-ups and sliders too, as on Windows. Apps already open pick it up when they next start. It is in System Settings, Keyboard, if you want it off.", comment: "A welcome page")))
         }
-        // Help make TurnOver (9 Nov 2026, Oliver: "a call to action to really get this open sourced"): once on this Mac,
+        // Help make TurnOver (9 Nov 2026, the owner: "a call to action to really get this open sourced"): once on this Mac,
         // the last page, after an update's pages or a new user's first welcome; its button opens TurnOver on GitHub.
         let helpMake = HelpMakeTurnOver.due
         if helpMake { pages.append(HelpMakeTurnOver.page) }

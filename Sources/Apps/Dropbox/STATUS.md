@@ -10,7 +10,7 @@
 
 Blocked scope: opening the panel through the tested accessibility action. A keyboard or real-click route remains untested.
 
-Historical limit: on 11 October the menu-bar item refused an accessibility press, so the panel was not assessed. Panel tabs, recent files and preferences were left on Oliver’s stress-test checklist. No completed panel-navigation pass is recorded.
+Historical limit: on 11 October the menu-bar item refused an accessibility press, so the panel was not assessed. Panel tabs, recent files and preferences were left on the owner’s stress-test checklist. No completed panel-navigation pass is recorded.
 
 ## Evidence
 

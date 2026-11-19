@@ -64,7 +64,7 @@ open class SelectableList: TurnOverObject {
         let rows = element.elements(kAXRowsAttribute)
         if !rows.isEmpty { return (rows, kAXSelectedRowsAttribute) }
         // A table or outline with no rows is empty: its children are its columns and header, not rows. Finder's list
-        // view of an empty folder was "5 items", and Down arrow walked "column, 1 of 5" (Oliver, 21 Oct 2026).
+        // view of an empty folder was "5 items", and Down arrow walked "column, 1 of 5" (21 Oct 2026).
         if ["AXOutline", "AXTable"].contains(element.role) {
             return (element.elements(kAXChildrenAttribute).filter { $0.role == "AXRow" }, kAXSelectedRowsAttribute)
         }

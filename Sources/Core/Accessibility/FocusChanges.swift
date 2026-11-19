@@ -388,7 +388,7 @@ extension AXHandler {
             // A text field TurnOver is on still says it has the keyboard: the report is Safari's, around the page, not a
             // move. On a page whose form is in a frame of its own (a Wix site, 14 Nov 2026), each focus on the Email
             // field brought Safari's AutoFill list and, 190 ms later, focus on the page's nameless group. TurnOver went
-            // back to browse mode, the address typed became commands, and Oliver switched to VoiceOver to fill it in.
+            // back to browse mode, the address typed became commands, and the owner switched to VoiceOver to fill it in.
             // The frame runs in a process of its own, so the same-app check above never applied.
             if Self.fieldHoldsKeyboard(current.element, target, page: web) {
                 Log.io("focus on a nameless \(axRole) while the field \"\(Log.words(current.name))\" still reports focus; ignored")
@@ -474,7 +474,7 @@ extension AXHandler {
     /// Safari, after VO Space or Return on a link or button: the focus goes to a nameless group outside any page, with
     /// no page in it yet, while the new page loads; the new page then takes the focus only as a blank frame
     /// (about:blank, ignored by its rule) and posts nothing more. Presented, the group said nothing, browse mode let go of
-    /// the page, and nothing was said of the new page until a key was pressed (Oliver, 18 Nov 2026 at 07:13:28 and
+    /// the page, and nothing was said of the new page until a key was pressed (18 Nov 2026 at 07:13:28 and
     /// 07:18:31: VO Space on a link, then silence until Tab three seconds later). Set aside, the page in hand keeps the
     /// keys and the new page is followed as soon as it has content (followIfPageWent), as a reloaded page is; with no new
     /// page in about five seconds the group is presented after all. Only with positive evidence (a link or button

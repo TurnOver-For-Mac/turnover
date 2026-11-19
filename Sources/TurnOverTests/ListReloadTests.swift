@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // A Finder list that is reloading is not called empty (17 Nov 2026). Logic evidence only: the timing against
-// Finder's real reload is for Oliver's ear.
+// Finder's real reload is for the owner's ear.
 import Foundation
 import TurnOverCore
 

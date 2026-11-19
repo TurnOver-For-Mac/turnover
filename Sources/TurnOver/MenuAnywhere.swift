@@ -84,7 +84,7 @@ final class MenuAnywhere {
         "v": (String(localized: "copy VoiceOver settings", comment: "A letter's command in the TurnOver layer (Command Control Comma)"), .run, { VoiceOverSettings.startFlow() }),
         ]
         // The screen interface (a window's controls from its pixels) is a feature for a whole build, so the layer
-        // offers it only in developer builds (Oliver, 29 Oct 2026: "that's not a bug fix, it's a feature").
+        // offers it only in developer builds (29 Oct 2026: "that's not a bug fix, it's a feature").
         if Edition.isDevBuild { l["e"] = (String(localized: "screen interface: the window's controls from its pixels (experimental)", comment: "A letter's command in the TurnOver layer (Command Control Comma)"), .list, { MenuAnywhere.shared.recognizeInterface() }) }
         return l
     }
@@ -252,7 +252,7 @@ final class MenuAnywhere {
         if key == "t" { Log.io("layer: t → switch reader (VoiceOver was reading: to TurnOver)"); switchLead?(true); return }
         if key == "a" { Log.io("layer: a → the next reading mode"); cycleLeadMode?(); return }
         // The keyboard style changes without stepping in: stepping in read the window first and buried the style's
-        // name under it ("wasn't properly reading the switching", Oliver, 28 Oct 2026). VoiceOver says the new style.
+        // name under it ("wasn't properly reading the switching", the owner, 28 Oct 2026). VoiceOver says the new style.
         if key == "k" {
             Log.io("layer: k → keyboard style (VoiceOver leads: no stepping in)")
             GlobalCommands.toggleKeyboardStyle(quietly: true)

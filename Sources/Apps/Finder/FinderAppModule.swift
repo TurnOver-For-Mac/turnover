@@ -93,7 +93,7 @@ package final class FinderAppModule: AppModule {
         }
     }
 
-    // View > Sort By (Oliver's decision, 17 Nov 2026): choosing an order says "sorted by <its name>" once the menu has
+    // View > Sort By (the owner's decision, 17 Nov 2026): choosing an order says "sorted by <its name>" once the menu has
     // closed, and nothing more. Return in a menu must reach Finder untouched (a key TurnOver re-posts is ignored by menu
     // menus, measured on Word, 1 Oct 2026), so this is no script: the key is only looked at, as it passes.
     // Finder gives no sign that the list has re-sorted (nothing recorded; its notifications are unknown), so the words
@@ -287,7 +287,7 @@ package final class FinderAppModule: AppModule {
         let focus = API.focusObject
         Log.io("finder: \(g.keyName) with the focus on a window (\(focus?.element.string(kAXSubroleAttribute) ?? "no subrole"), \(focus?.element.string(kAXTitleAttribute)?.prefix(1) ?? "")…); watching the file list")
         // On the first or last row, Up or Down cannot move the selection: said at once, without the 400 ms wait that
-        // ended in silence (28 times in Oliver's log, 17 Nov 2026). The key still goes on, for the system's own bump.
+        // ended in silence (28 times in the owner's log, 17 Nov 2026). The key still goes on, for the system's own bump.
         if let end = Self.listEnd(of: view, key: g.keyName, modifiers: g.modifiers, selected: before) {
             g.send()
             Log.io("finder: at the \(end.log) of the list under Quick Look")
@@ -304,7 +304,7 @@ package final class FinderAppModule: AppModule {
             return
         }
         let spoken = ObjectFactory.make(row)
-        // A clip that plays by itself (audio or video, 17 Nov 2026, Oliver): its name alone, and after a short clip has
+        // A clip that plays by itself (audio or video, 17 Nov 2026, the owner): its name alone, and after a short clip has
         // played, so the name does not talk over it.
         let media = Self.mediaInfo(row: row)
         guard media.isMedia else { Speech.speakObject(spoken, reason: .focus); return }
@@ -384,7 +384,7 @@ package final class FinderAppModule: AppModule {
         return Self.isQuickLookPanel(w)
     }
 
-    /// Quick Look open on an audio or video file (17 Nov 2026, Oliver): the clip plays by itself, so nothing from its
+    /// Quick Look open on an audio or video file (17 Nov 2026, the owner): the clip plays by itself, so nothing from its
     /// window is said (the file's name is said as the window comes to the front: windowAnnouncement).
     package override func handleEvent(_ event: Event, next: () -> Void) {
         guard inQuickLookWindow(event.obj), let view = Self.mainFileView(pid: pid), let row = Self.firstSelected(in: view),

@@ -4,7 +4,7 @@
 // silicon, macOS 15 or later), off until a natural voice is chosen; a developer's Mac can still use a helper in
 // ~/Library/Developer/TurnOver/kokoro with the "kokoro" default set. Nothing is sent anywhere:
 // the model runs here, on Apple silicon. (Kokoro's own helper and voices, the first natural voices, went on 3 Nov 2026,
-// Oliver: "the kokoro voices can probably go"; the names here stay, as his Mac's defaults carry them.)
+// The owner: "the kokoro voices can probably go"; the names here stay, as his Mac's defaults carry them.)
 //
 // TurnOver starts the helper and talks to it through pipes: a JSON line per utterance in; frames of id, sample count and
 // float32 samples (24 kHz mono) out, a count of 0 ending each. The speech player asks for "external:<voice>" voices
@@ -21,7 +21,7 @@ public enum KokoroVoice {
     /// maintainer runs release builds), but outside one a helper is started only if it is signed as TurnOver is
     /// (trusted), so a program that sets the default and leaves its own helper there hears nothing.
     public static var available: Bool {
-        // For everyone from build 23 (Oliver, 6 Nov 2026: "I also want to include the natural voices"): the helper is
+        // For everyone from build 23 (6 Nov 2026: "I also want to include the natural voices"): the helper is
         // in the app, on Apple silicon with macOS 15 or later (Phonon's helper needs both). A developer's Mac keeps
         // the helper in its folder, behind the default.
         if bundledHelper != nil { return supported }
@@ -49,7 +49,7 @@ public enum KokoroVoice {
     /// Settings, Speech offers Remove natural voices: the app's own download, on this Mac.
     public static var removable: Bool { bundledHelper != nil && downloaded }
     private static var removing = false
-    /// Settings, Speech, Remove natural voices (Oliver, 6 Nov 2026: "there should also be a choice to remove natural
+    /// Settings, Speech, Remove natural voices (6 Nov 2026: "there should also be a choice to remove natural
     /// voices"): back to the Mac voice chosen under the natural one, the helper stopped, the download deleted.
     public static func remove() {
         guard bundledHelper != nil else { return }
@@ -64,7 +64,7 @@ public enum KokoroVoice {
     }
     /// The download asked for in Settings, Speech is under way (the helper's first start fetches the model).
     public private(set) static var downloading = false
-    /// Settings, Speech, Download natural voices (Oliver, 6 Nov 2026: "an option, like in windows, to download
+    /// Settings, Speech, Download natural voices (6 Nov 2026: "an option, like in windows, to download
     /// natural voices"): starts the helper, whose first start downloads them; it says when they're ready.
     public static func download() {
         guard available, !downloaded, !downloading else { return }
@@ -78,7 +78,7 @@ public enum KokoroVoice {
         return FileManager.default.isExecutableFile(atPath: url.path) ? url : nil
     }
     /// Phonon's helper (plugins/phonon/helper, 2 Nov 2026): heard as quickly as the Mac voice, so it can be the voice
-    /// for everything (Oliver: "I want to be able to use these voices instead of alex").
+    /// for everything (the owner: "I want to be able to use these voices instead of alex").
     static var phononHelper: URL { bundledHelper ?? folder.appendingPathComponent("phonon-helper") }
     static var hasPhonon: Bool { FileManager.default.isExecutableFile(atPath: phononHelper.path) }
 
@@ -108,7 +108,7 @@ public enum KokoroVoice {
         set { UserDefaults.standard.set(newValue, forKey: "kokoroVoice") }
     }
     /// A natural voice's speed from the speech rate, as the Mac voices take it (0.1 to 1, 0.5 their own pace): the same
-    /// slider and keys for both (Oliver, 2 Nov 2026: "all the same settings whereever the voice comes from"). Doubled
+    /// slider and keys for both (2 Nov 2026: "all the same settings whereever the voice comes from"). Doubled
     /// each 0.31 above 0.5 and halved each 0.31 below, kept from 0.5 to 3 times the voice's own pace.
     nonisolated package static func speed(forRate rate: Float) -> Double { min(3, max(0.5, pow(2, (Double(rate) - 0.5) * 3.2))) }
 
@@ -123,7 +123,7 @@ public enum KokoroVoice {
 
     /// The speech voice as the Voice list and the speech settings ring show it: the natural voice ("external:…") while it
     /// speaks everything, otherwise the Mac voice. Underneath, the Mac voice stays the speech voice: other languages,
-    /// raised capitals and a slow moment are said with it (Oliver, 2 Nov 2026: natural voices chosen "in the same way
+    /// raised capitals and a slow moment are said with it (2 Nov 2026: natural voices chosen "in the same way
     /// I do with the normal voices", and ticked for the rotor).
     public static var speechVoiceID: String { available && mode == "everything" ? "external:" + voice : config.speech.voice }
     /// The natural voices as entries of the Voice list and the rotor.
@@ -256,7 +256,7 @@ public enum KokoroVoice {
 
     /// The helper running is signed by TurnOver's own developer, so private speech may go to it as to the Mac's voices.
     /// (Private speech is also everything typed, kept out of the log: with it kept from the helper too, typing was in
-    /// the Mac voice while everything else was natural, Oliver, 2 Nov 2026.)
+    /// the Mac voice while everything else was natural, the owner, 2 Nov 2026.)
     nonisolated static let helperTrusted = Locked(false)
 
     /// Whether a helper is signed by the developer team that signed this TurnOver: Developer ID, the same team (a

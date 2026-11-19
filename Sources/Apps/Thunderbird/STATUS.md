@@ -8,7 +8,7 @@
 
 ## Findings
 
-First launch was waiting on a macOS Contacts permission prompt. The app was left for Oliver; no mail or calendar workflow result was recorded.
+First launch was waiting on a macOS Contacts permission prompt. The app was left for the owner; no mail or calendar workflow result was recorded.
 
 Next check: Confirm identity and startup readiness, then use public sample mail. A pending prompt is not evidence that the mail reader is inaccessible.
 

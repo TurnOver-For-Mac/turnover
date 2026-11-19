@@ -58,7 +58,7 @@ public enum VoiceOverSounds {
         let started = Date()
         SoundLog.played(name, why: why)
         if !AudioOutput.muted { p.play() }   // tests are silent (AudioOutput)
-        // Oliver, 14 Nov 2026: on MacRumors "the link sound hangs". Sounds were not logged, so the log could not say
+        // The owner, 14 Nov 2026: on MacRumors "the link sound hangs". Sounds were not logged, so the log could not say
         // how. One that is slow to start, or played again before it ended, is logged now.
         let ms = Int(Date().timeIntervalSince(started) * 1000)
         if ms >= 50 { Log.io("sound: \(name) took \(ms) ms to start") }

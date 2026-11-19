@@ -44,7 +44,7 @@ nonisolated public enum Symbols {
     /// by its rules when nothing says what language the letter itself is in.
     nonisolated public static var interfaceLocale: Locale { Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en") }
 
-    // The language a capital's letter is lowered in (Oliver's review of PR 123, 29 Oct 2026: an English text read by a
+    // The language a capital's letter is lowered in (the owner's review of PR 123, 29 Oct 2026: an English text read by a
     // Turkish TurnOver said dotless ı for I). Typing, the keyboard layout's language: Turkish Q and F type Turkish.
     // Moving through text, the text's own language, when the line says it clearly enough. Else TurnOver's language.
 

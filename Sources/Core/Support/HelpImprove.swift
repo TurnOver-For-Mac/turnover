@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Help improve this app (7 Nov 2026, Oliver: "a really easy flow from within TurnOver itself for people to contribute
+// Help improve this app (7 Nov 2026, the owner: "a really easy flow from within TurnOver itself for people to contribute
 // whilst I keep control of core functionality and gatekeep security"). The TurnOver menu's This app section offers
 // four ways in, for the app in front:
 // - Tell us what's wrong: TurnOver's problem form, filled in with the app, the build and a report of how the app is

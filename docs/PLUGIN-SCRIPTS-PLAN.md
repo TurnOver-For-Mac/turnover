@@ -1,6 +1,6 @@
 # Plugin scripts: the plan (15 Nov 2026)
 
-The brief (Oliver, 14 Nov 2026): a robust way for people to build plugins, how they make them and how they are kept
+The brief (14 Nov 2026): a robust way for people to build plugins, how they make them and how they are kept
 secure; based on JAWS scripts and NVDA add-ons, and better suited to the Mac where it can be.
 
 This is the "scripts in a sandbox" stage that docs/PLUGIN-TOOLKIT-PLAN.md left for later. It adds to the data

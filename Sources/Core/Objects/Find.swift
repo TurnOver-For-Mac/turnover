@@ -58,7 +58,7 @@ public final class FindPrompt: @unchecked Sendable {
     /// Option key it sends on to the Mac while it stays open (Control Space switches the keyboard language). Any other
     /// key (Tab, an arrow, a Command or TurnOver key) leaves the prompt and does what it always does: before, the
     /// prompt took them all and said nothing, and left without Return it stayed open through Command Tab and in every
-    /// app, with Tab, the arrows and TurnOver's keys silent until TurnOver was turned off (Oliver, Safari, 17 Nov 2026
+    /// app, with Tab, the arrows and TurnOver's keys silent until TurnOver was turned off (Safari, 17 Nov 2026
     /// at 20:42). Asked on the keyboard's way in (InputManager), before any command is looked up for the key.
     nonisolated package static func keeps(_ g: KeyboardGesture) -> Bool {
         if g.modifiers.contains(.turnover) { return false }

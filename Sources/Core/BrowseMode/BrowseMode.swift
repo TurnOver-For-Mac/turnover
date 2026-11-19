@@ -371,7 +371,7 @@ public final class BrowseModeDocument: ScriptableObject {
         announcedURL = lastURL
         // The first of these that says something. Claude's page has its conversation's name as its title and an empty
         // description, and an empty description was taken as the answer: switching conversations never said which
-        // one, and Oliver read two headings to find he was in the wrong one (14 Nov 2026).
+        // one, and the owner read two headings to find he was in the wrong one (14 Nov 2026).
         let title = buffer.withSnapshot { () -> String in
             let description = webArea.string(kAXDescriptionAttribute)?.trimmingCharacters(in: .whitespacesAndNewlines)
             // No description at all: the window's title, as before.
@@ -838,7 +838,7 @@ public final class BrowseModeDocument: ScriptableObject {
     /// A page still filling in when it was first read is read again, quietly, keeping the place: at 1, 2, 4 and 8 s
     /// after it came, while its copy is small. App Store Connect's pages were read with their header and footer only
     /// (10 to 49 elements); the rest came with no news of it, so Tab went straight to the footer and H said "no next
-    /// heading", until Oliver had tabbed round Safari's tool bar and back, four times in a morning (14 Nov 2026).
+    /// heading", until the owner had tabbed round Safari's tool bar and back, four times in a morning (14 Nov 2026).
     func watchWhileFilling() {
         let epoch = pageGeneration
         for delay in [1.0, 2.0, 4.0, 8.0] {
@@ -907,7 +907,7 @@ public final class BrowseModeDocument: ScriptableObject {
 
     /// Whether quick navigation, finding nothing more ahead, waits for the page's end to be read again before it wraps.
     /// NVDA wraps at once. TurnOver waited every time: a whole read of the page before "wrapped to the top", about 260 ms
-    /// and up to 625 on a big page, against 20 ms for any other heading (63 of 71 wraps in Oliver's log of 13 and 14 Nov
+    /// and up to 625 on a big page, against 20 ms for any other heading (63 of 71 wraps in the owner's log of 13 and 14 Nov
     /// 2026: "wrapping on a webpage feels a bit sticky"). In the logs of 20 Oct to 9 Nov 2026, 84 of 1,142 such reads
     /// found something new to go to: a chat's new reply, or a page that loads more as its end comes into view.
     /// So it waits only where that can be so: the page has changed since it was read, the copy is in part, or this page
@@ -1014,7 +1014,7 @@ public final class BrowseModeDocument: ScriptableObject {
         key.epoch = pageGeneration
         key.movedAt = positionMovedAt
         bottomReadOn = key
-        // The read on has to wait (Oliver's decision, 17 Nov 2026): say so at once, then the bottom line when it comes. Not said
+        // The read on has to wait (the owner's decision, 17 Nov 2026): say so at once, then the bottom line when it comes. Not said
         // for a repeat press (returned above), nor when the bottom is in the copy already (landed above).
         Speech.speakMessage(String(localized: "reading on", comment: "Spoken message: the bottom of a long page is being read on before it is said"))
         readOnUntil(startedBy: key, { false }) { [weak self] _ in
@@ -1124,7 +1124,7 @@ public final class BrowseModeDocument: ScriptableObject {
     /// Scripts answer only in browse mode (NVDA: passThrough filters the tree interceptor's scripts).
     public override func script(for gesture: KeyboardGesture) -> Script? {
         bufferIntent += 1
-        // NVDA's way, in both styles (Oliver, 23 Oct 2026, issue 82): in browse mode a letter is always a command. A
+        // NVDA's way, in both styles (23 Oct 2026, issue 82): in browse mode a letter is always a command. A
         // field is typed into after Return or Tab has entered it (focus mode), or after the switch by hand. Until then
         // a letter typed while the reading position was on a field went into it (Mac style, 9 Oct 2026), and a letter
         // typed while a page field still had the keyboard resumed focus mode quietly (8 Oct 2026); the Safari stress
@@ -1150,7 +1150,7 @@ public final class BrowseModeDocument: ScriptableObject {
         // keeps it.
         let fieldWouldDelete = inBrowseMode && BrowseModeDocument.focusWouldDelete(gesture)
         if inBrowseMode, lettersAreCommands, wouldTypeText || fieldWouldDelete {
-            // Every kept typing key says "browse mode" when the run stops, as a letter does (Oliver's decision, 16 Nov
+            // Every kept typing key says "browse mode" when the run stops, as a letter does (the owner's decision, 16 Nov
             // 2026, evening): at 19:18 UTC a slash was typed twice in browse mode with the keyboard still in a prompt
             // field; both were kept without a sound, and Return then said "nothing to activate". Until then only plain
             // letters and digits said it and other kept keys were silent.

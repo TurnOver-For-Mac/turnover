@@ -471,7 +471,7 @@ public final class WebBuffer {
     /// This page's first reading: the rest of a long page is read on by itself (`fillOnIfWanted`).
     private var fillsThisPage = false
     /// A page's first reading carries on in the background to its end, quietly, in short turns on main, so that a
-    /// long page is all there by the time the reader gets far, and nothing need be said about its length (Oliver,
+    /// long page is all there by the time the reader gets far, and nothing need be said about its length (the owner,
     /// 10 Nov 2026: "I don't like the very long announcement"). Off in the tests, which read on by hand.
     nonisolated(unsafe) package static var fillsOn = true   // set by the tests, on the main thread only
     /// Past this many elements a page is read on only as the reader reaches for more.

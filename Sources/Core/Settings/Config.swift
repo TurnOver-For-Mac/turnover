@@ -77,7 +77,7 @@ public struct Config: Codable {
         /// Bass, middle and treble in decibels, -12 to 12, for the voice in use (SpeechEQ; 2 Nov 2026).
         public var bass = 0.0, middle = 0.0, treble = 0.0
         /// Each voice's own rate, volume and EQ, by voice (a Mac voice's identifier, or "external:" and a natural
-        /// voice): kept as the voice is left and put back as it is chosen again (Oliver, 2 Nov 2026: "rate, volume,
+        /// voice): kept as the voice is left and put back as it is chosen again (2 Nov 2026: "rate, volume,
         /// and the eq should be specific to each voice"). `rate`, `volume` and the EQ above are the voice in use's.
         public var voiceTunings: [String: VoiceTuning] = [:]
         public struct VoiceTuning: Codable, Equatable {
@@ -233,14 +233,14 @@ public struct Config: Codable {
     public struct Recognition: Codable {
         /// NVDA's "Periodically refresh recognized content", by change rather than by the clock: while the result is
         /// open, a small picture of the window is taken each second, and when it differs the window is recognised
-        /// again, the new rows said (Oliver, 3 Nov 2026: "or even if something on the screen changes"). Off by default,
+        /// again, the new rows said (3 Nov 2026: "or even if something on the screen changes"). Off by default,
         /// as in NVDA.
         public var autoRefresh = false
         /// NVDA's "Automatically say all on result".
         public var autoSayAll = false
-        /// After Return clicks something in the result, recognise again instead of closing (Oliver, 28 Oct 2026: a
+        /// After Return clicks something in the result, recognise again instead of closing (28 Oct 2026: a
         /// dialog's OK, then the screen that follows, without pressing the key again). A feature for a whole build:
-        /// hidden in 22.x (Oliver, 29 Oct 2026: "that's not a bug fix, it's a feature"), on for everyone from build 23
+        /// hidden in 22.x (29 Oct 2026: "that's not a bug fix, it's a feature"), on for everyone from build 23
         /// (3 Nov 2026). Stored under a new name: 22.x wrote the old one as off in every settings file (a review).
         public var refreshAfterClick = true
         public init() {}
@@ -404,7 +404,7 @@ public struct Config: Codable {
         /// "Bambu Studio, with the Bambu Studio plugin" as an app with a plugin comes to the front (the plugin design notes 13).
         public var announcePlugins = true
         /// A progress bar as it moves (ProgressOutput, NVDA+U): "beep", "speak", "both" or "off". Beeps by
-        /// default, as NVDA does (Oliver, having heard them, 3 Nov 2026: "put the progress bar stuff in there").
+        /// default, as NVDA does (having heard them, 3 Nov 2026: "put the progress bar stuff in there").
         public var progressBars = "beep"
         /// What is under the mouse pointer read as the pointer moves, and the cursor taken there (VoiceOver's cursor
         /// following the mouse pointer; NVDA+M). Off until asked for: a nudged mouse would otherwise start speech.

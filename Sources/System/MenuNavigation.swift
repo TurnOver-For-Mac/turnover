@@ -465,7 +465,7 @@ final class MenuNavigationPlugin: GlobalPlugin {
         guard let item else {
             // A letter that leaves the same item highlighted: that item again when it starts with what has been typed
             // (r, then u, for Russell), the edge sound when it doesn't (a letter nothing starts with). It said nothing
-            // (Oliver, 2 Nov 2026, "the menu and selection isn't great").
+            // (2 Nov 2026, "the menu and selection isn't great").
             if isLetter, let same = AXHandler.shared.highlightedMenuItem() {
                 if (same.string(kAXTitleAttribute) ?? "").range(of: typed, options: [.anchored, .caseInsensitive, .diacriticInsensitive]) != nil {
                     lastSpoken = (same, Date())

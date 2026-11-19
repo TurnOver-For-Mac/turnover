@@ -68,7 +68,7 @@ nonisolated package enum SnapshotItems {
     ///
     /// `onceByName` leaves out a text that only repeats what the item holding it is already listed as. Mail's
     /// sidebar listed "Favourites, cell" then "Favourites, text", and a mailbox the user made as "Important, cell"
-    /// then "Important, text field": every mailbox twice (Oliver's trial, 10 Nov 2026; the old walk listed the
+    /// then "Important, text field": every mailbox twice (the owner's trial, 10 Nov 2026; the old walk listed the
     /// same pairs). The outer item is the one kept: it is the stop VO Left and Right make too (a row or cell that
     /// says something is one stop). A text field is left out only inside a cell or row of the same name, and a
     /// button or any other control is never left out: it is somewhere to go and something to press.

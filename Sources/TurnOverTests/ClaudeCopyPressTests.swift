@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // The Claude app's "Copy code" press, TurnOver's own (17 Nov 2026): the keyboard it puts on the button is not
 // announced, and the page's "Copied" is said at once. Logic evidence only: the real timing, with Command Tab after
-// the press, is for Oliver's ear.
+// the press, is for the owner's ear.
 import Foundation
 import ApplicationServices
 import TurnOverCore

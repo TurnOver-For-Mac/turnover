@@ -17,7 +17,7 @@ public enum Tones {
     static func custom(_ id: String, why: String = #function) -> Bool { chosen && Thread.isMainThread && SoundSets.handle(id, why: why) }   // main thread only, as `fresh`
     /// A sound of TurnOver's own may play: its set is chosen, or VoiceOver is off.
     static var own: Bool { chosen || !Coexist.on }
-    /// THE RULE (19 Nov 2026; SHORTCOMINGS rule 10; Oliver: "the VoiceOver sounds are not correct"). With VoiceOver's
+    /// THE RULE (19 Nov 2026; SHORTCOMINGS rule 10; the owner: "the VoiceOver sounds are not correct"). With VoiceOver's
     /// sounds chosen, TurnOver plays a sound only for an event VoiceOver plays one for, and plays VoiceOver's file for
     /// it; every tone TurnOver invented (focus tick, press, heading, list, landmark, table, graphic, block quote, focus
     /// and browse mode, comment, the keystroke beep, the jump beeps, the assorted beeps) is silent. With TurnOver's

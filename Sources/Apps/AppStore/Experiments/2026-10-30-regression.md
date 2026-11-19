@@ -13,7 +13,7 @@ Down, End and Up reached the expected App Store navigation handlers. These four 
 
 ## Scope and remaining checks
 
-The 29 October application-library note records Oliver reporting App Store use with VoiceOver both on and off, and a successful download. Initial reading speed, More/End ordering and offer-action safety need separate checks.
+The 29 October application-library note records the owner reporting App Store use with VoiceOver both on and off, and a successful download. Initial reading speed, More/End ordering and offer-action safety need separate checks.
 
 
 The user download result is summarized from a [local 29 October note](../../../../docs/APP-TEST-HISTORY.md#local-application-library-notes): App Store 3.0 (1027.1.24), macOS 27.2 (26B118). The exact earlier baseline binary used for that user trial is not identified.

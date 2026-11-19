@@ -423,7 +423,7 @@ and no title. A tooltip names an icon button, but never the window's own buttons
 
 ## A sidebar press that returns success without changing page (TV, 29 Oct 2026, issue 186)
 
-TV 1.7.2 on macOS 27.2 advertised AXPress on the first cell of each sidebar row. Oliver's live trial returned
+TV 1.7.2 on macOS 27.2 advertised AXPress on the first cell of each sidebar row. The owner's live trial returned
 success pressing Home, but Search remained selected and later reads still held its Browse categories. A separate
 bounded read-only probe confirmed Home unselected, Search selected, and AXSelectedRows settable on the outline.
 The row itself did not advertise AXPress. These are different observations: an advertised operation or successful
@@ -432,7 +432,7 @@ from the sidebar selection alone cannot establish that the old content has been 
 
 ## Useful media content before a fixed pause ends (TV, 29 Oct 2026, issue 188)
 
-Nine clean shelf completions in Oliver's TV trial took 557–678 ms, including a fixed 500 ms client pause; one
+Nine clean shelf completions in the owner's TV trial took 557–678 ms, including a fixed 500 ms client pause; one
 overlapping current snapshot already had new items at 223 ms. The TV module now enables an optional early
 read with a small work budget. An unchanged/incomplete early result waits at the same scroll position until
 the existing settling point, rather than scrolling again prematurely. A current same-page publication with

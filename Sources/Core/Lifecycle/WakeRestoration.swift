@@ -88,7 +88,7 @@ package struct WakeRestoration {
 /// The lock screen's one request for VoiceOver. Sleep comes as notices in a burst: "sleep", then "display sleep" 86 ms
 /// later, then "lock". Each found VoiceOver's flag still off while the first request was under way, and each toggled
 /// it, so VoiceOver went on and straight off again behind the lock, and the Mac had no reader after the unlock until
-/// TurnOver was restarted (Oliver's log, 13 Nov 2026, 20:24:43; posted twice at 19:29:11 and 20:26:09 as well). A notice
+/// TurnOver was restarted (the owner's log, 13 Nov 2026, 20:24:43; posted twice at 19:29:11 and 20:26:09 as well). A notice
 /// that comes while the request is under way stands down. It is under way until it is answered, or for at most
 /// `window` seconds, so a request whose answer never comes cannot hold back the next lock.
 /// The caller supplies monotonic time.

@@ -24,7 +24,7 @@ public enum ImageDescriber {
         element = element ?? ObjectNavigator.shared.element ?? API.focusObject?.element
         // Not on a picture: what the window looks like. Its text was read here instead (issue 94, 23 Oct 2026), until
         // reading the text got its own key, VO-Shift-Y (TurnOver R with NVDA or JAWS keys): describing and reading
-        // the text are different jobs (Oliver, 2 Nov 2026).
+        // the text are different jobs (2 Nov 2026).
         guard let element, element.role == "AXImage" else {
             Log.io("describe: not on a picture; describing the window")
             describeWindow()

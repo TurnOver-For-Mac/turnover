@@ -2,7 +2,7 @@
 import Foundation
 import TurnOverCore
 
-// Find's prompt (TurnOver+F) and the keys it takes (18 Nov 2026). On 17 Nov at 20:42 Oliver left Find with Tab, without
+// Find's prompt (TurnOver+F) and the keys it takes (18 Nov 2026). On 17 Nov at 20:42 the owner left Find with Tab, without
 // Return: the prompt stayed open, took Tab, the arrows and TurnOver's keys and said nothing, through Command Tab and in
 // the next app, until he turned TurnOver off. Logic evidence only: the keys are made from their names, not pressed.
 func findPromptTests() {

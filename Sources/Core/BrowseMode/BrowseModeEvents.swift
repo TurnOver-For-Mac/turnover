@@ -170,7 +170,7 @@ extension BrowseModeDocument {
                                 Log.io("browse mode: \(why) after \(Int(ceiling)) seconds; the old page's line is not read")
                                 return
                             }
-                            // The keys come back to a page that never changed: said by reading its line, so Oliver knows the
+                            // The keys come back to a page that never changed: said by reading its line, so the owner knows the
                             // keys act on it again (16 Nov 2026, review). A new page that comes later still announces itself.
                             endPageOnItsWay(because: "\(why) after \(Int(ceiling)) seconds\(empty ? "" : "; its line is read")", token: token)
                             if !empty { speakUnit(.line) }

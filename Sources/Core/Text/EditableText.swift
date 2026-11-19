@@ -409,7 +409,7 @@ open class EditableText: TurnOverObject {
             return
         }
         // VoiceOver's reading of a plain Right by character: the character just passed over, now before the caret, so
-        // what you hear is what Backspace will delete (Oliver, 20 Oct 2026: "you have to be to the right of the
+        // what you hear is what Backspace will delete (20 Oct 2026: "you have to be to the right of the
         // object you want to backspace"). NVDA reads the character after the caret; the Windows family keeps that.
         if unit == .character, config.general.macKeys, gesture.keyName == "rightArrow", gesture.modifiers.isEmpty,
            let n = newInfo, n.start > 0, let old = try? makeTextInfo(.bookmark(bookmark)), n.start > old.start {
@@ -521,7 +521,7 @@ open class EditableText: TurnOverObject {
         let c = chunk.replacingOccurrences(of: "\r\n", with: "\n")
         // Said at once, before the caret is waited for: with something before the caret the deletion is certain, and
         // the wait (up to 300 ms in web content, 100 to 160 accessibility calls) held back every repeated Backspace
-        // in Mail's compose window (Oliver, 20 Oct 2026: "not reading so well").
+        // in Mail's compose window (20 Oct 2026: "not reading so well").
         if !c.isEmpty {
             // A line break has nothing to spell: say what it was ("new line"), as for any character named on its own.
             if let only = c.first, c.count == 1, only.isNewline { Speech.speakMessage(Symbols.name(of: only)) }

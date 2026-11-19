@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Changing voice, from Settings' Voice list or the speech settings ring: each voice keeps its own rate, volume and EQ
-// (Config.Speech.voiceTunings), a natural voice as a Mac one (Oliver, 2 Nov 2026: "it should be all the same settings
+// (Config.Speech.voiceTunings), a natural voice as a Mac one (2 Nov 2026: "it should be all the same settings
 // wherever the voice comes from"; "rate, volume, and the eq should be specific to each voice").
 import Foundation
 

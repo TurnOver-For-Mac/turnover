@@ -288,7 +288,7 @@ public enum PluginMaker {
         TurnOverMenu.shared.openList(verbatim: String(localized: "My changes for \(appName). Return removes one", comment: "A list of your plugin changes: %@ is the app"), items: items)
     }
 
-    /// Share my changes on GitHub (7 Nov 2026, Oliver asked for a way to share these little fixes so they reach
+    /// Share my changes on GitHub (7 Nov 2026, the owner asked for a way to share these little fixes so they reach
     /// everyone): the two files go on the clipboard, not into the address, so the person reads exactly what they send
     /// and can take out anything private before submitting; the form (Share a fix) is opened, filled in with the app.
     /// A fix the project accepts goes into Resources/fixes and comes with TurnOver (ProfileStore.shippedFixes).

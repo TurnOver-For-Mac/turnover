@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // One value change sent twice within a few milliseconds is said once (17 Nov 2026). Logic evidence only: whether
-// Safari's own pair of notifications is caught live is for Oliver's ear.
+// Safari's own pair of notifications is caught live is for the owner's ear.
 import Foundation
 import ApplicationServices
 import TurnOverCore
