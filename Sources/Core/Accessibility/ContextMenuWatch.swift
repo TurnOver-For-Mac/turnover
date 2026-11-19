@@ -19,6 +19,10 @@ extension AXHandler {
     /// application's focus is in.
     @MainActor static func contextMenuCandidates(of element: AXUIElement) -> [AXUIElement] {
         let app = AXUIElementCreateApplication(element.pid)
+        // Never a long wait on main for a menu (AGENTS.md): a busy process is asked again on the next look.
+        AXUIElementSetMessagingTimeout(app, 0.3)
+        AXUIElementSetMessagingTimeout(element, 0.3)
+        defer { AXUIElementSetMessagingTimeout(element, 0) }
         var found = element.elements(kAXChildrenAttribute).filter { $0.role == "AXMenu" }
         found += app.elements(kAXChildrenAttribute).filter { $0.role == "AXMenu" }
         if found.isEmpty, var f = app.element(kAXFocusedUIElementAttribute) {
@@ -53,6 +57,8 @@ extension AXHandler {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
             MainActor.assumeIsolated {
                 guard let self else { return }
+                // The process's own menu-closed notice may have ended it already: one ending, not two.
+                guard self.openMenus.contains(where: { $0.isSame(menu) }) else { return }
                 if Self.hasSize(menu) {
                     if Date() < limit { self.watchForClose(menu, until: limit) }
                     return
