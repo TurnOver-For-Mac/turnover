@@ -57,6 +57,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   prompt too. Before, the prompt stayed open, and what you typed in the other app went into Find.
 - Find (Turnover F): a Quick Nav arrow pressed straight after Turnover F now stops the prompt from opening, and moves
   as always. Before, the prompt could open just after the arrow and take the next letters you typed.
+- Find (Turnover F): switching to another app, opening TurnOver's menu or locking the Mac straight after Turnover F
+  now stops the prompt from opening. Before, it could open a moment later over the app you had switched to.
 - Closing the Find prompt with a Quick Nav arrow no longer writes to TurnOver's log while the arrow is being handled,
   so a slow disk can no longer hold up the keys.
 - Safari: VoiceOver Space on a link that opens its page in the same tab now reads the new page as soon as it has

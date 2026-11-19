@@ -162,4 +162,37 @@ func findPromptTests() {
         RunLoop.current.run(until: Date().addingTimeInterval(0.05))
         expect(onMainThread.value, [true], "the line written once, on the main thread")
     }
+
+    // 19 Nov 2026, Codex's fourth review: only an arrow stopped a queued opening, so an app switch (or the menu, the lock,
+    // secure input, the reader stopping) while TurnOver+F waited let the prompt open over the new app.
+    test("Any close after TurnOver+F stops its queued opening; a TurnOver+F after the close opens") {
+        defer { if FindPrompt.shared.isOpen { FindPrompt.shared.close(because: "the test is over") } }
+        let pressed = mach_absolute_time()
+        FindPrompt.shared.close(because: "the test: another app came to the front")
+        FindPrompt.shared.open(pressedAt: pressed)
+        check(!FindPrompt.shared.isOpen, "the opening asked for before the app switch did not happen")
+        FindPrompt.shared.open(pressedAt: mach_absolute_time())
+        check(FindPrompt.shared.isOpen, "TurnOver+F pressed after the switch opens")
+    }
+
+    // 19 Nov 2026, Codex's fourth review: the opening checked the last arrow and then, after letting go of the lock, set
+    // the prompt open; an arrow in between saw it closed, and the opening went on. In either order the prompt ends closed.
+    test("A Quick Nav arrow racing a queued opening leaves the prompt closed, whichever comes first") {
+        defer { if FindPrompt.shared.isOpen { FindPrompt.shared.close(because: "the test is over") } }
+        var leftOpen = 0
+        for _ in 0..<300 {
+            let pressed = mach_absolute_time()
+            let done = DispatchSemaphore(value: 0)
+            DispatchQueue.global().async { FindPrompt.shared.close(because: "a Quick Nav arrow", arrowAt: pressed &+ 1); done.signal() }
+            FindPrompt.shared.open(pressedAt: pressed)
+            done.wait()
+            if FindPrompt.shared.isOpen { leftOpen += 1; FindPrompt.shared.close(because: "the test") }
+        }
+        expect(leftOpen, 0, "openings left open after an arrow pressed after their key")
+        // Opened first, then the arrow: closed, and keys queued for that opening are dropped.
+        FindPrompt.shared.open(pressedAt: mach_absolute_time())
+        let opening = FindPrompt.shared.generation
+        FindPrompt.shared.close(because: "a Quick Nav arrow", arrowAt: mach_absolute_time())
+        check(!FindPrompt.shared.isOpen && FindPrompt.shared.generation != opening, "the open prompt closed, its opening ended")
+    }
 }

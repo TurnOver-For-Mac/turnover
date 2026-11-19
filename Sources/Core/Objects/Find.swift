@@ -12,34 +12,41 @@ import ApplicationServices
 // way in, Quick Nav's arrows, the menu); everything else is touched on the main thread only.
 public final class FindPrompt: @unchecked Sendable {
     nonisolated public static let shared = FindPrompt()
-    /// Read on the keyboard thread as well; written here, on the main thread.
-    private let _isOpen = Locked(false)
-    public private(set) var isOpen: Bool { get { _isOpen.value } set { _isOpen.value = newValue } }
-    /// Which opening of the prompt a key was given to (18 Nov 2026, Codex's review): a key is decided on the keyboard's
-    /// way in and handled later on the main thread, and in between the prompt can close (Command Tab, an app switch)
-    /// or be opened again. A handler acts only on the opening its key was given to, while it is still open: a queued
-    /// Return no longer searches for half-typed or old text after the prompt has gone.
-    private let _generation = Locked(0)
-    nonisolated public var generation: Int { _generation.value }
-    /// The time (the key events' clock) of the last Quick Nav arrow, behind `_generation`'s lock (19 Nov 2026, Codex's
-    /// review). TurnOver+F is decided on the keyboard's way in and opens later on the main thread, behind the script
-    /// queue; an arrow pressed in between found the prompt still closed, and the opening that followed stayed open and
-    /// took the next letters. An opening whose key came before the last arrow does not happen.
-    nonisolated(unsafe) private var arrowAt: UInt64 = 0
+    /// The open state, the opening number and the last cancellation, behind one lock (19 Nov 2026, Codex's fourth
+    /// review): opening and closing each read and write them as one step, so no close can fall between an opening's
+    /// check and its being open. Read on the keyboard thread as well. Only state is done under the lock.
+    private struct State {
+        var isOpen = false
+        /// Which opening of the prompt a key was given to (18 Nov 2026, Codex's review): a key is decided on the
+        /// keyboard's way in and handled later on the main thread, and in between the prompt can close (Command Tab, an
+        /// app switch) or be opened again. A handler acts only on the opening its key was given to, while it is open.
+        var generation = 0
+        /// When the prompt was last closed, or an opening stopped, on the gestures' clock (mach ticks). TurnOver+F is
+        /// decided on the keyboard's way in and opens later on the main thread, behind the script queue; a close in
+        /// between (a Quick Nav arrow, an app switch, the menu, the lock, secure input, the reader stopping) found
+        /// the prompt still closed, and the opening then came over the new app or took the next letters. An opening
+        /// whose key came before the last close does not happen.
+        var cancelledAt: UInt64 = 0
+    }
+    private let state = Locked(State())
+    public var isOpen: Bool { state.value.isOpen }
+    nonisolated public var generation: Int { state.value.generation }
+    /// Return or Escape: closed, in one step with the rest of the state, so a close or cancellation at the same moment
+    /// is not written over.
+    private func finish() { state.lock.lock(); state.unsafeValue.isOpen = false; state.unsafeValue.generation += 1; state.lock.unlock() }
     private var typed = ""
     public private(set) var lastSearch = ""
 
     /// `pressedAt`: the time of the key that asked for it (its gesture's timestamp); 0 when unknown (the key list, the
     /// menu), which always opens.
     public func open(pressedAt: UInt64 = 0) {
-        _generation.lock.lock()
-        let overtaken = pressedAt != 0 && pressedAt <= arrowAt
-        if !overtaken { _generation.unsafeValue += 1 }
-        _generation.lock.unlock()
-        // Closed by the arrow before it opened: nothing is said, as for any key that closes it; the arrow moves.
-        guard !overtaken else { Log.io("find: the prompt not opened (a Quick Nav arrow came after its key)"); return }
+        state.lock.lock()
+        let overtaken = pressedAt != 0 && pressedAt <= state.unsafeValue.cancelledAt
+        if !overtaken { state.unsafeValue.isOpen = true; state.unsafeValue.generation += 1 }
+        state.lock.unlock()
+        // Closed before it opened: nothing is said, as for any key that closes it; that key or switch goes on.
+        guard !overtaken else { Log.io("find: the prompt not opened (closed after its key)"); return }
         typed = ""
-        isOpen = true
         Speech.speakMessage(lastSearch.isEmpty ? String(localized: "find", comment: "Find opened") : String(localized: "find, last \(lastSearch)", comment: "Find opened: %@ is the last search"))
     }
 
@@ -78,15 +85,16 @@ public final class FindPrompt: @unchecked Sendable {
     /// opening; the lock, sleep or a user switch; secure input coming on (TurnOver hears no keys then). Any queued key
     /// for this opening is then dropped (`generation`). Nothing is said.
     ///
-    /// `arrowAt`: a Quick Nav arrow's time (its event's, on the gestures' clock), which also stops an opening asked for
-    /// before it and not yet made (`open`). The log line is written on the main thread: this is called on the
+    /// Every close also stops an opening asked for before it and not yet made (`open`), as of `arrowAt` (a Quick Nav
+    /// arrow's own event time, on the gestures' clock) or else now. The log line is written on the main thread: this is called on the
     /// keyboard's tap, where a stalled log write would hold every key (19 Nov 2026, Codex's review).
     nonisolated package func close(because why: String, arrowAt time: UInt64 = 0) {
-        _generation.lock.lock()
-        if time > arrowAt { arrowAt = time }
-        let wasOpen = _isOpen.value
-        if wasOpen { _isOpen.value = false; _generation.unsafeValue += 1 }
-        _generation.lock.unlock()
+        let at = time != 0 ? time : mach_absolute_time()
+        state.lock.lock()
+        if at > state.unsafeValue.cancelledAt { state.unsafeValue.cancelledAt = at }
+        let wasOpen = state.unsafeValue.isOpen
+        if wasOpen { state.unsafeValue.isOpen = false; state.unsafeValue.generation += 1 }
+        state.lock.unlock()
         guard wasOpen else { return }
         // The key itself, when there is one, is on the input line that follows (a typed key is never named in the log).
         let line = "find: the prompt closed without a search (\(why))"
@@ -105,9 +113,9 @@ public final class FindPrompt: @unchecked Sendable {
         guard given == generation, isOpen else { return }
         switch g.keyName {
         case "escape":
-            isOpen = false; Speech.speakMessage(String(localized: "find cancelled", comment: "Spoken message"))
+            finish(); Speech.speakMessage(String(localized: "find cancelled", comment: "Spoken message"))
         case "enter", "numpadEnter":
-            isOpen = false
+            finish()
             let s = typed.isEmpty ? lastSearch : typed
             guard !s.isEmpty else { Speech.speakMessage(String(localized: "nothing to find", comment: "Spoken message")); return }
             lastSearch = s
