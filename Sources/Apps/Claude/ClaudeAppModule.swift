@@ -600,6 +600,14 @@ package final class ClaudeAppModule: AppModule {
     /// through the same day ("Yes, add it"), so the press is ignored some of the time; why is not known.
     // The session menu's AXPress likewise reported success without an observable effect on
     // 14 Nov 2026; native Return opened its dialog. Use one confirmed key, with no action retry.
+    /// 19 Nov 2026 (Oliver's choice): Return in the prompt sent the message, and nothing said so. "sent" is spoken at once
+    /// as a queued message, so it cuts nothing off; Claude's progress lines wait for idle speech and quiet keys
+    /// (ClaudeProgressReadiness) and its bare "Running" is not said, so neither cuts it off. Claude's module only.
+    package override func returnSentText(inField fieldName: String) {
+        guard fieldName == "Prompt" else { return }
+        Speech.speakOnly(String(localized: "sent", comment: "Spoken when Return sends a message from Claude's prompt"))
+    }
+
     package override var rolesPressedByKeyboard: Set<String> { ["AXButton", "AXMenuItem"] }
 
     /// 17 Nov 2026 (log, three switches): Claude puts the keyboard in the destination's Prompt as it

@@ -364,6 +364,19 @@ func claudeNavigationTests() {
         }
     }
 
+    test("Claude prompt: Return that sends the message says sent at once, in the prompt only") {
+        withConversationTest { _, module, _ in
+            let savedSink = Speech.sink
+            var said: [String] = []
+            Speech.sink = { said.append($0) }
+            defer { Speech.sink = savedSink }
+            module.returnSentText(inField: "Search")
+            expect(said, [], "another field says nothing")
+            module.returnSentText(inField: "Prompt")
+            expect(said, ["sent"], "the prompt says sent once, as a queued message that cuts nothing off")
+        }
+    }
+
     test("Claude navigation: Recents in Claude 6's layout are read, so the row is named at once") {
         withConversationTest(recents: ["Public first", "Public second", "Public third", "Old conversation"], claude6Layout: true) { page, module, sent in
             let savedSink = Speech.sink

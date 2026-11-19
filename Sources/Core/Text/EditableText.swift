@@ -464,7 +464,7 @@ open class EditableText: TurnOverObject {
         guard moved, let newInfo, let line = try? makeTextInfo(.caret) else { return }
         // Return sent what was typed (Claude's prompt, a chat box): the text got shorter, not a line longer. Nothing
         // to say ("new line" was heard as Claude's prompt sent, 7 Oct 2026).
-        if lengthBefore > 0, line.storyLength() < lengthBefore { Log.io("Return sent the text; no new line"); return }
+        if lengthBefore > 0, line.storyLength() < lengthBefore { Log.io("Return sent the text; no new line"); appModule.returnSentText(inField: name); return }
         // Say the new line was made (the owner asked, 4 Oct 2026), then anything already on it (a list number).
         if config.keyboard.speakNewLine { Speech.speakOnly(String(localized: "new line", comment: "Spoken message")) }   // the display shows the new line itself
         line.expand(.line)

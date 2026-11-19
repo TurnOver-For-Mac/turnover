@@ -28,6 +28,10 @@ open class AppModule: ScriptableObject {
     /// already sound that boundary can opt out; TurnOver-owned review and structural navigation keep theirs.
     open var playsNativeCaretBoundarySound: Bool { true }
 
+    /// Return in an editable field sent its text rather than making a new line (the text got shorter). `fieldName` is
+    /// the field's name. Nothing by default; an app that wants "sent" said overrides it (19 Nov 2026).
+    open func returnSentText(inField fieldName: String) {}
+
     /// The app supplies its own spelling corrections and dictionary through its native context menu.
     open var usesNativeSpellingMenu: Bool { false }
 
