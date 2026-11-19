@@ -24,7 +24,10 @@ func safariPageHostTests() {
         let window: [String: AXFixture.Value] = ["AXWindow": .element(0)]
         func attrs(_ a: [String: AXFixture.Value]) -> [String: AXFixture.Value] { a.merging(window) { x, _ in x } }
         AXReplay.load(.init(app: "Public page host trial", bundle: "test.page-host", recorded: "synthetic", root: 0, application: 1, focus: appFocus, nodes: [
-            .init(id: 0, attrs: ["AXRole": .string("AXWindow"), "AXSubrole": .string("AXStandardWindow"), "AXTitle": .string("Events"), "AXParent": .element(1), "AXChildren": .elements(newPage ? [2, 3, 8, 6] : [2, 3, 8])]),
+            // With a new page, the window has no parent: in the replay every element is a process of its own, and the
+            // application above the window would make the new page "owned by another process" (the last rule).
+            .init(id: 0, attrs: ["AXRole": .string("AXWindow"), "AXSubrole": .string("AXStandardWindow"), "AXTitle": .string("Events"),
+                                 "AXChildren": .elements(newPage ? [2, 3, 8, 6] : [2, 3, 8])].merging(newPage ? [:] : ["AXParent": .element(1)]) { x, _ in x }),
             .init(id: 1, attrs: ["AXRole": .string("AXApplication"), "AXChildren": .elements([0, 10]), "AXFocusedWindow": .element(0), "AXMainWindow": .element(0), "AXFocusedUIElement": .element(appFocus)]),
             .init(id: 2, attrs: attrs(["AXRole": .string("AXGroup"), "AXParent": .element(0)])),
             .init(id: 3, attrs: attrs(["AXRole": .string("AXWebArea"), "AXURL": .url("https://example.com/old"), "AXParent": .element(0), "AXChildren": .elements([4, 5])])),
@@ -103,9 +106,6 @@ func safariPageHostTests() {
         }
     }
 
-    test("Safari's page host set aside: the new page is handed on when it comes, and the group is presented when none does") {
-        // No new page comes: set aside at first, presented once the watch ends.
-        withSafari(appFocus: 2) { pid in
     // 19 Nov 2026, Codex's review: a Quick Nav arrow (or a keypad command) never reaches InputManager, so its key time
     // stayed that of the press, and the group could still be set aside after it.
     test("A Quick Nav arrow or keypad key after the press ends it as evidence, and ends a group set aside") {
@@ -121,6 +121,9 @@ func safariPageHostTests() {
         }
     }
 
+    test("Safari's page host set aside: the new page is handed on when it comes, and the group is presented when none does") {
+        // No new page comes: set aside at first, presented once the watch ends.
+        withSafari(appFocus: 2) { pid in
             AXHandler.shared.focusChanged(AXReplay.element(2), pid: pid)
             check(API.focusObject?.element.isSame(AXReplay.element(4)) == true, "the group is set aside: the link keeps the focus")
             check(BrowseModeDocument.lastNavigationPress == nil, "the press is used up")
@@ -137,12 +140,17 @@ func safariPageHostTests() {
             let lines = Locked<[String]>([])
             Log.level = .debug
             Log.observer = { lines.value.append($0) }
-            defer { Log.observer = savedObserver; Log.level = savedLevel }
+            let savedDriver = Speech.enqueueTestDriver, said = Locked<[String]>([])
+            Speech.enqueueTestDriver = { text, _, _ in said.value.append(text) }
+            defer { Log.observer = savedObserver; Log.level = savedLevel; Speech.enqueueTestDriver = savedDriver }
             AXHandler.shared.focusChanged(AXReplay.element(2), pid: pid)
             RunLoop.current.run(until: Date().addingTimeInterval(0.4))
-            // The watch hands the new page to the focus rules. Whether it is then presented is not checked here: in the
-            // replay the window's owner is another made-up process, and the last rule turns it away (a fixture limit).
+            // The watch hands the new page to the focus rules, and it is presented and said (19 Nov 2026, Codex's review:
+            // only the hand-over was checked, so the page itself could be dropped unseen). Browse mode's document for it
+            // is not checked: a replayed web area has no text markers, so browse mode does not take it (a fixture limit).
             check(lines.value.contains { $0.contains("the web area that took the focus has content now; following it") }, "the new page is handed to the focus rules")
+            check(API.focusObject?.element.isSame(AXReplay.element(6)) == true, "the new page is TurnOver's focus")
+            check(said.value.contains { $0.contains("New page") }, "the new page is said: \(said.value)")
         }
     }
 }
