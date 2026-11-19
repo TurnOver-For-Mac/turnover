@@ -22,6 +22,14 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   never its words. It watches the pointer only while TurnOver is the reader, and it waits while Say All or the
   trackpad's explore is reading. If an app holds the lookup for over a second, the lookup is given up and the
   pointer is read again.
+- Deleted text by pitch: Settings, Speech, "Lower the pitch for deleted text, instead of saying deleted" says a
+  deleted character or word lower, as VoiceOver does, without the word "deleted". Off by default. A deleted capital
+  is lowered too when capitals are raised.
+
+### Changed
+
+- Typing, VoiceOver's keys: with words spoken as you type, the word said as the space is typed is no longer followed by
+  "space", as in VoiceOver. A space typed on its own is still said, and NVDA's and JAWS's keys say both.
 
 ## 2.0, build 24.1
 
