@@ -6,7 +6,7 @@ import TurnOverAX
 import AXFixtures
 import os
 
-private func conversationPage(_ name: String, address: String, body: String? = nil, recents: [String]? = nil) -> AXFixture {
+private func conversationPage(_ name: String, address: String, body: String? = nil, recents: [String]? = nil, claude6Layout: Bool = false) -> AXFixture {
     var fixture = AXFixture(app: "Public conversations", bundle: "test.claude-navigation", recorded: "", root: 0, application: 1, focus: 0, nodes: [
         .init(id: 0, attrs: ["AXRole": .string("AXWebArea"), "AXTitle": .string(name), "AXDescription": .string(""),
                              "AXURL": .url(address), "AXParent": .element(1), "AXChildren": .elements([2, 3])]),
@@ -25,6 +25,20 @@ private func conversationPage(_ name: String, address: String, body: String? = n
         ]
         for (index, title) in recents.enumerated() {
             let row = 20 + index * 10
+            if claude6Layout {
+                // 19 Nov 2026, Claude 6.6395.1: the row's button is titled name plus state and holds no static
+                // text; the first row holds a second button; a hint line with no button follows the first row.
+                fixture.nodes += [
+                    .init(id: row, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(11), "AXChildren": .elements(index == 0 ? [row + 1, row + 6, row + 8] : [row + 1, row + 6])]),
+                    .init(id: row + 1, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(row), "AXChildren": .elements([row + 2])]),
+                    .init(id: row + 2, attrs: ["AXRole": .string("AXButton"), "AXTitle": .string(title + " Unread response"), "AXParent": .element(row + 1), "AXChildren": .elements(index == 0 ? [row + 3] : [])]),
+                    .init(id: row + 3, attrs: ["AXRole": .string("AXButton"), "AXTitle": .string("Hide nested sessions " + title), "AXParent": .element(row + 2)]),
+                    .init(id: row + 6, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(row), "AXChildren": .elements([row + 7])]),
+                    .init(id: row + 7, attrs: ["AXRole": .string("AXPopUpButton"), "AXTitle": .string("…"), "AXDescription": .string("More options for " + title), "AXParent": .element(row + 6)]),
+                    .init(id: row + 8, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string("Quick reply controls available"), "AXParent": .element(row)]),
+                ]
+                continue
+            }
             fixture.nodes += [
                 .init(id: row, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(11), "AXChildren": .elements([row + 1, row + 6])]),
                 .init(id: row + 1, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(row), "AXChildren": .elements([row + 2])]),
@@ -41,10 +55,10 @@ private func conversationPage(_ name: String, address: String, body: String? = n
 }
 
 
-private func withConversationTest(recents: [String]? = nil, truncatedRecents: Bool = false, collapsedRecents: Bool = false, _ body: (BrowseModeDocument, ClaudeAppModule, Locked<[String]>) -> Void) {
+private func withConversationTest(recents: [String]? = nil, truncatedRecents: Bool = false, collapsedRecents: Bool = false, claude6Layout: Bool = false, _ body: (BrowseModeDocument, ClaudeAppModule, Locked<[String]>) -> Void) {
     let savedPid = AXHandler.shared.activePid
     defer { AXHandler.shared.activePid = savedPid }
-    var fixture = conversationPage("Old conversation", address: "https://example.com/old", recents: recents)
+    var fixture = conversationPage("Old conversation", address: "https://example.com/old", recents: recents, claude6Layout: claude6Layout)
     if truncatedRecents, let index = fixture.nodes.firstIndex(where: { $0.id == 42 }) {
         fixture.nodes[index].attrs["AXChildren"] = .elements([])
     }
@@ -347,6 +361,20 @@ func claudeNavigationTests() {
             RunLoop.current.run(until: Date().addingTimeInterval(0.05))
             expect(completed, 0, "a late worker cannot revive discarded commands")
             expect(sent.value, ["kb:command+1"])
+        }
+    }
+
+    test("Claude navigation: Recents in Claude 6's layout are read, so the row is named at once") {
+        withConversationTest(recents: ["Public first", "Public second", "Public third", "Old conversation"], claude6Layout: true) { page, module, sent in
+            let savedSink = Speech.sink
+            var said: [String] = []
+            Speech.sink = { said.append($0) }
+            defer { Speech.sink = savedSink }
+            page.position = page.buffer.text.length - 1
+            let shortcut = KeyboardGesture(identifier: "kb:command+4")!
+            module.script(for: shortcut)?.handler(shortcut)
+            waitForConversation { said == ["Old conversation"] }
+            expect(said, ["Old conversation"], "the open conversation is said once, from the row read")
         }
     }
 

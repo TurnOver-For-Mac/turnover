@@ -553,8 +553,19 @@ package final class ClaudeAppModule: AppModule {
             for row in children.dropFirst() {
                 let rowNodes = subtree(row)
                 let buttons = rowNodes.filter { $0.role == "AXButton" }
+                let popup = rowNodes.first(where: { $0.role == "AXPopUpButton" })
+                // 19 Nov 2026 (log: 686 reads "unknown", none since 18 Nov 08:11; live tree, Claude 6.6395.1): Recents now holds
+                // a hint line with no button between rows, a row's button can hold a second button ("Hide nested
+                // sessions") and its label is the name plus a state, with no static text in it. The row's own
+                // menu button carries the exact name, "More options for <name>". Claude's module only.
+                if popup == nil, buttons.isEmpty { continue }
+                guard let popup else { return nil }
+                let menuPrefix = "More options for "
+                if let named = popup.string(kAXDescriptionAttribute), named.hasPrefix(menuPrefix), named.count > menuPrefix.count {
+                    titles.append(switchTitle(String(named.dropFirst(menuPrefix.count))))
+                    continue
+                }
                 guard buttons.count == 1,
-                      rowNodes.contains(where: { $0.role == "AXPopUpButton" }),
                       let text = subtree(buttons[0]).first(where: { $0.role == "AXStaticText" }),
                       !label(text).isEmpty else { return nil }
                 titles.append(switchTitle(label(text)))

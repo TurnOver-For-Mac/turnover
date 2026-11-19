@@ -27,6 +27,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 - Safari: H (and the other quick keys, and a choice from the Elements list) on a heading too long for one line now reads
   the whole heading, as VoiceOver does, not its first line with the rest left for Down Arrow.
+- Claude: Command 1 to 5 (and the other numbers) names the conversation it lands on at once, and says it once. The
+  sidebar's Recents list had changed shape, so the row could not be read and the answer waited, came late or was missed.
 - Safari: Up and Down Arrow in a box that holds one character (the digit boxes on PayPal's code page) now answer at
   once, as they do at the top of any line. Before, Down waited about a third of a second.
 - Safari: the list a pop-up button opens (Amazon's Quantity) is no longer taken for a page of its own, so the heading
