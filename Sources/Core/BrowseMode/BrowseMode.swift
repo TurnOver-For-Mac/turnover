@@ -294,6 +294,8 @@ public final class BrowseModeDocument: ScriptableObject {
     var pageOnItsWayTicket = 0
     // Claude owns automatic switch speech even after queued content commands have been released.
     package var navigationTitleOwned = false
+    /// Read-only, for tests: whether the page is still holding keys for a session switch.
+    package var isWaitingForNavigation: Bool { navigationWaiting }
     var navigationRetries: [() -> Void] = []
     var navigationReplaying = false
     var navigationHadCommand = false

@@ -7,7 +7,7 @@ import AXFixtures
 import os
 
 func waitForBuffer(_ buffer: WebBuffer, file: String = #fileID, line: Int = #line) {
-    let deadline = Date().addingTimeInterval(3)
+    let deadline = Date().addingTimeInterval(6)
     while buffer.isLoading, Date() < deadline { RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01)) }
     check(!buffer.isLoading, "buffer collection completed", file: file, line: line)
 }

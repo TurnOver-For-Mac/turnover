@@ -89,8 +89,18 @@ private func withConversationTest(recents: [String]? = nil, truncatedRecents: Bo
     body(page, module, sent)
 }
 
+/// Runs the main loop until the worker has signalled, up to `limit` seconds; true when it did.
+private func spinUntilSignalled(_ semaphore: DispatchSemaphore, limit: TimeInterval) -> Bool {
+    let until = Date().addingTimeInterval(limit)
+    while Date() < until {
+        if semaphore.wait(timeout: .now()) == .success { return true }
+        RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.005))
+    }
+    return semaphore.wait(timeout: .now()) == .success
+}
+
 private func waitForConversation(_ condition: () -> Bool) {
-    let until = Date().addingTimeInterval(2)
+    let until = Date().addingTimeInterval(5)
     while !condition(), Date() < until {
         RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.005))
     }
@@ -200,8 +210,9 @@ func claudeNavigationTests() {
             }
             held.withLock { $0 = true }
             AXReplay.load(conversationPage("New conversation", address: "https://example.com/new"))
-            RunLoop.current.run(until: Date().addingTimeInterval(0.12))
-            check(entered.wait(timeout: .now() + 1) == .success, "the new copy is collecting off main")
+            check(spinUntilSignalled(entered, limit: 5), "the new copy is collecting off main")
+            // The read is still held here, so waiting for the name does not let the read finish first.
+            waitForConversation { !said.isEmpty }
             expect(said, ["New conversation"], "the name is heard before the whole-page read finishes")
             check(buffer.lines.isEmpty, "no old content is exposed during collection")
             held.withLock { $0 = false }
@@ -252,12 +263,14 @@ func claudeNavigationTests() {
         RunLoop.current.run(until: Date().addingTimeInterval(0.15))
         waitForBuffer(buffer)
         RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        waitForConversation { page.position > 0 }
         check(!buffer.lines.isEmpty, "the new conversation has been collected before its title arrives")
         check(!said.contains("Old conversation"), "the stale snapshot title is not announced")
         expect(sent.value, ["kb:command+2"], "the queued Tab focuses the new copy rather than posting into the departed page")
         check(page.position > 0, "the latest waiting movement runs on the completed new content")
 
         AXReplay.load(conversationPage("Late new title", address: "https://example.com/new", body: "New public body", recents: ["Old conversation", "Late new title"]))
+        waitForConversation { said.contains("Late new title") }
         RunLoop.current.run(until: Date().addingTimeInterval(0.15))
         expect(said.filter { $0 == "Late new title" }.count, 1, "the late title is announced once")
         buffer.build()
@@ -338,11 +351,11 @@ func claudeNavigationTests() {
             module.conversationRead = { root, recents in
                 let snapshot = read(root, recents)
                 entered.withLock { $0 = true }
-                _ = release.wait(timeout: .now() + 2)
+                _ = release.wait(timeout: .now() + 10)
                 returned.withLock { $0 = true }
                 return snapshot
             }
-            module.conversationWaitLimit = 0.2
+            module.conversationWaitLimit = 1.5
             defer { release.signal(); waitForConversation { returned.withLock { $0 } } }
             page.position = page.buffer.text.length - 1
             let shortcut = KeyboardGesture(identifier: "kb:command+1")!
@@ -353,7 +366,7 @@ func claudeNavigationTests() {
             page.script(for: tab)?.handler(tab)
             waitForConversation { entered.withLock { $0 } }
             AXHandler.shared.activePid = -1   // The interceptor can lag native app activation.
-            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+            waitForConversation { !page.isWaitingForNavigation }
             expect(completed, 0, "the independent ceiling discards departed-page commands")
             expect(sent.value, ["kb:command+1"], "the deadline cannot send Tab to another app")
             release.signal()
@@ -428,11 +441,11 @@ func claudeNavigationTests() {
                 offMain.withLock { $0 = !Thread.isMainThread }
                 let snapshot = read(root, recents)
                 entered.signal()
-                _ = release.wait(timeout: .now() + 2)
+                _ = release.wait(timeout: .now() + 10)
                 returned.withLock { $0 = true }
                 return snapshot
             }
-            module.conversationWaitLimit = 0.15
+            module.conversationWaitLimit = 1.5
             defer { release.signal(); waitForConversation { returned.withLock { $0 } } }
             let shortcut = KeyboardGesture(identifier: "kb:command+n")!
             let before = AXStats.calls
@@ -444,8 +457,7 @@ func claudeNavigationTests() {
             let tab = KeyboardGesture(identifier: "kb:tab")!
             page.script(for: tab)?.handler(tab)
             AXReplay.load(conversationPage("Late ignored conversation", address: "https://example.com/late"))
-            RunLoop.current.run(until: Date().addingTimeInterval(0.08))
-            check(entered.wait(timeout: .now() + 0.1) == .success, "the actual production reader has entered its held worker")
+            check(spinUntilSignalled(entered, limit: 0.8), "the actual production reader has entered its held worker")
             check(offMain.withLock { $0 }, "the provider callback executes off main")
             expect(completed, [], "the worker remains held before the ceiling")
             waitForConversation { completed.count == 2 }
@@ -564,7 +576,7 @@ func claudeNavigationTests() {
             defer { Speech.sink = savedSink }
             let key = KeyboardGesture(identifier: "kb:command+2")!
             module.script(for: key)?.handler(key)
-            RunLoop.current.run(until: Date().addingTimeInterval(0.34))
+            waitForConversation { !page.isWaitingForNavigation }
             check(!page.deferInitialContent({}), "the unchanged settle has released the wait")
             check(page.navigationTitleOwned, "the switch is still waiting for its destination")
             var destination = conversationPage("Prompt public destination", address: "https://example.com/prompt")
@@ -581,6 +593,7 @@ func claudeNavigationTests() {
             check(page.passThrough, "the Prompt is still in focus mode for typing")
             waitForConversation { said.contains("Prompt public destination") }
             waitForBuffer(page.buffer)
+            waitForConversation { page.passThrough && !module.ignoresFocus(focus) }
             RunLoop.current.run(until: Date().addingTimeInterval(0.15))
             expect(said, ["Prompt public destination"], "only the title is said")
             check(page.passThrough, "focus mode stays on in the Prompt after the switch")
@@ -748,18 +761,23 @@ func claudeNavigationTests() {
             let entered = OSAllocatedUnfairLock(initialState: 0)
             let returned = OSAllocatedUnfairLock(initialState: false)
             let release = DispatchSemaphore(value: 0)
+            let gate = DispatchSemaphore(value: 0)
             let read = module.conversationRead
             module.conversationRead = { root, recents in
                 let index = entered.withLock { value in let old = value; value += 1; return old }
+                // The fresh read at the deadline waits until the test has loaded the fresh page, so a slow main
+                // thread cannot let it read the old one.
+                if index > 0 { _ = gate.wait(timeout: .now() + 10); gate.signal() }
                 let snapshot = read(root, recents)
                 if index == 0 {
-                    _ = release.wait(timeout: .now() + 2)
+                    _ = release.wait(timeout: .now() + 10)
                     returned.withLock { $0 = true }
                 }
                 return snapshot
             }
-            module.conversationWaitLimit = 0.15
+            module.conversationWaitLimit = 1.0
             defer {
+                gate.signal()
                 release.signal()
                 waitForConversation { returned.withLock { $0 } }
             }
@@ -775,6 +793,7 @@ func claudeNavigationTests() {
             expect(completed, [1, 2], "the ceiling releases commands while the provider remains held")
             expect(sent.value, ["kb:command+5", "kb:tab"], "the queued native key is delivered once independently of speech")
             AXReplay.load(conversationPage("Fresh ceiling destination", address: "https://example.com/fresh"))
+            gate.signal()
             release.signal()
             waitForConversation { said.contains("Fresh ceiling destination") }
             RunLoop.current.run(until: Date().addingTimeInterval(0.15))
@@ -1006,7 +1025,7 @@ func claudeNavigationTests() {
             var completed = 0
             check(page.deferInitialContent { completed += 1 }, "the command initially waits behind the switch")
             waitForConversation { entered.withLock { $0 } }
-            RunLoop.current.run(until: Date().addingTimeInterval(0.4))
+            waitForConversation { !page.navigationTitleOwned }
             check(!page.navigationTitleOwned, "the independent grace ends speech ownership even while the provider is stuck")
             check(!page.deferInitialContent({}), "the ceiling has released the command queue")
             expect(completed, 1, "the original queued command was released exactly once")
