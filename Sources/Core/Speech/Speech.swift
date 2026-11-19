@@ -82,7 +82,7 @@ public enum Speech {
             // Raised only when the capital is the whole utterance; inside longer speech ("word A") the mark just goes.
             let plain = text.replacingOccurrences(of: capitalMark, with: "")
             if text.hasPrefix(capitalMark), !plain.contains(capitalMark), cleaned(plain).count <= 6 {
-                pitchNext = 1 + Float(config.speech.capitalPitch) / 100
+                pitchNext = capitalPitch(pending: pitchNext, percent: config.speech.capitalPitch)
             }
             return enqueue(plain, language: language, onStart: onStart, completion: completion)
         }
@@ -152,7 +152,7 @@ public enum Speech {
         else if Self.logsWords { Log.io("say\(voice != nil ? " [\(language ?? "")]" : ""): \(s.prefix(160))") }
         else { Log.io("say\(voice != nil ? " [\(language ?? "")]" : ""): [\(s.count) characters]") }
         if !privateNext { history.value.append((Date(), s)); if history.value.count > 3000 { history.value.removeFirst(500) } }
-        if let pitch { Log.io("say: (pitch raised to \(Int(pitch * 100)) percent)") }
+        if let pitch { Log.io(Self.pitchLogLine(pitch)) }
         // Kokoro (the maintainer's Mac): say all, or everything, in a natural voice; another language keeps its own voice, and
         // a capital said higher keeps the Mac voice (Kokoro has no pitch).
         // Private speech (a copied password, a two-factor code, what is typed) only to a helper signed by TurnOver's own
@@ -164,6 +164,20 @@ public enum Speech {
         player.speak(s, interrupt: false, voice: kokoro ?? voice, rate: voice == nil ? nil : Languages.rate(for: language), pitch: pitch, onStart: onStart, completion: completion)
     }
     private static var pitchNext: Float?
+    /// The log line for an utterance with its own pitch: lowered (a deleted character or word), raised (a capital), or just changed.
+    public static func pitchLogLine(_ pitch: Float) -> String {
+        let how = pitch < 1 ? "lowered" : pitch > 1 ? "raised" : "changed"
+        return "say: (pitch \(how) to \(Int(pitch * 100)) percent)"
+    }
+    /// Deleted text is said lower, not announced ("deleted"): VoiceOver's pitch change for deletions.
+    public static var deletionByPitch: Bool { config.speech.deletedPitch > 0 }
+    /// The pitch for a capital said on its own: raised, unless a pitch is already set. A deleted capital stays lowered, as in VoiceOver.
+    public static func capitalPitch(pending: Float?, percent: Int) -> Float { pending ?? 1 + Float(percent) / 100 }
+    /// Lowers the pitch of the next thing said, when the deletion is marked by pitch.
+    public static func lowerForDeletion() {
+        guard deletionByPitch else { return }
+        pitchNext = max(0.5, 1 - Float(config.speech.deletedPitch) / 100)
+    }
     /// Set by say all while it queues its text: Kokoro's "for reading" takes it.
     public static var readingNow = false
     /// The next utterance is private (the clipboard, a link's address, a notification: a copied password, a reset
