@@ -82,7 +82,7 @@ package struct ScriptEnvironment {
                     Speech.speakMessage(text)
                 }
             },
-            sound: { TurnOverSounds.play($0) },
+            sound: { TurnOverSounds.play($0, exempt: true) },
             copy: { text in
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(text, forType: .string)
@@ -107,7 +107,7 @@ package struct ScriptEnvironment {
                 TurnOverMenu.shared.onClose = { before?(); closed() }
             },
             readClipboard: { NSPasteboard.general.string(forType: .string) },
-            tone: { hertz, milliseconds in Tones.beep(hertz, milliseconds) },
+            tone: { hertz, milliseconds in Tones.beep(hertz, milliseconds, exempt: true) },
             askText: { prompt, done in LineInput.ask(prompt, done: done) },
             dismissQuestion: { TurnOverMenu.shared.close() },
             options: ScriptOptionsStore.live(),

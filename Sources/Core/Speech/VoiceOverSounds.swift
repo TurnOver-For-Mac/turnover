@@ -11,7 +11,12 @@ import TurnOverSpeech
 @MainActor
 public enum VoiceOverSounds {
     nonisolated package static let folder = URL(fileURLWithPath: "/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds")
-    private static var players: [String: AVAudioPlayer] = [:]
+    /// Players are prepared on a background queue (SoundCache); main only looks them up.
+    nonisolated package static let cache = SoundCache()
+    /// Every file TurnOver can ask for (the names in the code, both endings of the Quick Nav ones), prepared shortly after start-up.
+    nonisolated package static let preloadNames = ["Announcement.aiff", "BrailleDisplayConnected.aiff", "BrailleDisplayDisconnected.aiff", "DrillIn.aiff", "DrillOut.aiff", "EmptySpace.aiff", "LinkBegin.aiff", "MenuDown.aiff", "Misspelled.aiff", "NotFound.aiff", "PopupAppeared.aiff", "QuickNavArrowKeyOff.aiff", "QuickNavArrowKeyOff.wav", "QuickNavArrowKeyOn.aiff", "QuickNavArrowKeyOn.wav", "QuickNavOff.aiff", "QuickNavOff.wav", "QuickNavOn.aiff", "QuickNavOn.wav", "QuickNavSingleKeyOff.aiff", "QuickNavSingleKeyOn.aiff", "SecureCharacter.aiff", "TrackingOff.aiff", "TrackingOn.aiff", "WebAreaLoaded.aiff", "WebPageLoaded.aiff", "WrapBoundary.aiff"]
+    /// Prepares every file in the background; returns at once.
+    nonisolated public static func preload() { for n in preloadNames { cache.request(n, url: folder.appendingPathComponent(n), levelled: true) } }
     public static var available: Bool { FileManager.default.fileExists(atPath: folder.appendingPathComponent("LinkBegin.aiff").path) }
 
     private static var lastPlayed: [String: Date] = [:]
@@ -36,11 +41,21 @@ public enum VoiceOverSounds {
         if let probe = requestProbe { probe(name, config.general.effectiveSounds); return true }
         // "TurnOver's sounds" chosen (17 Oct 2026): TurnOver's own sound stands in for each of VoiceOver's files.
         if config.general.effectiveSounds == "turnover" { return ownTone(for: name, why: why) }
-        if players[name] == nil, let data = levelled(folder.appendingPathComponent(name)), let p = try? AVAudioPlayer(data: data) {
-            p.prepareToPlay()
-            players[name] = p
+        guard let p = cache.player(name) else {
+            if cache.hasFailed(name) { return ownTone(for: name, why: why) }
+            // Not prepared yet: never prepared here, on the calling thread (it would hold up speech and keys). It is
+            // prepared in the background and played when ready, unless that takes over a second (then it is skipped).
+            let asked = Date()
+            cache.request(name, url: folder.appendingPathComponent(name), levelled: true) { ok in
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        guard Date().timeIntervalSince(asked) < 1 else { return }
+                        if ok { _ = play(name, volume: volume, why: why) } else { _ = ownTone(for: name, why: why) }
+                    }
+                }
+            }
+            return true
         }
-        guard let p = players[name] else { return ownTone(for: name, why: why) }
         p.volume = volume * min(1.5, max(0.2, Float(config.speech.volume) / 100))   // with TurnOver's own volume
         p.currentTime = 0
         let started = Date()
@@ -97,18 +112,18 @@ public enum VoiceOverSounds {
             "EmptySpace.aiff": "empty", "Announcement.aiff": "announcement", "SecureCharacter.aiff": "secure",
             "LinkBegin.aiff": "link", "Misspelled.aiff": "spelling", "BrailleDisplayConnected.aiff": "braille_on", "BrailleDisplayDisconnected.aiff": "braille_off",
         ]
-        if let f = fresh[name], TurnOverSounds.play(f, why: why) { return true }
+        if let f = fresh[name], TurnOverSounds.play(f, exempt: true, why: why) { return true }
         switch name {
-        case "WrapBoundary.aiff": Tones.beep(220, 70); return true
-        case "DrillIn.aiff": Tones.beep(660, 30); return true
-        case "DrillOut.aiff": Tones.beep(440, 30); return true
-        case "QuickNavOn.aiff", "QuickNavSingleKeyOn.aiff", "QuickNavArrowKeyOn.aiff", "TrackingOn.aiff": Tones.beep(660, 40); DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { Tones.beep(880, 50) }; return true
-        case "QuickNavOff.aiff", "QuickNavSingleKeyOff.aiff", "QuickNavArrowKeyOff.aiff", "TrackingOff.aiff": Tones.beep(880, 40); DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { Tones.beep(660, 50) }; return true
-        case "PopupAppeared.aiff": Tones.beep(520, 40); return true
-        case "WebAreaLoaded.aiff", "WebPageLoaded.aiff": Tones.beep(700, 50); return true
-        case "EmptySpace.aiff": Tones.beep(300, 40); return true
-        case "Announcement.aiff": Tones.beep(800, 40); return true
-        case "SecureCharacter.aiff": Tones.beep(1000, 20, volume: 0.15); return true
+        case "WrapBoundary.aiff": Tones.beep(220, 70, exempt: true); return true
+        case "DrillIn.aiff": Tones.beep(660, 30, exempt: true); return true
+        case "DrillOut.aiff": Tones.beep(440, 30, exempt: true); return true
+        case "QuickNavOn.aiff", "QuickNavSingleKeyOn.aiff", "QuickNavArrowKeyOn.aiff", "TrackingOn.aiff": Tones.beep(660, 40, exempt: true); DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { Tones.beep(880, 50, exempt: true) }; return true
+        case "QuickNavOff.aiff", "QuickNavSingleKeyOff.aiff", "QuickNavArrowKeyOff.aiff", "TrackingOff.aiff": Tones.beep(880, 40, exempt: true); DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { Tones.beep(660, 50, exempt: true) }; return true
+        case "PopupAppeared.aiff": Tones.beep(520, 40, exempt: true); return true
+        case "WebAreaLoaded.aiff", "WebPageLoaded.aiff": Tones.beep(700, 50, exempt: true); return true
+        case "EmptySpace.aiff": Tones.beep(300, 40, exempt: true); return true
+        case "Announcement.aiff": Tones.beep(800, 40, exempt: true); return true
+        case "SecureCharacter.aiff": Tones.beep(1000, 20, volume: 0.15, exempt: true); return true
         default: return false   // LinkBegin, Misspelled, the braille display: Tones has its own
         }
     }

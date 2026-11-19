@@ -152,11 +152,11 @@ public final class FindPrompt: @unchecked Sendable {
     public static func find(_ s: String, forward: Bool) {
         Log.io("find \(forward ? "next" : "previous"): \(Log.words(s))")
         if let d = API.focusTreeInterceptor, !d.passThrough {
-            if !d.find(s, forward: forward) { Tones.searchNotFound(); Speech.speakMessage(String(localized: "\(s) not found", comment: "Find found nothing: %@ is what was searched for")) }
+            if !d.find(s, forward: forward) { Speech.speakMessage(String(localized: "\(s) not found", comment: "Find found nothing: %@ is what was searched for")); Tones.searchNotFound() }
             return
         }
         if let f = API.caretObject, f.hasNavigableText {
-            if !findInText(f, s, forward: forward) { Tones.searchNotFound(); Speech.speakMessage(String(localized: "\(s) not found", comment: "Find found nothing: %@ is what was searched for")) }
+            if !findInText(f, s, forward: forward) { Speech.speakMessage(String(localized: "\(s) not found", comment: "Find found nothing: %@ is what was searched for")); Tones.searchNotFound() }
             return
         }
         findInWindow(s, forward: forward)
@@ -189,7 +189,7 @@ public final class FindPrompt: @unchecked Sendable {
 
     private static func findInWindow(_ s: String, forward: Bool) {
         guard let f = API.focusObject, let window = f.element.element(kAXWindowAttribute) ?? (f.role == .window ? f.element : nil) else {
-            Tones.searchNotFound(); Speech.speakMessage(String(localized: "\(s) not found", comment: "Find found nothing: %@ is what was searched for")); return
+            Speech.speakMessage(String(localized: "\(s) not found", comment: "Find found nothing: %@ is what was searched for")); Tones.searchNotFound(); return
         }
         var here = ObjectNavigator.shared.element ?? f.element
         // In a list or table, "here" is the selected row: the next match is after the message you are on.
@@ -242,7 +242,7 @@ public final class FindPrompt: @unchecked Sendable {
             let timedOut = Date() >= deadline
             DispatchQueue.main.async {
                 Log.io("find: \(visited) items searched\(timedOut ? ", stopped at 3 s" : "")")
-                guard let hit else { Tones.searchNotFound(); Speech.speakMessage(String(localized: "\(s) not found", comment: "Find found nothing: %@ is what was searched for")); return }
+                guard let hit else { Speech.speakMessage(String(localized: "\(s) not found", comment: "Find found nothing: %@ is what was searched for")); Tones.searchNotFound(); return }
                 go(to: hit)
             }
         }

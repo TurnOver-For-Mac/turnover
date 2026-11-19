@@ -628,7 +628,7 @@ public final class ObjectNavigator {
         guard Self.isGroup(cur) || cur.role == "AXWindow" else { firstChild(); return }
         let items = Self.groupItems(cur)
         guard let first = items.first else { Tones.edge(); Speech.speakMessage(String(localized: "no items inside", comment: "Spoken message")); return }
-        if !VoiceOverSounds.play("DrillIn.aiff") { Tones.beep(660, 30) }
+        if !VoiceOverSounds.play("DrillIn.aiff") { Tones.beep(660, 30, exempt: true) }
         land(on: first)
     }
 
@@ -638,7 +638,7 @@ public final class ObjectNavigator {
         // The window itself is the top level: the cursor rests on it, so VO-Left and Right then move among the window's
         // own items (the toolbar, the sidebar, the document) instead of staying in the text (Word, 17 Oct 2026).
         if container.role == "AXWindow" { current = container; currentPid = container.pid; VoiceOverSounds.play("DrillOut.aiff"); Speech.speakMessage(String(localized: "top level", comment: "Spoken message")); return }
-        if !VoiceOverSounds.play("DrillOut.aiff") { Tones.beep(440, 30) }
+        if !VoiceOverSounds.play("DrillOut.aiff") { Tones.beep(440, 30, exempt: true) }
         land(on: container)
     }
 

@@ -942,7 +942,7 @@ public final class AppStoreView {
             }
             let t = o.string(kAXTitleAttribute) ?? ""
             if t.hasPrefix("Open") {
-                Tones.beep(880, 80); Speech.speakMessage(String(localized: "\(name) installed", comment: "An app finished installing"))
+                Speech.speakMessage(String(localized: "\(name) installed", comment: "An app finished installing")); Tones.installed()
                 Log.io("app store: \(Log.words(name)) installed")
                 downloadsWatched.remove(name)
                 return

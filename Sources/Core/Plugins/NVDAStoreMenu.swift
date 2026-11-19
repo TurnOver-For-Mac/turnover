@@ -65,7 +65,7 @@ enum NVDAStoreMenu {
     /// The tool is run off the main thread, with a soft tick each second so the wait is not silence (as the briefs do).
     private static func inBackground<T: Sendable>(_ work: @escaping @Sendable () -> T, then: @escaping @MainActor (T) -> Void) {
         let done = Locked(false)
-        func tick() { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if !done.value { if Tones.invented("waiting_tick") { Tones.beep(880, 30, volume: 0.1) }; tick() } } }
+        func tick() { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if !done.value { Tones.waitingTick(); tick() } } }
         tick()
         DispatchQueue.global(qos: .userInitiated).async {
             let result = work()

@@ -39,11 +39,15 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 - Sounds, with "VoiceOver's" chosen: more of VoiceOver's own sounds now play on the event VoiceOver uses them for. A
   search that finds nothing plays NotFound, a menu opening plays MenuDown (a context menu no longer plays the popover
   sound as well), and a page that has loaded plays WebPageLoaded, the file VoiceOver names for it, where TurnOver
-  played WebAreaLoaded. "TurnOver's" sounds are as they were.
+  played WebAreaLoaded. "TurnOver's" sounds are as they were. These sounds, and every other, are now prepared in the
+  background shortly after start-up, never on the main thread, so a first play can no longer hold up speech or keys,
+  and they play after the spoken message is queued.
 - Sounds, with "VoiceOver's" chosen in Settings, Sounds: TurnOver now plays a sound only where VoiceOver has one, and
   plays VoiceOver's own file for it. Before, the sounds TurnOver made up (the focus tick, pressing, headings, lists,
   landmarks, tables, pictures, quotes, comments, the browse and focus mode tones, the jump beeps) played as well, so
-  the sounds were not VoiceOver's. With "TurnOver's" chosen nothing changes. TurnOver Space, switching between
+  the sounds were not VoiceOver's. The gate is now at the lowest level, so the waiting beep, the "marked" sound and
+  the beep when an app finishes installing are silent too; only startup, take-over, hand-back, the progress beep and
+  the stand-ins for a missing VoiceOver file still play. With "TurnOver's" chosen nothing changes. TurnOver Space, switching between
   browse mode and focus mode, now plays VoiceOver's single-key Quick Nav on and off sounds. The page-loaded sound plays
   once for each page load, not again when the same page is read again.
 - Safari: Up and Down Arrow in a box that holds one character (the digit boxes on PayPal's code page) now answer at

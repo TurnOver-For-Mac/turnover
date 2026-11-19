@@ -9,8 +9,11 @@ import TurnOverSpeech
 
 @MainActor
 public enum TurnOverSounds {
-    static var folder: URL? { Bundle.main.resourceURL?.appendingPathComponent("Sounds") }
-    private static var players: [String: AVAudioPlayer] = [:]
+    nonisolated static var folder: URL? { Bundle.main.resourceURL?.appendingPathComponent("Sounds") }
+    /// Players are prepared on a background queue (SoundCache); main only looks them up.
+    nonisolated package static let cache = SoundCache()
+    /// Prepares every file of the set in the background; returns at once.
+    nonisolated public static func preload() { guard let folder else { return }; for n in names { cache.request(n, url: folder.appendingPathComponent(n + ".wav"), levelled: false) } }
     /// The names in the bundle, read once (the keyboard thread may ask whether one exists).
     nonisolated static let names: Set<String> = {
         guard let dir = Bundle.main.resourceURL?.appendingPathComponent("Sounds"),
@@ -32,14 +35,24 @@ public enum TurnOverSounds {
 
     /// Plays one of TurnOver's sounds by name ("link"); false if there is no such file.
     @discardableResult
-    public static func play(_ name: String, volume: Float = 0.8, why: String = #function) -> Bool {
+    public static func play(_ name: String, volume: Float = 0.8, exempt: Bool = false, why: String = #function) -> Bool {
+        // With VoiceOver's sounds chosen only an exempt caller plays (Tones.exempt's list); the others are TurnOver's inventions.
+        guard Tones.chosen || exempt else { return false }
+        if let probe = Tones.outputProbe { probe("sound " + name); return true }
         guard names.contains(name), let folder else { return false }
-        if players[name] == nil {
-            guard let p = try? AVAudioPlayer(contentsOf: folder.appendingPathComponent(name + ".wav")) else { return false }
-            p.prepareToPlay()
-            players[name] = p
+        guard let p = cache.player(name) else {
+            if cache.hasFailed(name) { return false }
+            // Not prepared yet: prepared in the background, never on this thread; played when ready, or skipped after a second.
+            let asked = Date()
+            cache.request(name, url: folder.appendingPathComponent(name + ".wav"), levelled: false) { ok in
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        if ok, Date().timeIntervalSince(asked) < 1 { _ = play(name, volume: volume, exempt: exempt, why: why) }
+                    }
+                }
+            }
+            return true
         }
-        guard let p = players[name] else { return false }
         p.volume = volume * min(1.5, max(0.2, Float(config.speech.volume) / 100))   // with TurnOver's own volume
         p.currentTime = 0
         let started = Date()

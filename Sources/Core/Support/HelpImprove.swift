@@ -59,7 +59,7 @@ public enum HelpImprove {
         let edition = Edition.fullName
         let done = Locked(false)
         func tick() {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if !done.value { Tones.beep(880, 30, volume: 0.1); tick() } }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if !done.value { Tones.waitingTick(); tick() } }
         }
         tick()
         DispatchQueue.global(qos: .userInitiated).async {

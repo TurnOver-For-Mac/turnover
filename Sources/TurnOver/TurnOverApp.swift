@@ -228,6 +228,8 @@ final class TurnOverApp {
         Trackpad.startIfWanted()   // the Trackpad gestures plugin, or the "trackpad" default (Trackpad.swift)   // an AI making a plugin may ask TurnOver to try keys in that app (PluginTry.swift)
         // Started while VoiceOver has the Mac (a login, a restart): no words, VoiceOver is talking, but a tone ().
         if NSWorkspace.shared.isVoiceOverEnabled { DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { Tones.startup() } }
+        // Both sound sets prepared in the background, so no first play prepares on the main thread (19 Nov 2026).
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { VoiceOverSounds.preload(); TurnOverSounds.preload() }
         watchForInputMonitoring()
         // The swap turned on in Settings while TurnOver waits for VoiceOver (the swap was off): the hand-over it would
         // have made at launch, now (25 Oct 2026).
