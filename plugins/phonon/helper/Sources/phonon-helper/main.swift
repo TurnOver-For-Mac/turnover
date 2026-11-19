@@ -153,8 +153,8 @@ struct Stretch {
     }
 }
 
-/// Phonon, cleared up (2 Nov 2026: "they're kinda muffled"; he has a little hearing loss and finds Microsoft's
-/// natural voices clear). Measured against Alex on the same paragraph: Phonon puts far more of its sound between 500 Hz
+/// Phonon, cleared up (2 Nov 2026: the voices sounded muffled next to Microsoft's natural voices, which are
+/// clear). Measured against Alex on the same paragraph: Phonon puts far more of its sound between 500 Hz
 /// and 1 kHz (-3.4 against -9.5 dB of the whole) and less between 2 and 4 kHz (-20 against -17 dB), where consonants
 /// are heard. So a broad cut at 600 Hz, a lift at 3 kHz and a little air above 7 kHz, as the advice for clear speech
 /// goes (a small cut low in the middle, a gentle lift at 2 to 4 kHz). The listener's own EQ is TurnOver's player's.

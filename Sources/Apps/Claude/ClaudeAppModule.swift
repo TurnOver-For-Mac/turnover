@@ -847,7 +847,7 @@ package final class ClaudeAppModule: AppModule {
 
     /// When the prompt last emptied: a message was sent.
     private var sentAt = Date.distantPast
-    /// The conversation a watch is for, by its page's title ("Monster Racer debugging - Claude Code").
+    /// The conversation a watch is for, by its page's title ("Fixing the build - Claude Code").
     private var watchedSession = ""
 
     /// While a reply streams, look once a second; when it stops, read it.
