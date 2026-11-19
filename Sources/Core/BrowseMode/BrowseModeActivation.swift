@@ -393,7 +393,7 @@ extension BrowseModeDocument {
                     Speech.speakMessage(Speech.objectPropertiesSpeech(ObjectFactory.make(el), reason: .focus).joined(separator: ", "))
                     ModeAnnouncement.navigationReported(self, object: ObjectFactory.make(el))
                     lastChain = []
-                } else { speakQuickNavText(at: position, link: el.role == "AXLink") }
+                } else { speakQuickNavText(at: position, link: el.role == "AXLink", element: el) }   // the whole element (19 Nov 2026)
             }
             // Later than the key that chose it: on a page that is not answering, read from the copy like the key.
             if !readFromCopyIfSilent(read) { read() }

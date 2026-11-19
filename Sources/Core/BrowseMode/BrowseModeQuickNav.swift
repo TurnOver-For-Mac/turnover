@@ -213,7 +213,9 @@ extension BrowseModeDocument {
             ModeAnnouncement.navigationReported(self, object: obj)
             lastChain = []
         } else {
-            speakQuickNavText(at: r.0, link: q.name.contains("Link"))
+            // The element too, so a heading wrapped over several lines is read whole (19 Nov 2026: H on a long AppleVis
+            // heading said its first line, Down Arrow the rest); the buffer's own search below already passed it.
+            speakQuickNavText(at: r.0, link: q.name.contains("Link"), element: target)
         }
     }
 
@@ -263,7 +265,7 @@ extension BrowseModeDocument {
     /// What quick navigation says on landing: the whole of the element found (a heading over two lines was read
     /// only to the end of its first line, then again from the caret, 8 Oct 2026), or the line when the
     /// element is not known.
-    func speakQuickNavText(at offset: Int, link: Bool, element: AXUIElement? = nil) {
+    package func speakQuickNavText(at offset: Int, link: Bool, element: AXUIElement? = nil) {
         guard let info = makeTextInfo(.bookmark(Bookmark(start: offset, end: offset))) else { return }
         info.expand(.line)
         if element != nil, let i = buffer.lineIndex(at: offset) {

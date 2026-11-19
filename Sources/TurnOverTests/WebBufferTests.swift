@@ -86,6 +86,61 @@ func webBufferTests() {
         check(!AXHandler.fieldHoldsKeyboard(AXReplay.element(3), group, page: page), "nor does a control that is not a text field (other rules decide)")
         check(!AXHandler.fieldHoldsKeyboard(AXReplay.element(0), group, page: page), "the group itself is not a field holding the keyboard")
     }
+    // 19 Nov 2026: H on a long AppleVis heading said its first wrapped line, Down Arrow the rest (the WebKit-search path
+    // passed no element to speakQuickNavText). Logic only: WebKit's search cannot be replayed, so this drives the call that
+    // path now makes (the element given) and the copy's own search; a real page's wording is Oliver's ear.
+    test("quick navigation: a heading wrapped over several lines, or split into a link and text, is read whole (19 Nov 2026)") {
+        let long = (1...14).map { "word\($0)" }.joined(separator: " ") + " " + String(repeating: "and more words here ", count: 8)
+        let first = "Announcing the first public beta of Runa TTS for iOS: bringing the high quality, natural sounding"
+        let rest = "voices from ReadSpeaker to VoiceOver and other apps that rely on speech."
+        var f = AXFixture(app: "Public sample", bundle: "test.longheading", recorded: "", root: 0, application: 1, focus: 0, nodes: [])
+        // Heading 10: one long text. Heading 20: a link, then plain text, together longer than the line length.
+        f.nodes.append(.init(id: 10, attrs: ["AXRole": .string("AXHeading"), "AXValue": .number(2), "AXParent": .element(0), "AXChildren": .elements([11])]))
+        f.nodes.append(.init(id: 11, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string(long), "AXParent": .element(10)]))
+        f.nodes.append(.init(id: 20, attrs: ["AXRole": .string("AXHeading"), "AXValue": .number(2), "AXParent": .element(0), "AXChildren": .elements([21, 23])]))
+        f.nodes.append(.init(id: 21, attrs: ["AXRole": .string("AXLink"), "AXParent": .element(20), "AXChildren": .elements([22])]))
+        f.nodes.append(.init(id: 22, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string(first + " "), "AXParent": .element(21)]))
+        f.nodes.append(.init(id: 23, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string(rest), "AXParent": .element(20)]))
+        f.nodes.append(.init(id: 30, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string(String(repeating: "Text after the headings, long enough to be a page of its own. ", count: 12)), "AXParent": .element(0)]))
+        f.nodes.append(.init(id: 0, attrs: ["AXRole": .string("AXWebArea"), "AXURL": .url("https://example.com/long"), "AXParent": .element(1), "AXChildren": .elements([10, 20, 30])]))
+        f.nodes.append(.init(id: 1, attrs: ["AXRole": .string("AXApplication"), "AXTitle": .string("Public sample"), "AXChildren": .elements([0])]))
+        AXReplay.load(f)
+        defer { AXReplay.unload() }
+        guard let root = AXReplay.root else { return check(false, "fixture root") }
+        let buffer = WebBuffer(webArea: root, collect: { root, focus, request in WebBufferCollection.collect(root: root, focus: focus, request: request) })
+        let page = BrowseModeDocument(webArea: root, buffer: buffer)
+        BrowseModeHandler.shared.adopt(page)
+        API.setFocusObject(nil, ancestors: [], interceptor: page)
+        var said: [String] = []
+        let savedSink = Speech.sink
+        Speech.sink = { said.append($0) }
+        defer { Speech.sink = savedSink; API.setFocusObject(nil, ancestors: []); BrowseModeHandler.shared.forget(pid: root.pid) }
+        page.hasWebKitSearch = false
+        page.refreshIfNavigated(); waitForBuffer(buffer)
+        guard let heading = BrowseModeDocument.quickNav.first(where: { $0.name == "Heading" }) else { return check(false, "the heading key") }
+        let hits = buffer.find(from: -1, forward: true, roles: ["AXHeading"]).map { [$0] } ?? []
+        guard let one = hits.first else { return check(false, "the first heading is in the copy") }
+        check(buffer.lines.filter { $0.start < buffer.text.range(of: "Text after").location }.count >= 5, "the headings wrap over more than one line each")
+        // The copy's own search: the whole heading.
+        page.position = -1; said = []
+        page.quickNav(heading, forward: true)
+        let heard1 = said.joined(separator: " ")
+        check(heard1.contains("word1 ") && heard1.contains(String(long.suffix(20))), "a heading longer than the line length is read to its end")
+        expect(page.position, one.0, "and the caret is at its start")
+        // The call the WebKit-search path makes: the element it found, the offset of its start.
+        guard let second = buffer.find(from: one.0, forward: true, roles: ["AXHeading"]) else { return check(false, "the second heading is in the copy") }
+        said = []
+        page.position = second.0
+        page.speakQuickNavText(at: second.0, link: false, element: second.1)
+        let heard2 = said.joined(separator: " ")
+        check(heard2.contains("Announcing the first public beta") && heard2.contains("natural sounding"), "a heading that starts with a link: the link's text is read")
+        check(heard2.contains("rely on speech"), "and the text after the link, to the end of the heading")
+        // Without the element (what the WebKit-search path passed before): one line only.
+        said = []
+        page.speakQuickNavText(at: second.0, link: false)
+        check(!said.joined(separator: " ").contains("rely on speech"), "(without the element only the first line is read: the fault this test guards)")
+    }
+
     test("quick navigation: at the end of a page that has not changed, the wrap is at once; a changed page is read first (14 Nov 2026)") {
         AXReplay.load(threeHeadingsPage())
         defer { AXReplay.unload() }

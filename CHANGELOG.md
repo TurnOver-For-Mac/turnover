@@ -25,6 +25,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- Safari: H (and the other quick keys, and a choice from the Elements list) on a heading too long for one line now reads
+  the whole heading, as VoiceOver does, not its first line with the rest left for Down Arrow.
 - Safari: Up and Down Arrow in a box that holds one character (the digit boxes on PayPal's code page) now answer at
   once, as they do at the top of any line. Before, Down waited about a third of a second.
 - Safari: the list a pop-up button opens (Amazon's Quantity) is no longer taken for a page of its own, so the heading
