@@ -12589,6 +12589,12 @@
         }
       }
     },
+    "Mouse tracking" : {
+
+    },
+    "Mouse tracking on or off; reads what is under the mouse pointer as it moves (NVDA+M)" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
     "Move %@ down" : {
       "localizations" : {
         "tr" : {
@@ -18022,6 +18028,9 @@
         }
       }
     },
+    "Read what is under the mouse pointer as it moves" : {
+
+    },
     "Readers per app" : {
       "localizations" : {
         "tr" : {
@@ -18736,6 +18745,9 @@
           }
         }
       }
+    },
+    "Reads what is under the mouse pointer as it moves" : {
+
     },
     "Rebuilds the page's browse mode view (NVDA+F5)" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -23576,6 +23588,9 @@
           }
         }
       }
+    },
+    "The pointer is not read while a page or Say All is being read out. If pages read themselves when they open, turn off \"Read a page through as it opens\" in Web pages to keep hearing the pointer." : {
+
     },
     "The Steam program did not answer." : {
       "comment" : "Game speech status",
@@ -28835,6 +28850,12 @@
           }
         }
       }
+    },
+    "With mouse tracking, a sound when the pointer leaves an item for a blank place" : {
+
+    },
+    "With mouse tracking, an app that holds the lookup for over a second is left behind so the pointer is read again" : {
+
     },
     "With no conversation open: into the conversations (or the sections, from one of them)" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -35268,6 +35289,9 @@
           }
         }
       }
+    },
+    "mouse tracking %@" : {
+      "comment" : "Mouse tracking turned on or off"
     },
     "mouse up" : {
       "comment" : "Spoken message",
