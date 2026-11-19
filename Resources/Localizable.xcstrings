@@ -13089,18 +13089,6 @@
         }
       }
     },
-    "Mouse interrupts other speech" : {
-
-    },
-    "Mouse moves the cursor" : {
-
-    },
-    "Mouse pointer interrupts other speech" : {
-
-    },
-    "Mouse pointer moves the review cursor" : {
-
-    },
     "Mouse tracking" : {
 
     },
@@ -16208,9 +16196,6 @@
           }
         }
       }
-    },
-    "Off, only the pointer's own speech gives way and a notification is not cut off. On, the pointer is heard at once, even while something else is talking." : {
-
     },
     "Off: each reader has its own switch and neither changes the other. Command Control Period is TurnOver's; Command F5 is VoiceOver's." : {
       "extractionState" : "stale",
@@ -29812,14 +29797,14 @@
         }
       }
     },
+    "With mouse tracking, a sound when the pointer leaves an item for a blank place" : {
+
+    },
+    "With mouse tracking, an app that holds the lookup for over a second is left behind so the pointer is read again" : {
+
+    },
     "With Quick Look open, an arrow says the file the selection moved to" : {
       "comment" : "A command, as the key list and keyboard help say it"
-    },
-    "With mouse tracking, the pointer also cuts off other speech, such as notifications; off, only the pointer's own speech gives way" : {
-
-    },
-    "With mouse tracking, the review cursor goes to what the pointer is over; the keyboard focus never does" : {
-
     },
     "With no conversation open: into the conversations (or the sections, from one of them)" : {
       "comment" : "A command, as the key list and keyboard help say it",

@@ -4,6 +4,28 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ## 2.0, build 24.2
 
+### New to try
+
+- Mouse tracking: Settings, Presentation, "Read what is under the mouse pointer as it moves" (or NVDA+M in the Windows
+  keyboard style) reads each item the pointer crosses, as VoiceOver's cursor following the mouse pointer does. It is off
+  until turned on. The keyboard focus never moves with the pointer; the review cursor goes to the item, as NVDA's review
+  cursor follows the mouse. A blank place (a window's background, a group with no name) is silent, and coming back to an
+  item reads it again. Each new item cuts off whatever is being said, as VoiceOver does when the pointer moves: a tester
+  found that notifications, live announcements and the speech from opening a chat kept talking over the pointer, which
+  made it no faster than the keyboard.
+  The whole lookup, the item's name, role, value, state and a group's item count, is read off the main thread under one
+  deadline, and only the finished text is handed back, so an app that stops answering cannot freeze TurnOver. This
+  reads less than the keyboard does: app-specific names (Mail, Excel, Finder, Calendar, Dock, Terminal and others),
+  plugin and profile labels, the Item details order and toggles, position information and the "goes in" hint are left
+  out.
+  What it says is private: it is not kept in the speech history, and the log holds only the kind of item and the app,
+  never its words. It watches the pointer only while TurnOver is the reader, and it waits while Say All or the
+  trackpad's explore is reading. If an app holds the lookup for over a second, the lookup is given up and the
+  pointer is read again.
+- Deleted text by pitch: Settings, Speech, "Lower the pitch for deleted text, instead of saying deleted" says a
+  deleted character or word lower, as VoiceOver does, without the word "deleted". Off by default. A deleted capital
+  is lowered too when capitals are raised.
+
 ### Changed
 
 - The test program no longer plays any audio: one switch (AudioOutput.muted), set first thing in the tests, makes every
