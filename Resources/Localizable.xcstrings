@@ -12650,6 +12650,9 @@
         }
       }
     },
+    "Made the sound set %@. Choose it in Whose sounds." : {
+      "comment" : "Spoken message after Make a starter set in Settings, Sounds; the name is the new folder's"
+    },
     "Mail" : {
       "comment" : "A group of commands in the key list",
       "localizations" : {
@@ -12721,6 +12724,9 @@
           }
         }
       }
+    },
+    "Make a starter set" : {
+
     },
     "Make one with %@" : {
       "localizations" : {
@@ -16456,6 +16462,9 @@
           }
         }
       }
+    },
+    "Open the sound sets folder" : {
+
     },
     "Opening %@" : {
       "comment" : "Spoken message",
@@ -25977,6 +25986,9 @@
         }
       }
     },
+    "The starter sound set could not be made." : {
+      "comment" : "Spoken message when Make a starter set in Settings, Sounds failed"
+    },
     "The system keeps switching TurnOver's keyboard off; TurnOver turns it back on each time. If keys are being missed, quit and start TurnOver again." : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -30059,6 +30071,9 @@
           }
         }
       }
+    },
+    "Your own sound sets: a folder of audio files, one for each event, named for the event. A set's sounds play where it has a file, and TurnOver's own where it has none. Make a starter set to see the names." : {
+
     },
     "Your previous window spot (VO-Command-Left Bracket)" : {
       "comment" : "A command, as the key list and keyboard help say it",
