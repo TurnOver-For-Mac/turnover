@@ -365,10 +365,8 @@ public final class GlobalCommands: ScriptableObject {
             guard let d = API.focusTreeInterceptor else { Speech.speakMessage(String(localized: "not in a document", comment: "Browse mode is only in documents")); return }
             d.disableAutoPassThrough = !d.passThrough   // NVDA: a manual switch to focus mode sticks until focus leaves
             // 14 Nov 2026: retain the familiar Quick Nav sound, with the mode words after the key's speech.
-            // 19 Nov 2026: single-key Quick Nav on and off is VoiceOver's nearest thing to browse mode (its files
-            // QuickNavSingleKeyOn/Off); the arrow-key pair stays for the Left+Right chord (VoiceOverParity).
             let browse = d.passThrough
-            let sounded = VoiceOverSounds.play(browse ? "QuickNavSingleKeyOn.wav" : "QuickNavSingleKeyOff.wav")
+            let sounded = VoiceOverSounds.play(browse ? "QuickNavOn.wav" : "QuickNavOff.wav")
             d.setPassThrough(!d.passThrough, announce: true, playSound: !sounded, manual: true)
         }
         // Object navigation: everything in the window, whether or not the keyboard reaches it. TurnOver Left and Right
