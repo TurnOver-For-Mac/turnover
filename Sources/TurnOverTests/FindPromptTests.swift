@@ -130,4 +130,21 @@ func findPromptTests() {
         check(!FindPrompt.shared.isOpen, "the menu opening closed the prompt")
         TurnOverMenu.shared.close()
     }
+
+    // 19 Nov 2026, Codex's review: the close's log line was written on the keyboard's tap.
+    test("Find's prompt closed off the main thread writes its log line on the main thread") {
+        let savedObserver = Log.observer, savedLevel = Log.level
+        let onMainThread = Locked<[Bool]>([])
+        Log.level = .io
+        Log.observer = { line in if line.contains("the prompt closed without a search (the test: off main)") { onMainThread.value.append(Thread.isMainThread) } }
+        defer { Log.observer = savedObserver; Log.level = savedLevel }
+        FindPrompt.shared.open()
+        let done = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async { FindPrompt.shared.close(because: "the test: off main"); done.signal() }
+        done.wait()
+        check(!FindPrompt.shared.isOpen, "closed at once, on the calling thread")
+        expect(onMainThread.value, [], "nothing written on the calling thread")
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        expect(onMainThread.value, [true], "the line written once, on the main thread")
+    }
 }

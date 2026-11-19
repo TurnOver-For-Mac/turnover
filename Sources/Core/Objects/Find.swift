@@ -65,6 +65,9 @@ public final class FindPrompt: @unchecked Sendable {
     /// came (Command Tab, the mouse, the Dock), which is also TurnOver's own app giving up the front; TurnOver's menu
     /// opening; the lock, sleep or a user switch; secure input coming on (TurnOver hears no keys then). Any queued key
     /// for this opening is then dropped (`generation`). Nothing is said.
+    ///
+    /// The log line is written on the main thread: this is called on the keyboard's tap, where a stalled log write
+    /// would hold every key (19 Nov 2026, Codex's review).
     nonisolated package func close(because why: String) {
         _generation.lock.lock()
         let wasOpen = _isOpen.value
@@ -72,7 +75,8 @@ public final class FindPrompt: @unchecked Sendable {
         _generation.lock.unlock()
         guard wasOpen else { return }
         // The key itself, when there is one, is on the input line that follows (a typed key is never named in the log).
-        Log.io("find: the prompt closed without a search (\(why))")
+        let line = "find: the prompt closed without a search (\(why))"
+        if Thread.isMainThread { Log.io(line) } else { DispatchQueue.main.async { Log.io(line) } }
     }
 
     /// Every key while the prompt is open that it takes (InputManager routes them here, on the main thread), with the
