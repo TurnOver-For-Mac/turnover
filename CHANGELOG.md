@@ -36,6 +36,10 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   the whole heading, as VoiceOver does, not its first line with the rest left for Down Arrow.
 - Claude: Command 1 to 5 (and the other numbers) names the conversation it lands on at once, and says it once. The
   sidebar's Recents list had changed shape, so the row could not be read and the answer waited, came late or was missed.
+- Sounds, with "VoiceOver's" chosen: more of VoiceOver's own sounds now play on the event VoiceOver uses them for. A
+  search that finds nothing plays NotFound, a menu opening plays MenuDown (a context menu no longer plays the popover
+  sound as well), and a page that has loaded plays WebPageLoaded, the file VoiceOver names for it, where TurnOver
+  played WebAreaLoaded. "TurnOver's" sounds are as they were.
 - Sounds, with "VoiceOver's" chosen in Settings, Sounds: TurnOver now plays a sound only where VoiceOver has one, and
   plays VoiceOver's own file for it. Before, the sounds TurnOver made up (the focus tick, pressing, headings, lists,
   landmarks, tables, pictures, quotes, comments, the browse and focus mode tones, the jump beeps) played as well, so

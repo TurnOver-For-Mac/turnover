@@ -28,8 +28,12 @@ public enum VoiceOverSounds {
 
     /// Plays one of VoiceOver's sounds by file name ("LinkBegin.aiff"), or TurnOver's own for it with TurnOver's set
     /// chosen or the file missing; false where there is neither, so the caller's old tone plays.
+    /// A test sets this to see which file is asked for, and with which sounds setting, with nothing played (19 Nov 2026).
+    nonisolated(unsafe) package static var requestProbe: ((_ name: String, _ sounds: String) -> Void)?
+
     @discardableResult
     public static func play(_ name: String, volume: Float = 0.8, why: String = #function) -> Bool {
+        if let probe = requestProbe { probe(name, config.general.effectiveSounds); return true }
         // "TurnOver's sounds" chosen (17 Oct 2026): TurnOver's own sound stands in for each of VoiceOver's files.
         if config.general.effectiveSounds == "turnover" { return ownTone(for: name, why: why) }
         if players[name] == nil, let data = levelled(folder.appendingPathComponent(name)), let p = try? AVAudioPlayer(data: data) {
@@ -80,7 +84,7 @@ public enum VoiceOverSounds {
 
     /// TurnOver's sound for one of VoiceOver's sound names (the sounds setting "TurnOver's", or the file missing); false
     /// where TurnOver has none, so the caller's own fallback plays.
-    static func ownTone(for asked: String, why: String = #function) -> Bool {
+    package static func ownTone(for asked: String, why: String = #function) -> Bool {
         guard Tones.own else { return false }   // coexisting, VoiceOver's own stand in for a file that is missing
         // By the sound's name, whatever its file's ending: VoiceOver's Quick Nav sounds are .wav, and asked for as such
         // they matched nothing here, so Quick Nav said its words instead of TurnOver's sound (19 Oct 2026).
@@ -89,7 +93,7 @@ public enum VoiceOverSounds {
         let fresh: [String: String] = [
             "WrapBoundary.aiff": "edge", "DrillIn.aiff": "drill_in", "DrillOut.aiff": "drill_out",
             "QuickNavOn.aiff": "quicknav_on", "QuickNavSingleKeyOn.aiff": "quicknav_on", "QuickNavSingleKeyOff.aiff": "quicknav_off", "QuickNavArrowKeyOn.aiff": "quicknav_on", "QuickNavOff.aiff": "quicknav_off", "QuickNavArrowKeyOff.aiff": "quicknav_off",
-            "TrackingOn.aiff": "tracking_on", "TrackingOff.aiff": "tracking_off", "PopupAppeared.aiff": "popup", "WebAreaLoaded.aiff": "page_loaded",
+            "TrackingOn.aiff": "tracking_on", "TrackingOff.aiff": "tracking_off", "PopupAppeared.aiff": "popup", "WebAreaLoaded.aiff": "page_loaded", "WebPageLoaded.aiff": "page_loaded",
             "EmptySpace.aiff": "empty", "Announcement.aiff": "announcement", "SecureCharacter.aiff": "secure",
             "LinkBegin.aiff": "link", "Misspelled.aiff": "spelling", "BrailleDisplayConnected.aiff": "braille_on", "BrailleDisplayDisconnected.aiff": "braille_off",
         ]
@@ -101,7 +105,7 @@ public enum VoiceOverSounds {
         case "QuickNavOn.aiff", "QuickNavSingleKeyOn.aiff", "QuickNavArrowKeyOn.aiff", "TrackingOn.aiff": Tones.beep(660, 40); DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { Tones.beep(880, 50) }; return true
         case "QuickNavOff.aiff", "QuickNavSingleKeyOff.aiff", "QuickNavArrowKeyOff.aiff", "TrackingOff.aiff": Tones.beep(880, 40); DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { Tones.beep(660, 50) }; return true
         case "PopupAppeared.aiff": Tones.beep(520, 40); return true
-        case "WebAreaLoaded.aiff": Tones.beep(700, 50); return true
+        case "WebAreaLoaded.aiff", "WebPageLoaded.aiff": Tones.beep(700, 50); return true
         case "EmptySpace.aiff": Tones.beep(300, 40); return true
         case "Announcement.aiff": Tones.beep(800, 40); return true
         case "SecureCharacter.aiff": Tones.beep(1000, 20, volume: 0.15); return true

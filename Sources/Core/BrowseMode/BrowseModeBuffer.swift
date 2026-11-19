@@ -158,7 +158,7 @@ extension BrowseModeDocument {
             guard API.focusTreeInterceptor === self else { return }
             if Core.active, publicationWasEmpty, !buffer.lines.isEmpty, pageLoadSounded != pageGeneration {
                 pageLoadSounded = pageGeneration
-                VoiceOverSounds.play("WebAreaLoaded.aiff")
+                Tones.pageLoaded()
             }
             // Nothing is said of a long page as it arrives: its rest is read on by itself (WebBuffer.fillOnIfWanted),
             // and "read in part" is for the reader who gets to the end of what there is first (reportBufferEnd).

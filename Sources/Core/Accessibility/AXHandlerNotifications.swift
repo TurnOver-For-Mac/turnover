@@ -135,7 +135,7 @@ extension AXHandler {
             menuOpenedAt = Date()
             logMenu(element)
             // Word opens its context menu and every submenu at once: one announcement.
-            if Date().timeIntervalSince(lastMenuStart) > 0.5 { EventHandler.queue(Event(.menuStart, ObjectFactory.make(element))) }
+            if Date().timeIntervalSince(lastMenuStart) > 0.5 { Tones.menuOpened(); EventHandler.queue(Event(.menuStart, ObjectFactory.make(element))) }
             lastMenuStart = Date()
         case kAXMenuClosedNotification:
             if element.role == "AXGroup", AppModuleHandler.shared.appModule(for: pid).handlesGroupMenus {

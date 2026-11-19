@@ -47,6 +47,17 @@ public enum Tones {
     /// VoiceOver's own sound where it has one (17 Oct 2026), or the set's with TurnOver's chosen; false off the main
     /// thread or with neither file, so the old tone plays.
     private static func voiceOver(_ name: String, why: String = #function) -> Bool { Thread.isMainThread ? MainActor.assumeIsolated { VoiceOverSounds.play(name, why: why) } : false }
+    /// 19 Nov 2026, like for like with VoiceOver's Sounds Help (its configuration maps each event to a file): a search
+    /// that found nothing is "Search did not find anything", NotFound.aiff. TurnOver's set has no sound for it.
+    public static func searchNotFound() { _ = voiceOver("NotFound.aiff") }
+    /// A menu opening is "Menu or popup displayed", MenuDown.aiff. TurnOver's set has none for a menu opening.
+    public static func menuOpened() { _ = voiceOver("MenuDown.aiff") }
+    /// A context menu is a menu, so with VoiceOver's sounds it is MenuDown (menuOpened); PopupAppeared.aiff is VoiceOver's
+    /// "Popover appeared". TurnOver's set keeps its popup sound for a context menu, as before.
+    public static func contextMenuOpened() { if chosen { _ = voiceOver("PopupAppeared.aiff") } }
+    /// A page finished loading: VoiceOver's "Web area loaded" event plays WebPageLoaded.aiff (WebAreaLoaded.aiff is not
+    /// the file its configuration names for it).
+    public static func pageLoaded() { _ = voiceOver("WebPageLoaded.aiff") }
     public static func link() { if !voiceOver("LinkBegin.aiff") { beep(1400, 25, volume: 0.18) } }
     public static func list() { guard invented("list") else { return }; if fresh("list") { return }; beep(520, 40) }
     public static func landmark() { guard invented("landmark") else { return }; if fresh("landmark") { return }; beep(620, 40); DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { beep(780, 40) } }

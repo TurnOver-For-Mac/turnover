@@ -552,7 +552,7 @@ open class TurnOverObject: ScriptableObject {
         let ownMenu: Set<String> = ["AXMenuBarItem", "AXMenuItem", "AXPopUpButton", "AXMenuButton", "AXComboBox", "AXButton"]   // a menu bar, submenu or pop-up button's menu
         if asked || (!ownMenu.contains(parentRole) && parent?.string(kAXSubroleAttribute) != "AXMenuExtra" && StatusMenus.lastOpened == nil) {
             Self.contextMenuRequestedAt = .distantPast
-            VoiceOverSounds.play("PopupAppeared.aiff")
+            Tones.contextMenuOpened()
             Speech.speakMessage(String(localized: "context menu", comment: "Spoken message"))
             return
         }
