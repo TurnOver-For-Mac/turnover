@@ -363,39 +363,97 @@ final class MenuNavigationPlugin: GlobalPlugin {
             if Date().timeIntervalSince(typedAt) > 1 { typed = "" }
             typed += gesture.keyName.lowercased(); typedAt = Date()
         }
+        // Menus found by looking (a process that sends no menu notices: the Dock): what Right, Return and Left mean there.
+        let ax = AXHandler.shared
+        var lookedSub: AXUIElement?       // the submenu Right or Return should open, in a menu found by looking
+        var lookedRight = false           // Right or Return on an item with a submenu, in a menu found by looking
+        var lookedLeftSub: AXUIElement?   // the submenu found by looking that Left should close
+        if ax.hasLookedMenus, let b = before, let bm = b.element(kAXParentAttribute), ax.isLookedMenu(bm), gesture.modifiers.isEmpty {
+            if ["rightArrow", "enter"].contains(gesture.keyName), Self.hasSubmenu(b) {
+                lookedRight = true
+                lookedSub = b.elements(kAXChildrenAttribute).first { $0.role == "AXMenu" }
+            }
+            if gesture.keyName == "leftArrow", (ax.openIndex(of: bm) ?? 0) > 0 { lookedLeftSub = bm }
+        }
+        // Up or Down at the end of a menu wraps round (below): at the end already, the native move that would have
+        // come is not waited for as long.
+        let isUpDown = (gesture.keyName == "upArrow" || gesture.keyName == "downArrow") && gesture.modifiers.isEmpty
+        let down = gesture.keyName == "downArrow"
+        var atEnd = false
+        if isUpDown, !gesture.isRepeat, let b = before, Self.isEndItem(b, down: down), !Self.inMenuBar(b) { atEnd = true }
         gesture.send()
         let start = Date()
         var item: AXUIElement?
         // The menu marks the new item within a few milliseconds; poll briefly rather than guess a delay. Right into
         // a submenu waits longer: Mail's Move To list takes half a second to appear, and Right said nothing (5 Oct 2026).
-        let limit = gesture.keyName == "rightArrow" ? 0.9 : 0.2
+        let limit = gesture.keyName == "rightArrow" || lookedRight ? 0.9 : (atEnd ? 0.08 : 0.2)
         _ = start
         var closed = false
+        // Left in a submenu found by looking: the submenu closes, and its entry leaves the open menus at once (its
+        // highlight would otherwise stay "the highlighted item" and nothing would ever change).
+        if let sub = lookedLeftSub {
+            let gone = Poll.pumping(every: 0.01, limit: 0.2) { !AXHandler.hasSize(sub) || sub.elements(kAXChildrenAttribute).isEmpty }
+            Log.io("menu: Left in a submenu found by looking; it \(gone ? "reports closed" : "still reports a size and children; treated as closed, as Left closes a submenu")")
+            ax.endLookedMenu(sub, why: "Left")
+        }
+        var subRegistered = false
         Poll.pumping(limit: limit) {
             if !AXHandler.shared.isMenuOpen { closed = true; return true }
             if let i = AXHandler.shared.highlightedMenuItem(), !Self.sameItem(i, before) { item = i; return true }
+            // The submenu of a menu found by looking is not in the open menus: look straight at it.
+            if lookedRight, !subRegistered, let sub = lookedSub, AXHandler.hasSize(sub), let h = AXHandler.highlightedChild(of: sub) {
+                subRegistered = true
+                Log.io("menu: submenu found by looking, \(sub.elements(kAXChildrenAttribute).count) children, after \(Int(Date().timeIntervalSince(start) * 1000)) ms")
+                ax.registerLookedMenu(sub, submenu: true, announce: true)
+                item = h
+                return true
+            }
             return false
         }
         if closed { return }
         // Right on an item with a submenu that the app ignored (Mail's context menu, once letters have gone into its
         // "Ask Siri" box, moves that box's caret instead): open the submenu by accessibility, and step into it.
         if item == nil, gesture.keyName == "rightArrow", let b = before, Self.hasSubmenu(b) {
-            Log.io("menu: Right did not open the submenu; opening it by accessibility")
-            AXUIElementPerformAction(b, kAXPressAction as CFString)
-            Poll.pumping(every: 0.01, limit: 0.8) { AXHandler.shared.openMenus.count > menusBefore }
-            if AXHandler.shared.openMenus.count > menusBefore {
-                KeyboardGesture(keyCode: 125, modifiers: [], characters: "", timestamp: 0, isRepeat: false, flags: []).send()   // to its first item
-                Poll.pumping(limit: 0.4) {
-                    if let i = AXHandler.shared.highlightedMenuItem(), !Self.sameItem(i, b) { item = i; return true }
-                    return false
+            var mayBeOpen = false
+            if lookedRight {
+                // The Right key may have opened the submenu without any notice: pressing the item could shut it. The
+                // facts first; the press only when the submenu shows no sign of being open.
+                if let sub = lookedSub {
+                    let kids = sub.elements(kAXChildrenAttribute)
+                    let selected = (sub.attr(kAXSelectedChildrenAttribute) as? [AXUIElement])?.count ?? -1
+                    let focused = kids.filter { ($0.attr(kAXFocusedAttribute) as? Bool) == true }.count
+                    let reportSelected = kids.filter { ($0.attr(kAXSelectedAttribute) as? Bool) == true }.count
+                    mayBeOpen = AXHandler.hasSize(sub) && !kids.isEmpty
+                    Log.io("menu: Right in a menu found by looking; submenu found yes, has size \(AXHandler.hasSize(sub)), \(kids.count) children, selected-children \(selected), \(focused) focused, \(reportSelected) report selected; \(mayBeOpen ? "may be open, not pressing" : "no sign of being open")")
+                } else {
+                    Log.io("menu: Right in a menu found by looking; submenu found no (the item has no menu child to look at); no sign of being open")
                 }
-                if let i = item {   // said here, with the submenu's name: its opening was news before this item was known
-                    lastItem = i; lastSpoken = (i, Date())
-                    let obj = ObjectFactory.make(i)
-                    API.setFocusObject(obj, ancestors: API.focusAncestors)
-                    Speech.speakMessage(String(localized: "\(b.string(kAXTitleAttribute) ?? "") submenu", comment: "A submenu opened: its name"))
-                    speak(i, obj)
-                    return
+            }
+            if !mayBeOpen {
+                Log.io("menu: Right did not open the submenu; opening it by accessibility")
+                AXUIElementPerformAction(b, kAXPressAction as CFString)
+                Poll.pumping(every: 0.01, limit: 0.8) {
+                    if lookedRight, AXHandler.shared.openMenus.count <= menusBefore, let sub = b.elements(kAXChildrenAttribute).first(where: { $0.role == "AXMenu" }),
+                       AXHandler.hasSize(sub), !sub.elements(kAXChildrenAttribute).isEmpty {
+                        Log.io("menu: submenu found by looking after the press")
+                        ax.registerLookedMenu(sub, submenu: true, announce: false)
+                    }
+                    return AXHandler.shared.openMenus.count > menusBefore
+                }
+                if AXHandler.shared.openMenus.count > menusBefore {
+                    KeyboardGesture(keyCode: 125, modifiers: [], characters: "", timestamp: 0, isRepeat: false, flags: []).send()   // to its first item
+                    Poll.pumping(limit: 0.4) {
+                        if let i = AXHandler.shared.highlightedMenuItem(), !Self.sameItem(i, b) { item = i; return true }
+                        return false
+                    }
+                    if let i = item {   // said here, with the submenu's name: its opening was news before this item was known
+                        lastItem = i; lastSpoken = (i, Date())
+                        let obj = ObjectFactory.make(i)
+                        API.setFocusObject(obj, ancestors: API.focusAncestors)
+                        Speech.speakMessage(String(localized: "\(b.string(kAXTitleAttribute) ?? "") submenu", comment: "A submenu opened: its name"))
+                        speak(i, obj)
+                        return
+                    }
                 }
             }
         }
@@ -411,9 +469,23 @@ final class MenuNavigationPlugin: GlobalPlugin {
                 return
             }
             Log.io("menu: no highlighted item found after \(gesture.identifier)")
-            if ["upArrow", "downArrow"].contains(gesture.keyName) { Tones.edge() }   // the end of the menu, not silence
+            if ["upArrow", "downArrow"].contains(gesture.keyName) {
+                // The key left the same item highlighted: the end of the menu. Plain Up or Down wraps round.
+                if isUpDown, !gesture.isRepeat, let b = before, Self.sameItem(AXHandler.shared.highlightedMenuItem(), b),
+                   let landed = wrapRound(down: down, before: b) {
+                    lastItem = landed
+                    let obj = ObjectFactory.make(landed)
+                    API.setFocusObject(obj, ancestors: API.focusAncestors)
+                    lastSpoken = (landed, Date())
+                    speak(landed, obj)
+                    return
+                }
+                Tones.edge()   // the end of the menu, not silence
+            }
             return
         }
+        // The highlight is back in a menu that has a submenu found by looking after it: that submenu has closed.
+        if ax.hasLookedMenus, let m = item.element(kAXParentAttribute) { ax.closeLookedSubmenus(after: m) }
         lastItem = item
         let obj = ObjectFactory.make(item)
         API.setFocusObject(obj, ancestors: API.focusAncestors)
@@ -421,6 +493,79 @@ final class MenuNavigationPlugin: GlobalPlugin {
         if gesture.keyName == "rightArrow" || gesture.keyName == "enter", AXHandler.shared.openMenus.count > menusBefore { pendingSubmenuItem = item; return }
         lastSpoken = (item, Date())
         speak(item, obj)
+    }
+
+    /// Whether an item is the last (Down) or first (Up) one in its menu that can be stopped on: an AXMenuItem that is
+    /// enabled and showing. Looks from the end only as far as the first such item.
+    static func isEndItem(_ item: AXUIElement, down: Bool) -> Bool {
+        guard let menu = item.element(kAXParentAttribute) else { return false }
+        let kids = menu.elements(kAXChildrenAttribute)
+        for k in down ? Array(kids.reversed()) : kids {
+            guard k.role == "AXMenuItem", (k.attr(kAXEnabledAttribute) as? Bool) ?? true, isShowing(k) else { continue }
+            return sameItem(k, item)
+        }
+        return false
+    }
+
+    /// While the arrows are stepped through a menu to wrap round, the selection reports of the items passed are not
+    /// spoken (until this time).
+    private var quietUntil = Date.distantPast
+
+    /// Up or Down at the end of a menu: on to the other end. Tried in turn, each checked by looking for a different
+    /// highlighted item: Home or End, setting the target's selected attribute, stepping with the opposite arrow. Returns
+    /// the item landed on, nil when none worked (the caller plays the edge sound).
+    private func wrapRound(down: Bool, before: AXUIElement) -> AXUIElement? {
+        guard !Self.inMenuBar(before), let menu = before.element(kAXParentAttribute) else { return nil }
+        let items = menu.elements(kAXChildrenAttribute).filter { $0.role == "AXMenuItem" }
+        let flags = items.map { ((($0.attr(kAXEnabledAttribute) as? Bool) ?? true) && Self.isShowing($0)) }
+        let stoppable = flags.filter { $0 }.count
+        guard MenuWrap.shouldWrap(isRepeat: false, hasBefore: true, inMenuBar: false, stoppableCount: stoppable),
+              let ti = MenuWrap.target(enabledShowing: flags, down: down) else {
+            Log.io("menu: no wrap; \(items.count) items, \(stoppable) can be stopped on")
+            return nil
+        }
+        let target = items[ti]
+        func landed(_ limit: Double) -> AXUIElement? {
+            var found: AXUIElement?
+            Poll.pumping(every: 0.01, limit: limit) {
+                if let i = AXHandler.shared.highlightedMenuItem(), !Self.sameItem(i, before) { found = i; return true }
+                return false
+            }
+            return found
+        }
+        func key(_ code: Int64) { KeyboardGesture(keyCode: code, modifiers: [], characters: "", timestamp: 0, isRepeat: false, flags: []).send() }
+        quietUntil = Date().addingTimeInterval(0.4)
+        // 1. Home (Down wraps to the first) or End (Up wraps to the last).
+        key(down ? 115 : 119)
+        if let i = landed(0.15) { Log.io("menu: wrapped by \(down ? "Home" : "End") key"); return i }
+        // 2. The target's selected attribute, when it can be set.
+        var settable: DarwinBoolean = false
+        let canSet = AXUIElementIsAttributeSettable(target, kAXSelectedAttribute as CFString, &settable) == .success && settable.boolValue
+        if canSet {
+            let r = AXUIElementSetAttributeValue(target, kAXSelectedAttribute as CFString, kCFBooleanTrue)
+            if let i = landed(0.15) { Log.io("menu: wrapped by setting the selected attribute"); return i }
+            Log.io("menu: setting the selected attribute (result \(r.rawValue)) moved nothing")
+        } else {
+            Log.io("menu: the selected attribute cannot be set on the target")
+        }
+        // 3. Step with the opposite arrow until the highlight stops changing, saying nothing on the way.
+        var cur = before, steps = 0
+        let cap = min(items.count, 60)
+        quietUntil = Date().addingTimeInterval(0.4)
+        while steps < cap {
+            key(down ? 126 : 125)
+            var next: AXUIElement?
+            Poll.pumping(every: 0.005, limit: 0.03) {
+                if let i = AXHandler.shared.highlightedMenuItem(), !Self.sameItem(i, cur) { next = i; return true }
+                return false
+            }
+            guard let n = next else { break }
+            cur = n; steps += 1
+            quietUntil = Date().addingTimeInterval(0.4)
+        }
+        if steps > 0, !Self.sameItem(cur, before) { Log.io("menu: wrapped by stepping, \(steps) steps"); return cur }
+        Log.io("menu: wrap failed (Home/End, selected attribute, stepping all moved nothing); edge sound")
+        return nil
     }
 
     /// Whether an item opens a submenu: a menu among its children. (Any child counted: Mail's and TextEdit's "Ask
@@ -521,6 +666,8 @@ final class MenuNavigationPlugin: GlobalPlugin {
     private var settleScheduled = false
 
     override func handleEvent(_ event: Event, next: () -> Void) {
+        // The arrows stepping round a menu to wrap: the items passed are not spoken, only the one landed on.
+        if event.kind == .selection, Date() < quietUntil { return }
         if event.kind == .menuEnd {
             // Only when the whole menu has gone: a submenu closing as the arrows move on (Mail opens each one it
             // passes) cleared this, and the item it had just said was said again.
