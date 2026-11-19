@@ -29797,12 +29797,6 @@
         }
       }
     },
-    "With mouse tracking, a sound when the pointer leaves an item for a blank place" : {
-
-    },
-    "With mouse tracking, an app that holds the lookup for over a second is left behind so the pointer is read again" : {
-
-    },
     "With Quick Look open, an arrow says the file the selection moved to" : {
       "comment" : "A command, as the key list and keyboard help say it"
     },
