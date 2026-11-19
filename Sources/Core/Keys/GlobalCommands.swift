@@ -672,7 +672,7 @@ public final class GlobalCommands: ScriptableObject {
             let r = AXUIElementPerformAction(e, "AXShowMenu" as CFString)
             AXUIElementSetMessagingTimeout(e, 0)
             Log.io("context menu: AXShowMenu on \(e.role) → \(r.rawValue)")
-            if r == .success { return true }
+            if r == .success { AXHandler.shared.watchForContextMenu(of: e); return true }
         }
         guard let frame = TurnOverObject.frame(e), frame.width > 0, frame.height > 0 else {
             Speech.speakMessage(String(localized: "No item to open a menu for", comment: "Spoken message")); return true
@@ -680,6 +680,7 @@ public final class GlobalCommands: ScriptableObject {
         let p = CGPoint(x: frame.midX, y: frame.midY)
         Log.io("context menu: right click on \(e.role) at (\(Int(p.x)), \(Int(p.y)))")
         rightClick(at: p)
+        AXHandler.shared.watchForContextMenu(of: e)
         return true
     }
 

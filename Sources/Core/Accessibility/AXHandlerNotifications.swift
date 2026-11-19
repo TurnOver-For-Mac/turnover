@@ -130,13 +130,7 @@ extension AXHandler {
                 Log.io("menu opened in a web page with no key for 2 s: the page's own menu, not counted")
                 return
             }
-            openMenus.removeAll { $0.isSame(element) }
-            openMenus.append(element)
-            menuOpenedAt = Date()
-            logMenu(element)
-            // Word opens its context menu and every submenu at once: one announcement.
-            if Date().timeIntervalSince(lastMenuStart) > 0.5 { EventHandler.queue(Event(.menuStart, ObjectFactory.make(element))); Tones.menuOpened() }
-            lastMenuStart = Date()
+            menuOpened(element)
         case kAXMenuClosedNotification:
             if element.role == "AXGroup", AppModuleHandler.shared.appModule(for: pid).handlesGroupMenus {
                 guard pid == activePid else { return }
@@ -237,6 +231,8 @@ extension AXHandler {
                 return
             }
             if count == 0, before.count > 0, focused, element.elements(kAXChildrenAttribute).first(where: { ($0.attr(kAXFocusedAttribute) as? Bool) == true }) == nil {
+                // A context menu just asked for takes the selection with it (the Dock's item menu): not news.
+                if Self.menuJustAsked(requestedAt: TurnOverObject.contextMenuRequestedAt, now: Date(), menuOpen: isMenuOpen) { return }
                 Speech.speakMessage(String(localized: "nothing selected", comment: "Spoken message")); return
             }
             // The Dock's Cmd+Tab list marks its highlighted item focused rather than selected.

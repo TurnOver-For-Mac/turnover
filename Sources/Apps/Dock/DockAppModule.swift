@@ -84,6 +84,8 @@ package final class DockAppModule: AppModule {
         // application's own focus instead.
         if event.kind == .gainFocus, event.obj is DockList,
            !event.obj.element.elements(kAXChildrenAttribute).contains(where: { ($0.attr(kAXSelectedAttribute) as? Bool) == true }) {
+            // The item's own menu opening empties the list's selection and gives the list focus: the user is in the menu.
+            if AXHandler.menuJustAsked(requestedAt: TurnOverObject.contextMenuRequestedAt, now: Date(), menuOpen: AXHandler.shared.isMenuOpen) { return }
             Log.io("dock: left with nothing selected; back to the application")
             let pid = AXHandler.shared.activePid
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { AXHandler.shared.refocus(pid: pid) }
