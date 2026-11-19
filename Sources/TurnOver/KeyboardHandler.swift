@@ -684,6 +684,8 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         // Quick Nav's arrows never reach InputManager: an arrow closes Find's prompt here and moves (18 Nov 2026), and
         // stops an opening asked for before it and still queued (19 Nov 2026), by the arrow's time on the gestures' clock.
         FindPrompt.shared.close(because: "a Quick Nav arrow", arrowAt: UInt64(Double(event.timestamp) / Self.machToNs))
+        // Nor does it reach InputManager's key time: it ends a pressed link's evidence for Safari's page host (19 Nov 2026).
+        onMain { BrowseModeDocument.keyBypassedInputManager() }
         if let first = arrowHeld, first != code, let firstName = Self.arrowNames[first] {
             arrowChorded = true
             quarantined.insert(code)
@@ -730,7 +732,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         let g = KeyboardGesture(keyCode: code, modifiers: mods, characters: "", timestamp: UInt64(Double(event.timestamp) / Self.machToNs), isRepeat: repeatKey, flags: f)
         // A key with nothing assigned goes to the application (numpad Enter, Equals: typing still works).
         guard Keypad.action(for: g, windows: windows) != nil else { return nil }
-        if type == .keyDown { onMain { Keypad.run(g, windows: windows) } }
+        if type == .keyDown { onMain { BrowseModeDocument.keyBypassedInputManager(); Keypad.run(g, windows: windows) } }
         return .some(nil)
     }
 

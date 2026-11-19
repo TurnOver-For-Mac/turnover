@@ -435,6 +435,14 @@ extension BrowseModeDocument {
     /// A link or button pressed by VO-Space or Return, with the window of its page, for the focus rules: Safari's
     /// nameless page host taking the focus just after is the page changing, not a move (18 Nov 2026). Used once.
     package static var lastNavigationPress: (window: AXUIElement, pid: pid_t, at: Date, keyAt: Date)?
+    /// A key that never reaches InputManager, so leaves `InputManager.lastKeyDownAt` as it was (a Quick Nav arrow, a
+    /// keypad command): it ends the press as evidence, and any page host set aside for it, as every other key does
+    /// (19 Nov 2026, Codex's review: after a press and a Quick Nav arrow, the page host could still be set aside).
+    /// Main thread; the keyboard asks for it as the key goes down, ahead of whatever the key then does.
+    package static func keyBypassedInputManager() {
+        lastNavigationPress = nil
+        AXHandler.pageHostSetAside = nil
+    }
 
     func notePressForNavigation(_ x: AXUIElement, role: String) {
         guard role == "AXLink" || role == "AXButton" else { return }

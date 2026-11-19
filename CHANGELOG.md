@@ -61,6 +61,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   so a slow disk can no longer hold up the keys.
 - Safari: VoiceOver Space on a link that opens its page in the same tab now reads the new page as soon as it has
   loaded. Before, nothing was said until you pressed a key.
+- Safari: after VoiceOver Space on a link, a Quick Nav arrow or a keypad key now counts as moving on, as other keys
+  do, so where the focus goes next is read at once. Before, it could be held back for up to five seconds.
 - When an app leaves the Mac's secure input on after you leave a password field, as Safari did on Steam's sign-in
   page, VoiceOver now takes the keys a second later, and TurnOver takes them back a second after secure input goes
   off. Before, TurnOver heard none of your keys until you left the page. Nothing is said, and inside a password field

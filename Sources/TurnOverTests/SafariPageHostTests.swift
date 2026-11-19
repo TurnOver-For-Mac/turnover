@@ -106,6 +106,21 @@ func safariPageHostTests() {
     test("Safari's page host set aside: the new page is handed on when it comes, and the group is presented when none does") {
         // No new page comes: set aside at first, presented once the watch ends.
         withSafari(appFocus: 2) { pid in
+    // 19 Nov 2026, Codex's review: a Quick Nav arrow (or a keypad command) never reaches InputManager, so its key time
+    // stayed that of the press, and the group could still be set aside after it.
+    test("A Quick Nav arrow or keypad key after the press ends it as evidence, and ends a group set aside") {
+        withSafari(appFocus: 2) { pid in
+            BrowseModeDocument.keyBypassedInputManager()
+            check(!AXHandler.isSafariPageHostBetweenPages(AXReplay.element(2), pid: pid), "no press to go on after the arrow")
+        }
+        withSafari(appFocus: 2) { pid in
+            AXHandler.shared.focusChanged(AXReplay.element(2), pid: pid)
+            check(AXHandler.isPageHostSetAside(AXReplay.element(2)), "set aside after the press")
+            BrowseModeDocument.keyBypassedInputManager()
+            check(!AXHandler.isPageHostSetAside(AXReplay.element(2)), "the arrow ends it: Oliver has moved")
+        }
+    }
+
             AXHandler.shared.focusChanged(AXReplay.element(2), pid: pid)
             check(API.focusObject?.element.isSame(AXReplay.element(4)) == true, "the group is set aside: the link keeps the focus")
             check(BrowseModeDocument.lastNavigationPress == nil, "the press is used up")
