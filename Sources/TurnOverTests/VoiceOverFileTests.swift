@@ -10,10 +10,17 @@ import TurnOverCore
         ("a search that finds nothing", "NotFound.aiff", { Tones.searchNotFound() }),
         ("a menu opening", "MenuDown.aiff", { Tones.menuOpened() }),
         ("a page finishing loading", "WebPageLoaded.aiff", { Tones.pageLoaded() }),
+        ("an item activated", "Select.aiff", { Tones.press() }),
+        ("a mouse click", "SingleClick.aiff", { Tones.mouseClick() }),
+        ("the rotor to its previous setting", "RotorLeft.aiff", { Tones.rotorMoved(forward: false) }),
+        ("the rotor to its next setting", "RotorRight.aiff", { Tones.rotorMoved(forward: true) }),
+        ("a search wrapping forward", "WrapForward.aiff", { Tones.searchWrapped(forward: true) }),
+        ("a search wrapping backward", "WrapBack.aiff", { Tones.searchWrapped(forward: false) }),
     ]
     test("sounds: with VoiceOver's chosen, each wired event asks for VoiceOver's own file") {
-        let saved = config.general.sounds
-        defer { config.general.sounds = saved; VoiceOverSounds.requestProbe = nil }
+        let saved = config.general.sounds, savedNav = config.general.navigationSounds
+        defer { config.general.sounds = saved; config.general.navigationSounds = savedNav; VoiceOverSounds.requestProbe = nil }
+        config.general.navigationSounds = true
         var asked: [String] = []
         VoiceOverSounds.requestProbe = { name, _ in asked.append(name) }
         config.general.sounds = "voiceover"
@@ -32,6 +39,18 @@ import TurnOverCore
         VoiceOverSounds.requestProbe = { name, sounds in asked.append(name + "/" + sounds) }
         Tones.contextMenuOpened()
         expect(asked, ["PopupAppeared.aiff/turnover"], "a context menu sounds as before")
+        asked = []
+        Tones.rotorMoved(forward: true); Tones.rotorMoved(forward: false); Tones.mouseClick(); Tones.searchWrapped(forward: true)
+        expect(asked.filter { $0.hasPrefix("Rotor") || $0.hasPrefix("SingleClick") || $0.hasPrefix("WrapForward") }, [], "TurnOver's set asks for none of VoiceOver's rotor, click or wrap files")
+        var heard: [String] = []
+        Tones.inventedProbe = { heard.append($0) }
+        defer { Tones.inventedProbe = nil }
+        let savedNav = config.general.navigationSounds
+        config.general.navigationSounds = true
+        asked = []; Tones.press()
+        config.general.navigationSounds = savedNav
+        expect(heard, ["press"], "TurnOver's own press click plays as before")
+        expect(asked, [], "and asks for no Select file")
         VoiceOverSounds.requestProbe = nil
         expect(VoiceOverSounds.ownTone(for: "NotFound.aiff"), false, "TurnOver's set has no sound for a failed search")
         expect(VoiceOverSounds.ownTone(for: "MenuDown.aiff"), false, "TurnOver's set has no sound for a menu opening")

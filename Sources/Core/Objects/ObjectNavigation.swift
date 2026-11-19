@@ -1318,7 +1318,7 @@ public final class ObjectNavigator {
         let back = CGEvent(source: nil)?.location
         Mouse.click(at: p, button: .left, count: double ? 2 : 1)
         if let b = back { Mouse.move(to: b) }
-        Tones.press()
+        Tones.mouseClick()
     }
 
     /// VO-Shift-H: the item's help tag.

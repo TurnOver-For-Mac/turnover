@@ -2,13 +2,14 @@
 import Foundation
 import TurnOverCore
 
+// (press is not here: with VoiceOver's sounds it plays VoiceOver's Select file, see voiceOverFileTests.)
 // 19 Nov 2026, SHORTCOMINGS rule 10: with VoiceOver's sounds chosen, TurnOver's invented tones are silent.
 @MainActor func inventedSoundsTests() {
     let all: [(String, () -> Void)] = [
         ("heading", { Tones.heading(level: 2) }), ("list", { Tones.list() }), ("landmark", { Tones.landmark() }),
         ("table", { Tones.table() }), ("graphic", { Tones.graphic() }), ("blockquote", { Tones.blockQuote() }),
         ("focus_mode", { Tones.focusMode() }), ("browse_mode", { Tones.browseMode() }), ("comment", { Tones.comment() }),
-        ("focus_tick", { Tones.focusTick() }), ("press", { Tones.press() }),
+        ("focus_tick", { Tones.focusTick() }),
         ("keystroke_beep", { _ = Tones.invented("keystroke_beep") }), ("jump", { _ = Tones.invented("jump") }),
         ("say_tone", { _ = Tones.invented("say_tone") }), ("waiting_tick", { _ = Tones.invented("waiting_tick") }),
     ]

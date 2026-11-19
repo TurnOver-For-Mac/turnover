@@ -696,7 +696,7 @@ public final class BrowseModeDocument: ScriptableObject {
         }
         guard r.location != NSNotFound else { return false }
         if wrapped {
-            Tones.edge()
+            Tones.searchWrapped(forward: forward)
             Speech.speakMessage(forward ? String(localized: "wrapped to the top", comment: "Spoken message") : String(localized: "wrapped to the bottom", comment: "Spoken message"))
         }
         position = r.location

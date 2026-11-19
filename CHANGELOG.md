@@ -6,6 +6,7 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### New to try
 
+- With VoiceOver's sounds chosen, activating an item, turning the rotor and a search wrapping round the page now play VoiceOver's own sounds.
 - Mouse tracking: Settings, Presentation, "Read what is under the mouse pointer as it moves" (or NVDA+M in the Windows
   keyboard style) reads each item the pointer crosses, as VoiceOver's cursor following the mouse pointer does. It is off
   until turned on. The keyboard focus never moves with the pointer; the review cursor goes to the item, as NVDA's review

@@ -68,6 +68,17 @@ public enum Tones {
     /// A page finished loading: VoiceOver's "Web area loaded" event plays WebPageLoaded.aiff (WebAreaLoaded.aiff is not
     /// the file its configuration names for it).
     public static func pageLoaded() { _ = voiceOver("WebPageLoaded.aiff") }
+    /// A mouse click on the item (VO-Shift-Space): VoiceOver's "Mouse click" event plays SingleClick.aiff; TurnOver's own
+    /// set plays its press click, as it did before.
+    public static func mouseClick() { if chosen { press() } else if config.general.navigationSounds { _ = voiceOver("SingleClick.aiff") } }
+    /// The rotor moved to its previous or next setting: VoiceOver's RotorLeft.aiff or RotorRight.aiff. TurnOver's own set has none.
+    public static func rotorMoved(forward: Bool) { if !chosen { _ = voiceOver(forward ? "RotorRight.aiff" : "RotorLeft.aiff") } }
+    /// Find wrapped round the page: with VoiceOver's sounds WrapForward.aiff or WrapBack.aiff; TurnOver's own set keeps its edge sound.
+    public static func searchWrapped(forward: Bool) {
+        guard !chosen else { edge(); return }
+        _ = voiceOver(forward ? "WrapForward.aiff" : "WrapBack.aiff")
+        onEdge?()
+    }
     public static func link() { if !voiceOver("LinkBegin.aiff") { beep(1400, 25, volume: 0.18, exempt: true) } }
     public static func list() { guard invented("list") else { return }; if fresh("list") { return }; beep(520, 40) }
     public static func landmark() { guard invented("landmark") else { return }; if fresh("landmark") { return }; beep(620, 40); DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { beep(780, 40) } }
@@ -118,9 +129,12 @@ public enum Tones {
     }
     private static var lastTick = Date.distantPast
     /// An item was pressed (a link followed, a button pressed): a fuller click, lower, two partials together.
+    /// With VoiceOver's sounds chosen (19 Nov 2026, second pass) it is VoiceOver's "Select" file, the sound it plays when
+    /// an item is activated; TurnOver's own set plays its own click as before.
     public static func press() {
-        guard invented("press") else { return }
         guard config.general.navigationSounds else { return }
+        guard chosen else { _ = voiceOver("Select.aiff"); return }
+        guard invented("press") else { return }
         if fresh("press") { return }
         bell(frequencies: [1300, 1950], spacingMs: 6, ringMs: 35, volume: 0.09)
     }
