@@ -42,15 +42,9 @@ public enum TurnOverSounds {
         guard names.contains(name), let folder else { return false }
         guard let p = cache.player(name) else {
             if cache.hasFailed(name) { return false }
-            // Not prepared yet: prepared in the background, never on this thread; played when ready, or skipped after a second.
-            let asked = Date()
-            cache.request(name, url: folder.appendingPathComponent(name + ".wav"), levelled: false) { ok in
-                DispatchQueue.main.async {
-                    MainActor.assumeIsolated {
-                        if ok, Date().timeIntervalSince(asked) < 1 { _ = play(name, volume: volume, exempt: exempt, why: why) }
-                    }
-                }
-            }
+            // Not prepared yet: skipped and logged, prepared in the background for next time; never played later.
+            cache.request(name, url: folder.appendingPathComponent(name + ".wav"), levelled: false)
+            Log.io("sound: \(name) skipped, not ready (why: \(why))")
             return true
         }
         p.volume = volume * min(1.5, max(0.2, Float(config.speech.volume) / 100))   // with TurnOver's own volume

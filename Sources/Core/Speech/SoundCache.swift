@@ -13,7 +13,7 @@ nonisolated package final class SoundCache: @unchecked Sendable {
     private let lock = NSLock()
     private var ready: [String: AVAudioPlayer] = [:]
     private var failed: Set<String> = []
-    private var waiting: [String: [@Sendable (Bool) -> Void]] = [:]
+    private var pending: Set<String> = []
     private var hold: DispatchSemaphore?
     private let queue = DispatchQueue(label: "turnover.sounds.prepare", qos: .utility)
 
@@ -24,16 +24,14 @@ nonisolated package final class SoundCache: @unchecked Sendable {
     /// A test holds preparation here, to see a request return before anything is prepared.
     package func setHold(_ s: DispatchSemaphore?) { lock.lock(); hold = s; lock.unlock() }
 
-    /// Prepares the file in the background; `done` (called on the queue) says whether a player is now ready. Returns at
-    /// once, never preparing on the calling thread. A file already being prepared is not prepared twice.
-    package func request(_ name: String, url: URL, levelled: Bool, done: (@Sendable (Bool) -> Void)? = nil) {
+    /// Prepares the file in the background, for the next request; returns at once, never preparing on the calling
+    /// thread, and never plays anything (no callbacks, so nothing can play later on a request's behalf). A file already
+    /// ready, failed or being prepared is left alone.
+    package func request(_ name: String, url: URL, levelled: Bool) {
         lock.lock()
-        if ready[name] != nil { lock.unlock(); done?(true); return }
-        if failed.contains(name) { lock.unlock(); done?(false); return }
-        let busy = waiting[name] != nil
-        waiting[name, default: []].append(done ?? { _ in })
+        if ready[name] != nil || failed.contains(name) || pending.contains(name) { lock.unlock(); return }
+        pending.insert(name)
         lock.unlock()
-        if busy { return }
         queue.async { [self] in
             lock.lock(); let h = hold; lock.unlock()
             h?.wait()
@@ -43,9 +41,8 @@ nonisolated package final class SoundCache: @unchecked Sendable {
             made?.prepareToPlay()
             lock.lock()
             if let made { ready[name] = made } else { failed.insert(name) }
-            let calls = waiting.removeValue(forKey: name) ?? []
+            pending.remove(name)
             lock.unlock()
-            for c in calls { c(made != nil) }
         }
     }
 }

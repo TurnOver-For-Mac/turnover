@@ -46,7 +46,7 @@ import TurnOverCore
         config.general.sounds = "turnover"
         for (what, play) in named { heard = []; play(); expect(heard.isEmpty, false, "\(what) plays") }
     }
-    test("sounds: a first request for an unprepared file returns without preparing on the calling thread") {
+    test("sounds: a prepared file plays now; an unprepared one is skipped and plays nothing later; a failed one returns false") {
         let saved = config.general.sounds
         defer { config.general.sounds = saved; VoiceOverSounds.cache.setHold(nil) }
         config.general.sounds = "voiceover"
@@ -54,11 +54,23 @@ import TurnOverCore
         VoiceOverSounds.cache.setHold(hold)   // preparation waits here, so the request must return first
         let name = "NotFound.aiff"
         expect(VoiceOverSounds.cache.player(name) == nil, true, "not prepared before the request")
-        expect(VoiceOverSounds.play(name), true, "the request returns at once")
-        expect(VoiceOverSounds.cache.player(name) == nil, true, "nothing was prepared on this thread")
+        expect(VoiceOverSounds.play(name), true, "an unprepared file: the request returns true at once")
+        expect(VoiceOverSounds.cache.player(name) == nil, true, "nothing was prepared on this thread, and nothing is waiting to play")
         hold.signal()
         let until = Date().addingTimeInterval(5)
         while VoiceOverSounds.cache.player(name) == nil, !VoiceOverSounds.cache.hasFailed(name), Date() < until { Thread.sleep(forTimeInterval: 0.01) }
-        expect(VoiceOverSounds.cache.player(name) != nil || VoiceOverSounds.cache.hasFailed(name), true, "it was prepared in the background")
+        if VoiceOverSounds.cache.player(name) != nil {
+            expect(VoiceOverSounds.play(name), true, "prepared: it plays now (muted in tests)")
+        } else {
+            expect(VoiceOverSounds.cache.hasFailed(name), true, "or it failed")
+        }
+        // A file that cannot be read fails once, and the request then says false so the caller's fallback plays.
+        let bad = "NoSuchFile-test.aiff"
+        VoiceOverSounds.cache.setHold(nil)
+        expect(VoiceOverSounds.play(bad), true, "the first request skips")
+        let until2 = Date().addingTimeInterval(5)
+        while !VoiceOverSounds.cache.hasFailed(bad), Date() < until2 { Thread.sleep(forTimeInterval: 0.01) }
+        expect(VoiceOverSounds.cache.hasFailed(bad), true, "its preparation failed")
+        expect(VoiceOverSounds.play(bad), false, "a failed file returns exactly what ownTone says (false: no stand-in), so the caller's own tone plays as before")
     }
 }

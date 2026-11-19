@@ -43,17 +43,10 @@ public enum VoiceOverSounds {
         if config.general.effectiveSounds == "turnover" { return ownTone(for: name, why: why) }
         guard let p = cache.player(name) else {
             if cache.hasFailed(name) { return ownTone(for: name, why: why) }
-            // Not prepared yet: never prepared here, on the calling thread (it would hold up speech and keys). It is
-            // prepared in the background and played when ready, unless that takes over a second (then it is skipped).
-            let asked = Date()
-            cache.request(name, url: folder.appendingPathComponent(name), levelled: true) { ok in
-                DispatchQueue.main.async {
-                    MainActor.assumeIsolated {
-                        guard Date().timeIntervalSince(asked) < 1 else { return }
-                        if ok { _ = play(name, volume: volume, why: why) } else { _ = ownTone(for: name, why: why) }
-                    }
-                }
-            }
+            // Not prepared yet (only in the first moments after launch): never prepared here, on the calling thread, and
+            // never played later on this request's behalf. Skipped and logged; prepared in the background for next time.
+            cache.request(name, url: folder.appendingPathComponent(name), levelled: true)
+            Log.io("sound: \(name) skipped, not ready (why: \(why))")
             return true
         }
         p.volume = volume * min(1.5, max(0.2, Float(config.speech.volume) / 100))   // with TurnOver's own volume

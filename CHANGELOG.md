@@ -39,9 +39,10 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 - Sounds, with "VoiceOver's" chosen: more of VoiceOver's own sounds now play on the event VoiceOver uses them for. A
   search that finds nothing plays NotFound, a menu opening plays MenuDown (a context menu no longer plays the popover
   sound as well), and a page that has loaded plays WebPageLoaded, the file VoiceOver names for it, where TurnOver
-  played WebAreaLoaded. "TurnOver's" sounds are as they were. These sounds, and every other, are now prepared in the
-  background shortly after start-up, never on the main thread, so a first play can no longer hold up speech or keys,
-  and they play after the spoken message is queued.
+  played WebAreaLoaded. "TurnOver's" sounds are as they were. Every sound file of both sets is now prepared in the
+  background from the start of TurnOver, never on the main thread, so a first play can no longer hold up speech or
+  keys; one asked for in the first moments before it is ready is skipped, never played late. These sounds play after
+  the spoken message is queued.
 - Sounds, with "VoiceOver's" chosen in Settings, Sounds: TurnOver now plays a sound only where VoiceOver has one, and
   plays VoiceOver's own file for it. Before, the sounds TurnOver made up (the focus tick, pressing, headings, lists,
   landmarks, tables, pictures, quotes, comments, the browse and focus mode tones, the jump beeps) played as well, so
