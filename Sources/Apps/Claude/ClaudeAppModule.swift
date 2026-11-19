@@ -608,36 +608,6 @@ package final class ClaudeAppModule: AppModule {
         Speech.speakOnly(String(localized: "sent", comment: "Spoken when Return sends a message from Claude's prompt"))
     }
 
-    /// 19 Nov 2026 (log, Settings, Memory, "Search and reference chats", Claude's switch): VO-Space (accessibility's press,
-    /// "success") and the real Space and Return changed nothing, and nothing was said; with VoiceOver on it turned on.
-    /// So the press is checked: at 0.5 s the keyboard is put on the switch and Space sent, at 2 s a click at its centre,
-    /// each only while the value is still the old one. The watch says the new state when it changes; if none does, it
-    /// is said so. Claude's module only.
-    package override func recoverUnchangedToggle(_ element: AXUIElement, attempt: Int, stillUnchanged: @escaping () -> Bool) {
-        guard stillUnchanged() else { return }
-        if attempt == 1 {
-            Log.io("claude: the switch did not change; keyboard focus and Space")
-            BrowseModeDocument.confirmFocus(element) { _ in
-                guard stillUnchanged() else { return }
-                KeyboardGesture(keyCode: 49, modifiers: [], characters: " ", timestamp: 0, isRepeat: false, flags: []).send()
-            }
-        } else {
-            guard let frame = TurnOverObject.frame(element), frame.width > 1, frame.height > 1 else { return }
-            Log.io("claude: the switch still did not change; a click at its centre")
-            let point = CGPoint(x: frame.midX, y: frame.midY)
-            let back = CGEvent(source: nil)?.location
-            DispatchQueue.global(qos: .userInitiated).async {
-                Mouse.click(at: point, button: .left, count: 1)
-                if let back { Mouse.move(to: back) }
-            }
-        }
-    }
-
-    package override func toggleStayedUnchanged(_ element: AXUIElement) {
-        Log.io("claude: the switch never changed")
-        Speech.speakMessage(String(localized: "did not change", comment: "Spoken when pressing a switch or tick box in Claude changed nothing"))
-    }
-
     package override var rolesPressedByKeyboard: Set<String> { ["AXButton", "AXMenuItem"] }
 
     /// 17 Nov 2026 (log, three switches): Claude puts the keyboard in the destination's Prompt as it

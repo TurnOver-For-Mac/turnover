@@ -28,14 +28,6 @@ open class AppModule: ScriptableObject {
     /// already sound that boundary can opt out; TurnOver-owned review and structural navigation keep theirs.
     open var playsNativeCaretBoundarySound: Bool { true }
 
-    /// A press on a switch or tick box changed nothing (the watch of its state found the same value). Called at the
-    /// watch's second looks, `attempt` 1 then 2, so the app can try another way; `stillUnchanged` is asked again
-    /// just before acting, so a change that came meanwhile is never toggled back. Nothing by default (19 Nov 2026).
-    open func recoverUnchangedToggle(_ element: AXUIElement, attempt: Int, stillUnchanged: @escaping () -> Bool) {}
-
-    /// The watch is over and the switch never changed, after every way the app tried.
-    open func toggleStayedUnchanged(_ element: AXUIElement) {}
-
     /// Return in an editable field sent its text rather than making a new line (the text got shorter). `fieldName` is
     /// the field's name. Nothing by default; an app that wants "sent" said overrides it (19 Nov 2026).
     open func returnSentText(inField fieldName: String) {}
