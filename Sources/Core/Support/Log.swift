@@ -40,8 +40,10 @@ nonisolated public enum Log {
     /// Tests: each line as it is written, to check what the log says and what it never names (16 Nov 2026, review).
     nonisolated(unsafe) package static var observer: ((String) -> Void)?
 
-    public static func line(_ text: String, level: Level = .info) {
+    public static func line(_ rawText: String, level: Level = .info) {
         guard level >= self.level else { return }
+        // The one place text reaches the log file or the terminal echo: key-like text is masked here, for every app.
+        let text = LogRedactor.mask(rawText)
         observer?(text)
         let t = String(format: "%9.3f", Date().timeIntervalSince(started))
         let tag: String
