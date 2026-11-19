@@ -79,7 +79,7 @@ enum HandOver {
     nonisolated static let shutdown = ReaderShutdown()
 
     /// The person's own presses of VoiceOver's toggle, heard by the key tap: a change after one is theirs (18 Nov 2026).
-    nonisolated static let personToggle = PersonVoiceOverToggle()
+    nonisolated static let personToggle = PersonVoiceOverToggle.shared
 
     nonisolated static func postToggle() {
         let s = toggleShortcut()

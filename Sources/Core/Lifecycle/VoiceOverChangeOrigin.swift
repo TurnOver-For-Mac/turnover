@@ -35,6 +35,8 @@ nonisolated public final class PersonVoiceOverToggle: @unchecked Sendable {
     /// TurnOver runs on 14.
     private let press = OSAllocatedUnfairLock<TimeInterval?>(initialState: nil)
     public init() {}
+    /// The one the app uses (HandOver.personToggle); the secure-input looks in Core record into it.
+    public static let shared = PersonVoiceOverToggle()
 
     /// The tap is up and hearing keys (`true`), or gone (`false`). Up again after being switched off by macOS, it
     /// starts afresh: keys in between were not heard.

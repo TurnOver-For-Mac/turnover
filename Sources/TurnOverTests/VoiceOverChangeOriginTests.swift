@@ -107,4 +107,12 @@ func voiceOverChangeOriginTests() {
         expect(keys.take(now: 75), .unheard, "on at the last report: when it went off is not known")
         expect(keys.take(now: 78), .notPerson)
     }
+    // 19 Nov 2026: the watcher's look is what records secure input; the app's toggle is the one it records into.
+    test("change origin: the secure-input look the watcher calls records secure input for the classifier") {
+        let keys = PersonVoiceOverToggle()
+        keys.listening(true, now: 0)
+        SecureInputWatch.noteLook(on: true, toggle: keys, now: 3.0)
+        SecureInputWatch.noteLook(on: false, toggle: keys, now: 3.5)   // over before the change is handled
+        expect(keys.take(now: 4.1), .unheard, "a toggle in a password field is not TurnOver's own start")
+    }
 }

@@ -141,8 +141,16 @@ public enum SecureInputWatch {
         if wasOn { wasOn = false; onChange?(false) }
     }
 
+    /// Each look is recorded for the person's-toggle classifier: keys are hidden from the key tap while secure input is on,
+    /// so a VoiceOver toggle then is not known to be TurnOver's own (19 Nov 2026; restored after the merge dropped it).
+    /// Observation only: nothing is handed to VoiceOver because of secure input.
+    public static func noteLook(on: Bool, toggle: PersonVoiceOverToggle = .shared, now: TimeInterval = Date().timeIntervalSince1970) {
+        toggle.secureInputSeen(on, now: now)
+    }
+
     private static func check() {
         let on = IsSecureEventInputEnabled()
+        noteLook(on: on)
         if on != wasOn { wasOn = on; onChange?(on) }
         let other = on ? SecureEcho.otherProcessField(of: AXHandler.shared.activePid) : nil
         SecureEcho.watch(other)
