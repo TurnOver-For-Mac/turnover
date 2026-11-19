@@ -27,6 +27,9 @@ public final class FindPrompt: @unchecked Sendable {
         /// the prompt still closed, and the opening then came over the new app or took the next letters. An opening
         /// whose key came before the last close does not happen.
         var cancelledAt: UInt64 = 0
+        /// The key code of the key that caused the last close, or nil: the same key (same time and code) may open the prompt
+        /// again, as TurnOver+F does with Find open; a different key at an equal time may not (19 Nov 2026, Codex).
+        var cancelledByKey: Int64? = nil
     }
     private let state = Locked(State())
     public var isOpen: Bool { state.value.isOpen }
@@ -39,9 +42,10 @@ public final class FindPrompt: @unchecked Sendable {
 
     /// `pressedAt`: the time of the key that asked for it (its gesture's timestamp); 0 when unknown (the key list, the
     /// menu), which always opens.
-    public func open(pressedAt: UInt64 = 0) {
+    public func open(pressedAt: UInt64 = 0, keyCode: Int64? = nil) {
         state.lock.lock()
-        let overtaken = pressedAt != 0 && pressedAt < state.unsafeValue.cancelledAt
+        let overtaken = pressedAt != 0 && (pressedAt < state.unsafeValue.cancelledAt
+            || (pressedAt == state.unsafeValue.cancelledAt && !(keyCode != nil && keyCode == state.unsafeValue.cancelledByKey)))
         if !overtaken { state.unsafeValue.isOpen = true; state.unsafeValue.generation += 1 }
         state.lock.unlock()
         // Closed before it opened: nothing is said, as for any key that closes it; that key or switch goes on.
@@ -91,10 +95,11 @@ public final class FindPrompt: @unchecked Sendable {
     /// Every close also stops an opening asked for before it and not yet made (`open`), as of `arrowAt` (a Quick Nav
     /// arrow's own event time, on the gestures' clock) or else now. The log line is written on the main thread: this is called on the
     /// keyboard's tap, where a stalled log write would hold every key (19 Nov 2026, Codex's review).
-    nonisolated package func close(because why: String, arrowAt time: UInt64 = 0) {
+    nonisolated package func close(because why: String, arrowAt time: UInt64 = 0, byKey keyCode: Int64? = nil) {
         let at = time != 0 ? time : mach_absolute_time()
         state.lock.lock()
-        if at > state.unsafeValue.cancelledAt { state.unsafeValue.cancelledAt = at }
+        if at > state.unsafeValue.cancelledAt { state.unsafeValue.cancelledAt = at; state.unsafeValue.cancelledByKey = time != 0 ? keyCode : nil }
+        else if at == state.unsafeValue.cancelledAt, state.unsafeValue.cancelledByKey != keyCode { state.unsafeValue.cancelledByKey = nil }
         let wasOpen = state.unsafeValue.isOpen
         if wasOpen { state.unsafeValue.isOpen = false; state.unsafeValue.generation += 1 }
         state.lock.unlock()

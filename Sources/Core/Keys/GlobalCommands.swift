@@ -318,7 +318,7 @@ public final class GlobalCommands: ScriptableObject {
             SayAll.changeRate(by: -0.05)
         }
         script("find", String(localized: "Finds text: type it, then Return; the match is where you are left (VO-F; NVDA+Control+F)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+f", "kb:turnover+control+f"], category: text) { g in
-            FindPrompt.shared.open(pressedAt: g.timestamp)
+            FindPrompt.shared.open(pressedAt: g.timestamp, keyCode: g.keyCode)
         }
         script("findNext", String(localized: "Finds the next match of the last search (VO-G; NVDA+F3)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+g", "kb:turnover+f3"], category: text) { g in
             FindPrompt.shared.again(forward: true, pressedAt: g.timestamp)
