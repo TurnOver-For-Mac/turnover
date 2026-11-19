@@ -328,6 +328,11 @@ final class MenuNavigationPlugin: GlobalPlugin {
     }
 
     private func move(_ gesture: KeyboardGesture) {
+        // A held Up or Down that has reached the end of the menu has had its boundary sound: the repeats still to come
+        // (they queue up behind one another) do nothing, so the sound is heard once and not again and again after
+        // the key is let go (19 Nov 2026: it sounded several times over, as if buffering).
+        if !gesture.isRepeat { heldAtEnd = false }
+        else if heldAtEnd, ["upArrow", "downArrow"].contains(gesture.keyName) { return }
         let menusBefore = AXHandler.shared.openMenus.count
         // What is highlighted now, asked before the key goes: the new item is whatever differs from it. (Comparing
         // with what TurnOver last said fell one behind in a VPN app's menus, and Right then opened the wrong submenu.)
@@ -380,7 +385,7 @@ final class MenuNavigationPlugin: GlobalPlugin {
         let isUpDown = (gesture.keyName == "upArrow" || gesture.keyName == "downArrow") && gesture.modifiers.isEmpty
         let down = gesture.keyName == "downArrow"
         var atEnd = false
-        if isUpDown, !gesture.isRepeat, let b = before, Self.isEndItem(b, down: down), !Self.inMenuBar(b) { atEnd = true }
+        if isUpDown, let b = before, Self.isEndItem(b, down: down), !Self.inMenuBar(b) { atEnd = true }
         gesture.send()
         let start = Date()
         var item: AXUIElement?
@@ -481,6 +486,7 @@ final class MenuNavigationPlugin: GlobalPlugin {
                     return
                 }
                 Tones.edge()   // the end of the menu, not silence
+                if gesture.isRepeat { heldAtEnd = true }
             }
             return
         }
@@ -510,6 +516,8 @@ final class MenuNavigationPlugin: GlobalPlugin {
     /// While the arrows are stepped through a menu to wrap round, the selection reports of the items passed are not
     /// spoken (until this time).
     private var quietUntil = Date.distantPast
+    /// A held Up or Down has run into the end of the menu and its boundary sound has played (see `move`).
+    private var heldAtEnd = false
 
     /// Up or Down at the end of a menu: on to the other end. Tried in turn, each checked by looking for a different
     /// highlighted item: Home or End, setting the target's selected attribute, stepping with the opposite arrow. Returns
