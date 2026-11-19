@@ -304,9 +304,7 @@ open class TurnOverObject: ScriptableObject {
         if let e = element.attr(kAXExpandedAttribute) as? Bool { s.insert(e ? .expanded : .collapsed) }
         if let d = element.attr("AXDisclosing") as? Bool, role == .treeViewItem {
             // Finder's list view: only a row that can disclose (a folder) is expanded or collapsed.
-            var settable: DarwinBoolean = false
-            AXUIElementIsAttributeSettable(element, "AXDisclosing" as CFString, &settable)
-            if settable.boolValue || d { s.insert(d ? .expanded : .collapsed) }
+            if element.attributeSettableResult("AXDisclosing").value == true || d { s.insert(d ? .expanded : .collapsed) }
         }
         if let m = element.string("AXMenuItemMarkChar"), !m.isEmpty { s.insert(.checked) }
         if role == .menuItem, element.elements(kAXChildrenAttribute).contains(where: { $0.role == "AXMenu" }) { s.insert(.hasPopup) }
@@ -345,9 +343,8 @@ open class TurnOverObject: ScriptableObject {
         var p = PositionInfo()
         if role == .treeViewItem, let level = element.int("AXDisclosureLevel"), level > 0 { p.level = level + 1 }   // NVDA-style: the top level goes without saying
         if let parent = element.element(kAXParentAttribute) {
-            var count: CFIndex = 0
             let attr = parent.role == "AXTable" || parent.role == "AXOutline" ? "AXRows" : kAXChildrenAttribute
-            if AXUIElementGetAttributeValueCount(parent, attr as CFString, &count) == .success, count > 0 {
+            if let count = parent.attributeValueCountResult(attr).value, count > 0 {
                 if count <= 200, let siblings = parent.attr(attr) as? [AXUIElement] {
                     // Only siblings of the same role count, and a menu's separators (untitled, disabled items) don't.
                     let same = siblings.filter { s in
@@ -450,7 +447,7 @@ open class TurnOverObject: ScriptableObject {
         reportFocus()
     }
     open func event_loseFocus() { Speech.clearTypedWordBuffer() }
-    open func event_focusEntered() { Speech.speakObject(self, reason: .focusEntered) }
+    open func event_focusEntered() { if !ToolbarKeys.sayEntering(self) { Speech.speakObject(self, reason: .focusEntered) } }
     open func event_focusExited() {}
     open func event_foreground() { Speech.cancel() }
     open func event_valueChange() {
@@ -496,7 +493,7 @@ open class TurnOverObject: ScriptableObject {
     }
     /// Set by the selection notification when several rows are selected: said after the row that changed.
     public static var selectionNote: String?
-    private static var lastSelectionSpoken: (AXUIElement, Date)?
+    package static var lastSelectionSpoken: (AXUIElement, Date)?
     public static func noteSelectionSpoken(_ e: AXUIElement) { lastSelectionSpoken = (e, Date()) }
     open func event_textChange() {}
     open func event_alert() { Speech.speakObject(self, reason: .focus) }
@@ -597,7 +594,7 @@ open class TurnOverObject: ScriptableObject {
             return
         }
         if event.kind == .gainFocus, role == .passwordEdit { SecureEcho.focused(element) }
-        if event.kind == .gainFocus { SettingsPanePlugin.focusMoved(to: self) }
+        if event.kind == .gainFocus { SettingsPanePlugin.focusMoved(to: self); ToolbarKeys.focusMoved(to: self) }
         switch event.kind {
         case .gainFocus: event_gainFocus()
         case .loseFocus: event_loseFocus()

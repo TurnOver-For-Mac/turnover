@@ -96,8 +96,7 @@ open class EditableWebArea: EditableText, WebBridged {
 
     /// A web area whose text can be set is being edited (its AXValue is settable; a page's is not).
     public static func isEditable(_ e: AXUIElement) -> Bool {
-        var settable: DarwinBoolean = false
-        return AXUIElementIsAttributeSettable(e, kAXValueAttribute as CFString, &settable) == .success && settable.boolValue
+        e.attributeSettableResult(kAXValueAttribute).value == true
     }
 }
 
@@ -375,8 +374,7 @@ public final class WebTextInfo: TextInfo {
             if d.isEmpty, config.virtualBuffers.imageFileNames { d = ImageNames.fromFile(el) }
             return Role.graphic.displayString + (d.isEmpty ? "" : " " + d)
         case "AXList":
-            var count: CFIndex = 0
-            AXUIElementGetAttributeValueCount(el, kAXChildrenAttribute as CFString, &count)
+            let count = el.attributeValueCountResult(kAXChildrenAttribute).value ?? 0
             return forEntering ? (count == 1 ? String(localized: "list with 1 item", comment: "A list on a page, entered") : String(localized: "list with \(String(count)) items", comment: "A list on a page, entered: how many items")) : nil
         case "AXTable": return forEntering ? Role.table.displayString : nil
         case "AXGroup":

@@ -12,6 +12,19 @@ import TurnOverControl
 import AXFixtures
 
 func pureTests() {
+    test("status menus: failed AX press remembers a menu that opened and closed before the check") {
+        let before = Date(timeIntervalSinceReferenceDate: 100)
+        let opened = before.addingTimeInterval(0.002)
+        check(!StatusMenus.shouldReportOpenFailure(menuStartBeforePress: before, latestMenuStart: opened,
+                                                  isMenuOpen: false), "a menu opened, then closed: no false failure")
+        check(!StatusMenus.shouldReportOpenFailure(menuStartBeforePress: before, latestMenuStart: opened,
+                                                  isMenuOpen: true), "a menu remains open: no failure")
+        check(StatusMenus.shouldReportOpenFailure(menuStartBeforePress: before, latestMenuStart: before,
+                                                 isMenuOpen: false), "no new menu opened: report the failure")
+        check(!StatusMenus.shouldReportOpenFailure(menuStartBeforePress: before, latestMenuStart: before,
+                                                  isMenuOpen: true), "an already open menu preserves the existing fallback")
+    }
+
     test("Help make TurnOver: every way to help named, by the menu's own words, and it opens by itself once") {
         let body = HelpMakeTurnOver.body
         for words in ["Send feedback", "Help improve this app", "Fix the item I'm on", "VO-Slash", "Translate", "CONTRIBUTING.md",
@@ -261,6 +274,12 @@ func pureTests() {
         check(UserGestures.storedIdentifier(of: left) != "kb:rightoption+s", "left Option is not")
         expect(UserGestures.spoken("kb:rightoption+s"), "right option s")
         expect(UserGestures.storedIdentifier(of: KeyboardGesture(identifier: "kb:turnover+shift+0")!), "kb:turnover+shift+0", "the plain form, not the layout's")
+    }
+    test("speech: the same focus twice is said once, another row with the same words is said") {
+        check(Speech.focusRepeated(words: "12, A1", last: "12, A1", after: 0.1, anotherRow: false), "the same focus reported twice")
+        check(!Speech.focusRepeated(words: "Your order, 09:16", last: "Your order, 09:16", after: 0.1, anotherRow: true), "two copies of a message, one above the other")
+        check(!Speech.focusRepeated(words: "12, A1", last: "12, A1", after: 0.6, anotherRow: false), "after half a second it is said again")
+        check(!Speech.focusRepeated(words: "13, A2", last: "12, A1", after: 0.1, anotherRow: false), "other words")
     }
     test("speech: a capital said alone is marked for a raised pitch only when the setting is on") {
         let was = config.speech.capitalPitch; defer { config.speech.capitalPitch = was }
@@ -1474,6 +1493,16 @@ func browseTextNavTests() {
         expect(NewToTry.heading("Direct (Command Control Comma, then D): for a game or app that speaks for itself, every key goes straight to it.").0, "Direct", "before the bracket")
         expect(NewToTry.heading("CoExist, much simpler: VoiceOver keeps running and is silenced at the sound level wherever TurnOver reads, and heard the instant.").0, "CoExist", "before the comma")
     }
+    test("browse mode: text the page takes clicks on is pressed, other text is not") {
+        let plain = ["AXShowMenu", "AXScrollToVisible"], pressable = ["AXPress", "AXShowMenu", "AXScrollToVisible"]
+        // A questionnaire's "Yes": text in three groups, the click listened for on the text or on a group around it.
+        expect(BrowseModeDocument.clickableText(in: [("AXStaticText", pressable), ("AXGroup", pressable), ("AXGroup", plain), ("AXWebArea", plain)]), 0, "the text itself")
+        expect(BrowseModeDocument.clickableText(in: [("AXStaticText", plain), ("AXGroup", pressable), ("AXGroup", plain), ("AXWebArea", plain)]), 1, "the group holding it")
+        expect(BrowseModeDocument.clickableText(in: [("AXStaticText", plain), ("AXGroup", plain), ("AXWebArea", plain)]), nil, "a paragraph: nothing to activate")
+        expect(BrowseModeDocument.clickableText(in: [("AXStaticText", plain), ("AXWebArea", pressable)]), nil, "never the page itself")
+        expect(BrowseModeDocument.clickableText(in: Array(repeating: ("AXGroup", plain), count: 6) + [("AXGroup", pressable)]), nil, "no more than six up")
+        expect(BrowseModeDocument.clickableText(in: []), nil, "nothing at the reading position")
+    }
     test("browse mode: NVDA's comma keys parse") {
         check(KeyboardGesture(identifier: "kb:,") != nil, "comma")
         check(KeyboardGesture(identifier: "kb:shift+,") != nil, "shift comma")
@@ -1492,6 +1521,14 @@ func browseTextNavTests() {
                  line("More Next Previous", more), line("That was the news.", p2)]
     let segs = ["Home", "News", "Sport", "More", "Next", "Previous"].map { w in WebBuffer.Segment(start: r(w).location, end: r(w).location + r(w).length, element: AXReplay.element(20), isLink: true) }
     func find(_ from: Int, _ fwd: Bool, _ k: WebBuffer.TextKind) -> Int? { WebBuffer.findText(lines: lines, segments: segs, text: t, from: from, forward: fwd, kind: k)?.offset }
+    test("browse mode: a menu button is pressed by Space, a role the app's module names by Return, the rest by the press") {
+        expect(BrowseModeDocument.keyboardPress(role: "AXPopUpButton", moduleRoles: []), .space, "a pop-up button in any app")
+        expect(BrowseModeDocument.keyboardPress(role: "AXMenuButton", moduleRoles: ["AXButton"]), .space, "a menu button keeps Space where buttons take Return")
+        expect(BrowseModeDocument.keyboardPress(role: "AXButton", moduleRoles: ["AXButton"]), .returnKey, "a button in an app whose module names buttons")
+        expect(BrowseModeDocument.keyboardPress(role: "AXButton", moduleRoles: []), nil, "a button anywhere else: the press")
+        expect(BrowseModeDocument.keyboardPress(role: "AXLink", moduleRoles: ["AXButton"]), nil, "a link in that app: the press")
+        expect(AppModule(pid: 0, bundleIdentifier: "test.other", appName: "Public other app").rolesPressedByKeyboard, [], "no app's buttons go by the keyboard unless its module says so")
+    }
     test("browse mode P: the next paragraph skips links and short headings") {
         expect(find(0, true, .paragraph), r("A lot happened").location)
         expect(find(r("A lot happened").location, true, .paragraph), r("That was the news.").location)

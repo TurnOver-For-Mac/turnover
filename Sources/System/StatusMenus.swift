@@ -110,21 +110,36 @@ public enum StatusMenus {
         return help.map { "\(owner), \($0)" } ?? owner
     }
 
+    /// An unsuccessful AX reply is only a failure if no menu opened during the attempt.
+    public static func shouldReportOpenFailure(menuStartBeforePress: Date, latestMenuStart: Date,
+                                              isMenuOpen: Bool) -> Bool {
+        latestMenuStart == menuStartBeforePress && !isMenuOpen
+    }
+
+    static func press(_ element: AXUIElement, owner: pid_t, name: String) {
+        AXHandler.shared.observe(owner)
+        lastOpened = (name, Date())
+        let menuStartBeforePress = AXHandler.shared.lastMenuStart
+        let result = AXUIElementPerformAction(element, kAXPressAction as CFString)
+        Log.io("status menus: press \"\(Log.words(name))\" → \(result.rawValue)")
+        guard result != .success else { return }
+        // macOS 27.2, 15 Nov 2026: AXPress returned cannotComplete, then the status menu
+        // opened 2 ms later and closed before this check. Remember the opening, not just
+        // whether a menu is still open; capture before AXPress, which can deliver callbacks.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            if shouldReportOpenFailure(menuStartBeforePress: menuStartBeforePress,
+                                       latestMenuStart: AXHandler.shared.lastMenuStart,
+                                       isMenuOpen: AXHandler.shared.isMenuOpen) {
+                Speech.speakMessage(String(localized: "could not open \(name)", comment: "A menu could not be opened: %@ is its name"))
+            }
+        }
+    }
+
     public static func openList() {
         let extras = gather()
         var items = extras.map { e in
             MenuItem(verbatim: e.name, .action {
-                AXHandler.shared.observe(e.pid)
-                StatusMenus.lastOpened = (e.name, Date())
-                let r = AXUIElementPerformAction(e.element, kAXPressAction as CFString)
-                Log.io("status menus: press \"\(Log.words(e.name))\" → \(r.rawValue)")
-                // A slow app (a VPN app) answers "cannot complete" and opens its menu anyway: only a menu that never
-                // appears is a failure.
-                if r != .success {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                        if !AXHandler.shared.isMenuOpen { Speech.speakMessage(String(localized: "could not open \(e.name)", comment: "A menu could not be opened: %@ is its name")) }
-                    }
-                }
+                press(e.element, owner: e.pid, name: e.name)
             })
         }
         // TurnOver's own item, at the right of the others it sits beside.
