@@ -317,14 +317,14 @@ public final class GlobalCommands: ScriptableObject {
         script("jaws_sayAllSlower", String(localized: "During say all: slower, for this say all only (JAWS: Page Down)", comment: "A command, as the key list and keyboard help say it"), gestures: [], category: text) { _ in
             SayAll.changeRate(by: -0.05)
         }
-        script("find", String(localized: "Finds text: type it, then Return; the match is where you are left (VO-F; NVDA+Control+F)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+f", "kb:turnover+control+f"], category: text) { _ in
-            FindPrompt.shared.open()
+        script("find", String(localized: "Finds text: type it, then Return; the match is where you are left (VO-F; NVDA+Control+F)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+f", "kb:turnover+control+f"], category: text) { g in
+            FindPrompt.shared.open(pressedAt: g.timestamp)
         }
-        script("findNext", String(localized: "Finds the next match of the last search (VO-G; NVDA+F3)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+g", "kb:turnover+f3"], category: text) { _ in
-            FindPrompt.shared.again(forward: true)
+        script("findNext", String(localized: "Finds the next match of the last search (VO-G; NVDA+F3)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+g", "kb:turnover+f3"], category: text) { g in
+            FindPrompt.shared.again(forward: true, pressedAt: g.timestamp)
         }
-        script("findPrevious", String(localized: "Finds the previous match of the last search (VO-Shift-G; NVDA+Shift+F3)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+shift+g", "kb:turnover+shift+f3"], category: text) { _ in
-            FindPrompt.shared.again(forward: false)
+        script("findPrevious", String(localized: "Finds the previous match of the last search (VO-Shift-G; NVDA+Shift+F3)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+shift+g", "kb:turnover+shift+f3"], category: text) { g in
+            FindPrompt.shared.again(forward: false, pressedAt: g.timestamp)
         }
         // The Windows style is NVDA's: NVDA+F reports the formatting, and find is NVDA+Control+F (Caps Lock F opened
         // the find prompt in Word, 7 Oct 2026). Declared after "find", so it is tried first.

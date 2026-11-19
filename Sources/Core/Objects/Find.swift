@@ -21,12 +21,24 @@ public final class FindPrompt: @unchecked Sendable {
     /// Return no longer searches for half-typed or old text after the prompt has gone.
     private let _generation = Locked(0)
     nonisolated public var generation: Int { _generation.value }
+    /// The time (the key events' clock) of the last Quick Nav arrow, behind `_generation`'s lock (19 Nov 2026, Codex's
+    /// review). TurnOver+F is decided on the keyboard's way in and opens later on the main thread, behind the script
+    /// queue; an arrow pressed in between found the prompt still closed, and the opening that followed stayed open and
+    /// took the next letters. An opening whose key came before the last arrow does not happen.
+    nonisolated(unsafe) private var arrowAt: UInt64 = 0
     private var typed = ""
     public private(set) var lastSearch = ""
 
-    public func open() {
+    /// `pressedAt`: the time of the key that asked for it (its gesture's timestamp); 0 when unknown (the key list, the
+    /// menu), which always opens.
+    public func open(pressedAt: UInt64 = 0) {
+        _generation.lock.lock()
+        let overtaken = pressedAt != 0 && pressedAt <= arrowAt
+        if !overtaken { _generation.unsafeValue += 1 }
+        _generation.lock.unlock()
+        // Closed by the arrow before it opened: nothing is said, as for any key that closes it; the arrow moves.
+        guard !overtaken else { Log.io("find: the prompt not opened (a Quick Nav arrow came after its key)"); return }
         typed = ""
-        _generation.lock.lock(); _generation.unsafeValue += 1; _generation.lock.unlock()
         isOpen = true
         Speech.speakMessage(lastSearch.isEmpty ? String(localized: "find", comment: "Find opened") : String(localized: "find, last \(lastSearch)", comment: "Find opened: %@ is the last search"))
     }
@@ -66,10 +78,12 @@ public final class FindPrompt: @unchecked Sendable {
     /// opening; the lock, sleep or a user switch; secure input coming on (TurnOver hears no keys then). Any queued key
     /// for this opening is then dropped (`generation`). Nothing is said.
     ///
-    /// The log line is written on the main thread: this is called on the keyboard's tap, where a stalled log write
-    /// would hold every key (19 Nov 2026, Codex's review).
-    nonisolated package func close(because why: String) {
+    /// `arrowAt`: a Quick Nav arrow's time (its event's, on the gestures' clock), which also stops an opening asked for
+    /// before it and not yet made (`open`). The log line is written on the main thread: this is called on the
+    /// keyboard's tap, where a stalled log write would hold every key (19 Nov 2026, Codex's review).
+    nonisolated package func close(because why: String, arrowAt time: UInt64 = 0) {
         _generation.lock.lock()
+        if time > arrowAt { arrowAt = time }
         let wasOpen = _isOpen.value
         if wasOpen { _isOpen.value = false; _generation.unsafeValue += 1 }
         _generation.lock.unlock()
@@ -112,8 +126,8 @@ public final class FindPrompt: @unchecked Sendable {
     package var typedSoFar: String { typed }
 
     /// TurnOver+G / TurnOver+Shift+G.
-    public func again(forward: Bool) {
-        guard !lastSearch.isEmpty else { open(); return }
+    public func again(forward: Bool, pressedAt: UInt64 = 0) {
+        guard !lastSearch.isEmpty else { open(pressedAt: pressedAt); return }
         Self.find(lastSearch, forward: forward)
     }
 

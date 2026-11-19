@@ -55,6 +55,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   password field's secure input also close it now. Typing, Backspace, Return and Escape work in the prompt as before.
 - Find (Turnover F): switching to another app while TurnOver is waking an app's accessibility now closes the Find
   prompt too. Before, the prompt stayed open, and what you typed in the other app went into Find.
+- Find (Turnover F): a Quick Nav arrow pressed straight after Turnover F now stops the prompt from opening, and moves
+  as always. Before, the prompt could open just after the arrow and take the next letters you typed.
 - Closing the Find prompt with a Quick Nav arrow no longer writes to TurnOver's log while the arrow is being handled,
   so a slow disk can no longer hold up the keys.
 - Safari: VoiceOver Space on a link that opens its page in the same tab now reads the new page as soon as it has

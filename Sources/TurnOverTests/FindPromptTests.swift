@@ -131,6 +131,21 @@ func findPromptTests() {
         TurnOverMenu.shared.close()
     }
 
+    // 19 Nov 2026, Codex's review: TurnOver+F decided, then a Quick Nav arrow before the queued opening ran; the arrow
+    // found the prompt closed, and the opening then stayed open and took the next letters.
+    test("A Quick Nav arrow after TurnOver+F stops the opening still queued; a later TurnOver+F opens") {
+        defer { if FindPrompt.shared.isOpen { FindPrompt.shared.close(because: "the test is over") } }
+        let t = mach_absolute_time()
+        FindPrompt.shared.close(because: "a Quick Nav arrow", arrowAt: t)
+        FindPrompt.shared.open(pressedAt: t &- 1_000)
+        check(!FindPrompt.shared.isOpen, "the opening asked for before the arrow did not happen")
+        FindPrompt.shared.open(pressedAt: t &+ 1_000)
+        check(FindPrompt.shared.isOpen, "TurnOver+F pressed after the arrow opens")
+        FindPrompt.shared.close(because: "the test")
+        FindPrompt.shared.open()
+        check(FindPrompt.shared.isOpen, "an opening with no key time (the key list, the menu) opens")
+    }
+
     // 19 Nov 2026, Codex's review: the close's log line was written on the keyboard's tap.
     test("Find's prompt closed off the main thread writes its log line on the main thread") {
         let savedObserver = Log.observer, savedLevel = Log.level
