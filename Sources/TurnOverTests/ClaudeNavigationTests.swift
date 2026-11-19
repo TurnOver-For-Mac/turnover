@@ -364,6 +364,21 @@ func claudeNavigationTests() {
         }
     }
 
+    test("Claude switch: a press that changed nothing is said so, and a changed value is never pressed again") {
+        withConversationTest { page, module, sent in
+            let savedSink = Speech.sink
+            var said: [String] = []
+            Speech.sink = { said.append($0) }
+            defer { Speech.sink = savedSink }
+            for attempt in [1, 2] { module.recoverUnchangedToggle(page.webArea, attempt: attempt, stillUnchanged: { false }) }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.4))
+            expect(sent.value, [], "a value that has changed gets no second key")
+            expect(said, [], "and nothing is said by the recovery")
+            module.toggleStayedUnchanged(page.webArea)
+            expect(said, ["did not change"], "when no way worked, it is said")
+        }
+    }
+
     test("Claude prompt: Return that sends the message says sent at once, in the prompt only") {
         withConversationTest { _, module, _ in
             let savedSink = Speech.sink

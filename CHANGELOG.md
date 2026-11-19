@@ -29,6 +29,9 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 - Safari: H (and the other quick keys, and a choice from the Elements list) on a heading too long for one line now reads
   the whole heading, as VoiceOver does, not its first line with the rest left for Down Arrow.
+- Claude: a switch or tick box in Settings (Memory, "Search and reference chats") that did nothing when pressed is
+  now checked afterwards. If its value has not changed, TurnOver puts the keyboard on it and sends Space, then clicks it,
+  and says the new state, "on" or "off"; if none works it says "did not change". It never presses again once the value has changed.
 - Claude: Command 1 to 5 (and the other numbers) names the conversation it lands on at once, and says it once. The
   sidebar's Recents list had changed shape, so the row could not be read and the answer waited, came late or was missed.
 - Safari: Up and Down Arrow in a box that holds one character (the digit boxes on PayPal's code page) now answer at

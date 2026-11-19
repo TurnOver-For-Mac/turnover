@@ -232,6 +232,12 @@ extension BrowseModeDocument {
                 guard ControlState.alive(element) else { self.finishWatch(watch, element, changed: true, movedOn: movedOn); return }   // gone: nothing said
                 let now = ControlState(element)
                 guard now != before else {
+                    // Claude only, so far: a switch pressed by accessibility or by Space can do nothing; the app's module
+                    // tries another way at 0.5 s and 2 s, each only if the value is still the old one.
+                    if checkable, !movedOn, next == 0.5 || next == 2.0 {
+                        AppModuleHandler.shared.appModule(for: element.pid).recoverUnchangedToggle(element, attempt: next == 0.5 ? 1 : 2, stillUnchanged: { ControlState.alive(element) && ControlState(element) == before })
+                    }
+                    if tries.count == 1, checkable, !movedOn { AppModuleHandler.shared.appModule(for: element.pid).toggleStayedUnchanged(element) }
                     if next == 1.0, !acknowledged, element.role == "AXButton" {
                         // 15 Nov 2026 log review: Submit received a native key but no changed state or speech.
                         // Acknowledge only that press, never submission, and never interrupt a later interaction.
