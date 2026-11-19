@@ -7,6 +7,7 @@ import Foundation
 import UniformTypeIdentifiers
 import ApplicationServices
 import AppKit
+import AVFoundation
 
 package final class FinderAppModule: AppModule {
     static let bundleID = "com.apple.finder"
@@ -303,13 +304,59 @@ package final class FinderAppModule: AppModule {
             return
         }
         let spoken = ObjectFactory.make(row)
-        // A clip that plays by itself (audio or video, 17 Nov 2026, Oliver): its name alone, nothing to talk over it.
-        if Self.isMedia(row: row) { Speech.speakMessage(spoken.name) } else { Speech.speakObject(spoken, reason: .focus) }
+        // A clip that plays by itself (audio or video, 17 Nov 2026, Oliver): its name alone, and after a short clip has
+        // played, so the name does not talk over it.
+        let media = Self.mediaInfo(row: row)
+        guard media.isMedia else { Speech.speakObject(spoken, reason: .focus); return }
+        let keyAt = InputManager.lastKeyDownAt
+        let length = media.url.flatMap { Self.clipLength(of: $0, deadline: 0.25) }
+        // A newer key handled while the length was being read has its own name to say: this one is stale.
+        guard InputManager.lastKeyDownAt == keyAt else { return }
+        guard let delay = Self.nameDelay(clipLength: length) else {
+            Log.io("finder: clip under Quick Look \"\(String(spoken.name.prefix(1)))…\", length \(length.map { String(format: "%.2f s", $0) } ?? "not known in time"): name said at once")
+            Speech.speakMessage(spoken.name)
+            return
+        }
+        Log.io("finder: clip under Quick Look \"\(String(spoken.name.prefix(1)))…\", length \(String(format: "%.2f", length ?? 0)) s: name said in \(String(format: "%.2f", delay)) s")
+        let name = spoken.name
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self else { return }
+            guard InputManager.lastKeyDownAt == keyAt, self.quickLookHasFocus(),
+                  let now = Self.mainFileView(pid: self.pid).flatMap({ Self.firstSelected(in: $0) }), now.isSame(row) else {
+                Log.io("finder: the name waiting for the clip was dropped (a key, another selection or the focus moved)")
+                return
+            }
+            Speech.speakMessage(name)
+        }
+    }
+
+    /// How long to wait before the name of a clip is said: the clip's length with 0.3 s for Quick Look to start it
+    /// and 0.15 s after. Nil (say it at once) for a clip longer than 5 s or one whose length is not known.
+    package static func nameDelay(clipLength: TimeInterval?) -> TimeInterval? {
+        guard let length = clipLength, length.isFinite, length >= 0, length <= 5 else { return nil }
+        return 0.3 + length + 0.15
+    }
+
+    /// The clip's length in seconds, read off the main thread; nil when not known within the deadline.
+    private static func clipLength(of url: URL, deadline: TimeInterval) -> TimeInterval? {
+        nonisolated final class Box: @unchecked Sendable {
+            let lock = NSLock(); private var value: TimeInterval?; private var finished = false
+            nonisolated func set(_ v: TimeInterval?) { lock.lock(); value = v; finished = true; lock.unlock() }
+            nonisolated func get() -> (Bool, TimeInterval?) { lock.lock(); defer { lock.unlock() }; return (finished, value) }
+        }
+        let box = Box()
+        Task.detached {
+            let d = try? await AVURLAsset(url: url).load(.duration)
+            let seconds = d.map { CMTimeGetSeconds($0) }
+            box.set(seconds.flatMap { $0.isFinite ? $0 : nil })
+        }
+        _ = Poll.pumping(every: 0.01, limit: deadline) { box.get().0 }
+        return box.get().1
     }
 
     /// Whether the row is an audio or video file, by its file address or else the extension in its name (a name shown
-    /// without its extension is not known: not media).
-    package static func isMedia(row: AXUIElement) -> Bool {
+    /// without its extension is not known: not media), with the file address when one was found.
+    package static func mediaInfo(row: AXUIElement) -> (isMedia: Bool, url: URL?) {
         var url: URL?
         var queue = [row]; var n = 0
         while url == nil, !queue.isEmpty, n < 12 {
@@ -318,15 +365,23 @@ package final class FinderAppModule: AppModule {
             queue.append(contentsOf: e.elements(kAXChildrenAttribute).prefix(8))
         }
         let ext = url?.pathExtension.isEmpty == false ? url!.pathExtension : (ObjectFactory.make(row).name as NSString).pathExtension
-        guard !ext.isEmpty, let type = UTType(filenameExtension: ext) else { return false }
-        return type.conforms(to: .audio) || type.conforms(to: .movie) || type.conforms(to: .audiovisualContent)
+        guard !ext.isEmpty, let type = UTType(filenameExtension: ext) else { return (false, url) }
+        return (type.conforms(to: .audio) || type.conforms(to: .movie) || type.conforms(to: .audiovisualContent), url)
+    }
+
+    package static func isMedia(row: AXUIElement) -> Bool { mediaInfo(row: row).isMedia }
+
+    /// Whether the window is Quick Look's panel: a window of Finder's whose subrole is "Quick Look" (the value seen
+    /// live on 19 November 2026; the title is not used, as it is translated). Get Info and other windows differ.
+    package static func isQuickLookPanel(_ window: AXUIElement?) -> Bool {
+        window?.string(kAXSubroleAttribute) == "Quick Look"
     }
 
     /// Whether the element is Quick Look's own window or inside it.
     private func inQuickLookWindow(_ obj: TurnOverObject) -> Bool {
         guard obj.pid == pid else { return false }
         let w = obj.axRole == "AXWindow" ? obj.element : obj.element.element(kAXWindowAttribute)
-        return w?.string(kAXSubroleAttribute) == "AXSystemFloatingWindow" && w?.string(kAXTitleAttribute) == "Quick Look"
+        return Self.isQuickLookPanel(w)
     }
 
     /// Quick Look open on an audio or video file (17 Nov 2026, Oliver): the clip plays by itself, so nothing from its
@@ -340,8 +395,12 @@ package final class FinderAppModule: AppModule {
     /// Quick Look coming to the front says the selected file's name in place of "Quick Look, window" (17 Nov 2026).
     /// Any other window, or no selection known, keeps the reader's own words.
     package override func windowAnnouncement(for window: AXUIElement, title: String) -> String? {
-        guard window.string(kAXSubroleAttribute) == "AXSystemFloatingWindow", title == "Quick Look" else { return nil }
+        guard Self.isQuickLookPanel(window) else { return nil }
         guard let view = Self.mainFileView(pid: pid), let row = Self.firstSelected(in: view) else { return nil }
+        if Self.isMedia(row: row) {
+            Log.io("finder: Quick Look opened on a clip \"\(String(ObjectFactory.make(row).name.prefix(1)))…\"; nothing said so the clip is heard")
+            return ""
+        }
         let name = ObjectFactory.make(row).name
         return name.isEmpty ? nil : name
     }

@@ -17,7 +17,7 @@ func finderQuickLookTests() {
             .init(id: 3, attrs: ["AXRole": .string("AXRow"), "AXTitle": .string(second), "AXParent": .element(1), "AXWindow": .element(0)]),
             .init(id: 8, attrs: ["AXRole": .string("AXApplication"), "AXChildren": .elements([0, 9]), "AXWindows": .elements([0, 9]),
                                  "AXMainWindow": .element(0), "AXFocusedWindow": .element(9), "AXFocusedUIElement": .element(floatingFocus ? 9 : 1)]),
-            .init(id: 9, attrs: ["AXRole": .string("AXWindow"), "AXSubrole": .string("AXSystemFloatingWindow"), "AXTitle": .string("Quick Look"), "AXParent": .element(8)]),
+            .init(id: 9, attrs: ["AXRole": .string("AXWindow"), "AXSubrole": .string("Quick Look"), "AXTitle": .string("Quick Look"), "AXParent": .element(8)]),
         ])
     }
     test("Finder Quick Look: the selection's move is told, and only with the panel itself holding the focus") {
@@ -81,9 +81,12 @@ func finderQuickLookTests() {
         expect(passed, 0, "a window event is held back while a clip is selected")
         expect(said, [], "and nothing said")
         module.handleEvent(Event(.gainFocus, ObjectFactory.make(AXReplay.element(9)))) { passed += 1 }
-        expect(module.windowAnnouncement(for: AXReplay.element(9), title: "Quick Look"), "Song.m4a", "Quick Look's window says the clip's name")
+        expect(module.windowAnnouncement(for: AXReplay.element(9), title: "Quick Look"), "", "Quick Look's window over a clip says nothing")
         expect(module.windowAnnouncement(for: AXReplay.element(0), title: "Docs"), nil, "another window keeps the reader's words")
-        expect(module.windowAnnouncement(for: AXReplay.element(9), title: "Other"), nil, "a floating window with another title too")
+        expect(module.windowAnnouncement(for: AXReplay.element(9), title: "Other"), "", "the panel is known by its subrole, not its title")
+        _ = AXReplay.element(1).set(kAXSelectedRowsAttribute, [AXReplay.element(2)] as CFArray)
+        expect(module.windowAnnouncement(for: AXReplay.element(9), title: "Quick Look"), "First file", "another file's name on opening")
+        _ = AXReplay.element(1).set(kAXSelectedRowsAttribute, [AXReplay.element(3)] as CFArray)
         let plain = AppModule(pid: 900_010, bundleIdentifier: "com.example.plain", appName: "Plain")
         expect(plain.windowAnnouncement(for: AXReplay.element(0), title: "Docs"), nil, "the default leaves every announcement as it is")
         expect(said, [], "the window taking the focus adds nothing (its name is its announcement)")
@@ -108,6 +111,13 @@ func finderQuickLookTests() {
         expect(FinderAppModule.listEnd(of: list, key: "downArrow", modifiers: [], selected: AXReplay.element(3))?.said, String(localized: "bottom", comment: "Spoken message"), "the last index and Down: bottom")
         check(FinderAppModule.listEnd(of: list, key: "downArrow", modifiers: [], selected: AXReplay.element(4)) == nil, "a middle row is not an end")
         check(FinderAppModule.listEnd(of: list, key: "upArrow", modifiers: [], selected: AXReplay.element(3)) == nil, "Up on the last row is not an end")
+    }
+    test("Finder Quick Look: when a clip's name waits") {
+        check(abs((FinderAppModule.nameDelay(clipLength: 2) ?? 0) - 2.45) < 0.001, "a 2 s clip: 0.3 + 2 + 0.15")
+        check(abs((FinderAppModule.nameDelay(clipLength: 5) ?? 0) - 5.45) < 0.001, "5 s is still short")
+        expect(FinderAppModule.nameDelay(clipLength: 5.1), nil, "longer than 5 s: at once")
+        expect(FinderAppModule.nameDelay(clipLength: nil), nil, "not known: at once")
+        expect(FinderAppModule.nameDelay(clipLength: .nan), nil, "not a number: at once")
     }
     test("Finder Quick Look: the selection test") {
         AXReplay.load(tree())

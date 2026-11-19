@@ -25,10 +25,11 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 - Automatic focus mode for caret movement is on by default. Arrows, quick navigation and VoiceOver's keys put
   the keyboard in the field you reach; VO-Left and VO-Right can move on. Turn it off in Settings, Web pages.
 
-- Finder: with Quick Look open on an audio or video file, which plays by itself, each Up or Down Arrow says only the
-  file's name, with no date, size or kind, and nothing else from the Quick Look window is said. Other files are read
-  as before.
-- Finder: opening Quick Look with Space now says the selected file's name in place of "Quick Look, window".
+- Finder: opening Quick Look on a sound or video file now says nothing, so the clip is heard. With Quick Look open,
+  an arrow to a clip of five seconds or less plays it and then says its name; a longer clip, or one whose length is
+  not known at once, says its name at once. The name is not said if you press another key first. Nothing else from
+  the Quick Look window is said while a clip is selected. Other files are read as before.
+- Finder: opening Quick Look on any other file says that file's name in place of "Quick Look, window".
 
 ### Fixed
 
