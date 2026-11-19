@@ -18,6 +18,9 @@
         }
       }
     },
+    "%@" : {
+      "comment" : "The list for one NVDA add-on; the placeholder is its name"
+    },
     "%@\n\nVoiceOver is still on. Check for an update from the TurnOver menu next time, or send feedback." : {
       "comment" : "An alert: %@ is the error",
       "localizations" : {
@@ -526,6 +529,20 @@
         }
       }
     },
+    "%@ could not be fetched: %@. Nothing was changed." : {
+      "comment" : "A download failed: the placeholders are the add-on's name and the reason, which has no full stop",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ could not be fetched: %2$@. Nothing was changed."
+          }
+        }
+      }
+    },
+    "%@ could not be fetched: its download is larger than TurnOver will read, 50 megabytes. Nothing was changed." : {
+      "comment" : "A download was too big; the placeholder is the add-on's name"
+    },
     "%@ could not be removed: %@" : {
       "comment" : "A plugin not removed: %1$@ is its name, %2$@ the error",
       "localizations" : {
@@ -599,6 +616,20 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ iletişim kutusu"
+          }
+        }
+      }
+    },
+    "%@ did not work, and the tool did not say why. Nothing was changed." : {
+      "comment" : "A store step failed with no reason: %@ names the step"
+    },
+    "%@ did not work: %@. Nothing was changed." : {
+      "comment" : "A store step failed: %1$@ names the step, %2$@ is the tool's own reason",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ did not work: %2$@. Nothing was changed."
           }
         }
       }
@@ -860,6 +891,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@, %2$@ ile yapılmış. TurnOver'da bunun için gereken parçalar var, bu yüzden herkes eklentisini yapabilir"
+          }
+        }
+      }
+    },
+    "%@ is converted into a draft in %@. The translation is not reviewed." : {
+      "comment" : "An add-on was converted; the placeholders are its name and the folder",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ is converted into a draft in %2$@. The translation is not reviewed."
           }
         }
       }
@@ -2126,6 +2168,9 @@
         }
       }
     },
+    "%@ was not used: its file is not the one NVDA's store listed, so nothing was read. That is at the store's or its author's end, not yours. Nothing was changed." : {
+      "comment" : "A download's checksum did not match; the placeholder is the add-on's name"
+    },
     "%@ will not be announced. Saved" : {
       "comment" : "An item silenced: %@ is its name",
       "localizations" : {
@@ -2897,7 +2942,7 @@
       }
     },
     "%@, selected" : {
-      "comment" : "Text selected in browse mode: %@ is the text",
+      "comment" : "Text selected in browse mode: %@ is the text\nThe folder just selected in Notes",
       "localizations" : {
         "ru" : {
           "stringUnit" : {
@@ -3789,7 +3834,7 @@
       }
     },
     ", by %@" : {
-      "comment" : "A plugin's author, after its name",
+      "comment" : "A plugin's author, after its name\nAn NVDA add-on in a list: its author, after its name",
       "localizations" : {
         "ru" : {
           "stringUnit" : {
@@ -3856,6 +3901,9 @@
         }
       }
     },
+    ", version %@" : {
+      "comment" : "An add-on's version after its name"
+    },
     ". Caps Lock pressed twice toggles caps lock" : {
       "comment" : "In the key list, after the speech keys",
       "localizations" : {
@@ -3872,6 +3920,15 @@
           }
         }
       }
+    },
+    ". Looked at before: can be converted." : {
+      "comment" : "An NVDA add-on an earlier conversion found can be converted"
+    },
+    ". Looked at before: needs work." : {
+      "comment" : "An NVDA add-on an earlier conversion found needs a person's work"
+    },
+    ". Not for the Mac%@." : {
+      "comment" : "An NVDA add-on that cannot come across; the placeholder is the reason, with its colon, or empty"
     },
     "1 app connection, %@ lines heard." : {
       "comment" : "The speech port's status",
@@ -4673,6 +4730,9 @@
         }
       }
     },
+    "About %@" : {
+      "comment" : "An item that reads out the details of an NVDA add-on; the placeholder is its name"
+    },
     "About TurnOver" : {
       "localizations" : {
         "ru" : {
@@ -4959,6 +5019,9 @@
           }
         }
       }
+    },
+    "All NVDA's add-ons" : {
+
     },
     "All day" : {
       "comment" : "A field of a Calendar event",
@@ -5291,6 +5354,9 @@
         }
       }
     },
+    "Ask NVDA's store for its list of add-ons" : {
+
+    },
     "Ask TurnOver for the parts" : {
       "localizations" : {
         "ru" : {
@@ -5356,6 +5422,9 @@
         }
       }
     },
+    "Asked again the next time" : {
+
+    },
     "Asked again the next time it wants to speak" : {
       "localizations" : {
         "ru" : {
@@ -5371,6 +5440,12 @@
           }
         }
       }
+    },
+    "Asking NVDA's store" : {
+      "comment" : "Said while NVDA's add-on store is asked"
+    },
+    "Asking NVDA's store about %@" : {
+      "comment" : "Said while the store is asked about one add-on; the placeholder is its name"
     },
     "Audio ducking isn't available on this Mac" : {
       "comment" : "Spoken message",
@@ -6020,6 +6095,9 @@
           }
         }
       }
+    },
+    "By %@." : {
+      "comment" : "An add-on's author"
     },
     "By keyboard style" : {
       "localizations" : {
@@ -7014,6 +7092,12 @@
         }
       }
     },
+    "Confirms a Claude session deletion" : {
+      "comment" : "A keyboard command"
+    },
+    "Connect" : {
+
+    },
     "Contacts" : {
       "comment" : "A group of commands in the key list",
       "localizations" : {
@@ -7115,6 +7199,15 @@
           }
         }
       }
+    },
+    "Convert it myself" : {
+
+    },
+    "Convert with %@" : {
+
+    },
+    "Converting %@. This can take a while" : {
+      "comment" : "Said while an NVDA add-on is converted; the placeholder is its name"
     },
     "Copied" : {
       "comment" : "Copied to the clipboard",
@@ -7367,6 +7460,9 @@
         }
       }
     },
+    "Could not open the Claude app. The folder is %@." : {
+      "comment" : "Claude could not be opened: %@ is the folder"
+    },
     "Could not remove it" : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -7458,6 +7554,17 @@
         }
       }
     },
+    "Could not start %@: %@. The folder is %@." : {
+      "comment" : "An AI tool could not start: its name, why, then the folder",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Could not start %1$@: %2$@. The folder is %3$@."
+          }
+        }
+      }
+    },
     "Could not start Steam in the %@ bottle: %@" : {
       "comment" : "The Steam program's message",
       "localizations" : {
@@ -7531,6 +7638,9 @@
           }
         }
       }
+    },
+    "Credited as %@." : {
+      "comment" : "Said after the credit name is kept; the placeholder is the name"
     },
     "CrossOver is not installed, so Steam in the %@ bottle cannot be started." : {
       "comment" : "Steam speech: %@ is a CrossOver bottle",
@@ -7855,6 +7965,12 @@
           }
         }
       }
+    },
+    "Deleting %@" : {
+      "comment" : "Acknowledges a requested deletion; does not claim success"
+    },
+    "Deleting %@, 2 sessions" : {
+      "comment" : "Acknowledges a requested deletion; does not claim success"
     },
     "Describe the image at the cursor" : {
       "localizations" : {
@@ -9001,6 +9117,9 @@
           }
         }
       }
+    },
+    "Find an add-on in NVDA's store and convert it into a draft plugin for your own AI tool or you to finish. Asks NVDA's store only after you agree" : {
+
     },
     "Find commands" : {
       "localizations" : {
@@ -10789,6 +10908,15 @@
         }
       }
     },
+    "In a toolbar: back to the window's content" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
+    "In a toolbar: the next control; the edge sound at the last" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
+    "In a toolbar: the previous control; the edge sound at the first" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
     "In edit fields" : {
       "localizations" : {
         "ru" : {
@@ -10943,15 +11071,6 @@
           }
         }
       }
-    },
-    "In a toolbar: back to the window's content" : {
-      "comment" : "A command, as the key list and keyboard help say it"
-    },
-    "In a toolbar: the next control; the edge sound at the last" : {
-      "comment" : "A command, as the key list and keyboard help say it"
-    },
-    "In a toolbar: the previous control; the edge sound at the first" : {
-      "comment" : "A command, as the key list and keyboard help say it"
     },
     "In the ribbon, sidebar, status bar or toolbar: back to the document" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -12154,6 +12273,9 @@
         }
       }
     },
+    "Left and Right move through the items; Return opens one." : {
+      "comment" : "A hint in the Dock at the bottom of the screen"
+    },
     "Let go of the keys, then press Command Control Period again." : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -12187,6 +12309,9 @@
           }
         }
       }
+    },
+    "Licence: %@." : {
+      "comment" : "An add-on's licence"
     },
     "Line by line" : {
       "localizations" : {
@@ -12661,6 +12786,12 @@
           }
         }
       }
+    },
+    "Makes a draft plugin in a new folder in TurnOver Plugins and opens it, with a brief for finishing it yourself. Nothing is installed or approved" : {
+
+    },
+    "Makes a draft plugin in a new folder in TurnOver Plugins, and gives it to %@ to finish. Nothing is installed or approved" : {
+
     },
     "Makes the item a window spot of your own (VO-Command-Shift-Right Bracket)" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -14513,6 +14644,12 @@
         }
       }
     },
+    "NVDA add-ons" : {
+      "comment" : "A list of every NVDA add-on"
+    },
+    "NVDA add-ons matching %@" : {
+      "comment" : "A list of NVDA add-ons; the placeholder is the search words"
+    },
     "NVDA and JAWS keys move by groups too" : {
       "localizations" : {
         "ru" : {
@@ -14562,6 +14699,15 @@
         }
       }
     },
+    "NVDA's store did not answer in time, so %@ did not happen. Nothing was changed. Try again later." : {
+      "comment" : "A store step took too long: %@ names the step"
+    },
+    "NVDA's store gave an answer TurnOver could not read. Nothing was changed." : {
+      "comment" : "The store's answer did not parse"
+    },
+    "NVDA's store list was empty." : {
+      "comment" : "The store list had nothing in it"
+    },
     "Name" : {
       "comment" : "A piece of an item's announcement, in the reading order",
       "localizations" : {
@@ -14595,6 +14741,12 @@
           }
         }
       }
+    },
+    "Name to credit for converted add-ons: %@" : {
+      "comment" : "A Plugins menu item; the placeholder is the name"
+    },
+    "Name to credit for converted add-ons: not set" : {
+      "comment" : "A Plugins menu item; the name is asked when first needed"
     },
     "Name undescribed pictures by their file name" : {
       "localizations" : {
@@ -15241,6 +15393,9 @@
         }
       }
     },
+    "No add-on on NVDA's store matches %@." : {
+      "comment" : "A search of NVDA's add-on store found nothing; the placeholder is the words"
+    },
     "No app has asked to speak through TurnOver yet. A game or another program can ask; it appears here, and you choose whether it may." : {
       "localizations" : {
         "ru" : {
@@ -15373,6 +15528,9 @@
           }
         }
       }
+    },
+    "No name given." : {
+      "comment" : "Said when the credit name was left empty"
     },
     "No plugin for %@ yet: make one, or ask" : {
       "localizations" : {
@@ -15778,6 +15936,17 @@
         }
       }
     },
+    "Nothing in %@ can come across to the Mac, so no plugin was made. The report is CONVERSION.md in %@. Nothing is installed or approved." : {
+      "comment" : "An add-on could not be converted; the placeholders are its name and the folder",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nothing in %1$@ can come across to the Mac, so no plugin was made. The report is CONVERSION.md in %2$@. Nothing is installed or approved."
+          }
+        }
+      }
+    },
     "Nothing in this window can be read. Press %@ to recognise its text, or %@ to describe it." : {
       "comment" : "Spoken message: %1$@ is the key that recognises the text, %2$@ the key that describes the window",
       "localizations" : {
@@ -15851,6 +16020,9 @@
           }
         }
       }
+    },
+    "Nothing was asked of NVDA's store." : {
+      "comment" : "Said after Not now to connecting to NVDA's store"
     },
     "Notification Centre" : {
       "comment" : "Spoken message\nThe Mac's Notification Centre",
@@ -16174,6 +16346,9 @@
         }
       }
     },
+    "On. Turn it off and TurnOver asks nothing of NVDA's store. Only the request is sent: nothing about you or your Mac" : {
+
+    },
     "On: TurnOver turns VoiceOver off as it starts and on as it quits, comes on when VoiceOver turns off and steps aside when VoiceOver comes on. Off: each reader has its own switch and neither turns the other on or off, for VoiceOver reading inside a virtual machine such as Parallels. Either way one reader speaks at a time: while VoiceOver is on, TurnOver is quiet." : {
       "localizations" : {
         "ru" : {
@@ -16314,6 +16489,17 @@
         }
       }
     },
+    "Opening %@ in Terminal, in %@. Nothing is installed or approved." : {
+      "comment" : "Handed to an AI tool: its name, then the folder",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Opening %1$@ in Terminal, in %2$@. Nothing is installed or approved."
+          }
+        }
+      }
+    },
     "Opening %@ in Terminal, in the brief's folder. It will ask what is wrong in %@; it can check, try and install the plugin itself." : {
       "comment" : "Making a plugin with an AI tool: the tool, then the app",
       "localizations" : {
@@ -16336,6 +16522,9 @@
           }
         }
       }
+    },
+    "Opening Claude Code in %@, with the request typed in: send it. Nothing is installed or approved." : {
+      "comment" : "Handed to Claude: %@ is the folder"
     },
     "Opening Claude Code in the brief's folder. The request is typed in: finish the sentence with what is wrong in %@, and send. Claude can check and install the plugin itself." : {
       "comment" : "Making a plugin with Claude Code: %@ is the app",
@@ -17786,6 +17975,9 @@
         }
       }
     },
+    "Prompt did not receive the keyboard; the held text was not typed" : {
+      "comment" : "Claude browser return could not safely deliver typing"
+    },
     "Punctuation" : {
       "localizations" : {
         "ru" : {
@@ -18716,6 +18908,9 @@
           }
         }
       }
+    },
+    "Reads its version, author, licence and source, and whether it can come across" : {
+      "comment" : "Hint for the About item"
     },
     "Reads the VoiceOver cursor's contents: in text or a page, from the cursor on; elsewhere everything in the item (VO-A)" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -21373,6 +21568,9 @@
         }
       }
     },
+    "Search NVDA's add-ons" : {
+
+    },
     "Search stopped before finishing. Try again." : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -21444,6 +21642,7 @@
     },
     "Secure input is on, so TurnOver cannot hear your keys. Press Command Tab twice to get them back." : {
       "comment" : "Spoken message",
+      "extractionState" : "stale",
       "localizations" : {
         "ru" : {
           "stringUnit" : {
@@ -22242,6 +22441,9 @@
         }
       }
     },
+    "Shows or hides Claude's browser" : {
+      "comment" : "Keyboard command"
+    },
     "Single-letter keys go round the page" : {
       "localizations" : {
         "ru" : {
@@ -22502,6 +22704,9 @@
           }
         }
       }
+    },
+    "Source: %@." : {
+      "comment" : "Where an add-on's source can be read"
     },
     "Space opens or closes it." : {
       "comment" : "A hint, said after a pause on an item",
@@ -23939,6 +24144,9 @@
         }
       }
     },
+    "That add-on's id is not one TurnOver will use." : {
+      "comment" : "An add-on id with odd characters"
+    },
     "That command's message was too large to send." : {
       "comment" : "A plugin command could not be sent to its script"
     },
@@ -24239,6 +24447,9 @@
         }
       }
     },
+    "The add-on" : {
+      "comment" : "Stands for an add-on's name in a failure sentence"
+    },
     "The answer has no manifest.json, and no brief was made this session to say which app it is for." : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -24450,6 +24661,17 @@
         }
       }
     },
+    "The brief is copied, and %@ is opening. Paste it and send. When it answers, save the files it gives you into %@. Nothing is installed or approved." : {
+      "comment" : "Handed to a chat AI: its name, then the folder",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The brief is copied, and %1$@ is opening. Paste it and send. When it answers, save the files it gives you into %2$@. Nothing is installed or approved."
+          }
+        }
+      }
+    },
     "The brief is copied, and %@ is opening. Paste it, add what is wrong in %@, and send. When it answers, copy the whole answer, then choose Install a plugin from the clipboard, in TurnOver's Plugins menu. The brief includes the names shown in %@." : {
       "comment" : "Making a plugin with a chat AI: the AI, then the app (twice)",
       "localizations" : {
@@ -24540,6 +24762,9 @@
           }
         }
       }
+    },
+    "The conversion finished but wrote nothing. Nothing was changed." : {
+      "comment" : "A conversion wrote no files"
     },
     "The cursor and panels on screen (VO-Command-F11)" : {
       "comment" : "A VoiceOver feature",
@@ -24699,6 +24924,9 @@
     },
     "The focus could not be moved to that item." : {
       "comment" : "Said to a plugin author"
+    },
+    "The folder is %@, opened in Finder. BRIEF.md is the whole task. Nothing is installed or approved." : {
+      "comment" : "A folder handed to the person: %@ is its path"
     },
     "The form is open in your browser, filled in for %@. Add what the app needs, then submit it. Thank you." : {
       "comment" : "Help improve this app: the building block form opened; %@ is the app",
@@ -25848,6 +26076,9 @@
         }
       }
     },
+    "The whole list, by name. Type the first letters of a name to jump to it" : {
+
+    },
     "The window chooser (keypad Slash, as VoiceOver's)" : {
       "comment" : "A command, as the key list and keyboard help say it",
       "localizations" : {
@@ -25947,6 +26178,9 @@
           }
         }
       }
+    },
+    "There was nothing to search for." : {
+      "comment" : "An empty search of NVDA's add-on store"
     },
     "There's nothing to put back: VoiceOver's settings haven't been copied on this Mac." : {
       "comment" : "Reverting the VoiceOver settings copy",
@@ -26695,6 +26929,9 @@
     "TurnOver could not lock the script's program in its sandbox, so scripts do not run." : {
       "comment" : "Said when the safety sandbox for plugin scripts could not be turned on"
     },
+    "TurnOver could not reach the internet. Check the connection and try again" : {
+      "comment" : "A download had no network"
+    },
     "TurnOver could not start" : {
       "comment" : "An alert's title",
       "localizations" : {
@@ -26864,6 +27101,9 @@
           }
         }
       }
+    },
+    "TurnOver has not been told it may ask NVDA's store, so nothing was asked." : {
+      "comment" : "Said when the NVDA add-on store is used without the person having agreed"
     },
     "TurnOver has not yet dealt with the script's earlier requests. Ask for less, or less often." : {
       "comment" : "Said to a plugin author when too many of its requests are waiting"
@@ -27418,6 +27658,9 @@
         }
       }
     },
+    "TurnOver will fetch the list of add-ons from NVDA's store on the internet. Nothing about you or your Mac is sent beyond the request itself. Connect?" : {
+      "comment" : "The question asked once before NVDA's add-on store is used"
+    },
     "TurnOver will read %@ when it changes. Saved" : {
       "comment" : "An item watched for changes: %@ is its name",
       "localizations" : {
@@ -27505,6 +27748,9 @@
         }
       }
     },
+    "TurnOver's plugin tool could not be started, so %@ did not happen." : {
+      "comment" : "A store step could not start: %@ names the step"
+    },
     "TurnOver's releases page is open in your browser" : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -27576,6 +27822,17 @@
         }
       }
     },
+    "TurnOver's view: %@%@." : {
+      "comment" : "Whether an add-on can come across to TurnOver; the placeholder holds the verdict and any reason",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "TurnOver's view: %1$@%2$@."
+          }
+        }
+      }
+    },
     "TurnOver's voice stopped. Restarting TurnOver." : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -27626,6 +27883,9 @@
           }
         }
       }
+    },
+    "Turns on Ask NVDA's store for its list of add-ons in this menu, which you can turn off again" : {
+
     },
     "Turns reporting of dynamic content changes on or off" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -27761,6 +28021,9 @@
           }
         }
       }
+    },
+    "Type some words; TurnOver asks NVDA's store and lists what matches" : {
+
     },
     "Type, or Down for the choices." : {
       "comment" : "A hint, said after a pause on an item",
@@ -28024,12 +28287,6 @@
         }
       }
     },
-    "Left and Right move through the items; Return opens one." : {
-      "comment" : "A hint in the Dock at the bottom of the screen"
-    },
-    "Up and Down move through the items; Return opens one." : {
-      "comment" : "A hint in the Dock on the side of the screen"
-    },
     "Up and Down move through the items." : {
       "comment" : "A hint, said after a pause on an item",
       "localizations" : {
@@ -28046,6 +28303,9 @@
           }
         }
       }
+    },
+    "Up and Down move through the items; Return opens one." : {
+      "comment" : "A hint in the Dock on the side of the screen"
     },
     "Up and Down move through the mailboxes; Tab goes to the messages." : {
       "comment" : "A hint, said after a pause on an item",
@@ -29026,6 +29286,9 @@
         }
       }
     },
+    "Waits for Claude's Prompt to receive the keyboard" : {
+      "comment" : "Keyboard command"
+    },
     "Watches hot spot %@ for changes, or stops (VO-Command-Shift-%@)" : {
       "comment" : "A command: %@ is the hot spot's number",
       "localizations" : {
@@ -29549,6 +29812,9 @@
         }
       }
     },
+    "With Quick Look open, an arrow says the file the selection moved to" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
     "With mouse tracking, the pointer also cuts off other speech, such as notifications; off, only the pointer's own speech gives way" : {
 
     },
@@ -29638,6 +29904,9 @@
           }
         }
       }
+    },
+    "Words to search NVDA's add-ons for" : {
+      "comment" : "Asking for a search of NVDA's add-on store"
     },
     "Write a plugin for %@ yourself" : {
       "localizations" : {
@@ -29791,6 +30060,9 @@
           }
         }
       }
+    },
+    "Your name, to credit as the person who converted it. It goes into the plugin and is read at approval" : {
+      "comment" : "Asking who to credit for a conversion"
     },
     "Your next window spot (VO-Command-Right Bracket)" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -30271,16 +30543,16 @@
     "application switcher is open" : {
       "comment" : "Spoken message: a heading or link search was asked for while Command-Tab's list is showing",
       "localizations" : {
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "uygulama değiştirici açık"
-          }
-        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "переключатель приложений открыт"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "uygulama değiştirici açık"
           }
         }
       }
@@ -30321,6 +30593,9 @@
     },
     "ask needs a prompt of at most %lld characters." : {
       "comment" : "Said to a plugin author; the placeholder is a number"
+    },
+    "asking NVDA's store" : {
+      "comment" : "A step: asking the store for its list"
     },
     "asking the catalog; a moment" : {
       "comment" : "Spoken message",
@@ -32001,6 +32276,9 @@
         }
       }
     },
+    "converting the add-on" : {
+      "comment" : "A step: converting an add-on"
+    },
     "copied" : {
       "comment" : "Command C pressed\nSpoken message",
       "localizations" : {
@@ -32604,9 +32882,6 @@
           }
         }
       }
-    },
-    "did not change" : {
-      "comment" : "Spoken when pressing a switch or tick box in Claude changed nothing"
     },
     "different item" : {
       "comment" : "A kind of thing to find, after next or previous",
@@ -34097,6 +34372,9 @@
         }
       }
     },
+    "it would not be fetched safely, because its address is not a secure one" : {
+      "comment" : "A download was not over https"
+    },
     "italic" : {
       "comment" : "Text formatting",
       "localizations" : {
@@ -34215,6 +34493,21 @@
           }
         }
       }
+    },
+    "its download address no longer exists. That is at its author's end, not yours" : {
+      "comment" : "A download address gave 404 or 410"
+    },
+    "its download server answered %lld, not the file. Try again later" : {
+      "comment" : "A download gave another status: the placeholder is the number"
+    },
+    "its download server could not be found. That may be no internet connection, or an address that no longer exists" : {
+      "comment" : "A download's host did not resolve"
+    },
+    "its download server had a problem (%lld). Try again later" : {
+      "comment" : "A download gave a server error: the placeholder is the number"
+    },
+    "its download server refused the request (%lld). That is at its author's end, not yours" : {
+      "comment" : "A download gave 401 or 403: the placeholder is the number"
     },
     "its usual voice" : {
       "comment" : "TurnOver's usual voice, when it has no name",
@@ -37832,6 +38125,9 @@
         }
       }
     },
+    "not given" : {
+      "comment" : "A licence the store does not give"
+    },
     "not in a container" : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -39435,7 +39731,7 @@
       "comment" : "Part of the reason a plugin needs a higher review"
     },
     "pressed" : {
-      "comment" : "A state, spoken after an item's role",
+      "comment" : "A state, spoken after an item's role\nSpoken acknowledgement that an activation was sent, not that a form was submitted",
       "localizations" : {
         "ru" : {
           "stringUnit" : {
@@ -40789,7 +41085,7 @@
       }
     },
     "selected" : {
-      "comment" : "A state, spoken after an item's role\nSpoken message",
+      "comment" : "A state, spoken after an item's role\nSpoken message\nSpoken state",
       "localizations" : {
         "ru" : {
           "stringUnit" : {
@@ -40942,7 +41238,7 @@
       }
     },
     "sent" : {
-      "comment" : "Spoken message",
+      "comment" : "Spoken message\nSpoken when Return sends a message from Claude's prompt",
       "localizations" : {
         "ru" : {
           "stringUnit" : {
@@ -43603,16 +43899,16 @@
     "the application" : {
       "comment" : "An app whose name is not known\nAn application with no name",
       "localizations" : {
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "uygulama"
-          }
-        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "приложение"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "uygulama"
           }
         }
       }
@@ -43701,6 +43997,12 @@
           }
         }
       }
+    },
+    "the download did not work" : {
+      "comment" : "A download failed with no reason"
+    },
+    "the download took too long. Try again later" : {
+      "comment" : "A download timed out"
     },
     "the log can't be read" : {
       "comment" : "Spoken message",
@@ -44459,16 +44761,16 @@
       "comment" : "A role, spoken after an item's name",
       "extractionState" : "stale",
       "localizations" : {
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "bilinmeyen"
-          }
-        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "неизвестно"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bilinmeyen"
           }
         }
       }
