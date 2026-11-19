@@ -43,9 +43,6 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   once the menu has closed.
 - VoiceOver Shift End on a long page that is read only in part says "reading on" at once while the rest is read, then
   the bottom line when it gets there. It is not said when the bottom is already read, nor again for a repeat press.
-- Deleted text by pitch: Settings, Speech, "Lower the pitch for deleted text, instead of saying deleted" says a
-  deleted character or word lower, as VoiceOver does, without the word "deleted". Off by default. A deleted capital
-  is lowered too when capitals are raised.
 - Automatic focus mode for caret movement is on by default. Arrows, quick navigation and VoiceOver's keys put
   the keyboard in the field you reach; VO-Left and VO-Right can move on. Turn it off in Settings, Web pages.
 
@@ -54,6 +51,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   not known at once, says its name at once. The name is not said if you press another key first. Nothing else from
   the Quick Look window is said while a clip is selected. Other files are read as before.
 - Finder: opening Quick Look on any other file says that file's name in place of "Quick Look, window".
+- Menus: Up Arrow on the first item and Down Arrow on the last now wrap round to the other end.
+- Dock: the menu of a Dock icon is now found and read even when the Dock sends no notice that it opened.
 
 ### Fixed
 
