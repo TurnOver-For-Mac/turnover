@@ -81,7 +81,7 @@ extension Config {
             handOverChimes = (try? c.decodeIfPresent(Bool.self, forKey: .handOverChimes)) ?? false
             navigationSounds = (try? c.decodeIfPresent(Bool.self, forKey: .navigationSounds)) ?? true
             screenCurtain = (try? c.decodeIfPresent(String.self, forKey: .screenCurtain)) ?? "follow"
-            sounds = (try? c.decodeIfPresent(String.self, forKey: .sounds)).flatMap { ["voiceover", "turnover"].contains($0) ? $0 : nil } ?? ""
+            sounds = (try? c.decodeIfPresent(String.self, forKey: .sounds)).flatMap { ["voiceover", "turnover"].contains($0) || SoundSets.setName(fromSaved: $0) != nil ? $0 : nil } ?? ""
         }
         public func encode(to encoder: Encoder) throws {
             var c = encoder.container(keyedBy: Keys.self)

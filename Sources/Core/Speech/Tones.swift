@@ -10,7 +10,11 @@ public enum Tones {
     /// throughout. Coexisting, VoiceOver is on and plays its own, so TurnOver's own are off ("turn off TurnOver's
     /// sounds"). The plain tones from before the set play where a file is missing. (3 Nov 2026: with VoiceOver's chosen
     /// and VoiceOver off, what VoiceOver hasn't fell to the plain tones, "they don't sound quite right".)
-    static var chosen: Bool { config.general.effectiveSounds == "turnover" }
+    static var chosen: Bool { let s = config.general.effectiveSounds; return s == "turnover" || s.hasPrefix(SoundSets.savedPrefix) }
+    /// A sound set of the user's own (SoundSets) answers an event: true if it has a file for it (or an empty one, which is
+    /// silence), so nothing else plays; false with none chosen, its folder gone or no file for the event, and TurnOver's own
+    /// sound plays as before. A custom set counts as TurnOver's chosen (`chosen`), so its gaps fall to TurnOver's own set.
+    static func custom(_ id: String, why: String = #function) -> Bool { chosen && Thread.isMainThread && SoundSets.handle(id, why: why) }   // main thread only, as `fresh`
     /// A sound of TurnOver's own may play: its set is chosen, or VoiceOver is off.
     static var own: Bool { chosen || !Coexist.on }
     /// THE RULE (19 Nov 2026; SHORTCOMINGS rule 10; Oliver: "the VoiceOver sounds are not correct"). With VoiceOver's
@@ -25,6 +29,7 @@ public enum Tones {
     package static func invented(_ name: String) -> Bool {
         guard chosen else { return false }
         if let probe = inventedProbe { probe(name); return false }
+        if let id = SoundEvents.id(forInvented: name), custom(id, why: name) { return false }
         return true
     }
     /// THE LOW-LEVEL GATE (19 Nov 2026): Tones.beep, the bell and TurnOverSounds.play all refuse with VoiceOver's sounds
@@ -53,13 +58,13 @@ public enum Tones {
         Speech.player?.playTone(frequency: frequency, durationMs: ms, volume: volume)
     }
     /// Headings: higher for level 1, descending by level.
-    public static func heading(level: Int) { guard invented("heading") else { return }; if fresh("heading\(min(6, max(1, level)))") { return }; beep(level <= 0 ? 700 : max(440, 1000 - Double(level - 1) * 110), 60) }
+    public static func heading(level: Int) { guard invented("heading") else { return }; if custom("heading-\(min(6, max(1, level)))") { return }; if fresh("heading\(min(6, max(1, level)))") { return }; beep(level <= 0 ? 700 : max(440, 1000 - Double(level - 1) * 110), 60) }
     /// VoiceOver's own sound where it has one (17 Oct 2026), or the set's with TurnOver's chosen; false off the main
     /// thread or with neither file, so the old tone plays.
     private static func voiceOver(_ name: String, why: String = #function) -> Bool { Thread.isMainThread ? MainActor.assumeIsolated { VoiceOverSounds.play(name, why: why) } : false }
     /// 19 Nov 2026, like for like with VoiceOver's Sounds Help (its configuration maps each event to a file): a search
     /// that found nothing is "Search did not find anything", NotFound.aiff. TurnOver's set has no sound for it.
-    public static func searchNotFound() { _ = voiceOver("NotFound.aiff") }
+    public static func searchNotFound() { _ = voiceOver("NotFound.aiff") }   // a custom set answers inside VoiceOverSounds.play
     /// A menu opening is "Menu or popup displayed", MenuDown.aiff. TurnOver's set has none for a menu opening.
     public static func menuOpened() { _ = voiceOver("MenuDown.aiff") }
     /// A context menu is a menu, so with VoiceOver's sounds it is MenuDown (menuOpened); PopupAppeared.aiff is VoiceOver's
@@ -72,27 +77,28 @@ public enum Tones {
     /// set plays its press click, as it did before.
     public static func mouseClick() { if chosen { press() } else if config.general.navigationSounds { _ = voiceOver("SingleClick.aiff") } }
     /// The rotor moved to its previous or next setting: VoiceOver's RotorLeft.aiff or RotorRight.aiff. TurnOver's own set has none.
-    public static func rotorMoved(forward: Bool) { if !chosen { _ = voiceOver(forward ? "RotorRight.aiff" : "RotorLeft.aiff") } }
+    public static func rotorMoved(forward: Bool) { if custom(forward ? "rotor-next" : "rotor-previous") { return }; if !chosen { _ = voiceOver(forward ? "RotorRight.aiff" : "RotorLeft.aiff") } }
     /// Find wrapped round the page: with VoiceOver's sounds WrapForward.aiff or WrapBack.aiff; TurnOver's own set keeps its edge sound.
     public static func searchWrapped(forward: Bool) {
+        if custom(forward ? "search-wrapped-forward" : "search-wrapped-back") { onEdge?(); return }
         guard !chosen else { edge(); return }
         _ = voiceOver(forward ? "WrapForward.aiff" : "WrapBack.aiff")
         onEdge?()
     }
     /// A window became the front one, including on an app switch, but not the Finder's desktop: VoiceOver's "Window
     /// activated" plays WindowActivated.aiff. TurnOver's own set has none.
-    public static func windowActivated() { if !chosen { _ = voiceOver("WindowActivated.aiff") } }
+    public static func windowActivated() { if custom("window-activated") { return }; if !chosen { _ = voiceOver("WindowActivated.aiff") } }
     /// A dialog or a system prompt appeared: VoiceOver's "System dialog appeared" plays Alert.aiff. TurnOver's own set has none.
-    public static func dialogAppeared() { if !chosen { _ = voiceOver("Alert.aiff") } }
+    public static func dialogAppeared() { if custom("dialog-appeared") { return }; if !chosen { _ = voiceOver("Alert.aiff") } }
     /// Text was added to the selection: VoiceOver's "Text added to selection" plays DragShort.aiff. One sound per
     /// change however many pieces were added. TurnOver's own set has none.
-    public static func selectionAdded() { if !chosen { _ = voiceOver("DragShort.aiff") } }
+    public static func selectionAdded() { if custom("selection-added") { return }; if !chosen { _ = voiceOver("DragShort.aiff") } }
     public static func link() { if !voiceOver("LinkBegin.aiff") { beep(1400, 25, volume: 0.18, exempt: true) } }
-    public static func list() { guard invented("list") else { return }; if fresh("list") { return }; beep(520, 40) }
-    public static func landmark() { guard invented("landmark") else { return }; if fresh("landmark") { return }; beep(620, 40); DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { beep(780, 40) } }
-    public static func table() { guard invented("table") else { return }; if fresh("table") { return }; beep(400, 50) }
-    public static func graphic() { guard invented("graphic") else { return }; if fresh("graphic") { return }; beep(1100, 35, volume: 0.18) }
-    public static func blockQuote() { guard invented("blockquote") else { return }; if fresh("blockquote") { return }; beep(560, 45) }
+    public static func list() { guard invented("list") else { return }; if custom("list") { return }; if fresh("list") { return }; beep(520, 40) }
+    public static func landmark() { guard invented("landmark") else { return }; if custom("landmark") { return }; if fresh("landmark") { return }; beep(620, 40); DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { beep(780, 40) } }
+    public static func table() { guard invented("table") else { return }; if custom("table") { return }; if fresh("table") { return }; beep(400, 50) }
+    public static func graphic() { guard invented("graphic") else { return }; if custom("graphic") { return }; if fresh("graphic") { return }; beep(1100, 35, volume: 0.18) }
+    public static func blockQuote() { guard invented("blockquote") else { return }; if custom("block-quote") { return }; if fresh("blockquote") { return }; beep(560, 45) }
     public static func spellingError() { if !voiceOver("Misspelled.aiff") { beep(300, 70, exempt: true) } }
     /// The caret could not leave the line or the document (NVDA re-reads the line; a bump is kinder).
     /// Also felt on the trackpad while trackpad control is on (Trackpad sets it).
@@ -120,18 +126,19 @@ public enum Tones {
     /// Short and soft, as it is heard every time an application changes hands.
     /// TurnOver has started while VoiceOver has the Mac: a short rising pair, so a tester with Open at login knows it is
     /// there (NVDA's start-up sound; a tester, 9 Oct 2026). Speech would be silent with VoiceOver on; a tone is not.
-    public static func startup() { if !own { return }; if fresh("startup", exempt: true) { return }; bell(frequencies: [659, 880], spacingMs: 90, ringMs: 160, volume: 0.18, exempt: true) }
-    public static func takeOver() { if !own { return }; if fresh("take_over", exempt: true) { return }; bell(frequencies: [784, 1175], spacingMs: 70, ringMs: 150, exempt: true) }
+    public static func startup() { if !own { return }; if custom("startup") { return }; if fresh("startup", exempt: true) { return }; bell(frequencies: [659, 880], spacingMs: 90, ringMs: 160, volume: 0.18, exempt: true) }
+    public static func takeOver() { if !own { return }; if custom("take-over") { return }; if fresh("take_over", exempt: true) { return }; bell(frequencies: [784, 1175], spacingMs: 70, ringMs: 150, exempt: true) }
     /// A braille display connected and gone: VoiceOver's sounds for them, or three notes up and three down.
     public static func brailleConnected() { if !own { return }; if !voiceOver("BrailleDisplayConnected.aiff") { bell(frequencies: [523, 659, 784], spacingMs: 80, ringMs: 220, volume: 0.22, exempt: true) } }
     public static func brailleDisconnected() { if !own { return }; if !voiceOver("BrailleDisplayDisconnected.aiff") { bell(frequencies: [784, 659, 523], spacingMs: 80, ringMs: 220, volume: 0.22, exempt: true) } }
-    public static func handBack() { if !own { return }; if fresh("hand_back", exempt: true) { return }; bell(frequencies: [1175, 784], spacingMs: 70, ringMs: 150, exempt: true) }
+    public static func handBack() { if !own { return }; if custom("hand-back") { return }; if fresh("hand_back", exempt: true) { return }; bell(frequencies: [1175, 784], spacingMs: 70, ringMs: 150, exempt: true) }
     /// The focus moved (Tab, a new control): VoiceOver's little tick. Very short, high and quiet.
     public static func focusTick() {
         guard invented("focus_tick") else { return }
         guard config.general.navigationSounds else { return }
         if Date().timeIntervalSince(lastTick) < 0.05 { return }   // a burst of focus events is one move
         lastTick = Date()
+        if custom("focus-tick") { return }
         if fresh("tick") { return }
         bell(frequencies: [2600], spacingMs: 0, ringMs: 18, volume: 0.07)
     }
@@ -143,6 +150,7 @@ public enum Tones {
         guard config.general.navigationSounds else { return }
         guard chosen else { _ = voiceOver("Select.aiff"); return }
         guard invented("press") else { return }
+        if custom("activate") { return }
         if fresh("press") { return }
         bell(frequencies: [1300, 1950], spacingMs: 6, ringMs: 35, volume: 0.09)
     }
@@ -150,18 +158,18 @@ public enum Tones {
     /// "audio indication of focus and browse modes".
     // (The browse and focus mode tones are TurnOver's own idea, NVDA's: VoiceOver plays nothing when a field takes the
     // focus, so its Quick Nav sounds were wrong here: every return to Claude played "Quick Nav off", 17 Oct 2026.)
-    public static func focusMode() { guard invented("focus_mode") else { return }; if fresh("focus_mode") { return }; beep(523, 35, volume: 0.18); DispatchQueue.main.asyncAfter(deadline: .now() + 0.045) { beep(784, 45, volume: 0.18) } }
-    public static func browseMode() { guard invented("browse_mode") else { return }; if fresh("browse_mode") { return }; beep(784, 35, volume: 0.18); DispatchQueue.main.asyncAfter(deadline: .now() + 0.045) { beep(523, 45, volume: 0.18) } }
+    public static func focusMode() { guard invented("focus_mode") else { return }; if custom("focus-mode") { return }; if fresh("focus_mode") { return }; beep(523, 35, volume: 0.18); DispatchQueue.main.asyncAfter(deadline: .now() + 0.045) { beep(784, 45, volume: 0.18) } }
+    public static func browseMode() { guard invented("browse_mode") else { return }; if custom("browse-mode") { return }; if fresh("browse_mode") { return }; beep(784, 35, volume: 0.18); DispatchQueue.main.asyncAfter(deadline: .now() + 0.045) { beep(523, 45, volume: 0.18) } }
     /// A progress bar's beep, NVDA's (ProgressOutput): 40 ms, 110 Hz at 0 percent, an octave higher each 25 percent,
     /// 1760 Hz at 100.
-    public static func progress(_ percent: Int) { beep(progressFrequency(percent), 40, exempt: true) }
+    public static func progress(_ percent: Int) { if custom("progress") { return }; beep(progressFrequency(percent), 40, exempt: true) }
     package static func progressFrequency(_ percent: Int) -> Double { 110 * pow(2, Double(max(0, min(100, percent))) / 25) }
     /// The sound of "Mark a problem" (the marked file of TurnOver's set, else a plain tone): invented, so silent with VoiceOver's sounds.
-    public static func marked() { guard invented("marked") else { return }; if fresh("marked") { return }; beep(660, 60, volume: 0.2) }
+    public static func marked() { guard invented("marked") else { return }; if custom("marked") { return }; if fresh("marked") { return }; beep(660, 60, volume: 0.2) }
     /// An app finished installing in the App Store window: invented.
     public static func installed() { guard invented("installed") else { return }; beep(880, 80) }
     /// A beep each second while something is gathered or an AI is asked: invented.
     public static func waitingTick() { guard invented("waiting_tick") else { return }; beep(880, 30, volume: 0.1) }
     /// Commented text in a document (Word): two quick notes.
-    public static func comment() { guard invented("comment") else { return }; if fresh("comment") { return }; beep(880, 35, volume: 0.18); DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { beep(1175, 35, volume: 0.18) } }
+    public static func comment() { guard invented("comment") else { return }; if custom("comment") { return }; if fresh("comment") { return }; beep(880, 35, volume: 0.18); DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { beep(1175, 35, volume: 0.18) } }
 }

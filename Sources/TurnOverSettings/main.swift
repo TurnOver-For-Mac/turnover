@@ -589,14 +589,26 @@ struct SoundsView: View {
     private var whose: Binding<String> {
         Binding(get: {
             let s = model.get("general", "sounds") as? String ?? ""
-            return s.isEmpty ? model.special("_effectiveSounds") as? String ?? "voiceover" : s
+            let shown = s.isEmpty ? model.special("_effectiveSounds") as? String ?? "voiceover" : s
+            // A sound set whose folder has gone plays TurnOver's own sounds, so the pop-up shows that (the file keeps the choice).
+            return shown.hasPrefix("set:") && !soundSets.contains(String(shown.dropFirst(4))) ? "turnover" : shown
         }, set: { model.set("general", "sounds", $0) })
     }
+    /// The folders found in the sound sets folder, as of when the pane opened.
+    private var soundSets: [String] { model.special("_soundSets") as? [String] ?? [] }
     var body: some View {
         Form {
             Picker("Whose sounds", selection: whose) {
                 Text("VoiceOver's").tag("voiceover"); Text("TurnOver's").tag("turnover")
+                ForEach(soundSets, id: \.self) { name in Text(name).tag("set:" + name) }
             }
+            HStack {
+                Button("Open the sound sets folder") { model.setSpecial("_openSoundSets", true) }
+                    .accessibilityLabel("Open the sound sets folder")
+                Button("Make a starter set") { model.setSpecial("_makeStarterSet", true) }
+                    .accessibilityLabel("Make a starter set")
+            }
+            Text("Your own sound sets: a folder of audio files, one for each event, named for the event. A set's sounds play where it has a file, and TurnOver's own where it has none. Make a starter set to see the names.").font(.caption)
             Text("VoiceOver's: VoiceOver's own sounds where it has one, such as links and boundaries, and TurnOver's set for the rest. TurnOver's: its set throughout.").font(.caption)
             Toggle("Sounds as I move and press", isOn: model.bool("general", "navigationSounds"))
             Picker("When TurnOver takes over from VoiceOver", selection: handOver) {
@@ -609,6 +621,7 @@ struct SoundsView: View {
                 Text("No").tag("off"); Text("While speaking").tag("speech"); Text("Always").tag("always")
             }
         }.formStyle(.grouped).navigationTitle("Sounds")
+            .onAppear { model.setSpecial("_refreshSoundSets", true) }
     }
 }
 

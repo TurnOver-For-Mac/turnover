@@ -40,7 +40,11 @@ public enum VoiceOverSounds {
     public static func play(_ name: String, volume: Float = 0.8, why: String = #function) -> Bool {
         if let probe = requestProbe { probe(name, config.general.effectiveSounds); return true }
         // "TurnOver's sounds" chosen (17 Oct 2026): TurnOver's own sound stands in for each of VoiceOver's files.
-        if config.general.effectiveSounds == "turnover" { return ownTone(for: name, why: why) }
+        // A sound set of the user's own (SoundSets) answers first where it has a file for the event; its gaps are TurnOver's.
+        if Tones.chosen {
+            if let id = SoundEvents.id(forVoiceOverFile: name), SoundSets.handle(id, why: why) { return true }
+            return ownTone(for: name, why: why)
+        }
         guard let p = cache.player(name) else {
             if cache.hasFailed(name) { return ownTone(for: name, why: why) }
             // Not prepared yet (only in the first moments after launch): never prepared here, on the calling thread, and
