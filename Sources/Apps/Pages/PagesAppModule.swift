@@ -320,7 +320,7 @@ final class PagesTextInfo: AXTextInfo {
     /// What sits at a placeholder: the attachment Pages names (a footnote), else the table or picture on the page
     /// that the placeholder's position falls in.
     static func objectName(in text: AXUIElement, at offset: Int) -> String {
-        guard let o = attachment(in: text, at: offset) else { return "object" }
+        guard let o = attachment(in: text, at: offset) else { return String(localized: "object", comment: "A page element with no name of its own, spoken where a placeholder stands") }
         if o.role == "AXLink", let n = o.string(kAXTitleAttribute), n.lowercased().hasPrefix("footnote") { return n.lowercased() }
         return describe(o)
     }

@@ -132,7 +132,7 @@ final class ExcelAppModule: AppModule {
 /// A sheet's grid: "Tides, sheet", not "TidesGrid, table".
 final class ExcelGrid: TurnOverObject {
     override var name: String { String((element.string(kAXDescriptionAttribute) ?? "").dropLast(4)) }
-    override var roleText: String? { "sheet" }
+    override var roleText: String? { String(localized: "sheet", comment: "A role, spoken after an item's name") }
 }
 
 /// A cell: "1.2, B2", "blank, E3", "3.6, D2, formula".

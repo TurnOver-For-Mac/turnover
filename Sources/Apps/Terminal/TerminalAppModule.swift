@@ -70,7 +70,7 @@ final class TerminalText: TurnOverObject {
     }
 
     override var role: Role { .editableText }
-    override var roleText: String? { "terminal" }
+    override var roleText: String? { String(localized: "terminal", comment: "A role, spoken after an item's name") }
     override var name: String { "" }
 
     // MARK: Text helpers
