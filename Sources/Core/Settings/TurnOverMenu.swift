@@ -548,6 +548,9 @@ public final class TurnOverMenu {
             items.append(MenuItem("Write a plugin for \(name) yourself", .action { PluginAI.startByHand(pid: pid) }, hint: "A starter folder with the guide, a snapshot of the app and its menus"))
         }
         items.append(MenuItem("Plugin library", .action { DispatchQueue.main.async { PluginLibrary.open() } }, hint: "Plugins others have made, checked and signed; each says what it can do before it installs"))
+        if Edition.includesPluginScripts {
+            items.append(MenuItem("NVDA add-ons", .submenu { NVDAStoreMenu.items() }, hint: "Find an add-on in NVDA's store and convert it into a draft plugin for your own AI tool or you to finish. Asks NVDA's store only after you agree"))
+        }
         items.append(MenuItem("Open the plugin guide", .action { DispatchQueue.main.async { PluginAI.openGuide() } }))
         if Trackpad.available {
             items.append(MenuItem("Gesture control", .toggle(get: { Trackpad.controlOn }, set: { Trackpad.set($0) }), hint: "The trackpad's gestures: VoiceOver's, or NVDA's in the Windows style. Also Command Control Comma, G; or hold the TurnOver key and turn two fingers, clockwise for on"))
@@ -565,12 +568,14 @@ public final class TurnOverMenu {
             let loaded = good == 1 ? String(localized: "1 plugin loaded", comment: "Plugins reloaded") : String(localized: "\(String(good)) plugins loaded", comment: "Plugins reloaded")
             Speech.speakMessage(bad > 0 ? String(localized: "\(loaded), \(String(bad)) with problems", comment: "Plugins reloaded: %1$@ says how many loaded, %2$@ how many have problems") : loaded)
         }))
+        if Edition.includesPluginScripts { items += ScriptPlugins.menuItems() }   // each script's state, and developer mode for scripts
         for (file, reason) in Recipes.problems { items.append(MenuItem("Recipe \(file) does not load: \(reason)", .action {})) }
         for p in ProfileStore.shared.plugins {
             if let m = p.manifest {
                 // The app's name when it isn't running too (the list said "for com.bambulab.bambu-studio"), and the
                 // library's author for a library plugin, as the library itself said (14 Oct 2026).
-                let apps = m.apps.map { b in NSRunningApplication.runningApplications(withBundleIdentifier: b).first?.localizedName ?? Self.appName(for: b) }.joined(separator: ", ")
+                let apps = m.worksEverywhere ? String(localized: "every app", comment: "A plugin that works in every app, in the Plugins menu: after \"for\"")
+                    : m.apps.map { b in NSRunningApplication.runningApplications(withBundleIdentifier: b).first?.localizedName ?? Self.appName(for: b) }.joined(separator: ", ")
                 let folder = p.folder
                 let author = PluginLibrary.receipt(folder)?.author ?? m.author
                 var title = String(localized: "\(m.name) \(String(describing: m.version)), for \(apps)", comment: "A plugin: its name, version and apps")
@@ -587,6 +592,8 @@ public final class TurnOverMenu {
                         Speech.speakMessage(String(localized: "\(m.description ?? m.name). \(String(n.0)) labels, \(String(n.1)) keys, \(String(n.2)) watched.", comment: "About a plugin: its description, then what it has"))
                     }),
                     ]
+                    // With plugin scripts on (stage B, 16 Nov 2026): the plugin's options, and who to tell about a problem with it.
+                    if Edition.includesPluginScripts { sub += ScriptPlugins.pluginItems(for: m) }
                     if !shipped { sub.append(MenuItem("Remove", .action { Self.removePlugin(at: folder, name: m.name) }, hint: "Moves it to the Trash; put it back from there to have it again")) }
                     return sub
                 }))
@@ -833,10 +840,15 @@ public final class TurnOverMenu {
         openChooser("Applications", items: items)
     }
 
+    /// What is said when a key is waited for: with hints off, the prompt alone; with hints on, "Escape to cancel" after it.
+    public static func spokenKeyPrompt(_ prompt: String, hints: Bool) -> String {
+        hints ? String(localized: "\(prompt). Escape to cancel", comment: "Waiting for a key: %@ says which") : prompt
+    }
+
     /// Wait for the next key, after the prompt; Escape cancels.
     static func captureKey(prompt: String, _ done: @escaping (KeyboardGesture) -> Void) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            Speech.speakMessage(String(localized: "\(prompt). Escape to cancel", comment: "Waiting for a key: %@ says which"))
+            Speech.speakMessage(spokenKeyPrompt(prompt, hints: config.presentation.speakHints))
             InputManager.captureNext = { g in
                 guard let g else { Speech.speakMessage(String(localized: "cancelled", comment: "Waiting for a key, cancelled with Escape")); return }
                 done(g)

@@ -37,7 +37,7 @@
       "items": {
         "type": "string"
       },
-      "description": "Bundle identifiers; nothing applies anywhere else."
+      "description": "Bundle identifiers; nothing applies anywhere else. A script may instead give exactly [\"*\"], with the everywhere ability and only with it: it then works in every app except the macOS password and permission dialogs and the login window."
     },
     "kind": {
       "const": "profile"
@@ -45,7 +45,8 @@
     "formatVersion": {
       "type": "integer",
       "minimum": 1,
-      "maximum": 1
+      "maximum": 2,
+      "description": "1 for rules only; 2 when the plugin has a script."
     },
     "minimumTurnOver": {
       "type": "string",
@@ -82,7 +83,7 @@
     },
     "abilities": {
       "type": "array",
-      "description": "What it asks to do, in TurnOver's fixed words.",
+      "description": "What it asks to do, in TurnOver's fixed words. A script needs at least one; edit and clipboard are for scripts. everywhere (apps is [\"*\"]), hearSpeech (be told what TurnOver says) and clipboardRead (read the clipboard) are for scripts too, and each is agreed to in plain words.",
       "items": {
         "enum": [
           "read",
@@ -90,7 +91,12 @@
           "focus",
           "menu",
           "keys",
-          "say"
+          "say",
+          "edit",
+          "clipboard",
+          "everywhere",
+          "hearSpeech",
+          "clipboardRead"
         ]
       }
     },
@@ -110,6 +116,196 @@
         "Unlicense"
       ],
       "description": "An open licence (SPDX name); the library's own is MIT."
+    },
+    "script": {
+      "const": "main.js",
+      "description": "The plugin's script, always main.js, next to manifest.json (at most 256 KB, UTF-8). Needs formatVersion 2, abilities, and apps named exactly (no patterns). It runs in a sandbox and only after the person has approved it."
+    },
+    "convertedFrom": {
+      "type": "object",
+      "description": "Set by turnover-plugin convert: where a plugin converted from an NVDA add-on came from. author is the creator and convertedBy who converted it; both are credit only. turnover-plugin check reports any ability or app in this manifest that abilities and apps here do not have.",
+      "required": [
+        "id",
+        "version"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "sourceURL": {
+          "type": "string"
+        },
+        "author": {
+          "type": "string"
+        },
+        "convertedBy": {
+          "type": "string"
+        },
+        "abilities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "apps": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "translation": {
+          "type": "string",
+          "description": "\"not reviewed\" from the converter on: nobody has read main.js against the original add-on. A person changes it to \"reviewed\" after doing that. It is not approval, and an AI must never change it.",
+          "enum": [
+            "not reviewed",
+            "reviewed"
+          ]
+        }
+      }
+    },
+    "commands": {
+      "type": "array",
+      "description": "The commands the script handles (turnover.command(id, handler)). Needs script. Keys and letters follow the rules for a key in profile.json.",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "description"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9]+$",
+            "description": "Letters and digits only; the name the script uses."
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What the command does, for input help."
+          },
+          "key": {
+            "type": "string",
+            "description": "A TurnOver gesture, as a key in profile.json is written."
+          },
+          "letter": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9]$",
+            "description": "Its letter in the plugin layer."
+          }
+        }
+      }
+    },
+    "support": {
+      "type": "string",
+      "maxLength": 300,
+      "description": "Where to report a problem with the plugin: a web address (https) or an email address. The Plugins menu's \"Report a problem with this plugin\" says who looks after it and copies this. The library needs one for a plugin with a script."
+    },
+    "reasons": {
+      "type": "object",
+      "description": "For an ability, one short sentence saying what the plugin uses it for, in the author's words. At approval it follows TurnOver's own sentence for that ability, marked as the author's; it never replaces it or widens it. The library needs one for every ability above read and say.",
+      "propertyNames": {
+        "enum": [
+          "read",
+          "press",
+          "focus",
+          "menu",
+          "keys",
+          "say",
+          "edit",
+          "clipboard",
+          "everywhere",
+          "hearSpeech",
+          "clipboardRead"
+        ]
+      },
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 150
+      }
+    },
+    "options": {
+      "type": "array",
+      "maxItems": 20,
+      "description": "Settings the person can change: TurnOver shows them under the plugin in its Plugins menu and keeps the values itself. The script reads them with turnover.options.get(id) and is told of a change with the optionsChange event. Needs script.",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "kind",
+          "default"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9]+$",
+            "description": "Letters and digits only; the name the script uses."
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "description": "The author's words, shown as written in TurnOver's menu: plain text."
+          },
+          "kind": {
+            "enum": [
+              "switch",
+              "choice",
+              "text",
+              "number"
+            ]
+          },
+          "choices": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 50,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "description": "For a choice: the choices, in plain text."
+          },
+          "min": {
+            "type": "number",
+            "description": "For a number: the smallest value."
+          },
+          "max": {
+            "type": "number",
+            "description": "For a number: the largest value."
+          },
+          "default": {
+            "type": [
+              "boolean",
+              "number",
+              "string"
+            ],
+            "description": "What the option is until the person changes it: true or false for a switch, one of the choices, text (at most 200 characters), or a number from min to max."
+          }
+        }
+      }
     }
+  },
+  "dependentRequired": {
+    "script": [
+      "formatVersion",
+      "abilities"
+    ],
+    "commands": [
+      "script"
+    ],
+    "options": [
+      "script"
+    ]
   }
 }

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The keeper of plugin script approvals (docs/PLUGIN-SCRIPTS-PLAN.md, "The keeper"): the App Sandbox and nothing else.
+	     Its container is what keeps another program from writing the receipts. -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+</dict>
+</plist>

@@ -549,6 +549,21 @@ public struct Config: Codable {
             try c.encode(panMovesCaret, forKey: .panMovesCaret)
         }
     }
+    /// Plugins that come from outside TurnOver's own library (16 Nov 2026): NVDA's add-on store, and the credit name for a conversion.
+    public struct PluginSources: Codable {
+        /// TurnOver's plugin tool may ask NVDA's add-on store for its list and download an add-on the person chooses. Off until a person
+        /// says yes in the question the first use asks, and off again with the same toggle. Nothing about the person or the Mac is sent.
+        public var connectToNVDAStore = false
+        /// Who is credited as having converted an NVDA add-on: asked once, kept here, written into the plugin and shown at approval.
+        public var convertedBy = ""
+        public init() {}
+        enum Keys: String, CodingKey { case connectToNVDAStore, convertedBy }
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: Keys.self)
+            connectToNVDAStore = (try? c.decodeIfPresent(Bool.self, forKey: .connectToNVDAStore)) ?? false
+            convertedBy = (try? c.decodeIfPresent(String.self, forKey: .convertedBy)) ?? ""
+        }
+    }
     public var general = General()
     public var speech = Speech()
     public var keyboard = Keyboard()
@@ -561,6 +576,7 @@ public struct Config: Codable {
     public var recognition = Recognition()
     /// Steam and CrossOver games speaking through TurnOver (Games.swift; this Mac only).
     public var games = Games()
+    public var pluginSources = PluginSources()
     /// Per-application settings, by bundle identifier, as the app module defines them.
     public var apps: [String: [String: String]] = [:]
 
@@ -572,7 +588,7 @@ public struct Config: Codable {
     /// A settings file written by an older TurnOver lacks the sections added since; each one falls back
     /// to its defaults instead of the whole file being thrown away (which lost the owner's rate once). Keys it has
     /// that are gone ("addons", the add-on loader's list) are ignored.
-    enum Keys: String, CodingKey { case general, speech, keyboard, editableText, presentation, virtualBuffers, applications, documentFormatting, braille, recognition, games, apps }
+    enum Keys: String, CodingKey { case general, speech, keyboard, editableText, presentation, virtualBuffers, applications, documentFormatting, braille, recognition, games, pluginSources, apps }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         general = (try? c.decodeIfPresent(General.self, forKey: .general)) ?? General()
@@ -586,6 +602,7 @@ public struct Config: Codable {
         braille = (try? c.decodeIfPresent(Braille.self, forKey: .braille)) ?? Braille()
         recognition = (try? c.decodeIfPresent(Recognition.self, forKey: .recognition)) ?? Recognition()
         games = (try? c.decodeIfPresent(Games.self, forKey: .games)) ?? Games()
+        pluginSources = (try? c.decodeIfPresent(PluginSources.self, forKey: .pluginSources)) ?? PluginSources()
         apps = (try? c.decodeIfPresent([String: [String: String]].self, forKey: .apps)) ?? [:]
     }
 

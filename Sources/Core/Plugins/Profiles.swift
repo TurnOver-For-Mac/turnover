@@ -43,6 +43,22 @@ nonisolated public struct PluginManifest: Codable {
     /// Acted on only for an official plugin installed from the library; anywhere else it does nothing. The code stays
     /// TurnOver's (closed); the plugin is how a tester chooses it (14 Oct 2026).
     public var provides: String?
+    /// The plugin's script, always "main.js" (format 2; docs/PLUGIN-SCRIPTS-PLAN.md). Needs `abilities` and named `apps`.
+    public var script: String?
+    /// The commands the script handles, declared here so TurnOver can list them, check their keys and let the person
+    /// rebind them without running anything. Format 2, with `script`.
+    public var commands: [PluginCommand]?
+    /// Where a plugin converted from an NVDA add-on came from, and what the original needed (PluginConversion). Nothing in
+    /// it widens what the plugin may do: `check` reports an ability or app the manifest has and this record does not.
+    public var convertedFrom: PluginConversionRecord?
+    /// Who to tell about a problem: a web address or an email address (stage B, 16 Nov 2026). The library needs one for a plugin
+    /// with a script; "Report a problem with this plugin" in the Plugins menu says who looks after it and copies it.
+    public var support: String?
+    /// For an ability, one short sentence saying what the plugin uses it for, in the author's words (at most 150 characters of plain
+    /// text). At approval it follows TurnOver's own sentence for the ability, marked as the author's; it never replaces it or widens it.
+    public var reasons: [String: String]?
+    /// The settings TurnOver shows under the plugin in its Plugins menu and keeps itself; the script reads them (stage B).
+    public var options: [PluginOption]?
 
     /// A plugin id: 1 to 64 letters, digits and hyphens, not starting with a hyphen. It names the plugin's folder.
     public static func isValidID(_ id: String) -> Bool {
@@ -51,6 +67,49 @@ nonisolated public struct PluginManifest: Codable {
 
     public init(id: String, name: String, version: String, author: String? = nil, description: String? = nil, apps: [String]) {
         self.id = id; self.name = name; self.version = version; self.author = author; self.description = description; self.apps = apps
+    }
+}
+
+/// The record of a conversion from an NVDA add-on (docs/PLUGIN-PLATFORM-PLAN.md, stage A).
+nonisolated public struct PluginConversionRecord: Codable, Equatable {
+    /// The add-on's id, and its version.
+    public var id: String
+    public var version: String
+    /// The SHA-256 of the add-on file that was read (none when a folder was converted), and where it came from.
+    public var sha256: String?
+    public var sourceURL: String?
+    /// The creator: the original add-on's author. Credit only.
+    public var author: String?
+    /// Who converted it. Credit only; empty until the converter is told.
+    public var convertedBy: String?
+    /// The abilities the original's behaviour needed, and the programs it named (Windows program names, then any app
+    /// a person chose for the Mac, written here as well as in `apps`).
+    public var abilities: [String]?
+    public var apps: [String]?
+    /// "not reviewed" from the converter on: a draft nobody has read against the original. A person changes it to
+    /// "reviewed" once they have read main.js against the original. Credit and honesty only: it never widens what the
+    /// plugin may do, and it never counts as approval (approval is the person's, in TurnOver).
+    public var translation: String?
+    public static let notReviewed = "not reviewed"
+    public init(id: String, version: String, sha256: String? = nil, sourceURL: String? = nil, author: String? = nil, convertedBy: String? = nil,
+                abilities: [String]? = nil, apps: [String]? = nil, translation: String? = nil) {
+        self.id = id; self.version = version; self.sha256 = sha256; self.sourceURL = sourceURL; self.author = author
+        self.convertedBy = convertedBy; self.abilities = abilities; self.apps = apps; self.translation = translation
+    }
+}
+
+/// One command of a plugin's script (manifest.json, format 2). A script never sees the key: it is told its command was chosen.
+nonisolated public struct PluginCommand: Codable, Equatable {
+    /// Letters and digits only: how the script names it (`turnover.command("readResult", …)`).
+    public var id: String
+    /// What it does, for input help and the shortcuts list.
+    public var description: String
+    /// A TurnOver gesture, as a key in profile.json is written.
+    public var key: String?
+    /// Its letter in the plugin layer, as a key's in profile.json.
+    public var letter: String?
+    public init(id: String, description: String, key: String? = nil, letter: String? = nil) {
+        self.id = id; self.description = description; self.key = key; self.letter = letter
     }
 }
 
@@ -168,8 +227,15 @@ nonisolated public struct LoadedPlugin {
     public let modified: Date
     /// Things to fix that do not stop it loading (an unknown field), each with its file and line.
     public let warnings: [String]
-    public init(folder: URL, manifest: PluginManifest?, profile: Profile?, error: String?, modified: Date, warnings: [String] = []) {
+    /// The text of main.js, when the manifest names a script. Nothing runs it in this stage; a plugin with a script
+    /// still works as a data plugin when scripts are off.
+    public let script: String?
+    /// ScriptTrust's hash of the plugin's files as they were read together at load (a receipt matches this).
+    public let scriptHash: String?
+    public init(folder: URL, manifest: PluginManifest?, profile: Profile?, error: String?, modified: Date, warnings: [String] = [],
+                script: String? = nil, scriptHash: String? = nil) {
         self.folder = folder; self.manifest = manifest; self.profile = profile; self.error = error; self.modified = modified; self.warnings = warnings
+        self.script = script; self.scriptHash = scriptHash
     }
     /// The plugin's view, as a recipe for each app its manifest names (none without a view section).
     public var recipes: [Recipe] {
@@ -187,20 +253,51 @@ nonisolated public enum ElementMatcher {
         if pattern == "*" { return !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }   // "has one"
         let p = pattern.lowercased(), t = s.lowercased()
         if !p.contains("*") { return p == t }
-        let escaped = NSRegularExpression.escapedPattern(for: p).replacingOccurrences(of: "\\*", with: ".*")
-        return t.range(of: "^" + escaped + "$", options: .regularExpression) != nil
+        // A pattern or a text beyond the limits matches nothing (ScriptLimits.globPatternCharacters says why).
+        let pattern = Array(p.unicodeScalars), text = Array(t.unicodeScalars)
+        guard pattern.count <= ScriptLimits.globPatternCharacters, text.count <= ScriptLimits.globTextCharacters else { return false }
+        return wildcardMatch(pattern, text)
+    }
+
+    /// `*` matches any run of characters except a line end (as `.*` did), everything else only itself. One star is
+    /// remembered and widened one character at a time, so the work is at most the pattern's length times the text's: never
+    /// the combinatorial work a backtracking regular expression does on "*a*a*a*b" against a long run of a's.
+    static func wildcardMatch(_ p: [Unicode.Scalar], _ t: [Unicode.Scalar]) -> Bool {
+        func lineEnd(_ c: Unicode.Scalar) -> Bool { c == "\n" || c == "\r" || c == "\u{85}" || c == "\u{2028}" || c == "\u{2029}" }
+        var pi = 0, ti = 0, star = -1, starText = 0
+        while ti < t.count {
+            if pi < p.count, p[pi] == "*" { star = pi; starText = ti; pi += 1 }
+            else if pi < p.count, p[pi] == t[ti] { pi += 1; ti += 1 }
+            else if star >= 0, !lineEnd(t[starText]) { starText += 1; ti = starText; pi = star + 1 }
+            else { return false }
+        }
+        while pi < p.count, p[pi] == "*" { pi += 1 }
+        return pi == p.count
+    }
+
+    /// What one search may spend and must not read: its end time (every step after it fails, so a slow app costs the search,
+    /// not the reader), and whether a secure field's value is hidden from the match (a script must not be able to ask
+    /// "does the password start with a?").
+    public final class SearchContext {
+        let end: Date?
+        let hideSecure: Bool
+        public init(end: Date? = nil, hideSecure: Bool = false) { self.end = end; self.hideSecure = hideSecure }
+        var expired: Bool { end.map { Date() >= $0 } ?? false }
     }
 
     /// "AXRadioButton", "RadioButton", "radio button" and "radioButton" all mean the same role.
-    static func roleMatches(_ wanted: String, _ axRole: String) -> Bool {
+    public static func roleMatches(_ wanted: String, _ axRole: String) -> Bool {
         if wanted.hasPrefix("AX") { return glob(wanted, axRole) }
+        // Authors guess "text" for a piece of text; AXText is not a role, so the word means what the item's role says, staticText.
+        if wanted.lowercased() == "text" { return axRole == "AXStaticText" }
         let words = wanted.split(separator: " ").map { $0.prefix(1).uppercased() + $0.dropFirst() }
         return glob("AX" + words.joined(), axRole)
     }
 
     /// Whether an element satisfies a match (the "nth" field is for searches, not single tests).
-    public static func matches(_ e: AXUIElement, _ m: ElementMatch) -> Bool {
-        if let any = m.any { return any.contains { matches(e, $0) } }
+    public static func matches(_ e: AXUIElement, _ m: ElementMatch, context: SearchContext? = nil) -> Bool {
+        if context?.expired == true { return false }
+        if let any = m.any { return any.contains { matches(e, $0, context: context) } }
         if let r = m.role, !roleMatches(r, e.role) { return false }
         if let rs = m.roles { let actual = e.role; if !rs.contains(where: { roleMatches($0, actual) }) { return false } }
         if let s = m.subrole, !glob(s, e.string(kAXSubroleAttribute) ?? "") { return false }
@@ -208,7 +305,11 @@ nonisolated public enum ElementMatcher {
         if let t = m.title, !glob(t, e.string(kAXTitleAttribute) ?? "") { return false }
         if let d = m.description, !glob(d, e.string(kAXDescriptionAttribute) ?? "") { return false }
         if let h = m.help, !glob(h, e.string(kAXHelpAttribute) ?? "") { return false }
-        if let v = m.value { let val = e.attr(kAXValueAttribute).map { "\($0)" } ?? ""; if !glob(v, val) { return false } }
+        if let v = m.value {
+            let secret = context?.hideSecure == true && ScriptItem.isSecure(subrole: e.string(kAXSubroleAttribute), role: e.string(kAXRoleAttribute))
+            let val = secret ? "" : (e.attr(kAXValueAttribute).map { "\($0)" } ?? "")
+            if !glob(v, val) { return false }
+        }
         if m.unnamed == true {
             let named = [e.string(kAXTitleAttribute), e.string(kAXDescriptionAttribute)].contains { s in
                 let t = (s ?? "").trimmingCharacters(in: .whitespaces); return !t.isEmpty && !TurnOverObject.isClassName(t)
@@ -221,11 +322,11 @@ nonisolated public enum ElementMatcher {
             if ((e.actionNamesResult().value as? [String]) ?? []).contains("AXPress") != p { return false }
         }
         if let w = m.window { guard let win = e.element(kAXWindowAttribute), glob(w, win.string(kAXTitleAttribute) ?? "") else { return false } }
-        if let t = m.text, !glob(t, text(of: e)) { return false }
-        if let pm = m.parent?.value { guard let p = e.element(kAXParentAttribute), matches(p, pm) else { return false } }
+        if let t = m.text, !glob(t, text(of: e, context: context)) { return false }
+        if let pm = m.parent?.value { guard let p = e.element(kAXParentAttribute), matches(p, pm, context: context) else { return false } }
         if let inside = m.inside?.value {
             var p = e.element(kAXParentAttribute); var depth = 0; var found = false
-            while let x = p, depth < 30 { if matches(x, inside) { found = true; break }; p = x.element(kAXParentAttribute); depth += 1 }
+            while let x = p, depth < 30, context?.expired != true { if matches(x, inside, context: context) { found = true; break }; p = x.element(kAXParentAttribute); depth += 1 }
             if !found { return false }
         }
         return true
@@ -237,6 +338,7 @@ nonisolated public enum ElementMatcher {
     public static func matchesHere(_ e: AXUIElement, _ m: ElementMatch, pid: pid_t) -> Bool {
         guard matches(e, m) else { return false }
         guard let n = m.nth else { return true }
+        guard validNth(n) else { return false }   // 0, or past what a search can visit: nothing is "the nth"
         let key = "\(pid)|" + String(data: (try? JSONEncoder().encode(m)) ?? Data(), encoding: .utf8)!
         nthLock.lock(); let cached = nthCache[key]; nthLock.unlock()
         let chosen: AXUIElement?
@@ -249,6 +351,9 @@ nonisolated public enum ElementMatcher {
         }
         return chosen.map { $0.isSame(e) } ?? false
     }
+    /// The most elements a search visits, and so the furthest an `nth` can reach. Zero is not a place.
+    static let maxVisits = 6000
+    public static func validNth(_ n: Int) -> Bool { n != 0 && n.magnitude <= UInt(maxVisits) }
     private static let nthLock = NSLock()
     nonisolated(unsafe) private static var nthCache: [String: (element: AXUIElement?, at: Date)] = [:]   // under `nthLock`
 
@@ -256,7 +361,7 @@ nonisolated public enum ElementMatcher {
     nonisolated(unsafe) public static var searchRoots: ((pid_t) -> [AXUIElement]?)?   // set by the test runner only
 
     /// Every element in the application's windows that matches, in tree order (bounded).
-    public static func find(_ m: ElementMatch, pid: pid_t, limit: Int = 50, budget: TimeInterval = 0.6) -> [AXUIElement] {
+    public static func find(_ m: ElementMatch, pid: pid_t, limit: Int = 50, budget: TimeInterval = 0.6, hideSecure: Bool = false) -> [AXUIElement] {
         let app = AXUIElementCreateApplication(pid)
         // The messaging timeout is inherited by the elements copied from the application element: set once per
         // application, not on every search (code review, 8 Oct 2026).
@@ -269,6 +374,7 @@ nonisolated public enum ElementMatcher {
         var queue = searchRoots?(pid) ?? app.elements(kAXWindowsAttribute)
         var head = 0
         let started = Date()
+        let context = SearchContext(end: started.addingTimeInterval(budget), hideSecure: hideSecure)
         func sameKind(_ a: AXUIElement, _ b: AXUIElement) -> Bool {
             let keys = [kAXRoleAttribute, kAXTitleAttribute, kAXDescriptionAttribute, kAXIdentifierAttribute]
             let x = a.attrs(keys), y = b.attrs(keys)
@@ -279,35 +385,37 @@ nonisolated public enum ElementMatcher {
             return keys.allSatisfy { (x[$0] as? String) == (y[$0] as? String) }
         }
         // A time budget as well as a count: 6,000 visits of a slow application is seconds on the main thread.
-        while head < queue.count, head < 6000, out.count < limit, Date().timeIntervalSince(started) < budget {
+        // The same end time stops the match and the walk part-way through one element, not only between elements.
+        while head < queue.count, head < maxVisits, out.count < limit, !context.expired {
             let e = queue[head]; head += 1
-            if matches(e, m) { out.append(e) }
-            for c in e.elements(kAXChildrenAttribute) where !sameKind(c, e) { queue.append(c) }
+            if matches(e, m, context: context) { out.append(e) }
+            for c in e.elements(kAXChildrenAttribute) where !context.expired && !sameKind(c, e) { queue.append(c) }
         }
         return out
     }
 
     /// The one element a key acts on: "nth" picks among the matches (default the first).
-    public static func findOne(_ m: ElementMatch, pid: pid_t, budget: TimeInterval = 0.6) -> AXUIElement? {
-        let all = find(m, pid: pid, limit: max(50, (m.nth ?? 1)), budget: budget)
-        guard !all.isEmpty else { return nil }
+    public static func findOne(_ m: ElementMatch, pid: pid_t, budget: TimeInterval = 0.6, hideSecure: Bool = false) -> AXUIElement? {
         let n = m.nth ?? 1
+        guard validNth(n) else { return nil }   // nth 0 once indexed all[-1]; a huge one once overflowed abs()
+        let all = find(m, pid: pid, limit: max(50, n), budget: budget, hideSecure: hideSecure)
+        guard !all.isEmpty else { return nil }
         if n < 0 { return all.count + n >= 0 ? all[all.count + n] : nil }
         return n - 1 < all.count ? all[n - 1] : nil
     }
 
     /// Static text inside an element, in order.
-    nonisolated public static func text(of e: AXUIElement) -> String {
+    nonisolated public static func text(of e: AXUIElement, context: SearchContext? = nil) -> String {
         if e.role == "AXStaticText" { return (e.string(kAXValueAttribute) ?? "").trimmingCharacters(in: .whitespacesAndNewlines) }
         // On a web page, one sentence comes in pieces ("Hello " and "world"): joined as they are. In an app, each text
         // is its own item: joined with a pause, or Asobi's game card read "Example GameLast played27 days ago…"
         // (parts request #3, from an AI making an Asobi plugin, 14 Oct 2026).
         var p = e.element(kAXParentAttribute); var hops = 0
-        while let x = p, hops < 30 { if x.role == "AXWebArea" { return ClaudeTranscript.text(of: e, skipHidden: false) }; p = x.element(kAXParentAttribute); hops += 1 }
+        while let x = p, hops < 30, context?.expired != true { if x.role == "AXWebArea" { return ClaudeTranscript.text(of: e, skipHidden: false) }; p = x.element(kAXParentAttribute); hops += 1 }
         var parts: [String] = []
         var budget = 2000
         func walk(_ x: AXUIElement) {
-            guard budget > 0 else { return }
+            guard budget > 0, context?.expired != true else { return }
             budget -= 1
             if x.role == "AXStaticText" {
                 if let v = x.string(kAXValueAttribute)?.trimmingCharacters(in: .whitespacesAndNewlines), !v.isEmpty { parts.append(v) }
@@ -381,7 +489,7 @@ nonisolated public enum ElementMatcher {
                 p = x.element(kAXParentAttribute); hops += 1
             }
             return nil
-        case "parentText": return plain(e.element(kAXParentAttribute).map(text(of:)))
+        case "parentText": return plain(e.element(kAXParentAttribute).map { text(of: $0) })
         case "help": return plain(e.string(kAXHelpAttribute).map(firstSentence))
         case "description": return plain(e.string(kAXDescriptionAttribute))
         default: return nil
@@ -393,7 +501,7 @@ nonisolated public enum ElementMatcher {
 
 public final class ProfileStore {
     nonisolated public static let shared = ProfileStore()
-    nonisolated init() {}
+    nonisolated package init() {}
     public static var folder: URL {
         AppPaths.file("plugins")
     }
@@ -411,30 +519,48 @@ public final class ProfileStore {
     /// Whether a change found on reload is said (on once TurnOver is running; not at its first load).
     nonisolated(unsafe) public var announceChanges = false   // main thread only
 
-    /// Load one plugin folder (also used by the tester).
-    public static func load(folder: URL) -> LoadedPlugin {
+    /// Load one plugin folder (also used by the tester). Each counted file is read once, through `read`, and both parsed and
+    /// hashed from those bytes, so a receipt is for what was parsed even if the file changes during the load (15 Nov 2026).
+    /// `read` is a seam for the tests only.
+    public static func load(folder: URL, read: (URL) -> Data? = { PluginFormat.readPluginFile($0) }) -> LoadedPlugin {
         let fm = FileManager.default
         let mURL = folder.appendingPathComponent("manifest.json"), pURL = folder.appendingPathComponent("profile.json")
-        let modified = [mURL, pURL].compactMap { (try? fm.attributesOfItem(atPath: $0.path))?[.modificationDate] as? Date }.max() ?? .distantPast
+        let jURL = folder.appendingPathComponent(PluginFormat.scriptName)
+        let modified = [mURL, pURL, jURL].compactMap { (try? fm.attributesOfItem(atPath: $0.path))?[.modificationDate] as? Date }.max() ?? .distantPast
         do {
             // Read as hand-written files: comments and trailing commas allowed, errors with their line (PluginFormat).
-            let manifest = try PluginFormat.decode(PluginManifest.self, from: mURL)
+            let mData = read(mURL)
+            let manifest = try PluginFormat.decode(PluginManifest.self, from: mData, file: mURL.lastPathComponent)
             // The id names its folder: never a path (".." would have made install delete TurnOver's own folder, the
             // code review, 13 Oct 2026).
             guard PluginManifest.isValidID(manifest.id) else {
                 return LoadedPlugin(folder: folder, manifest: nil, profile: nil, error: "manifest.json: id \"\(manifest.id)\" must be 1 to 64 letters, digits and hyphens, starting with a letter or digit", modified: modified)
             }
-            let profile = try PluginFormat.decode(Profile.self, from: pURL)
-            let problems = PluginFormat.check(manifest: mURL, profile: pURL)
+            // A plugin with a script may have no profile.json at all (the hash counts it "if present"); a data plugin may not.
+            let hasProfile = fm.fileExists(atPath: pURL.path)
+            let profile: Profile
+            let pData = hasProfile ? read(pURL) : nil
+            if manifest.script != nil, !hasProfile { profile = Profile() } else { profile = try PluginFormat.decode(Profile.self, from: pData, file: pURL.lastPathComponent) }
+            let jData = manifest.script != nil ? read(jURL) : nil
+            let problems = PluginFormat.check(manifest: mData, profile: pData, folder: folder, scriptData: jData)
             if let first = problems.first(where: { $0.isError }) {
                 return LoadedPlugin(folder: folder, manifest: nil, profile: nil, error: first.description, modified: modified, warnings: problems.filter { !$0.isError }.map(\.description))
             }
             try profile.view?.validate()   // a view that names a shape TurnOver has no view for fails the plugin
             // What no plugin may do on any Mac fails it here, however it arrived: copied in, or edited in place.
-            if let why = PluginPolicy.refusals(profile).first {
+            if let why = (PluginPolicy.refusals(profile) + PluginPolicy.scriptRefusals(manifest)).first {
                 return LoadedPlugin(folder: folder, manifest: nil, profile: nil, error: "refused: " + why, modified: modified)
             }
-            return LoadedPlugin(folder: folder, manifest: manifest, profile: profile, error: nil, modified: modified, warnings: problems.map(\.description))
+            // The script's text and the hash of the files, from the one read of each, so a receipt is for what was loaded.
+            var text: String?, hash: String?
+            if manifest.script != nil, let mData, let jData, let loaded = String(data: jData, encoding: .utf8) {
+                var files = [(name: "manifest.json", data: mData)]
+                if let pData { files.append((name: "profile.json", data: pData)) }
+                files.append((name: PluginFormat.scriptName, data: jData))
+                text = loaded; hash = ScriptTrust.hex(ScriptTrust.digest(files: files))
+            }
+            return LoadedPlugin(folder: folder, manifest: manifest, profile: profile, error: nil, modified: modified, warnings: problems.map(\.description),
+                                script: text, scriptHash: hash)
         } catch let e as PluginFormatError {
             return LoadedPlugin(folder: folder, manifest: nil, profile: nil, error: e.description, modified: modified)
         } catch let e as RecipeError {
@@ -472,10 +598,10 @@ public final class ProfileStore {
         let folders = (Self.shippedFixes.map(subfolders) ?? []) + subfolders(Self.folder)
         let current = plugins
         if !force, folders.count == current.count, zip(folders, current).allSatisfy({ f, p in
-            f == p.folder && ([f.appendingPathComponent("manifest.json"), f.appendingPathComponent("profile.json")]
+            f == p.folder && ([f.appendingPathComponent("manifest.json"), f.appendingPathComponent("profile.json"), f.appendingPathComponent(PluginFormat.scriptName)]
                 .compactMap { (try? fm.attributesOfItem(atPath: $0.path))?[.modificationDate] as? Date }.max() ?? .distantPast) == p.modified
         }) { return false }
-        let loaded = folders.map(Self.load(folder:))
+        let loaded = folders.map { Self.load(folder: $0) }
         lock.lock(); _plugins = loaded; lock.unlock()
         // Saved while TurnOver runs: said, so the author hears the result without looking (docs/PLUGIN-TOOLKIT-PLAN.md,
         // item 3: NVDA's scratchpad, without the reload key).
@@ -494,7 +620,7 @@ public final class ProfileStore {
             else { Log.info("plugin \(p.manifest!.name) \(p.manifest!.version) for \(p.manifest!.apps.joined(separator: ", "))\(p.profile?.view.map { " (a \($0.kind) view)" } ?? "")") }
             for w in p.warnings { Log.info("plugin \(p.folder.lastPathComponent): \(w)") }
         }
-        Recipes.load(plugins: loaded)   // the plugins' views, over the built-in recipes
+        Recipes.load(plugins: livePlugins)   // the plugins' views, over the built-in recipes
         DispatchQueue.main.async { Games.pluginsChanged(loaded); Trackpad.pluginsChanged(loaded) }   // official plugins switch built-in features on or off
         leadInPluginApps(loaded)
         onReload?()
@@ -549,22 +675,71 @@ public final class ProfileStore {
         lock.lock(); _plugins.removeAll { $0.manifest?.id == p.manifest?.id }; _plugins.append(p); lock.unlock()
     }
 
+    // MARK: Which profiles are live
+
+    /// With plugin scripts on, a plugin that has a script is one thing: until ScriptTrust says its script may run, none of its
+    /// profile is live either (no labels, keys, watches, silences, holds or view). This maps each such plugin's id to the hash
+    /// of the files that may run, set by ScriptPlugins whenever the receipts or the files change; a plugin whose files are
+    /// not the ones in the map is not live (so a change is dark until it is decided again). nil: scripts are off, every plugin
+    /// is live as a data plugin always was. Plugins without a script are never touched.
+    nonisolated(unsafe) private var scriptLive: [String: String]?   // under `lock`
+    /// Set the map; true if it changed (then `livenessChanged()` follows, on main).
+    nonisolated package func setScriptLive(_ map: [String: String]?) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        guard scriptLive != map else { return false }
+        scriptLive = map
+        return true
+    }
+    /// What to do when the live set changed without a reload: the keys are rebuilt (ProfilesPlugin) and the views reloaded.
+    nonisolated(unsafe) package var onLiveChange: (() -> Void)?   // main thread only
+    package func livenessChanged() {
+        if pluginsOff || plugins.contains(where: { $0.manifest?.script != nil && $0.profile?.view != nil }) { Recipes.load(plugins: livePlugins) }
+        onLiveChange?()
+    }
+    /// Every plugin off until TurnOver starts again (the Plugins menu's one item for it, stage B 16 Nov 2026): kept in memory only, so a
+    /// restart always has the plugins back. Nothing is live while it is set, rules or scripts.
+    nonisolated(unsafe) private var _pluginsOff = false   // under `lock`
+    nonisolated package var pluginsOff: Bool { lock.lock(); defer { lock.unlock() }; return _pluginsOff }
+    nonisolated package func setPluginsOff() { lock.lock(); _pluginsOff = true; lock.unlock() }
+    /// The plugins whose profiles apply now.
+    nonisolated public var livePlugins: [LoadedPlugin] {
+        lock.lock(); defer { lock.unlock() }
+        if _pluginsOff { return [] }
+        guard let live = scriptLive else { return _plugins }
+        return _plugins.filter { p in
+            guard p.manifest?.script != nil else { return true }
+            guard let id = p.manifest?.id, let hash = p.scriptHash else { return false }
+            return live[id] == hash
+        }
+    }
+
     /// The profiles that apply to an application.
     nonisolated public func profiles(for bundle: String) -> [(PluginManifest, Profile)] {
-        plugins.compactMap { p in
+        livePlugins.compactMap { p in
             guard let m = p.manifest, let pr = p.profile, m.apps.contains(bundle) else { return nil }
             return (m, pr)
         }
     }
 
-    nonisolated(unsafe) private var bundleCache: [pid_t: String] = [:]   // under `lock`
+    nonisolated(unsafe) private var bundleCache: [pid_t: (start: UInt64, bundle: String)] = [:]   // under `lock`
+    /// When the process began, to the microsecond: a process id that is used again by another program has another start, so
+    /// what was cached for the old one is not believed. Seams for the tests.
+    nonisolated(unsafe) package var processStart: (pid_t) -> UInt64? = { pid in
+        var info = proc_bsdinfo()
+        guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, Int32(MemoryLayout<proc_bsdinfo>.size)) == Int32(MemoryLayout<proc_bsdinfo>.size) else { return nil }
+        return info.pbi_start_tvsec &* 1_000_000 &+ info.pbi_start_tvusec
+    }
+    nonisolated(unsafe) package var lookupBundle: (pid_t) -> String = { NSRunningApplication(processIdentifier: $0)?.bundleIdentifier ?? "" }
     /// The app a replayed screen stands for (a plugin's tests: every element of a replay has a pid of its own).
     nonisolated(unsafe) public var replayBundle: String?   // set and cleared by the test runner, main thread
     nonisolated public func bundle(of pid: pid_t) -> String {
         if pid >= 900_000, let b = replayBundle { return b }
-        lock.lock(); if let b = bundleCache[pid] { lock.unlock(); return b }; lock.unlock()
-        let b = NSRunningApplication(processIdentifier: pid)?.bundleIdentifier ?? ""
-        lock.lock(); bundleCache[pid] = b; lock.unlock()
+        // The app that really has this process now: what is kept for a process id is kept with the process's start, because the
+        // answer decides what a script may reach, and an id passes to another program when the first one quits.
+        guard let start = processStart(pid) else { return lookupBundle(pid) }
+        lock.lock(); if let c = bundleCache[pid], c.start == start { lock.unlock(); return c.bundle }; lock.unlock()
+        let b = lookupBundle(pid)
+        lock.lock(); bundleCache[pid] = (start, b); lock.unlock()
         return b
     }
 
@@ -615,6 +790,10 @@ final class ProfilesPlugin: GlobalPlugin {
 
     required init() {
         super.init()
+        // With plugin scripts on, no profile of a plugin that has a script is live until its script is approved: shut before
+        // anything loads, opened one plugin at a time by ScriptPlugins.
+        if Edition.includesPluginScripts { _ = ProfileStore.shared.setScriptLive([:]) }
+        ProfileStore.shared.onLiveChange = { [weak self] in self?.rebuild() }
         ProfileStore.shared.onReload = { [weak self] in DispatchQueue.main.async { self?.rebuild() } }
         ProfileStore.shared.reload(force: true)
         // The plugins folder looked at every second: a file saved is reloaded and said (a few file dates, no reading).
@@ -625,7 +804,7 @@ final class ProfilesPlugin: GlobalPlugin {
     private func rebuild() {
         scriptNames.forEach { removeScript($0) }
         scriptNames.removeAll()
-        for p in ProfileStore.shared.plugins {
+        for p in ProfileStore.shared.livePlugins {
             guard let m = p.manifest, let profile = p.profile else { continue }
             for (i, rule) in (profile.keys ?? []).enumerated() {
                 let name = "plugin_\(m.id)_\(i)"
@@ -636,6 +815,13 @@ final class ProfilesPlugin: GlobalPlugin {
                 scriptNames.append(name)
             }
         }
+    }
+
+    /// What a key's `read` says for an element: its text, or its name, role and the rest if it has none. A script's
+    /// `item.read` says the same.
+    static func readingText(of e: AXUIElement) -> String {
+        let t = ElementMatcher.text(of: e)
+        return t.isEmpty ? Speech.objectPropertiesSpeech(ObjectFactory.make(e), reason: .query).joined(separator: ", ") : t
     }
 
     static func perform(_ rule: KeyRule, gesture: KeyboardGesture) {
@@ -657,9 +843,7 @@ final class ProfilesPlugin: GlobalPlugin {
             AXHandler.shared.refocus(pid: pid)
         case "read":
             guard let e = target() else { return }
-            let obj = ObjectFactory.make(e)
-            let t = ElementMatcher.text(of: e)
-            Speech.speakMessage(t.isEmpty ? Speech.objectPropertiesSpeech(obj, reason: .query).joined(separator: ", ") : t)
+            Speech.speakMessage(readingText(of: e))
         case "menu":
             guard let path = rule.menu, !path.isEmpty else { return }
             if !MenuPath.choose(path, pid: pid) { Speech.speakMessage(String(localized: "menu item not found: \(path.joined(separator: ", "))", comment: "A plugin's menu item not found: %@ is its path")) }
@@ -679,7 +863,7 @@ final class ProfilesPlugin: GlobalPlugin {
     /// say the shortcuts, so they can be learnt).
     static func commands(for bundle: String) -> [(letter: String?, title: String, key: String, run: @MainActor () -> Void)] {
         var out: [(letter: String?, title: String, key: String, run: @MainActor () -> Void)] = []
-        for p in ProfileStore.shared.plugins {
+        for p in ProfileStore.shared.livePlugins {
             guard let m = p.manifest, p.error == nil, m.apps.contains(bundle) else { continue }
             for rule in p.profile?.keys ?? [] {
                 let id = normalizeGestureIdentifier(rule.key.hasPrefix("kb:") ? rule.key : "kb:" + rule.key)
@@ -758,5 +942,41 @@ public enum MenuPath {
 
 /// The plugins' commands for the plugin layer in the app (Command Control Comma, P).
 public enum PluginCommands {
-    public static func forApp(_ bundle: String) -> [(letter: String?, title: String, key: String, run: @MainActor () -> Void)] { ProfilesPlugin.commands(for: bundle) }
+    public static func forApp(_ bundle: String) -> [(letter: String?, title: String, key: String, run: @MainActor () -> Void)] { ProfilesPlugin.commands(for: bundle) + ScriptPlugins.commands(for: bundle) }
+
+    /// The letters the TurnOver layer's own commands use (MenuAnywhere.letters, N and E included). A plugin's letter is tried only
+    /// when the layer has none of its own for it, so one of these never reaches the plugin; the checks say so. Keep in step with
+    /// MenuAnywhere.letters (a test in TurnOverTests lists them).
+    nonisolated public static let reservedLetters: Set<String> = ["m", "n", "s", "/", "r", "t", "d", "a", "k", "j", "h", "i", "c", "g", "v", "e"]
+
+    /// The plugin command a letter chosen in the layer runs, in the app with this bundle identifier: the first command whose
+    /// declared letter it is. Nil for a letter the layer keeps for itself, and for no match. (15 Nov 2026: the plugin layer
+    /// left in October, so a plugin's declared letter reached nothing.)
+    public typealias Entry = (letter: String?, title: String, key: String, run: @MainActor () -> Void)
+    public static func command(letter: String, bundle: String) -> Entry? { command(letter: letter, in: forApp(bundle)) }
+    /// The same, from a list of commands (what the tests pass, as the app's running scripts are not theirs).
+    public static func command(letter: String, in commands: [Entry]) -> Entry? {
+        let l = letter.lowercased()
+        guard !reservedLetters.contains(l) else { return nil }
+        return commands.first { $0.letter == l }
+    }
+
+    /// The commands with a letter that the layer offers in the app with this bundle identifier, in order: what is spoken beside the
+    /// layer's own letters and listed with them. A letter the layer keeps for itself, or one an earlier command has, is left out.
+    public static func layerCommands(bundle: String) -> [(letter: String, title: String, run: @MainActor () -> Void)] { layerCommands(in: forApp(bundle)) }
+    public static func layerCommands(in commands: [Entry]) -> [(letter: String, title: String, run: @MainActor () -> Void)] {
+        var seen = reservedLetters
+        var out: [(letter: String, title: String, run: @MainActor () -> Void)] = []
+        for c in commands {
+            guard let l = c.letter, seen.insert(l).inserted else { continue }
+            out.append((l, c.title, c.run))
+        }
+        return out
+    }
+
+    /// The app in front, by bundle identifier: the one TurnOver is reading, or else the one the Mac says is in front.
+    @MainActor public static func frontBundle() -> String {
+        if let pid = API.focusPid { let b = ProfileStore.shared.bundle(of: pid); if !b.isEmpty { return b } }
+        return NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
+    }
 }

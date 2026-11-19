@@ -59,7 +59,7 @@ mkdir -p "$BUILD"
 # A failed compile must not install yesterday's binary.
 # (Every product, the Settings app and the test runners too: a stale one of those installed or ran as if new. From an
 # outside audit, pull request 13, 26 Oct 2026.)
-for f in turnover turnover-probe turnover-plugin turnover-key turnover-settings turnover-tests turnover-coretest libTurnOverCore.dylib; do
+for f in turnover turnover-probe turnover-plugin turnover-plugin-host turnover-trust-keeper turnover-key turnover-settings turnover-tests turnover-coretest libTurnOverCore.dylib; do
   rm -f "$BUILD/release/$f"
 done
 # The recipes and official listings, built into the program (make-embedded.py).
@@ -78,6 +78,13 @@ BUILD_STATUS=${PIPESTATUS[0]}
 set -e
 [ "$BUILD_STATUS" -eq 0 ] || { echo "build failed"; exit "$BUILD_STATUS"; }
 [ -x "$BUILD/release/turnover" ] && [ -x "$BUILD/release/turnover-key" ] && [ -f "$BUILD/release/libTurnOverCore.dylib" ] || { echo "build failed"; exit 1; }
+# The script host (docs/PLUGIN-SCRIPTS-PLAN.md, 15 Nov 2026) must be able to lock itself in its sandbox on this Mac: its
+# self-test tries to read the home folder, write /tmp, reach the network and start a program, and fails unless the
+# sandbox refuses all of them. A host that cannot sandbox itself would mean scripts either do not run or run unlocked.
+[ -x "$BUILD/release/turnover-plugin-host" ] && "$BUILD/release/turnover-plugin-host" --self-test || { echo "STOP: turnover-plugin-host failed to build or its sandbox self-test failed"; exit 1; }
+# The keeper of plugin script approvals (docs/PLUGIN-SCRIPTS-PLAN.md, "The keeper", 15 Nov 2026): built with the rest. Its proof
+# comes below, once the signing identity and the final program are known.
+[ -x "$BUILD/release/turnover-trust-keeper" ] || { echo "STOP: turnover-trust-keeper failed to build"; exit 1; }
 # The unit tests (Sources/TurnOverTests): a failing test stops the install (8 Oct 2026). TURNOVER_SKIP_TESTS=1 to skip.
 if [ "$TURNOVER_SKIP_TESTS" != 1 ]; then
   "$BUILD/release/turnover-tests" || { echo "build.sh: tests failed; not installing"; exit 1; }
@@ -88,7 +95,7 @@ fi
 BIN="$BUILD/release"
 if [ "$TURNOVER_UNIVERSAL" = 1 ]; then
   X86="$BUILD-x86_64"
-  for f in turnover turnover-probe turnover-plugin turnover-key turnover-settings turnover-tests turnover-coretest libTurnOverCore.dylib; do
+  for f in turnover turnover-probe turnover-plugin turnover-plugin-host turnover-trust-keeper turnover-key turnover-settings turnover-tests turnover-coretest libTurnOverCore.dylib; do
     rm -f "$X86/release/$f"
   done
   set +e
@@ -99,7 +106,7 @@ if [ "$TURNOVER_UNIVERSAL" = 1 ]; then
   [ -x "$X86/release/turnover" ] && [ -x "$X86/release/turnover-key" ] && [ -f "$X86/release/libTurnOverCore.dylib" ] || { echo "Intel build failed"; exit 1; }
   BIN="$BUILD/universal"
   rm -rf "$BIN"; mkdir -p "$BIN"
-  for f in turnover turnover-plugin turnover-key turnover-settings libTurnOverCore.dylib; do
+  for f in turnover turnover-plugin turnover-plugin-host turnover-trust-keeper turnover-key turnover-settings libTurnOverCore.dylib; do
     lipo -create "$BUILD/release/$f" "$X86/release/$f" -output "$BIN/$f"
   done
   echo "Universal: $(lipo -archs "$BIN/turnover")"
@@ -109,10 +116,23 @@ for arch in $(lipo -archs "$BIN/libTurnOverCore.dylib"); do
   strings -arch "$arch" "$BIN/libTurnOverCore.dylib" | grep -q "^$MARKER$" || { echo "STOP: the $arch slice of the core has no $MARKER"; exit 1; }
 done
 
+# The keeper, proved with a throwaway app around the real keeper program (Tools/check-trust-keeper.sh): it must answer its own
+# app, and a build whose keeper answers a stranger stops here. An ad hoc build has no team, so there is nothing to prove.
+if [ "$IDENTITY" != "-" ]; then
+  set +e
+  bash Tools/check-trust-keeper.sh "$BIN/turnover-trust-keeper" "$IDENTITY" "$BUILD"
+  KEEPER_STATUS=$?
+  set -e
+  [ "$KEEPER_STATUS" -ne 2 ] || { echo "STOP: the keeper answers a stranger: a program that is not this app could write the plugin script approvals. Not installing."; exit 1; }
+  [ "$KEEPER_STATUS" -eq 0 ] || echo "build.sh: WARNING: the keeper check did not pass; plugin scripts cannot be approved in this build"
+fi
+
 # TurnOver's helper programs: Steam speech (14 Oct 2026), Trackpad gestures and VoiceOver quiet, in Helpers/. Each
 # built, its self-test run, carried in the bundle and signed with TurnOver. A release build stops without them.
 HELPERSRC="$(cd "$(dirname "$0")" && pwd)/Helpers"
 HELPERBINS=()
+# The plugin script host: built with the main build above, self-tested there, carried in Helpers like the rest.
+HELPERBINS+=("turnover-plugin-host:$BIN/turnover-plugin-host")
 for H in steam-speech trackpad-gestures voiceover-quiet; do
   SRC="$HELPERSRC/$H"
   if [ ! -f "$SRC/Package.swift" ]; then
@@ -162,6 +182,11 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 cp "$BIN/turnover" "$APP/Contents/MacOS/turnover"
 for hb in "${HELPERBINS[@]}"; do mkdir -p "$APP/Contents/Helpers"; cp "${hb#*:}" "$APP/Contents/Helpers/${hb%%:*}"; done
+# The keeper of plugin script approvals: an XPC service inside the app, whose bundle identifier is the app's followed by
+# .trust-keeper, sandboxed and signed below. The app's version numbers are read from its own Info.plist further down.
+KEEPERXPC="$APP/Contents/XPCServices/TurnOverTrustKeeper.xpc"
+mkdir -p "$KEEPERXPC/Contents/MacOS"
+cp "$BIN/turnover-trust-keeper" "$KEEPERXPC/Contents/MacOS/turnover-trust-keeper"
 cp NOTICE.md "$APP/Contents/Resources/NOTICE.md"
 # The built-in app recipes (docs/APP-RECIPES-PLAN.md): one JSON file per app.
 # Built into the program now (make-embedded.py, run before the build): no readable folder in the app (18 Oct 2026).
@@ -175,6 +200,8 @@ cp "Resources/TurnOver Guide.txt" "$APP/Contents/Resources/TurnOver Guide.txt"
 # format's schemas, for editors and AIs.
 cp "$BIN/turnover-plugin" "$APP/Contents/MacOS/turnover-plugin"
 cp PLUGIN-GUIDE.md "$APP/Contents/Resources/PLUGIN-GUIDE.md"
+# The script author's guide: the brief for finishing a converted NVDA add-on gives it to the AI beside the draft.
+cp docs/PLUGIN-SCRIPTS.md "$APP/Contents/Resources/PLUGIN-SCRIPTS.md"
 rm -rf "$APP/Contents/Resources/plugin-schema"; cp -R Resources/plugin-schema "$APP/Contents/Resources/plugin-schema"
 # The fixes people shared and the project accepted (Resources/fixes, 7 Nov 2026): loaded for everyone (ProfileStore).
 rm -rf "$APP/Contents/Resources/fixes"; [ -d Resources/fixes ] && cp -R Resources/fixes "$APP/Contents/Resources/fixes"
@@ -198,6 +225,13 @@ xcrun actool Resources/TurnOver.icon Resources/Assets.xcassets \
 /usr/libexec/PlistBuddy -c "Merge \"$BUILD/icon-info.plist\"" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $BUNDLEID" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :SUFeedURL $FEEDURL" "$APP/Contents/Info.plist"
+# The keeper's Info.plist: its identifier, the program, the package type for an XPC service, and the app's own version numbers.
+KEEPERPLIST="$KEEPERXPC/Contents/Info.plist"; rm -f "$KEEPERPLIST"
+/usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string $BUNDLEID.trust-keeper" -c "Add :CFBundleName string TurnOverTrustKeeper" \
+  -c "Add :CFBundleExecutable string turnover-trust-keeper" -c "Add :CFBundlePackageType string XPC!" -c "Add :CFBundleInfoDictionaryVersion string 6.0" \
+  -c "Add :CFBundleVersion string $(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Contents/Info.plist")" \
+  -c "Add :CFBundleShortVersionString string $(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")" \
+  -c "Add :XPCService dict" -c "Add :XPCService:ServiceType string Application" "$KEEPERPLIST" >/dev/null || { echo "STOP: the keeper's Info.plist could not be made"; exit 1; }
 # A developer build never takes updates: the published copy beside it does.
 [ -z "$FEEDURL" ] && /usr/libexec/PlistBuddy -c "Delete :SUFeedURL" "$APP/Contents/Info.plist"
 if [ "$APPNAME" != "TurnOver" ]; then
@@ -254,12 +288,24 @@ done
 sign --force --sign "$IDENTITY" --identifier com.turnover.core "$APP/Contents/Frameworks/libTurnOverCore.dylib"
 [ -f "$APP/Contents/MacOS/turnover-plugin" ] && sign --force --sign "$IDENTITY" --identifier com.turnover.plugin-tool "$APP/Contents/MacOS/turnover-plugin"
 for h in steam-speech trackpad-gestures voiceover-quiet phonon-helper; do [ -f "$APP/Contents/Helpers/$h" ] && sign --force --sign "$IDENTITY" --identifier "com.turnover.$h" "$APP/Contents/Helpers/$h"; done
+# The script host needs no entitlement: it sandboxes itself at start and runs JavaScriptCore without its compiler under the hardened runtime.
+[ -f "$APP/Contents/Helpers/turnover-plugin-host" ] && sign --force --sign "$IDENTITY" --identifier com.turnover.plugin-host "$APP/Contents/Helpers/turnover-plugin-host"
+# The keeper: the App Sandbox and nothing else, signed before the app that holds it.
+sign --force --sign "$IDENTITY" --entitlements Resources/TrustKeeper.entitlements --identifier "$BUNDLEID.trust-keeper" "$KEEPERXPC"
 sign --force --sign "$IDENTITY" --identifier "$BUNDLEID" "$APP"
 
 # Never install a TurnOver macOS will not trust: it would come up with no permissions and no speech.
 if ! codesign --verify --deep --strict "$APP" 2>/dev/null; then
   echo "build.sh: TurnOver.app is not properly signed; not installing" >&2
   exit 1
+fi
+
+# A build that is not a developer build keeps its plugin script approvals in the keeper: ask it to run its own check, through
+# the signed app, as the app asks it. A failure does not stop the build, but nobody could approve a script with it.
+if [ "$TURNOVER_STRIP" = 1 ]; then
+  if ! perl -e 'alarm shift; exec @ARGV' 30 "$APP/Contents/MacOS/turnover" --check-trust-keeper; then
+    echo "build.sh: WARNING: --check-trust-keeper failed on this build: plugin scripts cannot be approved in it" >&2
+  fi
 fi
 
 if [ "$1" != "--no-install" ]; then

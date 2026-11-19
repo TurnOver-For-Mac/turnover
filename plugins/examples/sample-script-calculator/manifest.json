@@ -1,0 +1,22 @@
+{
+  "formatVersion": 2,
+  "id": "sample-script-calculator",
+  "name": "Calculator, scripted",
+  "version": "1.0",
+  "author": "TurnOver",
+  "description": "Says Calculator's Divide and Multiply buttons as Divided by and Times, and reads the result aloud on a key.",
+  "apps": ["com.apple.calculator"],
+  "abilities": ["read", "say"],
+  "script": "main.js",
+  "commands": [
+    { "id": "readResult", "description": "Read the result", "key": "turnover+command+shift+a", "letter": "o" }
+  ],
+  "summary": "Reads Calculator's result on a key, and says its Divide and Multiply buttons plainly.",
+  "contact": "https://github.com/TurnOver-For-Mac/turnover/issues",
+  "support": "https://github.com/TurnOver-For-Mac/turnover/issues",
+  "privacy": "Reads Calculator's window only; nothing leaves your Mac.",
+  "license": "MIT",
+  "changes": [
+    { "version": "1.0", "notes": "First version: the readResult command and plainer words for the Divide and Multiply buttons." }
+  ]
+}

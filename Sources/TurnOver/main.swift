@@ -346,6 +346,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+// `turnover --check-trust-keeper`: ask the keeper to run its check and say the result, before anything else starts: no
+// screen reader, no permission asked of macOS, no Accessibility (build.sh runs it on a build that is not a developer build).
+if CommandLine.arguments.dropFirst().contains("--check-trust-keeper") {
+    if let why = ScriptTrustKeeperCheck.run() { print("trust keeper: \(why)"); exit(1) }
+    print("trust keeper: ok"); exit(0)
+}
+
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate

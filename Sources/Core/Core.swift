@@ -118,6 +118,7 @@ public enum Core {
         Log.info("speech: \(config.speech.voice) rate \(config.speech.rate), \(Int(Speech.player.sampleRate)) Hz, output latency \(String(format: "%.1f", Speech.player.outputLatencySeconds * 1000)) ms")
         _ = GlobalCommands.shared
         if Edition.includesPlugins { GlobalPluginHandler.shared.register(ProfilesPlugin.self) }   // first: the user's own fixes
+        if Edition.includesPluginScripts { GlobalPluginHandler.shared.register(ScriptPlugins.self) }   // after ProfilesPlugin: it chains onto its reloads
         GlobalPluginHandler.shared.register(MenuNavigationPlugin.self)
         GlobalPluginHandler.shared.register(VoiceOverKeysPlugin.self)
         GlobalPluginHandler.shared.register(HeldListPlugin.self)

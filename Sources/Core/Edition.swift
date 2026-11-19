@@ -83,4 +83,8 @@ public enum Edition {
     /// sent as public pull requests to the plugins repository and reviewed before the library's signed list carries
     /// them. "plugins" set to false turns them off.
     public static var includesPlugins: Bool { UserDefaults.standard.object(forKey: "plugins") as? Bool ?? true }
+
+    /// Plugin scripts (docs/PLUGIN-SCRIPTS-PLAN.md) are off unless the "pluginScripts" default turns them on
+    /// (`defaults write com.turnover.reader pluginScripts -bool true`), and never on when plugins themselves are off.
+    public static var includesPluginScripts: Bool { includesPlugins && (UserDefaults.standard.object(forKey: "pluginScripts") as? Bool ?? false) }
 }
