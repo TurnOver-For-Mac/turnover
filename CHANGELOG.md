@@ -53,6 +53,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   without a word, even after Command Tab to another app, so Tab, the arrows and Turnover's keys seemed dead until
   TurnOver was turned off. Switching to another app in any way, opening TurnOver's menu, locking the Mac and a
   password field's secure input also close it now. Typing, Backspace, Return and Escape work in the prompt as before.
+- Find (Turnover F): switching to another app while TurnOver is waking an app's accessibility now closes the Find
+  prompt too. Before, the prompt stayed open, and what you typed in the other app went into Find.
 - Safari: VoiceOver Space on a link that opens its page in the same tab now reads the new page as soon as it has
   loaded. Before, nothing was said until you pressed a key.
 - When an app leaves the Mac's secure input on after you leave a password field, as Safari did on Steam's sign-in

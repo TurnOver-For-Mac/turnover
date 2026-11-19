@@ -23,11 +23,18 @@ func findPromptTests() {
     }
 
     test("An app coming to the front closes Find's prompt, but not TurnOver's own switch to wake an app") {
-        let now = Date()
-        check(AXHandler.activationClosesFind(pid: 20, activePid: 10, now: now, nudgingUntil: .distantPast), "another app closes it")
-        check(!AXHandler.activationClosesFind(pid: 10, activePid: 10, now: now, nudgingUntil: .distantPast), "the same app does not")
-        check(!AXHandler.activationClosesFind(pid: 20, activePid: 10, now: now, nudgingUntil: now.addingTimeInterval(1)),
-              "TurnOver's own nudge (AppWake), itself or the app coming back, does not")
+        let now = Date(), soon = now.addingTimeInterval(1)
+        func closes(_ pid: pid_t, until: Date = .distantPast) -> Bool {
+            AXHandler.activationClosesFind(pid: pid, activePid: 10, ownPid: 99, now: now, nudgingUntil: until, nudgedPid: 10)
+        }
+        check(closes(20), "another app closes it")
+        check(!closes(10), "the same app does not")
+        check(closes(99), "TurnOver's own app, outside a nudge, does")
+        check(!closes(99, until: soon), "TurnOver coming forward for its nudge (AppWake) does not")
+        check(!AXHandler.activationClosesFind(pid: 30, activePid: 10, ownPid: 99, now: now, nudgingUntil: soon, nudgedPid: 30),
+              "the app being woken coming back does not")
+        // 19 Nov 2026, Codex's review: any app was let through during the nudge.
+        check(closes(20, until: soon), "another app clicked during the nudge does")
     }
 
     test("Find's prompt types a key's character, and nothing for an arrow or Tab") {
