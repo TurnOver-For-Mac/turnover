@@ -193,6 +193,26 @@ func findPromptTests() {
         check(!FindPrompt.shared.isOpen, "a key earlier than a later close does not open it")
     }
 
+    // 19 Nov 2026, Codex's seventh review: TurnOver+G with Find open and no earlier search closed Find, and its own
+    // fallback opening (without the key code) was refused. Every Find caller now passes its key's time and code.
+    test("TurnOver+G with Find open and no earlier search leaves Find open") {
+        let saved = FindPrompt.shared.lastSearch
+        FindPrompt.shared.lastSearch = ""
+        let t = mach_absolute_time() &+ 5_000  // just after any close an earlier test left behind
+        defer {
+            FindPrompt.shared.lastSearch = saved
+            if FindPrompt.shared.isOpen { FindPrompt.shared.close(because: "the test is over") }
+            while mach_absolute_time() < t &+ 100 {}  // so the next test's keys are later than this one's closes
+        }
+        FindPrompt.shared.open(pressedAt: t &- 5_000)
+        FindPrompt.shared.close(because: "a key it does not take", arrowAt: t, byKey: 5)
+        FindPrompt.shared.again(forward: true, pressedAt: t, keyCode: 5)
+        check(FindPrompt.shared.isOpen, "the key that closed the prompt opens it again through the repeat search")
+        FindPrompt.shared.close(because: "a Quick Nav arrow", arrowAt: t &+ 10)
+        FindPrompt.shared.again(forward: false, pressedAt: t &+ 10, keyCode: 5)
+        check(!FindPrompt.shared.isOpen, "a different key closing at the same time still refuses it")
+    }
+
     // 19 Nov 2026, Codex's fourth review: the opening checked the last arrow and then, after letting go of the lock, set
     // the prompt open; an arrow in between saw it closed, and the opening went on. In either order the prompt ends closed.
     test("A Quick Nav arrow racing a queued opening leaves the prompt closed, whichever comes first") {

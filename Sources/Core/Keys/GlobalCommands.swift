@@ -321,10 +321,10 @@ public final class GlobalCommands: ScriptableObject {
             FindPrompt.shared.open(pressedAt: g.timestamp, keyCode: g.keyCode)
         }
         script("findNext", String(localized: "Finds the next match of the last search (VO-G; NVDA+F3)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+g", "kb:turnover+f3"], category: text) { g in
-            FindPrompt.shared.again(forward: true, pressedAt: g.timestamp)
+            FindPrompt.shared.again(forward: true, pressedAt: g.timestamp, keyCode: g.keyCode)
         }
         script("findPrevious", String(localized: "Finds the previous match of the last search (VO-Shift-G; NVDA+Shift+F3)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+shift+g", "kb:turnover+shift+f3"], category: text) { g in
-            FindPrompt.shared.again(forward: false, pressedAt: g.timestamp)
+            FindPrompt.shared.again(forward: false, pressedAt: g.timestamp, keyCode: g.keyCode)
         }
         // The Windows style is NVDA's: NVDA+F reports the formatting, and find is NVDA+Control+F (Caps Lock F opened
         // the find prompt in Word, 7 Oct 2026). Declared after "find", so it is tried first.

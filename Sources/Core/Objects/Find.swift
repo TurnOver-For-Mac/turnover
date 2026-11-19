@@ -38,7 +38,7 @@ public final class FindPrompt: @unchecked Sendable {
     /// is not written over.
     private func finish() { state.lock.lock(); state.unsafeValue.isOpen = false; state.unsafeValue.generation += 1; state.lock.unlock() }
     private var typed = ""
-    public private(set) var lastSearch = ""
+    public package(set) var lastSearch = ""
 
     /// `pressedAt`: the time of the key that asked for it (its gesture's timestamp); 0 when unknown (the key list, the
     /// menu), which always opens.
@@ -142,8 +142,8 @@ public final class FindPrompt: @unchecked Sendable {
     package var typedSoFar: String { typed }
 
     /// TurnOver+G / TurnOver+Shift+G.
-    public func again(forward: Bool, pressedAt: UInt64 = 0) {
-        guard !lastSearch.isEmpty else { open(pressedAt: pressedAt); return }
+    public func again(forward: Bool, pressedAt: UInt64 = 0, keyCode: Int64? = nil) {
+        guard !lastSearch.isEmpty else { open(pressedAt: pressedAt, keyCode: keyCode); return }
         Self.find(lastSearch, forward: forward)
     }
 
