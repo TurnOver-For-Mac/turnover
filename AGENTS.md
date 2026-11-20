@@ -24,7 +24,7 @@ Use a Mac with full Xcode 27 and the macOS 27 SDK; the app targets macOS 14 onwa
 - `./build.sh`: additionally replace `/Applications/TurnOver.app` and restart it.
 - `~/Library/Developer/TurnOver/build/release/turnover-tests -v`: rerun tests verbosely; add a name substring to filter.
 
-Both build commands check source membership, the generated app index and app-record exclusions, then compile and run tests; `./build.sh` is not an install-only step. Allow a minute or two, with longer builds possible after larger changes. The last displayed product name can remain unchanged while compilation continues; check compiler activity before treating it as a hang. Running `turnover-tests` directly only reruns tests and does not build anything.
+Both build commands check source membership, the generated app index and app-record exclusions, then compile and run tests; `./build.sh` is not an install-only step. Allow a minute or two, with longer builds possible after larger changes. The last displayed product name can remain unchanged while compilation continues; check compiler activity before treating it as a hang. On GitHub's machines (`GITHUB_ACTIONS=true`) a failing test gets one second try and fails only if it fails twice, and the pass is listed; on a developer's Mac every test is strict. `TURNOVER_TEST_SECOND_TRY=1` or `0` forces it on or off. Running `turnover-tests` directly only reruns tests and does not build anything.
 
 For a byte-identical folder move, verify file hashes/modes, target membership, build and tests; no reinstall or listening trial is required. Behavior changes still require the installed-app loop and the owner's trial.
 
