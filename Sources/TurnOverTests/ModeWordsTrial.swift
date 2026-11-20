@@ -42,6 +42,10 @@ final class ModeWordsTrial {
         config.general.navigationSounds = false
         config.virtualBuffers.autoFocusMode = true
         config.virtualBuffers.autoPassThroughOnCaretMove = false
+        // 20 Nov 2026: hints run on the real clock (1.2 seconds after a focus) and this trial has a clock of its own. On a
+        // slow machine the menu button's hint from one mode-cue test was spoken into a later one and became its last
+        // event. So no hint is said while a trial runs, and restore() cancels any that was waiting from before.
+        config.presentation.speakHints = false
         ModeAnnouncement.now = { [weak self] in self?.now ?? .distantPast }
         ModeAnnouncement.schedule = { [weak self] delay, action in
             guard let self else { return }
@@ -64,6 +68,7 @@ final class ModeWordsTrial {
     func restore() {
         ModeAnnouncement.reset()
         for entry in queued { entry.1?(false) }
+        Hints.cancel()
         drain()
         scheduled = []
         config = configBefore
