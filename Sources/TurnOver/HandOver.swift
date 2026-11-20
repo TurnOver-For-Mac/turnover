@@ -45,8 +45,32 @@ enum HandOver {
     /// TurnOver doesn't go before VoiceOver has come (the same review). Polled, as turnVoiceOverOn waits.
     nonisolated static func bringVoiceOverBack(_ why: String, waitUpTo: Double = 0) {
         if voiceOverReading { return }
-        // Opened, not toggled, whichever way the flag stands: the shortcut can stop working (turnVoiceOverOn), and with
-        // the flag on but VoiceOver gone the toggle would turn the flag off.
+        // A caller that waits (the quit), with VoiceOver wholly off: its shortcut, which brings it in about a tenth of
+        // a second. Opened as an app it took ten, and every quit left that long with no reader (VoiceOverStart,
+        // 20 Nov 2026). VoiceOver.app after it only if VoiceOver is still wholly off, within the same wait: the quit
+        // has TurnOver Key's three seconds and no more.
+        if waitUpTo > 0, VoiceOverStart.step(flagOn: NSWorkspace.shared.isVoiceOverEnabled, running: voiceOverRunning) == .shortcut {
+            Log.info("\(why): VoiceOver off; its shortcut")
+            let mine = newChoice()
+            noteOwnStart()   // its arrival, even in the next TurnOver, is no pin by hand (18 Nov 2026)
+            let end = Date().addingTimeInterval(waitUpTo)
+            postToggle()
+            let shortcutEnd = min(end, Date().addingTimeInterval(waitUpTo * 2 / 3))
+            while Date() < shortcutEnd, !voiceOverReading { usleep(50_000) }
+            if voiceOverReading { Log.info("\(why): VoiceOver reading (shortcut)"); return }
+            guard choice.value == mine, VoiceOverStart.openAfterShortcut(flagOn: NSWorkspace.shared.isVoiceOverEnabled, running: voiceOverRunning) else {
+                Log.info("\(why): VoiceOver still starting after its shortcut; left to come")
+                return
+            }
+            Log.error("\(why): the shortcut didn't bring VoiceOver; opening VoiceOver.app")
+            openVoiceOver(why)
+            // Its process waited for in what is left, so TurnOver doesn't go before VoiceOver has come.
+            while Date() < end, !voiceOverRunning { usleep(50_000) }
+            return
+        }
+        // Otherwise opened, not toggled, whichever way the flag stands: the shortcut can stop working (turnVoiceOverOn),
+        // with the flag on but VoiceOver gone the toggle would turn the flag off, and a caller that doesn't wait
+        // (the watchdog, a failure) may be gone before a second step could run.
         Log.info("\(why): \(NSWorkspace.shared.isVoiceOverEnabled ? "VoiceOver's flag is on but it isn't running" : "VoiceOver off"); opening VoiceOver")
         let mine = newChoice()
         noteOwnStart()   // its arrival, even in the next TurnOver, is no pin by hand (18 Nov 2026)
@@ -115,27 +139,54 @@ enum HandOver {
         }
     }
 
-    /// VoiceOver on, safely: never the toggle while VoiceOver is changing, never when it is on; checked after, and
-    /// toggled once more only if VoiceOver is wholly off. (Opening VoiceOver.app does not start it, measured.) Any thread.
+    /// VoiceOver on, safely: never the toggle while VoiceOver is changing, never when it is on. Its shortcut when it is
+    /// wholly off, VoiceOver.app when the flag is on with no VoiceOver or the shortcut did not bring it (VoiceOverStart
+    /// says why: opened first, VoiceOver.app left the welcome unread for ten seconds, 20 Nov 2026). Any thread.
     nonisolated static func turnVoiceOverOn() {
         waitForVoiceOverToSettle()
-        // Reading, not just its flag: the flag alone stays on after VoiceOver crashed (a code review, 25 Oct 2026).
-        if voiceOverReading { return }
-        // VoiceOver.app opened first, the shortcut only if that fails: on the maintainer's Mac the shortcut (his own,
-        // Option Apostrophe) stopped reaching macOS on 23 Oct 2026, by hand as well as from TurnOver, and every
-        // hand-back since was silent, while opening VoiceOver.app started it at once (25 Oct 2026; it did on 8 Oct too).
+        var step = VoiceOverStart.step(flagOn: NSWorkspace.shared.isVoiceOverEnabled, running: voiceOverRunning)
+        if step == .wait {
+            // Still coming or going after three seconds: a VoiceOver opened as an app takes about ten to start (the
+            // quit of a build before this one opens it so). Waited out, and not opened a second time.
+            Log.info("hand-over: VoiceOver is still starting or stopping; waiting for it")
+            waitForVoiceOverToSettle(9)
+            step = VoiceOverStart.step(flagOn: NSWorkspace.shared.isVoiceOverEnabled, running: voiceOverRunning)
+        }
+        switch step {
+        case .nothing:
+            return
+        case .shortcut:
+            // A choice of reader: an older recovery's late fallback, which would post the shortcut too, stands down, so
+            // two presses cannot follow each other and turn VoiceOver off again (the review of 20 Nov 2026).
+            newChoice()
+            postToggle()
+            let end = Date().addingTimeInterval(VoiceOverStart.shortcutWait)
+            while Date() < end {
+                if voiceOverReading { Log.info("hand-over: VoiceOver on (shortcut)"); return }
+                usleep(50_000)
+            }
+            // Only when VoiceOver is still wholly off: a start that is merely slow must not be opened over.
+            guard VoiceOverStart.openAfterShortcut(flagOn: NSWorkspace.shared.isVoiceOverEnabled, running: voiceOverRunning) else {
+                Log.info("hand-over: VoiceOver still starting \(VoiceOverStart.shortcutWait) s after its shortcut; left to come")
+                return
+            }
+            Log.error("hand-over: the shortcut didn't turn VoiceOver on in \(VoiceOverStart.shortcutWait) s; opening VoiceOver.app")
+        case .open:
+            // Reading, not just its flag: the flag alone stays on after VoiceOver crashed (a code review, 25 Oct 2026).
+            Log.info("hand-over: VoiceOver's flag is on but it isn't running; opening VoiceOver.app")
+        case .wait:
+            // Its process is there, so VoiceOver.app opened again would start nothing, and its shortcut could turn off
+            // a VoiceOver that is coming. Left as it is.
+            Log.warning("hand-over: VoiceOver still neither on nor off after 12 s; left as it is")
+            return
+        }
         openVoiceOver("hand-over")
         let end = Date().addingTimeInterval(3)
         while Date() < end {
-            if voiceOverReading { Log.info("hand-over: VoiceOver on"); return }
+            if voiceOverReading { Log.info("hand-over: VoiceOver on (VoiceOver.app)"); return }
             usleep(50_000)
         }
-        // Only when VoiceOver is wholly off: a start that is merely slow must not be toggled back off.
-        guard !NSWorkspace.shared.isVoiceOverEnabled, !voiceOverRunning else { Log.info("hand-over: VoiceOver still starting after 3 s; left to come"); return }
-        Log.error("hand-over: VoiceOver.app didn't bring VoiceOver on in 3 s; trying its shortcut")
-        postToggle()
-        let again = Date().addingTimeInterval(2)
-        while Date() < again { if NSWorkspace.shared.isVoiceOverEnabled { Log.info("hand-over: VoiceOver on (shortcut)"); return }; usleep(100_000) }
+        Log.info("hand-over: VoiceOver still starting 3 s after VoiceOver.app was opened; left to come")
     }
 
     /// Counts choices of reader (a hand-over, a recovery): a late fallback for an older one stands down. Any thread.
