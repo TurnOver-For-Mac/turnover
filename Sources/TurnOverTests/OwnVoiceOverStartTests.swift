@@ -72,4 +72,19 @@ func ownVoiceOverStartTests() {
         check(!r.isPending, "deleted")
         expect(OwnVoiceOverStart.decode(OwnVoiceOverStart.encode(1_763_374_580.331)), 1_763_374_580.331)
     }
+
+    test("VoiceOver start: its shortcut when it is wholly off, VoiceOver.app only when the shortcut would turn the flag off") {
+        expect(VoiceOverStart.step(flagOn: true, running: true), .nothing, "reading already")
+        expect(VoiceOverStart.step(flagOn: false, running: false), .shortcut, "20 Nov 09:29: opened as an app here, the welcome sat unread for ten seconds")
+        expect(VoiceOverStart.step(flagOn: true, running: false), .open, "quit by script or crashed: the shortcut would turn the flag off")
+        expect(VoiceOverStart.step(flagOn: false, running: true), .wait, "coming or going: never added to")
+    }
+
+    test("VoiceOver start: VoiceOver.app after the shortcut only while VoiceOver is still wholly off") {
+        expect(VoiceOverStart.openAfterShortcut(flagOn: false, running: false), true, "the shortcut did not reach macOS (23 Oct)")
+        expect(VoiceOverStart.openAfterShortcut(flagOn: true, running: false), false, "the flag flipped: it is coming")
+        expect(VoiceOverStart.openAfterShortcut(flagOn: false, running: true), false, "its process is there: it is coming")
+        expect(VoiceOverStart.openAfterShortcut(flagOn: true, running: true), false, "reading")
+        check(VoiceOverStart.shortcutWait >= 1, "longer than the slowest nine in ten of the shortcut's starts (558 ms, 10 to 20 Nov)")
+    }
 }
