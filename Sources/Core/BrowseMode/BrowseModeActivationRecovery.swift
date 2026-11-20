@@ -18,7 +18,7 @@ final class BrowseActivationRecovery {
         let moved = document.positionMovedAt
         let position = document.position
         let focus = API.focusObject?.element
-        let deadline = Date().addingTimeInterval(0.15)
+        let deadline = Date().addingTimeInterval(BrowseModeDocument.activationRecoveryDeadline)
         let root = document.webArea
         let ancestors = document.buffer.activationAncestors(of: element)
         var pendingTarget: AXUIElement?
@@ -64,7 +64,7 @@ final class BrowseActivationRecovery {
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + max(0, deadline.timeIntervalSinceNow)) { [weak self, weak document] in
             guard self != nil, document != nil else { return }
-            finish("the 150 ms recovery deadline expired")
+            finish("the recovery deadline expired")
         }
         runner.submit(collect: { request in
             repeatedName ? nil : BrowseModeDocument.liveActionable(named: name, in: root, near: ancestors, request: request)

@@ -88,6 +88,14 @@ private func press(_ page: BrowseModeDocument, vo: Bool = true) {
 
 private var pressed: [Int] { AXReplay.actions.filter { $0.action == "AXPress" }.map(\.id) }
 
+/// Waits (up to 10 s, however slow the machine) for recovery's deadline to say "nothing to activate", then lets a wrong extra
+/// word or late press arrive so the checks after it still catch one.
+private func awaitFailure(_ words: () -> [String]) {
+    let limit = Date().addingTimeInterval(10)
+    while !words().contains("nothing to activate"), Date() < limit { RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.005)) }
+    RunLoop.current.run(until: Date().addingTimeInterval(0.18))
+}
+
 func activationLineTests() {
     test("VO-Space on a line: Mail's one link in a line of text is pressed") {
         withLinePage(at: "To stop these") { page, words in
@@ -140,7 +148,7 @@ func activationLineTests() {
         withLinePage(at: "To stop these", stale: true) { page, words in
             press(page)
             expect(words(), [], "recovery is under way, nothing said yet")
-            RunLoop.current.run(until: Date().addingTimeInterval(0.18))
+            awaitFailure(words)
             expect(pressed, [], "the whole line's text names no live control")
             expect(words().filter { $0 == "nothing to activate" }.count, 1, "refused once, by recovery's deadline")
         }
@@ -161,7 +169,7 @@ func activationLineTests() {
         withLinePage(at: "To stop these") { page, words in
             press(page, vo: false)
             expect(words(), [], "Enter still waits for recovery")
-            RunLoop.current.run(until: Date().addingTimeInterval(0.18))
+            awaitFailure(words)
             expect(pressed, [], "Enter does not reach along the line")
         }
     }

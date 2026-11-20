@@ -296,6 +296,8 @@ public final class BrowseModeDocument: ScriptableObject {
     package var navigationTitleOwned = false
     /// Read-only, for tests: whether the page is still holding keys for a session switch.
     package var isWaitingForNavigation: Bool { navigationWaiting }
+    /// How long live recovery may take after a key; only tests set it (to outlast a slow machine).
+    package static var activationRecoveryDeadline: TimeInterval = 0.15
     var navigationRetries: [() -> Void] = []
     var navigationReplaying = false
     var navigationHadCommand = false
