@@ -90,7 +90,7 @@ func claudePopupTests() {
             let root = ObjectFactory.make(AXReplay.element(3))
             let down = KeyboardGesture(identifier: "kb:downArrow")!
             module.handleEvent(Event(.menuStart, root)) {}
-            settle()
+            settle(until: { module.script(for: down) != nil })
             check(module.script(for: down) != nil, "an open slash popup owns focus-mode arrows")
             page.passThrough = false
             check(module.script(for: down) == nil, "browse arrows belong to the reading position")
@@ -100,7 +100,7 @@ func claudePopupTests() {
             check(module.script(for: down) == nil, "ordinary Prompt text retires the stale group without menuEnd")
             AXUIElementSetAttributeValue(AXReplay.element(2), kAXValueAttribute as CFString, "/" as CFString)
             check(module.script(for: down) == nil, "typing another slash requires fresh opening news")
-            settle()
+            settle(until: { !said.value.isEmpty })
             expect(said.value, ["compact"], "retired refreshes cannot speak late")
         }
     }
@@ -109,7 +109,7 @@ func claudePopupTests() {
         withPopup { module, _, said, sent in
             let down = KeyboardGesture(identifier: "kb:downArrow")!
             module.handleEvent(Event(.menuStart, ObjectFactory.make(AXReplay.element(3)))) {}
-            settle()
+            settle(until: { module.script(for: down) != nil })
             AXUIElementSetAttributeValue(AXReplay.element(2), kAXValueAttribute as CFString, "plain" as CFString)
             for _ in 0..<3 { check(module.script(for: down) != nil, "asking never retires the popup") }
             AXUIElementSetAttributeValue(AXReplay.element(2), kAXValueAttribute as CFString, "/" as CFString)
@@ -118,7 +118,7 @@ func claudePopupTests() {
             AXUIElementSetAttributeValue(AXReplay.element(2), kAXValueAttribute as CFString, "plain" as CFString)
             said.value.removeAll()
             command?.handler(down)
-            settle()
+            settle(until: { !sent.value.isEmpty })
             expect(sent.value, ["kb:downArrow"], "the arrow still reaches the Prompt once")
             expect(said.value, [], "a stale popup says nothing")
             check(module.script(for: down) == nil, "running the script found the popup stale and retired it")
@@ -136,7 +136,7 @@ func claudePopupTests() {
             check(module.script(for: down) == nil, "returning to the Prompt cannot resurrect the old group")
             AXUIElementSetAttributeValue(AXReplay.element(3), "AXHidden" as CFString, kCFBooleanTrue)
             module.handleEvent(Event(.menuStart, ObjectFactory.make(AXReplay.element(3)))) {}
-            settle()
+            settle(until: { module.script(for: down) == nil })
             check(module.script(for: down) == nil, "a hidden root closes even without focus or menuEnd news")
         }
     }
@@ -145,10 +145,10 @@ func claudePopupTests() {
         withPopup { module, _, said, _ in
             AXUIElementSetAttributeValue(AXReplay.element(4), kAXSelectedAttribute as CFString, kCFBooleanFalse)
             module.handleEvent(Event(.menuStart, ObjectFactory.make(AXReplay.element(3)))) {}
-            settle()
+            settle(until: { !said.value.isEmpty })
             AXUIElementSetAttributeValue(AXReplay.element(3), kAXChildrenAttribute as CFString, [AXReplay.element(5)] as CFArray)
             module.handleEvent(Event(.valueChange, ObjectFactory.make(AXReplay.element(2)))) {}
-            settle()
+            settle(until: { said.value.count >= 2 })
             module.handleEvent(Event(.caret, ObjectFactory.make(AXReplay.element(2)))) {}
             settle()
             expect(said.value, ["compact", "help"], "a changed first match is announced without repeating it")
@@ -181,7 +181,7 @@ func claudePopupTests() {
         withPopup { module, _, said, _ in
             AXUIElementSetAttributeValue(AXReplay.element(4), kAXSelectedAttribute as CFString, kCFBooleanFalse)
             module.handleEvent(Event(.menuStart, ObjectFactory.make(AXReplay.element(3)))) {}
-            settle()
+            settle(until: { !said.value.isEmpty })
             expect(said.value, ["compact"], "the first option is available before selection metadata arrives")
         }
     }
@@ -192,7 +192,7 @@ func claudePopupTests() {
             let item = ObjectFactory.make(AXReplay.element(6))
             API.setFocusObject(item, ancestors: [], interceptor: page)
             module.handleEvent(Event(.gainFocus, item)) { Speech.speakMessage("Low") }
-            settle()
+            settle(until: { !said.value.isEmpty })
             expect(said.value, ["Low"], "native focus owns menu-item speech")
         }
     }
@@ -201,7 +201,7 @@ func claudePopupTests() {
         withPopup(activeDescendant: 5) { module, _, said, _ in
             AXUIElementSetAttributeValue(AXReplay.element(4), kAXSelectedAttribute as CFString, kCFBooleanFalse)
             module.handleEvent(Event(.menuStart, ObjectFactory.make(AXReplay.element(3)))) {}
-            settle()
+            settle(until: { !said.value.isEmpty })
             expect(said.value, ["help"], "the field's active descendant wins over the first option")
         }
     }
@@ -231,7 +231,7 @@ func claudePopupTests() {
     test("Claude popup: Effort selection is spoken after the Prompt takes focus") {
         withPopup { module, _, said, sent in
             module.handleEvent(Event(.menuStart, ObjectFactory.make(AXReplay.element(3)))) {}
-            settle()
+            settle(until: { !said.value.isEmpty })
             said.value.removeAll()
             API.setFocusObject(ObjectFactory.make(AXReplay.element(6)), ancestors: [], interceptor: API.focusTreeInterceptor)
             let enter = KeyboardGesture(identifier: "kb:enter")!

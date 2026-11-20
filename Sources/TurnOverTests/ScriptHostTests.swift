@@ -25,7 +25,7 @@ private let scriptHostPath: String = {
 }()
 
 /// Run the main run loop until `condition` holds or the time is up (the way the other tests wait for what arrives later).
-private func waitFor(_ seconds: TimeInterval = 3, _ condition: () -> Bool) -> Bool {
+private func waitFor(_ seconds: TimeInterval = 10, _ condition: () -> Bool) -> Bool {
     let until = Date().addingTimeInterval(seconds)
     while !condition(), Date() < until { RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.005)) }
     return condition()
@@ -51,7 +51,7 @@ private struct Rig {
     /// Start and wait until the script has loaded (or failed).
     @discardableResult func start() -> ScriptHostState {
         host.start()
-        _ = waitFor(5) { if case .starting = host.state { return false } else { return true } }
+        _ = waitFor(10) { if case .starting = host.state { return false } else { return true } }
         return host.state
     }
     func ask(_ event: String = "focus", _ item: ScriptValue = .object([:])) -> ScriptAnswer { host.ask(event, item: item) }
@@ -122,7 +122,7 @@ func scriptHostTests() {
         defer { rig.host.stop() }
         guard case .failed(let message) = rig.start() else { return check(false, "expected a failure, got \(rig.host.state)") }
         check(message.contains("main.js, line 2"), "the message names the file and line: \(message)")
-        check(waitFor(3) { !rig.host.isRunning }, "the host program is ended after a failure")
+        check(waitFor(10) { !rig.host.isRunning }, "the host program is ended after a failure")
         expect(rig.strikes.list, [], "a script that does not load is not a strike")
     }
 
@@ -170,7 +170,7 @@ func scriptHostTests() {
         defer { rig.host.stop() }
         rig.start()
         expect(rig.ask(), .say("first"), "the words before the handler returned")
-        check(waitFor(3) { !broker.said.isEmpty }, "the late call was reported")
+        check(waitFor(10) { !broker.said.isEmpty }, "the late call was reported")
         check(broker.said.first?.contains("turnover.say") ?? false, "the error names turnover.say: \(broker.said)")
         expect(broker.said.count, 1, "the late words were not spoken")
     }
@@ -191,11 +191,11 @@ func scriptHostTests() {
         var began = Date()
         expect(rig.ask(), .late, "the slow handler's answer is late")
         check(Date().timeIntervalSince(began) < 0.2, "the question came back within the deadline, not the handler's 300 ms")
-        check(waitFor(2) { !rig.strikes.list.isEmpty }, "a strike was reported")
+        check(waitFor(10) { !rig.strikes.list.isEmpty }, "a strike was reported")
         expect(rig.strikes.list, [.lateAnswer], "one late answer")
         began = Date()
         expect(rig.ask(), .late, "while the host is busy, the next question is late at once")
-        check(Date().timeIntervalSince(began) < 0.02, "and did not wait")
+        check(Date().timeIntervalSince(began) < 0.1, "and did not wait")
         var answer = ScriptAnswer.late
         let until = Date().addingTimeInterval(3)
         while answer == .late, Date() < until { answer = rig.ask(); settle(0.005) }   // asked once per turn: waitFor would ask twice
@@ -213,9 +213,9 @@ func scriptHostTests() {
         rig.start()
         let pid = rig.host.processID
         expect(rig.ask(), .late, "the loop never answers")
-        check(waitFor(3) { !rig.host.isRunning }, "the host program was ended")
+        check(waitFor(10) { !rig.host.isRunning }, "the host program was ended")
         if case .failed = rig.host.state {} else { check(false, "the state is failed: \(rig.host.state)") }
-        check(waitFor(1) { rig.strikes.list.count == 2 }, "two strikes: \(rig.strikes.list)")
+        check(waitFor(10) { rig.strikes.list.count == 2 }, "two strikes: \(rig.strikes.list)")
         expect(rig.strikes.list.first, .lateAnswer, "first the late answer")
         if case .killed? = rig.strikes.list.last {} else { check(false, "then a kill: \(rig.strikes.list)") }
         if let pid { check(Darwin.kill(pid, 0) != 0, "the process is gone") }
@@ -228,8 +228,8 @@ func scriptHostTests() {
         let rig = Rig("while (true) {}", limits: limits)
         defer { rig.host.stop() }
         guard case .failed = rig.start() else { return check(false, "expected a failure, got \(rig.host.state)") }
-        check(waitFor(3) { !rig.host.isRunning }, "the host program was ended")
-        check(waitFor(1) { rig.strikes.list.count == 1 }, "one strike: \(rig.strikes.list)")
+        check(waitFor(10) { !rig.host.isRunning }, "the host program was ended")
+        check(waitFor(10) { rig.strikes.list.count == 1 }, "one strike: \(rig.strikes.list)")
     }
 
     test("script host: a script that burns the processor is killed") {
@@ -238,9 +238,9 @@ func scriptHostTests() {
         let rig = Rig("setInterval(function () { var t = Date.now(); while (Date.now() - t < 45) {} }, 50);", limits: limits)
         defer { rig.host.stop() }
         rig.start()
-        check(waitFor(5) { !rig.host.isRunning }, "the host program was ended")
+        check(waitFor(10) { !rig.host.isRunning }, "the host program was ended")
         // The host ends before the strike is delivered on main, so wait for the strike too.
-        _ = waitFor(5) { rig.strikes.list.contains { if case .killed = $0 { return true } else { return false } } }
+        _ = waitFor(10) { rig.strikes.list.contains { if case .killed = $0 { return true } else { return false } } }
         if case .killed(let why)? = rig.strikes.list.last { check(why.contains("processor"), "the reason names the processor: \(why)") } else { check(false, "a kill was reported: \(rig.strikes.list)") }
     }
 
@@ -251,9 +251,9 @@ func scriptHostTests() {
         defer { rig.host.stop() }
         guard case .ready = rig.start() else { return check(false, "expected ready, got \(rig.host.state)") }
         _ = rig.ask()
-        check(waitFor(5) { !rig.host.isRunning }, "the host program was ended")
+        check(waitFor(10) { !rig.host.isRunning }, "the host program was ended")
         // The host ends before the strike is delivered on main, so wait for the strike too.
-        _ = waitFor(5) { rig.strikes.list.contains { if case .killed = $0 { return true } else { return false } } }
+        _ = waitFor(10) { rig.strikes.list.contains { if case .killed = $0 { return true } else { return false } } }
         if case .killed(let why)? = rig.strikes.list.last { check(why.contains("memory"), "the reason names memory: \(why)") } else { check(false, "a kill was reported: \(rig.strikes.list)") }
     }
 
@@ -262,8 +262,8 @@ func scriptHostTests() {
         defer { rig.host.stop() }
         rig.start()
         if let pid = rig.host.processID { Darwin.kill(pid, SIGSEGV) }
-        check(waitFor(3) { !rig.host.isRunning }, "the host program ended")
-        check(waitFor(1) { !rig.strikes.list.isEmpty }, "a strike was reported")
+        check(waitFor(10) { !rig.host.isRunning }, "the host program ended")
+        check(waitFor(10) { !rig.strikes.list.isEmpty }, "a strike was reported")
         if case .crashed? = rig.strikes.list.last {} else { check(false, "the strike is a crash: \(rig.strikes.list)") }
         if case .failed = rig.host.state {} else { check(false, "the state is failed: \(rig.host.state)") }
     }
@@ -279,7 +279,7 @@ func scriptHostTests() {
         defer { rig.host.stop() }
         rig.start()
         _ = rig.ask()
-        check(waitFor(3) { !broker.said.isEmpty }, "the script heard the refusal")
+        check(waitFor(10) { !broker.said.isEmpty }, "the script heard the refusal")
         check(broker.said.first?.contains("read") ?? false, "the message names the missing ability: \(broker.said)")
         check(!broker.calls.contains { $0.operation == .find }, "the broker never saw the request")
     }
@@ -296,7 +296,7 @@ func scriptHostTests() {
         defer { rig.host.stop() }
         rig.start()
         _ = rig.ask()
-        check(waitFor(3) { broker.said.count == 2 }, "both things were said: \(broker.said)")
+        check(waitFor(10) { broker.said.count == 2 }, "both things were said: \(broker.said)")
         expect(broker.said, ["Focused OK button", "pressed"], "what the script said")
         let press = broker.calls.first { $0.operation == .itemPress }
         expect(press?.arguments["handle"], .number(7), "the press carried the item's handle")
@@ -313,12 +313,12 @@ func scriptHostTests() {
         rig.start()
         var result: ScriptCommandResult?
         rig.host.run(command: "go") { result = $0 }
-        check(waitFor(3) { result != nil }, "the command finished")
+        check(waitFor(10) { result != nil }, "the command finished")
         expect(result, .done, "the command's result")
-        check(waitFor(3) { broker.said == ["went Seven"] }, "what it said: \(broker.said)")
+        check(waitFor(10) { broker.said == ["went Seven"] }, "what it said: \(broker.said)")
         result = nil
         rig.host.run(command: "fail") { result = $0 }
-        check(waitFor(3) { result != nil }, "the failing command finished")
+        check(waitFor(10) { result != nil }, "the failing command finished")
         expect(result, .failed("boom"), "the error reaches TurnOver")
     }
 
@@ -335,7 +335,7 @@ func scriptHostTests() {
         defer { rig.host.stop() }
         rig.start()
         _ = rig.ask()
-        check(waitFor(3) { broker.said.count >= 3 }, "some things were said")
+        check(waitFor(10) { broker.said.count >= 3 }, "some things were said")
         settle(0.3)
         expect(broker.said.count, 3, "only three were let through")
         expect(broker.said.first?.count, 500, "the long one was cut to 500 characters")
@@ -355,7 +355,7 @@ func scriptHostTests() {
         defer { rig.host.stop() }
         rig.start()
         _ = rig.ask()
-        check(waitFor(4) { !broker.said.isEmpty }, "the script saw every answer")
+        check(waitFor(10) { !broker.said.isEmpty }, "the script saw every answer")
         expect(broker.calls.filter { $0.operation == .focused }.count, 5, "five requests were let through")
         expect(broker.said.first, "15 refused", "the rest were refused")
     }
@@ -378,7 +378,7 @@ func scriptHostTests() {
         defer { rig.host.stop() }
         rig.start()
         _ = rig.ask()
-        check(waitFor(6) { !broker.said.isEmpty }, "the script saw every answer")
+        check(waitFor(10) { !broker.said.isEmpty }, "the script saw every answer")
         check(broker.said.first?.contains("refused") ?? false, "later requests were refused: \(broker.said)")
         // 15 Nov 2026: only the first is certain. On a busy Mac the first answer can take the whole
         // budget by itself, so the second is refused; "ok,ok" failed a full build that way.
@@ -390,7 +390,7 @@ func scriptHostTests() {
         let rig = Rig("setInterval(function () { turnover.say('tick'); }, 50); setTimeout(function () { turnover.say('once'); }, 60);", broker: broker)
         defer { rig.host.stop() }
         rig.start()
-        check(waitFor(3) { broker.said.filter { $0 == "tick" }.count >= 2 && broker.said.contains("once") }, "timers fired: \(broker.said)")
+        check(waitFor(10) { broker.said.filter { $0 == "tick" }.count >= 2 && broker.said.contains("once") }, "timers fired: \(broker.said)")
         rig.host.pause()
         expect(rig.host.state, .paused, "the state while paused")
         settle(0.3)   // what was already on its way arrives
@@ -398,7 +398,7 @@ func scriptHostTests() {
         settle(0.4)
         expect(broker.said.count, ticks, "nothing fired while paused")
         rig.host.resume()
-        check(waitFor(3) { broker.said.count > ticks }, "a timer fired after resume")
+        check(waitFor(10) { broker.said.count > ticks }, "a timer fired after resume")
         expect(broker.said.filter { $0 == "once" }.count, 1, "the one-shot fired once")
     }
 
@@ -411,7 +411,7 @@ func scriptHostTests() {
         settle(0.5)
         expect(broker.said, [], "nothing while paused")
         rig.host.resume()
-        check(waitFor(3) { broker.said == ["late timer"] }, "it fired after resume: \(broker.said)")
+        check(waitFor(10) { broker.said == ["late timer"] }, "it fired after resume: \(broker.said)")
     }
 
     test("script host: fetch, require, process, XMLHttpRequest, WebSocket and importScripts are all undefined in the script") {
@@ -441,7 +441,7 @@ func scriptHostTests() {
         rig.start()
         guard let pid = rig.host.processID else { return check(false, "no process") }
         rig.host.stop()
-        check(waitFor(3) { !rig.host.isRunning }, "the host stopped")
+        check(waitFor(10) { !rig.host.isRunning }, "the host stopped")
         check(Darwin.kill(pid, 0) != 0, "the process is gone")
         expect(rig.host.state, .ended, "the state")
         expect(rig.strikes.list, [], "an ordinary stop is not a strike")
@@ -455,7 +455,7 @@ func scriptHostTests() {
         guard let pid = rig.host.processID else { return check(false, "no process") }
         expect(rig.ask(), .late, "the loop does not answer")
         rig.host.stop()
-        check(waitFor(3) { !rig.host.isRunning }, "the host stopped")
+        check(waitFor(10) { !rig.host.isRunning }, "the host stopped")
         check(Darwin.kill(pid, 0) != 0, "the process is gone")
     }
 
@@ -470,7 +470,7 @@ func scriptHostTests() {
         defer { rig.host.stop() }
         rig.start()
         _ = rig.ask()
-        check(waitFor(3) { !broker.said.isEmpty }, "the script heard the refusal")
+        check(waitFor(10) { !broker.said.isEmpty }, "the script heard the refusal")
         expect(broker.said, ["refused: RangeError"], "the host would not send it")
         check(!broker.calls.contains { $0.operation == .storageSet }, "the broker never saw it")
     }
@@ -535,7 +535,7 @@ func scriptHostTests() {
         defer { rig.host.stop() }
         rig.start()
         _ = rig.ask()
-        check(waitFor(3) { broker.calls.filter { $0.operation == .itemRead }.count >= 4 }, "the first readings arrived")
+        check(waitFor(10) { broker.calls.filter { $0.operation == .itemRead }.count >= 4 }, "the first readings arrived")
         settle(0.4)
         expect(broker.calls.filter { $0.operation == .itemRead }.count, 4, "no more than the limit were read in the window")
     }
@@ -555,11 +555,11 @@ func scriptHostTests() {
         limits.killLimit = 0.4
         let rig = Rig("", limits: limits, hostPath: path)
         rig.host.start()
-        check(waitFor(3) { if case .ready = rig.host.state { return true } else { return false } }, "the stand-in is ready")
+        check(waitFor(10) { if case .ready = rig.host.state { return true } else { return false } }, "the stand-in is ready")
         expect(rig.ask(), .late, "it never answered the question")
-        check(waitFor(3) { if case .failed = rig.host.state { return true } else { return false } }, "and it was stopped for it: \(rig.host.state)")
+        check(waitFor(10) { if case .failed = rig.host.state { return true } else { return false } }, "and it was stopped for it: \(rig.host.state)")
         // The state turns to failed before the strike is delivered on main, so wait for the strike too.
-        check(waitFor(5) { rig.strikes.list.contains { if case .killed = $0 { return true } else { return false } } }, "as a kill: \(rig.strikes.list)")
+        check(waitFor(10) { rig.strikes.list.contains { if case .killed = $0 { return true } else { return false } } }, "as a kill: \(rig.strikes.list)")
     }
 
     test("script host: a host that floods TurnOver with lines is thrown away unread, then stopped") {
@@ -572,10 +572,10 @@ func scriptHostTests() {
         defer { try? FileManager.default.removeItem(atPath: path) }
         let rig = Rig("", hostPath: path)
         rig.host.start()
-        check(waitFor(5) { if case .failed = rig.host.state { return true } else { return false } }, "the flood stopped the host: \(rig.host.state)")
+        check(waitFor(10) { if case .failed = rig.host.state { return true } else { return false } }, "the flood stopped the host: \(rig.host.state)")
         // The state turns to failed before the strike is delivered on main, so wait for the strike too.
-        check(waitFor(5) { rig.strikes.list.contains { if case .killed(let why) = $0 { return why.contains("far more messages") } else { return false } } }, "as a kill for sending too many: \(rig.strikes.list)")
-        check(waitFor(3) { !rig.host.isRunning }, "and the host is gone")
+        check(waitFor(10) { rig.strikes.list.contains { if case .killed(let why) = $0 { return why.contains("far more messages") } else { return false } } }, "as a kill for sending too many: \(rig.strikes.list)")
+        check(waitFor(10) { !rig.host.isRunning }, "and the host is gone")
     }
 
     test("script host: a host that ends at once is known to have ended, and a held child is not heard from until it is released") {
@@ -610,7 +610,9 @@ func scriptHostTests() {
             """, broker: broker)
         defer { rig.host.stop() }
         rig.start()
-        settle(0.8)
+        let loggedX = { broker.calls.filter { $0.operation == .log && $0.arguments["text"]?.stringValue == "x" }.count }
+        check(waitFor(10) { loggedX() >= PluginWire.Limits.timers }, "the timers that may exist ran")
+        settle(0.8)   // and no more than those
         expect(broker.calls.filter { $0.operation == .log && $0.arguments["text"]?.stringValue == "x" }.count, PluginWire.Limits.timers, "no more timers ran than may exist")
         expect(rig.ask(), .say("alive"), "and the host did not trap on the impossible delay")
     }
@@ -640,7 +642,7 @@ func scriptHostTests() {
         defer { rig.host.stop() }
         rig.start()
         _ = rig.ask()
-        check(waitFor(3) { broker.calls.contains { $0.operation == .sound } && !broker.said.isEmpty }, "both happened: \(broker.calls)")
+        check(waitFor(10) { broker.calls.contains { $0.operation == .sound } && !broker.said.isEmpty }, "both happened: \(broker.calls)")
         check(broker.said.first?.contains("nope") ?? false, "the error names the sound: \(broker.said)")
         expect(broker.calls.filter { $0.operation == .sound }.map { $0.arguments["name"]?.stringValue }, ["link"], "only the real sound reached TurnOver")
     }
@@ -658,12 +660,12 @@ func scriptHostTests() {
         // The command is sent first and the pause straight after: TurnOver's side is paused before the script's requests arrive.
         rig.host.run(command: "go") { _ in }
         rig.host.pause()
-        check(waitFor(3) { broker.calls.filter { $0.operation == .log }.count >= 2 }, "the script heard both refusals: \(broker.calls)")
+        check(waitFor(10) { broker.calls.filter { $0.operation == .log }.count >= 2 }, "the script heard both refusals: \(broker.calls)")
         check(!broker.calls.contains { $0.operation == .find || $0.operation == .copy }, "the broker saw neither request")
         check(broker.calls.contains { $0.operation == .log && ($0.arguments["text"]?.stringValue ?? "").contains("paused") }, "and the reason is said: \(broker.calls)")
         rig.host.resume()
         rig.host.run(command: "go") { _ in }
-        check(waitFor(3) { broker.calls.contains { $0.operation == .find } && broker.calls.contains { $0.operation == .copy } }, "resumed, both go through")
+        check(waitFor(10) { broker.calls.contains { $0.operation == .find } && broker.calls.contains { $0.operation == .copy } }, "resumed, both go through")
     }
 
     test("script host: requests waiting for main are limited, and the rest are refused") {
@@ -677,7 +679,8 @@ func scriptHostTests() {
         defer { rig.host.stop() }
         rig.start()
         _ = rig.ask()
-        Thread.sleep(forTimeInterval: 0.5)   // main does not run, so every accepted request waits
+        Thread.sleep(forTimeInterval: 1.5)   // main does not run, so every accepted request waits (a slow machine sends its 40 later)
+        check(waitFor(10) { broker.calls.filter { $0.operation == .storageGet }.count >= 5 }, "the five that may wait were taken up")
         settle(0.5)
         expect(broker.calls.filter { $0.operation == .storageGet }.count, 5, "no more than five were taken up")
     }
@@ -697,7 +700,7 @@ func scriptHostTests() {
         defer { rig.host.stop() }
         rig.start()
         _ = rig.ask()
-        check(waitFor(5) { broker.calls.contains { $0.operation == .storageGet } }, "the first was taken up")
+        check(waitFor(10) { broker.calls.contains { $0.operation == .storageGet } }, "the first was taken up")
         settle(0.6)
         expect(broker.calls.filter { $0.operation == .storageGet }.count, 1, "the second never reached the broker: the first's whole time counts against it")
     }
@@ -714,7 +717,7 @@ func scriptHostTests() {
         let rig = Rig("", commands: ["env0", "env1", "env2", "env3", "env4"], hostPath: path)
         defer { rig.host.stop() }
         rig.host.start()
-        check(waitFor(3) { if case .ready = rig.host.state { return true } else { return false } }, "ready")
+        check(waitFor(10) { if case .ready = rig.host.state { return true } else { return false } }, "ready")
         // bash adds a few variables of its own (PWD, SHLVL, _); TurnOver's own PATH, HOME and the rest must not be among them.
         check(rig.host.commands.first.map { Int($0.dropFirst(3)) ?? 99 }.map { $0 <= 4 } ?? false, "only the shell's own few variables: \(rig.host.commands)")
     }

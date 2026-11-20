@@ -8,6 +8,11 @@ import AXFixtures
 // Return in Safari's address field: until the new page's document has the focus, a key meant for the page's content is
 // refused on the page being left (16 Nov 2026: a Space 0.3 s before the new page came pressed a link on the old page).
 func pageOnItsWayTests() {
+    /// Spin the main run loop until the condition holds (ten seconds at most): a slow machine decides later, not never.
+    func waitUntil(_ condition: () -> Bool) {
+        let limit = Date().addingTimeInterval(10)
+        while !condition(), Date() < limit { RunLoop.current.run(until: Date().addingTimeInterval(0.01)) }
+    }
     /// A page in browse mode, and a second page that stands for the document that comes with the new address.
     func withPageLeft(_ body: (BrowseModeDocument, BrowseModeDocument, Locked<[String]>, Locked<[String]>) -> Void) {
         let savedFocus = API.focusObject, savedAncestors = API.focusAncestors, savedPage = API.focusTreeInterceptor
@@ -155,11 +160,11 @@ func pageOnItsWayTests() {
     }
     test("page on its way: the limit ends it") {
         withPageLeft { old, _, said, _ in
-            BrowseModeDocument.pageOnItsWayLimit = 0.4
+            BrowseModeDocument.pageOnItsWayLimit = 1.0   // long enough that a slow machine still sees it marked first
             backOnPage(old)
             _ = press(old, "kb:space")
             check(old.pageIsOnItsWay, "marked at first")
-            RunLoop.current.run(until: Date().addingTimeInterval(0.6))
+            waitUntil { !old.pageIsOnItsWay }
             check(!old.pageIsOnItsWay, "cleared by the limit")
             let before = loadingCount(said)
             _ = press(old, "kb:space")
@@ -170,7 +175,7 @@ func pageOnItsWayTests() {
         withPageLeft { old, _, _, _ in
             old.position = old.buffer.offset(of: AXReplay.element(3)) ?? 0
             backOnPage(old)
-            RunLoop.current.run(until: Date().addingTimeInterval(2.3))
+            waitUntil { !old.pageIsOnItsWay }
             check(!old.pageIsOnItsWay, "the page stayed, so the keys are its own again")
         }
     }
@@ -180,7 +185,7 @@ func pageOnItsWayTests() {
             _ = press(old, "kb:space")
             RunLoop.current.run(until: Date().addingTimeInterval(1.0))
             check(old.pageIsOnItsWay, "a refused key does not hand the old page its keys back at the next check")
-            RunLoop.current.run(until: Date().addingTimeInterval(1.3))
+            waitUntil { !old.pageIsOnItsWay }
             check(!old.pageIsOnItsWay, "the page stayed, so it is not locked")
         }
     }
@@ -243,7 +248,8 @@ func pageOnItsWayTests() {
             check(old.pageIsOnItsWay, "still marked while the address has no answer")
             AXHealth.forget(pid: old.webArea.pid)   // Safari answers again, with the same address: the page stayed
             let before = said.value.count
-            RunLoop.current.run(until: Date().addingTimeInterval(1.4))
+            waitUntil { !old.pageIsOnItsWay }
+            waitUntil { !said.value.dropFirst(before).isEmpty }
             check(!old.pageIsOnItsWay, "the page stayed, so its keys are its own again")
             let after = Array(said.value.dropFirst(before))
             check(!after.isEmpty && !after.contains("loading page"), "the old page's line is read, so the keys are known to be back")
@@ -254,7 +260,7 @@ func pageOnItsWayTests() {
             backOnPage(old)
             ScriptHandler.noteKeyArrived(KeyboardGesture(identifier: "kb:command+tab")!)
             let before = said.value.count
-            RunLoop.current.run(until: Date().addingTimeInterval(2.4))
+            waitUntil { !old.pageIsOnItsWay }
             check(!old.pageIsOnItsWay, "the page stayed")
             expect(said.value.count, before, "nothing is read: the key did what it was pressed for")
         }
@@ -262,7 +268,7 @@ func pageOnItsWayTests() {
     test("page on its way: a page still loading keeps the mark past the stay check, and at the limit its line says the keys are back") {
         withPageLeft { old, _, said, sent in
             expect(BrowseModeDocument.pageOnItsWayLimit, 20, "a page may load for twenty seconds before the keys come back")
-            BrowseModeDocument.pageOnItsWayLimit = 3.2
+            BrowseModeDocument.pageOnItsWayLimit = 5.0
             BrowseModeDocument.pageOnItsWayRepeat = 0.5
             old.position = old.buffer.offset(of: AXReplay.element(3)) ?? 0
             AXUIElementSetAttributeValue(old.webArea, "AXElementBusy" as CFString, kCFBooleanTrue)
@@ -272,7 +278,8 @@ func pageOnItsWayTests() {
             _ = press(old, "kb:space")
             expect(pressed(), 0, "Space is still refused")
             let before = said.value.count
-            RunLoop.current.run(until: Date().addingTimeInterval(1.1))
+            waitUntil { !old.pageIsOnItsWay }
+            waitUntil { !said.value.dropFirst(before).isEmpty }
             check(!old.pageIsOnItsWay, "the limit ends it: no page stays refused without end")
             let after = Array(said.value.dropFirst(before))
             check(!after.isEmpty && !after.contains("loading page"), "the old page's line is read as the keys come back")
@@ -332,7 +339,7 @@ func pageOnItsWayTests() {
             // The web area is still the focus document but answers its address with nothing (it may be gone).
             AXUIElementSetAttributeValue(old.webArea, "AXURL" as CFString, "" as CFString)
             let before = said.value.count
-            RunLoop.current.run(until: Date().addingTimeInterval(0.75))
+            waitUntil { !old.pageIsOnItsWay }
             check(!old.pageIsOnItsWay, "the limit ends the mark")
             expect(said.value.count, before, "the old page's line is not read: its page may have gone")
         }
@@ -345,7 +352,7 @@ func pageOnItsWayTests() {
             let before = said.value.count
             backOnPage(old)
             check(!old.pageIsOnItsWay, "no mark outside Safari")
-            RunLoop.current.run(until: Date().addingTimeInterval(2.4))
+            waitUntil { said.value.count > before }
             let after = Array(said.value.dropFirst(before))
             check(!after.isEmpty, "an answer, even an empty one, lets the line be read at about two seconds")
         }
@@ -357,7 +364,7 @@ func pageOnItsWayTests() {
             check(old.pageIsOnItsWay, "marked")
             expect(old.lastURL, "https://example.com/old", "the old address is the one read")
             AXUIElementSetAttributeValue(old.webArea, "AXURL" as CFString, "https://example.com/new" as CFString)
-            RunLoop.current.run(until: Date().addingTimeInterval(0.8))
+            waitUntil { !old.pageIsOnItsWay && old.lastURL == "https://example.com/new" }
             check(!old.pageIsOnItsWay, "the changed address ended the mark")
             expect(old.lastURL, "https://example.com/new", "and the page was rebuilt for it, so a key looked up before is dropped")
         }

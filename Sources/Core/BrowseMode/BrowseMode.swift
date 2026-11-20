@@ -874,7 +874,8 @@ public final class BrowseModeDocument: ScriptableObject {
 
     /// How long after Tab the focus is asked for, and how long the asking goes on.
     static let focusPollInterval = 0.025
-    static let focusPollCeiling = 0.35
+    /// A `package static var` only so that a test can lengthen the ceiling to outlast a slow machine; nothing else sets it.
+    package static var focusPollCeiling = 0.35
 
     private func pollFocusAfterTab(sentAt: Date, pid: pid_t, keys: Int, epoch: Int) {
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.focusPollInterval) { [weak self] in

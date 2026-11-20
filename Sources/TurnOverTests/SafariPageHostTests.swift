@@ -9,6 +9,11 @@ import AXFixtures
 // page while the new page loaded, TurnOver presented it (saying nothing) and let go of the page, and the new page was
 // said only after Tab. Logic evidence only: made-up windows, not Safari's own tree, and no real page load.
 func safariPageHostTests() {
+    /// Waits for a condition, however slow the machine is (the watch runs on timers of its own).
+    func waitUntil(_ condition: () -> Bool) {
+        let limit = Date().addingTimeInterval(10)
+        while !condition(), Date() < limit { RunLoop.current.run(until: Date().addingTimeInterval(0.01)) }
+    }
     /// Safari's window (0) with the page host (2), the page in hand (3) and its link (4), a group on the page (5), a sheet
     /// (8) holding a nameless group (9), and a second window (10) with a nameless group (11). `appFocus`: what the app
     /// says has its focus; `newPage`: a new page (6, with a link 7) in the window, beside the host.
@@ -131,7 +136,7 @@ func safariPageHostTests() {
             AXHandler.shared.focusChanged(AXReplay.element(2), pid: pid)
             check(API.focusObject?.element.isSame(AXReplay.element(4)) == true, "the group reported again is still set aside")
             check(API.focusTreeInterceptor != nil, "the page is still in hand, so the watch goes on")
-            RunLoop.current.run(until: Date().addingTimeInterval(0.4))
+            waitUntil { API.focusObject?.element.isSame(AXReplay.element(2)) == true }
             check(API.focusObject?.element.isSame(AXReplay.element(2)) == true, "with no new page, the group set aside is presented")
         }
         // The new page comes and takes the app's focus, with no focus event of its own: it is followed.
@@ -144,7 +149,7 @@ func safariPageHostTests() {
             Speech.enqueueTestDriver = { text, _, _ in said.value.append(text) }
             defer { Log.observer = savedObserver; Log.level = savedLevel; Speech.enqueueTestDriver = savedDriver }
             AXHandler.shared.focusChanged(AXReplay.element(2), pid: pid)
-            RunLoop.current.run(until: Date().addingTimeInterval(0.4))
+            waitUntil { said.value.contains { $0.contains("New page") } }
             // The watch hands the new page to the focus rules, and it is presented and said (19 Nov 2026, Codex's review:
             // only the hand-over was checked, so the page itself could be dropped unseen). Browse mode's document for it
             // is not checked: a replayed web area has no text markers, so browse mode does not take it (a fixture limit).
@@ -162,7 +167,7 @@ func safariPageHostTests() {
             check(API.focusObject?.element.isSame(AXReplay.element(4)) == true, "the group is set aside")
             guard let document = API.focusTreeInterceptor as? BrowseModeDocument else { return check(false, "the page is in hand") }
             document.pageGeneration += 1   // the document read a new page meanwhile
-            RunLoop.current.run(until: Date().addingTimeInterval(0.4))   // the watch (2 tries of 0.05 s) gives up
+            waitUntil { AXHandler.pageHostSetAside == nil }   // the watch (2 tries of 0.05 s) gives up
             check(AXHandler.pageHostSetAside == nil, "the watch has ended")
             check(API.focusObject?.element.isSame(AXReplay.element(2)) != true, "the group is not presented over the new page")
         }

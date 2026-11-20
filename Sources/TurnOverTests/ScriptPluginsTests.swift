@@ -15,7 +15,7 @@ private let hostPath: String = {
     return runner.deletingLastPathComponent().appendingPathComponent("turnover-plugin-host").path
 }()
 
-private func waitFor(_ seconds: TimeInterval = 5, _ condition: () -> Bool) -> Bool {
+private func waitFor(_ seconds: TimeInterval = 10, _ condition: () -> Bool) -> Bool {
     let until = Date().addingTimeInterval(seconds)
     while !condition(), Date() < until { RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.005)) }
     return condition()

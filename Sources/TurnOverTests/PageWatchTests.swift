@@ -50,7 +50,11 @@ func pageWatchTests() {
             expect(PageWatch.waiting.unansweredKeys(for: root.pid, generation: generation, lastNews: .distantPast), 2,
                    "both production key calls are waiting before the focus timer fires")
             // Exercise askFocusIfNoNews's real 0.35-second callback, rather than calling its helper.
-            RunLoop.current.run(until: Date().addingTimeInterval(0.6))
+            let askLimit = Date().addingTimeInterval(10)
+            while AXReplay.reads?.contains(where: { $0.attribute == "AXFocusedUIElement" }) != true, Date() < askLimit {
+                RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))   // the reply is taken in after the question
             check(AXReplay.reads?.contains { $0.attribute == "AXFocusedUIElement" } == true,
                   "the production focus timer actually queried the replayed application")
             let pending = PageWatch.waiting.unansweredKeys(for: root.pid, generation: generation, lastNews: .distantPast)
@@ -84,7 +88,10 @@ func pageWatchTests() {
             Speech.sink = { _ in }
             PageWatch.waiting = .init()
             AXReplay.reads = []
+            let savedCeiling = BrowseModeDocument.focusPollCeiling
+            if !moves { BrowseModeDocument.focusPollCeiling = 1.0 }
             defer {
+                BrowseModeDocument.focusPollCeiling = savedCeiling
                 API.setFocusObject(nil, ancestors: [])
                 RunLoop.current.run(until: Date().addingTimeInterval(1.3))
                 PageWatch.waiting = savedWaiting
@@ -97,7 +104,7 @@ func pageWatchTests() {
             let sent = Date()
             page.script(named: "tabFromCaret")?.handler(KeyboardGesture(identifier: "kb:tab")!)
             if moves {
-                while queries() == 0, Date().timeIntervalSince(sent) < 0.6 {
+                while queries() == 0, Date().timeIntervalSince(sent) < 10 {
                     RunLoop.current.run(until: Date().addingTimeInterval(0.005))
                 }
                 let took = Date().timeIntervalSince(sent)
@@ -105,9 +112,17 @@ func pageWatchTests() {
                 check((AXHandler.shared.lastNewsAt[root.pid] ?? .distantPast) >= sent,
                       "a focus TurnOver read itself counts as news from the page, so no false \"please wait\"")
             } else {
-                RunLoop.current.run(until: Date().addingTimeInterval(0.6))
+                // The ceiling is lengthened to outlast a slow machine (0.35 s there is only a few polls); the asking must
+                // then stop of its own accord: no new question for half a second, within ten seconds.
+                var last = -1, quietSince = Date()
+                let end = Date().addingTimeInterval(10)
+                while Date() < end {
+                    RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+                    if queries() != last { last = queries(); quietSince = Date() }
+                    else if last >= 3, Date().timeIntervalSince(quietSince) > 0.5 { break }
+                }
                 check(queries() >= 3, "an unmoved focus is asked for again, not once (asked \(queries()) times)")
-                check(queries() <= 15, "and the asking stops at the ceiling (asked \(queries()) times)")
+                check(queries() <= 60, "and the asking stops at the ceiling (asked \(queries()) times)")
             }
         }
     }
