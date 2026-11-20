@@ -1,7 +1,7 @@
 # Screen recognition: excluded from this investigation
 
 - Decision recorded: 29 October 2026.
-- Decision by: Oliver.
+- Decision by: The owner.
 - Being worked on: Unclaimed
 - Status: OCR excluded from the requested approach.
 
@@ -11,7 +11,7 @@ Should this investigation develop a Mirroring adapter based on reading the phone
 
 ## Decision
 
-Oliver withdrew that request and asked for further investigation of native access. The investigation therefore includes no OCR implementation or proposed OCR task for Mirroring.
+The owner withdrew that request and asked for further investigation of native access. The investigation therefore includes no OCR implementation or proposed OCR task for Mirroring.
 
 ## Evidence limit
 
@@ -19,7 +19,7 @@ This record does not certify a successful OCR trial or a working OCR adapter. Cl
 
 ## Reconsideration
 
-Only an explicit change to Oliver's scope would reopen this approach. Finding another native route remains a separate question.
+Only an explicit change to the owner's scope would reopen this approach. Finding another native route remains a separate question.
 
 ## Evidence
 

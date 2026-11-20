@@ -73,7 +73,7 @@ public final class ScreenRecognition {
     private var keyAt = Date.distantPast, keyCount = 0
 
     /// TurnOver+R: recognise the front window's text. While the result is open: recognise again, keeping the place.
-    /// Pressed twice: the window's controls instead (Oliver, 2 Nov 2026: "if I do shift vo y and hit y twice"); again
+    /// Pressed twice: the window's controls instead (2 Nov 2026: "if I do shift vo y and hit y twice"); again
     /// in a result of controls, its controls again. On macOS 26 and later, which their recognition needs.
     public func recognize(twice: Bool = false) {
         if #available(macOS 26.0, *), twice || (isOpen && showingInterface) {
@@ -164,7 +164,7 @@ public final class ScreenRecognition {
     /// The controls as rows: one each, "label, kind", the whole row clickable at the control's centre, in the order
     /// text is read (a sidebar before the pane beside it, cards as cards: `ordered`), each block Tab's stop.
     /// Each row ends where its words do, the line break between rows, as text results' rows are: a row that took in
-    /// its line break ended where the next began, and Down stayed on the first row (Oliver, 2 Nov 2026).
+    /// its line break ended where the next began, and Down stayed on the first row (2 Nov 2026).
     @available(macOS 26.0, *)
     package nonisolated static func interfaceResult(_ elements: [ScreenInterface.Element], title: String, pid: pid_t, window: CGRect) -> Result {
         let lines: [Line] = elements.map { e in

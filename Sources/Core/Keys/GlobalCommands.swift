@@ -137,7 +137,7 @@ public final class GlobalCommands: ScriptableObject {
         script("openMenus", String(localized: "Opens the application's menus; closes them if open (Windows: Alt or F10). Also Command on its own", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:f10"], category: win) { _ in
             GlobalCommands.toggleMenus()
         }.isAvailable = windowsOn
-        // Alt F4. Two misses (Oliver, 7 Nov 2026: "command f4 ... doesn't quit apps"): with the top row as media keys (the
+        // Alt F4. Two misses (7 Nov 2026: "command f4 ... doesn't quit apps"): with the top row as media keys (the
         // Mac's default) F4 arrives as Spotlight (key 177; Launchpad, 131, on older keyboards), never as F4; and with Fn,
         // the Command Q sent was heard and Safari stayed open. Both are now Alt F4, and the app is asked to quit
         // directly, as the Dock's Quit does (unsaved work still asks first); the key is the fallback.
@@ -157,7 +157,7 @@ public final class GlobalCommands: ScriptableObject {
         script("recognizeScreen", String(localized: "Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return. Pressed again in the result, recognises again. Pressed twice, its buttons, fields and icons instead", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+r"], category: sys) { _ in
             DispatchQueue.main.async { ScreenRecognition.shared.keyPressed() }
         }
-        // Command Control M, one key for the menu in every style, as NVDA N is (Oliver, 21 Oct 2026); Command Control Comma
+        // Command Control M, one key for the menu in every style, as NVDA N is (21 Oct 2026); Command Control Comma
         // then M is still the layer's way.
         script("turnOverMenu", String(localized: "Opens the TurnOver menu: settings, keys, tools, help, quit", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+n", "kb:command+control+m"], category: sys) { _ in
             TurnOverMenu.shared.open()
@@ -171,7 +171,7 @@ public final class GlobalCommands: ScriptableObject {
             // Only ever marks: a second press no longer sends a report (it carries recent speech, and a key pressed
             // twice by accident, in an app that uses it too, would have sent one; the code review, 12 Oct 2026).
             Feedback.mark()
-            if !(Tones.own && TurnOverSounds.play("marked")) { Tones.beep(660, 60, volume: 0.2) }
+            Tones.marked()
             let hinted = UserDefaults.standard.bool(forKey: "markHintGiven")
             UserDefaults.standard.set(true, forKey: "markHintGiven")
             // Just "marked": the count climbing with each press read as something going wrong (two testers, 13 Oct
@@ -317,14 +317,14 @@ public final class GlobalCommands: ScriptableObject {
         script("jaws_sayAllSlower", String(localized: "During say all: slower, for this say all only (JAWS: Page Down)", comment: "A command, as the key list and keyboard help say it"), gestures: [], category: text) { _ in
             SayAll.changeRate(by: -0.05)
         }
-        script("find", String(localized: "Finds text: type it, then Return; the match is where you are left (VO-F; NVDA+Control+F)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+f", "kb:turnover+control+f"], category: text) { _ in
-            FindPrompt.shared.open()
+        script("find", String(localized: "Finds text: type it, then Return; the match is where you are left (VO-F; NVDA+Control+F)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+f", "kb:turnover+control+f"], category: text) { g in
+            FindPrompt.shared.open(pressedAt: g.timestamp, keyCode: g.keyCode)
         }
-        script("findNext", String(localized: "Finds the next match of the last search (VO-G; NVDA+F3)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+g", "kb:turnover+f3"], category: text) { _ in
-            FindPrompt.shared.again(forward: true)
+        script("findNext", String(localized: "Finds the next match of the last search (VO-G; NVDA+F3)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+g", "kb:turnover+f3"], category: text) { g in
+            FindPrompt.shared.again(forward: true, pressedAt: g.timestamp, keyCode: g.keyCode)
         }
-        script("findPrevious", String(localized: "Finds the previous match of the last search (VO-Shift-G; NVDA+Shift+F3)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+shift+g", "kb:turnover+shift+f3"], category: text) { _ in
-            FindPrompt.shared.again(forward: false)
+        script("findPrevious", String(localized: "Finds the previous match of the last search (VO-Shift-G; NVDA+Shift+F3)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+shift+g", "kb:turnover+shift+f3"], category: text) { g in
+            FindPrompt.shared.again(forward: false, pressedAt: g.timestamp, keyCode: g.keyCode)
         }
         // The Windows style is NVDA's: NVDA+F reports the formatting, and find is NVDA+Control+F (Caps Lock F opened
         // the find prompt in Word, 7 Oct 2026). Declared after "find", so it is tried first.
@@ -364,10 +364,10 @@ public final class GlobalCommands: ScriptableObject {
         script("toggleVirtualBufferPassThrough", String(localized: "Switches between browse mode and focus mode in a document", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:turnover+space"], category: "Browse mode") { _ in
             guard let d = API.focusTreeInterceptor else { Speech.speakMessage(String(localized: "not in a document", comment: "Browse mode is only in documents")); return }
             d.disableAutoPassThrough = !d.passThrough   // NVDA: a manual switch to focus mode sticks until focus leaves
-            // By hand: VoiceOver's own Quick Nav sounds (its single-key Quick Nav is browse mode's twin); the automatic
-            // switch as a field takes the focus stays silent, as VoiceOver's is (17 Oct 2026).
-            let browse = d.passThrough   // about to be
-            d.setPassThrough(!d.passThrough, announce: !VoiceOverSounds.play(browse ? "QuickNavOn.wav" : "QuickNavOff.wav"))
+            // 14 Nov 2026: retain the familiar Quick Nav sound, with the mode words after the key's speech.
+            let browse = d.passThrough
+            let sounded = VoiceOverSounds.play(browse ? "QuickNavOn.wav" : "QuickNavOff.wav")
+            d.setPassThrough(!d.passThrough, announce: true, playSound: !sounded, manual: true)
         }
         // Object navigation: everything in the window, whether or not the keyboard reaches it. TurnOver Left and Right
         // step through every item in reading order, going in and out of groups by themselves, as Narrator's Caps Lock
@@ -672,7 +672,7 @@ public final class GlobalCommands: ScriptableObject {
             let r = AXUIElementPerformAction(e, "AXShowMenu" as CFString)
             AXUIElementSetMessagingTimeout(e, 0)
             Log.io("context menu: AXShowMenu on \(e.role) → \(r.rawValue)")
-            if r == .success { return true }
+            if r == .success { AXHandler.shared.watchForContextMenu(of: e); return true }
         }
         guard let frame = TurnOverObject.frame(e), frame.width > 0, frame.height > 0 else {
             Speech.speakMessage(String(localized: "No item to open a menu for", comment: "Spoken message")); return true
@@ -680,6 +680,7 @@ public final class GlobalCommands: ScriptableObject {
         let p = CGPoint(x: frame.midX, y: frame.midY)
         Log.io("context menu: right click on \(e.role) at (\(Int(p.x)), \(Int(p.y)))")
         rightClick(at: p)
+        AXHandler.shared.watchForContextMenu(of: e)
         return true
     }
 
@@ -698,7 +699,7 @@ public final class GlobalCommands: ScriptableObject {
             return
         }
         // The app's own Quit item first, pressed as a hand would choose it: Safari ignored both the quit request and
-        // the Command Q sent, and stayed open, where TextEdit quit (Oliver's trial, 7 Nov 2026).
+        // the Command Q sent, and stayed open, where TextEdit quit (the owner's trial, 7 Nov 2026).
         // Its Quit item dimmed (Safari, 7 Nov 2026: a window waiting for an answer) means the app won't quit by any
         // route, by hand included; it is said, rather than nothing happening.
         switch pressQuitItem(app.processIdentifier) {
@@ -734,7 +735,7 @@ public final class GlobalCommands: ScriptableObject {
         }
         // Mac style: the bar's titles, as VoiceOver (a second VO M leaves them).
         if !config.general.windowsKeys {
-            if MenuNavigationPlugin.heldBar != nil { MenuNavigationPlugin.releaseBar(); Braille.releaseItem(); if let pid = API.focusPid { MenuNavigationPlugin.backFromBar(pid: pid) }; return }
+            if let h = MenuNavigationPlugin.heldBar { MenuNavigationPlugin.releaseBar(); Braille.releaseItem(); MenuNavigationPlugin.backFromBar(pid: h.pid); return }
             MenuNavigationPlugin.holdMenuBar(); return
         }
         // The handler itself, not executeScript: that would make this the last script run, and the caller's

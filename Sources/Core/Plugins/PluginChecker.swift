@@ -190,7 +190,13 @@ public enum PluginChecker {
         try fm.createDirectory(at: ProfileStore.folder, withIntermediateDirectories: true)
         try? fm.removeItem(at: dest)
         try fm.createDirectory(at: dest, withIntermediateDirectories: true)
-        for f in ["manifest.json", "profile.json"] { try fm.copyItem(at: plugin.folder.appendingPathComponent(f), to: dest.appendingPathComponent(f)) }
+        // A plugin with a script brings main.js and, if the author signed it, signature.json. Copying never approves
+        // the script: that is the person's, on this Mac (docs/PLUGIN-SCRIPTS-PLAN.md, "Approval").
+        for f in ["manifest.json", "profile.json", PluginFormat.scriptName, "signature.json"] {
+            let from = plugin.folder.appendingPathComponent(f)
+            let required = f == "manifest.json" || (f == "profile.json" && plugin.manifest?.script == nil)   // the others only if there
+            if required || fm.fileExists(atPath: from.path) { try fm.copyItem(at: from, to: dest.appendingPathComponent(f)) }
+        }
         return dest
     }
 }

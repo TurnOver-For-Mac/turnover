@@ -19,8 +19,37 @@ import TurnOverAX
 extension AXHandler {
     // MARK: Applications
 
+    /// Whether an app coming to the front closes Find's prompt: another app than the one in front, except, during
+    /// AppWake's nudge, the nudge's own two activations (TurnOver itself and the app being woken). Another app clicked
+    /// or switched to during the nudge closes it (19 Nov 2026, Codex's review: every app was let through then, and
+    /// letters meant for the new app went into Find).
+    nonisolated package static func activationClosesFind(pid: pid_t, activePid: pid_t, ownPid: pid_t, now: Date,
+                                                         nudgingUntil: Date, nudgedPid: pid_t) -> Bool {
+        guard pid != activePid else { return false }
+        if now <= nudgingUntil, pid == ownPid || pid == nudgedPid { return false }
+        return true
+    }
+
+    /// Whether an activation notice names a running application: a pid of 0 or less (-1, seen when an app was launched
+    /// from Finder: "app activated: ? pid -1", then an observer for pid -1 that failed, and "application" said) does not.
+    nonisolated package static func activationNamesApplication(pid: pid_t?) -> Bool {
+        guard let pid else { return false }
+        return pid > 0
+    }
+
     func appActivated(_ app: NSRunningApplication) {
         let pid = app.processIdentifier
+        guard Self.activationNamesApplication(pid: pid) else {
+            Log.io("app activation ignored: it names no running application (pid \(pid))")
+            return
+        }
+        // Find's prompt belongs to the app it was opened over: any other app coming to the front, TurnOver's own
+        // included, however it came (Command Tab, the mouse, the Dock), closes it (18 Nov 2026). Not TurnOver's own
+        // switch to wake an app's accessibility (AppWake), which is not the user leaving, as the lead watcher has it.
+        if Self.activationClosesFind(pid: pid, activePid: activePid, ownPid: getpid(), now: Date(),
+                                     nudgingUntil: AppWake.nudgingUntil, nudgedPid: AppWake.nudgedPid) {
+            FindPrompt.shared.close(because: "another app came to the front")
+        }
         guard pid != getpid() else { return }
         if pid == activePid { return }
         let old = activePid
@@ -32,11 +61,25 @@ extension AXHandler {
             Log.io("menus of the application that left the front dropped: \(openMenus.filter { $0.pid == old }.count)")
             openMenus.removeAll { $0.pid == old }
         }
+        // The time each stage of the activation takes, for the log (17 Nov 2026): Command Tab through WhatsApp held keys for
+        // 0.96 s and 0.76 s, and the log could not say which call was slow. Logged once, however the activation ends.
+        let began = DispatchTime.now().uptimeNanoseconds
+        var lap = began
+        var stages: [String] = []
+        func took(_ stage: String) {
+            let now = DispatchTime.now().uptimeNanoseconds
+            stages.append("\(stage) \((now &- lap) / 1_000_000) ms")
+            lap = now
+        }
+        defer { Log.info("app activation stages (pid \(pid)): \(stages.joined(separator: ", ")); \((DispatchTime.now().uptimeNanoseconds &- began) / 1_000_000) ms in all") }
         ProfileStore.shared.reload()   // a plugin just written or edited applies on the next visit to its app
+        took("profiles")
         observe(pid)
+        took("observe")
         let module = AppModuleHandler.shared.appModule(for: pid)
         if old != 0, let oldModule = observers[old].map({ _ in AppModuleHandler.shared.appModule(for: old) }) { oldModule.event_appModuleLoseFocus() }
         module.event_appModuleGainFocus()
+        took("module")
         let appEl = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(appEl, 1.0)
         lastForegroundTitle = ""
@@ -44,13 +87,16 @@ extension AXHandler {
         // Store is trying to authenticate your Apple Account… Touch ID or enter your password"), then its button,
         // not "coreautha, Untitled, window" (7 Oct 2026).
         if let b = app.bundleIdentifier, SystemPrompts.agents.contains(b) {
+            Tones.dialogAppeared()
             SystemPrompts.shared.announceFront(pid: pid)
             return
         }
         // A system prompt (UserNotificationCenter's "wants access to control…") has a window but no focused window.
         let firstWindow = appEl.element(kAXFocusedWindowAttribute) ?? appEl.elements(kAXWindowsAttribute).first
+        took("first window")
         if let win = firstWindow {
             foregroundChanged(win, appName: app.localizedName)
+            took("foreground")
         } else {
             // Just launched and no window yet: say so, so the wait is not mistaken for silence.
             let launching = app.launchDate.map { Date().timeIntervalSince($0) < 10 } ?? false
@@ -59,6 +105,7 @@ extension AXHandler {
         if let focused = appEl.element(kAXFocusedUIElementAttribute) { focusChanged(focused, pid: pid) }
         else if let win = firstWindow { focusChanged(win, pid: pid) }
         else { waitForFirstWindow(pid: pid, name: app.localizedName, tries: 12) }
+        took("focus")
         if API.focusObject?.pid == pid, API.focusObject?.role == .window { settleFocus(pid: pid, tries: 6) }
         // A system prompt still open behind this app: said after the app, with the way back to it.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { SystemPrompts.shared.remindIfWaiting(activated: pid) }
@@ -150,6 +197,7 @@ extension AXHandler {
         let t0 = Date()
         _ = app.set("AXEnhancedUserInterface", kCFBooleanTrue)
         _ = app.set("AXManualAccessibility", kCFBooleanTrue)
+        let setsMs = Int(Date().timeIntervalSince(t0) * 1000)
         // The observer and the handler's pointer go to another thread: the accessibility client API takes them from
         // any thread (as TurnOver's walks already do).
         nonisolated(unsafe) let refcon = Unmanaged.passUnretained(self).toOpaque()
@@ -169,8 +217,9 @@ extension AXHandler {
         // more than 30 ms (the questions alone missed it: an app can answer those at once and the sign-ups slowly).
         // Its first moments' news may be missed; the focus is read as the app comes forward anyway.
         let firstFailed = register(names.prefix(1))
+        let firstMs = Int(Date().timeIntervalSince(t0) * 1000) - setsMs
         if Date().timeIntervalSince(t0) > 0.03 {
-            Log.info("pid \(pid): slow to answer; its notifications are asked for in the background")
+            Log.info("pid \(pid): slow to answer (the two settings \(setsMs) ms, the first notification \(firstMs) ms); its notifications are asked for in the background")
             DispatchQueue.global(qos: .userInitiated).async {
                 let failed = firstFailed + register(names.dropFirst())
                 DispatchQueue.main.async { MainActor.assumeIsolated { settle(failed) } }
@@ -183,7 +232,7 @@ extension AXHandler {
         CFRunLoopAddSource(CFRunLoopGetMain(), source, EventHandler.runLoopMode)
         observers[pid] = obs
         ForeignChildren.check(pid: pid)
-        Log.info("observing pid \(pid)\(ForeignChildren.contains(pid) ? "; its windows list each other's elements (Qt Quick): filtered" : "")")
+        Log.info("observing pid \(pid) (settings \(setsMs) ms, first notification \(firstMs) ms, in all \(Int(Date().timeIntervalSince(t0) * 1000)) ms)\(ForeignChildren.contains(pid) ? "; its windows list each other's elements (Qt Quick): filtered" : "")")
     }
 
     func retryNotifications(pid: pid_t, obs: AXObserver, names: [String], delays: [Double]) {
@@ -194,7 +243,16 @@ extension AXHandler {
             // Only an app that took none of them: the Dock always refuses most (24 of 27) and never comes to the front,
             // and dropping it silenced the Command Tab switcher (15 Oct 2026).
             guard names.count >= Self.notifications.count else {
-                Log.error("pid \(pid): \(names.count) notifications never registered; the rest kept"); return
+                // The Dock always refuses most of them (24 of 27) and never comes to the front: what it is, not a
+                // fault, though it read as one in every log (13 and 14 Nov 2026). Any other app's refusal is an error.
+                if NSRunningApplication(processIdentifier: pid)?.bundleIdentifier == "com.apple.dock" {
+                    Log.info("pid \(pid), the Dock: \(names.count) notifications refused, as it always does; the rest kept")
+                } else if names.count <= Self.notifications.count / 2 {
+                    Log.info("pid \(pid): \(names.count) notifications not registered after the retries; the rest kept")
+                } else {
+                    Log.error("pid \(pid): \(names.count) notifications never registered; the rest kept")
+                }
+                return
             }
             Log.error("pid \(pid): no notifications registered; trying again when it next comes to the front")
             if let current = observers[pid], current === obs { removeSource(obs); observers[pid] = nil }
@@ -212,17 +270,21 @@ extension AXHandler {
             // closure holds the observer).
             nonisolated(unsafe) let refcon = Unmanaged.passUnretained(self).toOpaque()
             nonisolated(unsafe) let observer = obs
+            // A notification the app says it does not support is not asked for again: no retry changes that (Codex's
+            // review, 14 Nov 2026: only real failures are worth the retries).
             let register: @Sendable ([String]) -> [String] = { some in
                 some.filter { n in
                     let r = AXObserverAddNotification(observer, app, n as CFString, refcon)
-                    return r != .success && r != .notificationAlreadyRegistered
+                    return r != .success && r != .notificationAlreadyRegistered && r != .notificationUnsupported
                 }
             }
             let started = Date()
             let settle: @MainActor @Sendable ([String]) -> Void = { [weak self] still in
                 guard let self, let current = self.observers[pid], current === obs else { return }
                 Log.info("pid \(pid): \(names.count - still.count) of \(names.count) notifications registered on retry, in \(Int(Date().timeIntervalSince(started) * 1000)) ms off the main thread")
-                if still.count > Self.notifications.count / 2 { self.retryNotifications(pid: pid, obs: obs, names: still, delays: Array(delays.dropFirst())) }
+                // Any that still failed, now that the unsupported ones are set aside: one missing focus notification
+                // matters (Codex's second review, 14 Nov 2026). The schedule stays bounded.
+                if !still.isEmpty { self.retryNotifications(pid: pid, obs: obs, names: still, delays: Array(delays.dropFirst())) }
             }
             DispatchQueue.global(qos: .userInitiated).async {
                 let still = register(names)

@@ -1,0 +1,31 @@
+{
+  "formatVersion": 2,
+  "id": "sample-script-chooser",
+  "name": "Button chooser, scripted",
+  "version": "1.0",
+  "author": "TurnOver",
+  "description": "In any app, lists the buttons of the window in front, lets you choose one from a list, and presses it.",
+  "apps": ["*"],
+  "abilities": ["everywhere", "read", "say", "press"],
+  "reasons": {
+    "everywhere": "The list of buttons is wanted in whichever app you are in, not one app.",
+    "press": "Presses the one button you chose from the list, and nothing else."
+  },
+  "script": "main.js",
+  "commands": [
+    { "id": "chooseButton", "description": "Choose a button in this window from a list and press it", "key": "turnover+command+shift+n", "letter": "b" }
+  ],
+  "options": [
+    { "id": "includeDisabled", "label": "List buttons that are switched off too", "kind": "switch", "default": false },
+    { "id": "limit", "label": "Most buttons to list", "kind": "number", "min": 5, "max": 50, "default": 20 },
+    { "id": "announce", "label": "Say which button was pressed", "kind": "switch", "default": true }
+  ],
+  "summary": "Lists the buttons in the window in front, in any app, and presses the one you choose.",
+  "contact": "https://github.com/TurnOver-For-Mac/turnover/issues",
+  "support": "https://github.com/TurnOver-For-Mac/turnover/issues",
+  "privacy": "Reads the button names in the window in front and shows them to you; nothing leaves your Mac.",
+  "license": "MIT",
+  "changes": [
+    { "version": "1.0", "notes": "First version: the chooseButton command, with three options." }
+  ]
+}

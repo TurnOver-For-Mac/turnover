@@ -160,6 +160,12 @@ nonisolated package struct WebBufferCollection: Sendable {
             }
         }
         func address(_ value: CFTypeRef?) -> String { (value as? URL)?.absoluteString ?? (value as? String) ?? "" }
+        /// The root's address now, or nil when no answer came: a page that stops answering during a read has not
+        /// changed its address, and its copy is not thrown away for it (11 Nov 2026).
+        func addressNow() -> String? {
+            let read = root.attributeResult("AXURL")
+            return read.isNoAnswer ? nil : address(read.value)
+        }
         AXReadScope.with(while: { budget.check() }, onQuery: { budget.admitAXQuery() }, onResult: { status in
             switch status {
             case .returned(let error) where [.invalidUIElement, .failure, .cannotComplete].contains(error):
@@ -173,14 +179,14 @@ nonisolated package struct WebBufferCollection: Sendable {
             if let continuing {
                 // Reused web areas can change pages without a new root. Check on the same worker as the walk.
                 guard root.attributeResult(kAXRoleAttribute).value != nil else { budget.halt(.providerFailure); return }
-                let start = address(root.attr("AXURL"))
+                guard let start = addressNow() else { budget.halt(.providerFailure); return }
                 if budget.check(), let expectedURL, address(expectedURL.value) != start { changed = true; return }
                 for element in continuing {
                     guard budget.check() else { break }
                     visit(element, depth: 1)
                 }
                 if hadOmissions, budget.check(), root.attributeResult(kAXRoleAttribute).value == nil { budget.halt(.providerFailure) }
-                if budget.check() { changed = start != address(root.attr("AXURL")) }
+                if budget.check(), let end = addressNow() { changed = start != end }
                 return
             }
             visit(root, depth: 0)
@@ -209,8 +215,8 @@ nonisolated package struct WebBufferCollection: Sendable {
             // Isolated omissions are normal on changing pages; losing the root itself (including app exit)
             // is a failed read, never a complete empty document.
             if hadOmissions, budget.check(), root.attributeResult(kAXRoleAttribute).value == nil { budget.halt(.providerFailure) }
-            if budget.check() {
-                changed = address(nodes[ElementKey(root)]?.attributes["AXURL"]?.value) != address(root.attr("AXURL"))
+            if budget.check(), let end = addressNow() {
+                changed = address(nodes[ElementKey(root)]?.attributes["AXURL"]?.value) != end
             }
         }
         var result = Self(snapshot: AXSnapshot(nodes: nodes), documentText: text, focusedPart: part, stop: budget.stopped,

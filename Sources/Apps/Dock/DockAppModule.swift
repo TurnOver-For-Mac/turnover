@@ -43,7 +43,7 @@ package final class DockAppModule: AppModule {
     }
 
     /// An item reached in the Dock's own list is said by its name alone: "Safari", not "Safari, dock item, selected"
-    /// (Oliver, 15 Nov 2026). Nothing for an item with no name, which keeps the general wording. Object navigation does
+    /// (15 Nov 2026). Nothing for an item with no name, which keeps the general wording. Object navigation does
     /// not come through here, so it still says what the item is.
     package static func itemWords(name: String) -> String? {
         let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -60,6 +60,7 @@ package final class DockAppModule: AppModule {
             return
         }
         if event.kind == .gainFocus, event.obj is AppSwitcherList {
+            AppSwitcherList.openedOver = AXHandler.shared.activePid   // the app the switcher came up over (focus rules)
             // As VoiceOver does: just the highlighted application's name, not "application switcher, list" first.
             // (The first highlighted item is marked before the list reports focus.)
             AppSwitcherDiagnostics.lastAnnounced = nil
@@ -83,6 +84,8 @@ package final class DockAppModule: AppModule {
         // application's own focus instead.
         if event.kind == .gainFocus, event.obj is DockList,
            !event.obj.element.elements(kAXChildrenAttribute).contains(where: { ($0.attr(kAXSelectedAttribute) as? Bool) == true }) {
+            // The item's own menu opening empties the list's selection and gives the list focus: the user is in the menu.
+            if AXHandler.menuJustAsked(requestedAt: TurnOverObject.contextMenuRequestedAt, now: Date(), menuOpen: AXHandler.shared.isMenuOpen) { return }
             Log.io("dock: left with nothing selected; back to the application")
             let pid = AXHandler.shared.activePid
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { AXHandler.shared.refocus(pid: pid) }
@@ -98,6 +101,8 @@ package final class DockList: TurnOverObject {
 }
 
 final class AppSwitcherList: TurnOverObject {
+    /// The app that was active when the switcher came up: its own focus news is set aside while the switcher is up.
+    static var openedOver: pid_t?
     override var role: Role { .list }
     override var name: String { "application switcher" }
 }
@@ -141,10 +146,15 @@ package enum AppSwitcherDiagnostics {
         return "pid \(matching[0].pid) by its name"
     }
 
-    package static func line(key: String, selectedName: String?, process: String?, lastAnnounced: String?) -> String {
+    /// `items`: how many apps could be read from the switcher, given when nothing is selected. None is either the
+    /// switcher already closed while TurnOver's focus was still on it, or the Dock not answering: the children read
+    /// gives nothing either way, so the line says both (Codex's review, 18 Nov 2026). On 18 Nov 2026 (07:32:54 to
+    /// 07:33:01) the keys logged as "in the switcher" went to Safari, in front and not answering, after its activation.
+    package static func line(key: String, selectedName: String?, process: String?, lastAnnounced: String?, items: Int? = nil) -> String {
         let selected = selectedName.map { "\"\($0)\"" } ?? "unknown"
         let announced = lastAnnounced.map { "\"\($0)\"" } ?? "nothing"
-        return "switcher key \(key): selected \(selected), \(process ?? "pid unknown"); last announced \(announced)"
+        let listed = selectedName == nil ? items.map { $0 == 0 ? " (no apps could be read from the switcher: closed, or the Dock not answering)" : " (the switcher lists \($0) apps)" } ?? "" : ""
+        return "switcher key \(key): selected \(selected)\(listed), \(process ?? "pid unknown"); last announced \(announced)"
     }
 
     /// From the main thread as each key is decided (InputManager.handleKeyDown), before the key reaches the Dock.
@@ -162,7 +172,8 @@ package enum AppSwitcherDiagnostics {
         guard let list = API.focusObject as? AppSwitcherList else { return }
         guard logsLine(for: gesture) else { return }
         // Bounded, as a diagnostic must be: the switcher holds one item per running app.
-        let selected = list.element.elements(kAXChildrenAttribute).prefix(64).first { ($0.attr(kAXFocusedAttribute) as? Bool) == true }
+        let items = list.element.elements(kAXChildrenAttribute).prefix(64)
+        let selected = items.first { ($0.attr(kAXFocusedAttribute) as? Bool) == true }
         let name = selected?.string(kAXTitleAttribute)
         let url = selected?.attr(kAXURLAttribute) as? URL
         var process: String?
@@ -172,6 +183,6 @@ package enum AppSwitcherDiagnostics {
             }
             process = Self.process(name: name, url: url, among: apps)
         }
-        Log.io(line(key: gesture.logDescription(), selectedName: name, process: process, lastAnnounced: lastAnnounced))
+        Log.io(line(key: gesture.logDescription(), selectedName: name, process: process, lastAnnounced: lastAnnounced, items: items.count))
     }
 }

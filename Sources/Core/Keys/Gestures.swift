@@ -92,6 +92,11 @@ nonisolated public struct KeyboardGesture: CustomStringConvertible, Sendable {
         let mayType = modifiers.intersection([.control, .command, .turnover]).isEmpty &&
             (typedCharacter != nil || (!KeyNames.isSpecial(keyCode) && !(54...62).contains(keyCode)))
         if mayType, commandName == nil || secure { return "(a typed key)" }
+        // A key browse mode keeps because it would type and has no command is text the user meant to type: logged
+        // like typing, without its name, but marked as kept (review, 16 Nov 2026: symbols and Option characters typed
+        // in browse mode were named in the log). The trap's own line still says when.
+        let keptByTrap = commandName == BrowseModeDocument.trapScriptName
+        if mayType, keptByTrap { return "(a kept key) → \(BrowseModeDocument.trapScriptName)" }
         return identifier + (commandName.map { " → \($0)" } ?? "")
     }
 
@@ -114,6 +119,39 @@ nonisolated public struct KeyboardGesture: CustomStringConvertible, Sendable {
 
     public var isTurnOverModifier: Bool { modifiers.contains(.turnover) }
 
+    /// Whether browse mode keeps this key from the page when it has no command: it would type a character (letters,
+    /// digits, punctuation, symbols, with Shift or Option, a dead key that has not composed yet) and has no Command,
+    /// Control or TurnOver key. Return, Space, Tab, Escape, the arrows, Backspace, the function keys and the
+    /// modifiers themselves are not typing keys here and keep what they do (16 Nov 2026: a comma and a dash reached
+    /// the Claude app's Prompt in browse mode, 15 Nov 2026).
+    public var wouldTypeTextInBrowseMode: Bool {
+        let hasCommandModifier = !modifiers.intersection([.turnover, .command, .control]).isEmpty
+        if hasCommandModifier { return false }
+        let isSpace = keyCode == 49
+        if isSpace { return false }
+        if KeyNames.isSpecial(keyCode) { return false }
+        let isModifierKey = (54...62).contains(keyCode)
+        if isModifierKey { return false }
+        let producesText = characters.unicodeScalars.contains { !CharacterSet.controlCharacters.contains($0) }
+        if producesText { return true }
+        // A dead key (Option E) can arrive with no characters yet: a printing key still starts text. An unknown key
+        // with no characters (a keyboard's input-mode switch) is not typing, and keeps its own action.
+        let isPrintingKey = keyName.count == 1 || keyName == "section" || keyName.hasPrefix("numpad")
+        return isPrintingKey
+    }
+
+    /// Whether this key is plain typing that can wait for a field's focus (16 Nov 2026): a printing character (with
+    /// Shift or not), Space, and plain Backspace or Forward Delete. Never Return, Tab, Escape, the arrows, the other
+    /// special keys, the modifiers themselves, or any key with Command, Control, Option or the TurnOver key (VoiceOver's
+    /// keys): those are commands, and they end a request for the field's focus as they always did.
+    public var isTypingKeyForCaretFocus: Bool {
+        guard modifiers.subtracting(.shift).isEmpty else { return false }
+        if keyCode == 51 || keyCode == 117 { return modifiers.isEmpty }   // Backspace, Forward Delete
+        if keyCode == 49 { return true }   // Space
+        if KeyNames.isSpecial(keyCode) || (54...63).contains(keyCode) { return false }
+        return characters.unicodeScalars.contains { !CharacterSet.controlCharacters.contains($0) }
+    }
+
     /// NVDA's shouldReportAsCommand: keys with modifiers or special keys, never plain typing.
     public var shouldReportAsCommand: Bool {
         if isTurnOverModifier { return false }
@@ -134,11 +172,16 @@ nonisolated public struct KeyboardGesture: CustomStringConvertible, Sendable {
 
     /// Send the key on to the system (NVDA: gesture.send): re-posted as a HID-level
     /// event carrying TurnOver's marker so the tap lets it through. Down and up.
+    /// A script in the ordered lane sends its key in order (ScriptHandler.sendInOrder, 16 Nov 2026, review).
     public func send() {
+        if Thread.isMainThread, ScriptHandler.sendingInOrder { ScriptHandler.sendInOrder(self); return }
         KeyboardGesture.poster?(self)
     }
     /// Installed by the keyboard handler (the Mac-specific layer).
     nonisolated(unsafe) public static var poster: (@Sendable (KeyboardGesture) -> Void)?   // set once at start
+    /// The same, marked so that the tap counts the key as it passes (ScriptHandler.orderedKeySeen) and then lets it
+    /// through as it would the key typed (16 Nov 2026, review). nil: `poster`.
+    nonisolated(unsafe) public static var orderedPoster: (@Sendable (KeyboardGesture) -> Void)?
     /// Whether the TurnOver key is held now (Caps Lock, or Control and Option): the trackpad's on and off.
     nonisolated(unsafe) public static var turnOverHeld: (@Sendable () -> Bool)?
     /// Presses a key as if typed (an AI trying a plugin, PluginTry): TurnOver handles it like the owner's own key.

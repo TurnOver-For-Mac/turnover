@@ -72,8 +72,10 @@ extension KeyboardHandler {
         }
     }
 
-    /// NVDA's gesture.send: the key down and up, marked so the tap ignores them.
-    nonisolated static func post(_ g: KeyboardGesture) {
+    /// NVDA's gesture.send: the key down and up, marked so the tap ignores them. `ordered`: marked so the tap counts
+    /// the key and routes it (ScriptHandler.sendInOrder), and a typed character carries its own text, so a capital sent
+    /// a moment after it was typed is still a capital whatever the hand now holds (16 Nov 2026, review).
+    nonisolated static func post(_ g: KeyboardGesture, ordered: Bool = false) {
         let src = CGEventSource(stateID: .hidSystemState)
         // Modifiers the hand still holds that the key sent must not carry (Control and Option under VO-Left, when the
         // key sent is a bare Left): Word asked the keyboard itself and saw them held, and did nothing with the arrow
@@ -90,11 +92,15 @@ extension KeyboardHandler {
             e.post(tap: .cghidEventTap)
         }
         for (f, code) in lift { state.remove(f); modifier(code, down: false, flags: state) }
-        let toApp = arrowTarget(code: Int64(g.keyCode), flags: g.flags)
+        let toApp = ordered ? nil : arrowTarget(code: Int64(g.keyCode), flags: g.flags)
+        let text = Array(g.characters.utf16)
+        let ownText = ordered && g.isTypingKeyForCaretFocus && !text.isEmpty && text.count <= 8 &&
+            !g.characters.unicodeScalars.contains { CharacterSet.controlCharacters.contains($0) }
         for down in [true, false] {
             guard let e = CGEvent(keyboardEventSource: src, virtualKey: CGKeyCode(g.keyCode), keyDown: down) else { continue }
             e.flags = g.flags
-            e.setIntegerValueField(.eventSourceUserData, value: marker)
+            if ownText { var t = text; e.keyboardSetUnicodeString(stringLength: t.count, unicodeString: &t) }
+            e.setIntegerValueField(.eventSourceUserData, value: ordered ? orderedMarker : marker)
             if let toApp { e.postToPid(toApp) } else { e.post(tap: .cghidEventTap) }
         }
         // Put back only what the hand still holds: a release in between was overwritten by a synthetic press, and

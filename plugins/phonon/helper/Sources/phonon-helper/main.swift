@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Phonon for TurnOver (2 Nov 2026, Oliver: "I'd really like to get some good voices working"): Gradium's Phonon 31m
+// Phonon for TurnOver (2 Nov 2026, the owner: "I'd really like to get some good voices working"): Gradium's Phonon 31m
 // through FluidAudio's Pocket TTS, on the Kokoro helper's pipes (plugins/kokoro/helper), so TurnOver speaks with
 // either. Measured on an M4 (2 Nov 2026): the first frame 9 to 11 ms after a request, speech in it 9 to 25 ms once
 // the silence before it is cut; Kokoro's helper is heard 40 to 120 ms after.
@@ -59,7 +59,7 @@ Thread.detachNewThread {
 /// held back until sound follows it, so pauses between words stay. The threshold is low, as Kokoro's helper's is, so a
 /// soft first sound (the s of "Send") isn't cut.
 /// A single character ends at its first pause of 180 ms once 100 ms of it has been heard: Phonon often says a lone
-/// letter or digit again, or adds a stray sound, after 160 ms to 1.9 s of quiet (Oliver, 2 Nov 2026: "when I type a it
+/// letter or digit again, or adds a stray sound, after 160 ms to 1.9 s of quiet (2 Nov 2026: "when I type a it
 /// says aa", "fragments of sound"; 22 of 132 letters and digits came in pieces, none of 240 words and numbers).
 /// Measured the same day in all 25 English voices: a letter's own pause is up to 131 ms (the k of x, the middle of
 /// three takes), and none of 750 takes of the letters and digits with one was cut at it; a faint f or th can leave up
@@ -153,8 +153,8 @@ struct Stretch {
     }
 }
 
-/// Phonon, cleared up (Oliver, 2 Nov 2026: "they're kinda muffled"; he has a little hearing loss and finds Microsoft's
-/// natural voices clear). Measured against Alex on the same paragraph: Phonon puts far more of its sound between 500 Hz
+/// Phonon, cleared up (2 Nov 2026: the voices sounded muffled next to Microsoft's natural voices, which are
+/// clear). Measured against Alex on the same paragraph: Phonon puts far more of its sound between 500 Hz
 /// and 1 kHz (-3.4 against -9.5 dB of the whole) and less between 2 and 4 kHz (-20 against -17 dB), where consonants
 /// are heard. So a broad cut at 600 Hz, a lift at 3 kHz and a little air above 7 kHz, as the advice for clear speech
 /// goes (a small cut low in the middle, a gentle lift at 2 to 4 kHz). The listener's own EQ is TurnOver's player's.

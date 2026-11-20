@@ -12,6 +12,9 @@ import ApplicationServices
 public enum AppWake {
     /// Until when activations are TurnOver's own nudge, not the user's (main thread).
     public static var nudgingUntil = Date.distantPast
+    /// The application being woken (main thread): with TurnOver itself, the only activations that are the nudge's
+    /// (19 Nov 2026). Any other app coming to the front meanwhile is the user's.
+    public static var nudgedPid: pid_t = 0
     private static var lastNudge: [pid_t: Date] = [:]
 
     /// Once per application every 30 s at most (`minimumGap`: Steam's menu asks more often, 14 Oct 2026).
@@ -21,6 +24,7 @@ public enum AppWake {
         lastNudge[pid] = Date()
         Log.io("wake: \(app.localizedName ?? "pid \(pid)") (\(reason)); switching to TurnOver and back")
         nudgingUntil = Date().addingTimeInterval(5)
+        nudgedPid = pid
         // Off the main thread: the app answers slowly while it builds what it held back (Word took 3 s), and
         // TurnOver must go on speaking meanwhile.
         DispatchQueue.global(qos: .userInitiated).async {

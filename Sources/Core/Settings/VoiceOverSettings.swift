@@ -506,17 +506,40 @@ public enum VoiceOverSpeak {
         guard NSWorkspace.shared.isVoiceOverEnabled else { Speech.speakMessage(text); return }
         // Coexisting, VoiceOver is silent wherever TurnOver reads: TurnOver says it there (the code review, 17 Oct 2026).
         if Coexist.on, Core.active { Speech.speakMessage(text); return }
-        if tone { Tones.beep(880, 50, volume: 0.2) }
-        NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
-                             userInfo: [.announcement: text, .priority: NSAccessibilityPriorityLevel.high.rawValue])
+        if tone, Tones.invented("say_tone") { Tones.beep(880, 50, volume: 0.2) }
+        sayToVoiceOver(text, current: { true })
+    }
+
+    /// The selected-reader route never falls back to TurnOver. Revalidate on the main actor
+    /// immediately before each submission; a script already submitted to VoiceOver cannot be recalled.
+    public static func sayToVoiceOver(_ text: String, current: @escaping @MainActor () -> Bool) {
+        guard current() else { return }
+        if let outputTestDriver { outputTestDriver(text, .announcement) }
+        else {
+            NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
+                                 userInfo: [.announcement: text, .priority: NSAccessibilityPriorityLevel.high.rawValue])
+        }
+        // VoiceOver ignored AX announcements for the layer on 15 Oct 2026. Preserve its
+        // AppleScript output route, including when AX posting itself reports no error.
+        guard current() else { return }
+        if let outputTestDriver { outputTestDriver(text, .appleScript); return }
         let escaped = text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", "tell application id \"com.apple.VoiceOver\" to output \"\(escaped)\""]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        do { try process.run() }
+        catch { Log.info("VoiceOver couldn't take the words to say: \(error.localizedDescription)"); return }
         DispatchQueue.global(qos: .userInitiated).async {
-            let p = Process()
-            p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-            p.arguments = ["-e", "tell application id \"com.apple.VoiceOver\" to output \"\(escaped)\""]
-            p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
-            try? p.run(); p.waitUntilExit()
-            if p.terminationStatus != 0 { Log.info("VoiceOver didn't take the words to say (status \(p.terminationStatus)): \(Log.words(String(text.prefix(40))))") }
+            process.waitUntilExit()
+            if process.terminationStatus != 0 {
+                Log.info("VoiceOver didn't take the words to say (status \(process.terminationStatus)): \(Log.words(String(text.prefix(40))))")
+            }
         }
     }
+
+    public enum Submission { case announcement, appleScript }
+    /// Observes the actual submission boundaries without posting AX or launching AppleScript.
+    public static var outputTestDriver: ((String, Submission) -> Void)?
 }

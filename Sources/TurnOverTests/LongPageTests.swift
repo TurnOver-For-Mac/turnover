@@ -489,6 +489,109 @@ func longPageTests() {
         expect(AXSnapshot.takeMissed().count, 0, "taken once")
     }
 
+    // 17 Nov 2026: VO Shift End pressed three times on a long Claude chat said nothing: each press cancelled the read on
+    // the one before had started. Unhappy cases: another key between the presses, and a different key after them.
+    func withBottomRead(_ body: (BrowseModeDocument, Script, () -> String) -> Void) {
+        AXReplay.load(page(headings: 300))
+        let was = (WebBuffer.maxElements, WebBuffer.fillsOn), sink = Speech.sink
+        let savedFocus = API.focusObject, savedAncestors = API.focusAncestors, savedPage = API.focusTreeInterceptor
+        WebBuffer.maxElements = 100; WebBuffer.fillsOn = false
+        var said = ""
+        Speech.sink = { said += $0 + "\n" }
+        defer {
+            API.setFocusObject(savedFocus, ancestors: savedAncestors, interceptor: savedPage)
+            AXReplay.unload(); WebBuffer.maxElements = was.0; WebBuffer.fillsOn = was.1; Speech.sink = sink
+        }
+        let page = BrowseModeDocument(webArea: AXReplay.root!)
+        page.buffer.buildForInspection()
+        waitForBuffer(page.buffer)
+        API.setFocusObject(nil, ancestors: [], interceptor: page)
+        page.passThrough = false
+        check(page.buffer.canReadOn, "the page is read only in part")
+        guard let bottom = page.script(named: "bottomOfDocument") else { return check(false, "the bottom command") }
+        said = ""
+        body(page, bottom, { said })
+    }
+    func waitForBottomRead(_ page: BrowseModeDocument) {
+        let until = Date().addingTimeInterval(5)
+        while page.bottomReadOn != nil, Date() < until { RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01)) }
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    }
+    let shiftEnd = KeyboardGesture(identifier: "kb:turnover+shift+end")!
+
+    test("long page: the bottom asked for again while the page is read on carries the first read on, and says the end once") {
+        withBottomRead { page, bottom, said in
+            ScriptHandler.noteKeyArrived(shiftEnd); bottom.handler(shiftEnd)
+            let first = page.bottomReadOn
+            check(first != nil, "the first press reads the page on")
+            check(said().contains("reading on"), "the wait is announced at once: \(said())")
+            ScriptHandler.noteKeyArrived(shiftEnd); bottom.handler(shiftEnd)
+            check(page.bottomReadOn === first, "the second press carries the first read on, rather than cancelling it")
+            ScriptHandler.noteKeyArrived(shiftEnd); bottom.handler(shiftEnd)
+            check(page.bottomReadOn === first, "and so does a third")
+            expect(said().components(separatedBy: "reading on").count - 1, 1, "\"reading on\" is said once, not again for the repeats")
+            waitForBottomRead(page)
+            // (The line said there is not checked: in this fixture the bottom line's reading says nothing. The read's end,
+            // which lands and reads the line, is what is checked.)
+            check(page.bottomReadOn == nil, "the first read came to its end and landed")
+            expect(page.position, page.buffer.text.length - 1, "the reading is at the bottom")
+        }
+    }
+
+    test("long page: the bottom asked for again after another key starts a read of its own; a different key still stops it") {
+        withBottomRead { page, bottom, said in
+            ScriptHandler.noteKeyArrived(shiftEnd); bottom.handler(shiftEnd)
+            let first = page.bottomReadOn
+            ScriptHandler.noteKeyArrived(KeyboardGesture(identifier: "kb:z")!)
+            ScriptHandler.noteKeyArrived(shiftEnd); bottom.handler(shiftEnd)
+            check(page.bottomReadOn !== first, "with another key between, the press is a new request, as before")
+            ScriptHandler.noteKeyArrived(KeyboardGesture(identifier: "kb:downArrow")!)
+            let until = Date().addingTimeInterval(2.5)
+            while Date() < until { RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01)) }
+            check(page.position != page.buffer.text.length - 1, "a different key after it stops the read, as before")
+        }
+    }
+
+    // 20 Nov 2026 (review): a repeat of the key arrives (counted) and a pass of the read on runs before toBottom sees the
+    // repeat: the read stops, and the repeat used to be taken for a read still going, so nothing was ever said.
+    test("long page: a repeat whose key arrived before the read on noticed it starts the read again; \"reading on\" once") {
+        withBottomRead { page, bottom, said in
+            ScriptHandler.noteKeyArrived(shiftEnd); bottom.handler(shiftEnd)
+            guard let first = page.bottomReadOn else { return check(false, "the first press reads the page on") }
+            ScriptHandler.noteKeyArrived(shiftEnd)   // the repeat arrives ...
+            let until = Date().addingTimeInterval(3)
+            while first.running, Date() < until { RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01)) }
+            check(!first.running, "... and a pass of the read on sees it first, and stops")
+            bottom.handler(shiftEnd)   // ... and only then is the script run for it
+            check(first.running, "the repeat starts the read on again")
+            check(page.bottomReadOn === first, "it is still the first request")
+            waitForBottomRead(page)
+            check(page.bottomReadOn == nil, "the read came to its end and landed")
+            expect(page.position, page.buffer.text.length - 1, "the reading is at the bottom")
+            expect(said().components(separatedBy: "reading on").count - 1, 1, "\"reading on\" is said once")
+        }
+    }
+
+    test("long page: nothing is announced when the bottom is in the copy already") {
+        AXReplay.load(page(headings: 5))
+        let sink = Speech.sink
+        let savedFocus = API.focusObject, savedAncestors = API.focusAncestors, savedPage = API.focusTreeInterceptor
+        var said = ""
+        Speech.sink = { said += $0 + "\n" }
+        defer { API.setFocusObject(savedFocus, ancestors: savedAncestors, interceptor: savedPage); AXReplay.unload(); Speech.sink = sink }
+        let page = BrowseModeDocument(webArea: AXReplay.root!)
+        page.buffer.buildForInspection()
+        waitForBuffer(page.buffer)
+        API.setFocusObject(nil, ancestors: [], interceptor: page)
+        page.passThrough = false
+        check(!page.buffer.canReadOn, "the whole page is in the copy")
+        guard let bottom = page.script(named: "bottomOfDocument") else { return check(false, "the bottom command") }
+        said = ""
+        ScriptHandler.noteKeyArrived(shiftEnd); bottom.handler(shiftEnd)
+        check(!said.contains("reading on"), "no wait to announce: \(said)")
+        expect(page.position, page.buffer.text.length - 1, "the reading is at the bottom at once")
+    }
+
     test("long page: its first reading carries on to the end by itself, and nothing is said about its length") {
         AXReplay.load(page(headings: 300))
         let was = (WebBuffer.maxElements, WebBuffer.fillsOn), sink = Speech.sink

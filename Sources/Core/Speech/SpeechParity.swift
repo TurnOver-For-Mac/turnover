@@ -20,7 +20,7 @@ public enum SpeechParity {
     nonisolated(unsafe) private static var refused = false   // main thread
     nonisolated(unsafe) private static var toldRefused = false   // main thread
 
-    /// Whether this setting goes through VoiceOver now. Off since 20 Oct 2026 (Oliver: "get rid of that bonding of
+    /// Whether this setting goes through VoiceOver now. Off since 20 Oct 2026 (the owner: "get rid of that bonding of
     /// VoiceOver and TurnOver voices, it's not working correctly"): the keys change TurnOver's own voice only, and
     /// TurnOver no longer reads VoiceOver's rate as it takes over. The code stays for a better attempt.
     public static let on = false

@@ -28,8 +28,15 @@ open class AppModule: ScriptableObject {
     /// already sound that boundary can opt out; TurnOver-owned review and structural navigation keep theirs.
     open var playsNativeCaretBoundarySound: Bool { true }
 
+    /// Return in an editable field sent its text rather than making a new line (the text got shorter). `fieldName` is
+    /// the field's name. Nothing by default; an app that wants "sent" said overrides it (19 Nov 2026).
+    open func returnSentText(inField fieldName: String) {}
+
     /// The app supplies its own spelling corrections and dictionary through its native context menu.
     open var usesNativeSpellingMenu: Bool { false }
+
+    /// Group-based popups remain app-owned; they must not enter native menu tracking.
+    open var handlesGroupMenus: Bool { false }
 
     /// The app owns formatting-shortcut feedback, including when a shortcut passes through without a script.
     open var handlesNativeFormattingShortcuts: Bool { false }
@@ -94,6 +101,10 @@ open class AppModule: ScriptableObject {
     /// is not dropped for it (Word's page blipping between a dialog's fields cut each field to its first letter;
     /// A tester, 16 Oct 2026).
     open func ignoresFocus(_ event: Event) -> Bool { false }
+
+    /// What to say when this window comes to the front, in place of "<app>, <title>, window" (17 Nov 2026: Finder's Quick
+    /// Look says the selected file's name). Nil: the announcement exactly as the reader makes it. An empty string: nothing.
+    open func windowAnnouncement(for window: AXUIElement, title: String) -> String? { nil }
 
     /// Events for every object in the app pass here first (NVDA: event_* with nextHandler).
     open func handleEvent(_ event: Event, next: () -> Void) {

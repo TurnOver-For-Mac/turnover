@@ -11,7 +11,7 @@ Recovered on 1 November 2026. These are sanitized historical investigation notes
 
 Connecting to a server, navigating its files and running transfers were left on the stress-test checklist. The historical checks used masked existing state; no server names, usernames, paths or private file content are reproduced.
 
-Unless a result above specifies otherwise, the source sections do not record exact app/macOS versions, a uniquely identified TurnOver binary or a complete VoiceOver on/off and leader-state matrix. Mac and Windows refer to TurnOver keyboard styles on macOS. Historical driver checks report what TurnOver emitted; they do not substitute for Oliver listening to the current installed build. No app was opened, keys sent, code changed or build installed during this recovery.
+Unless a result above specifies otherwise, the source sections do not record exact app/macOS versions, a uniquely identified TurnOver binary or a complete VoiceOver on/off and leader-state matrix. Mac and Windows refer to TurnOver keyboard styles on macOS. Historical driver checks report what TurnOver emitted; they do not substitute for the owner listening to the current installed build. No app was opened, keys sent, code changed or build installed during this recovery.
 
 ## Provenance
 

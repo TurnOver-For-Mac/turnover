@@ -84,7 +84,7 @@ final class MenuAnywhere {
         "v": (String(localized: "copy VoiceOver settings", comment: "A letter's command in the TurnOver layer (Command Control Comma)"), .run, { VoiceOverSettings.startFlow() }),
         ]
         // The screen interface (a window's controls from its pixels) is a feature for a whole build, so the layer
-        // offers it only in developer builds (Oliver, 29 Oct 2026: "that's not a bug fix, it's a feature").
+        // offers it only in developer builds (29 Oct 2026: "that's not a bug fix, it's a feature").
         if Edition.isDevBuild { l["e"] = (String(localized: "screen interface: the window's controls from its pixels (experimental)", comment: "A letter's command in the TurnOver layer (Command Control Comma)"), .list, { MenuAnywhere.shared.recognizeInterface() }) }
         return l
     }
@@ -92,7 +92,8 @@ final class MenuAnywhere {
     static var letterList: String {
         let names = ["m": String(localized: "M menu", comment: "A letter's command, as the TurnOver layer lists them"), "s": String(localized: "S settings", comment: "A letter's command, as the TurnOver layer lists them"), "t": String(localized: "T switch reader", comment: "A letter's command, as the TurnOver layer lists them"), "a": String(localized: "A ask for this app", comment: "A letter's command, as the TurnOver layer lists them"), "v": String(localized: "V copy VoiceOver settings", comment: "A letter's command, as the TurnOver layer lists them"), "k": String(localized: "K keyboard style", comment: "A letter's command, as the TurnOver layer lists them"), "j": String(localized: "J that was wrong", comment: "A letter's command, as the TurnOver layer lists them"),
                      "h": String(localized: "H guide", comment: "A letter's command, as the TurnOver layer lists them"), "i": String(localized: "I describe image", comment: "A letter's command, as the TurnOver layer lists them"), "c": String(localized: "C copy last spoken", comment: "A letter's command, as the TurnOver layer lists them"), "g": String(localized: "G gesture control", comment: "A letter's command, as the TurnOver layer lists them"), "r": String(localized: "R recognition", comment: "A letter's command, as the TurnOver layer lists them"), "e": String(localized: "E screen interface", comment: "A letter's command, as the TurnOver layer lists them"), "d": String(localized: "D direct", comment: "A letter's command, as the TurnOver layer lists them"), "/": String(localized: "Slash shortcuts", comment: "A letter's command, as the TurnOver layer lists them")]
-        return String(localized: "\(listOrder.filter { letters[$0] != nil }.compactMap { names[$0] }.joined(separator: ", ")). Or Down Arrow for a list", comment: "The TurnOver layer's letters, then the list")
+        let own = listOrder.filter { letters[$0] != nil }.compactMap { names[$0] } + PluginCommands.layerCommands(bundle: PluginCommands.frontBundle()).map { "\($0.letter.uppercased()) \($0.title)" }
+        return String(localized: "\(own.joined(separator: ", ")). Or Down Arrow for a list", comment: "The TurnOver layer's letters, then the list")
     }
 
     /// Said by whichever reader is talking: where VoiceOver leads, as an accessibility announcement VoiceOver reads
@@ -106,6 +107,8 @@ final class MenuAnywhere {
         let items = Self.listOrder.compactMap { k -> MenuItem? in
             guard let l = Self.letters[k] else { return nil }
             return MenuItem(verbatim: "\(k == "/" ? KeyNames.slashName : k.uppercased()), \(l.spoken)", .action { DispatchQueue.main.async { l.action() } })
+        } + PluginCommands.layerCommands(bundle: PluginCommands.frontBundle()).map { c in
+            MenuItem(verbatim: "\(c.letter.uppercased()), \(c.title)", .action { DispatchQueue.main.async { c.run() } })
         }
         if steppedIn { TurnOverMenu.shared.onClose = { [weak self] in self?.handBack() } }
         TurnOverMenu.shared.openList("TurnOver commands", items: items)
@@ -133,7 +136,7 @@ final class MenuAnywhere {
         if Coexist.on {
             if turnOverActive() { steppedIn = false; listen(); return }
             Log.info("layer key where VoiceOver leads: the letters claimed for 3 s")
-            Self.say("TurnOver", tone: true)
+            announceClaimedLayer()
             claimLetters()
             return
         }
@@ -142,8 +145,15 @@ final class MenuAnywhere {
         // at once went to the app (Calculator, 12 Oct 2026). So the layer's letters are claimed for three seconds
         // straight away, as hot keys of their own; the chosen one steps in, runs and hands back.
         Log.info("layer key where VoiceOver leads: the letters claimed for 3 s")
-        Self.say("TurnOver", tone: true)   // VoiceOver says it; the letters are listed only if nothing comes
+        announceClaimedLayer()
         claimLetters()
+    }
+
+    private func announceClaimedLayer() {
+        // 14 Nov 2026: the ordinary tone obeys TurnOver's sound-set preference and can be silent while
+        // VoiceOver leads. The system cue confirms the three-second letter claim without taking speech.
+        NSSound.beep()
+        Self.say("TurnOver")
     }
 
     /// The keys claimed while VoiceOver leads: the layer's letters, and Escape.
@@ -242,7 +252,7 @@ final class MenuAnywhere {
         if key == "t" { Log.io("layer: t → switch reader (VoiceOver was reading: to TurnOver)"); switchLead?(true); return }
         if key == "a" { Log.io("layer: a → the next reading mode"); cycleLeadMode?(); return }
         // The keyboard style changes without stepping in: stepping in read the window first and buried the style's
-        // name under it ("wasn't properly reading the switching", Oliver, 28 Oct 2026). VoiceOver says the new style.
+        // name under it ("wasn't properly reading the switching", the owner, 28 Oct 2026). VoiceOver says the new style.
         if key == "k" {
             Log.io("layer: k → keyboard style (VoiceOver leads: no stepping in)")
             GlobalCommands.toggleKeyboardStyle(quietly: true)
@@ -354,6 +364,13 @@ final class MenuAnywhere {
         if ["upArrow", "downArrow"].contains(g.keyName) {
             Log.io("layer: the commands as a list")
             openLayerList()
+            return
+        }
+        // A letter the layer has none of its own for may be a plugin's command in the app in front (the plugin layer, back 15 Nov 2026).
+        if Self.letters[key] == nil, g.modifiers.subtracting(.shift).isEmpty, let c = PluginCommands.command(letter: key, bundle: PluginCommands.frontBundle()) {
+            Log.io("layer: \(key) → plugin command \(Log.words(c.title))")
+            c.run()
+            if steppedIn { handBack() }
             return
         }
         guard let l = Self.letters[key], g.modifiers.subtracting(.shift).isEmpty else {

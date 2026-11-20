@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// The screen interface (28 Oct 2026, Oliver: "something more interesting with the OCR side... on-device AI or
+// The screen interface (28 Oct 2026, the owner: "something more interesting with the OCR side... on-device AI or
 // something faster to create a kind of pseudo-interface, a little how Apple's Screen Recognition does on iOS"):
 // the front window's pixels read as controls, not only as lines of text. Three passes over one capture:
 //   1. Vision's document reader: titles, paragraphs, lists and tables, each with its place on screen.

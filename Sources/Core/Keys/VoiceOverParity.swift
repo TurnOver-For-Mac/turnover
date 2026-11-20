@@ -178,7 +178,7 @@ extension VoiceOverKeysPlugin {
         add("screenCurtain", String(localized: "Screen Curtain on or off (VO-Shift-F11)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+shift+f11"]) { g in run("screenCurtain", g) }
         add("describeImage", String(localized: "Describes the image or photo; anywhere else, what the window looks like (VO-Shift-L)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+shift+l"]) { _ in ImageDescriber.describeCurrent() }
         // TurnOver's own: VoiceOver has no key that reads a window's text from the screen. VO-Shift-L did it off a
-        // picture until Oliver chose VO-Shift-Y (2 Nov 2026: "describing an image is different to ocr").
+        // picture until the owner chose VO-Shift-Y (2 Nov 2026: "describing an image is different to ocr").
         add("recognizeScreen", String(localized: "Recognises the text in the window from the screen (OCR), to read with the arrows and click with Return; pressed twice, its buttons, fields and icons instead (VO-Shift-Y, TurnOver's own)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+shift+y"]) { _ in
             DispatchQueue.main.async { ScreenRecognition.shared.keyPressed() }
         }
@@ -522,21 +522,33 @@ extension BrowseModeDocument {
     public func searchKey(_ key: String, spoken: String, forward: Bool) {
         if deferInitialContent({ [weak self] in self?.searchKey(key, spoken: spoken, forward: forward) }) { return }
         guard ensureContent() else { return }
-        if buffer.isDirty || buffer.isLoading {
-            let epoch = pageGeneration, intent = bufferIntent, movedAt = positionMovedAt, keys = ScriptHandler.keysArrivedCount
-            buffer.build { [weak self] in
-                guard let self, pageGeneration == epoch, bufferIntent == intent, ScriptHandler.keysArrivedCount == keys, positionMovedAt == movedAt, API.focusTreeInterceptor === self else { return }
-                searchPublishedKey(key, spoken: spoken, forward: forward)
-            }
-            return
-        }
-        searchPublishedKey(key, spoken: spoken, forward: forward)
+        // Answered from the copy held, with a fresh one asked for in the background, as quick navigation is (17 Nov 2026).
+        // It waited for a fresh copy whenever the page had changed: on a long Claude chat that took two to four seconds,
+        // and another key nearly always came first. It waits now only when what it finds is not in the copy held.
+        refreshBufferIfNeeded()
+        searchPublishedKey(key, spoken: spoken, forward: forward, mayWait: true)
     }
 
-    private func searchPublishedKey(_ key: String, spoken: String, forward: Bool) {
+    private func searchPublishedKey(_ key: String, spoken: String, forward: Bool, mayWait: Bool) {
         let from = lastQuickNavTarget ?? (buffer.segment(at: position)?.element ?? buffer.lineIndex(at: position).flatMap { buffer.lines[$0].element }) ?? bridge.webArea
         var found = bridge.search(key: key, from: from, forward: forward, limit: 1).first
         var at = found.flatMap { buffer.offset(of: $0) }
+        // Not in a copy older than the page (17 Nov 2026): a fresh copy is waited for, rather than climbing to a parent
+        // the old copy holds (a field in the newest reply is not in it) or saying there is none.
+        let copyIsOld = buffer.isDirty || buffer.isLoading
+        let roles = Self.voiceOverQuickNav.first(where: { $0.searchKey == key }).flatMap { Self.quickNavRoles[$0.name] }
+        let copyHasOneByRole = roles.flatMap { buffer.find(from: position, forward: forward, roles: $0) } != nil
+        let pageFoundItInCopy = at != nil
+        let pageFoundNothingButCopyHasOne = found == nil && copyHasOneByRole
+        let inCopy = pageFoundItInCopy || pageFoundNothingButCopyHasOne
+        if mayWait, copyIsOld, !inCopy {
+            let wait = startCopyWait()
+            buffer.build { [weak self] in
+                guard let self, copyWaitAnswers(wait, "VoiceOver's find (\(spoken))") else { return }
+                searchPublishedKey(key, spoken: spoken, forward: forward, mayWait: false)
+            }
+            return
+        }
         // A run of styled text inside a paragraph: the buffer knows the paragraph.
         var hops = 0
         while at == nil, let f = found, hops < 4 { found = f.element(kAXParentAttribute); at = found.flatMap { buffer.offset(of: $0) }; hops += 1 }
@@ -576,7 +588,7 @@ extension VoiceOverKeysPlugin {
         add("nextOwnWindowSpot", String(localized: "Your next window spot (VO-Command-Right Bracket)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+command+]"]) { _ in Self.cycleOwnSpot(forward: true) }
         add("previousOwnWindowSpot", String(localized: "Your previous window spot (VO-Command-Left Bracket)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+command+["]) { _ in Self.cycleOwnSpot(forward: false) }
         add("arrowQuickNav", String(localized: "Arrow-key Quick Nav on or off: Left and Right move the VoiceOver cursor, Up and Down the item above and below (VO-Shift-Q; Left and Right Arrow together)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+shift+q"]) { _ in
-            ArrowQuickNav.toggle()
+            ArrowQuickNav.toggle("vo_arrowQuickNav script")
         }
         // The arrows alone, while Quick Nav is on: the keyboard handler holds each one until it is let go (or a second
         // arrow joins it, a chord) and hands it here, ArrowQuickNav.single. These scripts answer the same keys when
@@ -631,7 +643,7 @@ public enum ArrowQuickNav {
         if let vo = VoiceOverSettings.arrowQuickNav() {
             voiceOverOn = vo
             Log.info("Quick Nav: VoiceOver's is \(vo ? "on" : "off"); TurnOver's the same")
-            if vo != on { set(vo, sound: false) }
+            if vo != on { set(vo, sound: false, reason: "start, in step with VoiceOver") }
         } else {
             voiceOverOn = nil
             Log.info("Quick Nav: VoiceOver's setting can't be read; the arrows TurnOver passes go to the app alone")
@@ -644,32 +656,36 @@ public enum ArrowQuickNav {
         let vo = !(voiceOverOn ?? on)
         voiceOverOn = vo
         Log.io("Quick Nav: VoiceOver's \(vo ? "on" : "off") in its app; TurnOver's the same")
-        if vo != on { set(vo, sound: false) }
+        if vo != on { set(vo, sound: false, reason: "VoiceOver's own chord seen") }
     }
 
-    static func toggle() {
-        set(!on, sound: true)
+    static func toggle(_ reason: String = "key") {
+        set(!on, sound: true, reason: reason)
         // In a document the chord is also the way between browse mode and focus mode (VoiceOver has no focus mode:
         // Quick Nav off is when the arrows go to the page). Quick Nav off: focus mode, kept until the focus leaves, as
         // NVDA's by-hand switch is; on: browse mode. The VoiceOver keys had no deliberate way into focus mode, since
-        // TurnOver Space is VO-Space there (a contributor, 21 Oct 2026). The Quick Nav sound says enough.
+        // TurnOver Space is VO-Space there (a contributor, 21 Oct 2026). The Quick Nav sound is kept alongside the mode words (14 Nov 2026).
         if config.general.macKeys, let d = API.focusTreeInterceptor {
             d.disableAutoPassThrough = !on
-            d.setPassThrough(!on, announce: false)
+            d.setPassThrough(!on, announce: true, playSound: false, manual: true)
         }
         // VoiceOver's follows: its own chord, posted where VoiceOver hears it. Only when it differs, so two out of step
         // come back into step. (Tried on 17 Oct 2026 and undone, because VoiceOver's Quick Nav then took the arrows
         // TurnOver passed to its apps; those now go to the app alone, so it can be on.)
         guard Coexist.on, !NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.VoiceOver").isEmpty,
-              voiceOverOn != on else { return }
+              voiceOverOn != on else {
+            Log.io("Quick Nav: toggled to \(on ? "on" : "off"); no chord posted to VoiceOver (coexist \(Coexist.on), VoiceOver running \(!NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.VoiceOver").isEmpty), its Quick Nav believed \(voiceOverOn.map { $0 ? "on" : "off" } ?? "unknown"))")
+            return
+        }
         voiceOverOn = on
         Log.io("Quick Nav: VoiceOver's turned \(on ? "on" : "off") with TurnOver's")
         let post = KeyboardGesture.chordPoster
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.15) { post?([123, 124]) }
     }
 
-    private static func set(_ value: Bool, sound: Bool) {
+    private static func set(_ value: Bool, sound: Bool, reason: String = "following VoiceOver") {
         on = value
+        Log.io("Quick Nav: TurnOver's \(value ? "on" : "off") (sound: \(sound); \(reason); app in front: \(NSWorkspace.shared.frontmostApplication?.localizedName ?? "none"))")
         timer?.invalidate(); timer = nil
         if on {
             // Kept current four times a second while on, for the keyboard thread (focus and browse mode change often).
@@ -686,7 +702,7 @@ public enum ArrowQuickNav {
         // Quick Nav on but not applying here (a text field): the chord still toggles, as VoiceOver's does; it was
         // ignored, and the chord did nothing in Claude's prompt (17 Oct 2026).
         guard config.general.macKeys else { return }
-        toggle()
+        toggle("Left and Right chord")
     }
 
     /// One arrow, let go without another joining it. Not Quick Nav's here after all: the key goes to the app.

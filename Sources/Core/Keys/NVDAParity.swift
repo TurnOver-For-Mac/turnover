@@ -470,7 +470,7 @@ enum NVDAMouse {
 enum SynthRing {
     /// A natural voice's speed is the rate, as a Mac voice's is; its voices are in the voice stop.
     /// VoiceOver's ring (16 Oct 2026: the chord and what it turns must feel the same): pitch is in it.
-    /// (Its last stop was "sync with VoiceOver", 16 Oct 2026, until 2 Nov 2026: Oliver, "I don't think it fits there
+    /// (Its last stop was "sync with VoiceOver", 16 Oct 2026, until 2 Nov 2026: The owner, "I don't think it fits there
     /// really, it's already in the TurnOver menu".)
     /// VoiceOver's order, as far as it is known (volume, rate, pitch, voice; 17 Oct 2026, to confirm by ear), then
     /// punctuation.

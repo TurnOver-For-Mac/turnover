@@ -31,4 +31,12 @@ func dockModuleTests() {
         expect(DockAppModule.itemWords(name: "  Finder \n"), "Finder", "trimmed")
         expect(DockAppModule.itemWords(name: ""), nil, "no name: the general wording is kept")
     }
+
+    test("context menu: the selection news of a menu just asked for or open is not said") {
+        let now = Date()
+        check(AXHandler.menuJustAsked(requestedAt: now.addingTimeInterval(-0.1), now: now, menuOpen: false), "asked a moment ago")
+        check(AXHandler.menuJustAsked(requestedAt: .distantPast, now: now, menuOpen: true), "a menu is open")
+        check(!AXHandler.menuJustAsked(requestedAt: now.addingTimeInterval(-3), now: now, menuOpen: false), "asked long ago, none open")
+        check(!AXHandler.menuJustAsked(requestedAt: .distantPast, now: now, menuOpen: false), "never asked")
+    }
 }

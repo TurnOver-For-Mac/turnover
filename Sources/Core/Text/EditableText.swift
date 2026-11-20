@@ -268,6 +268,39 @@ open class EditableText: TurnOverObject {
         Log.io("selection: no change seen within \(Int(patience * 1000)) ms; the app's notice will read it")
     }
 
+    /// Whether the text has letters that run right to left (Hebrew, Arabic, Syriac, Thaana and the like), or a mark that says so.
+    public static func hasRightToLeft(_ text: String) -> Bool {
+        text.unicodeScalars.contains { u in
+            switch u.value {
+            case 0x0590...0x08FF, 0x200F, 0x202B, 0x202E, 0x2067, 0xFB1D...0xFDFF, 0xFE70...0xFEFF, 0x10800...0x10FFF, 0x1E800...0x1EFFF: return true
+            default: return false
+            }
+        }
+    }
+
+    /// Whether Left or Right has nowhere to go: the caret and its line both reach the edge, so a caret wrongly reported at 0 is not believed.
+    public nonisolated static func sidewaysEdge(key: String, caret: Int, lineStart: Int, lineEnd: Int, length: Int, fieldIsEmpty: Bool) -> Bool {
+        switch key {
+        case "leftArrow": return lineStart <= 0 && caret <= 0
+        case "rightArrow": return lineEnd >= length && caret >= length && (length > 0 || fieldIsEmpty)
+        default: return false
+        }
+    }
+
+    /// A one-line web box that holds a single character, and the key is a plain Up or Down Arrow: no other line to go to.
+    public nonisolated static func isOneCharacterBox(length: Int, isTextField: Bool, inWebContent: Bool, key: String) -> Bool {
+        isTextField && inWebContent && length == 1 && (key == "upArrow" || key == "downArrow")
+    }
+
+    /// A caret key at a known edge: sent on unwaited, the edge sound, and the line read in a one-line box. A field whose
+    /// application answers an edge arrow by replacing its text (Claude's Prompt recalling a message, 16 Nov 2026)
+    /// overrides this to read the line once the value has changed.
+    open func sendUnwaitedCaretKeyAtEdge(_ gesture: KeyboardGesture, unit: TextUnit, info: TextInfo) {
+        gesture.send()
+        Tones.edge(keySent: true, sound: appModule.playsNativeCaretBoundarySound)
+        caretMoved(speak: unit == .line && readsLineAtEdge ? .line : nil, gesture: gesture, info: info)
+    }
+
     func caretMovement(_ gesture: KeyboardGesture, _ unit: TextUnit) {
         // Google Docs, Sheets, Slides: the text box is a hidden typing target; Google says the move itself.
         if GoogleDocs.isEditor(element) { gesture.send(); return }
@@ -291,13 +324,23 @@ open class EditableText: TurnOverObject {
         var up: AXUIElement? = element.element(kAXParentAttribute)
         for _ in 0..<4 { guard let e = up, !inCell else { break }; if ["AXCell", "AXRow", "AXTable"].contains(e.role) { inCell = true }; up = e.element(kAXParentAttribute) }
         if !inCell, appModule.isTableCellText(element) { inCell = true }
+        // A web box of one character (PayPal's six code boxes, 18 Nov 2026: Up was at once, Down waited 320 ms and made 170
+        // accessibility calls, because the caret stood before the character, not after it): Up and Down have no other line
+        // to go to, whichever side of it the caret is on.
+        let oneCharacterBox = Self.isOneCharacterBox(length: length, isTextField: element.role == "AXTextField", inWebContent: isInWebContent, key: key)
         let noRoom = collapsed && !inCell && !gesture.modifiers.contains(.shift) && unit == .line
-            && ((backwards && oldLine.start <= 0 && info.start <= 0) || (forwards && length > 0 && oldLine.end >= length && info.start >= length))
-        if noRoom {
-            Log.io("edge: nothing \(backwards ? "before" : "after") the caret (\(info.start) of \(length)); sent unwaited")
-            gesture.send()
-            Tones.edge(keySent: true, sound: boundarySound)
-            caretMoved(speak: readsLineAtEdge ? .line : nil, gesture: gesture, info: info)
+            && (oneCharacterBox || (backwards && oldLine.start <= 0 && info.start <= 0) || (forwards && length > 0 && oldLine.end >= length && info.start >= length))
+        // Plain Left and Right at either end of left-to-right text are as sure an edge, so the bump is at once, as
+        // VoiceOver's is: a web field made them wait three times the caret's patience, over 300 ms (9 Nov 2026). Not where
+        // the line has right-to-left text, in which the arrows go the other way round.
+        // A length of 0 is believed only when the field says so itself: some editors answer 0 for text they do not expose.
+        // As for Up and Down, the line must also reach the edge: some apps report the caret at 0 when it is not.
+        let fieldIsEmpty = length == 0 && (element.int(kAXNumberOfCharactersAttribute) == 0 || element.string(kAXValueAttribute) == "")
+        let noRoomSideways = collapsed && !inCell && unit == .character && gesture.modifiers.isEmpty && !Self.hasRightToLeft(oldLine.text)
+            && Self.sidewaysEdge(key: key, caret: info.start, lineStart: oldLine.start, lineEnd: oldLine.end, length: length, fieldIsEmpty: fieldIsEmpty)
+        if noRoom || noRoomSideways {
+            Log.io("edge: nothing \(backwards || key == "leftArrow" ? "before" : "after") the caret (\(info.start) of \(length)); sent unwaited")
+            sendUnwaitedCaretKeyAtEdge(gesture, unit: unit, info: info)
             return
         }
         gesture.send()
@@ -366,7 +409,7 @@ open class EditableText: TurnOverObject {
             return
         }
         // VoiceOver's reading of a plain Right by character: the character just passed over, now before the caret, so
-        // what you hear is what Backspace will delete (Oliver, 20 Oct 2026: "you have to be to the right of the
+        // what you hear is what Backspace will delete (20 Oct 2026: "you have to be to the right of the
         // object you want to backspace"). NVDA reads the character after the caret; the Windows family keeps that.
         if unit == .character, config.general.macKeys, gesture.keyName == "rightArrow", gesture.modifiers.isEmpty,
            let n = newInfo, n.start > 0, let old = try? makeTextInfo(.bookmark(bookmark)), n.start > old.start {
@@ -421,7 +464,7 @@ open class EditableText: TurnOverObject {
         guard moved, let newInfo, let line = try? makeTextInfo(.caret) else { return }
         // Return sent what was typed (Claude's prompt, a chat box): the text got shorter, not a line longer. Nothing
         // to say ("new line" was heard as Claude's prompt sent, 7 Oct 2026).
-        if lengthBefore > 0, line.storyLength() < lengthBefore { Log.io("Return sent the text; no new line"); return }
+        if lengthBefore > 0, line.storyLength() < lengthBefore { Log.io("Return sent the text; no new line"); appModule.returnSentText(inField: name); return }
         // Say the new line was made (the owner asked, 4 Oct 2026), then anything already on it (a list number).
         if config.keyboard.speakNewLine { Speech.speakOnly(String(localized: "new line", comment: "Spoken message")) }   // the display shows the new line itself
         line.expand(.line)
@@ -448,7 +491,8 @@ open class EditableText: TurnOverObject {
         }
         let test = old.copy()
         var chunk = ""
-        if test.move(.character, -1) < 0 {
+        let movedBack = test.move(.character, -1)
+        if movedBack < 0 {
             if unit == .line { let l = old.copy(); l.expand(.line); l.setEndPoint(old, .endToStart); chunk = l.text }
             else if unit == .word {
                 // The word before the caret, past any spaces: Option Backspace takes it and the spaces after it. The
@@ -463,11 +507,21 @@ open class EditableText: TurnOverObject {
             else { test.expand(unit); chunk = test.text }
         }
         gesture.send()
+        // An empty field: nothing to delete, and nothing to wait for. The wait was 300 ms of silence a press in
+        // an empty prompt (Claude's: 127 times on 13 Nov 2026), and the next key waited behind it. A bump, as at any edge.
+        // (An empty field only, by its own value, white space aside: Claude's empty prompt holds a line break. Where
+        // the caret's place can't be read, it says 0 with text before it.)
+        let blank = (element.attr(kAXValueAttribute) as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true
+        if movedBack == 0, blank {
+            Log.io("edge: an empty field, nothing to delete; sent unwaited")
+            Tones.edge(keySent: true, sound: appModule.playsNativeCaretBoundarySound)
+            return
+        }
         Speech.speakTypedCharacter("\u{8}", inEditable: true)
         let c = chunk.replacingOccurrences(of: "\r\n", with: "\n")
         // Said at once, before the caret is waited for: with something before the caret the deletion is certain, and
         // the wait (up to 300 ms in web content, 100 to 160 accessibility calls) held back every repeated Backspace
-        // in Mail's compose window (Oliver, 20 Oct 2026: "not reading so well").
+        // in Mail's compose window (20 Oct 2026: "not reading so well").
         if !c.isEmpty {
             // A line break has nothing to spell: say what it was ("new line"), as for any character named on its own.
             if let only = c.first, c.count == 1, only.isNewline { Speech.speakMessage(Symbols.name(of: only)) }

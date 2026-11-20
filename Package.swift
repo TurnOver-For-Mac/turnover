@@ -13,6 +13,10 @@
 // turnover-key      TurnOver Key, the login item: Command Control Period, and a restart after a crash
 // turnover-settings TurnOver's settings window
 // turnover-plugin   the plugin tool (making and checking app plugins)
+// turnover-plugin-host   runs one plugin's script in a sandbox (TurnOverPluginHost; TurnOverPluginWire is the
+//                   message names and limits it shares with the core)
+// turnover-trust-keeper   the sandboxed XPC service that keeps plugin script approvals (TurnOverTrustKeeper), also the
+//                   program build.sh's keeper check runs as a throwaway app's host
 // turnover-tests    the unit tests (build.sh runs them); turnover-coretest the live and fixture tests
 // AXFixtures, PluginTestKit   recorded accessibility trees and the plugin test kit, for the tests
 // turnover-probe    measurement probes, run by hand
@@ -46,6 +50,10 @@ let coreSources: [String] = [
     "Apps/Chat/ChatAppModule.swift",
     "Apps/Chat/ChatView.swift",
     "Apps/Claude/ClaudeAppModule.swift",
+    "Apps/Claude/ClaudeBrowserReturn.swift",
+    "Apps/Claude/ClaudeConversationSwitch.swift",
+    "Apps/Claude/ClaudePromptText.swift",
+    "Apps/Claude/ClaudeSessionDeletion.swift",
     "Apps/Claude/ClaudeTranscript.swift",
     "Apps/Contacts/ContactsAppModule.swift",
     "Apps/Dock/DockAppModule.swift",
@@ -59,12 +67,14 @@ let coreSources: [String] = [
     "Apps/Keynote/KeynoteAppModule.swift",
     "Apps/Kindle/KindleAppModule.swift",
     "Apps/Mail/MailAppModule.swift",
+    "Apps/Mail/MailReadAhead.swift",
     "Apps/Maps/MapsAppModule.swift",
     "Apps/Media/MediaAppModule.swift",
     "Apps/Media/MediaShelfReadiness.swift",
     "Apps/Media/MediaSidebarSelection.swift",
     "Apps/Media/MediaView.swift",
     "Apps/Media/MediaWorkOwner.swift",
+    "Apps/Notes/NotesPaneNavigation.swift",
     "Apps/Numbers/NumbersAppModule.swift",
     "Apps/Pages/PagesAppModule.swift",
     "Apps/Panes/PanesAppModule.swift",
@@ -108,6 +118,8 @@ let package = Package(
         .executable(name: "turnover-coretest", targets: ["TurnOverCoreTest"]),
         .executable(name: "turnover-plugin", targets: ["TurnOverPlugin"]),
         .executable(name: "turnover-key", targets: ["TurnOverKey"]),
+        .executable(name: "turnover-plugin-host", targets: ["TurnOverPluginHost"]),
+        .executable(name: "turnover-trust-keeper", targets: ["TurnOverTrustKeeper"]),
         .executable(name: "turnover-settings", targets: ["TurnOverSettings"]),
         .executable(name: "turnover-tests", targets: ["TurnOverTests"]),
         // Dynamic: dyld honours interposing only in a library loaded at launch, never in the executable itself.
@@ -138,6 +150,9 @@ let package = Package(
             path: "Sources/TurnOverControl",
             linkerSettings: [.linkedFramework("Security")]
         ),
+        // What TurnOver and turnover-plugin-host must agree on: message names, operations, limits, line framing.
+        // Foundation only, no actor isolation (docs/PLUGIN-SCRIPTS-PLAN.md).
+        .target(name: "TurnOverPluginWire", path: "Sources/TurnOverPluginWire"),
         // macOS's own braille display drivers, reached from Objective-C (docs/BRAILLE-PLAN.md).
         .target(
             name: "TurnOverBraille",
@@ -146,7 +161,7 @@ let package = Package(
         ),
         .target(
             name: "TurnOverCore",
-            dependencies: ["TurnOverAX", "TurnOverSpeech", "TurnOverBraille", "TurnOverControl"],
+            dependencies: ["TurnOverAX", "TurnOverSpeech", "TurnOverBraille", "TurnOverControl", "TurnOverPluginWire"],
             path: "Sources",
             exclude: [
                 "AXFixtures",
@@ -160,10 +175,13 @@ let package = Package(
                 "TurnOverKey",
                 "TurnOverObjC",
                 "TurnOverPlugin",
+                "TurnOverPluginHost",
+                "TurnOverPluginWire",
                 "TurnOverProbe",
                 "TurnOverSettings",
                 "TurnOverSpeech",
                 "TurnOverTests",
+                "TurnOverTrustKeeper",
                 "README.md",
                 "Core/README.md",
                 "Views/README.md",
@@ -360,7 +378,7 @@ let package = Package(
         // HIServices calls, and the recording/replay model over it.
         .target(name: "AXReplayShim", path: "Sources/AXReplayShim", linkerSettings: [.linkedFramework("ApplicationServices")]),
         // A plugin's own tests, replayed (docs/PLUGIN-TOOLKIT-PLAN.md item 5): used by turnover-plugin test and turnover-tests.
-        .target(name: "PluginTestKit", dependencies: ["TurnOverCore", "AXFixtures"], path: "Sources/PluginTestKit",
+        .target(name: "PluginTestKit", dependencies: ["TurnOverCore", "AXFixtures", "TurnOverPluginWire"], path: "Sources/PluginTestKit",
                 swiftSettings: [.defaultIsolation(MainActor.self)],
                 linkerSettings: [.linkedFramework("ApplicationServices")]),
         .target(name: "AXFixtures", path: "Sources/AXFixtures",
@@ -368,7 +386,7 @@ let package = Package(
         // The unit tests: pure functions, and views against recorded trees (Tests/Fixtures). build.sh runs it.
         .executableTarget(
             name: "TurnOverTests",
-            dependencies: ["TurnOverCore", "TurnOverSpeech", "TurnOverControl", "AXFixtures", "PluginTestKit"],
+            dependencies: ["TurnOverCore", "TurnOverSpeech", "TurnOverControl", "TurnOverPluginWire", "AXFixtures", "PluginTestKit"],
             path: "Sources/TurnOverTests",
             swiftSettings: [.defaultIsolation(MainActor.self)],
             linkerSettings: [.linkedFramework("ApplicationServices"), .linkedFramework("AppKit")]
@@ -408,6 +426,22 @@ let package = Package(
                 .linkedFramework("AppKit"),
                 .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"]),
             ]
+        ),
+        // Runs one plugin's script in a sandbox, for TurnOver (docs/PLUGIN-SCRIPTS-PLAN.md). Ships in Contents/Helpers.
+        // Depends on the wire definitions only, never on TurnOverCore.
+        .executableTarget(
+            name: "TurnOverPluginHost",
+            dependencies: ["TurnOverPluginWire"],
+            path: "Sources/TurnOverPluginHost",
+            swiftSettings: [.defaultIsolation(MainActor.self)],
+            linkerSettings: [.linkedFramework("JavaScriptCore")]
+        ),
+        // The keeper of plugin script approvals: a small sandboxed XPC service inside TurnOver.app, and with --client check
+        // the program the build uses to prove it (docs/PLUGIN-SCRIPTS-PLAN.md, "The keeper"). Depends on the wire only.
+        .executableTarget(
+            name: "TurnOverTrustKeeper",
+            dependencies: ["TurnOverPluginWire"],
+            path: "Sources/TurnOverTrustKeeper"
         ),
         .executableTarget(
             name: "TurnOverProbe",

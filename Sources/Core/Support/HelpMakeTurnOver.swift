@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Help make TurnOver (9 Nov 2026, Oliver: "a panel to open talking about how you can contribute, pointing to letting
+// Help make TurnOver (9 Nov 2026, the owner: "a panel to open talking about how you can contribute, pointing to letting
 // us know what works and doesn't work, all the way through to contributing. It's a call to action to really get this
 // open sourced"). One page, read with the arrows like the welcome's: the ways to help, from a sentence of feedback to
 // writing code, then a button that opens TurnOver on GitHub. It opens by itself once, at the end of the welcome after

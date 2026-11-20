@@ -1,0 +1,40 @@
+// Tests with no app (turnover-plugin test). "answers" gives TurnOver's reply to what the script asks in a step: here the
+// buttons it finds, the item the person chooses (or null if they dismiss the list) and the result of pressing.
+// "expect.asked" is the list the script put up; "expect.said" is what it spoke.
+[
+  { "name": "offers the buttons of the window in front and presses the one chosen",
+    "steps": [
+      { "command": "chooseButton", "item": { "role": "textField", "name": "Name", "window": "Main" },
+        "answers": {
+          "find": [ { "role": "button", "name": "Save", "window": "Main" },
+                    { "role": "button", "name": "Cancel", "window": "Main" },
+                    { "role": "button", "name": "Elsewhere", "window": "Other" } ],
+          "choose": "Cancel", "item.press": true },
+        "expect": { "asked": [ { "choose": "Buttons in Main", "items": ["Save", "Cancel"] } ], "said": ["Pressed Cancel"] } } ] },
+
+  { "name": "does nothing when the list is dismissed",
+    "steps": [
+      { "command": "chooseButton", "item": { "role": "textField", "name": "Name", "window": "Main" },
+        "answers": { "find": [ { "role": "button", "name": "Save", "window": "Main" } ], "choose": null },
+        "expect": { "asked": [ { "choose": "Buttons in Main", "items": ["Save"] } ], "said": [] } } ] },
+
+  { "name": "says so when there are no buttons, and asks nothing",
+    "steps": [
+      { "command": "chooseButton", "answers": { "find": [] }, "expect": { "asked": [], "said": ["No buttons to list here"] } } ] },
+
+  { "name": "buttons that are switched off are listed only when the option says so",
+    "options": { "includeDisabled": true },
+    "steps": [
+      { "command": "chooseButton", "item": { "role": "textField", "window": "Main" },
+        "answers": { "find": [ { "role": "button", "name": "Save", "window": "Main", "states": ["disabled"] },
+                               { "role": "button", "name": "Save", "window": "Main" } ], "choose": "Save (2)", "item.press": true },
+        "expect": { "asked": [ { "choose": "Buttons in Main", "items": ["Save", "Save (2)"] } ], "said": ["Pressed Save (2)"] } } ] },
+
+  { "name": "the options can be changed while it runs, and say nothing when pressed if told not to",
+    "steps": [
+      { "event": "optionsChange", "id": "announce", "value": false },
+      { "command": "chooseButton", "item": { "role": "textField", "window": "Main" },
+        "answers": { "find": [ { "role": "button", "name": "Save", "window": "Main" } ], "choose": "Save", "item.press": true },
+        "expect": { "said": [] } },
+      { "event": "optionsChange", "id": "limit", "value": 7 } ] }
+]

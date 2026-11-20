@@ -11,7 +11,7 @@ Recovered on 1 November 2026. These are sanitized historical investigation notes
 
 This is coverage of the offer screen, not audiobook access. The stress checklist’s library navigation, opening a book, Play/Pause, chapter list and sleep timer were plans. No account or library contents are included.
 
-Unless a result above specifies otherwise, the source sections do not record exact app/macOS versions, a uniquely identified TurnOver binary or a complete VoiceOver on/off and leader-state matrix. Mac and Windows refer to TurnOver keyboard styles on macOS. Historical driver checks report what TurnOver emitted; they do not substitute for Oliver listening to the current installed build. No app was opened, keys sent, code changed or build installed during this recovery.
+Unless a result above specifies otherwise, the source sections do not record exact app/macOS versions, a uniquely identified TurnOver binary or a complete VoiceOver on/off and leader-state matrix. Mac and Windows refer to TurnOver keyboard styles on macOS. Historical driver checks report what TurnOver emitted; they do not substitute for the owner listening to the current installed build. No app was opened, keys sent, code changed or build installed during this recovery.
 
 ## Provenance
 

@@ -5,7 +5,7 @@
 // next night (28 Oct 2026) because it is one plain list for all of them. The term the person typed goes to the
 // catalog's search service (it goes to Apple through the app either way), the answers are a plain list spoken by
 // name, and Return opens the page by its link through the app's own URL scheme, which each app follows from any
-// page (measured: macappstore://, music://, podcasts://). On for everyone from build 23 (Oliver, 2 Nov 2026), after a
+// page (measured: macappstore://, music://, podcasts://). On for everyone from build 23 (2 Nov 2026), after a
 // week behind the developer switch `flatView`.
 import Foundation
 import AppKit

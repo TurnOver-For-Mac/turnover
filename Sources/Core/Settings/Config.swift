@@ -77,7 +77,7 @@ public struct Config: Codable {
         /// Bass, middle and treble in decibels, -12 to 12, for the voice in use (SpeechEQ; 2 Nov 2026).
         public var bass = 0.0, middle = 0.0, treble = 0.0
         /// Each voice's own rate, volume and EQ, by voice (a Mac voice's identifier, or "external:" and a natural
-        /// voice): kept as the voice is left and put back as it is chosen again (Oliver, 2 Nov 2026: "rate, volume,
+        /// voice): kept as the voice is left and put back as it is chosen again (2 Nov 2026: "rate, volume,
         /// and the eq should be specific to each voice"). `rate`, `volume` and the EQ above are the voice in use's.
         public var voiceTunings: [String: VoiceTuning] = [:]
         public struct VoiceTuning: Codable, Equatable {
@@ -201,11 +201,13 @@ public struct Config: Codable {
         /// NVDA's "Automatic focus mode for focus changes": a field taking the focus switches to focus mode by itself;
         /// off, only TurnOver Space does (a tester, 6 Oct 2026).
         public var autoFocusMode = true
+        /// Automatic focus mode when the virtual reading cursor reaches an interactive field.
+        public var autoPassThroughOnCaretMove = true
         /// A picture with no description is read by its file name ("graphic, sunset beach"), as JAWS can; off, just
         /// "graphic" (a tester, AppleVis, 9 Oct 2026).
         public var imageFileNames = false
         public init() {}
-        enum Keys: String, CodingKey { case maxLineLength, autoSayAllOnPageLoad, wrapQuickNav, screenLayout, autoFocusMode, imageFileNames }
+        enum Keys: String, CodingKey { case maxLineLength, autoSayAllOnPageLoad, wrapQuickNav, screenLayout, autoFocusMode, autoPassThroughOnCaretMove, imageFileNames }
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: Keys.self)
             maxLineLength = (try? c.decodeIfPresent(Int.self, forKey: .maxLineLength)) ?? 100
@@ -213,6 +215,7 @@ public struct Config: Codable {
             wrapQuickNav = (try? c.decodeIfPresent(Bool.self, forKey: .wrapQuickNav)) ?? true
             screenLayout = (try? c.decodeIfPresent(Bool.self, forKey: .screenLayout)) ?? true
             autoFocusMode = (try? c.decodeIfPresent(Bool.self, forKey: .autoFocusMode)) ?? true
+            autoPassThroughOnCaretMove = (try? c.decodeIfPresent(Bool.self, forKey: .autoPassThroughOnCaretMove)) ?? true
             imageFileNames = (try? c.decodeIfPresent(Bool.self, forKey: .imageFileNames)) ?? false
         }
         public func encode(to encoder: Encoder) throws {
@@ -222,6 +225,7 @@ public struct Config: Codable {
             try c.encode(wrapQuickNav, forKey: .wrapQuickNav)
             try c.encode(screenLayout, forKey: .screenLayout)
             try c.encode(autoFocusMode, forKey: .autoFocusMode)
+            try c.encode(autoPassThroughOnCaretMove, forKey: .autoPassThroughOnCaretMove)
             try c.encode(imageFileNames, forKey: .imageFileNames)
         }
     }
@@ -229,14 +233,14 @@ public struct Config: Codable {
     public struct Recognition: Codable {
         /// NVDA's "Periodically refresh recognized content", by change rather than by the clock: while the result is
         /// open, a small picture of the window is taken each second, and when it differs the window is recognised
-        /// again, the new rows said (Oliver, 3 Nov 2026: "or even if something on the screen changes"). Off by default,
+        /// again, the new rows said (3 Nov 2026: "or even if something on the screen changes"). Off by default,
         /// as in NVDA.
         public var autoRefresh = false
         /// NVDA's "Automatically say all on result".
         public var autoSayAll = false
-        /// After Return clicks something in the result, recognise again instead of closing (Oliver, 28 Oct 2026: a
+        /// After Return clicks something in the result, recognise again instead of closing (28 Oct 2026: a
         /// dialog's OK, then the screen that follows, without pressing the key again). A feature for a whole build:
-        /// hidden in 22.x (Oliver, 29 Oct 2026: "that's not a bug fix, it's a feature"), on for everyone from build 23
+        /// hidden in 22.x (29 Oct 2026: "that's not a bug fix, it's a feature"), on for everyone from build 23
         /// (3 Nov 2026). Stored under a new name: 22.x wrote the old one as off in every settings file (a review).
         public var refreshAfterClick = true
         public init() {}
@@ -400,7 +404,7 @@ public struct Config: Codable {
         /// "Bambu Studio, with the Bambu Studio plugin" as an app with a plugin comes to the front (the plugin design notes 13).
         public var announcePlugins = true
         /// A progress bar as it moves (ProgressOutput, NVDA+U): "beep", "speak", "both" or "off". Beeps by
-        /// default, as NVDA does (Oliver, having heard them, 3 Nov 2026: "put the progress bar stuff in there").
+        /// default, as NVDA does (having heard them, 3 Nov 2026: "put the progress bar stuff in there").
         public var progressBars = "beep"
         /// What is under the mouse pointer read as the pointer moves, and the cursor taken there (VoiceOver's cursor
         /// following the mouse pointer; NVDA+M). Off until asked for: a nudged mouse would otherwise start speech.
@@ -549,6 +553,21 @@ public struct Config: Codable {
             try c.encode(panMovesCaret, forKey: .panMovesCaret)
         }
     }
+    /// Plugins that come from outside TurnOver's own library (16 Nov 2026): NVDA's add-on store, and the credit name for a conversion.
+    public struct PluginSources: Codable {
+        /// TurnOver's plugin tool may ask NVDA's add-on store for its list and download an add-on the person chooses. Off until a person
+        /// says yes in the question the first use asks, and off again with the same toggle. Nothing about the person or the Mac is sent.
+        public var connectToNVDAStore = false
+        /// Who is credited as having converted an NVDA add-on: asked once, kept here, written into the plugin and shown at approval.
+        public var convertedBy = ""
+        public init() {}
+        enum Keys: String, CodingKey { case connectToNVDAStore, convertedBy }
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: Keys.self)
+            connectToNVDAStore = (try? c.decodeIfPresent(Bool.self, forKey: .connectToNVDAStore)) ?? false
+            convertedBy = (try? c.decodeIfPresent(String.self, forKey: .convertedBy)) ?? ""
+        }
+    }
     public var general = General()
     public var speech = Speech()
     public var keyboard = Keyboard()
@@ -561,6 +580,7 @@ public struct Config: Codable {
     public var recognition = Recognition()
     /// Steam and CrossOver games speaking through TurnOver (Games.swift; this Mac only).
     public var games = Games()
+    public var pluginSources = PluginSources()
     /// Per-application settings, by bundle identifier, as the app module defines them.
     public var apps: [String: [String: String]] = [:]
 
@@ -572,7 +592,7 @@ public struct Config: Codable {
     /// A settings file written by an older TurnOver lacks the sections added since; each one falls back
     /// to its defaults instead of the whole file being thrown away (which lost the owner's rate once). Keys it has
     /// that are gone ("addons", the add-on loader's list) are ignored.
-    enum Keys: String, CodingKey { case general, speech, keyboard, editableText, presentation, virtualBuffers, applications, documentFormatting, braille, recognition, games, apps }
+    enum Keys: String, CodingKey { case general, speech, keyboard, editableText, presentation, virtualBuffers, applications, documentFormatting, braille, recognition, games, pluginSources, apps }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         general = (try? c.decodeIfPresent(General.self, forKey: .general)) ?? General()
@@ -586,6 +606,7 @@ public struct Config: Codable {
         braille = (try? c.decodeIfPresent(Braille.self, forKey: .braille)) ?? Braille()
         recognition = (try? c.decodeIfPresent(Recognition.self, forKey: .recognition)) ?? Recognition()
         games = (try? c.decodeIfPresent(Games.self, forKey: .games)) ?? Games()
+        pluginSources = (try? c.decodeIfPresent(PluginSources.self, forKey: .pluginSources)) ?? PluginSources()
         apps = (try? c.decodeIfPresent([String: [String: String]].self, forKey: .apps)) ?? [:]
     }
 

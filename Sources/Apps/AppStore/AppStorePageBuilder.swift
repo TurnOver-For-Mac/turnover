@@ -243,7 +243,7 @@ nonisolated final class AppStorePageBuilder {
             while current(), page.count == before, tries < 2, children(sec).count <= 1 || (sec.string(kAXDescriptionAttribute) ?? "").isEmpty {
                 guard current() else { return }
                 if deferEmptyMaterialization, before > 0 {
-                    // A readable prefix is ready. Initial product-page collection took 1.6–1.9 s in Oliver's
+                    // A readable prefix is ready. Initial product-page collection took 1.6–1.9 s in the owner's
                     // trial (28 Oct 2026); this retry path adds 250 ms waits before publication. Leave this exact
                     // shelf for more/End; they retain the existing eager materialization and reading order.
                     shelves.removeLast()

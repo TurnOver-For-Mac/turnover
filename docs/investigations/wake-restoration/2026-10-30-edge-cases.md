@@ -1,6 +1,6 @@
 # Sleep and wake restoration follow-up
 
-30 October 2026. Codex implementation and review for Oliver. Tracking: [issue 204](https://github.com/TurnOver-For-Mac/turnover/issues/204), following [PR 197](https://github.com/TurnOver-For-Mac/turnover/pull/197).
+30 October 2026. Codex implementation and review for the owner. Tracking: [issue 204](https://github.com/TurnOver-For-Mac/turnover/issues/204), following [PR 197](https://github.com/TurnOver-For-Mac/turnover/pull/197).
 
 ## Scope
 
@@ -33,18 +33,18 @@ The inherited `lockTurnedVoiceOverOn` attribution remains one-shot: if a request
 
 ## Local trial to record
 
-With TurnOver reading and the swap off, sleep or lock, then unlock. VoiceOver should read the password screen; TurnOver should resume when secure input is off and an ordinary app is ready. Repeat once. Separately, when VoiceOver was already on before locking, it should remain on after unlocking. Read the newest installed-app log and record what Oliver actually heard.
+With TurnOver reading and the swap off, sleep or lock, then unlock. VoiceOver should read the password screen; TurnOver should resume when secure input is off and an ordinary app is ready. Repeat once. Separately, when VoiceOver was already on before locking, it should remain on after unlocking. Read the newest installed-app log and record what the owner actually heard.
 
-Slow readiness and failed handovers are covered by controlled regression scenarios; do not delay system processes, revoke permissions or manufacture a broken reader on Oliver's Mac to reproduce them.
+Slow readiness and failed handovers are covered by controlled regression scenarios; do not delay system processes, revoke permissions or manufacture a broken reader on the owner's Mac to reproduce them.
 
 ## Rollback and publication
 
 The current installed 22.4 bundle was copied to ~/Library/Developer/TurnOver/rollback/TurnOver-before-wake-edge-fix-20261030.app and verified by matching 145 file hashes and deep strict code-signature verification. A corresponding hash manifest is beside it. This local rollback path is not portable contributor evidence.
 
-No code push, PR update or release before Oliver tries the local installed result. GitHub status updates identify checks performed and remaining trial limits.
+No code push, PR update or release before the owner tries the local installed result. GitHub status updates identify checks performed and remaining trial limits.
 
 ## User trial and publication checkpoint
 
-30 October 2026: Oliver reported that the installed 22.5 wake build works. This is a general confirmation of the local trial, not a claim that every delayed-start or failure ordering was individually reproduced. Both full build loops passed 418 tests, including the 12 wake regressions, plus the braille thread and three helper self-tests. Installed signature, Accessibility and keyboard startup were verified. The notification-attribution limit above remains documented.
+30 October 2026: The owner reported that the installed 22.5 wake build works. This is a general confirmation of the local trial, not a claim that every delayed-start or failure ordering was individually reproduced. Both full build loops passed 418 tests, including the 12 wake regressions, plus the braille thread and three helper self-tests. Installed signature, Accessibility and keyboard startup were verified. The notification-attribution limit above remains documented.
 
 The wake fix is submitted separately from the folder migration, following the review's publication order.

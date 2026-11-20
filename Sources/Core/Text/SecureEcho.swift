@@ -50,12 +50,12 @@ public enum SecureEcho {
         baseline = lastSeen; changes = 0; pending = nil
         if single, delta == 1 {
             if VoiceOverSounds.play("SecureCharacter.aiff") { }
-            else if config.general.navigationSounds { Speech.player?.playBell(frequencies: [1900], spacingMs: 0, ringMs: 14, volume: 0.12) }
+            else if config.general.navigationSounds { Tones.bell(frequencies: [1900], spacingMs: 0, ringMs: 14, volume: 0.12, exempt: true) }
             else { Speech.speakMessage(String(localized: "star", comment: "Spoken message"), remember: false) }
         } else if single, delta == -1 {
             if lastSeen == 0 { Speech.speakMessage(String(localized: "blank", comment: "Spoken message"), remember: false) }
             else if VoiceOverSounds.play("SecureCharacter.aiff") { }
-            else if config.general.navigationSounds { Speech.player?.playBell(frequencies: [900], spacingMs: 0, ringMs: 14, volume: 0.12) }
+            else if config.general.navigationSounds { Tones.bell(frequencies: [900], spacingMs: 0, ringMs: 14, volume: 0.12, exempt: true) }
             else { Speech.speakMessage(String(localized: "deleted", comment: "Spoken message"), remember: false) }
         } else {
             Speech.speakMessage(lastSeen == 0 ? Phrases.blank : Phrases.characters(lastSeen), remember: false)
@@ -110,34 +110,99 @@ public enum SecureEcho {
 /// warning.) A password field the application shows from another process (SecureEcho.otherProcessField) is one too:
 /// its length is looked at from the first quarter second, and it is not logged as this (System Settings' password
 /// sheet said "Press Command Tab twice" three times while the password was typed).
+/// 18 Nov 2026: each stretch of secure input, as the looks see it come on and go off, logs one line at each end and
+/// nothing is said. VoiceOver is never brought in: the hand-over of 17 Nov 2026 was taken out on the owner's word
+/// ("voiceover shouldn't be coming on"). Reading a text field from its own news while no key is heard was tried and left
+/// out of the bug-fix build (a review on 18 Nov 2026: flicker, a first paste unread, replayed keys said twice, word echo).
 public enum SecureInputWatch {
     private static var timer: Timer?
     private static var looks = 0
     private static var warned = false
+    /// While secure input is on outside a password field: when that began, the focus last seen, and how often it moved.
+    private static var onSince: Date?
+    private static var focusSeen: AXUIElement?
+    private static var focusMoves = 0
     /// Secure input came on or went off while TurnOver leads (the app lifts VoiceOver's mute for a password field).
     public static var onChange: ((Bool) -> Void)?
     private static var wasOn = false
+    /// The stretch of secure input under way, for its two log lines (18 Nov 2026).
+    private static var episode = SecureInputEpisode()
 
     public static func start() {
         timer?.invalidate()
+        onSince = nil; focusSeen = nil; focusMoves = 0
         timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { _ in MainActor.assumeIsolated { check() } }
     }
-    public static func stop() { timer?.invalidate(); timer = nil; looks = 0; warned = false; SecureEcho.watch(nil) }
+    public static func stop() {
+        timer?.invalidate(); timer = nil; looks = 0; warned = false; SecureEcho.watch(nil)
+        onSince = nil; focusSeen = nil; focusMoves = 0
+        // No longer watched: the episode ends here for TurnOver, and starts afresh if it is still on when watched again.
+        if let line = episode.look(on: false, now: Date(), watched: false) { Log.info(line) }
+        if wasOn { wasOn = false; onChange?(false) }
+    }
+
+    /// Each look is recorded for the person's-toggle classifier: keys are hidden from the key tap while secure input is on,
+    /// so a VoiceOver toggle then is not known to be TurnOver's own (19 Nov 2026; restored after the merge dropped it).
+    /// Observation only: nothing is handed to VoiceOver because of secure input.
+    public static func noteLook(on: Bool, toggle: PersonVoiceOverToggle = .shared, now: TimeInterval = Date().timeIntervalSince1970) {
+        toggle.secureInputSeen(on, now: now)
+    }
 
     private static func check() {
         let on = IsSecureEventInputEnabled()
-        if on != wasOn { wasOn = on; onChange?(on) }
+        noteLook(on: on)
+        if on != wasOn {
+            wasOn = on
+            // TurnOver hears no keys while secure input is on: Find's prompt is closed, not left waiting (18 Nov 2026).
+            if on { FindPrompt.shared.close(because: "secure input came on") }
+            onChange?(on)
+        }
         let other = on ? SecureEcho.otherProcessField(of: AXHandler.shared.activePid) : nil
         SecureEcho.watch(other)
         let inPassword = API.focusObject?.role == .passwordEdit || other != nil
-        guard on, !inPassword else { looks = 0; warned = false; return }
+        if let line = episode.look(on: on, now: Date(), inPasswordField: inPassword) { Log.info(line) }
+        guard on, !inPassword else { looks = 0; warned = false; onSince = nil; focusSeen = nil; focusMoves = 0; return }
+        if onSince == nil { onSince = Date() }
         looks += 1
-        guard looks >= 40, !warned else { return }
+        if let f = API.focusObject?.element, !(focusSeen.map { CFEqual($0, f) } ?? false) {
+            if focusSeen != nil { focusMoves += 1 }
+            focusSeen = f
+        }
+        // The focus moving again and again while no key reaches TurnOver: someone is pressing keys it cannot hear, and
+        // it is logged at once, not after ten seconds (until 16 Nov 2026 they were also told at once). Signing in to
+        // App Store Connect in the Claude app, the focus moved 15 times in the 9.8 s before the warning came (14 Nov
+        // 2026). Chrome's "Show password" box after its field is one move, and goes on waiting the ten seconds (31 Oct
+        // 2026).
+        let since = onSince ?? Date()
+        let keysUnheard = focusMoves >= 3 && InputManager.lastKeyDownAt < since && Date().timeIntervalSince(since) >= 2
+        guard looks >= 40 || keysUnheard, !warned else { return }
         warned = true
         let holder = (CGSessionCopyCurrentDictionary() as? [String: Any])?["kCGSSessionSecureInputPID"] as? Int
         let name = holder.flatMap { NSRunningApplication(processIdentifier: pid_t($0))?.localizedName } ?? holder.map { "pid \($0)" } ?? "an application"
         // The session's "holder" is not reliable (a test program holding it was reported as Mail, 4 Oct 2026): logged,
         // not spoken.
         Log.error("secure input: on outside a password field (session names \(name)); TurnOver cannot hear the keys")
+    }
+}
+
+/// One stretch of secure input, from on to off, as the looks four times a second see it: a log line at each end and
+/// nothing said (18 Nov 2026). A flicker off and on between two looks is one stretch. Nothing about the keyboard is
+/// logged: a line saying whether the keyboard watch saw keys was taken out, since a password field visited between two
+/// looks could not be ruled out (a review, 18 Nov 2026). Pure, for the tests.
+public struct SecureInputEpisode {
+    public private(set) var since: Date?
+    public init() {}
+
+    /// A look at secure input; a log line when it has just come on or gone off.
+    public mutating func look(on: Bool, now: Date, inPasswordField: Bool = false, watched: Bool = true) -> String? {
+        if on, since == nil {
+            since = now
+            return "secure input: on, the focus \(inPasswordField ? "in" : "not in") a password field; TurnOver reads from the focus until it is off"
+        }
+        guard !on || !watched,
+              let began = since else { return nil }
+        since = nil
+        let seconds = String(format: "%.1f", now.timeIntervalSince(began))
+        return watched ? "secure input: off after \(seconds) s" : "secure input: no longer watched after \(seconds) s (TurnOver stood aside)"
     }
 }

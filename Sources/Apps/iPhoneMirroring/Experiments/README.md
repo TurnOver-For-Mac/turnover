@@ -11,7 +11,7 @@ These dated summaries were imported from the reviewed layout proposal on 30 Octo
 
 ## Constraints and unanswered questions
 
-- [Screen recognition decision](2026-10-29-screen-recognition.md): OCR is excluded at Oliver's request; no working OCR adapter is claimed.
+- [Screen recognition decision](2026-10-29-screen-recognition.md): OCR is excluded at the owner's request; no working OCR adapter is claimed.
 - [Mac VoiceOver reading question](to-try-voiceover-on-the-mac.md): separate and unverified.
 
 ## Evidence

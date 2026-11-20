@@ -8,7 +8,7 @@
 
 ## Findings
 
-Cell values and addresses passed 7/7 driver checks in each style on 10 October. Oliver separately confirmed selection announcements. The corrected 12 October rerun passed 7/7 in Windows style and 6/7 in Mac style; the first cold-start key arrived during the temporary VoiceOver handover for grid activation.
+Cell values and addresses passed 7/7 driver checks in each style on 10 October. The owner separately confirmed selection announcements. The corrected 12 October rerun passed 7/7 in Windows style and 6/7 in Mac style; the first cold-start key arrived during the temporary VoiceOver handover for grid activation.
 
 On 30 October, a Microsoft 365 offer stopped the workbook test, so all seven expectations missed in each style. That setup failure does not invalidate the earlier working cell-reading route. Cold-start readiness remains a gap; formula editing and a complete spreadsheet workflow are not assessed.
 

@@ -1,7 +1,7 @@
 # Reading native phone accessibility over USB
 
 - Date: 29 October 2026.
-- Investigation: Codex working with Oliver.
+- Investigation: Codex working with the owner.
 - Being worked on: Unclaimed
 - Tools included pymobiledevice3 11.10.2 and the ipb protocol codec.
 - Verdict: controlled Calculator test worked with the phone unlocked and connected by USB.

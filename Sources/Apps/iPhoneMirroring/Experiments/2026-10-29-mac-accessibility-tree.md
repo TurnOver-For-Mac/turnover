@@ -1,7 +1,7 @@
 # Reading the phone through the Mac accessibility tree
 
 - Date: 29 October 2026.
-- Investigation: Codex working with Oliver.
+- Investigation: Codex working with the owner.
 - Being worked on: Unclaimed
 - Verdict: no usable phone content through the public routes sampled.
 

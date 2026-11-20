@@ -95,7 +95,7 @@ final class VoiceLists: ObservableObject {
         let wanted = Set(mine + ["en"])
         let voices = AVSpeechSynthesisVoice.speechVoices()
         all = voices
-        // Not Apple's novelty voices (Bells, Bubbles, Zarvox and the rest, 15 of them: Oliver, 2 Nov 2026, "a big list of
+        // Not Apple's novelty voices (Bells, Bubbles, Zarvox and the rest, 15 of them: The owner, 2 Nov 2026, "a big list of
         // shit nonsense voices that apple like to ship"). A novelty voice already chosen stays selectable (voices).
         let real = voices.filter { !$0.voiceTraits.contains(.isNoveltyVoice) }
         // English and the Mac's own languages, the Mac's languages first and Eloquence before the rest.
@@ -142,7 +142,7 @@ struct SpeechView: View {
             }))
         .accessibilityLabel(name)
     }
-    /// The voice chosen above, in the rotor or not, without Tabbing through every voice's switch (Oliver, 2 Nov 2026:
+    /// The voice chosen above, in the rotor or not, without Tabbing through every voice's switch (2 Nov 2026:
     /// "the menu and selection isn't great"). None ticked is every voice: so switching one off when none or only it is
     /// ticked ticks all the others, and all of them ticked is none.
     private func inRotor(_ id: String) -> some View {
@@ -219,7 +219,7 @@ struct SpeechView: View {
                 }
                 Section("Mac voices") { ForEach(voices, id: \.identifier) { v in Text(voiceLists.label(for: v)).tag(v.identifier) } }
             }
-            // Downloading and removing the natural voices, beside the Voice list they add to (Oliver, 6 Nov 2026: "an
+            // Downloading and removing the natural voices, beside the Voice list they add to (6 Nov 2026: "an
             // option, like in windows, to download natural voices"; "next to voice selection"; "a choice to remove").
             // All 25 at once: the engine they share is most of the size.
             if model.special("_kokoroAvailable") as? Bool == true {
@@ -489,6 +489,7 @@ struct WebPagesView: View {
     var body: some View {
         Form {
             Toggle("Type into a field as soon as it has the focus", isOn: model.bool("virtualBuffers", "autoFocusMode"))
+            Toggle("Automatic focus mode for caret movement", isOn: model.bool("virtualBuffers", "autoPassThroughOnCaretMove"))
             Toggle("Read a page through as it opens", isOn: model.bool("virtualBuffers", "autoSayAllOnPageLoad"))
             Toggle("Single-letter keys go round the page", isOn: model.bool("virtualBuffers", "wrapQuickNav"))
             Toggle("Links and buttons in the line, as on screen", isOn: model.bool("virtualBuffers", "screenLayout"))
@@ -568,7 +569,7 @@ struct GeneralView: View {
     }
 }
 
-/// Everything TurnOver plays, in one place (Oliver, 2 Nov 2026), as NVDA's Audio panel: whose sounds, the hand-over,
+/// Everything TurnOver plays, in one place (2 Nov 2026), as NVDA's Audio panel: whose sounds, the hand-over,
 /// progress bars, and other apps' sound lowered while TurnOver speaks. Audio graphs will join them.
 struct SoundsView: View {
     @EnvironmentObject var model: Model
@@ -588,14 +589,26 @@ struct SoundsView: View {
     private var whose: Binding<String> {
         Binding(get: {
             let s = model.get("general", "sounds") as? String ?? ""
-            return s.isEmpty ? model.special("_effectiveSounds") as? String ?? "voiceover" : s
+            let shown = s.isEmpty ? model.special("_effectiveSounds") as? String ?? "voiceover" : s
+            // A sound set whose folder has gone plays TurnOver's own sounds, so the pop-up shows that (the file keeps the choice).
+            return shown.hasPrefix("set:") && !soundSets.contains(String(shown.dropFirst(4))) ? "turnover" : shown
         }, set: { model.set("general", "sounds", $0) })
     }
+    /// The folders found in the sound sets folder, as of when the pane opened.
+    private var soundSets: [String] { model.special("_soundSets") as? [String] ?? [] }
     var body: some View {
         Form {
             Picker("Whose sounds", selection: whose) {
                 Text("VoiceOver's").tag("voiceover"); Text("TurnOver's").tag("turnover")
+                ForEach(soundSets, id: \.self) { name in Text(name).tag("set:" + name) }
             }
+            HStack {
+                Button("Open the sound sets folder") { model.setSpecial("_openSoundSets", true) }
+                    .accessibilityLabel("Open the sound sets folder")
+                Button("Make a starter set") { model.setSpecial("_makeStarterSet", true) }
+                    .accessibilityLabel("Make a starter set")
+            }
+            Text("Your own sound sets: a folder of audio files, one for each event, named for the event. A set's sounds play where it has a file, and TurnOver's own where it has none. Make a starter set to see the names.").font(.caption)
             Text("VoiceOver's: VoiceOver's own sounds where it has one, such as links and boundaries, and TurnOver's set for the rest. TurnOver's: its set throughout.").font(.caption)
             Toggle("Sounds as I move and press", isOn: model.bool("general", "navigationSounds"))
             Picker("When TurnOver takes over from VoiceOver", selection: handOver) {
@@ -608,6 +621,7 @@ struct SoundsView: View {
                 Text("No").tag("off"); Text("While speaking").tag("speech"); Text("Always").tag("always")
             }
         }.formStyle(.grouped).navigationTitle("Sounds")
+            .onAppear { model.setSpecial("_refreshSoundSets", true) }
     }
 }
 
@@ -630,7 +644,7 @@ struct ReadersView: View {
                 Text("On: TurnOver turns VoiceOver off as it starts and on as it quits, comes on when VoiceOver turns off and steps aside when VoiceOver comes on. Off: each reader has its own switch and neither turns the other on or off, for VoiceOver reading inside a virtual machine such as Parallels. Either way one reader speaks at a time: while VoiceOver is on, TurnOver is quiet.").font(.caption)
             }
             // A plain section, not a disclosure group: the triangle took the focus but neither Return nor VO Space
-            // opened it (Oliver, 28 Oct 2026: "I can't get into the experimental part").
+            // opened it (28 Oct 2026: "I can't get into the experimental part").
             Section(header: Text("Experimental: readers per app, CoExist")) {
                 Toggle("CoExist: VoiceOver stays running alongside TurnOver", isOn: coexist)
                 Text("VoiceOver is kept quiet by an audio tap where TurnOver reads and keeps passwords and macOS's own prompts. Removed on 24 Oct 2026 and back as an experiment: it can leave a Mac silent if macOS asks for audio permission while VoiceOver is muted. Changing it restarts TurnOver.").font(.caption)

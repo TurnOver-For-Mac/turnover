@@ -1,7 +1,7 @@
 # Native accessibility service discovery without the cable
 
 - Date: 29 October 2026.
-- Investigation: Codex working with Oliver.
+- Investigation: Codex working with the owner.
 - Being worked on: Unclaimed
 - Verdict: wireless discovery succeeded; opening the advertised service sockets failed.
 

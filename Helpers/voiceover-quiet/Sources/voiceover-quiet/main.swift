@@ -65,6 +65,11 @@ final class Quiet {
         if pid != tappedPid { stop(); _ = start() }
     }
 
+    func status(_ token: String) -> String {
+        follow()
+        return "status \(voiceOverPid()) \(silencing ? "on" : "off") \(token)"
+    }
+
     private func voiceOverPid() -> pid_t {
         NSRunningApplication.runningApplications(withBundleIdentifier: voiceOverID).first?.processIdentifier ?? 0
     }
@@ -150,7 +155,10 @@ Thread.detachNewThread {
             case "still": quiet.still()
             case "off": say(quiet.set(false))
             case "quit": quiet.stop(); say("off"); exit(0)
-            default: say("error unknown \(word)")
+            default:
+                let fields = word.split(separator: " ")
+                if fields.count == 2, fields[0] == "status" { say(quiet.status(String(fields[1]))) }
+                else { say("error unknown \(word)") }
             }
         }
     }

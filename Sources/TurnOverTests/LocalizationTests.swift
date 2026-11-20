@@ -135,6 +135,21 @@ func localizationTests() {
             }
         }
     }
+    // The browse-mode trap's description was reworded on 16 Nov 2026 and its Russian and Turkish went with the old
+    // wording (review, 16 Nov 2026).
+    test("localization: the browse-mode trap's description has Russian and Turkish") {
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Resources/Localizable.xcstrings")
+        guard let data = try? Data(contentsOf: url),
+              let catalog = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let strings = catalog["strings"] as? [String: Any] else { Harness.fail("no catalog at \(url.path)"); return }
+        let entry = strings["A key that would type, with no command in browse mode: nothing"] as? [String: Any] ?? [:]
+        let localizations = entry["localizations"] as? [String: Any] ?? [:]
+        for language in ["ru", "tr"] {
+            let text = localizations[language].map(stringUnits)?.first ?? ""
+            check(!text.isEmpty, "\(language) translation of the trap's description")
+        }
+    }
 }
 
 /// Every string a localization holds, plural and device variations included.

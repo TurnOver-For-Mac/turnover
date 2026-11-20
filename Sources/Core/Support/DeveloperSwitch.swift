@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Switching between the published TurnOver and your own developer build (issue 248, 7 Nov 2026, Oliver: "an option in
+// Switching between the published TurnOver and your own developer build (issue 248, 7 Nov 2026, the owner: "an option in
 // TurnOver to switch between developer mode and ... the regular flavour"). A contributor's build installs beside the
 // published one as TurnOver Developer (build.sh); each has its own permissions, granted once, and both read the same
 // settings folder. The TurnOver menu offers the other copy when it is installed.
@@ -40,7 +40,7 @@ public enum DeveloperSwitch {
             : String(localized: "Switching to the published TurnOver.", comment: "TurnOver Developer is handing over to the published TurnOver"))
         Log.info("switch: to \(id) at \(url.path)")
         // The launcher outlives this copy: it waits for it to go, then opens the other. (A child process is left
-        // running when its parent quits.) Then the safety net: with the swap off (Oliver's Mac, 7 Nov 2026) quitting
+        // running when its parent quits.) Then the safety net: with the swap off (the owner's Mac, 7 Nov 2026) quitting
         // leaves VoiceOver off, so if the other copy hasn't started, or is waiting for its Accessibility permission
         // (a first switch, before it was allowed), the launcher turns VoiceOver on. Never silence.
         let logs = AppPaths.file("logs").path

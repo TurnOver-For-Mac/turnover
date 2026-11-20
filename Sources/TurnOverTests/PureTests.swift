@@ -245,6 +245,11 @@ func pureTests() {
         expect(Speech.withoutIconGlyphs("\u{F02DC}"), ""); expect(Speech.withoutIconGlyphs("Send \u{E001}"), "Send")
         expect(Role.from(axRole: "AXListMarker", subrole: nil), .staticText)
     }
+    test("roles: an unrecognised control is silent; a known control keeps its role") {
+        expect(Role.unknown.displayString, "", "an unnamed control must not fall back to saying unknown")
+        expect(Role.from(axRole: "AXUnrecognisedControl", subrole: nil).displayString, "", "an unrecognised AX role has no spoken fallback")
+        expect(Role.from(axRole: "AXButton", subrole: nil).displayString, "button", "a known control still says its actual role")
+    }
     test("roles: Preview's pages and tool groups are named; a disabled container is not said to be unavailable") {
         expect(Role.from(axRole: "AXPage", subrole: nil), .page)
         expect(Role.from(axRole: "AXRadioGroup", subrole: nil), .groupBox)
@@ -274,12 +279,6 @@ func pureTests() {
         check(UserGestures.storedIdentifier(of: left) != "kb:rightoption+s", "left Option is not")
         expect(UserGestures.spoken("kb:rightoption+s"), "right option s")
         expect(UserGestures.storedIdentifier(of: KeyboardGesture(identifier: "kb:turnover+shift+0")!), "kb:turnover+shift+0", "the plain form, not the layout's")
-    }
-    test("speech: the same focus twice is said once, another row with the same words is said") {
-        check(Speech.focusRepeated(words: "12, A1", last: "12, A1", after: 0.1, anotherRow: false), "the same focus reported twice")
-        check(!Speech.focusRepeated(words: "Your order, 09:16", last: "Your order, 09:16", after: 0.1, anotherRow: true), "two copies of a message, one above the other")
-        check(!Speech.focusRepeated(words: "12, A1", last: "12, A1", after: 0.6, anotherRow: false), "after half a second it is said again")
-        check(!Speech.focusRepeated(words: "13, A2", last: "12, A1", after: 0.1, anotherRow: false), "other words")
     }
     test("speech: a capital said alone is marked for a raised pitch only when the setting is on") {
         let was = config.speech.capitalPitch; defer { config.speech.capitalPitch = was }
@@ -1503,6 +1502,20 @@ func browseTextNavTests() {
         expect(BrowseModeDocument.clickableText(in: Array(repeating: ("AXGroup", plain), count: 6) + [("AXGroup", pressable)]), nil, "no more than six up")
         expect(BrowseModeDocument.clickableText(in: []), nil, "nothing at the reading position")
     }
+    test("speech: the same focus twice is said once, another row with the same words is said") {
+        check(Speech.focusRepeated(words: "12, A1", last: "12, A1", after: 0.1, anotherRow: false), "the same focus reported twice")
+        check(!Speech.focusRepeated(words: "Your order, 09:16", last: "Your order, 09:16", after: 0.1, anotherRow: true), "two copies of a message, one above the other")
+        check(!Speech.focusRepeated(words: "12, A1", last: "12, A1", after: 0.6, anotherRow: false), "after half a second it is said again")
+        check(!Speech.focusRepeated(words: "13, A2", last: "12, A1", after: 0.1, anotherRow: false), "other words")
+    }
+    test("browse mode: a menu button is pressed by Space, a role the app's module names by Return, the rest by the press") {
+        expect(BrowseModeDocument.keyboardPress(role: "AXPopUpButton", moduleRoles: []), .space, "a pop-up button in any app")
+        expect(BrowseModeDocument.keyboardPress(role: "AXMenuButton", moduleRoles: ["AXButton"]), .space, "a menu button keeps Space where buttons take Return")
+        expect(BrowseModeDocument.keyboardPress(role: "AXButton", moduleRoles: ["AXButton"]), .returnKey, "a button in an app whose module names buttons")
+        expect(BrowseModeDocument.keyboardPress(role: "AXButton", moduleRoles: []), nil, "a button anywhere else: the press")
+        expect(BrowseModeDocument.keyboardPress(role: "AXLink", moduleRoles: ["AXButton"]), nil, "a link in that app: the press")
+        expect(AppModule(pid: 0, bundleIdentifier: "test.other", appName: "Public other app").rolesPressedByKeyboard, [], "no app's buttons go by the keyboard unless its module says so")
+    }
     test("browse mode: NVDA's comma keys parse") {
         check(KeyboardGesture(identifier: "kb:,") != nil, "comma")
         check(KeyboardGesture(identifier: "kb:shift+,") != nil, "shift comma")
@@ -1521,14 +1534,6 @@ func browseTextNavTests() {
                  line("More Next Previous", more), line("That was the news.", p2)]
     let segs = ["Home", "News", "Sport", "More", "Next", "Previous"].map { w in WebBuffer.Segment(start: r(w).location, end: r(w).location + r(w).length, element: AXReplay.element(20), isLink: true) }
     func find(_ from: Int, _ fwd: Bool, _ k: WebBuffer.TextKind) -> Int? { WebBuffer.findText(lines: lines, segments: segs, text: t, from: from, forward: fwd, kind: k)?.offset }
-    test("browse mode: a menu button is pressed by Space, a role the app's module names by Return, the rest by the press") {
-        expect(BrowseModeDocument.keyboardPress(role: "AXPopUpButton", moduleRoles: []), .space, "a pop-up button in any app")
-        expect(BrowseModeDocument.keyboardPress(role: "AXMenuButton", moduleRoles: ["AXButton"]), .space, "a menu button keeps Space where buttons take Return")
-        expect(BrowseModeDocument.keyboardPress(role: "AXButton", moduleRoles: ["AXButton"]), .returnKey, "a button in an app whose module names buttons")
-        expect(BrowseModeDocument.keyboardPress(role: "AXButton", moduleRoles: []), nil, "a button anywhere else: the press")
-        expect(BrowseModeDocument.keyboardPress(role: "AXLink", moduleRoles: ["AXButton"]), nil, "a link in that app: the press")
-        expect(AppModule(pid: 0, bundleIdentifier: "test.other", appName: "Public other app").rolesPressedByKeyboard, [], "no app's buttons go by the keyboard unless its module says so")
-    }
     test("browse mode P: the next paragraph skips links and short headings") {
         expect(find(0, true, .paragraph), r("A lot happened").location)
         expect(find(r("A lot happened").location, true, .paragraph), r("That was the news.").location)
