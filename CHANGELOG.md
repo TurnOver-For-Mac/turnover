@@ -11,7 +11,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 - Mouse tracking: Settings, Item details, "Read what is under the mouse pointer as it moves" (or NVDA+M in the Windows
   keyboard style) reads each item the pointer crosses, as VoiceOver's cursor following the mouse pointer does. It is off
   until turned on. The keyboard focus never moves with the pointer; the review cursor goes to the item, as NVDA's review
-  cursor follows the mouse. A blank place (a window's background, a group with no name) is silent, and coming back to an
+  cursor follows the mouse. The cursor follows the pointer only into the app in front, or the app the keys are in:
+  an item in another app's window, on the Dock or in the menu bar is still said, and the cursor stays where it was. A blank place (a window's background, a group with no name) is silent, and coming back to an
   item reads it again. Each new item cuts off whatever is being said, as VoiceOver does when the pointer moves: a tester
   found that notifications, live announcements and the speech from opening a chat kept talking over the pointer, which
   made it no faster than the keyboard.
@@ -56,6 +57,11 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- After an update, and when TurnOver quits with "turn VoiceOver back on" switched on, VoiceOver now comes on in a
+  fraction of a second. TurnOver had been opening VoiceOver as an app, which on macOS 27.2 sits for about ten seconds
+  before it reads, so the "what's new" pages came up with nobody reading them. TurnOver now presses VoiceOver's own
+  on and off shortcut first, as the hand-over between apps already does, and opens the app only if the shortcut does
+  not bring VoiceOver.
 - Launching an app from Finder no longer makes TurnOver say the bare word "application": an activation notice that names no running application is ignored.
 - Claude: Space on a checkable item in a menu that stays open, such as "Goal" in the "Show" menu, now says the item's new state, for example "Goal, checked".
 - Safari: H (and the other quick keys, and a choice from the Elements list) on a heading too long for one line now reads
