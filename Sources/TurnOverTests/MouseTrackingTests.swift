@@ -97,4 +97,11 @@ func mouseTrackingTests() {
         expect(s.giveUp(onLookOf: look.id), false)
         expect(s.accepts(generation: look.generation), true, "nothing was dropped")
     }
+
+    test("mouse tracking: the cursor goes with the pointer only into the app in front") {
+        expect(PointerCursor.follows(itemIn: 74868, front: [74868, 74868]), true, "an item of the app in front")
+        expect(PointerCursor.follows(itemIn: 45060, front: [74868, 74868]), false, "20 Nov 09:35: Mail's sidebar behind Claude is said, and the cursor stays in Claude")
+        expect(PointerCursor.follows(itemIn: 45060, front: [74868, 45060]), true, "the Mac's app in front counts while TurnOver's focus is still in the last one")
+        expect(PointerCursor.follows(itemIn: 45060, front: [nil, nil]), false, "no app in front known: said, and the cursor stays")
+    }
 }

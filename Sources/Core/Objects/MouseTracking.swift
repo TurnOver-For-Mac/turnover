@@ -5,6 +5,9 @@
 // never moved by the pointer, the review cursor follows it, any speech still going gives way to the item under the pointer, and a blank place
 // (a window's background, a group with no name) is silent.
 //
+// The cursor follows the pointer only into the app in front. An item in a window behind it, another app's, is said
+// and the cursor stays where it was (PointerCursor).
+//
 // The pointer is watched with a listen-only monitor of mouse-moved events: nothing is held back or changed, and the
 // keyboard is never involved. A move asks for a look at most every tenth of a second, so a long sweep across a window
 // says each item it crosses and the pointer coming to rest says where it ended. The look itself (the accessibility
@@ -48,6 +51,16 @@ public struct PointerTracker<Hit: Equatable> {
     public mutating func forgetLook() { lookedAt = nil }
 
     public mutating func reset() { lookedAt = nil; spoken = nil }
+}
+
+/// Whether the review cursor goes with the pointer, apart from every accessibility call so a test can drive it.
+public enum PointerCursor {
+    /// `item` is the process the item under the pointer belongs to, `front` the app in front as TurnOver's focus and
+    /// as the Mac have it (either may be unknown). Only an item of the app in front takes the cursor: the item keys
+    /// belong to that app, and with the cursor in another's window they walked that window. The pointer came to rest
+    /// on Mail's sidebar behind Claude, and the next-item key read Mail's mailboxes while the heading keys read
+    /// Claude's page (the maintainer, 20 Nov 2026).
+    public static func follows(itemIn item: pid_t, front: [pid_t?]) -> Bool { front.contains(item) }
 }
 
 /// Which look is out and which results still count, apart from every accessibility and main-thread call so a test can
@@ -250,7 +263,9 @@ public enum MouseTracking {
             guard let reading = found.reading else { tracker.forgetLook(); return }
             Log.io("mouse tracking: says \(found.label)")
             Speech.cancel()
-            ObjectNavigator.shared.hover(reading)
+            let follows = PointerCursor.follows(itemIn: reading.element.pid, front: [API.focusPid, NSWorkspace.shared.frontmostApplication?.processIdentifier])
+            if !follows { Log.io("mouse tracking: not the app in front; said, and the cursor stays") }
+            ObjectNavigator.shared.hover(reading, movingCursor: follows)
         }
     }
 }
