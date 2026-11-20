@@ -2,7 +2,7 @@
 
 The newest build is first. "Reported by a tester" marks a fix for something a tester sent in. Thank you.
 
-## 2.0, build 24.2
+## 2.0, build 25
 
 ### New to try
 
