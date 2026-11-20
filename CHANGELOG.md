@@ -56,6 +56,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 ### Fixed
 
+- Launching an app from Finder no longer makes TurnOver say the bare word "application": an activation notice that names no running application is ignored.
+- Claude: Space on a checkable item in a menu that stays open, such as "Goal" in the "Show" menu, now says the item's new state, for example "Goal, checked".
 - Safari: H (and the other quick keys, and a choice from the Elements list) on a heading too long for one line now reads
   the whole heading, as VoiceOver does, not its first line with the rest left for Down Arrow.
 - Claude: Command 1 to 5 (and the other numbers) names the conversation it lands on at once, and says it once. The

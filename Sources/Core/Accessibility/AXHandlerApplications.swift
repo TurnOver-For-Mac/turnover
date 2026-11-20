@@ -30,8 +30,19 @@ extension AXHandler {
         return true
     }
 
+    /// Whether an activation notice names a running application: a pid of 0 or less (-1, seen when an app was launched
+    /// from Finder: "app activated: ? pid -1", then an observer for pid -1 that failed, and "application" said) does not.
+    nonisolated package static func activationNamesApplication(pid: pid_t?) -> Bool {
+        guard let pid else { return false }
+        return pid > 0
+    }
+
     func appActivated(_ app: NSRunningApplication) {
         let pid = app.processIdentifier
+        guard Self.activationNamesApplication(pid: pid) else {
+            Log.io("app activation ignored: it names no running application (pid \(pid))")
+            return
+        }
         // Find's prompt belongs to the app it was opened over: any other app coming to the front, TurnOver's own
         // included, however it came (Command Tab, the mouse, the Dock), closes it (18 Nov 2026). Not TurnOver's own
         // switch to wake an app's accessibility (AppWake), which is not the user leaving, as the lead watcher has it.

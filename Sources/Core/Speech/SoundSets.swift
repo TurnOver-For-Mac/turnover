@@ -201,8 +201,13 @@ public enum SoundSets {
                 let folder = root.appendingPathComponent(name, isDirectory: true)
         if let l = loaded, l.signature != signature(of: folder) || (l.entries == nil) != !FileManager.default.fileExists(atPath: folder.path) { loaded = nil }
     }
+    /// Called at start: the chosen set is read and its files are prepared in the background, so that its first sound
+    /// is ready when it is wanted (review, 20 Nov 2026). Nothing is read where no set of the user's own is chosen.
+    public static func preload() { _ = current() }
     /// Forgets the loaded set (a test).
     package static func forget() { loaded = nil; failedLogged = [] }
+    /// Whether a set has been read (a test).
+    package static var isLoaded: Bool { loaded != nil }
 
     /// Whether a custom set is chosen and the folder is there.
     public static var active: Bool { current() != nil }
@@ -217,7 +222,7 @@ public enum SoundSets {
         return playOnMain(id, set: set.name, cache: set.cache, why: why)
     }
 
-    private static func playOnMain(_ id: String, set: String, cache: SoundCache, why: String) -> Bool {
+    package static func playOnMain(_ id: String, set: String, cache: SoundCache, why: String) -> Bool {
         if let probe = playProbe { probe(id); return true }
         guard let p = cache.player(id) else {
             if cache.hasFailed(id) {
@@ -225,8 +230,10 @@ public enum SoundSets {
                 if first { Log.io("sound set \(set): the file for \(id) would not load; TurnOver's own sound plays") }
                 return false
             }
-            Log.io("sound: set \(set) \(id) skipped, not ready (why: \(why))")
-            return true
+            // Not prepared yet (the first sound after a set is chosen or read again): TurnOver's own sound plays this
+            // once, where the event used to pass in silence (review, 20 Nov 2026).
+            Log.io("sound: set \(set) \(id) not ready; TurnOver's own sound plays (why: \(why))")
+            return false
         }
         p.volume = 0.8 * min(1.5, max(0.2, Float(config.speech.volume) / 100))   // with TurnOver's own volume, as its own set
         p.currentTime = 0

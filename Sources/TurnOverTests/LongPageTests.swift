@@ -552,6 +552,26 @@ func longPageTests() {
         }
     }
 
+    // 20 Nov 2026 (review): a repeat of the key arrives (counted) and a pass of the read on runs before toBottom sees the
+    // repeat: the read stops, and the repeat used to be taken for a read still going, so nothing was ever said.
+    test("long page: a repeat whose key arrived before the read on noticed it starts the read again; \"reading on\" once") {
+        withBottomRead { page, bottom, said in
+            ScriptHandler.noteKeyArrived(shiftEnd); bottom.handler(shiftEnd)
+            guard let first = page.bottomReadOn else { return check(false, "the first press reads the page on") }
+            ScriptHandler.noteKeyArrived(shiftEnd)   // the repeat arrives ...
+            let until = Date().addingTimeInterval(3)
+            while first.running, Date() < until { RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01)) }
+            check(!first.running, "... and a pass of the read on sees it first, and stops")
+            bottom.handler(shiftEnd)   // ... and only then is the script run for it
+            check(first.running, "the repeat starts the read on again")
+            check(page.bottomReadOn === first, "it is still the first request")
+            waitForBottomRead(page)
+            check(page.bottomReadOn == nil, "the read came to its end and landed")
+            expect(page.position, page.buffer.text.length - 1, "the reading is at the bottom")
+            expect(said().components(separatedBy: "reading on").count - 1, 1, "\"reading on\" is said once")
+        }
+    }
+
     test("long page: nothing is announced when the bottom is in the copy already") {
         AXReplay.load(page(headings: 5))
         let sink = Speech.sink

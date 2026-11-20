@@ -153,4 +153,18 @@ func safariPageHostTests() {
             check(said.value.contains { $0.contains("New page") }, "the new page is said: \(said.value)")
         }
     }
+
+    // 20 Nov 2026 (review): the same document took a new page while the nameless group was set aside; presenting the group
+    // then would drop that page and talk over it.
+    test("Safari's page host set aside: when the page's generation changed during the watch, the group is not presented") {
+        withSafari(appFocus: 2) { pid in
+            AXHandler.shared.focusChanged(AXReplay.element(2), pid: pid)
+            check(API.focusObject?.element.isSame(AXReplay.element(4)) == true, "the group is set aside")
+            guard let document = API.focusTreeInterceptor as? BrowseModeDocument else { return check(false, "the page is in hand") }
+            document.pageGeneration += 1   // the document read a new page meanwhile
+            RunLoop.current.run(until: Date().addingTimeInterval(0.4))   // the watch (2 tries of 0.05 s) gives up
+            check(AXHandler.pageHostSetAside == nil, "the watch has ended")
+            check(API.focusObject?.element.isSame(AXReplay.element(2)) != true, "the group is not presented over the new page")
+        }
+    }
 }

@@ -129,7 +129,7 @@ final class TurnOverApp {
     func start() {
         // Both sound sets are prepared on a background queue from the very start (it only queues the work), so no play
         // prepares on the main thread and the request is nearly always ready (19 Nov 2026).
-        VoiceOverSounds.preload(); TurnOverSounds.preload()
+        VoiceOverSounds.preload(); TurnOverSounds.preload(); SoundSets.preload()
         lead.turnOverActive = { [weak self] in self?.activation != nil }
         // An Activity left by a build before 18 Oct 2026 (the first CoExist) comes out whatever the switch says: it
         // keeps VoiceOver's speech off in the apps it lists (a review, 28 Oct 2026).

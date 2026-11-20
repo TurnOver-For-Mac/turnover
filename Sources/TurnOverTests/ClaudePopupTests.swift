@@ -254,4 +254,46 @@ func claudePopupTests() {
             check(said.value.isEmpty, "background popup cannot speak late")
         }
     }
+
+    // 20 Nov 2026: Space on a checkable item in a Claude menu that stays open ("Goal" in "Show") toggled it and said nothing.
+    test("Claude menu: Space on a checkable item in a menu that stays open says its new state once; a closed menu says nothing extra") {
+        func fixture(marked: Bool) -> AXFixture {
+            var item: [String: AXFixture.Value] = ["AXRole": .string("AXMenuItem"), "AXTitle": .string("Goal"), "AXParent": .element(3)]
+            if marked { item["AXMenuItemMarkChar"] = .string("\u{2713}") }
+            return AXFixture(app: "Public show menu", bundle: "test.claude-show-menu", recorded: "synthetic", root: 0, application: 1, focus: 4, nodes: [
+                .init(id: 0, attrs: ["AXRole": .string("AXWebArea"), "AXURL": .url("https://example.com/show"), "AXParent": .element(1)]),
+                .init(id: 1, attrs: ["AXRole": .string("AXApplication")]),
+                .init(id: 3, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(0), "AXChildren": .elements([4])]),
+                .init(id: 4, attrs: item)
+            ])
+        }
+        for closes in [false, true] {
+            let focus = API.focusObject, ancestors = API.focusAncestors, pageBefore = API.focusTreeInterceptor
+            let sink = Speech.sink, poster = KeyboardGesture.poster
+            nonisolated(unsafe) let markedFixture = fixture(marked: true)
+            AXReplay.load(fixture(marked: false))
+            let item = AXReplay.element(4)
+            let said = Locked<[String]>([])
+            Speech.sink = { said.value.append($0) }
+            // The key reaches the app: the item is toggled there (marked now).
+            KeyboardGesture.poster = { _ in AXReplay.load(markedFixture) }
+            let module = ClaudeAppModule(pid: item.pid, bundleIdentifier: "com.anthropic.claudefordesktop", appName: "Claude")
+            module.handleEvent(Event(.menuStart, ObjectFactory.make(AXReplay.element(3)))) {}
+            API.setFocusObject(ObjectFactory.make(item), ancestors: [], interceptor: nil)
+            let space = KeyboardGesture(identifier: "kb:space")!
+            let command = module.script(named: "claude_chooseMenuItem")
+            check(command?.isAvailable?() == true, "the script takes the item in the open menu")
+            said.value.removeAll()
+            command?.handler(space)
+            if closes { module.handleEvent(Event(.menuEnd, ObjectFactory.make(AXReplay.element(3)))) {} }
+            let limit = Date().addingTimeInterval(closes ? 0.8 : 5)
+            while !(closes ? false : said.value.count >= 1), Date() < limit { RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01)) }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))   // a second, wrong word would arrive here
+            expect(said.value, closes ? [] : ["Goal, checked"], closes ? "a menu that closed: nothing extra" : "the new state, once")
+            module.handleEvent(Event(.appModuleLoseFocus, ObjectFactory.make(item))) {}
+            Speech.sink = sink; KeyboardGesture.poster = poster
+            API.setFocusObject(focus, ancestors: ancestors, interceptor: pageBefore)
+            Hints.cancel(); AXReplay.unload()
+        }
+    }
 }

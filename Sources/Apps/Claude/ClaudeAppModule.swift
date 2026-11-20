@@ -56,7 +56,9 @@ package final class ClaudeAppModule: AppModule {
         script("claude_chooseMenuItem", String(localized: "Chooses a Claude menu item", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:enter", "kb:space"], category: "Claude") { [weak self] key in
             guard let self, let focus = API.focusObject else { return }
             rememberChoice(focus)
+            let hadMark = !(focus.element.string("AXMenuItemMarkChar") ?? "").isEmpty
             key.send()
+            announceToggle(of: focus, hadMark: hadMark)
         }.isAvailable = { [weak self] in self?.popup != nil && API.focusObject?.axRole == "AXMenuItem" }
         // 14 Nov 2026: focused session menu items exposed no AXPress/AXConfirm; VO-Space
         // only refocused them. Native Return opened the confirmation dialog in the same log.
@@ -99,6 +101,18 @@ package final class ClaudeAppModule: AppModule {
     private func rememberChoice(_ focus: TurnOverObject) {
         guard popup != nil else { return }
         pendingChoice = (focus.name, Date())
+    }
+
+    /// A checkable item in a menu that stays open ("Goal" in "Show") toggled, and nothing said (20 Nov 2026): its new state
+    /// is said once, as "Goal, checked", when the menu is still open and the same item still has the highlight a moment
+    /// later. A menu that closed, or an item whose mark did not change, says nothing here: the focus change speaks.
+    private func announceToggle(of item: TurnOverObject, hadMark: Bool) {
+        let element = item.element
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            guard let self, popup != nil, let now = API.focusObject, now.element.isSame(element) else { return }
+            guard (element.string("AXMenuItemMarkChar") ?? "").isEmpty == hadMark else { return }
+            Speech.speakCheckState(of: element, named: true)
+        }
     }
 
     private func clearPopup() {

@@ -97,4 +97,23 @@ import TurnOverCore
             check(SoundEvents.id(forVoiceOverFile: name).map { SoundEvents.ids.contains($0) } == true, "\(name) maps to an event")
         }
     }
+    // 20 Nov 2026 (review): a set's file that is not prepared yet must not pass in silence; TurnOver's own sound plays.
+    test("sound sets: a file not prepared yet answers false, so TurnOver's own sound plays; preload reads the chosen set") {
+        let root = temporaryRoot(); defer { try? FileManager.default.removeItem(at: root); SoundSets.rootOverride = nil; SoundSets.playProbe = nil; SoundSets.forget() }
+        SoundSets.rootOverride = root
+        SoundSets.playProbe = nil
+        write(10, "boundary.wav", in: root.appendingPathComponent("Mine"))
+        // A cache that nothing was requested of: the file is neither ready nor failed. (No player is made, so nothing plays.)
+        let cache = SoundCache()
+        check(cache.player("boundary") == nil && !cache.hasFailed("boundary"), "the file is not prepared")
+        expect(SoundSets.playOnMain("boundary", set: "Mine", cache: cache, why: "test"), false, "not ready: TurnOver's own sound answers")
+        let saved = config.general.sounds; defer { config.general.sounds = saved }
+        config.general.sounds = SoundSets.saved("Mine"); SoundSets.forget()
+        check(!SoundSets.isLoaded, "no set is read yet")
+        SoundSets.preload()
+        check(SoundSets.isLoaded, "preload reads the chosen set")
+        config.general.sounds = "turnover"; SoundSets.forget()
+        SoundSets.preload()
+        check(!SoundSets.isLoaded, "with TurnOver's own set chosen, preload reads nothing")
+    }
 }

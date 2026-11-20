@@ -148,7 +148,8 @@ public enum Speech {
         // raised the pitch of the next real utterance instead (code review, 16 Oct 2026).
         let pitch = pitchNext; pitchNext = nil
         sink?(cleaned(text))
-        if attributedDepth == 0, let observer { observer(cleaned(text)) }
+        // Private speech (a password field's text) never reaches a plugin script's observer (review, 20 Nov 2026).
+        if attributedDepth == 0, !privateNext, let observer { observer(cleaned(text)) }
         if let enqueueTestDriver { enqueueTestDriver(cleaned(text), onStart, completion); return }
         switch mode {
         case .talk: break

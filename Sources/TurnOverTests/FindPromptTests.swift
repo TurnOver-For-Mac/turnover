@@ -37,6 +37,16 @@ func findPromptTests() {
         check(closes(20, until: soon), "another app clicked during the nudge does")
     }
 
+    // 20 Nov 2026: an app launched from Finder gave an activation notice with no application ("app activated: ? pid -1"),
+    // and "application" was said.
+    test("An activation notice that names no running application is ignored") {
+        check(!AXHandler.activationNamesApplication(pid: nil), "no application")
+        check(!AXHandler.activationNamesApplication(pid: -1), "pid -1")
+        check(!AXHandler.activationNamesApplication(pid: 0), "pid 0")
+        check(AXHandler.activationNamesApplication(pid: 1), "pid 1 is an application")
+        check(AXHandler.activationNamesApplication(pid: 4321), "an ordinary pid")
+    }
+
     test("Find's prompt types a key's character, and nothing for an arrow or Tab") {
         expect(FindPrompt.typedText(key("kb:b")), "b")
         expect(FindPrompt.typedText(key("kb:space")), " ")

@@ -244,7 +244,7 @@ public final class BrowseModeDocument: ScriptableObject {
         let kept = script?.name == trapScriptName
         return kept && keptKeyWordIsSpeaking
     }
-    var pageGeneration = 0
+    package var pageGeneration = 0
     /// The page load whose sound has played (19 Nov 2026): the sound is once per page load (pageGeneration), not once
     /// per empty-to-full publication, which a re-made copy of the same page also was.
     var pageLoadSounded = -1
@@ -260,6 +260,9 @@ public final class BrowseModeDocument: ScriptableObject {
         var keys: Int
         var epoch = 0
         var movedAt = Date.distantPast
+        /// False once the read this key began has stopped without finishing (readOnUntil saw another key, page or
+        /// position): a repeat of the key then starts the read again (toBottom; review, 20 Nov 2026).
+        package var running = true
         init(intent: Int, keys: Int) { self.intent = intent; self.keys = keys }
         /// Whether, since the read began, the only key to arrive is the one asking now, on the same page and reading.
         func repeatedOnce(on page: BrowseModeDocument) -> Bool {
@@ -975,11 +978,15 @@ public final class BrowseModeDocument: ScriptableObject {
         let key = key ?? ReadOnKey(intent: bufferIntent, keys: ScriptHandler.keysArrivedCount)
         let until = Date().addingTimeInterval(2)
         func current() -> Bool {
-            pageGeneration == epoch &&
-            bufferIntent == key.intent &&
-            positionMovedAt == movedAt &&
-            ScriptHandler.keysArrivedCount == key.keys &&
-            API.focusTreeInterceptor === self
+            let still = pageGeneration == epoch &&
+                bufferIntent == key.intent &&
+                positionMovedAt == movedAt &&
+                ScriptHandler.keysArrivedCount == key.keys &&
+                API.focusTreeInterceptor === self
+            // The read ends here without `done`. A repeat of the key can arrive just before toBottom has counted it
+            // in: the read stopped, the repeat was taken for a read still going, and nothing was ever said.
+            if !still { key.running = false }
+            return still
         }
         func pass() {
             guard current() else { return }
@@ -1006,12 +1013,27 @@ public final class BrowseModeDocument: ScriptableObject {
             speakUnit(.line, caretMoved: true)
         }
         guard buffer.canReadOn else { land(); return }
+        func readOn(_ key: ReadOnKey) {
+            readOnUntil(startedBy: key, { false }) { [weak self] _ in
+                guard let self else { return }
+                if bottomReadOn === key { bottomReadOn = nil }
+                if buffer.stoppedAtLimit { Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")) }
+                land()
+            }
+        }
         // Pressed again while the read on is under way, with no other key between (17 Nov 2026): the same request. Each
         // VO Shift End cancelled the one before, and three presses on a long Claude chat said nothing at all.
         if let under = bottomReadOn, under.repeatedOnce(on: self) {
             under.intent = bufferIntent
             under.keys = ScriptHandler.keysArrivedCount
-            Log.io("browse mode: the bottom of the page asked for again while it is read on; the read goes on")
+            if under.running {
+                Log.io("browse mode: the bottom of the page asked for again while it is read on; the read goes on")
+            } else {
+                // The read saw this very press arrive before it was counted in here, and stopped (review, 20 Nov 2026).
+                under.running = true
+                Log.io("browse mode: the bottom of the page asked for again after its read on had stopped; reading on again")
+                readOn(under)
+            }
             return
         }
         let key = ReadOnKey(intent: bufferIntent, keys: ScriptHandler.keysArrivedCount)
@@ -1021,12 +1043,7 @@ public final class BrowseModeDocument: ScriptableObject {
         // The read on has to wait (the owner's decision, 17 Nov 2026): say so at once, then the bottom line when it comes. Not said
         // for a repeat press (returned above), nor when the bottom is in the copy already (landed above).
         Speech.speakMessage(String(localized: "reading on", comment: "Spoken message: the bottom of a long page is being read on before it is said"))
-        readOnUntil(startedBy: key, { false }) { [weak self] _ in
-            guard let self else { return }
-            if bottomReadOn === key { bottomReadOn = nil }
-            if buffer.stoppedAtLimit { Speech.speakMessage(String(localized: "page read in part, it is very long", comment: "Spoken message")) }
-            land()
-        }
+        readOn(key)
     }
 
     /// A paged document (Preview's PDF): the page is said as the reading position crosses onto another one, as

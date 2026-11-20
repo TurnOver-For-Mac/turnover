@@ -435,10 +435,17 @@ extension AXHandler {
             Self.pageHostSetAside = (target, document, press.keyAt)
             Log.io("focus on a nameless AXGroup with no page in it yet, just after a link or button was pressed; set aside, watching for the new page")
             let setAside = target
+            let generation = document.pageGeneration
             followIfPageWent(document, tries: Self.pageHostWatchTries) { [weak self] in
                 // No new page came: the focus set aside is presented, if the app still has it there.
                 Self.pageHostSetAside = nil
                 guard let self else { return }
+                // The same document took a new page meanwhile and has read it: the group, presented now, would drop
+                // that page and talk over it (review, 20 Nov 2026).
+                guard document.pageGeneration == generation else {
+                    Log.io("focus: the page changed while the nameless group was set aside; not presented")
+                    return
+                }
                 guard let now = AXUIElementCreateApplication(pid).element(kAXFocusedUIElementAttribute), now.isSame(setAside) else {
                     Log.io("focus: no new page came, and the app's focus has moved on from the group set aside; not presented")
                     return
