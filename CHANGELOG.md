@@ -7,7 +7,7 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 ### New to try
 
 - Your own sound sets: Settings, Sounds has two new buttons, "Open the sound sets folder" and "Make a starter set", and "Whose sounds" also lists every folder of audio files you put there, one file per event; where a set has no file TurnOver's own sound plays, and an empty file is silence.
-- With VoiceOver's sounds chosen, activating an item, turning the rotor, a search wrapping round the page, a window coming to the front (not the Finder desktop), a dialog or system prompt appearing and text being added to a selection now play VoiceOver's own sounds.
+- With VoiceOver's sounds chosen, activating an item, turning the rotor, a search wrapping round the page, a window coming to the front (not the Finder desktop) and a dialog or system prompt appearing now play VoiceOver's own sounds.
 - Mouse tracking: Settings, Presentation, "Read what is under the mouse pointer as it moves" (or NVDA+M in the Windows
   keyboard style) reads each item the pointer crosses, as VoiceOver's cursor following the mouse pointer does. It is off
   until turned on. The keyboard focus never moves with the pointer; the review cursor goes to the item, as NVDA's review

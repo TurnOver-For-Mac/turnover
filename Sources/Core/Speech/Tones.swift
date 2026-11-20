@@ -90,9 +90,10 @@ public enum Tones {
     public static func windowActivated() { if custom("window-activated") { return }; if !chosen { _ = voiceOver("WindowActivated.aiff") } }
     /// A dialog or a system prompt appeared: VoiceOver's "System dialog appeared" plays Alert.aiff. TurnOver's own set has none.
     public static func dialogAppeared() { if custom("dialog-appeared") { return }; if !chosen { _ = voiceOver("Alert.aiff") } }
-    /// Text was added to the selection: VoiceOver's "Text added to selection" plays DragShort.aiff. One sound per
-    /// change however many pieces were added. TurnOver's own set has none.
-    public static func selectionAdded() { if custom("selection-added") { return }; if !chosen { _ = voiceOver("DragShort.aiff") } }
+    /// Text was added to the selection: only a sound set of your own plays here, once per change however many pieces
+    /// were added. VoiceOver's DragShort.aiff ("Text added to selection") played here for a day and was wrong by ear
+    /// on Select All and on Shift with the arrows (20 Nov 2026), so VoiceOver's set and TurnOver's own have none.
+    public static func selectionAdded() { _ = custom("selection-added") }
     public static func link() { if !voiceOver("LinkBegin.aiff") { beep(1400, 25, volume: 0.18, exempt: true) } }
     public static func list() { guard invented("list") else { return }; if custom("list") { return }; if fresh("list") { return }; beep(520, 40) }
     public static func landmark() { guard invented("landmark") else { return }; if custom("landmark") { return }; if fresh("landmark") { return }; beep(620, 40); DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { beep(780, 40) } }

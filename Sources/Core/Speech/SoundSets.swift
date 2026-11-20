@@ -90,7 +90,7 @@ public enum SoundEvents {
         "NotFound": "search-not-found", "MenuDown": "menu-opened", "PopupAppeared": "context-menu-opened",
         "WebAreaLoaded": "page-loaded", "WebPageLoaded": "page-loaded", "RotorLeft": "rotor-previous", "RotorRight": "rotor-next",
         "WrapForward": "search-wrapped-forward", "WrapBack": "search-wrapped-back", "WindowActivated": "window-activated",
-        "Alert": "dialog-appeared", "DragShort": "selection-added", "DrillIn": "drill-in", "DrillOut": "drill-out",
+        "Alert": "dialog-appeared", "DrillIn": "drill-in", "DrillOut": "drill-out",
         "QuickNavOn": "quick-nav-on", "QuickNavSingleKeyOn": "quick-nav-on", "QuickNavArrowKeyOn": "quick-nav-on",
         "QuickNavOff": "quick-nav-off", "QuickNavSingleKeyOff": "quick-nav-off", "QuickNavArrowKeyOff": "quick-nav-off",
         "TrackingOn": "tracking-on", "TrackingOff": "tracking-off", "EmptySpace": "empty-space", "Announcement": "announcement",

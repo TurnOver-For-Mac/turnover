@@ -17,7 +17,6 @@ import TurnOverCore
         ("a search wrapping forward", "WrapForward.aiff", { Tones.searchWrapped(forward: true) }),
         ("a window coming to the front", "WindowActivated.aiff", { Tones.windowActivated() }),
         ("a dialog appearing", "Alert.aiff", { Tones.dialogAppeared() }),
-        ("text added to the selection", "DragShort.aiff", { Tones.selectionAdded() }),
         ("a search wrapping backward", "WrapBack.aiff", { Tones.searchWrapped(forward: false) }),
     ]
     test("sounds: with VoiceOver's chosen, each wired event asks for VoiceOver's own file") {
@@ -33,6 +32,8 @@ import TurnOverCore
         }
         asked = []; Tones.contextMenuOpened()
         expect(asked, [], "a context menu is a menu: only MenuDown, not PopupAppeared, with VoiceOver's sounds")
+        asked = []; Tones.selectionAdded()
+        expect(asked, [], "text added to a selection asks for none of VoiceOver's files: DragShort was wrong by ear")
     }
     test("sounds: with TurnOver's chosen, a context menu keeps its popup sound and the new events add none of their own") {
         let saved = config.general.sounds
