@@ -36,11 +36,20 @@ func claudePopupTests() {
             Speech.sink = sink; KeyboardGesture.poster = poster
             API.setFocusObject(focus, ancestors: ancestors, interceptor: pageBefore)
             if let focus { ObjectNavigator.shared.focusMoved(to: focus.element, pid: focus.pid) }
+            // Moving the focus back schedules a spoken hint 1.2 s ahead; it must not land in a later test on a slow machine.
+            Hints.cancel(); RunLoop.current.run(until: Date().addingTimeInterval(0.01))
             AXReplay.unload()
         }
         body(module, page, said, sent)
     }
     func settle() { RunLoop.current.run(until: Date().addingTimeInterval(0.18)) }
+    /// Wait for the popup reader (a delayed read on a worker, then main) to say what is wanted, however slow the machine is; the
+    /// short settle after it lets a wrong extra word arrive, so an extra word still fails the check that follows.
+    func settle(until condition: () -> Bool) {
+        let limit = Date().addingTimeInterval(10)
+        while !condition(), Date() < limit { RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.005)) }
+        settle()
+    }
 
     test("Claude popup: production lookup gives suggestion arrows priority over editable caret commands") {
         withPopup { _, _, _, _ in
@@ -150,7 +159,7 @@ func claudePopupTests() {
         withPopup { module, page, said, sent in
             check(module.handlesGroupMenus, "Claude opts into group menu notifications")
             module.handleEvent(Event(.menuStart, ObjectFactory.make(AXReplay.element(3)))) {}
-            settle()
+            settle(until: { !said.value.isEmpty })
             expect(said.value, ["compact"], "the opening item is spoken")
             for (key, selected, label) in [("downArrow", 5, "help"), ("upArrow", 4, "compact")] {
                 AXUIElementSetAttributeValue(AXReplay.element(4), kAXSelectedAttribute as CFString, selected == 4 ? kCFBooleanTrue : kCFBooleanFalse)
@@ -159,7 +168,7 @@ func claudePopupTests() {
                 let command = module.script(for: gesture)
                 check(command != nil, "the popup owns the native arrow")
                 command?.handler(gesture)
-                settle()
+                settle(until: { said.value.last == label })
                 expect(said.value.last, label, "the highlighted option is spoken after the arrow")
             }
             expect(sent.value, ["kb:downArrow", "kb:upArrow"], "each arrow reaches Claude once")

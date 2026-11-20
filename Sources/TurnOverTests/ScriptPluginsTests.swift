@@ -681,8 +681,8 @@ func scriptPluginsTests() {
     }
 
     test("script plugins: two strikes leave a script running and the third turns it off, said once") {
-        let mac = Mac()   // the real 25 ms deadline: a handler that takes 150 ms is late each time
-        guard let (plugins, entry, _, _) = start(mac, script: "turnover.on('focus', function (e) { var t = Date.now(); while (Date.now() - t < 150) {} });") else { return }
+        let mac = Mac()   // the real 25 ms deadline: a handler that takes 1.5 s is late each time, even when a slow machine wakes the waiting thread long after 25 ms (the answer must not already be in by then)
+        guard let (plugins, entry, _, _) = start(mac, script: "turnover.on('focus', function (e) { var t = Date.now(); while (Date.now() - t < 1500) {} });") else { return }
         defer { plugins.terminate() }
         expect(startHost(plugins, entry), true, "the script loads")
         for strike in 1...2 {
@@ -708,7 +708,7 @@ func scriptPluginsTests() {
     test("script plugins: strikes older than ten minutes do not count") {
         let mac = Mac()
         mac.limits.strikeWindow = 0.3
-        guard let (plugins, entry, _, _) = start(mac, script: "turnover.on('focus', function (e) { var t = Date.now(); while (Date.now() - t < 150) {} });") else { return }
+        guard let (plugins, entry, _, _) = start(mac, script: "turnover.on('focus', function (e) { var t = Date.now(); while (Date.now() - t < 1500) {} });") else { return }
         defer { plugins.terminate() }
         expect(startHost(plugins, entry), true, "the script loads")
         for strike in 1...3 {

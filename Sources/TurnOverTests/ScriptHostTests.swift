@@ -239,6 +239,8 @@ func scriptHostTests() {
         defer { rig.host.stop() }
         rig.start()
         check(waitFor(5) { !rig.host.isRunning }, "the host program was ended")
+        // The host ends before the strike is delivered on main, so wait for the strike too.
+        _ = waitFor(5) { rig.strikes.list.contains { if case .killed = $0 { return true } else { return false } } }
         if case .killed(let why)? = rig.strikes.list.last { check(why.contains("processor"), "the reason names the processor: \(why)") } else { check(false, "a kill was reported: \(rig.strikes.list)") }
     }
 
@@ -250,6 +252,8 @@ func scriptHostTests() {
         guard case .ready = rig.start() else { return check(false, "expected ready, got \(rig.host.state)") }
         _ = rig.ask()
         check(waitFor(5) { !rig.host.isRunning }, "the host program was ended")
+        // The host ends before the strike is delivered on main, so wait for the strike too.
+        _ = waitFor(5) { rig.strikes.list.contains { if case .killed = $0 { return true } else { return false } } }
         if case .killed(let why)? = rig.strikes.list.last { check(why.contains("memory"), "the reason names memory: \(why)") } else { check(false, "a kill was reported: \(rig.strikes.list)") }
     }
 
@@ -554,7 +558,8 @@ func scriptHostTests() {
         check(waitFor(3) { if case .ready = rig.host.state { return true } else { return false } }, "the stand-in is ready")
         expect(rig.ask(), .late, "it never answered the question")
         check(waitFor(3) { if case .failed = rig.host.state { return true } else { return false } }, "and it was stopped for it: \(rig.host.state)")
-        check(rig.strikes.list.contains { if case .killed = $0 { return true } else { return false } }, "as a kill: \(rig.strikes.list)")
+        // The state turns to failed before the strike is delivered on main, so wait for the strike too.
+        check(waitFor(5) { rig.strikes.list.contains { if case .killed = $0 { return true } else { return false } } }, "as a kill: \(rig.strikes.list)")
     }
 
     test("script host: a host that floods TurnOver with lines is thrown away unread, then stopped") {
@@ -568,7 +573,8 @@ func scriptHostTests() {
         let rig = Rig("", hostPath: path)
         rig.host.start()
         check(waitFor(5) { if case .failed = rig.host.state { return true } else { return false } }, "the flood stopped the host: \(rig.host.state)")
-        check(rig.strikes.list.contains { if case .killed(let why) = $0 { return why.contains("far more messages") } else { return false } }, "as a kill for sending too many: \(rig.strikes.list)")
+        // The state turns to failed before the strike is delivered on main, so wait for the strike too.
+        check(waitFor(5) { rig.strikes.list.contains { if case .killed(let why) = $0 { return why.contains("far more messages") } else { return false } } }, "as a kill for sending too many: \(rig.strikes.list)")
         check(waitFor(3) { !rig.host.isRunning }, "and the host is gone")
     }
 

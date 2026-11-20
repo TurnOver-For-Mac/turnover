@@ -21,6 +21,9 @@ if !AXReplay.isAvailable, ProcessInfo.processInfo.environment["TURNOVER_TESTS_RE
         print("(no \(shim): fixture tests will fail)")
     }
 }
+// The shim is loaded by now, and nothing a test starts should inherit it: with it, a system program can die as it
+// starts (seen on CI as /bin/echo ending with status 6). Done here, before any other thread exists.
+unsetenv("DYLD_INSERT_LIBRARIES")
 Log.level = .error
 // A long page's rest is not read on by itself while the tests run: a test that wants it turns it on.
 WebBuffer.fillsOn = false
