@@ -8,7 +8,7 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 
 - Your own sound sets: Settings, Sounds has two new buttons, "Open the sound sets folder" and "Make a starter set", and "Whose sounds" also lists every folder of audio files you put there, one file per event; where a set has no file TurnOver's own sound plays, and an empty file is silence.
 - With VoiceOver's sounds chosen, activating an item, turning the rotor, a search wrapping round the page, a window coming to the front (not the Finder desktop) and a dialog or system prompt appearing now play VoiceOver's own sounds.
-- Mouse tracking: Settings, Presentation, "Read what is under the mouse pointer as it moves" (or NVDA+M in the Windows
+- Mouse tracking: Settings, Item details, "Read what is under the mouse pointer as it moves" (or NVDA+M in the Windows
   keyboard style) reads each item the pointer crosses, as VoiceOver's cursor following the mouse pointer does. It is off
   until turned on. The keyboard focus never moves with the pointer; the review cursor goes to the item, as NVDA's review
   cursor follows the mouse. A blank place (a window's background, a group with no name) is silent, and coming back to an
@@ -77,6 +77,13 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   the stand-ins for a missing VoiceOver file still play. With "TurnOver's" chosen nothing changes. TurnOver Space, switching between
   browse mode and focus mode, now plays VoiceOver's single-key Quick Nav on and off sounds. The page-loaded sound plays
   once for each page load, not again when the same page is read again.
+  When TurnOver changes between browse mode and focus mode by itself (landing on a text field, or leaving one), there
+  is no sound with VoiceOver's sounds chosen, because VoiceOver plays none there. The focus mode and browse mode sounds
+  named in the fixes below are heard with "TurnOver's" chosen.
+- An app or a web page that stops answering: after a few seconds TurnOver now says the app's name and "is not
+  responding", or "the page is not responding" when the app still answers and only its page does not. It says so once,
+  and says "is responding again" when the app or the page answers. Before, "please wait" was all that was said, however
+  long the wait. Only the app in front is spoken about.
 - Safari: Up and Down Arrow in a box that holds one character (the digit boxes on PayPal's code page) now answer at
   once, as they do at the top of any line. Before, Down waited about a third of a second.
 - Safari: the list a pop-up button opens (Amazon's Quantity) is no longer taken for a page of its own, so the heading
