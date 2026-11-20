@@ -582,8 +582,11 @@ func scriptHostTests() {
         for _ in 0..<20 {
             let rig = Rig("", hostPath: "/usr/bin/true")
             rig.host.start()
-            check(waitFor(3) { !rig.host.isRunning }, "the host that ended at once is not running")
-            if case .failed = rig.host.state {} else { check(false, "it is reported as ended on its own: \(rig.host.state)") }
+            // The end is known in two steps, first "not running" and then the state. Read between the two on a slow
+            // machine, the state was still "starting" (the build check, 20 Nov 2026): so the state is what is waited for.
+            let ended = waitFor(10) { if case .failed = rig.host.state { return true }; return false }
+            check(ended, "it is reported as ended on its own: \(rig.host.state)")
+            check(!rig.host.isRunning, "the host that ended at once is not running")
         }
         final class Flag: @unchecked Sendable { var heard = false }
         let flag = Flag()
@@ -592,9 +595,8 @@ func scriptHostTests() {
         expect(flag.heard, false, "a held child that has ended is not reported until it is released")
         check(Darwin.kill(child.pid, 0) == 0, "and its process id is still its own (it has not been reaped)")
         child.releaseExit?()
-        check(waitFor(3) { flag.heard }, "released, the end is reported")
-        settle(0.2)
-        check(Darwin.kill(child.pid, 0) != 0, "and the child is reaped after")
+        check(waitFor(10) { flag.heard }, "released, the end is reported")
+        check(waitFor(10) { Darwin.kill(child.pid, 0) != 0 }, "and the child is reaped after")
     }
 
     test("script host: timers are limited in Swift, whatever the script does to its own bookkeeping") {
