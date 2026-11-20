@@ -88,7 +88,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// (still running) reads each one.
     private func welcomeOnFirstRun() {
         // Coexisting, VoiceOver must be on for the welcome and for every app TurnOver doesn't read (the code review, 17 Oct 2026).
-        if Coexist.on, !NSWorkspace.shared.isVoiceOverEnabled { Log.info("welcome: VoiceOver is off; turning it on first"); HandOver.turnVoiceOverOn() }
+        // Asked for once: turnVoiceOverOn waits for VoiceOver and falls back by itself, and a second request on top
+        // of a start under way (VoiceOver.app opened over the shortcut's start) brought it no sooner (20 Nov 2026).
+        var askedForVoiceOver = false
+        if Coexist.on, !NSWorkspace.shared.isVoiceOverEnabled { Log.info("welcome: VoiceOver is off; turning it on first"); HandOver.turnVoiceOverOn(); askedForVoiceOver = true }
         let key = "welcomed-\(Edition.version)"
         let versionWelcomed = UserDefaults.standard.bool(forKey: key)
         // Keyboard navigation for the Mac, once, welcome due or not (a code review: behind the welcome, a Mac already
@@ -100,7 +103,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // went). TurnOver's own launch hand-over turns it off after, by the swap setting.
         // VoiceOver's flag can stay on with VoiceOver gone (quit by script, or crashed): then it is started, since the
         // toggle would turn the flag off (the test machine, 24 Oct 2026: the welcome open, and nobody speaking).
-        if !HandOver.voiceOverReading {
+        if !askedForVoiceOver, !HandOver.voiceOverReading {
             if NSWorkspace.shared.isVoiceOverEnabled {
                 Log.info("welcome: VoiceOver's flag is on but it isn't running; starting it first")
                 NSWorkspace.shared.openApplication(at: URL(fileURLWithPath: "/System/Library/CoreServices/VoiceOver.app"), configuration: NSWorkspace.OpenConfiguration()) { _, _ in }

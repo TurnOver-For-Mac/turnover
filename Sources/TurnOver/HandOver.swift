@@ -156,6 +156,9 @@ enum HandOver {
         case .nothing:
             return
         case .shortcut:
+            // A choice of reader: an older recovery's late fallback, which would post the shortcut too, stands down, so
+            // two presses cannot follow each other and turn VoiceOver off again (the review of 20 Nov 2026).
+            newChoice()
             postToggle()
             let end = Date().addingTimeInterval(VoiceOverStart.shortcutWait)
             while Date() < end {
@@ -172,7 +175,10 @@ enum HandOver {
             // Reading, not just its flag: the flag alone stays on after VoiceOver crashed (a code review, 25 Oct 2026).
             Log.info("hand-over: VoiceOver's flag is on but it isn't running; opening VoiceOver.app")
         case .wait:
-            Log.warning("hand-over: VoiceOver still neither on nor off after 12 s; opening VoiceOver.app")
+            // Its process is there, so VoiceOver.app opened again would start nothing, and its shortcut could turn off
+            // a VoiceOver that is coming. Left as it is.
+            Log.warning("hand-over: VoiceOver still neither on nor off after 12 s; left as it is")
+            return
         }
         openVoiceOver("hand-over")
         let end = Date().addingTimeInterval(3)
