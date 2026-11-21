@@ -12,9 +12,9 @@
 //   or the reaction's picture for a few seconds. The module says "hand raised" or "hand lowered" and the reaction
 //   after those keys.
 // - Command Shift 2, Zoom's own key for reading the active speaker's name, said nothing. The speaker is in the
-//   window: the tile whose description ends ", active speaker". The module answers the key in the meeting window
-//   with that name. (Command 2 is Zoom's key for another view of the Zoom Workplace window and is left alone;
-//   13 Nov 2026.)
+//   window: the tile whose description ends ", active speaker". The module sends the key on, as it does the
+//   others, and in the meeting window says that name. (Command 2 is Zoom's key for another view of the Zoom
+//   Workplace window and is left alone; 13 Nov 2026.)
 // - Zoom's own alerts (Settings, Accessibility, Screen reader alerts) never arrive. Its interface framework
 //   (Prism) holds "speakStringIfVoiceOverOn:" and watches the system's VoiceOver state, so the alerts appear to be
 //   made only while VoiceOver itself is on (names read from the program file, 13 Nov 2026; not traced running).
@@ -128,14 +128,19 @@ package final class ZoomAppModule: AppModule {
         guard Core.active, NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { return }
         generation += 1
         let mine = generation
-        // Zoom took about a quarter of a second (13 Nov 2026). Nothing is said if nothing changed: in a text field
-        // the key may have typed a letter instead.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { [weak self] in
-            guard let self, self.generation == mine else { return }
+        // Zoom took between 0.06 and 0.30 s in 10 presses (13 and 16 Nov 2026) and the first look never missed. The
+        // second look is for a slower Zoom. Nothing is said if nothing changed: in a text field the key may have
+        // typed a letter instead.
+        look(after: [0.7, 0.8], generation: mine) { [weak self] last in
+            guard let self else { return true }
             let now = self.feedback().handRaised
-            guard now != was else { Log.io("zoom: hand: no change after the key"); return }
+            guard now != was else {
+                if last { Log.io("zoom: hand: no change after the key") }
+                return false
+            }
             Speech.speakMessage(now ? String(localized: "hand raised", comment: "Zoom: your hand after the raise hand key, and in the state command")
                                     : String(localized: "hand lowered", comment: "Zoom: your hand after the raise hand key"))
+            return true
         }
     }
 
@@ -144,21 +149,40 @@ package final class ZoomAppModule: AppModule {
         guard Core.active, NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { return }
         generation += 1
         let mine = generation
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-            guard let self, self.generation == mine, let reaction = self.feedback().reaction, !reaction.isEmpty else { return }
+        // The first look found the reaction in all 11 presses (13 and 16 Nov 2026); the second is for a slower Zoom.
+        look(after: [0.6, 0.6], generation: mine) { [weak self] last in
+            guard let self else { return true }
+            guard let reaction = self.feedback().reaction, !reaction.isEmpty else {
+                if last { Log.io("zoom: reaction: none shown after the key") }
+                return false
+            }
             Speech.speakMessage(String(localized: "sent \(reaction)", comment: "Zoom: a reaction was sent; the value is the reaction, such as a thumbs up"))
+            return true
+        }
+    }
+
+    /// Looks at Zoom after each wait in turn, until a look reports that it found and said what it was looking for.
+    /// A newer key press ends the looking. `last` tells the look that no other follows it.
+    private func look(after waits: [TimeInterval], generation mine: Int, _ found: @escaping (_ last: Bool) -> Bool) {
+        guard let wait = waits.first else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + wait) { [weak self] in
+            guard let self, self.generation == mine else { return }
+            if !found(waits.count == 1) { self.look(after: Array(waits.dropFirst()), generation: mine, found) }
         }
     }
 
     // MARK: Who is speaking
 
+    /// Sends the key to Zoom wherever it is pressed, then in the meeting window says the speaker. The key is Zoom's
+    /// own and stays Zoom's: should Zoom come to answer it without VoiceOver, it still gets the key.
     private func sayActiveSpeaker(_ gesture: KeyboardGesture) {
+        gesture.send()
         // The app's focused window, not the focus object's: a toolbar button there gave no window (installed build,
         // 13 Nov 2026: the key ran this and nothing was said).
         guard let window = AXUIElementCreateApplication(pid).element(kAXFocusedWindowAttribute),
               window.string(kAXIdentifierAttribute) == Self.meetingWindowIdentifier else {
-            Log.io("zoom: who is speaking outside the meeting window; the key goes to Zoom")
-            gesture.send(); return
+            Log.io("zoom: who is speaking outside the meeting window; nothing said")
+            return
         }
         // The tiles are tab groups in the window, and in the "grid view" tab group one level down.
         var descriptions: [String] = []

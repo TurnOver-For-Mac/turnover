@@ -47,7 +47,7 @@ func zoomModuleTests() {
         check(ZoomWords.activeSpeaker(in: []) == nil, "no tiles")
     }
 
-    test("zoom: who is speaking outside the meeting window sends the key on") {
+    test("zoom: who is speaking sends the key on to Zoom, in the meeting window and outside it") {
         let savedPoster = KeyboardGesture.poster, savedSink = Speech.sink, oldFocus = API.focusObject, oldAncestors = API.focusAncestors, oldDocument = API.focusTreeInterceptor
         let sent = Locked<[String]>([])
         var said: [String] = []
@@ -55,10 +55,32 @@ func zoomModuleTests() {
         Speech.sink = { said.append($0) }
         API.setFocusObject(nil, ancestors: [])
         defer { KeyboardGesture.poster = savedPoster; Speech.sink = savedSink; API.setFocusObject(oldFocus, ancestors: oldAncestors, interceptor: oldDocument) }
-        let module = ZoomAppModule(pid: 0, bundleIdentifier: "us.zoom.xos", appName: "Zoom")
         let key = KeyboardGesture(identifier: "kb:command+shift+2")!
-        module.script(named: "zoom_activeSpeaker")?.handler(key)
-        expect(sent.value, [key.identifier], "the key goes to Zoom once")
+
+        // Outside a meeting: no window answers. The key goes to Zoom and nothing is said.
+        let outside = ZoomAppModule(pid: 0, bundleIdentifier: "us.zoom.xos", appName: "Zoom")
+        outside.script(named: "zoom_activeSpeaker")?.handler(key)
+        expect(sent.value, [key.identifier], "outside the meeting window the key goes to Zoom once")
         expect(said, [], "nothing is said")
+
+        // In the meeting window, made up here: a tile, and the grid's tiles one level down, one marked as speaking.
+        func meeting(speaking: Bool) -> AXFixture {
+            AXFixture(app: "Public sample", bundle: "us.zoom.xos", recorded: "", root: 1, application: 0, focus: nil, nodes: [
+                .init(id: 0, attrs: ["AXRole": .string("AXApplication"), "AXFocusedWindow": .element(1), "AXWindows": .elements([1])]),
+                .init(id: 1, attrs: ["AXRole": .string("AXWindow"), "AXIdentifier": .string("zm.meeting.window.main"), "AXChildren": .elements([2, 3])]),
+                .init(id: 2, attrs: ["AXRole": .string("AXTabGroup"), "AXDescription": .string("Sample Two, Computer audio muted, Video off")]),
+                .init(id: 3, attrs: ["AXRole": .string("AXTabGroup"), "AXDescription": .string("grid view"), "AXChildren": .elements([4])]),
+                .init(id: 4, attrs: ["AXRole": .string("AXTabGroup"), "AXDescription": .string("Sample One, Computer audio unmuted, Video on" + (speaking ? ", active speaker" : ""))]),
+            ])
+        }
+        let inMeeting = ZoomAppModule(pid: AXReplay.floor, bundleIdentifier: "us.zoom.xos", appName: "Zoom")
+        defer { AXReplay.unload() }
+        for (speaking, words) in [(true, "Sample One is speaking"), (false, "No one is speaking")] {
+            AXReplay.load(meeting(speaking: speaking))
+            sent.value = []; said = []
+            inMeeting.script(named: "zoom_activeSpeaker")?.handler(key)
+            expect(sent.value, [key.identifier], "in the meeting window the key goes to Zoom once too")
+            expect(said, [words], "and the speaker is said")
+        }
     }
 }
