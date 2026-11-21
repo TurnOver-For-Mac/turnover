@@ -10,7 +10,7 @@ App version is given below only where the source states it. Other missing app/ma
 
 ## Recorded outcome
 
-Firefox was listed for the sweep, but browser interaction was deferred to Oliver’s checklist. No live browser workflow pass is recorded in this source. Recognition of its identifier in keyboard handling is not proof of web-reading support.
+Firefox was listed for the sweep, but browser interaction was deferred to the owner’s checklist. No live browser workflow pass is recorded in this source. Recognition of its identifier in keyboard handling is not proof of web-reading support.
 
 ## Limits and next check
 

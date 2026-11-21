@@ -14,4 +14,8 @@ func soundsTests() {
         expect(Int((player.duration * 1000).rounded()), 52, "the file's length, 52 ms, kept")
         expect(player.numberOfChannels, 2, "its two channels kept")
     }
+
+    test("Sound log: one line names the sound and the caller that asked for it") {
+        expect(SoundLog.line("link", why: "link()"), "sound: link (why: link())", "the name, then the caller")
+    }
 }

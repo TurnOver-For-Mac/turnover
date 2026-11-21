@@ -151,6 +151,18 @@ The TurnOver menu
 In the menu, Right or Return opens a submenu or changes a setting; on a number (rate, volume) Left turns it down.
 Settings that restart TurnOver change only with Return.
 
+Sounds
+
+In Settings, Sounds, "Whose sounds" chooses between VoiceOver's sounds and TurnOver's own. You can also add sounds of your own.
+
+A sound set is a folder with one audio file for each thing TurnOver can sound, such as a boundary, pressing an item, a menu opening or a page finishing loading. The file's name, without its ending, says which event it is for, for example `boundary.wav`. Wav, aiff, aif, caf, m4a and mp3 files all work.
+
+- Open the sound sets folder: a button beside the choice. It shows the folder, in Application Support, TurnOver, Sound Sets, and makes it if it is not there yet.
+- Make a starter set: a button beside the choice. It makes a new folder, "My sounds" (then "My sounds 2" and so on), holding TurnOver's own sounds as wav files under the right names, and a "Read me.txt" that lists every event's file with a line about what it is.
+- Choosing a set: every folder in the Sound Sets folder is listed in "Whose sounds" by its name, after VoiceOver's and TurnOver's. The list is read again each time the Sounds pane opens.
+
+Replace any file with your own, keeping the name. Delete a file to get TurnOver's own sound for that event. A file with nothing in it means silence for that event. A file TurnOver cannot play counts as missing. To share a set, zip its folder; whoever you send it to unzips it into their Sound Sets folder. If a chosen set's folder is removed, TurnOver's own sounds play.
+
 
 READING AND SAY ALL
 
@@ -1245,6 +1257,7 @@ NVDA keys
   TurnOver F9: Marks the review cursor as the start of text to copy (NVDA+F9)
   TurnOver Home: Moves the review cursor to the start of the line (NVDA+Home)
   TurnOver K: Reports where the link goes (NVDA+K)
+  TurnOver M: Mouse tracking on or off; reads what is under the mouse pointer as it moves (NVDA+M)
   TurnOver Period: Reports the character at the review cursor; twice, spells it (NVDA+Period)
   TurnOver U: Progress bars: beeps that rise in pitch, the percentage spoken, both, or nothing (NVDA+U)
   TurnOver V: Screen layout on or off in browse mode: things side by side on one line (NVDA+V)

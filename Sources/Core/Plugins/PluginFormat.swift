@@ -6,14 +6,37 @@
 //   nextText, previousText, childText, parentText, help, description".
 // - A field TurnOver does not know is a warning, with the nearest field it does know ("did you mean name?"): a
 //   misspelt field used to be ignored without a word.
-// - formatVersion (the format the plugin is written in; 1 today) and minimumTurnOver (the oldest TurnOver it works
+// - formatVersion (the format the plugin is written in; 2 today) and minimumTurnOver (the oldest TurnOver it works
 //   with) in the manifest. TurnOver reads every older format; a newer one is refused with a reason, never half-read.
+// - Format 2 (15 Nov 2026, docs/PLUGIN-SCRIPTS-PLAN.md) adds `script` and `commands` to the manifest: one JavaScript
+//   file that runs in a sandbox, and the commands it handles. Everything valid in format 1 is valid in format 2.
 import Foundation
 
 nonisolated public enum PluginFormat {
     /// The newest format this TurnOver reads.
-    public static let currentVersion = 1
+    public static let currentVersion = 2
+    /// The format a plugin with no script is written in. The maker writes this, so a data plugin still loads in a
+    /// TurnOver that only knows format 1 (15 Nov 2026).
+    public static let dataVersion = 1
+    /// The one name a plugin's script may have, and the most it may hold (the plan's 256 KB).
+    public static let scriptName = "main.js"
+    public static let scriptBytes = 256 * 1024
+    /// The most manifest.json or profile.json is read as: a file larger than this is cut here and so does not parse. Far more than
+    /// any real plugin needs; it stops a huge file from filling the memory of the reader (16 Nov 2026 review).
+    public static let fileBytes = 1024 * 1024
 
+    /// At most `limit + 1` bytes of a file: one more than the limit is enough to know it is too large, and the rest is never
+    /// read. Nil if the file cannot be read.
+    public static func readBounded(_ url: URL, limit: Int) -> Data? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+        do { return try handle.read(upToCount: limit + 1) ?? Data() } catch { return nil }
+    }
+
+    /// A plugin file as the loader reads it: main.js to the script limit, the others to `fileBytes`.
+    public static func readPluginFile(_ url: URL) -> Data? {
+        readBounded(url, limit: url.lastPathComponent == scriptName ? scriptBytes : fileBytes)
+    }
     /// The values a field may take, where it is a choice.
     public static let choices: [String: [String]] = [
         "nameFrom": ["nextText", "previousText", "childText", "parentText", "help", "description", "ancestorHelp", "rowText"],
@@ -24,7 +47,11 @@ nonisolated public enum PluginFormat {
 
     /// The fields each part of the format knows (for the unknown-field warning).
     static let manifestFields = ["id", "name", "version", "author", "description", "apps", "kind", "formatVersion", "minimumTurnOver", "$schema",
-                                  "summary", "contact", "changes", "abilities", "privacy", "license", "provides"]
+                                  "summary", "contact", "changes", "abilities", "privacy", "license", "provides", "script", "commands", "convertedFrom",
+                                  "support", "reasons", "options"]
+    static let convertedFromFields = ["id", "version", "sha256", "sourceURL", "author", "convertedBy", "abilities", "apps"]
+    static let commandFields = ["id", "description", "key", "letter"]
+    static let optionFields = ["id", "label", "kind", "choices", "min", "max", "default"]
     static let profileFields = ["labels", "keys", "watch", "silence", "view", "hold", "$schema"]
     static let holdFields = ["focus", "items"]
     static let labelFields = ["match", "name", "nameFrom", "role"]
@@ -116,8 +143,13 @@ nonisolated public enum PluginFormat {
 
     /// Decode a file of the format, or throw the first problem in words with its line.
     public static func decode<T: Decodable>(_ type: T.Type, from url: URL) throws -> T {
-        let file = url.lastPathComponent
-        guard let data = try? Data(contentsOf: url) else { throw PluginFormatError(problem: Problem(file: file, line: nil, message: "cannot be read (is it there?)", isError: true)) }
+        try decode(type, from: try? Data(contentsOf: url), file: url.lastPathComponent)
+    }
+
+    /// The same for bytes the caller already read, so what is parsed is what it hashes (15 Nov 2026). `file` is the name
+    /// the messages use; nil bytes read as a file that cannot be read.
+    public static func decode<T: Decodable>(_ type: T.Type, from data: Data?, file: String) throws -> T {
+        guard let data else { throw PluginFormatError(problem: Problem(file: file, line: nil, message: "cannot be read (is it there?)", isError: true)) }
         guard let raw = String(data: data, encoding: .utf8) else { throw PluginFormatError(problem: Problem(file: file, line: nil, message: "is not text in UTF-8", isError: true)) }
         let text = clean(raw)
         do {
@@ -169,8 +201,14 @@ nonisolated public enum PluginFormat {
 
     /// Warnings and errors a decoder does not give: unknown fields, values outside their choices, the format version.
     public static func check(manifest: URL?, profile: URL?) -> [Problem] {
+        check(manifest: manifest.flatMap { try? Data(contentsOf: $0) }, profile: profile.flatMap { try? Data(contentsOf: $0) }, folder: manifest?.deletingLastPathComponent())
+    }
+
+    /// The same for bytes the caller already read. `folder` is where main.js is, and `scriptData` is main.js as the caller
+    /// read it (read again from `folder` if nil).
+    public static func check(manifest: Data?, profile: Data?, folder: URL?, scriptData: Data? = nil) -> [Problem] {
         var out: [Problem] = []
-        if let manifest, let raw = try? String(contentsOf: manifest, encoding: .utf8) {
+        if let manifest, let raw = String(data: manifest, encoding: .utf8) {
             let text = clean(raw)
             for k in keys(in: text) {
                 let fields = fieldsFor(path: k.path, inManifest: true)
@@ -187,8 +225,9 @@ nonisolated public enum PluginFormat {
                     out.append(Problem(file: "manifest.json", line: k.line, message: "kind \"\(v)\" is not one TurnOver loads; the only kind is \"profile\" (data, no code)", isError: true))
                 }
             }
+            out += checkScript(folder: folder, text: text, scriptData: scriptData)
         }
-        if let profile, let raw = try? String(contentsOf: profile, encoding: .utf8) {
+        if let profile, let raw = String(data: profile, encoding: .utf8) {
             let text = clean(raw)
             for k in keys(in: text) {
                 if let fields = fieldsFor(path: k.path, inManifest: false), !fields.contains(k.key) {
@@ -204,7 +243,12 @@ nonisolated public enum PluginFormat {
 
     /// The fields allowed at a path, or nil where TurnOver does not check (the view section has its own checks).
     static func fieldsFor(path: [String], inManifest: Bool) -> [String]? {
-        if inManifest { return path.isEmpty ? manifestFields : nil }
+        if inManifest {
+            if path == ["convertedFrom"] { return convertedFromFields }
+            if path.count == 2, path[0] == "commands", Int(path[1]) != nil { return commandFields }
+            if path.count == 2, path[0] == "options", Int(path[1]) != nil { return optionFields }
+            return path.isEmpty ? manifestFields : nil
+        }
         let named = path.filter { Int($0) == nil }   // list positions dropped
         guard let first = named.first else { return profileFields }
         if first == "view" { return nil }

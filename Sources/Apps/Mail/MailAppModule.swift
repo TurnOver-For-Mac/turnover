@@ -4,6 +4,7 @@
 // the compose body has a name.
 import Foundation
 import ApplicationServices
+import AppKit
 
 package final class MailAppModule: AppModule {
     static let bundleID = "com.apple.mail"
@@ -18,6 +19,12 @@ package final class MailAppModule: AppModule {
             guard let self, let f = API.focusObject?.element else { g.send(); return }
             self.composeMove(forward: false, from: f, g)
         }.isAvailable = { Self.place.hasPrefix("compose:") }
+        // Up and Down in the message list: the row is read before Mail has moved to it (MailReadAhead.swift).
+        script("mail_readAhead", "In the message list: reads the next or previous message at once, without waiting for Mail",
+               gestures: ["kb:downArrow", "kb:upArrow"], category: "Mail") { [weak self] g in
+            guard let self else { g.send(); return }
+            self.readAhead(g)
+        }.isAvailable = { Self.place == "messages" && Self.readsAhead }
         script("mail_toMailboxes", String(localized: "From the message list: the mailbox list (Shift Tab)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:shift+tab"], category: "Mail") { [weak self] g in
             guard let self, let f = API.focusObject?.element else { g.send(); return }
             self.focusList("mailboxes", from: f)
@@ -34,7 +41,11 @@ package final class MailAppModule: AppModule {
                 else if title.lowercased().contains("search") { Speech.speakMessage(String(localized: "no results", comment: "Spoken message")) }
                 if let f = API.focusObject?.element { self.focusList("messages", from: f) }
             }
-        }.isAvailable = { API.focusObject?.role == .searchField }
+        }.isAvailable = {
+            // Not the Open and Save panel's own search field (17 Nov 2026): Return there is the panel's.
+            guard Self.isInMailsOwnContent else { return false }
+            return API.focusObject?.role == .searchField
+        }
         // Command Shift D sends: say so once the compose window has gone (nothing confirmed it; a tester, 8 Oct 2026).
         script("mail_send", String(localized: "Writing a message: Command Shift D sends it, and says so", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+shift+d"], category: "Mail") { g in
             g.send()
@@ -70,12 +81,13 @@ package final class MailAppModule: AppModule {
             self.leaveMessage(from: d.webArea, g)
         }.isAvailable = {
             guard let d = API.focusTreeInterceptor, !d.passThrough, d.webArea.pid == pid else { return false }
+            guard Self.isInMailsOwnContent else { return false }
             return !Self.place.hasPrefix("compose:") && !AXHandler.shared.isMenuOpen
         }
         script("mail_getNewMail", String(localized: "Checks for new mail and says so", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+shift+n"], category: "Mail") { g in
             g.send()
             Speech.speakMessage(String(localized: "checking for new mail", comment: "Spoken message"))
-        }
+        }.isAvailable = { Self.isInMailsOwnContent }   // Command Shift N in a Save panel is New Folder (17 Nov 2026)
         script("mail_toggleRead", String(localized: "Marks the message read or unread, and says which", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+shift+u"], category: "Mail") { g in
             g.send()
             // The focus is the message list (its rows are read as its selection) or, rarely, a row.
@@ -89,14 +101,16 @@ package final class MailAppModule: AppModule {
                     : unread == rows.count ? String(localized: "\(String(rows.count)) messages marked unread", comment: "Mail messages marked unread: how many") : String(localized: "\(String(rows.count)) messages marked read", comment: "Mail messages marked read: how many")
                 Speech.speakMessage(said)
             }
-        }
+        }.isAvailable = { Self.isInMailsOwnContent }
     }
 
     // Tab between the mailbox list and the message list. Mail puts its mailbox list in the Tab order only while
     // VoiceOver runs: with TurnOver, Shift Tab from the messages went to the favourites bar and the toolbar, and the
     // mailboxes could not be reached (5 Oct 2026). Worked out as the focus moves; read by the keyboard thread.
     private static let placeLock = NSLock()
-    private static var _place = ""   // "messages", "mailboxes" or ""
+    private static var _place = ""   // "messages", "mailboxes", "reading", "compose:…", "panel" (a sheet, dialog or Open and Save panel) or ""
+    /// Not in a sheet, a dialog or the Open and Save panel (17 Nov 2026): Mail's keys that are not tied to a place.
+    static var isInMailsOwnContent: Bool { place != "panel" }
     static var place: String { placeLock.lock(); defer { placeLock.unlock() }; return _place }
 
     /// A message being written: its header in the order a person expects. Mail's own Tab skips the three pop-ups
@@ -104,10 +118,80 @@ package final class MailAppModule: AppModule {
     static let composeOrder = ["Mail.toField", "Mail.ccField", "Mail.bccField", "Mail.replyToField", "Mail.subjectField",
                                "popup_priority", "popup_from", "popup_signature", "body"]
 
+    /// `defaults write com.turnover.reader mailReadAhead -bool false` turns reading ahead off: the list is then read
+    /// when Mail reports its selection, as it was until 10 Nov 2026.
+    nonisolated static var readsAhead: Bool { UserDefaults.standard.object(forKey: "mailReadAhead") as? Bool ?? true }
+    private var ahead = MailReadAhead()
+
+    /// The list's own script for this key: the edges, an empty list, several rows selected, anything not plain.
+    private func listsOwn(_ g: KeyboardGesture) {
+        if let script = API.focusObject?.script(named: "list_\(g.keyName)") { script.handler(g) } else { g.send() }
+    }
+
+    private func readAhead(_ g: KeyboardGesture) {
+        guard g.modifiers.isEmpty, let focus = API.focusObject?.element else { listsOwn(g); return }
+        let table = focus.string(kAXDescriptionAttribute) == "messages" ? focus : focus.element(kAXParentAttribute)
+        guard let table, table.string(kAXDescriptionAttribute) == "messages" else { listsOwn(g); return }
+        let selected = table.elements(kAXSelectedRowsAttribute)
+        let now = ProcessInfo.processInfo.systemUptime
+        // Nothing selected, or several: the list's own rules. At the top or bottom there is no next row: its edge.
+        guard selected.count == 1, let from = ahead.base(selected: selected.first, now: now),
+              let next = ObjectNavigator.neighbourRow(of: from, in: table, offset: g.keyName == "downArrow" ? 1 : -1) else {
+            ahead.clear(); listsOwn(g); return
+        }
+        let serial = ahead.readingAhead(next, now: now)
+        Log.io("mail: reading the \(g.keyName == "downArrow" ? "next" : "previous") row ahead of Mail")
+        // Read in full before the key goes on, not queued: once Mail has the key it is busy moving its selection and
+        // loading the message, and every question about the row waits behind that. Queued, the row's words came 43 ms
+        // after the key and nothing was gained (39 presses in the owner's trial, 10 Nov 2026: 77 ms to the first sound,
+        // against 76 before). Asked first, they cost the 2 ms they always did.
+        EventHandler.execute(Event(.selection, ObjectFactory.make(next)))
+        g.send()
+        // If Mail never lands there (it was busy, the list changed under the key), say where it is.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { [weak self] in
+            guard let self, self.ahead.serial == serial, let expected = self.ahead.row else { return }
+            guard let actual = table.elements(kAXSelectedRowsAttribute).first, !CFEqual(actual, expected) else { return }
+            Log.io("mail: Mail did not move to the row read ahead; reading the row it is on")
+            self.ahead.clear()
+            EventHandler.queue(Event(.selection, ObjectFactory.make(actual)))
+        }
+    }
+
+    /// The bundle of the system service that draws every app's Open and Save panels.
+    nonisolated package static let panelServiceBundle = "com.apple.appkit.xpc.openAndSavePanelService"
+
+    /// 17 Nov 2026: inside Save Attachments the panel's file list (an outline drawn by the panel service) was taken for
+    /// Mail's mailbox list, and every Tab ran the Tab to the message list, searched Mail's window, found nothing and was
+    /// lost. A sheet, a dialog or anything the panel service draws is not Mail's own window content: none of Mail's
+    /// keys apply there, and Tab and Shift Tab go to the panel. No question to Mail: the focus's ancestors are known.
+    package nonisolated static func isOutsideMailsOwnContent(ancestorRoles: [Role], ownerBundle: String?) -> Bool {
+        let drawnByThePanelService = ownerBundle == panelServiceBundle
+        let inASheet = ancestorRoles.contains(.sheet)
+        let inADialog = ancestorRoles.contains(.dialog)
+        return drawnByThePanelService || inASheet || inADialog
+    }
+
+    /// Whether the focus `e` is in a sheet, a dialog or the Open and Save panel, from the ancestors already known.
+    private func isInPanelOrSheet(_ e: AXUIElement) -> Bool {
+        guard let focus = API.focusObject else { return false }
+        guard focus.element.isSame(e) else { return false }
+        let ancestors = API.focusAncestors
+        var ownerBundle: String?
+        if let top = ancestors.last, top.axRole == "AXApplication" {
+            ownerBundle = NSRunningApplication(processIdentifier: top.pid)?.bundleIdentifier
+        }
+        let outside = Self.isOutsideMailsOwnContent(ancestorRoles: ancestors.map(\.role), ownerBundle: ownerBundle)
+        if outside, Self.place != "panel" {
+            Log.io("mail: the focus is in a sheet, dialog or Open and Save panel (owner \(ownerBundle ?? "Mail")); Mail's own keys are off there")
+        }
+        return outside
+    }
+
     private func notePlace(_ e: AXUIElement) {
         var p = ""
         let id = e.string(kAXIdentifierAttribute) ?? ""
-        if Self.composeOrder.contains(id) { p = "compose:" + id }
+        if isInPanelOrSheet(e) { p = "panel" }   // "panel": none of the places below, whatever the element looks like
+        else if Self.composeOrder.contains(id) { p = "compose:" + id }
         // Mail names the body "message body" both when writing and when reading: only an editable one is writing.
         else if e.role == "AXWebArea", e.string(kAXDescriptionAttribute) == "message body", EditableWebArea.isEditable(e) { p = "compose:body" }
         else if e.role == "AXWebArea" { p = "reading" }
@@ -239,12 +323,60 @@ package final class MailAppModule: AppModule {
         // After Command Shift D: "sent" before the window and focus behind the compose window are read.
         if Self.sending != nil, [.foreground, .gainFocus].contains(event.kind) { Self.saySentIfGone() }
         if event.kind == .gainFocus { notePlace(event.obj.element) }
+        if event.kind == .gainFocus { ahead.clear() }
+        // Mail's own news of a row already read ahead: not read again. Its unread note is still taken.
+        if event.kind == .selection, ahead.row != nil, !ahead.admits(event.obj.element, now: ProcessInfo.processInfo.systemUptime) {
+            Log.io("mail: Mail confirmed the row read ahead")
+            if let table = event.obj.element.element(kAXParentAttribute) { MailUnread.snapshot(table) }
+            return
+        }
         // The focus on the scroll area around a message (Mail can come back to it after Command Tab; nothing in it is
         // TurnOver's to read, and the arrows only scrolled, 13 Oct 2026): reading starts in the message, as
         // when a message opens in its own window.
-        if event.kind == .gainFocus, event.obj.element.role == "AXScrollArea", let web = Self.messageIn(event.obj.element) {
+        if event.kind == .gainFocus, Self.isInMailsOwnContent, event.obj.element.role == "AXScrollArea", let web = Self.messageIn(event.obj.element) {
             Log.io("mail: focus on the message's scroll area; reading starts in the message")
             DispatchQueue.main.async { [pid] in AXHandler.shared.focusChanged(web, pid: pid) }
+            return
+        }
+        // Another mailbox by Command and a number: the list takes the focus before Mail has filled it with the new
+        // mailbox, and its old row was read under the new mailbox's name ("Amazon.co.uk, Delivered…", then "Junk –
+        // Personal", three times in twelve on 13 Nov 2026). The list is read a moment later, as it then is.
+        if event.kind == .gainFocus, event.obj.element.role == "AXTable", event.obj.element.string(kAXDescriptionAttribute) == "messages",
+           Self.switchedMailboxRecently {
+            let table = event.obj.element
+            notePlace(table)
+            MailUnread.snapshot(table)   // as for any focus on the list, before Mail marks a row read
+            Log.io("mail: another mailbox; its list is read once Mail shows it")
+            let window = table.element(kAXWindowAttribute)
+            let titleThen = window?.string(kAXTitleAttribute) ?? ""
+            let keys = ScriptHandler.keysArrivedCount
+            // The mailbox this key chose last time is the one shown now (17 Nov 2026: Command 1 on the Inbox waited the whole
+            // second and a half for a title that could not change, 1.7 s in all). Learned from earlier switches, so a key
+            // not yet seen takes the wait below. A short look first, in case Mail changed the title before the rows.
+            let mailboxKey = InputManager.lastKeyIdentifier
+            if Self.mailboxKeys.isShown(key: mailboxKey, title: titleThen) {
+                Log.io("mail: the mailbox this key chooses is already shown; its list is read without waiting for a new title")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    guard API.focusObject?.element.isSame(table) == true, ScriptHandler.keysArrivedCount == keys else { return }
+                    Speech.speakObject(ObjectFactory.make(table), reason: .focus)
+                }
+                return
+            }
+            // The window's title names the new mailbox once Mail has switched ("Junk – Personal"): looked at every tenth of
+            // a second for a second and a half, then the list is read as it is (Codex's review, 14 Nov 2026: a fixed
+            // wait could read the old list on a slow switch). Not after another key, nor once the focus has moved.
+            func readWhenShown(_ tries: Int) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    guard API.focusObject?.element.isSame(table) == true, ScriptHandler.keysArrivedCount == keys else { return }
+                    let titleNow = window?.string(kAXTitleAttribute) ?? ""
+                    guard titleNow != titleThen || tries >= 15 else { readWhenShown(tries + 1); return }
+                    Self.mailboxKeys.learn(key: mailboxKey, title: titleNow)
+                    // (No snapshot again here: by now Mail may have marked the row read, and a fresh snapshot would lose
+                    // its "unread"; Codex's second review, 14 Nov 2026.)
+                    Speech.speakObject(ObjectFactory.make(table), reason: .focus)
+                }
+            }
+            readWhenShown(0)
             return
         }
         next()
@@ -260,12 +392,59 @@ package final class MailAppModule: AppModule {
         }
     }
 
+    /// The window title each mailbox key led to, as last seen (17 Nov 2026). Main thread.
+    static var mailboxKeys = MailboxKeys()
+    package struct MailboxKeys {
+        package init() {}
+        private var titles: [String: String] = [:]
+        package mutating func learn(key: String, title: String) { if !title.isEmpty { titles[key] = title } }
+        /// This key chose the mailbox whose title the window has now.
+        package func isShown(key: String, title: String) -> Bool { !title.isEmpty && titles[key] == title }
+    }
+
+    /// The last key, a moment ago, was Command and a number: Mail's keys for its mailboxes.
+    static var switchedMailboxRecently: Bool {
+        guard Date().timeIntervalSince(InputManager.lastKeyDownAt) < 1 else { return false }
+        let key = InputManager.lastKeyIdentifier
+        guard key.hasPrefix("kb:command+"), let last = key.last, last.isNumber else { return false }
+        return key.count == "kb:command+1".count
+    }
+
     package override func objectClass(for element: AXUIElement, role: Role, subrole: String?) -> TurnOverObject.Type? {
         if role == .tableRow, MailMessageRow.isMessageRow(element) { return MailMessageRow.self }
         if role == .webArea, EditableWebArea.isEditable(element) { return MailMessageBody.self }
         if element.string(kAXIdentifierAttribute) == "popup_priority" { return MailPriorityPopup.self }
+        // Only for the rare dialog subrole: the two questions below are never asked of an ordinary window.
+        if role == .dialog {
+            let axRole = element.role
+            let title = element.string(kAXTitleAttribute)
+            if Self.isViewerSaidToBeDialog(axRole: axRole, role: role, title: title) {
+                Log.io("mail: the viewer window \(axRole) reported subrole \(subrole ?? "none") (role \(role)); read as a window, not a dialog (cause unknown)")
+                return MailViewerWindow.self
+            } else if axRole == "AXWindow" {
+                Log.io("mail: Mail reported an AXWindow as a dialog (subrole \(subrole ?? "none"), title empty: \(title?.isEmpty ?? true)); left a dialog, not taken for the viewer")
+            }
+        }
         return nil
     }
+
+    /// 17 Nov 2026, a symptom fix (cause unknown): about once in sixteen activations Mail reports its main viewer
+    /// window ("Inbox – Personal – 495 messages") with a dialog subrole. As a Dialog its opening walked the whole window
+    /// on the main thread, and with Mail slow that froze TurnOver until the watchdog acted. The viewer's title ends in
+    /// its message count after an en dash, in any language; Mail's real dialogs (Settings, an account prompt, an
+    /// alert) are not titled so and keep their dialog reading.
+    package nonisolated static func isViewerSaidToBeDialog(axRole: String, role: Role, title: String?) -> Bool {
+        guard axRole == "AXWindow" else { return false }   // a sheet is a real dialog
+        guard role == .dialog else { return false }
+        guard let parts = title?.components(separatedBy: " – "), parts.count >= 2 else { return false }
+        guard let count = parts.last?.first, count.isNumber else { return false }
+        return true
+    }
+}
+
+/// Mail's viewer window when Mail has called it a dialog: read as the window it is.
+final class MailViewerWindow: TurnOverObject {
+    override var role: Role { .window }
 }
 
 /// The message window's priority pop-up, which Mail describes by its icon ("Exclamation mark").

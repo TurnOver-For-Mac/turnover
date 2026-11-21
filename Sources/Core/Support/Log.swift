@@ -37,8 +37,14 @@ nonisolated public enum Log {
     /// thread's among them) would block (E6 audit, 4 Oct 2026).
     private static let toTerminal = isatty(STDERR_FILENO) != 0
 
-    public static func line(_ text: String, level: Level = .info) {
+    /// Tests: each line as it is written, to check what the log says and what it never names (16 Nov 2026, review).
+    nonisolated(unsafe) package static var observer: ((String) -> Void)?
+
+    public static func line(_ rawText: String, level: Level = .info) {
         guard level >= self.level else { return }
+        // The one place text reaches the log file or the terminal echo: key-like text is masked here, for every app.
+        let text = LogRedactor.mask(rawText)
+        observer?(text)
         let t = String(format: "%9.3f", Date().timeIntervalSince(started))
         let tag: String
         switch level { case .debug: tag = "D "; case .io: tag = "IO "; case .info: tag = ""; case .warning: tag = "WARN "; case .error: tag = "ERROR " }

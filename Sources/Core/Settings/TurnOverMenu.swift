@@ -22,13 +22,16 @@ public struct MenuItem {
     public let kind: Kind
     /// What it means, said after a pause on the item (docs/MENU-PLAN.md: names in titles, explanations after).
     public var hint: String?
+    /// Which thing a list's item stands for, when the list may be filled in after it opens (the Item Chooser): the
+    /// cursor stays on the item with the same tag. Nil for every menu and list that is made once.
+    public var tag: Int?
     /// TurnOver's own words, translated (Resources/Localizable.xcstrings): a literal title or hint is listed for
     /// translation as it is written. A number goes in as text ("\(String(n))"), so English reads as it did.
     public init(_ title: LocalizedStringResource, _ kind: Kind, hint: LocalizedStringResource? = nil) {
         self.init(verbatim: String(localized: title), kind, hint: hint.map { String(localized: $0) })
     }
     /// A title made elsewhere: an app's or a document's own words, or words already translated.
-    public init(verbatim title: String, _ kind: Kind, hint: String? = nil) { self.title = title; self.kind = kind; self.hint = hint }
+    public init(verbatim title: String, _ kind: Kind, hint: String? = nil, tag: Int? = nil) { self.title = title; self.kind = kind; self.hint = hint; self.tag = tag }
 
     var valueText: String? {
         switch kind {
@@ -45,7 +48,14 @@ public final class TurnOverMenu {
     public static let shared = TurnOverMenu()
     /// Read on the keyboard thread as well; written here, on the main thread.
     private let _isOpen = Locked(false)
-    nonisolated public private(set) var isOpen: Bool { get { _isOpen.value } set { _isOpen.value = newValue; Self.anyOpen.value = newValue } }
+    nonisolated public private(set) var isOpen: Bool {
+        get { _isOpen.value }
+        set {
+            _isOpen.value = newValue; Self.anyOpen.value = newValue
+            // The menu, a list, the chooser or the rotor opening closes Find's prompt: the keys are the menu's now (18 Nov 2026).
+            if newValue { FindPrompt.shared.close(because: "TurnOver's menu opened") }
+        }
+    }
     /// The same, without the shared menu itself (main actor): for the key tap's thread.
     nonisolated public static let anyOpen = Locked(false)
     private var stack: [(title: String, items: [MenuItem], index: Int)] = []
@@ -112,6 +122,7 @@ public final class TurnOverMenu {
         guard !items.isEmpty else { Speech.speakMessage(Self.none(title)); return }
         stack = [(title, items, 0)]
         isOpen = true
+        countPending = false
         Speech.cancel()
         Speech.speakMessage("\(title), \(items.count)")
         announce()
@@ -124,8 +135,9 @@ public final class TurnOverMenu {
 
     public func close() {
         isOpen = false
+        listGeneration += 1
         stack.removeAll()
-        filterSource = nil; filter = ""; rotor = nil
+        filterSource = nil; filter = ""; rotor = nil; countPending = false
         config.save()
         let hook = onClose; onClose = nil
         Braille.releaseItem()
@@ -138,7 +150,8 @@ public final class TurnOverMenu {
         guard let top = stack.last, top.items.indices.contains(top.index) else { return }
         let item = top.items[top.index]
         hintWork?.cancel()
-        if let hint = item.hint, !valueOnly {
+        // The menu's own hints follow "Hints after a pause" too (15 Nov 2026: they were still spoken with hints off).
+        if config.presentation.speakHints, let hint = item.hint, !valueOnly {
             let depth = stack.count, index = top.index
             let work = DispatchWorkItem { [weak self] in
                 guard let self, self.isOpen, self.stack.count == depth, self.stack.last?.index == index else { return }
@@ -150,33 +163,83 @@ public final class TurnOverMenu {
         if valueOnly { Speech.speakItem("\(item.title): \(item.valueText ?? "")"); return }
         var parts = [item.title]
         if let v = item.valueText { parts.append(v) }
-        parts.append(Phrases.position(top.index + 1, of: top.items.count))
+        if !countPending { parts.append(Phrases.position(top.index + 1, of: top.items.count)) }
         Speech.speakItem(Speech.joined(parts))
     }
 
     /// A list that narrows as you type (VoiceOver's Item Chooser): every item whose title contains the text.
-    public func openChooser(_ title: LocalizedStringResource, items: [MenuItem]) { openChooser(verbatim: String(localized: title), items: items) }
-    public func openChooser(verbatim title: String, items: [MenuItem]) {
+    /// `partial`: these items are only the first of what is coming (the Item Chooser's rows on screen, with the rows out
+    /// of sight to follow in `refillChooser`). No count and no "1 of 23" is said until the rest is in: a small number
+    /// and then a big one was what was heard (10 Nov 2026).
+    public func openChooser(_ title: LocalizedStringResource, items: [MenuItem], partial: Bool = false) { openChooser(verbatim: String(localized: title), items: items, partial: partial) }
+    public func openChooser(verbatim title: String, items: [MenuItem], partial: Bool = false) {
         guard !items.isEmpty else { Speech.speakMessage(Self.none(title)); return }
         filterSource = items; filter = ""
+        listGeneration += 1
         stack = [(title, items, 0)]
         isOpen = true
+        countPending = partial
         Speech.cancel()
-        Speech.speakMessage(String(localized: "\(title), \(Phrases.items(items.count)), type to filter", comment: "A list that narrows as you type: its title, then the count of items"))
+        Speech.speakMessage(partial ? String(localized: "\(title), type to filter", comment: "A list that narrows as you type, opened before all its items are in: its title, with no count yet")
+            : String(localized: "\(title), \(Phrases.items(items.count)), type to filter", comment: "A list that narrows as you type: its title, then the count of items"))
         announce()
     }
+    /// True from a chooser or rotor opening on part of its items until the rest arrives: counts and positions are not
+    /// said meanwhile, because they would be the part's.
+    private var countPending = false
     private var filterSource: [MenuItem]?
     private var filter = ""
+
+    /// Counts every chooser and rotor opened and every close: a list filled in later proves it is still the same one.
+    public private(set) var listGeneration = 0
+
+    /// The open chooser's items replaced by a fuller list, quietly: nothing is spoken, what was typed still narrows
+    /// it, and the cursor stays on the item it was on (by `tag`). The Item Chooser opens on what is on screen and
+    /// fills in the rows scrolled out of sight a moment later (10 Nov 2026). Ignored unless `generation` is still the
+    /// open list's.
+    public func refillChooser(generation: Int, items: [MenuItem]) {
+        guard isOpen, generation == listGeneration, rotor == nil, filterSource != nil, stack.count == 1, !items.isEmpty else { return }
+        countPending = false
+        replaceShownItems(items)
+    }
+
+    /// The same for the rotor: each kind's list replaced, staying on the kind and the item it was on.
+    public func refillRotor(generation: Int, categories: [(name: String, items: [MenuItem])]) {
+        guard isOpen, generation == listGeneration, let old = rotor, stack.count == 1 else { return }
+        countPending = false
+        let kinds = categories.filter { !$0.items.isEmpty }
+        guard let index = kinds.firstIndex(where: { $0.name == old[rotorIndex].name }) else { return }
+        rotor = kinds
+        rotorIndex = index
+        replaceShownItems(kinds[index].items)
+    }
+
+    private func replaceShownItems(_ source: [MenuItem]) {
+        let top = stack[0]
+        let tag = top.items.indices.contains(top.index) ? top.items[top.index].tag : nil
+        filterSource = source
+        let matches = filter.isEmpty ? source : source.filter { $0.title.lowercased().contains(filter.lowercased()) }
+        let shown = matches.isEmpty ? source : matches
+        let index = tag.flatMap { t in shown.firstIndex { $0.tag == t } } ?? min(top.index, shown.count - 1)
+        stack[0] = (top.title, shown, index)
+    }
+
+    /// For tests: where the cursor is in the open list, and how long the list is.
+    public var debugPosition: (index: Int, count: Int, title: String)? {
+        stack.last.flatMap { top in top.items.indices.contains(top.index) ? (top.index, top.items.count, top.items[top.index].title) : nil }
+    }
 
     /// VoiceOver's Rotor (VO-U), NVDA's Elements List: kinds of item (Headings, Links, Form controls…). Left and
     /// Right change kind, Up and Down move through it, typing narrows it, Enter goes there. It opens on the kind
     /// used last, as VoiceOver's does.
-    public func openRotor(_ categories: [(name: String, items: [MenuItem])]) {
+    public func openRotor(_ categories: [(name: String, items: [MenuItem])], partial: Bool = false) {
         let kinds = categories.filter { !$0.items.isEmpty }
         guard !kinds.isEmpty else { Speech.speakMessage(String(localized: "nothing to list here", comment: "The rotor found nothing")); return }
         rotor = kinds
         rotorIndex = kinds.firstIndex { $0.name == lastRotorKind } ?? 0
+        listGeneration += 1
         isOpen = true
+        countPending = partial
         Speech.cancel()
         showRotorKind(intro: String(localized: "rotor", comment: "VoiceOver's rotor, as it opens"))
     }
@@ -190,7 +253,7 @@ public final class TurnOverMenu {
         lastRotorKind = kind.name
         filterSource = kind.items; filter = ""
         stack = [(kind.name, kind.items, 0)]
-        Speech.speakMessage(Speech.joined([intro ?? "", kind.name, "\(kind.items.count)"]))
+        Speech.speakMessage(Speech.joined([intro ?? "", kind.name, countPending ? "" : "\(kind.items.count)"]))
         announce()
     }
 
@@ -223,6 +286,11 @@ public final class TurnOverMenu {
 
     /// A key while the menu is open (main thread).
     public func handle(_ g: KeyboardGesture) {
+        // Turnover with Right or Left act as plain Down and Up do here: next and previous item, as VoiceOver's own
+        // VO-Right and VO-Left move along items (the owner's decision, 17 Nov 2026). Plain Right and Left keep their meanings.
+        let turnoverOnly = g.modifiers == [.turnover]
+        if turnoverOnly, g.keyName == "rightArrow", let down = KeyboardGesture(identifier: "kb:downArrow") { handle(down); return }
+        if turnoverOnly, g.keyName == "leftArrow", let up = KeyboardGesture(identifier: "kb:upArrow") { handle(up); return }
         if let r = rotor, stack.count == 1, g.modifiers.isEmpty, g.keyName == "leftArrow" || g.keyName == "rightArrow" {
             rotorIndex = (rotorIndex + (g.keyName == "rightArrow" ? 1 : r.count - 1)) % r.count
             Speech.cancel()
@@ -308,7 +376,7 @@ public final class TurnOverMenu {
 
     /// The menu (docs/MENU-PLAN.md, 12 Oct 2026: "This app" first), in NVDA's shape since 21 Oct 2026: no settings in
     /// the menu, every setting in the Settings window; the menu is This app, Settings, Keys, Tools, Help, Support and
-    /// Quit ("way too busy", Oliver; "should all settings be moved there and the menu cleaned up", a contributor).
+    /// Quit ("way too busy", the owner; "should all settings be moved there and the menu cleaned up", a contributor).
     private func rootItems() -> [MenuItem] {
         var items: [MenuItem] = []
         if let app = thisAppItem() { items.append(app) }
@@ -344,7 +412,7 @@ public final class TurnOverMenu {
         return items
     }
 
-    /// How items are read in this app (28 Oct 2026; Ash's idea, as Oliver read it: the order the pieces of an
+    /// How items are read in this app (28 Oct 2026; Ash's idea, as the owner read it: the order the pieces of an
     /// announcement come in, and which are said, app by app). A list of the pieces in their spoken order; each opens
     /// a short submenu: said or not, move up, move down. Saved for this app; the Settings window keeps the default.
     private func readingOrderItem(bundle: String, name: String) -> MenuItem {
@@ -548,6 +616,9 @@ public final class TurnOverMenu {
             items.append(MenuItem("Write a plugin for \(name) yourself", .action { PluginAI.startByHand(pid: pid) }, hint: "A starter folder with the guide, a snapshot of the app and its menus"))
         }
         items.append(MenuItem("Plugin library", .action { DispatchQueue.main.async { PluginLibrary.open() } }, hint: "Plugins others have made, checked and signed; each says what it can do before it installs"))
+        if Edition.includesPluginScripts {
+            items.append(MenuItem("NVDA add-ons", .submenu { NVDAStoreMenu.items() }, hint: "Find an add-on in NVDA's store and convert it into a draft plugin for your own AI tool or you to finish. Asks NVDA's store only after you agree"))
+        }
         items.append(MenuItem("Open the plugin guide", .action { DispatchQueue.main.async { PluginAI.openGuide() } }))
         if Trackpad.available {
             items.append(MenuItem("Gesture control", .toggle(get: { Trackpad.controlOn }, set: { Trackpad.set($0) }), hint: "The trackpad's gestures: VoiceOver's, or NVDA's in the Windows style. Also Command Control Comma, G; or hold the TurnOver key and turn two fingers, clockwise for on"))
@@ -565,12 +636,14 @@ public final class TurnOverMenu {
             let loaded = good == 1 ? String(localized: "1 plugin loaded", comment: "Plugins reloaded") : String(localized: "\(String(good)) plugins loaded", comment: "Plugins reloaded")
             Speech.speakMessage(bad > 0 ? String(localized: "\(loaded), \(String(bad)) with problems", comment: "Plugins reloaded: %1$@ says how many loaded, %2$@ how many have problems") : loaded)
         }))
+        if Edition.includesPluginScripts { items += ScriptPlugins.menuItems() }   // each script's state, and developer mode for scripts
         for (file, reason) in Recipes.problems { items.append(MenuItem("Recipe \(file) does not load: \(reason)", .action {})) }
         for p in ProfileStore.shared.plugins {
             if let m = p.manifest {
                 // The app's name when it isn't running too (the list said "for com.bambulab.bambu-studio"), and the
                 // library's author for a library plugin, as the library itself said (14 Oct 2026).
-                let apps = m.apps.map { b in NSRunningApplication.runningApplications(withBundleIdentifier: b).first?.localizedName ?? Self.appName(for: b) }.joined(separator: ", ")
+                let apps = m.worksEverywhere ? String(localized: "every app", comment: "A plugin that works in every app, in the Plugins menu: after \"for\"")
+                    : m.apps.map { b in NSRunningApplication.runningApplications(withBundleIdentifier: b).first?.localizedName ?? Self.appName(for: b) }.joined(separator: ", ")
                 let folder = p.folder
                 let author = PluginLibrary.receipt(folder)?.author ?? m.author
                 var title = String(localized: "\(m.name) \(String(describing: m.version)), for \(apps)", comment: "A plugin: its name, version and apps")
@@ -587,6 +660,8 @@ public final class TurnOverMenu {
                         Speech.speakMessage(String(localized: "\(m.description ?? m.name). \(String(n.0)) labels, \(String(n.1)) keys, \(String(n.2)) watched.", comment: "About a plugin: its description, then what it has"))
                     }),
                     ]
+                    // With plugin scripts on (stage B, 16 Nov 2026): the plugin's options, and who to tell about a problem with it.
+                    if Edition.includesPluginScripts { sub += ScriptPlugins.pluginItems(for: m) }
                     if !shipped { sub.append(MenuItem("Remove", .action { Self.removePlugin(at: folder, name: m.name) }, hint: "Moves it to the Trash; put it back from there to have it again")) }
                     return sub
                 }))
@@ -833,10 +908,15 @@ public final class TurnOverMenu {
         openChooser("Applications", items: items)
     }
 
+    /// What is said when a key is waited for: with hints off, the prompt alone; with hints on, "Escape to cancel" after it.
+    public static func spokenKeyPrompt(_ prompt: String, hints: Bool) -> String {
+        hints ? String(localized: "\(prompt). Escape to cancel", comment: "Waiting for a key: %@ says which") : prompt
+    }
+
     /// Wait for the next key, after the prompt; Escape cancels.
     static func captureKey(prompt: String, _ done: @escaping (KeyboardGesture) -> Void) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            Speech.speakMessage(String(localized: "\(prompt). Escape to cancel", comment: "Waiting for a key: %@ says which"))
+            Speech.speakMessage(spokenKeyPrompt(prompt, hints: config.presentation.speakHints))
             InputManager.captureNext = { g in
                 guard let g else { Speech.speakMessage(String(localized: "cancelled", comment: "Waiting for a key, cancelled with Escape")); return }
                 done(g)
@@ -858,6 +938,7 @@ public final class TurnOverMenu {
             MenuItem("Each item's keyboard shortcut", .toggle(get: { config.presentation.reportKeyboardShortcuts }, set: { config.presentation.reportKeyboardShortcuts = $0 })),
             MenuItem("Position, such as 3 of 10", .toggle(get: { config.presentation.reportObjectPositionInformation }, set: { config.presentation.reportObjectPositionInformation = $0 })),
             MenuItem("Hints after a pause", .toggle(get: { config.presentation.speakHints }, set: { config.presentation.speakHints = $0 }), hint: "What you can do with an item"),
+            MenuItem("Mouse tracking", .toggle(get: { config.presentation.mouseTracking }, set: { config.presentation.mouseTracking = $0; MouseTracking.refresh() }), hint: "Reads what is under the mouse pointer as it moves"),
             MenuItem("Progress bars", .cycle(options: [String(localized: "beep", comment: "A choice in the TurnOver menu"), String(localized: "speak the percentage", comment: "A choice in the TurnOver menu"), String(localized: "beep and speak", comment: "A choice in the TurnOver menu"), String(localized: "off", comment: "A choice in the TurnOver menu")],
                 get: { ProgressOutput.modes.firstIndex(of: config.presentation.progressBars) ?? 0 },
                 set: { config.presentation.progressBars = ProgressOutput.modes[$0] }), hint: "Beeps that rise in pitch as a progress bar moves, the percentage spoken, both, or nothing"),

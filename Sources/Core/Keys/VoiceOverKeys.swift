@@ -43,7 +43,8 @@ public final class VoiceOverKeysPlugin: GlobalPlugin {
             if let s = ScriptHandler.findScript(named: scriptName) { s.handler(g); return }
             // The keys were going to the page (focus mode, Claude's prompt): move to the heading, and read on from it.
             if let d = API.focusTreeInterceptor, let s = d.script(named: scriptName) {
-                if d.passThrough { d.setPassThrough(false, announce: false) }
+                ModeAnnouncement.navigationStarted(d)
+                if d.passThrough { d.setPassThrough(false, announce: true) }
                 s.handler(g); return
             }
             if let roles = windowRoles[name] { ObjectNavigator.shared.findInWindow(roles: roles, forward: forward, kind: spoken); return }
@@ -106,9 +107,17 @@ public final class VoiceOverKeysPlugin: GlobalPlugin {
         }
         add("quickNav", String(localized: "Browse mode on or off: single-letter navigation (VO-Q)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+q"]) { g in
             if API.focusTreeInterceptor != nil { run("toggleVirtualBufferPassThrough", g, otherwise: String(localized: "not in a document", comment: "Spoken message")) }
-            else { ArrowQuickNav.toggle() }   // outside a document VoiceOver's Quick Nav toggles all the same (the code review, 17 Oct 2026)
+            else { ArrowQuickNav.toggle("VO-Q outside a document") }   // outside a document VoiceOver's Quick Nav toggles all the same (the code review, 17 Oct 2026)
         }
         add("defaultAction", String(localized: "Activates the item under the VoiceOver cursor (VO-Space)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+space"]) { g in
+            // 14 Nov 2026: this global binding wins before app scripts. Let an app's available
+            // implementation of this command handle its own activation exception (Claude's menu).
+            if let pid = API.focusPid,
+               let action = AppModuleHandler.shared.appModule(for: pid).script(named: "vo_defaultAction"),
+               action.isAvailableNow {
+                action.handler(g)
+                return
+            }
             // By accessibility's press, as VoiceOver's VO-Space is: a page that ignores the real key (Squarespace's
             // switches are links styled as switches; Space scrolls, Enter and a click work, 25 Oct 2026) still answers
             // the press. Enter and Space themselves go to the page as real keys (activatePosition).
@@ -128,18 +137,18 @@ public final class VoiceOverKeysPlugin: GlobalPlugin {
         }
         add("next", String(localized: "Next item (VO-Right)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+rightArrow"]) { g in
             if let s = tableScript("table_nextColumn") { s.handler(g); return }   // Word: the next cell in the row
-            if let d = API.focusTreeInterceptor, !d.passThrough, ObjectNavigator.shared.isWithin(d.webArea), let s = d.script(named: "moveByLine_forward") { s.handler(g); return }
+            if let d = API.focusTreeInterceptor, (!d.passThrough || (config.virtualBuffers.autoPassThroughOnCaretMove && !d.disableAutoPassThrough)), ObjectNavigator.shared.isWithin(d.webArea), let s = d.script(named: "moveByLine_forward") { s.handler(g); return }
             // At the end of the text, VO-Right leaves the field for the next item, as VoiceOver's cursor does (it bumped
             // for 300 ms at the end of Claude's prompt, 17 Oct 2026).
             if Self.inTextArea(), let f = API.focusObject, let s = f.script(named: "caret_moveByCharacter") {
-                if let i = try? f.makeTextInfo(.caret), i.storyLength() > 0, i.start >= i.storyLength() { Log.io("VO-Right at the end of the text: the next item") }
+                if let i = try? f.makeTextInfo(.caret), i.start >= i.storyLength() { Log.io("VO-Right at the end of the text: the next item") }
                 else { s.handler(KeyboardGesture(identifier: "kb:rightArrow")!); return }
             }
             if config.general.navigateByGroups { ObjectNavigator.shared.groupStep(forward: true) } else { ObjectNavigator.shared.next() }
         }
         add("previous", String(localized: "Previous item (VO-Left)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+leftArrow"]) { g in
             if let s = tableScript("table_previousColumn") { s.handler(g); return }
-            if let d = API.focusTreeInterceptor, !d.passThrough, ObjectNavigator.shared.isWithin(d.webArea), let s = d.script(named: "moveByLine_back") { s.handler(g); return }
+            if let d = API.focusTreeInterceptor, (!d.passThrough || (config.virtualBuffers.autoPassThroughOnCaretMove && !d.disableAutoPassThrough)), ObjectNavigator.shared.isWithin(d.webArea), let s = d.script(named: "moveByLine_back") { s.handler(g); return }
             if Self.inTextArea(), let f = API.focusObject, let s = f.script(named: "caret_moveByCharacter") {
                 if let i = try? f.makeTextInfo(.caret), i.start <= 0 { Log.io("VO-Left at the start of the text: the previous item") }
                 else { s.handler(KeyboardGesture(identifier: "kb:leftArrow")!); return }

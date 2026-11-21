@@ -135,4 +135,4 @@ intonation setting yet). Lesson: Apple documents commands outside the command pa
 ## TurnOver's own keys in the VoiceOver style
 
 - VO-Shift-Y (2 Nov 2026): screen recognition, the window's text read from the screen to move through and click.
-  VoiceOver has no such command; VO-Shift-L did it away from a picture until Oliver asked for the two to be apart.
+  VoiceOver has no such command; VO-Shift-L did it away from a picture until the owner asked for the two to be apart.

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// The welcome pages as little pages you read with the arrows (7 Nov 2026, Oliver: "you should be able to move up and
+// The welcome pages as little pages you read with the arrows (7 Nov 2026, the owner: "you should be able to move up and
 // down them with cursor keys, more like little web pages"). They were alerts: each page's text was one block, read
 // once as the alert opened and hard to go back over. Now each page is a window with its text in a read-only text area
 // that has the keyboard, one point a line: Up and Down read it a line at a time, under VoiceOver (which reads the

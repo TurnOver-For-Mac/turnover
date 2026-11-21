@@ -103,6 +103,7 @@ public enum SettingsBridge {
             pendingSection = nil
         }
         dict["_effectiveSounds"] = config.general.effectiveSounds
+        dict["_soundSets"] = SoundSets.names()
         dict["_kokoroAvailable"] = KokoroVoice.available
         dict["_naturalDownloaded"] = KokoroVoice.downloaded
         dict["_naturalDownloading"] = KokoroVoice.downloading
@@ -148,6 +149,17 @@ public enum SettingsBridge {
         if patch["_downloadNaturalVoices"] as? Bool == true { KokoroVoice.download(); sendState() }
         if patch["_removeNaturalVoices"] as? Bool == true { KokoroVoice.remove() }
         if patch["_restartSteam"] as? Bool == true { Games.restartSteam() }
+        // Sound sets of the user's own (SoundSets): the Sounds pane asks for the list again each time it opens.
+        if patch["_refreshSoundSets"] as? Bool == true { SoundSets.reload(); sendState() }
+        if patch["_openSoundSets"] as? Bool == true { NSWorkspace.shared.open(SoundSets.ensureRoot()) }
+        if patch["_makeStarterSet"] as? Bool == true {
+            if let made = try? SoundSets.makeStarterSet() {
+                Speech.speakMessage(String(localized: "Made the sound set \(made.lastPathComponent). Choose it in Whose sounds.", comment: "Spoken message after Make a starter set in Settings, Sounds; the name is the new folder's"))
+            } else {
+                Speech.speakMessage(String(localized: "The starter sound set could not be made.", comment: "Spoken message when Make a starter set in Settings, Sounds failed"))
+            }
+            sendState()
+        }
         if let a = patch["_speechPortAllowed"] as? [String: Any], let id = a["id"] as? String, let on = a["allowed"] as? Bool { SpeechPort.shared.setAllowed(id, on) }
         if let on = patch["_coexist"] as? Bool, on != Coexist.wouldBeOn {
             UserDefaults.standard.set(on, forKey: "coexist")
@@ -187,6 +199,7 @@ public enum SettingsBridge {
             if before.braille.bluetooth != next.braille.bluetooth, next.braille.bluetooth { BrailleDisplays.shared.lookNow() }
             if before.applications.perAppReaders != next.applications.perAppReaders { TurnOverMenu.shared.leadModeChanged?() }
             if before.applications.swapWithVoiceOver != next.applications.swapWithVoiceOver { onSwapChanged?(next.applications.swapWithVoiceOver) }
+            if before.presentation.mouseTracking != next.presentation.mouseTracking { MouseTracking.refresh() }
             // Steam's switches from the window do what the menu's do.
             if before.games.readBigPicture != next.games.readBigPicture { Games.restartBigPicture() }
             // The EQ heard as it is set: a short sample once the slider stops.

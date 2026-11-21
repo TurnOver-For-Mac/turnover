@@ -13,7 +13,7 @@ Recovered on 1 November 2026. These are sanitized historical investigation notes
 
 The stress-test request to type a line and undo it is an unfinished checklist item, not evidence of editing. The notes do not establish a complete Markdown-authoring workflow.
 
-Unless a result above specifies otherwise, the source sections do not record exact app/macOS versions, a uniquely identified TurnOver binary or a complete VoiceOver on/off and leader-state matrix. Mac and Windows refer to TurnOver keyboard styles on macOS. Historical driver checks report what TurnOver emitted; they do not substitute for Oliver listening to the current installed build. No app was opened, keys sent, code changed or build installed during this recovery.
+Unless a result above specifies otherwise, the source sections do not record exact app/macOS versions, a uniquely identified TurnOver binary or a complete VoiceOver on/off and leader-state matrix. Mac and Windows refer to TurnOver keyboard styles on macOS. Historical driver checks report what TurnOver emitted; they do not substitute for the owner listening to the current installed build. No app was opened, keys sent, code changed or build installed during this recovery.
 
 ## Provenance
 

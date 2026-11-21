@@ -12,7 +12,7 @@ App version is given below only where the source states it. Other missing app/ma
 
 ## Recorded outcome
 
-First launch was waiting on a macOS Contacts permission prompt. The app was left for Oliver; no mail or calendar workflow result was recorded.
+First launch was waiting on a macOS Contacts permission prompt. The app was left for the owner; no mail or calendar workflow result was recorded.
 
 ## Limits and next check
 

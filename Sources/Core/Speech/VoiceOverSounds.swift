@@ -6,27 +6,63 @@
 // graphics have no sound in VoiceOver: it says them, and so does TurnOver, with its own set's sounds (Tones).
 import Foundation
 import AVFoundation
+import TurnOverSpeech
 
 @MainActor
 public enum VoiceOverSounds {
     nonisolated package static let folder = URL(fileURLWithPath: "/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds")
-    private static var players: [String: AVAudioPlayer] = [:]
+    /// Players are prepared on a background queue (SoundCache); main only looks them up.
+    nonisolated package static let cache = SoundCache()
+    /// Every file TurnOver can ask for (the names in the code, both endings of the Quick Nav ones), prepared shortly after start-up.
+    nonisolated package static let preloadNames = ["Alert.aiff", "Announcement.aiff", "BrailleDisplayConnected.aiff", "BrailleDisplayDisconnected.aiff", "DrillIn.aiff", "DrillOut.aiff", "EmptySpace.aiff", "LinkBegin.aiff", "MenuDown.aiff", "Misspelled.aiff", "NotFound.aiff", "PopupAppeared.aiff", "QuickNavArrowKeyOff.aiff", "QuickNavArrowKeyOff.wav", "QuickNavArrowKeyOn.aiff", "QuickNavArrowKeyOn.wav", "QuickNavOff.aiff", "QuickNavOff.wav", "QuickNavOn.aiff", "QuickNavOn.wav", "QuickNavSingleKeyOff.aiff", "QuickNavSingleKeyOn.aiff", "RotorLeft.aiff", "RotorRight.aiff", "SecureCharacter.aiff", "Select.aiff", "SingleClick.aiff", "TrackingOff.aiff", "TrackingOn.aiff", "WebAreaLoaded.aiff", "WebPageLoaded.aiff", "WindowActivated.aiff", "WrapBack.aiff", "WrapBoundary.aiff", "WrapForward.aiff"]
+    /// Prepares every file in the background; returns at once.
+    nonisolated public static func preload() { for n in preloadNames { cache.request(n, url: folder.appendingPathComponent(n), levelled: true) } }
     public static var available: Bool { FileManager.default.fileExists(atPath: folder.appendingPathComponent("LinkBegin.aiff").path) }
+
+    private static var lastPlayed: [String: Date] = [:]
+    /// A sound asked for again within a tenth of a second of the last time: logged, at most once a second.
+    private static var repeatLoggedAt = Date.distantPast
+    private static func noteRepeat(_ name: String) {
+        let now = Date()
+        if let last = lastPlayed[name], now.timeIntervalSince(last) < 0.1, now.timeIntervalSince(repeatLoggedAt) > 1 {
+            repeatLoggedAt = now
+            Log.io("sound: \(name) played again \(Int(now.timeIntervalSince(last) * 1000)) ms after the last")
+        }
+        lastPlayed[name] = now
+    }
 
     /// Plays one of VoiceOver's sounds by file name ("LinkBegin.aiff"), or TurnOver's own for it with TurnOver's set
     /// chosen or the file missing; false where there is neither, so the caller's old tone plays.
+    /// A test sets this to see which file is asked for, and with which sounds setting, with nothing played (19 Nov 2026).
+    nonisolated(unsafe) package static var requestProbe: ((_ name: String, _ sounds: String) -> Void)?
+
     @discardableResult
-    public static func play(_ name: String, volume: Float = 0.8) -> Bool {
+    public static func play(_ name: String, volume: Float = 0.8, why: String = #function) -> Bool {
+        if let probe = requestProbe { probe(name, config.general.effectiveSounds); return true }
         // "TurnOver's sounds" chosen (17 Oct 2026): TurnOver's own sound stands in for each of VoiceOver's files.
-        if config.general.effectiveSounds == "turnover" { return ownTone(for: name) }
-        if players[name] == nil, let data = levelled(folder.appendingPathComponent(name)), let p = try? AVAudioPlayer(data: data) {
-            p.prepareToPlay()
-            players[name] = p
+        // A sound set of the user's own (SoundSets) answers first where it has a file for the event; its gaps are TurnOver's.
+        if Tones.chosen {
+            if let id = SoundEvents.id(forVoiceOverFile: name), SoundSets.handle(id, why: why) { return true }
+            return ownTone(for: name, why: why)
         }
-        guard let p = players[name] else { return ownTone(for: name) }
+        guard let p = cache.player(name) else {
+            if cache.hasFailed(name) { return ownTone(for: name, why: why) }
+            // Not prepared yet (only in the first moments after launch): never prepared here, on the calling thread, and
+            // never played later on this request's behalf. Skipped and logged; prepared in the background for next time.
+            cache.request(name, url: folder.appendingPathComponent(name), levelled: true)
+            Log.io("sound: \(name) skipped, not ready (why: \(why))")
+            return true
+        }
         p.volume = volume * min(1.5, max(0.2, Float(config.speech.volume) / 100))   // with TurnOver's own volume
         p.currentTime = 0
-        p.play()
+        let started = Date()
+        SoundLog.played(name, why: why)
+        if !AudioOutput.muted { p.play() }   // tests are silent (AudioOutput)
+        // The owner, 14 Nov 2026: on MacRumors "the link sound hangs". Sounds were not logged, so the log could not say
+        // how. One that is slow to start, or played again before it ended, is logged now.
+        let ms = Int(Date().timeIntervalSince(started) * 1000)
+        if ms >= 50 { Log.io("sound: \(name) took \(ms) ms to start") }
+        noteRepeat(name)
         return true
     }
 
@@ -60,7 +96,7 @@ public enum VoiceOverSounds {
 
     /// TurnOver's sound for one of VoiceOver's sound names (the sounds setting "TurnOver's", or the file missing); false
     /// where TurnOver has none, so the caller's own fallback plays.
-    static func ownTone(for asked: String) -> Bool {
+    package static func ownTone(for asked: String, why: String = #function) -> Bool {
         guard Tones.own else { return false }   // coexisting, VoiceOver's own stand in for a file that is missing
         // By the sound's name, whatever its file's ending: VoiceOver's Quick Nav sounds are .wav, and asked for as such
         // they matched nothing here, so Quick Nav said its words instead of TurnOver's sound (19 Oct 2026).
@@ -68,23 +104,23 @@ public enum VoiceOverSounds {
         // TurnOver's own set first (make-sounds.py); the old tones below if a file is missing.
         let fresh: [String: String] = [
             "WrapBoundary.aiff": "edge", "DrillIn.aiff": "drill_in", "DrillOut.aiff": "drill_out",
-            "QuickNavOn.aiff": "quicknav_on", "QuickNavArrowKeyOn.aiff": "quicknav_on", "QuickNavOff.aiff": "quicknav_off", "QuickNavArrowKeyOff.aiff": "quicknav_off",
-            "TrackingOn.aiff": "tracking_on", "TrackingOff.aiff": "tracking_off", "PopupAppeared.aiff": "popup", "WebAreaLoaded.aiff": "page_loaded",
+            "QuickNavOn.aiff": "quicknav_on", "QuickNavSingleKeyOn.aiff": "quicknav_on", "QuickNavSingleKeyOff.aiff": "quicknav_off", "QuickNavArrowKeyOn.aiff": "quicknav_on", "QuickNavOff.aiff": "quicknav_off", "QuickNavArrowKeyOff.aiff": "quicknav_off",
+            "TrackingOn.aiff": "tracking_on", "TrackingOff.aiff": "tracking_off", "PopupAppeared.aiff": "popup", "WebAreaLoaded.aiff": "page_loaded", "WebPageLoaded.aiff": "page_loaded",
             "EmptySpace.aiff": "empty", "Announcement.aiff": "announcement", "SecureCharacter.aiff": "secure",
             "LinkBegin.aiff": "link", "Misspelled.aiff": "spelling", "BrailleDisplayConnected.aiff": "braille_on", "BrailleDisplayDisconnected.aiff": "braille_off",
         ]
-        if let f = fresh[name], TurnOverSounds.play(f) { return true }
+        if let f = fresh[name], TurnOverSounds.play(f, exempt: true, why: why) { return true }
         switch name {
-        case "WrapBoundary.aiff": Tones.beep(220, 70); return true
-        case "DrillIn.aiff": Tones.beep(660, 30); return true
-        case "DrillOut.aiff": Tones.beep(440, 30); return true
-        case "QuickNavOn.aiff", "QuickNavArrowKeyOn.aiff", "TrackingOn.aiff": Tones.beep(660, 40); DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { Tones.beep(880, 50) }; return true
-        case "QuickNavOff.aiff", "QuickNavArrowKeyOff.aiff", "TrackingOff.aiff": Tones.beep(880, 40); DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { Tones.beep(660, 50) }; return true
-        case "PopupAppeared.aiff": Tones.beep(520, 40); return true
-        case "WebAreaLoaded.aiff": Tones.beep(700, 50); return true
-        case "EmptySpace.aiff": Tones.beep(300, 40); return true
-        case "Announcement.aiff": Tones.beep(800, 40); return true
-        case "SecureCharacter.aiff": Tones.beep(1000, 20, volume: 0.15); return true
+        case "WrapBoundary.aiff": Tones.beep(220, 70, exempt: true); return true
+        case "DrillIn.aiff": Tones.beep(660, 30, exempt: true); return true
+        case "DrillOut.aiff": Tones.beep(440, 30, exempt: true); return true
+        case "QuickNavOn.aiff", "QuickNavSingleKeyOn.aiff", "QuickNavArrowKeyOn.aiff", "TrackingOn.aiff": Tones.beep(660, 40, exempt: true); DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { Tones.beep(880, 50, exempt: true) }; return true
+        case "QuickNavOff.aiff", "QuickNavSingleKeyOff.aiff", "QuickNavArrowKeyOff.aiff", "TrackingOff.aiff": Tones.beep(880, 40, exempt: true); DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { Tones.beep(660, 50, exempt: true) }; return true
+        case "PopupAppeared.aiff": Tones.beep(520, 40, exempt: true); return true
+        case "WebAreaLoaded.aiff", "WebPageLoaded.aiff": Tones.beep(700, 50, exempt: true); return true
+        case "EmptySpace.aiff": Tones.beep(300, 40, exempt: true); return true
+        case "Announcement.aiff": Tones.beep(800, 40, exempt: true); return true
+        case "SecureCharacter.aiff": Tones.beep(1000, 20, volume: 0.15, exempt: true); return true
         default: return false   // LinkBegin, Misspelled, the braille display: Tones has its own
         }
     }

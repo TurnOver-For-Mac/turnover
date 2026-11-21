@@ -9,9 +9,9 @@ Recovered on 1 November 2026. These are sanitized historical investigation notes
 
 ## Limits and setup
 
-The 29 October probe was not a listening test. Advertised text markers/attributes do not establish successful full-document reading or actions. Browse quick keys, forms and focus-mode transitions were left for Oliver’s trial. The 10 October stress checklist and Chrome sign-off checklist are not completed sign-offs, and the synthetic Google patterns do not prove Docs, Sheets, Slides or Drive support.
+The 29 October probe was not a listening test. Advertised text markers/attributes do not establish successful full-document reading or actions. Browse quick keys, forms and focus-mode transitions were left for the owner’s trial. The 10 October stress checklist and Chrome sign-off checklist are not completed sign-offs, and the synthetic Google patterns do not prove Docs, Sheets, Slides or Drive support.
 
-Unless a result above specifies otherwise, the source sections do not record exact app/macOS versions, a uniquely identified TurnOver binary or a complete VoiceOver on/off and leader-state matrix. Mac and Windows refer to TurnOver keyboard styles on macOS. Historical driver checks report what TurnOver emitted; they do not substitute for Oliver listening to the current installed build. No app was opened, keys sent, code changed or build installed during this recovery.
+Unless a result above specifies otherwise, the source sections do not record exact app/macOS versions, a uniquely identified TurnOver binary or a complete VoiceOver on/off and leader-state matrix. Mac and Windows refer to TurnOver keyboard styles on macOS. Historical driver checks report what TurnOver emitted; they do not substitute for the owner listening to the current installed build. No app was opened, keys sent, code changed or build installed during this recovery.
 
 ## Provenance
 

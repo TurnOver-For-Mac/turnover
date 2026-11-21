@@ -2,11 +2,11 @@
 
 ## Result and scope
 
-Oliver reported silent Command-B/Command-I in Ulysses while Word already announced them. This investigation concerns toggling formatting, not increased verbosity while reading. Shared delayed feedback with a Ulysses-specific adapter reports the resulting state. Oliver confirmed both shortcuts work at the typing cursor and with text selected on 1 November 2026, using TurnOver 22.5 runtime `8514e13`.
+The owner reported silent Command-B/Command-I in Ulysses while Word already announced them. This investigation concerns toggling formatting, not increased verbosity while reading. Shared delayed feedback with a Ulysses-specific adapter reports the resulting state. The owner confirmed both shortcuts work at the typing cursor and with text selected on 1 November 2026, using TurnOver 22.5 runtime `8514e13`.
 
 ## Live evidence
 
-Ulysses 42 (84473), macOS 27.2 (26B118), TurnOver 22.5 runtime `8514e13`, Mac keys, VoiceOver off. A disposable public sheet was supplied by Oliver and normalized to `TurnOver formatting sample`. The signed metadata-only `format-state` probe and existing HID test driver were used. No personal writing was recorded.
+Ulysses 42 (84473), macOS 27.2 (26B118), TurnOver 22.5 runtime `8514e13`, Mac keys, VoiceOver off. A disposable public sheet was supplied by the owner and normalized to `TurnOver formatting sample`. The signed metadata-only `format-state` probe and existing HID test driver were used. No personal writing was recorded.
 
 - At an end caret, Command-I inserts `_`; Command-B inserts `**`. Repeating removes the marker. Marker font attributes remain plain, so they do not establish pending typing style.
 - At a word boundary before a space, an opening tag also enables the style. Ulysses can auto-insert a closing tag while typing; the formatting shortcut then moves the caret past it to turn the style off. Spaces adjacent to tags are valid here, unlike assumptions borrowed from some Markdown parsers.
@@ -32,12 +32,12 @@ In a disposable Markdown XL sheet, test empty and end carets, a midpoint, select
 
 The 1 November installed-app checks covered end-caret, selected and nested states; empty text; a tag before a space; and turning styles off after typing trailing spaces. Subsequent typed characters were plain after the closing tag. The disposable sample was restored to plain text. Public-sample AX state and privacy-masked speech lengths supplied the automated live evidence; regression tests checked exact wording and once-only response ownership. Existing selection announcements can precede formatting feedback and are not duplicate state responses.
 
-Oliver subsequently answered “Both are working” to the trial question covering Command-B and Command-I at the typing cursor and with text selected. This is the listening result for the named Ulysses cases, not a claim about every markup shape.
+The owner subsequently answered “Both are working” to the trial question covering Command-B and Command-I at the typing cursor and with text selected. This is the listening result for the named Ulysses cases, not a claim about every markup shape.
 
 Captured focus and foreground AX references serve only as identity checks. The worker reacquires matching references and applies its 50 ms timeout only to its own objects, including text reads and final revalidation. Both app collectors have regression cases proving the original handles never reach the timeout setter while verified states still succeed. This prevents persistent AX timeouts from changing later reader navigation.
 
-Issue: [212](https://github.com/TurnOver-For-Mac/turnover/issues/212). Sanitized summaries are sufficient to understand these results; private logs retained on Oliver’s Mac are not repository prerequisites.
+Issue: [212](https://github.com/TurnOver-For-Mac/turnover/issues/212). Sanitized summaries are sufficient to understand these results; private logs retained on the owner’s Mac are not repository prerequisites.
 
 ## Combined-build listening check
 
-On 1 November 2026, Oliver was asked to try Command-B and Command-I in Ulysses and TextEdit, plus normal reading and navigation, in combined build `ddc21cf`. He replied “Working as expected”. This confirms his trial of the combined migration, localization and formatting changes; it does not extend the adapter’s documented language or markup scope.
+On 1 November 2026, the owner was asked to try Command-B and Command-I in Ulysses and TextEdit, plus normal reading and navigation, in combined build `ddc21cf`. He replied “Working as expected”. This confirms his trial of the combined migration, localization and formatting changes; it does not extend the adapter’s documented language or markup scope.

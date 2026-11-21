@@ -1,0 +1,90 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+import Foundation
+import TurnOverCore
+
+/// VoiceOver started by TurnOver's own watchdog or quit is no pin by hand, even in the TurnOver after a restart; the
+/// record answers for one start only (18 Nov 2026, with Codex's review). The record is driven through a real file in
+/// a temporary folder, with the clock given; nothing touches VoiceOver. Logic evidence only.
+func ownVoiceOverStartTests() {
+    func freshRecord() -> OwnVoiceOverStart.Record {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("turnover-own-start-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        return OwnVoiceOverStart.Record(url: folder.appendingPathComponent("voiceover-asked-by-turnover"))
+    }
+
+    test("own VoiceOver start: 17 Nov 10:16, the quit's request taken by the restarted TurnOver's first VoiceOver on") {
+        // Two processes share the file: the old one writes (watchdog 10:16:20.3, then the quit 10:16:24.4), the new one,
+        // started 10:16:26, reads it when VoiceOver comes on at 10:16:30.1.
+        let old = freshRecord()
+        old.note(now: 36_980.331)
+        old.note(now: 36_984.415)
+        let new = OwnVoiceOverStart.Record(url: old.url)
+        expect(new.take(now: 36_990.146), .ours)
+        check(!new.isPending, "the record is used up by the start it describes")
+    }
+    test("own VoiceOver start: the restarted TurnOver's first report, VoiceOver still off, keeps the record") {
+        // Codex's second review (18 Nov 2026): the startup "VoiceOver is off" deleted the record, and the watchdog's
+        // VoiceOver, arriving 4 s later, pinned Mail by hand again. Driven through the app's own call, report(on:starting:).
+        let old = freshRecord()
+        old.note(now: 36_980.331)   // the watchdog in the old TurnOver
+        let new = OwnVoiceOverStart.Record(url: old.url)
+        expect(new.report(on: false, starting: true, now: 36_986.4), .none, "the first report as it starts")
+        check(new.isPending, "the start it records may still be coming")
+        expect(new.report(on: true, starting: false, now: 36_990.146), .ours, "VoiceOver's arrival is TurnOver's own")
+        check(!new.isPending, "used up")
+    }
+    test("own VoiceOver start: VoiceOver going off after the start still cancels the record") {
+        let r = freshRecord()
+        r.note(now: 1000)
+        expect(r.report(on: false, starting: false, now: 1002), .none)
+        check(!r.isPending, "a change to off: the start is no longer what comes next")
+        expect(r.report(on: true, starting: false, now: 1005), .none, "so the next on is the person's")
+    }
+    test("own VoiceOver start: after the recovery's start is taken, Oliver's own Option-quote within 20 s is his") {
+        let r = freshRecord()
+        r.note(now: 1000)
+        expect(r.take(now: 1004), .ours, "the watchdog's VoiceOver")
+        // A hand-over turns VoiceOver off (cancel, as LeadWatcher.handOver does), then he turns it on at 1010.
+        r.cancel()
+        expect(r.take(now: 1010), .none, "his toggle, inside the old window")
+    }
+    test("own VoiceOver start: a hand-over or VoiceOver going off before the start arrives cancels it") {
+        let r = freshRecord()
+        r.note(now: 1000)
+        r.cancel()   // VoiceOver off, or a hand-over posted
+        check(!r.isPending, "cancelled")
+        expect(r.take(now: 1003), .none)
+    }
+    test("own VoiceOver start: a stale record, or one dated after the clock (it went back), is no evidence and is deleted") {
+        let r = freshRecord()
+        r.note(now: 1000)
+        expect(r.take(now: 1000 + OwnVoiceOverStart.window), .stale)
+        check(!r.isPending, "deleted when stale")
+        r.note(now: 1000)
+        expect(r.take(now: 999.5), .stale, "the clock went back")
+        check(!r.isPending, "deleted when ahead of the clock")
+        expect(r.take(now: 2000), .none, "nothing asked")
+    }
+    test("own VoiceOver start: junk in the file reads as nothing and is deleted") {
+        let r = freshRecord()
+        try? "yesterday".write(to: r.url, atomically: true, encoding: .utf8)
+        expect(r.take(now: 1000), .none)
+        check(!r.isPending, "deleted")
+        expect(OwnVoiceOverStart.decode(OwnVoiceOverStart.encode(1_763_374_580.331)), 1_763_374_580.331)
+    }
+
+    test("VoiceOver start: its shortcut when it is wholly off, VoiceOver.app only when the shortcut would turn the flag off") {
+        expect(VoiceOverStart.step(flagOn: true, running: true), .nothing, "reading already")
+        expect(VoiceOverStart.step(flagOn: false, running: false), .shortcut, "20 Nov 09:29: opened as an app here, the welcome sat unread for ten seconds")
+        expect(VoiceOverStart.step(flagOn: true, running: false), .open, "quit by script or crashed: the shortcut would turn the flag off")
+        expect(VoiceOverStart.step(flagOn: false, running: true), .wait, "coming or going: never added to")
+    }
+
+    test("VoiceOver start: VoiceOver.app after the shortcut only while VoiceOver is still wholly off") {
+        expect(VoiceOverStart.openAfterShortcut(flagOn: false, running: false), true, "the shortcut did not reach macOS (23 Oct)")
+        expect(VoiceOverStart.openAfterShortcut(flagOn: true, running: false), false, "the flag flipped: it is coming")
+        expect(VoiceOverStart.openAfterShortcut(flagOn: false, running: true), false, "its process is there: it is coming")
+        expect(VoiceOverStart.openAfterShortcut(flagOn: true, running: true), false, "reading")
+        check(VoiceOverStart.shortcutWait >= 1, "longer than the slowest nine in ten of the shortcut's starts (558 ms, 10 to 20 Nov)")
+    }
+}

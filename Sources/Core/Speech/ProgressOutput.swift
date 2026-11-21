@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// A progress heard as NVDA reports one (NVDA+U; Oliver, 27 Oct and 2 Nov 2026): a beep for each percent that rises
+// A progress heard as NVDA reports one (NVDA+U; the owner, 27 Oct and 2 Nov 2026): a beep for each percent that rises
 // in pitch, the percentage said each 10 percent, both, or nothing. ProgressWatch keeps one for an accessibility
 // progress bar; an app module that knows a progress of its own (a download, a command's output) can keep one too.
 import Foundation

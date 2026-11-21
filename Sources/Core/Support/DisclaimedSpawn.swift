@@ -6,8 +6,14 @@
 import Foundation
 import Darwin
 
-public enum DisclaimedSpawn {
-    public struct Child { public let pid: pid_t; public let stdin: FileHandle; public let stdout: FileHandle; public let stderr: FileHandle }
+// nonisolated: ScriptHost starts its host from several threads (15 Nov 2026); nothing here touches main-actor state.
+nonisolated public enum DisclaimedSpawn {
+    public struct Child {
+        public let pid: pid_t; public let stdin: FileHandle; public let stdout: FileHandle; public let stderr: FileHandle
+        /// Only for a child started with `hold`: call it once the caller has published the child (its pid, that it is running)
+        /// and is ready to hear that it ended. Until then `exited` is not called, however soon the child ends.
+        public var releaseExit: (@Sendable () -> Void)?
+    }
 
     private typealias SetDisclaim = @convention(c) (UnsafeMutablePointer<posix_spawnattr_t?>, Int32) -> Int32
     private static let setDisclaim: SetDisclaim? = {
@@ -18,7 +24,14 @@ public enum DisclaimedSpawn {
     /// Start `path` with `arguments`, its three standard streams as pipes, in `directory`. `exited` is called (on a
     /// background thread) with the exit status when it ends. Nil if it couldn't start; `disclaimed` says whether the
     /// permissions link was cut (false only where macOS lacks the call).
-    public static func run(_ path: String, arguments: [String], directory: String?, exited: @escaping @Sendable (Int32) -> Void) -> (child: Child, disclaimed: Bool)? {
+    ///
+    /// `environment` (`NAME=value` strings) is all the child is given when it is not nil; nil gives it TurnOver's own.
+    /// `hold` (a plugin script's host, 16 Nov 2026) changes two things for a child that must be signalled safely: `exited` is
+    /// not called until `releaseExit` is, so a child that ends at once cannot be heard before it is known; and the child is
+    /// waited for without being reaped, so its process id stays its own until `exited` has returned, and a caller that signals
+    /// only while it has not yet been told of the end can never signal an id that now belongs to another program.
+    public static func run(_ path: String, arguments: [String], directory: String?, environment: [String]? = nil, hold: Bool = false,
+                           exited: @escaping @Sendable (Int32) -> Void) -> (child: Child, disclaimed: Bool)? {
         let inPipe = Pipe(), outPipe = Pipe(), errPipe = Pipe()
         var actions: posix_spawn_file_actions_t? = nil
         posix_spawn_file_actions_init(&actions)
@@ -42,16 +55,32 @@ public enum DisclaimedSpawn {
         var pid: pid_t = 0
         let argv: [UnsafeMutablePointer<CChar>?] = ([path] + arguments).map { strdup($0) } + [nil]
         defer { argv.forEach { free($0) } }
-        let r = posix_spawn(&pid, path, &actions, &attr, argv, environ)
+        let envp: [UnsafeMutablePointer<CChar>?]? = environment.map { $0.map { strdup($0) } + [nil] }
+        defer { envp?.forEach { free($0) } }
+        let r = envp.map { posix_spawn(&pid, path, &actions, &attr, argv, $0) } ?? posix_spawn(&pid, path, &actions, &attr, argv, environ)
         // The child has its ends; close ours of them.
         try? inPipe.fileHandleForReading.close(); try? outPipe.fileHandleForWriting.close(); try? errPipe.fileHandleForWriting.close()
         guard r == 0 else { return nil }
         let child = pid
+        let gate = DispatchSemaphore(value: 0)
         Thread.detachNewThread {
-            var status: Int32 = 0
-            while waitpid(child, &status, 0) == -1 && errno == EINTR {}
+            guard hold else {
+                var status: Int32 = 0
+                while waitpid(child, &status, 0) == -1 && errno == EINTR {}
+                exited(status)
+                return
+            }
+            gate.wait()
+            var info = siginfo_t()
+            while waitid(P_PID, id_t(child), &info, WEXITED | WNOWAIT) == -1 && errno == EINTR {}
+            // As waitpid would have said it: the exit code in the second byte, or the signal (and 0x80 for a core dump).
+            let status: Int32 = info.si_code == CLD_EXITED ? (info.si_status & 0xff) << 8 : (info.si_status & 0x7f) | (info.si_code == CLD_DUMPED ? 0x80 : 0)
             exited(status)
+            var reaped: Int32 = 0
+            while waitpid(child, &reaped, 0) == -1 && errno == EINTR {}
         }
-        return (Child(pid: pid, stdin: inPipe.fileHandleForWriting, stdout: outPipe.fileHandleForReading, stderr: errPipe.fileHandleForReading), disclaimed)
+        var made = Child(pid: pid, stdin: inPipe.fileHandleForWriting, stdout: outPipe.fileHandleForReading, stderr: errPipe.fileHandleForReading)
+        if hold { made.releaseExit = { gate.signal() } }
+        return (made, disclaimed)
     }
 }

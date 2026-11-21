@@ -30,6 +30,7 @@ extension AXHandler {
     typealias FocusRule = (AXUIElement, pid_t, AXUIElement) -> FocusVerdict
     var focusRules: [(String, FocusRule)] {[
         ("not an application", ruleNotAnApplication),
+        ("behind the app switcher", ruleBehindTheSwitcher),
         ("background application", ruleBackgroundApplication),
         ("set aside after a settings Tab", ruleSetAside),
         ("untitled window", ruleUntitledWindow),
@@ -77,6 +78,40 @@ extension AXHandler {
             return .ignore
         }
         return .go(target)
+    }
+
+    /// While Command Tab's app switcher has the focus, the app it was opened over can still report a focus of its own:
+    /// Mail's message pane was read over the switcher ("Claude", then a PayPal message), and the next two Command Tabs
+    /// said nothing (13 Nov 2026). Set aside while the switcher is there; once Command is let go it is gone, and the
+    /// app that comes to the front is followed as ever.
+    func ruleBehindTheSwitcher(_ target: AXUIElement, _ pid: pid_t, _ element: AXUIElement) -> FocusVerdict {
+        guard let f = API.focusObject, f is AppSwitcherList else { return .go(target) }
+        // Only the app the switcher came up over; the app being switched to is never held back (Codex's review, 14 Nov
+        // 2026: the active app changes to it before its focus is read).
+        guard let over = AppSwitcherList.openedOver, pid == over else { return .go(target) }
+        // Only while Command is still held: the switcher closes when it is let go, whatever its element still answers.
+        let commandHeld = CGEventSource.flagsState(.combinedSessionState).contains(.maskCommand)
+        guard commandHeld else { return .go(target) }
+        Log.io("focus from pid \(pid) while the app switcher is up; set aside")
+        // Escape can close the switcher with Command still held, and the app's focus then comes back with no further
+        // news (Codex's second review, 14 Nov 2026): once Command is let go, if the switcher is still what TurnOver
+        // has as the focus, the app's own focus is asked for and read.
+        reconcileAfterSwitcher(pid: pid, waited: 0)
+        return .ignore
+    }
+
+    func reconcileAfterSwitcher(pid: pid_t, waited: Double) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            guard let self, API.focusObject is AppSwitcherList else { return }
+            let commandHeld = CGEventSource.flagsState(.combinedSessionState).contains(.maskCommand)
+            if commandHeld, waited < 10 { self.reconcileAfterSwitcher(pid: pid, waited: waited + 0.2); return }
+            guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { return }
+            let app = AXUIElementCreateApplication(pid)
+            AXUIElementSetMessagingTimeout(app, 0.25)
+            guard let f = app.element(kAXFocusedUIElementAttribute) else { return }
+            Log.io("focus: the app switcher went without news; the app's own focus, \(f.role)")
+            self.focusChanged(f, pid: pid)
+        }
     }
 
     /// An ordinary application in the background (Safari's page reloading behind Mail, 2 Oct 2026) can post focus
@@ -260,8 +295,8 @@ extension AXHandler {
     /// if the page in hand has gone (its web area dead or emptied) and the window has a new one with content, that
     /// one is followed. Now, not at the next key, which would have read the old buffer (a second reviewer, 23 Oct
     /// 2026).
-    func followIfPageWent(_ document: BrowseModeDocument, tries: Int) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+    func followIfPageWent(_ document: BrowseModeDocument, tries: Int, gaveUp: (() -> Void)? = nil) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.pageWatchInterval) { [weak self] in
             guard let self, API.focusTreeInterceptor === document else { return }
             let app = AXUIElementCreateApplication(document.webArea.pid)
             if let focused = app.element(kAXFocusedUIElementAttribute), focused.role == "AXWebArea",
@@ -273,13 +308,16 @@ extension AXHandler {
             let oldGone = !document.isAlive || document.webArea.elements(kAXChildrenAttribute).isEmpty
             if oldGone {
                 document.followCurrentRoot(requireEmpty: false) { [weak self] followed in
-                    if !followed, tries > 1 { self?.followIfPageWent(document, tries: tries - 1) }
+                    guard !followed else { return }
+                    if tries > 1 { self?.followIfPageWent(document, tries: tries - 1, gaveUp: gaveUp) } else { gaveUp?() }
                 }
                 return
             }
-            if tries > 1 { self.followIfPageWent(document, tries: tries - 1) }
+            if tries > 1 { self.followIfPageWent(document, tries: tries - 1, gaveUp: gaveUp) } else { gaveUp?() }
         }
     }
+    /// How often followIfPageWent looks (a test shortens it).
+    package static var pageWatchInterval: TimeInterval = 0.4
 
     /// Safari reports the page focused while its address bar, with the suggestions popup up, still has the keyboard.
     /// (Only a field you can type in: Mail's message window starts its focus on the read-only header, a text area,
@@ -347,6 +385,16 @@ extension AXHandler {
         }
         if let web = target.firstDescendant(role: "AXWebArea", maxVisited: 300) {
             if sameWindow, axRole == "AXUnknown" { Log.io("focus on a nameless \(axRole) in the same window; ignored"); return .ignore }
+            // A text field TurnOver is on still says it has the keyboard: the report is Safari's, around the page, not a
+            // move. On a page whose form is in a frame of its own (a Wix site, 14 Nov 2026), each focus on the Email
+            // field brought Safari's AutoFill list and, 190 ms later, focus on the page's nameless group. TurnOver went
+            // back to browse mode, the address typed became commands, and the owner switched to VoiceOver to fill it in.
+            // The frame runs in a process of its own, so the same-app check above never applied.
+            if Self.fieldHoldsKeyboard(current.element, target, page: web) {
+                Log.io("focus on a nameless \(axRole) while the field \"\(Log.words(current.name))\" still reports focus; ignored")
+                recheckFieldFocus(current.element, pid: pid)
+                return .ignore
+            }
             // A list or table in the same window still says it has the keyboard: the report is the app announcing a
             // pane it loaded, not a move. Outlook does it for its reading pane each time a message loads, half a
             // second after Down, and the next Down moved by line in the message (parts request #2, written by an AI
@@ -374,7 +422,136 @@ extension AXHandler {
             }
             Log.io("focus on a nameless AXUnknown with no document inside; ignored"); return .ignore
         }
+        // The group set aside, reported again while the new page is awaited and no key has been pressed since: still set
+        // aside. Presented, it dropped the page and the watch with it, and the silence came back (Codex's review).
+        if Self.isPageHostSetAside(target) {
+            Log.io("focus on the nameless AXGroup set aside, reported again; still set aside")
+            return .ignore
+        }
+        if Self.isSafariPageHostBetweenPages(target, pid: pid), let document = API.focusTreeInterceptor,
+           let press = BrowseModeDocument.lastNavigationPress {
+            // The press is the evidence for one page change only.
+            BrowseModeDocument.lastNavigationPress = nil
+            Self.pageHostSetAside = (target, document, press.keyAt)
+            Log.io("focus on a nameless AXGroup with no page in it yet, just after a link or button was pressed; set aside, watching for the new page")
+            let setAside = target
+            let generation = document.pageGeneration
+            followIfPageWent(document, tries: Self.pageHostWatchTries) { [weak self] in
+                // No new page came: the focus set aside is presented, if the app still has it there.
+                Self.pageHostSetAside = nil
+                guard let self else { return }
+                // The same document took a new page meanwhile and has read it: the group, presented now, would drop
+                // that page and talk over it (review, 20 Nov 2026).
+                guard document.pageGeneration == generation else {
+                    Log.io("focus: the page changed while the nameless group was set aside; not presented")
+                    return
+                }
+                guard let now = AXUIElementCreateApplication(pid).element(kAXFocusedUIElementAttribute), now.isSame(setAside) else {
+                    Log.io("focus: no new page came, and the app's focus has moved on from the group set aside; not presented")
+                    return
+                }
+                Log.io("focus: no new page came; the nameless group set aside is presented")
+                self.present(setAside, pid: pid)
+            }
+            return .ignore
+        }
         return .go(target)
+    }
+
+    /// The page host set aside, the page it was set aside for, and the key that pressed the link: while the page is still
+    /// TurnOver's and no key has come since, a report of the same group again is set aside too. Ended by the watch
+    /// giving up, by the new page being followed (the page is no longer TurnOver's), or by any key.
+    package static var pageHostSetAside: (element: AXUIElement, document: BrowseModeDocument, keyAt: Date)?
+
+    package static func isPageHostSetAside(_ target: AXUIElement) -> Bool {
+        guard let held = pageHostSetAside else { return false }
+        guard held.element.isSame(target) else { return false }
+        guard API.focusTreeInterceptor === held.document else { return false }
+        guard InputManager.lastKeyDownAt == held.keyAt else { return false }
+        return true
+    }
+
+    /// How many looks, at pageWatchInterval, for the new page after Safari's page host takes the focus (about 5 s).
+    package static var pageHostWatchTries = 12
+    /// How long a press of a link or button stands as evidence of a page change.
+    package static let pageHostPressWindow: TimeInterval = 4
+    /// How far up the walk from the group to its window goes before it gives up (a test lowers it).
+    package static var pageHostAncestorLimit = 40
+
+    /// Safari, after VO Space or Return on a link or button: the focus goes to a nameless group outside any page, with
+    /// no page in it yet, while the new page loads; the new page then takes the focus only as a blank frame
+    /// (about:blank, ignored by its rule) and posts nothing more. Presented, the group said nothing, browse mode let go of
+    /// the page, and nothing was said of the new page until a key was pressed (18 Nov 2026 at 07:13:28 and
+    /// 07:18:31: VO Space on a link, then silence until Tab three seconds later). Set aside, the page in hand keeps the
+    /// keys and the new page is followed as soon as it has content (followIfPageWent), as a reloaded page is; with no new
+    /// page in about five seconds the group is presented after all. Only with positive evidence (a link or button
+    /// pressed by VO Space or Return in this window within the last few seconds), only Safari (SHORTCOMINGS 13), only in
+    /// the very window of that press, never in a dialog, a sheet or anything inside one.
+    package static func isSafariPageHostBetweenPages(_ target: AXUIElement, pid: pid_t, now: Date = Date()) -> Bool {
+        guard target.role == "AXGroup" else { return false }
+        guard BrowseModeDocument.pageOnItsWayBundles.contains(ProfileStore.shared.bundle(of: pid)) else { return false }
+        guard let document = API.focusTreeInterceptor else { return false }
+        guard document.webArea.pid == pid else { return false }
+        guard let press = BrowseModeDocument.lastNavigationPress else { return false }
+        guard press.pid == pid else { return false }
+        guard now.timeIntervalSince(press.at) < pageHostPressWindow else { return false }
+        // No key since the one that pressed it: a Tab (a move into Safari's own controls) or any other key ends the
+        // evidence for good (Codex's review: VO Space, Tab, then another key made the old press count again).
+        guard InputManager.lastKeyDownAt == press.keyAt else { return false }
+        // The very window the press was in, by identity.
+        guard let targetWindow = target.element(kAXWindowAttribute) else { return false }
+        guard targetWindow.isSame(press.window) else { return false }
+        guard targetWindow.string(kAXSubroleAttribute) == "AXStandardWindow" else { return false }
+        // Outside any page (a nameless group on a page is the page's own), and in no sheet or dialog.
+        let dialogSubroles: Set<String> = ["AXDialog", "AXSystemDialog", "AXFloatingWindow", "AXSystemFloatingWindow"]
+        // The walk must reach that very window: one stopped by its limit has not shown the group is outside a page.
+        var p = target.element(kAXParentAttribute); var hops = 0
+        var reachedWindow = false
+        while let x = p, hops < Self.pageHostAncestorLimit {
+            let role = x.role
+            if role == "AXWebArea" { return false }
+            if role == "AXSheet" { return false }
+            if let sub = x.string(kAXSubroleAttribute), dialogSubroles.contains(sub) { return false }
+            if role == "AXWindow" { reachedWindow = x.isSame(targetWindow); break }
+            p = x.element(kAXParentAttribute); hops += 1
+        }
+        return reachedWindow
+    }
+
+    /// Whether `field`, where the focus is, is a text field in `page` that still says it has the keyboard, so a report
+    /// of focus on `reported` (a nameless container around that page) is not a move. Asked of the field itself: a
+    /// frame of the page can run in a process of its own, with no window of its own to compare. A field outside the
+    /// page (Safari's address field, after Return) that lets the page have the keys is a move, and is followed.
+    package static func fieldHoldsKeyboard(_ field: AXUIElement, _ reported: AXUIElement, page: AXUIElement) -> Bool {
+        guard ["AXTextField", "AXTextArea", "AXComboBox"].contains(field.role) else { return false }
+        guard !field.isSame(reported) else { return false }
+        guard (field.attr(kAXFocusedAttribute) as? Bool) == true else { return false }
+        // TurnOver's document for that page holds the field, or the field is inside the page.
+        if let d = API.focusTreeInterceptor, d.webArea.isSame(page) { return true }
+        var x = field.element(kAXParentAttribute); var hops = 0
+        while let y = x, hops < 60 {
+            if y.isSame(page) { return true }
+            x = y.element(kAXParentAttribute); hops += 1
+        }
+        return false
+    }
+
+    /// A field's own word that it is focused is not proof that its frame still has the keys (WebKit answers it from
+    /// the field's document; Codex's review, 14 Nov 2026). Looked at again a moment later: if the field no longer says
+    /// so, or the app's focus is now a control of another kind, that is followed; the nameless group alone is not.
+    func recheckFieldFocus(_ field: AXUIElement, pid: pid_t) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+            guard let self, API.focusObject?.element.isSame(field) == true else { return }
+            let app = AXUIElementCreateApplication(pid)
+            AXUIElementSetMessagingTimeout(app, 0.25)
+            let fieldStillSays = (field.attr(kAXFocusedAttribute) as? Bool) == true
+            guard let now = app.element(kAXFocusedUIElementAttribute), !now.isSame(field) else { return }
+            let containers: Set<String> = ["AXGroup", "AXWebArea", "AXUnknown", "AXScrollArea"]
+            let elsewhere = !containers.contains(now.role)
+            guard !fieldStillSays || elsewhere else { return }
+            Log.io("focus: the field let go after all; the app's focus is on \(now.role)")
+            self.focusChanged(now, pid: pid)
+        }
     }
 
     /// The list, table or outline the focus is in (the focus itself, or a row or cell of it), if it still says it
@@ -461,6 +638,10 @@ extension AXHandler {
         }
         if let web = target.firstWebArea() {
             Log.io("focus to the window \"\(Log.words(name))\" after \(f.axRole) let go; to its page")
+            if f.axRole == "AXTextField", InputManager.lastKeyIdentifier == "kb:enter", Date().timeIntervalSince(InputManager.lastKeyDownAt) < 1 {
+                // Whether the field was outside any page is asked only here, once a Return (16 Nov 2026, review).
+                BrowseModeHandler.backFromAddressField = (Date(), web, f.element.enclosingWebArea() == nil)
+            }
             return .follow(web)
         }
         // The control let go, but the app may only be passing the focus through its window on the way to the next
@@ -543,7 +724,15 @@ extension AXHandler {
         } else {
             beforeNamelessStop = nil
         }
+        let interceptor = BrowseModeHandler.shared.document(for: obj, ancestors: ancestors)
+        let fromOutside = interceptor !== API.focusTreeInterceptor
+        // Automatic focus mode moving the keyboard to the field it has just named (17 Nov 2026: VO Right and F onto a
+        // field in a named group said the group after the field, from the focus passing into it). The move is TurnOver's,
+        // not the person's: no group it passes into is said. Tab, a click or the app's own move is said as ever.
+        let ownFocusMove = interceptor?.isOwnCaretFocusMove(to: target, fromOutside: fromOutside) ?? false
+        if ownFocusMove { Log.io("focus: automatic focus mode's own move to the \(target.role) it named; groups entered not said") }
         for a in ancestors.reversed() where a.isPresentableFocusAncestor {
+            if ownFocusMove { continue }
             if known.contains(where: { $0.isSameElement(as: a) }) || old?.isSameElement(as: a) == true { continue }
             if let w = focusWindow, a.isSameElement(as: w) { continue }   // the window was presented as the foreground
             if let (el, at) = lastEntered, el.isSame(a.element), Date().timeIntervalSince(at) < 1.5 { continue }   // a sheet announced on creation
@@ -555,10 +744,9 @@ extension AXHandler {
             EventHandler.queue(Event(.focusEntered, a))
         }
         lastGainFocus = (target, Date())
-        let interceptor = BrowseModeHandler.shared.document(for: obj, ancestors: ancestors)
         // Into a document from outside it (another app, the window around the page): its focus event is told, as NVDA's
         // tree interceptor is (_enteringFromOutside).
-        interceptor?.focusFromOutside = interceptor !== API.focusTreeInterceptor
+        interceptor?.focusFromOutside = fromOutside
         API.setFocusObject(obj, ancestors: ancestors, interceptor: interceptor)
         ObjectNavigator.shared.focusMoved(to: obj.element, pid: pid)
         EventHandler.queue(Event(.gainFocus, obj))
@@ -589,6 +777,8 @@ extension AXHandler {
             Log.io("foreground: Notification Centre's panel, for the key; the key says it")
             return
         }
+        if subrole != "AXDesktop" { Tones.windowActivated() }   // not for the Finder's desktop, as VoiceOver
+        if obj is Dialog { Tones.dialogAppeared() }
         let isDialog = obj.role == .dialog || obj.role == .sheet
         let shownTitle = appName == title ? "" : title
         // The app's name alone with the role is one phrase, as the language says it ("Finder penceresi" in Turkish);
@@ -601,7 +791,16 @@ extension AXHandler {
             case (true, true): String(localized: "\(appName) dialog", comment: "A dialog in front: %@ is its app (Windows style)")
             }
         } else { Speech.joined([appName ?? "", shownTitle, (isDialog ? Role.dialog : Role.window).displayString]) }
-        if obj is Dialog { EventHandler.queue(Event(.focusEntered, obj)) } else { Speech.speakOnly(text) }   // a window's name: the display shows the focus in it
+        // The app module may say its own words for the window, or none (an empty string) (17 Nov 2026).
+        let moduleWords = obj.appModule.windowAnnouncement(for: window, title: title)
+        // a window's name: the display shows the focus in it
+        if obj is Dialog {
+            EventHandler.queue(Event(.focusEntered, obj))
+        } else if let moduleWords {
+            if !moduleWords.isEmpty { Speech.speakOnly(moduleWords) }
+        } else {
+            Speech.speakOnly(text)
+        }
         // A window with nothing to read (OpenGL, custom drawing): said a moment later, with the recognition key (issue 74).
         if !(obj is Dialog), window.pid != ProcessInfo.processInfo.processIdentifier { EmptyWindowNotice.check(window, pid: window.pid) }
     }

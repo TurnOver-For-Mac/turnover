@@ -35,11 +35,34 @@ final class Watchdog: @unchecked Sendable {   // its state is under `lock`
     /// TurnOver is reading (VoiceOver off): set by the app, read by the watch.
     /// No fresh player and no relaunch while the Mac is asleep or locked, nor for 30 s after it wakes: the audio
     /// system is away then, speech sticks for a while by rights, and a relaunch at the lock screen made copy after copy
-    /// of TurnOver (a tester, 20 Oct 2026: "many instances", speech as an echo, VoiceOver unstartable).
+    /// of TurnOver (a tester, 20 Oct 2026: "many instances", speech as an echo, VoiceOver unstartable). Since 14 Nov
+    /// 2026 a queue that got stuck later than 3 s after the wake, with the lock screen gone, gets its fresh player
+    /// within the 30 s (graceCovers); the relaunch still waits out the whole grace.
     nonisolated(unsafe) private var graceUntil = Date.distantPast
-    nonisolated func noteAsleepOrLocked() { lock.lock(); graceUntil = .distantFuture; lock.unlock() }
-    nonisolated func noteAwake() { lock.lock(); graceUntil = Date().addingTimeInterval(30); lock.unlock() }
+    /// When the Mac last woke or was unlocked (nil while it is asleep or locked). Under `lock`.
+    nonisolated(unsafe) private var awakeAt: Date?
+    nonisolated func noteAsleepOrLocked() { lock.lock(); graceUntil = .distantFuture; awakeAt = nil; lock.unlock() }
+    nonisolated func noteAwake() { lock.lock(); graceUntil = Date().addingTimeInterval(30); awakeAt = Date(); lock.unlock() }
     nonisolated var inGrace: Bool { lock.lock(); defer { lock.unlock() }; return Date() < graceUntil }
+    /// Whether the grace covers a speech queue stuck since `began`. It is for what the sleep or the wake left stuck. A
+    /// queue that got stuck later, with the Mac awake and unlocked, is not the wake's: the sound moved to AirPods Max 17 s
+    /// after the unlock, the queue stuck in starting playback, and with the fresh player held back for the grace there
+    /// was no speech until the owner restarted TurnOver 13 s later (14 Nov 2026). Such a queue gets its fresh player at once;
+    /// the relaunch keeps the whole grace (`inGrace`), for the lock screen's sake.
+    nonisolated func graceCovers(stallBegan began: Date) -> Bool {
+        // The lock screen itself, asked of the session, whatever the notices said: "session active" can come while it is
+        // still up (Codex's review, 14 Nov 2026), and the lock screen keeps the whole grace.
+        if Self.sessionLocked { return true }
+        lock.lock(); defer { lock.unlock() }
+        guard Date() < graceUntil else { return false }
+        guard let awakeAt else { return true }   // asleep or locked
+        return began.timeIntervalSince(awakeAt) < 3
+    }
+    /// The session says its screen is locked (any thread; the same question as LeadWatcher.screenIsLocked).
+    nonisolated static var sessionLocked: Bool {
+        guard let d = CGSessionCopyCurrentDictionary() as? [String: Any] else { return false }
+        return (d["CGSSessionScreenIsLocked"] as? Bool) ?? (d["CGSSessionScreenIsLocked"] as? Int).map { $0 != 0 } ?? false
+    }
 
     nonisolated var active: Bool {
         get { lock.lock(); defer { lock.unlock() }; return _active }
@@ -103,8 +126,10 @@ final class Watchdog: @unchecked Sendable {   // its state is under `lock`
         lock.lock(); trippedAt = Date(); _lastTrip = trippedAt; voiceOverHeldBack = sleeping; lock.unlock()
         // The Mac asleep, locked or just awake: the beat stopped because the Mac did, not TurnOver. Keys through, but
         // VoiceOver left as it is and nothing announced. Each wake said "TurnOver is not responding" in the
-        // system's voice, several copies over each other (Oliver, 22 Oct 2026), while TurnOver was simply waking.
+        // system's voice, several copies over each other (22 Oct 2026), while TurnOver was simply waking.
         Log.error("watchdog: the main thread has not run for \(Int(stuck)) s\(sleeping ? " (the Mac asleep, locked or just awake)" : ""); letting keys through\(sleeping ? "" : " and turning VoiceOver back on")")
+        // What it was in (17 Nov 2026: two 6 s stalls on 16 Nov left no trace of their cause).
+        Log.error("watchdog: the main thread last began \(Core.mainWorkDescription())")
         KeyboardHandler.bypass = true
         // Coexisting: VoiceOver's sound back first, since the tap silencing it would otherwise outlive a hang (18 Oct
         // 2026), and the warning in the system's own voice, the only one left.
@@ -143,8 +168,10 @@ final class Watchdog: @unchecked Sendable {   // its state is under `lock`
         guard stall.isStillStalled, SpeechPlayer.current === stall.player else { return true }
         // Returning false preserves the request for the next watch poll: a sleeping Mac must not consume the
         // one recovery attempt for a queue that stays stuck after waking (#155, 28 Oct 2026).
-        guard !inGrace else { return false }
         let seconds = stall.seconds, old = stall.player
+        let began = Date().addingTimeInterval(-seconds)
+        guard !graceCovers(stallBegan: began) else { return false }
+        if inGrace { Log.info("speech: the speech queue stuck \(Int(seconds)) s ago, after the Mac woke; a fresh speech player now") }
         let attempt = SpeechRecoveryAttempt<SpeechPlayer>()
         // Audio teardown can block as well: rejected candidates leave both main and this recovery watcher free.
         defer { attempt.expire(); attempt.discardOffThread() }
@@ -153,7 +180,7 @@ final class Watchdog: @unchecked Sendable {   // its state is under `lock`
                 let fresh = try old.freshCopy()
                 guard attempt.offer(fresh) else { return }
                 DispatchQueue.main.async { MainActor.assumeIsolated {
-                    guard stall.isStillStalled, SpeechPlayer.current === old, !self.inGrace else {
+                    guard stall.isStillStalled, SpeechPlayer.current === old, !self.graceCovers(stallBegan: began) else {
                         attempt.expire()
                         return
                     }

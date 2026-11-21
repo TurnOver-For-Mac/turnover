@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""The fence around TurnOver's core (6 Nov 2026, Oliver: contributors' AIs build app modules "whilst keeping the core
+"""The fence around TurnOver's core (6 Nov 2026, the owner: contributors' AIs build app modules "whilst keeping the core
 locked down and safe").
 
   Tools/check-module-fence.py <base ref> [--outside]

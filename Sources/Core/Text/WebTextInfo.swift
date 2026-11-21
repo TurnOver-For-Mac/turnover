@@ -310,7 +310,8 @@ public final class WebTextInfo: TextInfo {
                 if lastLink.map({ !$0.isSame(l) }) ?? true {
                     switch linkMode {
                     case .speech: pieces.append(" \(Role.link.displayString) ")
-                    case .tone: pendingTones.append { Tones.link() }
+                    // Once a line: the sounds all play together, before the words (BufferTextInfo, 14 Nov 2026).
+                    case .tone: if !sawLinkRun { pendingTones.append { Tones.link() } }
                     case .off: break
                     }
                     sawLinkRun = true

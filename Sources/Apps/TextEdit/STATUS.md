@@ -3,8 +3,8 @@
 - Bundle id: com.apple.TextEdit
 - Support: Partial
 - Effort: Module
-- Being worked on: Codex for Oliver, issue 212
-- Checked: 1 November 2026; TurnOver 22.5, combined runtime ddc21cf, TextEdit 1.21, macOS 27.2, Mac keys, VoiceOver off. Oliver confirmed the combined build’s bold/italic feedback and normal reading/navigation work as expected; the earlier formatting build was also confirmed by ear in Claude’s 1 November review. Earlier navigation checks retain their dates and limits in the evidence.
+- Being worked on: Codex for the owner, issue 212
+- Checked: 1 November 2026; TurnOver 22.5, combined runtime ddc21cf, TextEdit 1.21, macOS 27.2, Mac keys, VoiceOver off. The owner confirmed the combined build’s bold/italic feedback and normal reading/navigation work as expected; the earlier formatting build was also confirmed by ear in Claude’s 1 November review. Earlier navigation checks retain their dates and limits in the evidence.
 
 ## Findings
 

@@ -8,7 +8,7 @@
 
 ## Findings
 
-Firefox was listed for the sweep, but browser interaction was deferred to Oliver’s checklist. No live browser workflow pass is recorded in this source. Recognition of its identifier in keyboard handling is not proof of web-reading support.
+Firefox was listed for the sweep, but browser interaction was deferred to the owner’s checklist. No live browser workflow pass is recorded in this source. Recognition of its identifier in keyboard handling is not proof of web-reading support.
 
 Next check: Use a public page to check reading, quick navigation, forms and focus-mode transitions; record browser and macOS versions.
 

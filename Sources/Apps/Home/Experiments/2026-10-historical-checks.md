@@ -10,7 +10,7 @@ App version is given below only where the source states it. Other missing app/ma
 
 ## Recorded outcome
 
-The driver read headings, rooms, named tiles and toolbar controls. The app’s Tab order reached the sidebar and toolbar but skipped tiles; VoiceOver-style review keys reached them. A location prompt was left for Oliver. No device or automation action was recorded.
+The driver read headings, rooms, named tiles and toolbar controls. The app’s Tab order reached the sidebar and toolbar but skipped tiles; VoiceOver-style review keys reached them. A location prompt was left for the owner. No device or automation action was recorded.
 
 ## Limits and next check
 

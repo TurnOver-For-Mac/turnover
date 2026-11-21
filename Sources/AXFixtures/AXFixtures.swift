@@ -239,14 +239,32 @@ extension AXUIElement {
 /// pids from `floor` up, one per node, so CFEqual and CFHash work on them as on the real thing.
 public enum AXReplay {
     public static let floor: pid_t = 900_000
-    nonisolated(unsafe) private static var fixture: AXFixture?
-    nonisolated(unsafe) private static var byId: [Int: AXFixture.Node] = [:]
+    // The shim's callbacks run on whatever thread the product asks from while tests load and unload on the main
+    // thread, so all of this state is behind one lock; each callback copies what it needs and lets go.
+    private static let stateLock = NSLock()
+    private static func locked<T>(_ body: () -> T) -> T { stateLock.lock(); defer { stateLock.unlock() }; return body() }
+    nonisolated(unsafe) private static var _fixture: AXFixture?
+    nonisolated(unsafe) private static var _byId: [Int: AXFixture.Node] = [:]
+    nonisolated(unsafe) private static var _actions: [(id: Int, action: String)] = []
+    nonisolated(unsafe) private static var _sets: [(id: Int, attribute: String, value: AXFixture.Value?)] = []
+    nonisolated(unsafe) private static var _reads: [(id: Int, attribute: String)]?
+    private static var fixture: AXFixture? { locked { _fixture } }
+    private static func node(_ i: Int) -> AXFixture.Node? { locked { _byId[i] } }
     /// Actions performed and attributes set during the test, in order.
-    nonisolated(unsafe) public private(set) static var actions: [(id: Int, action: String)] = []
-    nonisolated(unsafe) public private(set) static var sets: [(id: Int, attribute: String, value: AXFixture.Value?)] = []
+    public private(set) static var actions: [(id: Int, action: String)] {
+        get { locked { _actions } }
+        set { locked { _actions = newValue } }
+    }
+    public private(set) static var sets: [(id: Int, attribute: String, value: AXFixture.Value?)] {
+        get { locked { _sets } }
+        set { locked { _sets = newValue } }
+    }
     /// Attributes read, in order, while a test keeps this list (nil, the default, records nothing): for checking that
     /// something is left unread.
-    nonisolated(unsafe) public static var reads: [(id: Int, attribute: String)]?
+    public static var reads: [(id: Int, attribute: String)]? {
+        get { locked { _reads } }
+        set { locked { _reads = newValue } }
+    }
 
     // The shim (Sources/AXReplayShim) must be a library dyld loaded at launch for its interposing to count, so
     // the test runner inserts libAXReplayShim.dylib (DYLD_INSERT_LIBRARIES) and this finds its install function
@@ -269,12 +287,11 @@ public enum AXReplay {
     }
 
     public static func load(_ f: AXFixture) {
-        fixture = f
-        byId = Dictionary(uniqueKeysWithValues: f.nodes.map { ($0.id, $0) })
-        actions = []; sets = []
+        let table = Dictionary(uniqueKeysWithValues: f.nodes.map { ($0.id, $0) })
+        locked { _fixture = f; _byId = table; _actions = []; _sets = [] }
         installFn?(floor, attrFn, attrNamesFn, paramNamesFn, actionNamesFn, paramFn, actionFn, setFn)
     }
-    public static func unload() { fixture = nil; byId = [:]; installFn?(0, nil, nil, nil, nil, nil, nil, nil) }
+    public static func unload() { locked { _fixture = nil; _byId = [:] }; installFn?(0, nil, nil, nil, nil, nil, nil, nil) }
 
     /// The element for a node.
     public static func element(_ id: Int) -> AXUIElement { AXUIElementCreateApplication(floor + pid_t(id)) }
@@ -306,34 +323,39 @@ public enum AXReplay {
     }
 
     private static let attrFn: AttrFn = { e, a, out in
-        guard let i = id(of: e), var n = byId[i], let a else { return .invalidUIElement }
+        guard let i = id(of: e), let a else { return .invalidUIElement }
         let name = a as String
-        reads?.append((i, name))
+        let found: AXFixture.Node? = locked {
+            guard var n = _byId[i] else { return nil }
+            _reads?.append((i, name))
+            if n.attrs[name] == nil, Self.applicationAttributes.contains(name), let app = _fixture?.application, let an = _byId[app] { n = an }
+            return n
+        }
+        guard let n = found else { return .invalidUIElement }
         // Every replayed element has a pid of its own, so "the application of this pid" is the element itself:
         // the application's questions (its focused window, its focus) are answered by the recorded application.
-        if n.attrs[name] == nil, Self.applicationAttributes.contains(name), let app = fixture?.application, let an = byId[app] { n = an }
         guard let v = n.attrs[name] else { return n.attrs.isEmpty ? .invalidUIElement : .noValue }
         out?.pointee = Unmanaged.passRetained(cf(v))
         return .success
     }
     private static let attrNamesFn: NamesFn = { e, out in
-        guard let i = id(of: e), let n = byId[i] else { return .invalidUIElement }
+        guard let i = id(of: e), let n = node(i) else { return .invalidUIElement }
         out?.pointee = Unmanaged.passRetained(n.attrs.keys.sorted() as CFArray)
         return .success
     }
     private static let paramNamesFn: NamesFn = { e, out in
-        guard let i = id(of: e), let n = byId[i] else { return .invalidUIElement }
+        guard let i = id(of: e), let n = node(i) else { return .invalidUIElement }
         out?.pointee = Unmanaged.passRetained(n.params as CFArray)
         return .success
     }
     private static let actionNamesFn: NamesFn = { e, out in
-        guard let i = id(of: e), let n = byId[i] else { return .invalidUIElement }
+        guard let i = id(of: e), let n = node(i) else { return .invalidUIElement }
         out?.pointee = Unmanaged.passRetained(n.actions as CFArray)
         return .success
     }
     /// Text questions answered from the recorded value: a string for a range, the line of an index, a line's range.
     private static let paramFn: ParamFn = { e, a, p, out in
-        guard let i = id(of: e), let n = byId[i], let a, let p else { return .invalidUIElement }
+        guard let i = id(of: e), let n = node(i), let a, let p else { return .invalidUIElement }
         guard case .string(let text)? = n.attrs[kAXValueAttribute] else { return .parameterizedAttributeUnsupported }
         let chars = Array(text.utf16)
         func range() -> CFRange? { var r = CFRange(); guard CFGetTypeID(p) == AXValueGetTypeID(), AXValueGetValue((p as! AXValue), .cfRange, &r) else { return nil }; return r }
@@ -361,11 +383,13 @@ public enum AXReplay {
         }
     }
     private static let actionFn: ActionFn = { e, a in
+        // A removed fixture node is a dead AX element. Accepting its action would hide stale-buffer failures.
         guard let i = id(of: e), let a else { return .invalidUIElement }
-        actions.append((i, a as String)); return .success
+        let known: Bool = locked { guard _byId[i] != nil else { return false }; _actions.append((i, a as String)); return true }
+        return known ? .success : .invalidUIElement
     }
     private static let setFn: SetFn = { e, a, v in
-        guard let i = id(of: e), var n = byId[i], let v, let a else { return .invalidUIElement }
+        guard let i = id(of: e), node(i) != nil, let v, let a else { return .invalidUIElement }
         let t = CFGetTypeID(v)
         var value: AXFixture.Value?
         if t == CFStringGetTypeID() { value = .string(v as! String) }
@@ -380,7 +404,7 @@ public enum AXReplay {
                 for index in 0..<count {
                     guard let pointer = CFArrayGetValueAtIndex(array, index) else { continue }
                     let object = Unmanaged<AnyObject>.fromOpaque(pointer).takeUnretainedValue()
-                    guard CFGetTypeID(object) == AXUIElementGetTypeID(), let elementID = id(of: object as! AXUIElement), byId[elementID] != nil else { continue }
+                    guard CFGetTypeID(object) == AXUIElementGetTypeID(), let elementID = id(of: object as! AXUIElement), node(elementID) != nil else { continue }
                     ids.append(elementID)
                 }
             }
@@ -390,8 +414,10 @@ public enum AXReplay {
             value = .elements(ids)
         }
         else if t == AXValueGetTypeID(), AXValueGetType((v as! AXValue)) == .cfRange { var r = CFRange(); AXValueGetValue((v as! AXValue), .cfRange, &r); value = .range(r.location, r.length) }
-        sets.append((i, a as String, value))
-        if let value { n.attrs[a as String] = value; byId[i] = n }
+        locked {
+            _sets.append((i, a as String, value))
+            if let value, var n = _byId[i] { n.attrs[a as String] = value; _byId[i] = n }
+        }
         return .success
     }
 }

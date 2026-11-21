@@ -7,11 +7,12 @@ import Foundation
 import UniformTypeIdentifiers
 import ApplicationServices
 import AppKit
+import AVFoundation
 
-final class FinderAppModule: AppModule {
+package final class FinderAppModule: AppModule {
     static let bundleID = "com.apple.finder"
 
-    required init(pid: pid_t, bundleIdentifier: String, appName: String) {
+    package required init(pid: pid_t, bundleIdentifier: String, appName: String) {
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
         let cat = "Finder"
         // Command Down with nothing selected (after Command Up to the top: Finder selects nothing there) does nothing
@@ -30,11 +31,20 @@ final class FinderAppModule: AppModule {
         // A symptom fix, the cause in Finder unknown: the key is sent on, and if nothing changes within 350 ms it is
         // sent once more. Down only for a folder (a file would open twice), and only while Finder is still in front.
         script("finder_openSelected", String(localized: "Opens the selected item (Command Down); a folder is asked for again if Finder ignored it", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+downArrow"], category: cat) { [weak self] g in
-            self?.sendAgainIfIgnored(g, what: "Command Down", foldersOnly: true)
+            guard let self else { g.send(); return }
+            FinderRows.openSelection(in: API.focusObject?.element) {
+                self.sendAgainIfIgnored(g, what: "Command Down", foldersOnly: true)
+            }
         }.isAvailable = { [weak self] in
             guard let self, inFileView(), let f = API.focusObject else { return false }
             return !(f.element.elements(kAXSelectedRowsAttribute) + f.element.elements(kAXSelectedChildrenAttribute)).isEmpty
         }
+        // Quick Look open (17 Nov 2026): the window has the focus, not the list, so Finder moved the selection under it
+        // and the arrow said nothing (two stretches in the log). The key goes on; the file the selection moved to is said.
+        script("finder_quickLookArrows", String(localized: "With Quick Look open, an arrow says the file the selection moved to", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:upArrow", "kb:downArrow", "kb:leftArrow", "kb:rightArrow"], category: cat) { [weak self] g in
+            guard let self else { g.send(); return }
+            self.arrowUnderQuickLook(g)
+        }.isAvailable = { [weak self] in self?.quickLookHasFocus() ?? false }
         script("finder_enclosingFolder", String(localized: "Goes to the enclosing folder (Command Up); asked for again if Finder ignored it", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:command+upArrow"], category: cat) { [weak self] g in
             self?.sendAgainIfIgnored(g, what: "Command Up", foldersOnly: false)
         }.isAvailable = { [weak self] in self?.inFileView() ?? false }
@@ -83,10 +93,63 @@ final class FinderAppModule: AppModule {
         }
     }
 
+    // View > Sort By (the owner's decision, 17 Nov 2026): choosing an order says "sorted by <its name>" once the menu has
+    // closed, and nothing more. Return in a menu must reach Finder untouched (a key TurnOver re-posts is ignored by menu
+    // menus, measured on Word, 1 Oct 2026), so this is no script: the key is only looked at, as it passes.
+    // Finder gives no sign that the list has re-sorted (nothing recorded; its notifications are unknown), so the words
+    // come a moment after the menu closes, once the focus has read the list again.
+    /// The open menu that is Finder's, if any; a test puts in its own.
+    package lazy var openMenu: () -> AXUIElement? = { [pid] in
+        guard AXHandler.shared.isMenuOpen else { return nil }
+        guard let menu = AXHandler.shared.openMenus.last else { return nil }
+        return menu.pid == pid ? menu : nil
+    }
+    /// How long after the menu closes the words are said: the list's first row is read in that time (0.44 s in the log).
+    package var sortSayDelay: TimeInterval = 0.6
+    private var sortWatch = 0
+
+    package override func script(for gesture: KeyboardGesture) -> Script? {
+        noteSortChoice(gesture)
+        return super.script(for: gesture)
+    }
+
+    private func noteSortChoice(_ gesture: KeyboardGesture) {
+        let chooses = ["enter", "numpadEnter", "space"].contains(gesture.keyName)
+        guard chooses, gesture.modifiers.isEmpty else { return }
+        guard let menu = openMenu() else { return }
+        guard let order = Self.sortOrder(inMenu: menu) else { return }
+        sortWatch += 1
+        let token = sortWatch
+        let began = Date()
+        func look() {
+            guard token == sortWatch else { return }
+            if openMenu() != nil, Date().timeIntervalSince(began) < 3 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { look() }
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + sortSayDelay) { [weak self] in
+                guard let self, token == sortWatch else { return }
+                Log.io("Finder: sort order chosen, \"\(Log.words(order))\"")
+                Speech.speakMessage(String(localized: "sorted by \(order)", comment: "Spoken message after choosing an order in Finder's View, Sort By menu: %@ is the order's name, such as Date Created"))
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { look() }
+    }
+
+    /// The order the highlighted item of Finder's Sort By submenu names, nil in any other menu.
+    package static func sortOrder(inMenu menu: AXUIElement) -> String? {
+        guard let parent = menu.element(kAXParentAttribute) else { return nil }
+        guard parent.role == "AXMenuItem" else { return nil }
+        guard parent.string(kAXTitleAttribute) == "Sort By" else { return nil }
+        guard let item = menu.elements(kAXSelectedChildrenAttribute).first else { return nil }
+        guard let title = item.string(kAXTitleAttribute), !title.isEmpty else { return nil }
+        return title
+    }
+
     private func window() -> AXUIElement? { AXUIElementCreateApplication(pid).element(kAXFocusedWindowAttribute) }
 
     /// The desktop's icons and an icon view's are pictures to accessibility ("graphic"): read them as files, by kind.
-    override func objectClass(for element: AXUIElement, role: Role, subrole: String?) -> TurnOverObject.Type? {
+    package override func objectClass(for element: AXUIElement, role: Role, subrole: String?) -> TurnOverObject.Type? {
         // A file's picture has a file address (AXURL), or at least its name (AXFilename); on the Desktop every picture is
         // a file. A tester's Desktop items have no AXURL, so the fallback in `kind` was never reached (19 Oct 2026).
         if element.role == "AXImage", FinderItem.fileURL(of: element) != nil || element.attr("AXFilename") != nil
@@ -109,7 +172,7 @@ final class FinderAppModule: AppModule {
     }
 
     /// Escape from a toolbar control goes to the window's file view (ToolbarKeys; 15 Nov 2026).
-    override func toolbarEscapeTarget(in window: AXUIElement) -> AXUIElement? { Self.fileView(in: window) }
+    package override func toolbarEscapeTarget(in window: AXUIElement) -> AXUIElement? { Self.fileView(in: window) }
 
     /// The window's file view (list, icon, column or table view), outside the toolbar and the sidebar.
     static func fileView(in window: AXUIElement) -> AXUIElement? {
@@ -184,6 +247,178 @@ final class FinderAppModule: AppModule {
         let cells = row.elements(kAXChildrenAttribute)
         let texts = cells.map { c in c.elements(kAXChildrenAttribute).compactMap { $0.string(kAXValueAttribute) }.joined(separator: " ") }
         return FinderRows.isFolderRow(cellTexts: texts)
+    }
+
+    /// Finder's own window itself has the focus (Quick Look's panel), and it is not a file window or a dialog.
+    /// A text field or a button in a dialog is not the window itself, so the arrows there stay Finder's own.
+    func quickLookHasFocus() -> Bool {
+        guard let f = API.focusObject, f.pid == pid, f.axRole == "AXWindow" else { return false }
+        let sub = f.element.string(kAXSubroleAttribute) ?? ""
+        guard !["AXDesktop", "AXDialog", "AXSystemDialog"].contains(sub), Self.fileView(in: f.element) == nil else { return false }
+        return Self.mainFileView(pid: pid) != nil
+    }
+
+    /// The file view of Finder's main window, or of the first standard window that has one.
+    static func mainFileView(pid: pid_t) -> AXUIElement? {
+        let app = AXUIElementCreateApplication(pid)
+        if let w = app.element(kAXMainWindowAttribute), let v = fileView(in: w) { return v }
+        for w in app.elements(kAXWindowsAttribute) where w.string(kAXSubroleAttribute) == "AXStandardWindow" {
+            if let v = fileView(in: w) { return v }
+        }
+        return nil
+    }
+
+    static func firstSelected(in view: AXUIElement) -> AXUIElement? {
+        (view.elements(kAXSelectedRowsAttribute) + view.elements(kAXSelectedChildrenAttribute)).first
+    }
+
+    /// Whether the selection is on another row than before (nothing before, something now, counts).
+    static func selectionMoved(from before: AXUIElement?, to after: AXUIElement?) -> Bool {
+        switch (before, after) {
+        case (_, nil): return false
+        case (nil, _?): return true
+        case let (x?, y?): return !x.isSame(y)
+        }
+    }
+
+    private func arrowUnderQuickLook(_ g: KeyboardGesture) {
+        guard let view = Self.mainFileView(pid: pid) else { g.send(); return }
+        let before = Self.firstSelected(in: view)
+        let focus = API.focusObject
+        Log.io("finder: \(g.keyName) with the focus on a window (\(focus?.element.string(kAXSubroleAttribute) ?? "no subrole"), \(focus?.element.string(kAXTitleAttribute)?.prefix(1) ?? "")…); watching the file list")
+        // On the first or last row, Up or Down cannot move the selection: said at once, without the 400 ms wait that
+        // ended in silence (28 times in the owner's log, 17 Nov 2026). The key still goes on, for the system's own bump.
+        if let end = Self.listEnd(of: view, key: g.keyName, modifiers: g.modifiers, selected: before) {
+            g.send()
+            Log.io("finder: at the \(end.log) of the list under Quick Look")
+            Speech.speakMessage(end.said)
+            return
+        }
+        g.send()
+        var after = before
+        let moved = Poll.pumping(every: 0.02, limit: 0.4) { after = Self.firstSelected(in: view); return Self.selectionMoved(from: before, to: after) }
+        guard moved, let row = after else {
+            Log.io("finder: the selection did not move within 400 ms of \(g.keyName)")
+            // A list that was not known to be at its end before the key (rows still loading) may be known now.
+            if let end = Self.listEnd(of: view, key: g.keyName, modifiers: g.modifiers, selected: after) { Speech.speakMessage(end.said) }
+            return
+        }
+        let spoken = ObjectFactory.make(row)
+        // A clip that plays by itself (audio or video, 17 Nov 2026, the owner): its name alone, and after a short clip has
+        // played, so the name does not talk over it.
+        let media = Self.mediaInfo(row: row)
+        guard media.isMedia else { Speech.speakObject(spoken, reason: .focus); return }
+        let keyAt = InputManager.lastKeyDownAt
+        let length = media.url.flatMap { Self.clipLength(of: $0, deadline: 0.25) }
+        // A newer key handled while the length was being read has its own name to say: this one is stale.
+        guard InputManager.lastKeyDownAt == keyAt else { return }
+        guard let delay = Self.nameDelay(clipLength: length) else {
+            Log.io("finder: clip under Quick Look \"\(String(spoken.name.prefix(1)))…\", length \(length.map { String(format: "%.2f s", $0) } ?? "not known in time"): name said at once")
+            Speech.speakMessage(spoken.name)
+            return
+        }
+        Log.io("finder: clip under Quick Look \"\(String(spoken.name.prefix(1)))…\", length \(String(format: "%.2f", length ?? 0)) s: name said in \(String(format: "%.2f", delay)) s")
+        let name = spoken.name
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self else { return }
+            guard InputManager.lastKeyDownAt == keyAt, self.quickLookHasFocus(),
+                  let now = Self.mainFileView(pid: self.pid).flatMap({ Self.firstSelected(in: $0) }), now.isSame(row) else {
+                Log.io("finder: the name waiting for the clip was dropped (a key, another selection or the focus moved)")
+                return
+            }
+            Speech.speakMessage(name)
+        }
+    }
+
+    /// How long to wait before the name of a clip is said: the clip's length with 0.3 s for Quick Look to start it
+    /// and 0.15 s after. Nil (say it at once) for a clip longer than 5 s or one whose length is not known.
+    package static func nameDelay(clipLength: TimeInterval?) -> TimeInterval? {
+        guard let length = clipLength, length.isFinite, length >= 0, length <= 5 else { return nil }
+        return 0.3 + length + 0.15
+    }
+
+    /// The clip's length in seconds, read off the main thread; nil when not known within the deadline.
+    private static func clipLength(of url: URL, deadline: TimeInterval) -> TimeInterval? {
+        nonisolated final class Box: @unchecked Sendable {
+            let lock = NSLock(); private var value: TimeInterval?; private var finished = false
+            nonisolated func set(_ v: TimeInterval?) { lock.lock(); value = v; finished = true; lock.unlock() }
+            nonisolated func get() -> (Bool, TimeInterval?) { lock.lock(); defer { lock.unlock() }; return (finished, value) }
+        }
+        let box = Box()
+        Task.detached {
+            let d = try? await AVURLAsset(url: url).load(.duration)
+            let seconds = d.map { CMTimeGetSeconds($0) }
+            box.set(seconds.flatMap { $0.isFinite ? $0 : nil })
+        }
+        _ = Poll.pumping(every: 0.01, limit: deadline) { box.get().0 }
+        return box.get().1
+    }
+
+    /// Whether the row is an audio or video file, by its file address or else the extension in its name (a name shown
+    /// without its extension is not known: not media), with the file address when one was found.
+    package static func mediaInfo(row: AXUIElement) -> (isMedia: Bool, url: URL?) {
+        var url: URL?
+        var queue = [row]; var n = 0
+        while url == nil, !queue.isEmpty, n < 12 {
+            let e = queue.removeFirst(); n += 1
+            url = FinderItem.fileURL(of: e)
+            queue.append(contentsOf: e.elements(kAXChildrenAttribute).prefix(8))
+        }
+        let ext = url?.pathExtension.isEmpty == false ? url!.pathExtension : (ObjectFactory.make(row).name as NSString).pathExtension
+        guard !ext.isEmpty, let type = UTType(filenameExtension: ext) else { return (false, url) }
+        return (type.conforms(to: .audio) || type.conforms(to: .movie) || type.conforms(to: .audiovisualContent), url)
+    }
+
+    package static func isMedia(row: AXUIElement) -> Bool { mediaInfo(row: row).isMedia }
+
+    /// Whether the window is Quick Look's panel: a window of Finder's whose subrole is "Quick Look" (the value seen
+    /// live on 19 November 2026; the title is not used, as it is translated). Get Info and other windows differ.
+    package static func isQuickLookPanel(_ window: AXUIElement?) -> Bool {
+        window?.string(kAXSubroleAttribute) == "Quick Look"
+    }
+
+    /// Whether the element is Quick Look's own window or inside it.
+    private func inQuickLookWindow(_ obj: TurnOverObject) -> Bool {
+        guard obj.pid == pid else { return false }
+        let w = obj.axRole == "AXWindow" ? obj.element : obj.element.element(kAXWindowAttribute)
+        return Self.isQuickLookPanel(w)
+    }
+
+    /// Quick Look open on an audio or video file (17 Nov 2026, the owner): the clip plays by itself, so nothing from its
+    /// window is said (the file's name is said as the window comes to the front: windowAnnouncement).
+    package override func handleEvent(_ event: Event, next: () -> Void) {
+        guard inQuickLookWindow(event.obj), let view = Self.mainFileView(pid: pid), let row = Self.firstSelected(in: view),
+              Self.isMedia(row: row) else { super.handleEvent(event, next: next); return }
+        Log.io("finder: Quick Look is playing \"\(String(ObjectFactory.make(row).name.prefix(1)))…\"; \(event.kind.rawValue) from its window not said")
+    }
+
+    /// Quick Look coming to the front says the selected file's name in place of "Quick Look, window" (17 Nov 2026).
+    /// Any other window, or no selection known, keeps the reader's own words.
+    package override func windowAnnouncement(for window: AXUIElement, title: String) -> String? {
+        guard Self.isQuickLookPanel(window) else { return nil }
+        guard let view = Self.mainFileView(pid: pid), let row = Self.firstSelected(in: view) else { return nil }
+        if Self.isMedia(row: row) {
+            Log.io("finder: Quick Look opened on a clip \"\(String(ObjectFactory.make(row).name.prefix(1)))…\"; nothing said so the clip is heard")
+            return ""
+        }
+        let name = ObjectFactory.make(row).name
+        return name.isEmpty ? nil : name
+    }
+
+    /// "top" or "bottom" (the words the lists and browse mode say at their ends) when a plain Up or Down Arrow cannot
+    /// move the selection of a list view: it is on the first row and the key is Up, or on the last and it is Down.
+    /// Nil in an icon or column view (no rows to know the end by), with a modifier, or for any other key.
+    package static func listEnd(of view: AXUIElement, key: String, modifiers: Modifiers, selected: AXUIElement?) -> (said: String, log: String)? {
+        guard modifiers.isEmpty, key == "upArrow" || key == "downArrow", let selected else { return nil }
+        // By the selected row's place when Finder gives it, so a big folder's rows are not all fetched (17 Nov 2026);
+        // its real values for a list view were not recorded, so a place that is not known falls back to the rows.
+        if let place = (selected.attr("AXIndex") as? NSNumber)?.intValue, let count = (view.attr(kAXRowCountAttribute) as? NSNumber)?.intValue, count > 0 {
+            guard place == (key == "upArrow" ? 0 : count - 1) else { return nil }
+        } else {
+            let rows = view.elements(kAXRowsAttribute)
+            guard let end = key == "upArrow" ? rows.first : rows.last, selected.isSame(end) else { return nil }
+        }
+        return key == "upArrow" ? (String(localized: "top", comment: "Spoken message"), "top") : (String(localized: "bottom", comment: "Spoken message"), "bottom")
     }
 
     private func inFileView() -> Bool {
@@ -278,8 +513,35 @@ final class FinderColumnItem: TurnOverObject {
 
 /// Finder's list rows as text, for the rules above and their tests.
 public enum FinderRows {
+    /// Acknowledge an application before sending its open key or waiting for Finder's retry.
+    /// The 14 Nov 2026 Mail launch took 2.4 s to announce. AXURL on the selected item's
+    /// name cell identifies app bundles without disk I/O or relying on a translated Kind column.
+    public static func openSelection(in view: AXUIElement?, send: () -> Void) {
+        if let view, selectedApplication(in: view) {
+            Speech.speakMessage(String(localized: "opening", comment: "Spoken message"))
+        }
+        send()
+    }
+
+    private static func selectedApplication(in view: AXUIElement) -> Bool {
+        let selected = view.elements(kAXSelectedRowsAttribute) + view.elements(kAXSelectedChildrenAttribute)
+        // Inspect at most 32 nodes across selected items and their cells/name fields, never the whole file list.
+        var remaining = 32
+        func isApplication(_ item: AXUIElement, depth: Int) -> Bool {
+            guard remaining > 0 else { return false }
+            remaining -= 1
+            if let url = FinderItem.fileURL(of: item) {
+                return url.pathExtension.lowercased() == "app"
+            }
+            guard depth < 2 else { return false }
+            return item.elements(kAXChildrenAttribute).prefix(32).contains { isApplication($0, depth: depth + 1) }
+        }
+        return selected.prefix(32).contains { isApplication($0, depth: 0) }
+    }
+
     /// The window's file view, outside the sidebar and the toolbar (the toolbar rule's way back, and its test).
     public static func fileView(in window: AXUIElement) -> AXUIElement? { FinderAppModule.fileView(in: window) }
+    public static func selectionMoved(from before: AXUIElement?, to after: AXUIElement?) -> Bool { FinderAppModule.selectionMoved(from: before, to: after) }
     /// A folder: the Kind cell says Folder, or the Size cell holds the folder's dashes (the Kind column may be hidden).
     nonisolated public static func isFolderRow(cellTexts: [String]) -> Bool {
         cellTexts.contains("Folder") || (cellTexts.count >= 3 && cellTexts[2] == "--")

@@ -115,4 +115,17 @@ func speechOutputTests() {
         check(!voiceOverMuted && !interceptingKeys, "accepted failure releases output and input together")
         check(health.poll(now: 40, sampleTime: nil, hasQueuedAudio: false) == nil, "claimed incident is not delivered again")
     }
+
+    // 20 Nov 2026 (review): a password field's text is spoken as private speech; no plugin script's observer may hear it.
+    test("speech: private speech does not reach the observer, and ordinary speech does") {
+        let savedObserver = Speech.observer, savedDriver = Speech.enqueueTestDriver
+        defer { Speech.observer = savedObserver; Speech.enqueueTestDriver = savedDriver }
+        Speech.enqueueTestDriver = { _, _, _ in }   // nothing is spoken aloud
+        var heard: [String] = []
+        Speech.observer = { heard.append($0) }
+        Speech.asPrivate { Speech.speakOnly("secret words") }
+        expect(heard, [], "private speech is not observed")
+        Speech.speakOnly("plain words")
+        expect(heard, ["plain words"], "ordinary speech still is")
+    }
 }

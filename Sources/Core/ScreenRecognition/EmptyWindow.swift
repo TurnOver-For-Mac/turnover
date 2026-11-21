@@ -3,7 +3,7 @@
 // title-bar buttons and perhaps a toolbar (Parallels' installation assistant, issue 74, 23 Oct 2026; Bambu Studio's
 // plate, 26 Oct). TurnOver said "window" and then nothing, and the person had to know that screen recognition exists
 // and where it is. Now, a moment after such a window comes to the front, TurnOver says so once and names the key for
-// screen recognition in the keyboard style in use (Oliver, 27 Oct 2026: "include the relevant shortcut based on which
+// screen recognition in the keyboard style in use (27 Oct 2026: "include the relevant shortcut based on which
 // mode they are using"). The look at the window runs off the main thread, every element with a short messaging
 // timeout and the whole with a deadline, so a slow app costs nothing on main (AGENTS.md); it is looked at twice, a
 // second apart, since a web view or an Electron window fills in late (a code review, 27 Oct 2026).
@@ -32,11 +32,11 @@ public enum EmptyWindowNotice {
     nonisolated enum Look: Equatable { case readable(String), empty, inconclusive }
 
     /// Whether the notice may be said in this app at all. It tells you which keys to press, so it is a hint, and
-    /// turning off Hints after a pause turns it off too (Oliver, 9 Nov 2026: "it's a tool tip and I think I have
+    /// turning off Hints after a pause turns it off too (9 Nov 2026: "it's a tool tip and I think I have
     /// mine off"). And not in Steam while TurnOver reads Big Picture: Big Picture's window has nothing for
     /// accessibility, but the Steam program reads its pages, so "nothing in this window can be read" came over
     /// Steam's own words ("it still read in Steam even though it is technically reading from there"). Each of the 26
-    /// notices in Steam in Oliver's logs, 27 Oct to 9 Nov 2026, came with Big Picture being read. With Big Picture
+    /// notices in Steam in the owner's logs, 27 Oct to 9 Nov 2026, came with Big Picture being read. With Big Picture
     /// reading off, TurnOver can't read that window, so the notice stays.
     static func wanted(pid: pid_t) -> Bool {
         wanted(bundle: NSRunningApplication(processIdentifier: pid)?.bundleIdentifier)
@@ -69,7 +69,7 @@ public enum EmptyWindowNotice {
     private static func forget(_ window: AXUIElement) { pending.removeAll { $0.isSame(window) } }
 
     /// An app in front that shows a window accessibility doesn't report at all: Parallels Desktop's virtual machine
-    /// had no window, so no notice either (Oliver, 2 Nov 2026). Said once for the app, as for an empty window. Not for
+    /// had no window, so no notice either (2 Nov 2026). Said once for the app, as for an empty window. Not for
     /// an app still starting (a splash screen comes before the real window), and asked once more just before.
     public static func checkNoWindow(pid: pid_t) {
         guard wanted(pid: pid), !toldApps.contains(pid), let app = NSRunningApplication(processIdentifier: pid), NSWorkspace.shared.frontmostApplication == app,

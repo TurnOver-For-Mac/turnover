@@ -16,8 +16,24 @@
         {
           "name": "Notes list",
           "match": {
-            "role": "AXTable",
-            "identifier": "ICMNoteListTableView*"
+            "any": [
+              {
+                "role": "AXTable",
+                "identifier": "ICMNoteListTableView*"
+              },
+              {
+                "role": "AXList",
+                "description": "*as Gallery"
+              },
+              {
+                "role": "AXList",
+                "title": "*as Gallery"
+              },
+              {
+                "role": "AXList",
+                "identifier": "ICMNoteList*"
+              }
+            ]
           },
           "hint": "Up and Down choose a note."
         },

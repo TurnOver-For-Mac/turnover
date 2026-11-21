@@ -12,7 +12,7 @@ nonisolated public enum Phrases {
 
     /// Whether words are a position: TurnOver's own, as `position` says it in the reader's language ("3 / 9"), with
     /// any digits ("03 / 09"); or the English pattern this check had before, kept alongside for an app's own words
-    /// ("1 of 2", "01 of 02") whatever TurnOver's language (Oliver's review of PR 123, 29 Oct 2026).
+    /// ("1 of 2", "01 of 02") whatever TurnOver's language (the owner's review of PR 123, 29 Oct 2026).
     public static func isPosition(_ words: String) -> Bool { isPosition(words, template: position(111111, of: 222222)) }
     /// `template`: a position said with 111111 and 222222 for its numbers.
     public static func isPosition(_ words: String, template: String) -> Bool {

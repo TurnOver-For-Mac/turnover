@@ -10,9 +10,9 @@ Recovered on 1 November 2026. These are sanitized historical investigation notes
 
 ## Limits and setup
 
-Record, stop, playback and delete remained checklist-only. Empty-window navigation cannot establish recorder accessibility, and the 14 October note does not resolve the unnamed field. Later driver speech output is not an Oliver listening trial.
+Record, stop, playback and delete remained checklist-only. Empty-window navigation cannot establish recorder accessibility, and the 14 October note does not resolve the unnamed field. Later driver speech output is not an the owner listening trial.
 
-Unless a result above specifies otherwise, the source sections do not record exact app/macOS versions, a uniquely identified TurnOver binary or a complete VoiceOver on/off and leader-state matrix. Mac and Windows refer to TurnOver keyboard styles on macOS. Historical driver checks report what TurnOver emitted; they do not substitute for Oliver listening to the current installed build. No app was opened, keys sent, code changed or build installed during this recovery.
+Unless a result above specifies otherwise, the source sections do not record exact app/macOS versions, a uniquely identified TurnOver binary or a complete VoiceOver on/off and leader-state matrix. Mac and Windows refer to TurnOver keyboard styles on macOS. Historical driver checks report what TurnOver emitted; they do not substitute for the owner listening to the current installed build. No app was opened, keys sent, code changed or build installed during this recovery.
 
 ## Provenance
 

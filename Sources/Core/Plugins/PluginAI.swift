@@ -41,21 +41,13 @@ public enum PluginAI: String, CaseIterable {
             switch ai {
             case .claude:
                 let request = "Read BRIEF.md in this folder and follow it to make a TurnOver plugin for \(name). What is wrong: "
-                var c = URLComponents(string: "claude://code/new")!
-                c.queryItems = [URLQueryItem(name: "folder", value: folder.path), URLQueryItem(name: "q", value: request)]
-                guard let url = c.url, NSWorkspace.shared.open(url) else { Speech.speakMessage(String(localized: "Could not open the Claude app", comment: "Spoken message")); return }
-                Log.info("plugin brief sent to Claude Code: \(url.absoluteString.prefix(200))")
+                guard openClaude(folder: folder, request: request) else { Speech.speakMessage(String(localized: "Could not open the Claude app", comment: "Spoken message")); return }
                 Speech.speakMessage(String(localized: "Opening Claude Code in the brief's folder. The request is typed in: finish the sentence with what is wrong in \(name), and send. Claude can check and install the plugin itself.", comment: "Making a plugin with Claude Code: %@ is the app"))
             case .chatGPT where agent != nil, .gemini where agent != nil:
                 let request = "Read BRIEF.md in this folder and follow it to make a TurnOver plugin for \(name). Ask me what is wrong first."
-                let script = folder.appendingPathComponent("start \(ai == .chatGPT ? "Codex" : "Gemini").command")
-                let q = { (s: String) in "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'" }
-                let body = "#!/bin/zsh -l\ncd \(q(folder.path))\nexec \(q(agent!)) \(ai == .gemini ? "-i " : "")\(q(request))\n"
                 do {
-                    try body.write(to: script, atomically: true, encoding: .utf8)
-                    try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: script.path)
+                    NSWorkspace.shared.open(try writeStartScript(ai, agent: agent!, folder: folder, request: request))
                 } catch { Speech.speakMessage(String(localized: "Could not start \(ai.agentName): \(error.localizedDescription)", comment: "An AI tool could not start: its name, then why")); return }
-                NSWorkspace.shared.open(script)
                 Log.info("plugin brief opened in \(ai.agentName) (\(agent!))")
                 Speech.speakMessage(String(localized: "Opening \(ai.agentName) in Terminal, in the brief's folder. It will ask what is wrong in \(name); it can check, try and install the plugin itself.", comment: "Making a plugin with an AI tool: the tool, then the app"))
             case .chatGPT, .gemini:
@@ -70,12 +62,62 @@ public enum PluginAI: String, CaseIterable {
         }
     }
 
+    /// Open the Claude app on a folder with a request typed in (claude://code/new).
+    static func openClaude(folder: URL, request: String) -> Bool {
+        var c = URLComponents(string: "claude://code/new")!
+        c.queryItems = [URLQueryItem(name: "folder", value: folder.path), URLQueryItem(name: "q", value: request)]
+        guard let url = c.url, NSWorkspace.shared.open(url) else { return false }
+        Log.info("plugin brief sent to Claude Code: \(url.absoluteString.prefix(200))")
+        return true
+    }
+
+    /// The Terminal script that starts Codex or Gemini CLI in the folder with the request; the caller opens it.
+    static func writeStartScript(_ ai: PluginAI, agent: String, folder: URL, request: String) throws -> URL {
+        let script = folder.appendingPathComponent("start \(ai == .chatGPT ? "Codex" : "Gemini").command")
+        let q = { (s: String) in "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'" }
+        let body = "#!/bin/zsh -l\ncd \(q(folder.path))\nexec \(q(agent)) \(ai == .gemini ? "-i " : "")\(q(request))\n"
+        try body.write(to: script, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: script.path)
+        return script
+    }
+
+    /// Hand a prepared folder (BRIEF.md in it) to the person's own AI tool, or to the person, and say in plain words what
+    /// happened and what to do next. The words are returned, not spoken: the menu speaks them, the tool prints them.
+    /// `task` is what the AI is asked to do ("finish translating this NVDA add-on"); `chatText` is the whole brief as one
+    /// message, for ChatGPT or Gemini without a command-line tool. An `ai` of nil means the person finishes it themselves.
+    /// Nothing is installed or approved by this.
+    public static func handOver(_ ai: PluginAI?, folder: URL, task: String, chatText: @autoclosure () -> String) -> (opened: Bool, words: String) {
+        guard let ai else {
+            NSWorkspace.shared.activateFileViewerSelecting([folder.appendingPathComponent("BRIEF.md")])
+            return (true, String(localized: "The folder is \(folder.path), opened in Finder. BRIEF.md is the whole task. Nothing is installed or approved.", comment: "A folder handed to the person: %@ is its path"))
+        }
+        let request = "Read BRIEF.md in this folder and follow it: \(task)."
+        switch ai {
+        case .claude:
+            guard openClaude(folder: folder, request: request) else { return (false, String(localized: "Could not open the Claude app. The folder is \(folder.path).", comment: "Claude could not be opened: %@ is the folder")) }
+            return (true, String(localized: "Opening Claude Code in \(folder.path), with the request typed in: send it. Nothing is installed or approved.", comment: "Handed to Claude: %@ is the folder"))
+        case .chatGPT, .gemini:
+            if let agent = agentPath(ai) {
+                do { NSWorkspace.shared.open(try writeStartScript(ai, agent: agent, folder: folder, request: request)) }
+                catch { return (false, String(localized: "Could not start \(ai.agentName): \(error.localizedDescription). The folder is \(folder.path).", comment: "An AI tool could not start: its name, why, then the folder")) }
+                Log.info("plugin brief opened in \(ai.agentName) (\(agent))")
+                return (true, String(localized: "Opening \(ai.agentName) in Terminal, in \(folder.path). Nothing is installed or approved.", comment: "Handed to an AI tool: its name, then the folder"))
+            }
+            let text = chatText()
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            NSWorkspace.shared.open(URL(string: ai == .chatGPT ? "https://chatgpt.com/" : "https://gemini.google.com/app")!)
+            Log.info("plugin brief for \(ai.rawValue): \(text.count) characters on the clipboard")
+            return (true, String(localized: "The brief is copied, and \(ai.rawValue) is opening. Paste it and send. When it answers, save the files it gives you into \(folder.path). Nothing is installed or approved.", comment: "Handed to a chat AI: its name, then the folder"))
+        }
+    }
+
     /// The brief written off the main thread (a big app takes seconds to walk), a soft tick every second meanwhile so
     /// the wait isn't silence; then `then` on the main thread with the folder.
     private static func brief(pid: pid_t, failure: String, chat: Bool = false, then: @escaping @MainActor (URL, String?) -> Void) {
         let done = Locked(false)
         func tick() {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if !done.value { Tones.beep(880, 30, volume: 0.1); tick() } }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if !done.value { Tones.waitingTick(); tick() } }
         }
         tick()
         DispatchQueue.global(qos: .userInitiated).async {

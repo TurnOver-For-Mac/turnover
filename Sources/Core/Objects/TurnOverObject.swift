@@ -428,7 +428,7 @@ open class TurnOverObject: ScriptableObject {
         // The selection event that follows on the same element is the same news (LibreOffice Calc's cells take the
         // focus and are selected on each arrow: every cell was said twice, parts sweep 14 Oct 2026).
         TurnOverObject.noteSelectionSpoken(element)
-        Speech.speakObject(self, reason: .focus)
+        if let words = ScriptFocusWords.held(for: element) { Speech.speakFocusWords(words, for: self) } else { Speech.speakObject(self, reason: .focus) }
     }
 
     /// The focus's name as last spoken. Claude's collapsed summary button ("Ran 23 commands (2 failed), compacted the
@@ -472,7 +472,23 @@ open class TurnOverObject: ScriptableObject {
         // The value is read afresh: this is the focus object, made when the control took the focus, and its value
         // is remembered from then (a slider said 0.9 at every step, in a game, 9 Oct 2026).
         let fresh = ObjectFactory.make(element)
+        // The same value on the same control twice within a few milliseconds is one change, not two (17 Nov 2026: a
+        // video's seek slider sent its value twice, 4 to 15 ms apart, and each second was said twice). Narrow on purpose:
+        // a slider, the same element, the same words, 150 ms (a text field repeating a value keeps saying it).
+        if role == .slider, let text = fresh.value, !text.isEmpty {
+            let now = Date()
+            if Self.repeatsValueJustSaid(last: TurnOverObject.lastValueSaid, element: element, text: text, now: now) {
+                Log.io("value: the same value on the same control \(Int(now.timeIntervalSince(TurnOverObject.lastValueSaid!.at) * 1000)) ms after it was said; not said again")
+                return
+            }
+            TurnOverObject.lastValueSaid = (element, text, now)
+        }
         Speech.speakObjectProperty(fresh, value: true)
+    }
+    public static var lastValueSaid: (element: AXUIElement, text: String, at: Date)?
+    public static func repeatsValueJustSaid(last: (element: AXUIElement, text: String, at: Date)?, element: AXUIElement, text: String, now: Date, within: TimeInterval = 0.15) -> Bool {
+        guard let last, CFEqual(last.element, element), last.text == text else { return false }
+        return now.timeIntervalSince(last.at) < within
     }
     open func event_nameChange() {
         guard role != .window, API.focusObject?.isSameElement(as: self) == true else { return }
@@ -481,7 +497,15 @@ open class TurnOverObject: ScriptableObject {
         TurnOverObject.lastName = (element, n)
         Speech.speakObjectProperty(self, name: true)
     }
-    open func event_stateChange() { if API.focusObject?.isSameElement(as: self) == true { Speech.speakObjectProperty(self, states: true) } }
+    open func event_stateChange() {
+        guard API.focusObject?.isSameElement(as: self) == true else { return }
+        // The same words a press's own look at the control said a moment ago (BrowseModeDocument.watchStateChange) are
+        // not said again; a different state is.
+        let words = statesSpeech(role: role, states: states, reason: .change).joined(separator: ", ")
+        if Speech.stateSaid(words, of: element, since: Date().addingTimeInterval(-1.5)) { return }
+        Speech.noteStateSaid(words, of: element)
+        Speech.speakObjectProperty(self, states: true)
+    }
     open func event_descriptionChange() {}
     open func event_caret() {}
     open func event_selection() {
@@ -493,7 +517,7 @@ open class TurnOverObject: ScriptableObject {
     }
     /// Set by the selection notification when several rows are selected: said after the row that changed.
     public static var selectionNote: String?
-    private static var lastSelectionSpoken: (AXUIElement, Date)?
+    package static var lastSelectionSpoken: (AXUIElement, Date)?
     public static func noteSelectionSpoken(_ e: AXUIElement) { lastSelectionSpoken = (e, Date()) }
     open func event_textChange() {}
     open func event_alert() { Speech.speakObject(self, reason: .focus) }
@@ -524,11 +548,12 @@ open class TurnOverObject: ScriptableObject {
         if parentRole == "AXMenuBarItem", Date().timeIntervalSince(Speech.lastMenuBarItemSpoken) < 0.4 { return }   // already said ("View menu, 5 of 10")
         // A context menu says so (6 Oct 2026): one just asked for (VO Shift M, the right Option, Shift F10), or
         // any menu that hangs off no menu bar, menu or button, even when the app gives it a name.
-        let asked = Date().timeIntervalSince(Self.contextMenuRequestedAt) < 2
+        // (Never a submenu: it hangs off an item and is named by it, even a moment after the context menu was asked for.)
+        let asked = !isSubmenu && Date().timeIntervalSince(Self.contextMenuRequestedAt) < 2
         let ownMenu: Set<String> = ["AXMenuBarItem", "AXMenuItem", "AXPopUpButton", "AXMenuButton", "AXComboBox", "AXButton"]   // a menu bar, submenu or pop-up button's menu
         if asked || (!ownMenu.contains(parentRole) && parent?.string(kAXSubroleAttribute) != "AXMenuExtra" && StatusMenus.lastOpened == nil) {
             Self.contextMenuRequestedAt = .distantPast
-            VoiceOverSounds.play("PopupAppeared.aiff")
+            Tones.contextMenuOpened()
             Speech.speakMessage(String(localized: "context menu", comment: "Spoken message"))
             return
         }

@@ -68,6 +68,9 @@ public final class AXHandler {
     /// For the keyboard thread: whether any app menu is open.
     nonisolated public static let anyMenuOpen = Locked(false)
     var _openMenus: [AXUIElement] = []
+    /// The open menus that no notice reported and TurnOver found by looking (the Dock's context menu and its
+    /// submenus); `sub` marks a submenu. Empty for every process that sends its menu notices. Main thread only.
+    var lookedMenus: [(menu: AXUIElement, sub: Bool)] = []
     var _topMenuIsWeb = false
     let menuLock = NSLock()
     public var topMenuIsWeb: Bool { menuLock.lock(); defer { menuLock.unlock() }; return _topMenuIsWeb }
@@ -106,7 +109,12 @@ public final class AXHandler {
         })
         workspaceTokens.append(nc.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main) { [weak self] n in
             guard let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
-            MainActor.assumeIsolated { self?.appTerminated(app.processIdentifier) }
+            MainActor.assumeIsolated {
+                // 16 Nov 2026: a line when an app ends, from the workspace's own notice (no question to the app), so a
+                // Command-Q in the switcher can be matched to the app it reached.
+                Log.io("app terminated: \(app.localizedName ?? "unnamed") pid \(app.processIdentifier)")
+                self?.appTerminated(app.processIdentifier)
+            }
         })
         // A system agent never activates, so one launched after TurnOver (Siri AI is started on demand and relaunched)
         // is observed when it starts, or Spotlight went unread until TurnOver restarted (code review, 21 Oct 2026).
@@ -193,13 +201,18 @@ public final class AXHandler {
 }
 
 extension AXHandler {
+    /// The item one menu marks as highlighted: a selected child, a focused child, or a child that reports itself selected.
+    public static func highlightedChild(of menu: AXUIElement) -> AXUIElement? {
+        if let sel = menu.elements(kAXSelectedChildrenAttribute).first { return sel }
+        let kids = menu.elements(kAXChildrenAttribute)
+        if let f = kids.first(where: { ($0.attr(kAXFocusedAttribute) as? Bool) == true }) { return f }
+        return kids.first(where: { ($0.attr(kAXSelectedAttribute) as? Bool) == true })
+    }
+
     /// The highlighted item in the open menus, by whatever the app marks it with (NVDA reads menus by focus events; Word's own menus need this).
     public func highlightedMenuItem() -> AXUIElement? {
         for menu in openMenus.reversed() {
-            if let sel = menu.elements(kAXSelectedChildrenAttribute).first { return sel }
-            let kids = menu.elements(kAXChildrenAttribute)
-            if let f = kids.first(where: { ($0.attr(kAXFocusedAttribute) as? Bool) == true }) { return f }
-            if let s = kids.first(where: { ($0.attr(kAXSelectedAttribute) as? Bool) == true }) { return s }
+            if let h = Self.highlightedChild(of: menu) { return h }
             // A page's own menu (Claude's model picker in Safari, 3 Oct 2026): its items sit inside groups, and the
             // highlighted one is the one with the focus. Every arrow found nothing and said nothing.
             let app = AXUIElementCreateApplication(menu.pid)
@@ -207,7 +220,7 @@ extension AXHandler {
                 var p: AXUIElement? = f; var hops = 0
                 while let x = p, hops < 6 { if x.isSame(menu) { return f }; p = x.element(kAXParentAttribute); hops += 1 }
             }
-            for g in kids where g.role == "AXGroup" {
+            for g in menu.elements(kAXChildrenAttribute) where g.role == "AXGroup" {
                 let inner = g.elements(kAXChildrenAttribute)
                 if let f = inner.first(where: { ($0.attr(kAXFocusedAttribute) as? Bool) == true }) { return f }
                 if let s = inner.first(where: { ($0.attr(kAXSelectedAttribute) as? Bool) == true }) { return s }

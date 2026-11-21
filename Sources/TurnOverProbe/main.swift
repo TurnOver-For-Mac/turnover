@@ -68,6 +68,9 @@ let gates: [String: (name: String, help: String, run: ([String]) -> Void)] = [
     "tree":     ("tree",
                  "Print the focused window's element tree. --bundle id [--focused] [--depth N] [--max N] [--all]",
                  runTreeGate),
+    "snapshot": ("snapshot",
+                 "Time one copy of the focused window's tree as a batched snapshot and one attribute a question; --profile says where the time goes by role and attribute. Counts, timings and roles only; no labels or text. --app Name | --bundle id | --pid N [--repeat N] [--profile] [--seconds N]",
+                 runSnapshotGate),
     "voices":   ("voices",
                  "List the voices available to this process.",
                  runVoicesGate),
@@ -84,7 +87,7 @@ guard let gateName = args.first, let gate = gates[gateName] else {
 
 Log.open(gate: gate.name)
 // Metadata gates never persist raw arguments, including rejected content or malformed target arguments.
-let metadataGate = gateName == "format-state" || gateName == "appstore-ax" || gateName == "appstore-navigation" || gateName == "capabilities" || gateName == "tv-structure" || gateName == "iphone-mirroring"
+let metadataGate = gateName == "format-state" || gateName == "appstore-ax" || gateName == "appstore-navigation" || gateName == "capabilities" || gateName == "tv-structure" || gateName == "iphone-mirroring" || gateName == "snapshot"
 Log.line(metadataGate ? "turnover-probe \(gate.name)" : "turnover-probe \(gate.name) \(args.dropFirst().joined(separator: " "))")
 Log.line("macOS \(ProcessInfo.processInfo.operatingSystemVersionString), pid \(getpid()), VoiceOver enabled flag: \(voiceOverRunning())")
 gate.run(Array(args.dropFirst()))

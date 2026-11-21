@@ -12,7 +12,7 @@ App version is given below only where the source states it. Other missing app/ma
 
 ## Recorded outcome
 
-Without OSARA, the main window did not expose useful changing focus for track navigation; controls included unnamed items and raw fader values. The later note records OSARA being installed. Oliver reported tracks being read as he moved. TurnOver spoke OSARA’s accessibility announcements without a TurnOver code change. This established that narrow track-announcement route, not all recording or editing tasks.
+Without OSARA, the main window did not expose useful changing focus for track navigation; controls included unnamed items and raw fader values. The later note records OSARA being installed. The owner reported tracks being read as he moved. TurnOver spoke OSARA’s accessibility announcements without a TurnOver code change. This established that narrow track-announcement route, not all recording or editing tasks.
 
 ## Limits and next check
 

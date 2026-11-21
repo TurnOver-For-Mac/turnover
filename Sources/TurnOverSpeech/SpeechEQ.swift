@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Bass, middle and treble for every voice, the Mac's and the natural ones alike (Oliver, 2 Nov 2026: "rate, volume,
+// Bass, middle and treble for every voice, the Mac's and the natural ones alike (2 Nov 2026: "rate, volume,
 // and the eq should be specific to each voice"): a low shelf at 250 Hz, a peak at 2.5 kHz and a high shelf at 6 kHz,
 // the usual biquads (Robert Bristow-Johnson's audio EQ cookbook), run on each utterance's buffers before the volume.
 // Lowered first by the largest boost, so a boost doesn't clip. Flat, it does nothing.

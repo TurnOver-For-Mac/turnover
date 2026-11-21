@@ -64,7 +64,7 @@ open class SelectableList: TurnOverObject {
         let rows = element.elements(kAXRowsAttribute)
         if !rows.isEmpty { return (rows, kAXSelectedRowsAttribute) }
         // A table or outline with no rows is empty: its children are its columns and header, not rows. Finder's list
-        // view of an empty folder was "5 items", and Down arrow walked "column, 1 of 5" (Oliver, 21 Oct 2026).
+        // view of an empty folder was "5 items", and Down arrow walked "column, 1 of 5" (21 Oct 2026).
         if ["AXOutline", "AXTable"].contains(element.role) {
             return (element.elements(kAXChildrenAttribute).filter { $0.role == "AXRow" }, kAXSelectedRowsAttribute)
         }
@@ -108,6 +108,19 @@ open class SelectableList: TurnOverObject {
         return false
     }
 
+    public enum ReloadOutcome: Equatable { case event, rows, empty }
+    /// After a key was sent to a list with no rows: waits up to `limit` for the application's own news or for rows to
+    /// come back; nothing means the list is empty.
+    public static func settleReload(limit: TimeInterval, eventPending: () -> Bool, rowsBack: () -> Bool) -> ReloadOutcome {
+        var outcome = ReloadOutcome.empty
+        Poll.pumping(every: 0.01, limit: limit) {
+            if eventPending() { outcome = .event; return true }
+            if rowsBack() { outcome = .rows; return true }
+            return false
+        }
+        return outcome
+    }
+
     private func waitForSelection() -> Bool {
         Poll.pumping(limit: 0.3) { EventHandler.isPending(.selection) || EventHandler.isPending(.gainFocus) }
     }
@@ -130,12 +143,35 @@ open class SelectableList: TurnOverObject {
             if !waitForSelection() { readSelection() }
             return
         }
+        // An empty list: nothing to move to, so nothing to wait for, and said at once. In Mail's empty Junk list each Up
+        // and Down waited 300 ms for a selection that could not come, and "empty" was said after the next key
+        // (13 Nov 2026).
+        let plainUpOrDown = g.modifiers.isEmpty && (key == "upArrow" || key == "downArrow")
+        if plainUpOrDown, rowsAndKey.0.isEmpty {
+            g.send()
+            // Finder only (17 Nov 2026): a list that is reloading has no rows for a moment, and "empty" was said just
+            // before the row it came to (175 ms key, rows back about 90 ms later). Its own selection or focus event, or
+            // its rows coming back, within 150 ms means it was not empty; Mail's empty Junk list keeps its quick answer.
+            if appModule.bundleIdentifier == "com.apple.finder" {
+                switch Self.settleReload(limit: 0.15, eventPending: { EventHandler.isPending(.selection) || EventHandler.isPending(.gainFocus) }, rowsBack: { !self.rowsAndKey.0.isEmpty }) {
+                case .event: Log.io("list: Finder's list was reloading, not empty (an event came)"); return
+                case .rows: Log.io("list: Finder's list was reloading, not empty (rows came back)"); readSelection(); return
+                case .empty: break
+                }
+            }
+            Log.io("list: empty (\(emptyListDetail))")
+            Speech.speakMessage(String(localized: "empty", comment: "Spoken message"))
+            return
+        }
         // Already on the first or last row: the key goes on to the application (the system plays its own bump) without
         // waiting for a change that will not come; each wait held up the keys behind it (up to the top fast, then down
         // fast, was silent, 3 Oct 2026).
         if g.modifiers.isEmpty, key == "upArrow" || key == "downArrow", atEnd(top: key == "upArrow") {
             g.send()
             Log.io("list: at the \(key == "upArrow" ? "top" : "bottom")")
+            // Mail only (18 Nov 2026): its message list gave the bump and no word, 14 times in one log (17 Nov 2026), where
+            // Finder's lists and browse mode say "top" and "bottom". Other apps' lists keep the system's bump alone.
+            if let words = Self.edgeWords(bundle: appModule.bundleIdentifier, key: key) { Speech.speakMessage(words) }
             return
         }
         if virtualRow != nil, g.modifiers.isEmpty, ["upArrow", "downArrow", "home", "end"].contains(key) { moveVirtually(key); return }
@@ -143,7 +179,7 @@ open class SelectableList: TurnOverObject {
         if waitForSelection() { return }   // the selection event reads the row
         // An empty list: the arrow has nothing to move to; say so rather than nothing (Finder's empty folder).
         if g.modifiers.isEmpty, ["upArrow", "downArrow"].contains(key), rowsAndKey.0.isEmpty {
-            Log.io("list: empty")
+            Log.io("list: empty (\(emptyListDetail))")
             Speech.speakMessage(String(localized: "empty", comment: "Spoken message"))
             return
         }
@@ -157,8 +193,17 @@ open class SelectableList: TurnOverObject {
         }
         // Not at an end, but nothing yet: the application is slow (Mail fetching a message); its event reads the row
         // when it comes. In a grid, Up and Down at the top or bottom row do nothing: the edge (Freeform's boards).
-        Log.io("list: no selection change yet after \(g.keyName)")
+        Log.io("list: no selection change yet after \(g.keyName) (VoiceOver process \(NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.VoiceOver").isEmpty ? "absent" : "running"), VoiceOver flag \(NSWorkspace.shared.isVoiceOverEnabled ? "on" : "off"))")
         if axSubrole == "AXCollectionList" { Tones.edge(keySent: true) }
+    }
+
+    /// What a list called empty holds, for the log (17 Nov 2026): Notes' gallery list was called empty by the arrows while
+    /// it held notes a few seconds later, and the log could not say why. Roles and counts only, never the text.
+    private var emptyListDetail: String {
+        let rows = element.elements(kAXRowsAttribute).count
+        let children = element.elements(kAXChildrenAttribute)
+        let firstChildRole = children.first?.role ?? "none"
+        return "role \(element.role), subrole \(axSubrole ?? "none"), rows \(rows), children \(children.count), first child \(firstChildRole)"
     }
 
     /// The row TurnOver is on, in a list that will not move its own selection (-1: before the first).
@@ -187,6 +232,12 @@ open class SelectableList: TurnOverObject {
     }
 
     /// Whether the selection is on the first (or last) row.
+    /// What is said when a plain Up or Down Arrow meets the end of a list: "top" or "bottom" in Mail's lists, nil elsewhere.
+    public static func edgeWords(bundle: String?, key: String) -> String? {
+        guard bundle == "com.apple.mail", key == "upArrow" || key == "downArrow" else { return nil }
+        return key == "upArrow" ? String(localized: "top", comment: "Spoken message") : String(localized: "bottom", comment: "Spoken message")
+    }
+
     private func atEnd(top: Bool) -> Bool {
         let (rows, key) = rowsAndKey
         guard let end = top ? rows.first : rows.last, let selected = element.elements(key).first else { return false }

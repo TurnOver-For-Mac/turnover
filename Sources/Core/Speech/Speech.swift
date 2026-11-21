@@ -21,6 +21,7 @@ public enum SpeechMode { case off, talk, onDemand, beeps }
 public enum Speech {
     public static var player: SpeechPlayer! {
         didSet {
+            outputSubmissions.removeAll()
             oldValue?.monitorRequiredOutput(false)
             SpeechPlayer.current = player
             player?.monitorRequiredOutput(mode == .talk || mode == .onDemand)
@@ -52,12 +53,14 @@ public enum Speech {
     // MARK: - Primitives
 
     /// Stop now (NVDA: cancelSpeech). Every gesture does this before its script runs.
-    public static func cancel() {
+    public static func cancel(explicit: Bool = false) {
+        ModeAnnouncement.cancelled(explicit: explicit)
         player?.cancel()
     }
 
     /// Control alone: pause speech, or carry on if it is paused (VoiceOver's way). Say All waits with it.
     public static func togglePause() {
+        if player?.isPaused != true { ModeAnnouncement.cancelled(explicit: true) }
         guard let p = player else { return }
         if p.isPaused { p.resume() } else if p.isBusy { p.pause() }
     }
@@ -65,9 +68,28 @@ public enum Speech {
     /// The lowest level: text already processed, queued behind what is playing.
     /// Receives everything that would be spoken, before the mode check (tests and the log viewer).
     public static var sink: ((String) -> Void)?
+    /// Plugin scripts with the `hearSpeech` ability are told what TurnOver says (docs/PLUGIN-PLATFORM-PLAN.md, stage B; 16 Nov 2026).
+    /// Nil unless plugin scripts are on and one listens, so with them off nothing here runs. It is told the text and can do nothing
+    /// to it: this only watches. What a plugin itself said is never passed on (`attributedToPlugin`).
+    public static var observer: ((String) -> Void)?
+    private static var attributedDepth = 0
+    /// Run `body` (which speaks) with the words marked as a plugin's: the observer does not hear them.
+    public static func attributedToPlugin(_ body: () -> Void) { attributedDepth += 1; defer { attributedDepth -= 1 }; body() }
     /// An in-memory speech queue for lifecycle tests; production leaves this nil. Tests hold the real
     /// onStart/completion callbacks and deliver them through their existing return-to-main path.
     package static var enqueueTestDriver: ((String, (@Sendable () -> Void)?, (@Sendable (Bool) -> Void)?) -> Void)?
+
+    // 14 Nov 2026: this seam is after the production output gates; no audio device is opened in tests.
+    package static var outputTestDriver: ((String, (@Sendable () -> Void)?, (@Sendable (Bool) -> Void)?) -> Void)?
+    // Main owns submissions from admission through the player's completion. isBusy alone is updated
+    // asynchronously on the speech queue and can still be false immediately after enqueue (14 Nov 2026).
+    private static var outputSubmissions: Set<UUID> = []
+    static var hasPendingOutput: Bool { !outputSubmissions.isEmpty }
+    package static var voiceOverEnabledForOutput: () -> Bool = { NSWorkspace.shared.isVoiceOverEnabled }
+    package static var coexistingForOutput: () -> Bool = { Coexist.on }
+    /// macOS's flag says VoiceOver is on, but VoiceOver has gone (VoiceOverGoneWatch decided it): the flag no longer
+    /// keeps TurnOver quiet, or nobody speaks at all, the recovery's own words included (Codex's review, 18 Nov 2026).
+    public static var voiceOverGoneForOutput = false
 
     /// TurnOver's own words inside text being read ("link", "heading level 2"): marked, so that on a page in another
     /// language they are said by the reader's own voice, not by the page's ("link" read by the Arabic voice as a
@@ -82,7 +104,7 @@ public enum Speech {
             // Raised only when the capital is the whole utterance; inside longer speech ("word A") the mark just goes.
             let plain = text.replacingOccurrences(of: capitalMark, with: "")
             if text.hasPrefix(capitalMark), !plain.contains(capitalMark), cleaned(plain).count <= 6 {
-                pitchNext = 1 + Float(config.speech.capitalPitch) / 100
+                pitchNext = capitalPitch(pending: pitchNext, percent: config.speech.capitalPitch)
             }
             return enqueue(plain, language: language, onStart: onStart, completion: completion)
         }
@@ -126,22 +148,35 @@ public enum Speech {
         // raised the pitch of the next real utterance instead (code review, 16 Oct 2026).
         let pitch = pitchNext; pitchNext = nil
         sink?(cleaned(text))
+        // Private speech (a password field's text) never reaches a plugin script's observer (review, 20 Nov 2026).
+        if attributedDepth == 0, !privateNext, let observer { observer(cleaned(text)) }
         if let enqueueTestDriver { enqueueTestDriver(cleaned(text), onStart, completion); return }
         switch mode {
         case .talk: break
         case .onDemand where Date() < demandedUntil: break
         case .beeps:
-            if !NSWorkspace.shared.isVoiceOverEnabled, Date().timeIntervalSince(lastBeep) > 0.1 { lastBeep = Date(); Tones.beep(1000, 15, volume: 0.25) }
+            if !NSWorkspace.shared.isVoiceOverEnabled, Date().timeIntervalSince(lastBeep) > 0.1 { lastBeep = Date(); if Tones.invented("keystroke_beep") { Tones.beep(1000, 15, volume: 0.25) } }
             completion?(false); return
         default: completion?(false); return
         }
         // While VoiceOver is on it does the talking: TurnOver speaking too (its own menu-bar menu, read item by
         // item over VoiceOver, 3 Oct 2026) is two voices at once.
-        if NSWorkspace.shared.isVoiceOverEnabled, !Coexist.on { completion?(false); return }   // (coexisting, VoiceOver is on and silent in TurnOver's apps)
+        if voiceOverEnabledForOutput(), !voiceOverGoneForOutput, !coexistingForOutput() { completion?(false); return }   // (coexisting, VoiceOver is on and silent in TurnOver's apps)
         let s = cleaned(text)
         // Nothing left to say (zero-width marks, a bidi mark): it still "starts", or say all's count of queued
         // chunks never came down and three such lines stopped it for good (a code review, 14 Oct 2026).
         guard !s.isEmpty else { onStart?(); completion?(true); return }
+        let submission = UUID()
+        outputSubmissions.insert(submission)
+        let finished: @Sendable (Bool) -> Void = { done in
+            // Preserve the caller's speech-queue completion contract; only admission bookkeeping returns to main.
+            completion?(done)
+            onMain {
+                outputSubmissions.remove(submission)
+                ModeAnnouncement.outputFinished()
+            }
+        }
+        if let outputTestDriver { outputTestDriver(s, onStart, finished); return }
         lastSpoken = s
         // Speech that came with its text as written (a message, text from the screen) keeps it for "copy last
         // spoken"; anything else (an object: "alert, dialog") is copied as spoken.
@@ -152,7 +187,7 @@ public enum Speech {
         else if Self.logsWords { Log.io("say\(voice != nil ? " [\(language ?? "")]" : ""): \(s.prefix(160))") }
         else { Log.io("say\(voice != nil ? " [\(language ?? "")]" : ""): [\(s.count) characters]") }
         if !privateNext { history.value.append((Date(), s)); if history.value.count > 3000 { history.value.removeFirst(500) } }
-        if let pitch { Log.io("say: (pitch raised to \(Int(pitch * 100)) percent)") }
+        if let pitch { Log.io(Self.pitchLogLine(pitch)) }
         // Kokoro (the maintainer's Mac): say all, or everything, in a natural voice; another language keeps its own voice, and
         // a capital said higher keeps the Mac voice (Kokoro has no pitch).
         // Private speech (a copied password, a two-factor code, what is typed) only to a helper signed by TurnOver's own
@@ -160,15 +195,35 @@ public enum Speech {
         let kokoro: String? = voice == nil && pitch == nil && (!privateNext || KokoroVoice.helperTrusted.value) && KokoroVoice.wanted(reading: readingNow) ? "external:" + KokoroVoice.voice : nil
         // No player (the plugin tool and the tests start no speech): nothing to say it with (a plugin list crashed
         // here, 13 Oct 2026).
-        guard player != nil else { completion?(false); return }
-        player.speak(s, interrupt: false, voice: kokoro ?? voice, rate: voice == nil ? nil : Languages.rate(for: language), pitch: pitch, onStart: onStart, completion: completion)
+        guard player != nil else { finished(false); return }
+        player.speak(s, interrupt: false, voice: kokoro ?? voice, rate: voice == nil ? nil : Languages.rate(for: language), pitch: pitch, source: sourceNext, onStart: onStart, completion: finished)
     }
     private static var pitchNext: Float?
+    /// The log line for an utterance with its own pitch: lowered (a deleted character or word), raised (a capital), or just changed.
+    public static func pitchLogLine(_ pitch: Float) -> String {
+        let how = pitch < 1 ? "lowered" : pitch > 1 ? "raised" : "changed"
+        return "say: (pitch \(how) to \(Int(pitch * 100)) percent)"
+    }
+    /// Deleted text is said lower, not announced ("deleted"): VoiceOver's pitch change for deletions.
+    public static var deletionByPitch: Bool { config.speech.deletedPitch > 0 }
+    /// The pitch for a capital said on its own: raised, unless a pitch is already set. A deleted capital stays lowered, as in VoiceOver.
+    public static func capitalPitch(pending: Float?, percent: Int) -> Float { pending ?? 1 + Float(percent) / 100 }
+    /// Lowers the pitch of the next thing said, when the deletion is marked by pitch.
+    public static func lowerForDeletion() {
+        guard deletionByPitch else { return }
+        pitchNext = max(0.5, 1 - Float(config.speech.deletedPitch) / 100)
+    }
     /// Set by say all while it queues its text: Kokoro's "for reading" takes it.
     public static var readingNow = false
     /// The next utterance is private (the clipboard, a link's address, a notification: a copied password, a reset
     /// token, a two-factor code): spoken, but logged only as its length (the code review, 12 Oct 2026).
     private static var privateNext = false
+    /// Who the next utterances are for, so that source alone can cancel them (the pointer's reading).
+    private static var sourceNext: String?
+    /// Whatever is spoken inside is tagged `source`; `cancel(source:)` then stops only that.
+    public static func asSource(_ source: String, _ speak: () -> Void) { sourceNext = source; speak(); sourceNext = nil }
+    /// Stop only the speech `asSource` tagged, leaving notifications, focus changes and typing echo alone.
+    public static func cancel(source: String) { player?.cancel(source: source) }
     public static func speakPrivate(_ text: String) { asPrivate { speakText(text) } }
     /// Whatever is spoken inside is logged only as its length (every part, if the speech is split by language).
     public static func asPrivate(_ speak: () -> Void) { privateNext = true; speak(); privateNext = false }
@@ -204,7 +259,7 @@ public enum Speech {
     /// For the tests: whether a drop is waiting for the next focus's words, and whether a capital's pitch is pending.
     public static var testDropForFocusPending: Bool { dropForFocusUntil != nil }
     public static var testPitchPending: Bool { pitchNext != nil }
-    public static func testResetFocusTiming() { lastFocusAt = .distantPast; dropForFocusUntil = nil }
+    public static func testResetFocusTiming() { lastFocusAt = .distantPast; dropForFocusUntil = nil; lastFocusWords = ""; lastFocusWordsAt = .distantPast }
     public static func focusMoving() {
         Tones.focusTick()
         if Date().timeIntervalSince(lastFocusAt) < 0.4 { dropForFocusUntil = Date().addingTimeInterval(0.5) }
@@ -213,8 +268,12 @@ public enum Speech {
 
     /// A message from the reader itself (NVDA: speakMessage / ui.message).
     public static func speakMessage(_ text: String) {
+        speakMessage(text, completion: nil)
+    }
+
+    package static func speakMessage(_ text: String, completion: (@Sendable (Bool) -> Void)?) {
         lastRaw = text; rawPending = true
-        enqueue(text)
+        enqueue(text, completion: completion)
         if Thread.isMainThread { Braille.message(text) } else { DispatchQueue.main.async { Braille.message(text) } }
     }
 
@@ -341,7 +400,7 @@ public enum Speech {
         // "list view" outlines in a row (Finder opening a folder) looked the same with different rows selected.
         // Another row with the same words is a move, not the same focus twice: two copies of one message in Mail's
         // list, and Up from the lower to the upper within half a second said nothing, so the upper one seemed not to
-        // be there (Oliver, 11 Nov 2026).
+        // be there (11 Nov 2026).
         if reason == .focus {
             let row = obj.element.role == "AXRow" ? obj.element : nil
             let anotherRow = row.map { r in lastFocusRow.map { !r.isSame($0) } ?? false } ?? false
@@ -350,10 +409,33 @@ public enum Speech {
         }
         if reason == .focus, let until = dropForFocusUntil {
             dropForFocusUntil = nil
-            if Date() < until, !words.isEmpty { cancel(); Log.io("focus moved on at once: the speech for the focus before it dropped") }
+            if Date() < until,
+               !words.isEmpty {
+                ModeAnnouncement.cancelled(explicit: false)
+                player?.cancel()
+                Log.io("focus moved on at once: the speech for the focus before it dropped")
+            }
         }
         enqueue(words)
         if reason == .focus { Hints.schedule(Hints.forObject(obj)) }
+    }
+
+    /// The words a plugin script gave for a focus, said in place of `speakObject`'s, with what `speakObject` does for a
+    /// focus: the same words twice within half a second are said once, the speech for a focus that this one follows within
+    /// moments is dropped once these have words of their own, and the hint for the object is scheduled. Empty words say
+    /// nothing and schedule no hint.
+    public static func speakFocusWords(_ words: String, for obj: TurnOverObject) {
+        if !words.isEmpty {
+            if words == lastFocusWords, Date().timeIntervalSince(lastFocusWordsAt) < 0.5 { Log.io("focus: the same words again within 0.5 s; not repeated"); return }
+            lastFocusWords = words; lastFocusWordsAt = Date()
+        }
+        if let until = dropForFocusUntil {
+            dropForFocusUntil = nil
+            if Date() < until, !words.isEmpty { cancel(); Log.io("focus moved on at once: the speech for the focus before it dropped") }
+        }
+        guard !words.isEmpty else { return }
+        enqueue(words)
+        Hints.schedule(Hints.forObject(obj))
     }
 
     /// NVDA: speakObjectProperties with reason CHANGE — only the named property.
@@ -364,6 +446,26 @@ public enum Speech {
         if states { parts.append(contentsOf: statesSpeech(role: obj.role, states: obj.states, reason: .change)) }
         if description, let d = obj.description { parts.append(d) }
         enqueue(joined(parts))
+    }
+
+    /// What was last said of each control's state, and when (the newest eight): the page's own state event and a
+    /// press's look at the control share it, so the same change is said once, and a different one is said at once
+    /// (expanded, then collapsed a moment later; Codex's review, 14 Nov 2026).
+    private static var statesSaid: [(element: AXUIElement, words: String, at: Date)] = []
+    public static func noteStateSaid(_ words: String, of element: AXUIElement) {
+        statesSaid.removeAll { CFEqual($0.element, element) }
+        statesSaid.append((element, words, Date()))
+        if statesSaid.count > 8 { statesSaid.removeFirst() }
+    }
+    /// Said since `date`: these states, every one of them (the press's look said "expanded", and the page's event says
+    /// "expanded" too). One state more is news, and is said ("expanded, unavailable"; Codex's second review, 14 Nov
+    /// 2026). States are compared whole: "not pressed" is not "pressed".
+    public static func stateSaid(_ words: String, of element: AXUIElement, since date: Date) -> Bool {
+        guard let last = statesSaid.last(where: { CFEqual($0.element, element) }), last.at >= date else { return false }
+        let now = Set(words.components(separatedBy: ", ").filter { !$0.isEmpty })
+        let then = Set(last.words.components(separatedBy: ", ").filter { !$0.isEmpty })
+        guard !now.isEmpty else { return false }
+        return now.isSubset(of: then)
     }
 
     /// A check box or radio button just pressed: "checked", "not checked" or "half checked", read fresh.
@@ -526,6 +628,11 @@ public enum Speech {
     /// A typed word as it is echoed: a one-letter word ("I") is named, its capital lowered in the typing language.
     public static func typedWordSpeech(_ word: String, locale: Locale?) -> String { processed(word, locale: locale) }
 
+    /// Whether a line of one whitespace character is a field's whole value, so the field is empty to the ear.
+    public nonisolated static func wholeValueIsWhitespace(lineText: String, storyLength: Int, isField: Bool) -> Bool {
+        isField && storyLength == lineText.count && !lineText.isEmpty && lineText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     public static func textInfoSpeech(_ info: TextInfo, unit: TextUnit?, reason: OutputReason) -> String {
         var blank = false
         return textInfoSpeech(info, unit: unit, reason: reason, onlyBlank: &blank)
@@ -579,7 +686,7 @@ public enum Speech {
             if text.count > 1 { return (prefix + [text]).joined(separator: " ") }
             if text.isEmpty { onlyBlank = prefix.isEmpty; return (prefix + [Phrases.blank]).joined(separator: " ") }
             // A capital read by character: lowered in its line's language when the line says it clearly (an English
-            // line under a Turkish TurnOver: I is i), else in TurnOver's (Oliver's review of PR 123, 30 Oct 2026: this
+            // line under a Turkish TurnOver: I is i), else in TurnOver's (the owner's review of PR 123, 30 Oct 2026: this
             // return came before the check, so the line's language never reached it).
             return (prefix + [Symbols.spelled(text, locale: characterLocale(info, text))]).joined(separator: " ")
         }
@@ -628,7 +735,11 @@ public enum Speech {
             // NVDA: a line of only whitespace is "blank"; a lone space or tab is named.
             // (Not a lone non-breaking space: Mail fills each empty line of a message with one, and it was read as
             // "non breaking space" on every blank line, 5 Oct 2026.)
-            if text.count == 1, let c = text.first, c != "\r", c != "\n", c != "\u{2029}", c != "\u{a0}" { return (prefix + [Symbols.name(of: c)]).joined(separator: " ") }
+            // A text field whose whole value is whitespace is an empty field (PayPal's code box holds one space: "space"
+            // was said for each empty box, 18 Nov 2026). A space typed or deleted inside text is still named, by character.
+            let isField = ["AXTextField", "AXTextArea", "AXComboBox", "AXSearchField"].contains(info.obj.element.role)
+            if text.count == 1, let c = text.first, c != "\r", c != "\n", c != "\u{2029}", c != "\u{a0}",
+               !wholeValueIsWhitespace(lineText: text, storyLength: info.storyLength(), isField: isField) { return (prefix + [Symbols.name(of: c)]).joined(separator: " ") }
             onlyBlank = prefix.isEmpty
             return (prefix + [Phrases.blank]).joined(separator: " ")
         }
@@ -676,6 +787,7 @@ public enum Speech {
 
     public static func speakTypedCharacter(_ ch: Character, inEditable editable: Bool, wordBefore: (() -> String?)? = nil) {
         if typingIntoSecretField { typedWord.removeAll(); backspacedSinceWord = false; return }
+        var wordEchoed = false
         if ch.isLetter || ch.isNumber || ch == "'" || ch == "’" {
             typedWord.append(ch)
         } else if ch == "\u{8}" {
@@ -690,6 +802,7 @@ public enum Speech {
             lastTypedWordSpoken = nil
             let mode = config.keyboard.speakTypedWords
             if mode == .always || (mode == .editControls && editable) {
+                wordEchoed = true
                 lastTypedWordSpoken = word
                 // The word and the character that ended it in one breath ("fast period"): the next key cuts speech
                 // short, and two separate echoes lost the second.
@@ -702,6 +815,9 @@ public enum Speech {
         }
         let mode = config.keyboard.speakTypedCharacters
         guard ch >= " " else { return }
+        // VoiceOver's keys: the word said as the space is typed already marks it, so "space" is not said after it.
+        // NVDA's and JAWS's keys say both. A space typed on its own is still said.
+        if ch == " ", wordEchoed, !config.general.windowsKeys { return }
         if mode == .always || (mode == .editControls && editable) { echo(Symbols.name(of: ch, locale: Symbols.typingLocale)); return }
         // Typed words only: a symbol is never part of a word, so it would never be heard. Say it as it is typed
         // (` grave, § section, / slash), as a word is said when it ends.
@@ -805,6 +921,7 @@ public enum Speech {
         }
         let added = outside(after, before).map { new.textRange($0.start, $0.end) }
         let removed = outside(before, after).map { old.textRange($0.start, $0.end) }
+        if added.contains(where: { !$0.isEmpty }) { Tones.selectionAdded() }
         func spoken(_ t: String) -> String { t.count == 1 ? Symbols.name(of: t.first!) : (t.count > 1000 ? Phrases.characters(t.count) : processed(t)) }
         func selected(_ t: String) -> String { String(localized: "selected \(spoken(t))", comment: "Selected text, read: %@ is the text") }
         if generalize {

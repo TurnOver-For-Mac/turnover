@@ -87,7 +87,19 @@ static AXError my_SetAttributeValue(AXUIElementRef e, CFStringRef a, CFTypeRef v
     return AXUIElementSetAttributeValue(e, a, v);
 }
 static AXError my_IsAttributeSettable(AXUIElementRef e, CFStringRef a, Boolean *settable) {
-    if (axreplay_handles(e)) { *settable = true; return kAXErrorSuccess; }
+    if (axreplay_handles(e)) {
+        *settable = true;
+        // 14 Nov 2026: native focus adoption must distinguish a browse page from an editable web area.
+        // Fixtures may name read-only attributes; absent metadata preserves the original replay behaviour.
+        CFTypeRef readOnly = NULL;
+        if (attrFn && attrFn(e, CFSTR("AXReplayReadOnlyAttributes"), &readOnly) == kAXErrorSuccess && readOnly &&
+            CFGetTypeID(readOnly) == CFArrayGetTypeID()) {
+            CFArrayRef names = (CFArrayRef)readOnly;
+            if (CFArrayContainsValue(names, CFRangeMake(0, CFArrayGetCount(names)), a)) *settable = false;
+        }
+        if (readOnly) CFRelease(readOnly);
+        return kAXErrorSuccess;
+    }
     return AXUIElementIsAttributeSettable(e, a, settable);
 }
 static AXError my_CopyMultipleAttributeValues(AXUIElementRef e, CFArrayRef attributes, AXCopyMultipleAttributeOptions options, CFArrayRef *values) {

@@ -8,7 +8,7 @@
 
 ## Findings
 
-The driver read headings, rooms, named tiles and toolbar controls. The app’s Tab order reached the sidebar and toolbar but skipped tiles; VoiceOver-style review keys reached them. A location prompt was left for Oliver. No device or automation action was recorded.
+The driver read headings, rooms, named tiles and toolbar controls. The app’s Tab order reached the sidebar and toolbar but skipped tiles; VoiceOver-style review keys reached them. A location prompt was left for the owner. No device or automation action was recorded.
 
 Next check: Check review-key access and native Tab order separately, using a setup that permits read-only inspection. Do not treat a readable tile as a verified device action.
 

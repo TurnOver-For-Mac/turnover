@@ -41,6 +41,7 @@ public enum QuickRotor {
         let i = ((here + by) % a.count + a.count) % a.count
         chosen = a[i].spoken
         Log.io("rotor: \(chosen)")
+        Tones.rotorMoved(forward: by > 0)
         Speech.speakMessage(chosen)
     }
 

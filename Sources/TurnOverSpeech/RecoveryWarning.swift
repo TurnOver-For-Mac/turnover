@@ -36,7 +36,8 @@ package final class RecoveryWarning: Sendable {
     /// False if an earlier warning is still running or the system voice could not be started.
     @discardableResult
     package func say(_ text: String) -> Bool {
-        start(executable: URL(fileURLWithPath: "/usr/bin/say"), arguments: [text])
+        if AudioOutput.muted { return true }   // tests are silent (AudioOutput)
+        return start(executable: URL(fileURLWithPath: "/usr/bin/say"), arguments: [text])
     }
 
     /// The test executable supplies silent system tools; production starts only the system voice above.

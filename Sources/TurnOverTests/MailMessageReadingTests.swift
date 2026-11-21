@@ -56,4 +56,51 @@ func mailMessageReadingTests() {
         check(MailAppModule.messageIn(AXReplay.root!, isEditable: { _ in inspected += 1; return false }) == nil, "level cap includes the initial children")
         expect(inspected, 0)
     }
+
+    test("Mail read ahead: Mail confirming the row is not read twice; another row is read as the correction") {
+        let a = AXReplay.element(1), b = AXReplay.element(2), c = AXReplay.element(3)
+        var ahead = MailReadAhead()
+        check(ahead.admits(a, now: 0), "with nothing read ahead, every selection is read")
+        ahead.readingAhead(b, now: 10)
+        check(ahead.admits(b, now: 10.001), "TurnOver's own reading of the row passes")
+        check(!ahead.admits(b, now: 10.045), "Mail's news of the same row is not read again")
+        check(!ahead.admits(b, now: 10.2), "nor a repeat of it")
+        ahead.readingAhead(c, now: 20)
+        check(ahead.admits(c, now: 20.001), "own reading")
+        check(ahead.admits(a, now: 20.05), "Mail landing somewhere else is read")
+        check(ahead.row == nil, "and ends the expectation")
+        ahead.readingAhead(b, now: 30)
+        _ = ahead.admits(b, now: 30.001)
+        check(ahead.admits(b, now: 34), "news that comes far too late is read as news")
+    }
+
+    test("Mail read ahead: a quick second arrow steps from the row just read, not from where Mail still is") {
+        let a = AXReplay.element(1), b = AXReplay.element(2)
+        var ahead = MailReadAhead()
+        check(ahead.base(selected: a, now: 0).map { CFEqual($0, a) } == true, "first press: from the selection")
+        ahead.readingAhead(b, now: 1)
+        check(ahead.base(selected: a, now: 1.03).map { CFEqual($0, b) } == true, "30 ms on, Mail still on the old row: from the row read ahead")
+        check(ahead.base(selected: b, now: 1.03).map { CFEqual($0, b) } == true, "Mail caught up: the same row either way")
+        check(ahead.base(selected: a, now: 2).map { CFEqual($0, a) } == true, "a second later and Mail never moved: from where Mail is")
+        let s1 = ahead.serial; ahead.readingAhead(a, now: 3)
+        expect(ahead.serial, s1 + 1, "each row read ahead is counted")
+    }
+
+    test("Mail viewer window reported as a dialog is read as a window; real dialogs are not") {
+        func viewer(_ axRole: String, _ role: Role, _ title: String?) -> Bool {
+            MailAppModule.isViewerSaidToBeDialog(axRole: axRole, role: role, title: title)
+        }
+        check(viewer("AXWindow", .dialog, "Inbox – Personal – 495 messages"), "the viewer with a dialog subrole")
+        check(viewer("AXWindow", .dialog, "Inbox – Personal – 489 messages, 1 unread"), "with unread messages")
+        check(viewer("AXWindow", .dialog, "Sent – Personal – 3,297 messages"), "a count with a thousands comma")
+        check(viewer("AXWindow", .dialog, "Gelen Kutusu – Kişisel – 12 ileti"), "in another language")
+        check(!viewer("AXWindow", .window, "Inbox – Personal – 495 messages"), "an ordinary window is left alone")
+        check(!viewer("AXSheet", .dialog, "Inbox – Personal – 495 messages"), "a sheet stays a dialog")
+        check(!viewer("AXWindow", .dialog, "General"), "Settings stays a dialog")
+        check(!viewer("AXWindow", .dialog, "Accounts"), "Settings, Accounts, stays a dialog")
+        check(!viewer("AXWindow", .dialog, ""), "an untitled alert stays a dialog")
+        check(!viewer("AXWindow", .dialog, nil), "no title stays a dialog")
+        check(!viewer("AXWindow", .dialog, "Enter the password for the account “Personal”."), "an account prompt stays a dialog")
+        check(!viewer("AXWindow", .dialog, "Your order – All Inboxes"), "a message window is left as Mail reports it")
+    }
 }
