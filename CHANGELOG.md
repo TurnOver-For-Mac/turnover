@@ -2,6 +2,14 @@
 
 The newest build is first. "Reported by a tester" marks a fix for something a tester sent in. Thank you.
 
+## 2.0, build 26
+
+### New to try
+
+- Zoom: in a meeting, Zoom's own keys speak. Mute, video, raising your hand and reactions say what they did:
+  "muted", "video on", "hand raised", or the reaction sent. Command Shift 2 says who is speaking. Zoom itself
+  said nothing for any of them.
+
 ## 2.0, build 25
 
 ### New to try
