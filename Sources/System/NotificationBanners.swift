@@ -37,16 +37,7 @@ extension AXHandler {
         let speak = wanted && !NotificationCentrePanel.isOpen
         let app = AXUIElementCreateApplication(notificationCentrePid)
         AXUIElementSetMessagingTimeout(app, 0.5)
-        var alerts: [AXUIElement] = []
-        for w in app.elements(kAXWindowsAttribute) {
-            var stack = [w], n = 0
-            while let e = stack.popLast(), n < 300 {
-                n += 1
-                if e.string(kAXSubroleAttribute) == "AXNotificationCenterAlert" { alerts.append(e); continue }
-                stack.append(contentsOf: e.elements(kAXChildrenAttribute))
-            }
-        }
-        for a in alerts {
+        for a in Self.notificationElements(in: app.elements(kAXWindowsAttribute)) {
             let id = a.string(kAXIdentifierAttribute) ?? (a.string(kAXDescriptionAttribute) ?? "")
             guard !id.isEmpty, !seenNotifications.contains(id) else { continue }
             seenNotifications.append(id)
@@ -63,5 +54,23 @@ extension AXHandler {
             VoiceOverSounds.play("Announcement.aiff")
             Speech.asPrivate { Speech.speakNews(String(localized: "notification, \(text)", comment: "A notification banner: its words")) }
         }
+    }
+
+    package static func notificationElements(in windows: [AXUIElement]) -> [AXUIElement] {
+        var alerts: [AXUIElement] = []
+        for window in windows {
+            var stack = [window], visited = 0
+            while let element = stack.popLast(), visited < 300 {
+                visited += 1
+                // A live banner on macOS 26.6.2 has its own subrole (7 Nov 2026).
+                let subrole = element.string(kAXSubroleAttribute)
+                if subrole == NotificationCentrePanel.alertSubrole || subrole == "AXNotificationCenterBanner" {
+                    alerts.append(element)
+                    continue
+                }
+                stack.append(contentsOf: element.elements(kAXChildrenAttribute))
+            }
+        }
+        return alerts
     }
 }
