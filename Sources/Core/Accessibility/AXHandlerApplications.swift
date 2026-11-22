@@ -117,8 +117,10 @@ extension AXHandler {
     func waitForFirstWindow(pid: pid_t, name: String?, tries: Int) {
         guard tries > 0 else { Log.io("no window appeared in \(name ?? "pid \(pid)")"); EmptyWindowNotice.checkNoWindow(pid: pid); return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
-            guard let self, self.activePid == pid, API.focusObject?.pid != pid else { return }
+            guard let self, self.activePid == pid else { return }
             let appEl = AXUIElementCreateApplication(pid)
+            // Switcher recovery may hold the application itself while it launches. Its first window is still to come.
+            if let focus = API.focusObject, focus.pid == pid, !CFEqual(focus.element, appEl) { return }
             AXUIElementSetMessagingTimeout(appEl, 1.0)
             guard let win = appEl.element(kAXFocusedWindowAttribute) ?? appEl.elements(kAXWindowsAttribute).first else { self.waitForFirstWindow(pid: pid, name: name, tries: tries - 1); return }
             Log.io("first window of \(name ?? "pid \(pid)") appeared")

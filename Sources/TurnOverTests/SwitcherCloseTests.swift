@@ -44,6 +44,18 @@ func switcherCloseTests() {
         expect(decide(front: 20, active: 10, closed: 5), .refocusFront, "let go, and no activation came: the front app")
     }
 
+    test("switcher close: reopening cancels the previous fallback over the same app") {
+        var finishes = 0
+        W.start()
+        let oldFallback = W.unlessReopened { finishes += 1 }
+        W.start()
+        let newFallback = W.unlessReopened { finishes += 1 }
+        oldFallback()
+        expect(finishes, 0, "the old callback leaves the new switcher alone")
+        newFallback()
+        expect(finishes, 1, "the current callback still runs")
+    }
+
     test("review cursor: a focus in another app always moves it; the bounce rule is for the same app") {
         check(!ObjectNavigator.keepsCursorAfterFollowing(cursorPid: 10, focusPid: 20), "another app: the cursor moves")
         check(ObjectNavigator.keepsCursorAfterFollowing(cursorPid: 10, focusPid: 10), "the same app: the cursor stays")
@@ -58,10 +70,8 @@ func switcherCloseTests() {
             .init(id: 3, attrs: ["AXRole": .string("AXButton"), "AXParent": .element(1)]),
             .init(id: 4, attrs: ["AXRole": .string("AXButton"), "AXParent": .element(1)]),
         ]))
-        let nav = ObjectNavigator.shared
-        let savedFollowed = nav.followed
-        let savedElement = nav.reviewElement
-        defer { nav.followed = savedFollowed; if let e = savedElement { nav.focusMoved(to: e, pid: e.pid) }; AXReplay.unload() }
+        defer { AXReplay.unload() }
+        let nav = ObjectNavigator()
         let a = AXReplay.element(2), b = AXReplay.element(3), c = AXReplay.element(4)
         nav.focusMoved(to: a, pid: 10)
         nav.followed = (a, Date())
@@ -69,5 +79,7 @@ func switcherCloseTests() {
         check(nav.reviewElement.map { CFEqual($0, a) } ?? false, "the same app: the bounce is kept off the cursor")
         nav.focusMoved(to: c, pid: 20)
         check(nav.reviewElement.map { CFEqual($0, c) } ?? false, "another app: the cursor moves with the focus")
+        nav.focusMoved(to: b, pid: 20)
+        check(nav.reviewElement.map { CFEqual($0, b) } ?? false, "the next control in that app is followed too")
     }
 }

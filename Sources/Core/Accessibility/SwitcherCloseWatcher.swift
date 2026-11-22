@@ -53,7 +53,7 @@ package enum SwitcherCloseWatcher {
     static var commandHeld: Bool { CGEventSource.flagsState(.combinedSessionState).contains(.maskCommand) }
 
     /// Called when the switcher's list gains the focus. A newer opening replaces an older watcher.
-    static func start() {
+    package static func start() {
         generation &+= 1
         poll(generation: generation, firstClosedAt: nil)
     }
@@ -89,16 +89,25 @@ package enum SwitcherCloseWatcher {
         reconcile(pid: pid, why: "a key came after the app switcher went", immediate: true)
     }
 
+    /// A second Command Tab can open the same list over the same app before the old close finishes.
+    package static func unlessReopened(_ action: @escaping () -> Void) -> () -> Void {
+        let opening = generation
+        let focusAtClose = API.focusObject
+        return {
+            guard generation == opening, API.focusObject === focusAtClose else { return }
+            action()
+        }
+    }
+
     /// Reads the app's own focus again, quietly for the app switcher's sake: nothing extra is said unless the app's
     /// focus is something new, as for any refocus. If the app gives no focused element (it is not answering) the list
     /// must still stop being the focus: the app itself becomes the focus, quietly, as after its last window closes.
     private static func reconcile(pid: pid_t, why: String, immediate: Bool = false) {
         guard pid > 0 else { return }
         Log.io("focus: \(why); reading the app's own focus (pid \(pid))")
-        AXHandler.shared.refocus(pid: pid)
         // The focus change may be handled a moment later, so the check waits a little, except before a key, which
         // must act on the app now.
-        let finish = {
+        let finish = unlessReopened {
             guard API.focusObject is AppSwitcherList else { return }
             // The menu bar held by TurnOver is where the keys are: nothing is taken from it.
             guard MenuNavigationPlugin.heldBar == nil, MenuNavigationPlugin.heldStatus == nil else { return }
@@ -109,6 +118,7 @@ package enum SwitcherCloseWatcher {
             API.setFocusObject(obj, ancestors: [])
             ObjectNavigator.shared.focusMoved(to: app, pid: pid)
         }
-        if immediate { finish() } else { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: finish) }
+        AXHandler.shared.refocus(pid: pid)
+        if immediate { finish() } else { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { finish() } }
     }
 }

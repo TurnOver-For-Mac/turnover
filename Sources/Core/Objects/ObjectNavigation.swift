@@ -13,6 +13,7 @@ import AppKit
 
 public final class ObjectNavigator {
     public static let shared = ObjectNavigator()
+    package init() {}
     /// The navigator object's element; nil means "the focus".
     private var current: AXUIElement? { didSet { cancelWindowSearch(); movedAt = Date() } }
     /// When the review cursor last moved: VO-J starts from an app's own reader only when that reader moved since.
@@ -39,6 +40,10 @@ public final class ObjectNavigator {
         guard tracksFocus else { return }
         // Choosing in a held list moves the app's focus (Finder shows the folder): the cursor stays in the list.
         if heldList != nil, Date() < keepHoldUntil { return }
+        if !Self.keepsCursorAfterFollowing(cursorPid: current == nil ? nil : currentPid, focusPid: pid) {
+            // Forget the old app's focus request before the new app reports its first window and then a control.
+            followed = nil
+        }
         // The focus TurnOver just put on the item the cursor landed on, and the app sent it on somewhere else (Safari's
         // toolbar buttons hand it back to the page): the cursor stays on the item. Following the bounce put the
         // cursor on the page, so VO-Right from the toolbar's first button bumped at an edge, or landed on the window's
@@ -47,8 +52,7 @@ public final class ObjectNavigator {
         // with it (22 Nov 2026, issue 351: PS Remote Play's window came forward and TurnOver Right still read the app
         // left behind, and even moved its keyboard focus). `currentPid` is set wherever `current` is, bar the two places
         // that clear `current` to nil; with no cursor there is nothing to keep, so it is not asked then.
-        if let f = followed, Self.keepsCursorAfterFollowing(cursorPid: current == nil ? nil : currentPid, focusPid: pid),
-           Date().timeIntervalSince(f.at) < 1.5, !CFEqual(f.element, e) {
+        if let f = followed, Date().timeIntervalSince(f.at) < 1.5, !CFEqual(f.element, e) {
             var p: AXUIElement? = e; var hops = 0; var inside = false
             while let x = p, hops < 10 { if x.isSame(f.element) { inside = true; break }; p = x.element(kAXParentAttribute); hops += 1 }
             if !inside { Log.io("review: the focus moved on to \(e.role) after following the cursor; the cursor stays"); return }
