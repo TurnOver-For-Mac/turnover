@@ -315,6 +315,7 @@ public final class SpeechPlayer: @unchecked Sendable {
     }
     /// Points the engine at the chosen device when it is present, else at the Mac's default output; no change, no work.
     private func followOutputChoice() {
+        guard !isRetired else { return }
         doing("reading the output devices")
         let uidChoice = chosenUID
         let chosen = uidChoice.flatMap(Self.device(withUID:))
@@ -346,6 +347,7 @@ public final class SpeechPlayer: @unchecked Sendable {
     /// connection to the Mac's speech service. The old one is stopped off this queue, in case that call is what sticks.
     /// Whatever was being said is cut, as a cancel would (not when called from a cancel or the end of an utterance).
     private func freshSynth(because reason: String, cut: Bool = true) {
+        guard !isRetired else { return }
         let old = synth, oldQueue = synthQueue
         synth = AVSpeechSynthesizer()
         synth.delegate = finishWatch
@@ -364,6 +366,7 @@ public final class SpeechPlayer: @unchecked Sendable {
     /// ones when its stop returns, and is simply left behind if it never does. Nothing here waits on it.
     private var idleSynths: [(AVSpeechSynthesizer, DispatchQueue)] = []
     private func retireSynth() {
+        guard !isRetired else { return }
         guard current != nil || rendering else { return }
         let old = synth, oldQueue = synthQueue
         if let (s, q) = idleSynths.popLast() { synth = s; synthQueue = q }
@@ -388,12 +391,13 @@ public final class SpeechPlayer: @unchecked Sendable {
     private var current: (utterance: AVSpeechUtterance, state: UtteranceState, gen: UInt64)?
 
     private func synthFinished(_ u: AVSpeechUtterance) {
+        guard !isRetired else { return }
         guard let c = current, c.utterance === u else { return }
         endRender(c.state, gen: c.gen)
     }
 
     private func endRender(_ state: UtteranceState, gen: UInt64) {
-        guard !state.renderFinished else { return }
+        guard !isRetired, !state.renderFinished else { return }
         state.renderFinished = true
         if state.hasWords, gen == generation {
             if state.scheduled == 0 {
@@ -411,6 +415,7 @@ public final class SpeechPlayer: @unchecked Sendable {
     /// warmth), the next note starting while the last still rings. One buffer, so the notes never stutter.
     public func playBell(frequencies: [Double], spacingMs: Int, ringMs: Int, volume: Float = 0.12) {
         queue.async { [self] in
+            guard !isRetired else { return }
             let sr = format.sampleRate
             let spacing = Int(sr * Double(spacingMs) / 1000), ring = Int(sr * Double(ringMs) / 1000)
             let total = spacing * max(0, frequencies.count - 1) + ring
@@ -438,6 +443,7 @@ public final class SpeechPlayer: @unchecked Sendable {
 
     public func playTone(frequency: Double, durationMs: Int, volume: Float = 0.25) {
         queue.async { [self] in
+            guard !isRetired else { return }
             let frames = AVAudioFrameCount(format.sampleRate * Double(durationMs) / 1000)
             guard frames > 0, let buf = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames), let data = buf.floatChannelData?[0] else { return }
             buf.frameLength = frames
@@ -463,6 +469,7 @@ public final class SpeechPlayer: @unchecked Sendable {
                       completion: (@Sendable (_ finished: Bool) -> Void)? = nil) {
         if interrupt { outputHealth.cancel() }
         queue.async { [self] in
+            guard !isRetired else { completion?(false); return }
             if interrupt { cancelOnQueue() }
             // One utterance renders at a time, in order: a second write while the first was rendering played their
             // buffers interleaved (a typed word and its punctuation queued together).
@@ -489,11 +496,12 @@ public final class SpeechPlayer: @unchecked Sendable {
     /// Start the next utterance waiting to render (queue).
     private func renderNext() {
         rendering = false
-        guard !waiting.isEmpty else { return }
+        guard !isRetired, !waiting.isEmpty else { return }
         waiting.removeFirst().job()
     }
 
     private func render(_ text: String, requestedAt: UInt64, voice: String?, rate rateOverride: Float? = nil, pitch: Float? = nil, source: String? = nil, onStart: (@Sendable () -> Void)?, completion: (@Sendable (Bool) -> Void)?) {
+        guard !isRetired else { completion?(false); return }   // never starts a write
         do {
             let state = UtteranceState(completion: completion)
             state.source = source
@@ -518,7 +526,7 @@ public final class SpeechPlayer: @unchecked Sendable {
             // A voice that never answers would hold every utterance behind it: after 3 s with nothing, it is done. Not
             // an external voice: it has its own wait, then the Mac voice says it (this ended it first, unsaid).
             queue.asyncAfter(deadline: .now() + 3) { [weak self] in
-                guard let self, state.buffers == 0, !state.renderFinished, !wanted.hasPrefix("external:") else { return }
+                guard let self, !self.isRetired, state.buffers == 0, !state.renderFinished, !wanted.hasPrefix("external:") else { return }
                 self.endRender(state, gen: gen)
             }
             utterance.rate = rateOverride ?? rate
@@ -532,7 +540,7 @@ public final class SpeechPlayer: @unchecked Sendable {
                 let fallback: @Sendable () -> Void = { [weak self] in
                     guard let self else { return }
                     self.queue.async {
-                        guard gen == self.generation, state.buffers == 0, !state.renderFinished else { return }
+                        guard !self.isRetired, gen == self.generation, state.buffers == 0, !state.renderFinished else { return }
                         self.onExternalFallback?()
                         state.renderFinished = true
                         self.pending.removeAll { $0 === state }; self.noteBusy()
@@ -544,7 +552,8 @@ public final class SpeechPlayer: @unchecked Sendable {
                 doing("external voice render")
                 let cancel = external(text, String(wanted.dropFirst("external:".count)), rateOverride ?? rate) { [weak self] pcm in
                     guard let self else { return }
-                    guard let pcm else { self.queue.async { if state.buffers == 0 { fallback() } else { self.endRender(state, gen: gen) } }; return }
+                    guard !self.isRetired else { return }
+                    guard let pcm else { self.queue.async { guard !self.isRetired else { return }; if state.buffers == 0 { fallback() } else { self.endRender(state, gen: gen) } }; return }
                     self.deliver(pcm, state: state, gen: gen, timing: timing, onStart: onStart)
                 }
                 guard let cancel else { fallback(); return }
@@ -553,7 +562,7 @@ public final class SpeechPlayer: @unchecked Sendable {
                 // paragraph isn't said in the Mac's voice in the middle of the natural one (18 Oct 2026).
                 let ahead = pending.contains { $0 !== state && !$0.done && $0.scheduled > $0.played }
                 queue.asyncAfter(deadline: .now() + (ahead ? 8.0 : 1.0)) { [weak self] in
-                    guard self != nil, state.buffers == 0, !state.renderFinished else { return }
+                    guard let self, !self.isRetired, state.buffers == 0, !state.renderFinished else { return }
                     cancel(); fallback()   // the external voice's own cancel, then the Mac voice
                 }
                 return
@@ -562,22 +571,23 @@ public final class SpeechPlayer: @unchecked Sendable {
             nonisolated(unsafe) let writer = synth
             nonisolated(unsafe) let toWrite = utterance
             queue.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-                guard let self, !started.isSet, gen == self.generation, self.synth === writer else { return }
+                guard let self, !self.isRetired, !started.isSet, gen == self.generation, self.synth === writer else { return }
                 self.onOutputChange?("speech: a synthesizer didn't start writing in 1.5 s; left behind")
                 self.freshSynth(because: "a write didn't start", cut: false)
                 self.endRender(state, gen: gen)
             }
-            onQueue.async { [weak self] in started.set(); writer.write(toWrite) { [weak self] buffer in
-                guard let self, let pcm = buffer as? AVAudioPCMBuffer else { return }
+            onQueue.async { [weak self] in started.set(); if self?.isRetired == true { return }   // a write queued before retiring is not started
+                self?.audioCalls.withLock { $0 += 1 }; writer.write(toWrite) { [weak self] buffer in
+                guard let self, !self.isRetired, let pcm = buffer as? AVAudioPCMBuffer else { return }   // retired: the buffer is dropped
                 self.queue.async {
-                    guard gen == self.generation else { return }
+                    guard !self.isRetired, gen == self.generation else { return }
                     state.buffers += 1
                     if pcm.frameLength == 0 {
                         // An empty buffer ends a part, not always the utterance: the delegate says when it is done.
                         // Should a voice never say, nothing more arriving within 2 s ends it.
                         let seen = state.buffers
                         self.queue.asyncAfter(deadline: .now() + 2) {
-                            guard state.buffers == seen else { return }
+                            guard !self.isRetired, state.buffers == seen else { return }
                             self.endRender(state, gen: gen)
                         }
                         return
@@ -623,7 +633,7 @@ public final class SpeechPlayer: @unchecked Sendable {
     /// An external voice's buffer, on its way through the same steps as the Mac voice's: converted, volume, scheduled.
     private func deliver(_ pcm: AVAudioPCMBuffer, state: UtteranceState, gen: UInt64, timing: TimingBox, onStart: (@Sendable () -> Void)?) {
         queue.async {
-            guard gen == self.generation, !state.renderFinished || state.buffers > 0 else { return }
+            guard !self.isRetired, gen == self.generation, !state.renderFinished || state.buffers > 0 else { return }
             state.buffers += 1
             guard pcm.frameLength > 0, let out = self.convert(pcm), out.frameLength > 0 else { return }
             if state.eq == nil { state.eq = SpeechEQ(self.eq, sampleRate: out.format.sampleRate) }
@@ -657,6 +667,7 @@ public final class SpeechPlayer: @unchecked Sendable {
     /// speech queue's last call; a tester's five restarts on build 20). The player is asked on the speech queue.
     private func noteStart(_ state: UtteranceState, length: AVAudioFramePosition) {
         queue.async { [self] in
+            guard !isRetired else { return }
             doing("render time (start)")
             guard let t = player.lastRenderTime, let p = player.playerTime(forNodeTime: t) else { return }
             state.startSample = max(0, p.sampleTime - length)
@@ -674,6 +685,7 @@ public final class SpeechPlayer: @unchecked Sendable {
         return done.wait(timeout: .now() + 0.2) == .success ? answer.value : nil
     }
     private func progressOnQueue() -> Double? {
+        guard !isRetired else { return nil }
         do {
             doing("render time (progress)")
             guard let t = player.lastRenderTime, let p = player.playerTime(forNodeTime: t) else { return nil }
@@ -708,7 +720,7 @@ public final class SpeechPlayer: @unchecked Sendable {
     private var pending: [UtteranceState] = []
 
     private func finishIfDone(_ state: UtteranceState) {
-        guard !state.done, state.renderFinished, state.played >= state.scheduled else { return }
+        guard !isRetired, !state.done, state.renderFinished, state.played >= state.scheduled else { return }
         state.done = true
         pending.removeAll { $0 === state }; noteBusy()
         state.completion?(true)
@@ -719,10 +731,11 @@ public final class SpeechPlayer: @unchecked Sendable {
     private var paused = false
     public func pause() {
         outputHealth.setPaused(true)
-        queue.async { [self] in outputHealth.setPaused(true); player.pause(); busyLock.lock(); paused = true; busyLock.unlock() }
+        queue.async { [self] in guard !isRetired else { return }; outputHealth.setPaused(true); player.pause(); busyLock.lock(); paused = true; busyLock.unlock() }
     }
     public func resume() {
         queue.async { [self] in
+            guard !isRetired else { return }
             outputHealth.setPaused(false)
             for state in pending where !state.done {
                 state.outputIncident = outputHealth.request(hasWords: state.hasWords, now: Self.outputClock)
@@ -745,6 +758,7 @@ public final class SpeechPlayer: @unchecked Sendable {
     /// or rendering, the source's current utterance finishes (a limitation).
     public func cancel(source: String) {
         queue.async { [self] in
+            guard !isRetired else { return }   // the shut-down block has completed everything
             let dropped = waiting.filter { $0.source == source }
             waiting = SpeechSourceFilter.keeping(waiting, notFrom: source) { $0.source }
             for d in dropped { d.completion?(false) }
@@ -773,6 +787,8 @@ public final class SpeechPlayer: @unchecked Sendable {
     /// The check alone wasn't enough: the engine said it was running and the device went a moment later (the lid closed,
     /// 19 Oct 2026, the same crash): the play is also run inside TOCatch, which catches the exception.
     private func play(_ node: AVAudioPlayerNode) {
+        guard !isRetired else { return }
+        audioCalls.withLock { $0 += 1 }
         if AudioOutput.muted { return }   // tests are silent (AudioOutput): nothing is rendered to the speakers
         guard engine.isRunning, node.engine != nil else { NSLog("speech: not playing a node while the audio engine is stopped"); return }
         guard !node.isPlaying else { return }
@@ -785,8 +801,75 @@ public final class SpeechPlayer: @unchecked Sendable {
         let ms = Int((Self.outputClock - started) * 1000)
         if ms >= 200 {
             let name = Self.stringProperty(engineDevice, kAudioObjectPropertyName) ?? "device \(engineDevice)"
-            onOutputChange?("speech: starting playback took \(ms) ms (output \(name))")
+            onOutputChange?("speech: starting playback took \(ms) ms (output \(name); engine running \(engine.isRunning); player rate \(Int(format.sampleRate)) Hz)")
         }
+    }
+
+    // MARK: Retirement
+
+    // 22 Nov 2026, issue 350: a player the watchdog replaced was simply dropped, its queue still holding a backlog of 5-second
+    // node.play() calls on a wedged engine (twice on 21 Nov, after moving the sound to AirPods Max). When the last of
+    // them ended nothing held the player, it was freed while a synthesizer of its own was still writing, and Apple's
+    // TextToSpeech framework then retained a freed object (objc_retain, segmentation fault on main). So a retired
+    // player is kept for the life of the process: a stall is rare and the leak is small.
+    // The rule after retirement: only the shut-down block may touch the engine, the nodes or a synthesizer; every
+    // other entry point, including blocks queued before retiring, checks `isRetired` when it runs and gives up.
+    // (A flag of its own, not queueWatch's: SpeechPlayer.current retires only the watch of a replaced player, and
+    // tests put a swapped-out player back.)
+    private static let retiredPlayers = OSAllocatedUnfairLock<[SpeechPlayer]>(initialState: [])
+    private let retiredFlag = OSAllocatedUnfairLock<Bool>(initialState: false)
+    private var isRetired: Bool { retiredFlag.withLock { $0 } }
+    /// True once `retire()` has been called (readable from any thread, without the speech queue).
+    package var isRetiredPlayer: Bool { isRetired }
+    /// Tests only: how many writes, engine starts and node plays this player began (all stay 0 once retired).
+    package let audioCalls = OSAllocatedUnfairLock<Int>(initialState: 0)
+    /// Tests only: holds the speech queue until `release` is signalled.
+    package func blockQueueForTesting(until release: DispatchSemaphore) { queue.async { release.wait() } }
+    /// Tests only: runs on the speech queue; the callback is told when it has run.
+    package func afterQueueForTesting(_ done: @escaping @Sendable () -> Void) { queue.async { done() } }
+
+    /// Called when the owner has put another player in this one's place and will never use this one again (the
+    /// watchdog, speechStuck). Idempotent, returns at once and never waits on the speech queue, which may be blocked.
+    public func retire() {
+        let first = retiredFlag.withLock { was -> Bool in let first = !was; was = true; return first }
+        guard first else { return }
+        Self.retiredPlayers.withLock { $0.append(self) }   // never deallocated, see above
+        onOutputChange?("speech: this speech player is retired (replaced after a stall); its audio is being shut down")
+        queueWatch.retire()
+        queue.async { [self] in shutDown() }
+    }
+
+    /// The only code that touches the engine, nodes and synthesizers of a retired player. Speech queue.
+    private func shutDown() {
+        doing("retire: removing listeners")
+        let system = AudioObjectID(kAudioObjectSystemObject)
+        var defaultAddress = Self.defaultOutputAddress, devicesAddress = Self.devicesAddress
+        if let l = outputListener { AudioObjectRemovePropertyListenerBlock(system, &defaultAddress, queue, l); outputListener = nil }
+        if let l = devicesListener { AudioObjectRemovePropertyListenerBlock(system, &devicesAddress, queue, l); devicesListener = nil }
+        if let o = configObserver { NotificationCenter.default.removeObserver(o); configObserver = nil }
+        outputHealth.cancel()
+        generation &+= 1
+        current = nil
+        let dropped = waiting
+        waiting.removeAll()
+        rendering = false
+        for item in dropped { item.completion?(false) }
+        let cancelled = pending
+        pending.removeAll(); noteBusy()
+        for s in cancelled where !s.done { s.done = true; s.completion?(false) }
+        externalCancel?(); externalCancel = nil
+        // Delegate cleared first, then stopped, each on the synthesizer's own queue. The references stay (here and in
+        // the idle list), so the objects live as long as the player does.
+        for (s, q) in [(synth, synthQueue)] + idleSynths {
+            nonisolated(unsafe) let s = s
+            q.async { s.delegate = nil; s.stopSpeaking(at: .immediate) }
+        }
+        var reason: NSString?
+        for (name, stop) in [("player", { [player] in player.stop() }), ("tone node", { [toneNode] in toneNode.stop() }), ("engine", { [engine] in engine.stop() })] as [(String, () -> Void)] {
+            doing("retire: \(name) stop")
+            _ = TOCatch({ stop() }, &reason)
+        }
+        doing("retired")
     }
 
     /// A new player with this one's voice, settings and callbacks, for when this one's queue is stuck in Apple's audio
@@ -856,7 +939,9 @@ public final class SpeechPlayer: @unchecked Sendable {
 
     /// The engine running, started again if it stopped (speech queue).
     private func ensureRunning(reason: String) {
+        guard !isRetired else { return }
         if engine.isRunning { return }
+        audioCalls.withLock { $0 += 1 }
         doing("engine start (\(reason))")
         do {
             try engine.start()
@@ -881,7 +966,7 @@ public final class SpeechPlayer: @unchecked Sendable {
     private static var outputClock: TimeInterval { Double(DispatchTime.now().uptimeNanoseconds) / 1_000_000_000 }
 
     private func outputSampleTime() -> Int64? {
-        guard engine.isRunning, player.isPlaying, let time = player.lastRenderTime else { return nil }
+        guard !isRetired, engine.isRunning, player.isPlaying, let time = player.lastRenderTime else { return nil }
         return player.playerTime(forNodeTime: time)?.sampleTime
     }
 
@@ -889,7 +974,7 @@ public final class SpeechPlayer: @unchecked Sendable {
     /// reach the four-second deadline. A stuck queue is handled separately by watchQueue.
     private func watchOutput() {
         queue.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-            guard let self else { return }
+            guard let self, !self.isRetired else { return }   // a retired player's health check ends here
             if self.outputHealth.isWaiting {
                 let queued = self.pending.contains { !$0.done && $0.scheduled > $0.played }
                 if let failure = self.outputHealth.poll(now: Self.outputClock, sampleTime: self.outputSampleTime(), hasQueuedAudio: queued) {
@@ -903,6 +988,19 @@ public final class SpeechPlayer: @unchecked Sendable {
     private func cancelOnQueue() {
         outputHealth.cancel()
         outputHealth.setPaused(false)
+        if isRetired {
+            // Bookkeeping and completions only: no engine, node or synthesizer call, no voice-silent report.
+            generation &+= 1
+            current = nil
+            let dropped = waiting
+            waiting.removeAll()
+            rendering = false
+            for item in dropped { item.completion?(false) }
+            let cancelled = pending
+            pending.removeAll(); noteBusy()
+            for s in cancelled where !s.done { s.done = true; s.completion?(false) }
+            return
+        }
         ensureRunning(reason: "before a cancel")
         let t0 = DispatchTime.now().uptimeNanoseconds
         defer { lastCancelMs = Double(DispatchTime.now().uptimeNanoseconds - t0) / 1_000_000 }
