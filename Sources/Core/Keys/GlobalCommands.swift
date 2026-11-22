@@ -473,7 +473,7 @@ public final class GlobalCommands: ScriptableObject {
         Speech.speakMessage(Phrases.rate(Int((config.speech.rate * 100).rounded())))
     }
 
-    static func batteryText() -> String {
+    public nonisolated static func batteryText() -> String {
         guard let info = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
               let list = IOPSCopyPowerSourcesList(info)?.takeRetainedValue() as? [CFTypeRef], let first = list.first,
               let desc = IOPSGetPowerSourceDescription(info, first)?.takeUnretainedValue() as? [String: Any] else { return String(localized: "no battery", comment: "The Mac has no battery") }
