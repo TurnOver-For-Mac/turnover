@@ -337,6 +337,7 @@ final class TurnOverApp {
         voiceOverGoneTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
+                self.lead.pollScreenLock()
                 // The flag on and no VoiceOver, four looks in a row: gone. The speech gate follows the same decision.
                 let decidedGone = self.goneWatch.look(flagOn: NSWorkspace.shared.isVoiceOverEnabled, running: HandOver.voiceOverRunning)
                 // Coexisting, VoiceOver's process coming or going under a flag that stays on sends no change notice:
