@@ -67,6 +67,7 @@ Run `python3 Tools/build-app-index.py` after editing app records or documentatio
 - [Voice Memos](VoiceMemos/STATUS.md) — Effort: None; being worked on: Unclaimed.
 - [WhatsApp](WhatsApp/STATUS.md) — Effort: Module; being worked on: Unclaimed.
 - [Xcode](Xcode/STATUS.md) — Effort: None; being worked on: Unclaimed.
+- [Zoom](Zoom/STATUS.md) — Effort: Module; being worked on: Jakob Rosin, [#318](https://github.com/TurnOver-For-Mac/turnover/issues/318).
 
 ## Blocked
 
@@ -109,4 +110,3 @@ Run `python3 Tools/build-app-index.py` after editing app records or documentatio
 - [Tips](Tips/STATUS.md) — Effort: not assessed; being worked on: Unclaimed.
 - [TurnOver Settings](TurnOverSettings/STATUS.md) — Effort: Module; being worked on: Unclaimed.
 - [Weather](Weather/STATUS.md) — Effort: not assessed; being worked on: Unclaimed.
-- [Zoom](Zoom/STATUS.md) — Effort: not assessed; being worked on: Unclaimed.
