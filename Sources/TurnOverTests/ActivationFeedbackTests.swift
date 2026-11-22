@@ -6,6 +6,56 @@ import TurnOverAX
 import AXFixtures
 
 func activationFeedbackTests() {
+    test("activation feedback: recovery uses the app's reported focus after OK") {
+        func load(focused: Int, window: Int) {
+            AXReplay.load(.init(app: "Public sample", bundle: "test.activation-feedback", recorded: "synthetic",
+                                root: 0, application: 0, focus: focused, nodes: [
+                .init(id: 0, attrs: ["AXRole": .string("AXApplication"), "AXFocusedWindow": .element(window),
+                                     "AXFocusedUIElement": .element(focused)]),
+                .init(id: 1, attrs: ["AXRole": .string("AXButton"), "AXTitle": .string("OK"), "AXWindow": .element(2)]),
+                .init(id: 2, attrs: ["AXRole": .string("AXWindow")]),
+                .init(id: 3, attrs: ["AXRole": .string("AXWindow")]),
+                .init(id: 4, attrs: ["AXRole": .string("AXTextField"), "AXWindow": .element(3)]),
+            ]))
+        }
+        defer { AXReplay.unload() }
+
+        load(focused: 4, window: 3)
+        let replacement = AXHandler.browseButtonReplacement(in: AXReplay.element(0), oldButton: AXReplay.element(1),
+                                                            oldWindow: AXReplay.element(2))
+        check(replacement?.focus.isSame(AXReplay.element(4)) == true, "adopt the control the app actually focused")
+        check(replacement?.window?.isSame(AXReplay.element(3)) == true, "update the foreground for the new window")
+
+        load(focused: 1, window: 3)
+        let window = AXHandler.browseButtonReplacement(in: AXReplay.element(0), oldButton: AXReplay.element(1),
+                                                       oldWindow: AXReplay.element(2))
+        check(window?.focus.isSame(AXReplay.element(3)) == true, "use the app's focused window if the button is stale")
+
+        load(focused: 1, window: 2)
+        let unchanged = AXHandler.browseButtonReplacement(in: AXReplay.element(0), oldButton: AXReplay.element(1),
+                                                          oldWindow: AXReplay.element(2))
+        check(unchanged == nil, "a background window creation does not move focus")
+    }
+
+    test("activation feedback: return from Drive only when it confirms there are no windows") {
+        func load(_ windows: AXFixture.Value?) {
+            var attrs: [String: AXFixture.Value] = ["AXRole": .string("AXApplication")]
+            attrs["AXWindows"] = windows
+            AXReplay.load(.init(app: "Public sample", bundle: "test.activation-feedback", recorded: "synthetic",
+                                root: 0, application: 0, focus: 0, nodes: [
+                .init(id: 0, attrs: attrs),
+                .init(id: 1, attrs: ["AXRole": .string("AXWindow")]),
+            ]))
+        }
+        defer { AXReplay.unload() }
+        load(.elements([]))
+        check(AXHandler.driveAlertEnded(in: AXReplay.element(0)), "a successful empty windows list confirms closure")
+        load(.elements([1]))
+        check(!AXHandler.driveAlertEnded(in: AXReplay.element(0)), "an open window keeps the reader in Drive")
+        load(nil)
+        check(!AXHandler.driveAlertEnded(in: AXReplay.element(0)), "missing window data cannot switch apps")
+    }
+
     for scenario in ["silent button", "changed state", "later key", "focus departure", "new activation", "non-button"] {
         test("activation feedback integration: \(scenario)") {
             let savedFocus = API.focusObject, savedAncestors = API.focusAncestors

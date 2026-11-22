@@ -53,6 +53,7 @@ extension AXHandler {
         guard pid != getpid() else { return }
         if pid == activePid { return }
         let old = activePid
+        if ApplicationChooser.driveAlertVisit?.pid == old { ApplicationChooser.driveAlertVisit = nil }
         activePid = pid
         Log.io("app activated: \(app.localizedName ?? "?") pid \(pid)")
         // An application's menus close when it leaves the front; one still counted open would take the letters

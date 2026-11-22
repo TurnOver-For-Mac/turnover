@@ -46,17 +46,27 @@ public enum ApplicationChooser {
         }
     }
 
+    // Keep the origin only for a one-window Google Drive alert opened through this chooser.
+    struct DriveAlertVisit {
+        let pid: pid_t
+        let window: AXUIElement
+        let previous: NSRunningApplication
+    }
+
+    static var driveAlertVisit: DriveAlertVisit?
+
     public static func open() {
+        let previous = NSWorkspace.shared.frontmostApplication
         let entries = gather()
         let items: [MenuItem] = entries.map { e in
             let count = e.windows.count
             let label = "\(e.name), \(count == 0 ? String(localized: "no windows", comment: "An app with no windows") : count == 1 ? e.windows[0].title : String(localized: "\(String(count)) windows", comment: "How many windows an app has"))"
             if count > 1 {
                 return MenuItem(verbatim: label, .submenu {
-                    e.windows.map { w in MenuItem(verbatim: w.title, .action { switchTo(e, window: w.element) }) }
+                    e.windows.map { w in MenuItem(verbatim: w.title, .action { switchTo(e, window: w.element, previous: previous) }) }
                 })
             }
-            return MenuItem(verbatim: label, .action { switchTo(e, window: e.windows.first?.element) })
+            return MenuItem(verbatim: label, .action { switchTo(e, window: e.windows.first?.element, previous: previous) })
         }
         Log.io("application chooser: \(entries.count) applications")
         TurnOverMenu.shared.openList("Application Chooser", items: items)   // named as VoiceOver names it (15 Oct 2026)
@@ -64,9 +74,15 @@ public enum ApplicationChooser {
 
     /// Bring the app and the window forward and give it the keyboard. A process with no Dock icon (a system alert)
     /// is not "activated" by AppKit; it is made frontmost through accessibility, and its window raised and focused.
-    static func switchTo(_ e: Entry, window: AXUIElement?) {
+    static func switchTo(_ e: Entry, window: AXUIElement?, previous: NSRunningApplication?) {
         Log.io("application chooser: to \(e.name)")
         let app = NSRunningApplication(processIdentifier: e.pid)
+        driveAlertVisit = nil
+        if app?.bundleIdentifier == "com.google.drivefs", e.windows.count == 1, let window, let previous,
+           previous.activationPolicy == .regular, previous.processIdentifier != e.pid,
+           previous.processIdentifier != ProcessInfo.processInfo.processIdentifier {
+            driveAlertVisit = DriveAlertVisit(pid: e.pid, window: window, previous: previous)
+        }
         app?.activate(options: [.activateAllWindows])
         let ax = AXUIElementCreateApplication(e.pid)
         _ = ax.set(kAXFrontmostAttribute, kCFBooleanTrue)
