@@ -169,7 +169,9 @@ extension AXHandler {
             // Role and title only, and at most 20 a second: a loading page or an 800-row list sends hundreds, each
             // costing the main thread four round trips for a log line (a code review, 14 Oct 2026).
             // A second window: does this app list every window's elements under each (Qt Quick)? Checked once it does.
-            if name == kAXWindowCreatedNotification, !ForeignChildren.contains(pid) { ForeignChildren.check(pid: pid) }
+            if name == kAXWindowCreatedNotification {
+                if !ForeignChildren.contains(pid) { ForeignChildren.check(pid: pid) }
+            }
             if Date().timeIntervalSince(loggedOnlyWindow) > 1 { loggedOnlyWindow = Date(); loggedOnlyCount = 0 }
             loggedOnlyCount += 1
             if loggedOnlyCount <= 20 {
@@ -317,6 +319,97 @@ extension AXHandler {
             Log.io("window closed: the focus went with it; reading it again")
             refocus(pid: pid)
         }
+    }
+
+    nonisolated enum DriveAlertFocus: Sendable {
+        case replacement(focus: AXUIElement, window: AXUIElement?)
+        case closed
+    }
+
+    /// Drive can dismiss its window without sending a window or focus event.
+    func recoverFocusAfterDriveAlertPress(button: AXUIElement, page: BrowseModeDocument) {
+        guard running, let visit = ApplicationChooser.driveAlertVisit, visit.pid == page.webArea.pid,
+              activePid == visit.pid, let old = API.focusObject, old.isSameElement(as: button),
+              (focusWindow ?? API.foregroundObject?.element)?.isSame(visit.window) == true else { return }
+        let press = UUID()
+        driveAlertPress = press
+        Log.io("Google Drive alert: checking focus after a button press")
+        let keys = ScriptHandler.keysArrivedCount
+        let stillCurrent: @MainActor @Sendable () -> Bool = { [self] in
+            running && activePid == visit.pid && ScriptHandler.keysArrivedCount == keys &&
+            driveAlertPress == press && ApplicationChooser.driveAlertVisit?.window.isSame(visit.window) == true &&
+            API.focusObject === old && API.focusTreeInterceptor === page &&
+            MenuNavigationPlugin.heldBar == nil && MenuNavigationPlugin.heldStatus == nil
+        }
+        let read: @MainActor @Sendable () -> Void = { [self] in
+            guard stillCurrent(), let front = NSWorkspace.shared.frontmostApplication else { return }
+            if front.processIdentifier != visit.pid {
+                if front.activationPolicy == .regular { self.appActivated(front) }
+                return
+            }
+            let pid = visit.pid
+            let oldWindow = visit.window
+            self.driveAlertFocusRead.submit(collect: { request in
+                let budget = AXWalkBudget(request: request, duration: 150_000_000, maxAXQueries: 6)
+                let app = AXUIElementCreateApplication(pid)
+                AXUIElementSetMessagingTimeout(app, 0.15)
+                return AXReadScope.with(while: { budget.check() }, onQuery: { budget.admitAXQuery() },
+                                        onResult: { budget.record($0) }) {
+                    let focus = Self.driveAlertFocus(in: app, oldButton: button, oldWindow: oldWindow)
+                    return budget.check() ? focus : nil
+                }
+            }, publish: { answer in
+                guard let answer, stillCurrent(),
+                      NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { return }
+                switch answer {
+                case let .replacement(focus, window):
+                    self.driveAlertPress = nil
+                    Log.io("Google Drive alert: the app reported replacement focus")
+                    if let window { self.foregroundChanged(window, appName: nil) }
+                    self.focusChanged(focus, pid: pid)
+                case .closed:
+                    guard !visit.previous.isTerminated, visit.previous.activationPolicy == .regular else { return }
+                    if visit.previous.activate() {
+                        self.driveAlertPress = nil
+                        ApplicationChooser.driveAlertVisit = nil
+                        Log.io("Google Drive alert closed: returning to the application left by the chooser")
+                    }
+                }
+            })
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.20, execute: read)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: read)
+    }
+
+    nonisolated package static func driveAlertEnded(in app: AXUIElement) -> Bool {
+        let (value, result) = app.attrError(kAXWindowsAttribute)
+        return result == .success && (value as? [AXUIElement])?.isEmpty == true
+    }
+
+    nonisolated static func driveAlertFocus(in app: AXUIElement, oldButton: AXUIElement,
+                                            oldWindow: AXUIElement) -> DriveAlertFocus? {
+        // Ask for the window list before reading focus. Immediately after dismissal, an old focus element can
+        // report invalid UI element, which ends the read budget even when the application is answering.
+        if driveAlertEnded(in: app) { return .closed }
+        guard let replacement = browseButtonReplacement(in: app, oldButton: oldButton, oldWindow: oldWindow) else { return nil }
+        return .replacement(focus: replacement.focus, window: replacement.window)
+    }
+
+    nonisolated package static func browseButtonReplacement(in app: AXUIElement, oldButton: AXUIElement,
+                                                             oldWindow: AXUIElement?) -> (focus: AXUIElement, window: AXUIElement?)? {
+        // The created window may be a background window. Only use the window the app itself says has focus.
+        let window = app.element(kAXFocusedWindowAttribute)
+        let newWindow = window.flatMap { candidate in
+            oldWindow?.isSame(candidate) == false && candidate.role == "AXWindow" ? candidate : nil
+        }
+        if let focus = app.element(kAXFocusedUIElementAttribute), !focus.isSame(oldButton) {
+            let role = focus.role
+            let inFocusedWindow = newWindow.map { focus.isSame($0) || focus.element(kAXWindowAttribute)?.isSame($0) == true } ?? true
+            if role != "?", !role.isEmpty, role != "AXApplication", inFocusedWindow {
+                return (focus, newWindow)
+            }
+        }
+        return newWindow.map { ($0, $0) }
     }
 
     public func refocus(pid: pid_t) {

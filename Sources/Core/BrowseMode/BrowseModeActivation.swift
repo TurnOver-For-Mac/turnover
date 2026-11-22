@@ -220,6 +220,9 @@ extension BrowseModeDocument {
         let checkable = Self.isCheckable(element)
         let focusAtPress = API.focusObject?.element
         let urlAtPress = url   // another page since (a link followed, Back): nothing said about the one left
+        if focusAtPress?.isSame(element) == true, API.focusObject?.axRole == "AXButton" {
+            AXHandler.shared.recoverFocusAfterDriveAlertPress(button: element, page: self)
+        }
         func look(_ tries: ArraySlice<Double>) {
             guard let next = tries.first else { Self.endWatch(watch); return }
             let delay = max(0, pressedAt.addingTimeInterval(next).timeIntervalSinceNow)

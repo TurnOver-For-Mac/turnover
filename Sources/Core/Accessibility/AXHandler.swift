@@ -33,6 +33,8 @@ public final class AXHandler {
     var madeForFocus: (element: AXUIElement, obj: TurnOverObject, ancestors: [TurnOverObject])?
     var loggedOnlyWindow = Date.distantPast
     var loggedOnlyCount = 0
+    var driveAlertPress: UUID?
+    let driveAlertFocusRead = AXWalkRunner<DriveAlertFocus?>()
     /// Where the focus was before it rested a moment on a nameless group (FocusChanges.present).
     var beforeNamelessStop: (ancestors: [TurnOverObject], focus: TurnOverObject?, at: Date)?
     var lastGainFocus: (AXUIElement, Date)?
