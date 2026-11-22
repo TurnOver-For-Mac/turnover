@@ -85,6 +85,7 @@ public final class TurnOverMenu {
     public var onScreenCurtainChanged: (() -> Void)?
 
     public func open() {
+        listGeneration += 1
         let title = String(localized: "TurnOver menu", comment: "The TurnOver menu, as it opens")
         stack = [(title, rootItems(), 0)]
         isOpen = true
@@ -120,6 +121,7 @@ public final class TurnOverMenu {
     public func openList(_ title: LocalizedStringResource, items: [MenuItem]) { openList(verbatim: String(localized: title), items: items) }
     public func openList(verbatim title: String, items: [MenuItem]) {
         guard !items.isEmpty else { Speech.speakMessage(Self.none(title)); return }
+        listGeneration += 1
         stack = [(title, items, 0)]
         isOpen = true
         countPending = false
@@ -201,6 +203,15 @@ public final class TurnOverMenu {
         guard isOpen, generation == listGeneration, rotor == nil, filterSource != nil, stack.count == 1, !items.isEmpty else { return }
         countPending = false
         replaceShownItems(items)
+    }
+
+    /// Replace a spoken list after an action which changes its items in place.
+    package func refreshList(generation: Int, items: [MenuItem], selection: (Int) -> Int) {
+        guard isOpen, generation == listGeneration, stack.count == 1, !items.isEmpty else { return }
+        let old = stack[0]
+        let index = min(max(0, selection(old.index)), items.count - 1)
+        stack[0] = (old.title, items, index)
+        announce()
     }
 
     /// The same for the rotor: each kind's list replaced, staying on the kind and the item it was on.

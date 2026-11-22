@@ -15,13 +15,169 @@ import ApplicationServices
 public enum StatusMenus {
     /// The status item just opened from the list: its menu carries no name of its own ("a VPN app's menu").
     public static var lastOpened: (String, Date)?
-    struct Extra {
+    nonisolated struct Extra: @unchecked Sendable {
         let element: AXUIElement
         let pid: pid_t
         let name: String
         let x: Double
         /// The system's own items carry one ("com.apple.menuextra.clock"); most apps' items carry none.
         let identifier: String?
+        let overflow: Overflow?
+    }
+
+    nonisolated enum Overflow: Sendable {
+        case show, hide
+
+        private static let labels: (show: Set<String>, hide: Set<String>) = {
+            // MenuBarAgent publishes localized descriptions for this toggle. Only use
+            // them for that process, since an ordinary app may name its item anything.
+            let url = URL(fileURLWithPath: "/System/Library/CoreServices/MenuBarAgent.app/Contents/Resources/MenuBarCore.loctable")
+            let table = (try? Data(contentsOf: url)).flatMap {
+                try? PropertyListSerialization.propertyList(from: $0, format: nil)
+            } as? [String: [String: String]]
+            let locales = (table ?? [:]).values
+            return (
+                Set(locales.compactMap { $0["menuBar.showOverflowItemsAccessibilityLabel"] } + ["Show Hidden Menu Bar Items"]),
+                Set(locales.compactMap { $0["menuBar.hideOverflowItemsAccessibilityLabel"] } + ["Hide Menu Bar Items"])
+            )
+        }()
+
+        static func matching(_ label: String) -> Self? {
+            if labels.show.contains(label) { return .show }
+            if labels.hide.contains(label) { return .hide }
+            return nil
+        }
+    }
+
+    /// The item currently selected in the old row, or the first revealed item
+    /// when the cursor is still on the control that opened the overflow.
+    static func refreshedSelection(old: [Extra], new: [Extra], selected: Int, toggle: Extra) -> Int {
+        if selected == old.count { return new.count }  // TurnOver's own item
+        guard old.indices.contains(selected) else { return 0 }
+        let current = old[selected]
+        if sameItem(current, toggle), toggle.overflow == .show,
+           let first = firstRevealed(old: old, new: new) { return first }
+        return new.firstIndex { sameItem($0, current) } ?? min(selected, new.count)
+    }
+
+    private static func firstRevealed(old: [Extra], new: [Extra]) -> Int? {
+        new.firstIndex { item in item.overflow == nil && !old.contains { sameItem($0, item) } }
+    }
+
+    private static func sameRow(_ previous: [Extra], _ new: [Extra]) -> Bool {
+        previous.count == new.count && zip(previous, new).allSatisfy { sameItem($0.0, $0.1) }
+    }
+
+    private static func sameItem(_ first: Extra, _ second: Extra) -> Bool {
+        guard first.pid == second.pid else { return false }
+        if first.overflow != nil, second.overflow != nil { return true }
+        if let id = first.identifier, id == second.identifier { return true }
+        return CFEqual(first.element, second.element)
+    }
+
+    private final class OverflowRequest {
+        let toggle: Extra
+        let old: [Extra]
+        let direction: Overflow
+        let deadline = ContinuousClock.now + .seconds(4)
+        var candidate: [Extra]?
+        let isCurrent: @MainActor () -> Bool
+        let refreshed: @MainActor ([Extra]) -> Void
+
+        init(toggle: Extra, old: [Extra], direction: Overflow, isCurrent: @escaping @MainActor () -> Bool,
+             refreshed: @escaping @MainActor ([Extra]) -> Void) {
+            self.toggle = toggle
+            self.old = old
+            self.direction = direction
+            self.isCurrent = isCurrent
+            self.refreshed = refreshed
+        }
+    }
+
+    private static var pendingOverflow: OverflowRequest?
+
+    /// Press and reread outside the keyboard decision. The agent can take about a
+    /// second to reveal the row. Apply the result only to the menu that issued the press.
+    static func toggleOverflow(
+        _ toggle: Extra, from old: [Extra], isCurrent: @escaping @MainActor () -> Bool,
+        refreshed: @escaping @MainActor ([Extra]) -> Void
+    ) {
+        guard let direction = toggle.overflow else { return }
+        if let pendingOverflow, accepts(pendingOverflow) { return }
+        let request = OverflowRequest(toggle: toggle, old: old, direction: direction, isCurrent: isCurrent, refreshed: refreshed)
+        pendingOverflow = request
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+            if pendingOverflow === request {
+                pendingOverflow = nil
+                Log.io("status menus: overflow refresh expired")
+            }
+        }
+        prepareOverflow(request)
+    }
+
+    private static func prepareOverflow(_ request: OverflowRequest) {
+        guard accepts(request) else { return }
+        let pid = request.toggle.pid
+        // Read the current toggle before pressing. If an earlier request
+        // revealed the items late, another press would hide them again.
+        DispatchQueue.global(qos: .userInitiated).async {
+            let liveToggle = NSRunningApplication(processIdentifier: pid)
+                .flatMap { extras(of: $0).first { $0.overflow != nil } }
+            DispatchQueue.main.async {
+                guard accepts(request) else { return }
+                guard let liveToggle else {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { prepareOverflow(request) }
+                    return
+                }
+                guard liveToggle.overflow == request.direction else {
+                    readOverflow(request)
+                    return
+                }
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let result = AXUIElementPerformAction(liveToggle.element, kAXPressAction as CFString)
+                    DispatchQueue.main.async {
+                        Log.io("status menus: overflow press returned \(result.rawValue)")
+                        readOverflow(request)
+                    }
+                }
+            }
+        }
+    }
+
+    private static func accepts(_ request: OverflowRequest) -> Bool {
+        guard pendingOverflow === request else { return false }
+        if request.isCurrent(), ContinuousClock.now < request.deadline { return true }
+        pendingOverflow = nil
+        return false
+    }
+
+    private static func readOverflow(_ request: OverflowRequest) {
+        guard accepts(request) else { return }
+        DispatchQueue.global(qos: .userInitiated).async {
+            let row = gather()
+            DispatchQueue.main.async {
+                guard accepts(request) else { return }
+                let stateChanged = row.contains {
+                    $0.pid == request.toggle.pid && $0.overflow != nil && $0.overflow != request.direction
+                }
+                if stateChanged, request.direction == .hide || firstRevealed(old: request.old, new: row) != nil {
+                    let stable = request.candidate.map { sameRow($0, row) } ?? false
+                    let keptVisibleItems = request.direction == .show && request.old.allSatisfy { oldItem in
+                        row.contains { sameItem(oldItem, $0) }
+                    }
+                    if keptVisibleItems || stable {
+                        pendingOverflow = nil
+                        Log.io("status menus: overflow refreshed from \(request.old.count) to \(row.count) items")
+                        request.refreshed(row)
+                        return
+                    }
+                    request.candidate = row
+                } else {
+                    request.candidate = nil
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { readOverflow(request) }
+            }
+        }
     }
 
     /// The names, in order, for tests.
@@ -43,7 +199,7 @@ public enum StatusMenus {
         return nil
     }
 
-    static func gather() -> [Extra] {
+    nonisolated static func gather() -> [Extra] {
         let me = getpid()
         // Web content processes never own status items and answer slowly; everything else is asked at once.
         let apps = NSWorkspace.shared.runningApplications.filter {
@@ -51,7 +207,9 @@ public enum StatusMenus {
         }
         let found = Locked([[Extra]](repeating: [], count: apps.count))
         DispatchQueue.concurrentPerform(iterations: apps.count) { i in
-            found.value[i] = extras(of: apps[i])
+            let items = extras(of: apps[i])
+            // Store this app's result in one lock acquisition so parallel reads cannot lose another app's items.
+            found.lock.withLock { found.unsafeValue[i] = items }
         }
         return found.value.flatMap { $0 }.sorted { $0.x < $1.x }
     }
@@ -75,7 +233,11 @@ public enum StatusMenus {
             var x = 0.0
             if let v = item.attr(kAXPositionAttribute), CFGetTypeID(v as CFTypeRef) == AXValueGetTypeID() { var p = CGPoint.zero; axValue(v, .cgPoint, &p); x = p.x }
             let identifier = item.string(kAXIdentifierAttribute) ?? outer.string(kAXIdentifierAttribute)
-            mine.append(Extra(element: item, pid: app.processIdentifier, name: name(of: item, app: app), x: x, identifier: identifier))
+            let overflow = app.bundleIdentifier == "com.apple.MenuBarAgent"
+                ? [kAXDescriptionAttribute, kAXTitleAttribute].lazy.compactMap { item.string($0) }.compactMap(Overflow.matching).first
+                : nil
+            mine.append(Extra(element: item, pid: app.processIdentifier, name: name(of: item, app: app), x: x,
+                              identifier: identifier, overflow: overflow))
         }
         return mine
     }
@@ -150,14 +312,33 @@ public enum StatusMenus {
 
     public static func openList() {
         let extras = gather()
+        Log.io("status menus: \(extras.count) items")
+        TurnOverMenu.shared.openList("Status menus", items: listItems(extras))
+    }
+
+    private static func listItems(_ extras: [Extra]) -> [MenuItem] {
         var items = extras.map { e in
-            MenuItem(verbatim: e.name, .action {
+            if e.overflow != nil {
+                return MenuItem(verbatim: e.name, .select {
+                    let menu = TurnOverMenu.shared
+                    let generation = menu.listGeneration
+                    let front = NSWorkspace.shared.frontmostApplication?.processIdentifier
+                    toggleOverflow(e, from: extras, isCurrent: {
+                        menu.isOpen && menu.listGeneration == generation
+                            && NSWorkspace.shared.frontmostApplication?.processIdentifier == front
+                    }, refreshed: { row in
+                        menu.refreshList(generation: generation, items: listItems(row)) { selected in
+                            refreshedSelection(old: extras, new: row, selected: selected, toggle: e)
+                        }
+                    })
+                })
+            }
+            return MenuItem(verbatim: e.name, .action {
                 press(e.element, owner: e.pid, name: e.name)
             })
         }
         // TurnOver's own item, at the right of the others it sits beside.
         items.append(MenuItem("TurnOver", .action { DispatchQueue.main.async { TurnOverMenu.shared.open() } }))
-        Log.io("status menus: \(extras.count) items")
-        TurnOverMenu.shared.openList("Status menus", items: items)
+        return items
     }
 }
