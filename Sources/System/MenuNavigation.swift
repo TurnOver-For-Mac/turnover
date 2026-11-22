@@ -225,7 +225,8 @@ final class MenuNavigationPlugin: GlobalPlugin {
     /// The bar's titles while TurnOver's cursor is on them (no menu open yet), and which one.
     static var heldBar: (pid: pid_t, titles: [AXUIElement], index: Int)?
     /// Holding the status items instead (VO M M): their names and owning processes, by index.
-    static var heldStatus: (names: [String], pids: [pid_t])?
+    static var heldStatus: [StatusMenus.Extra]?
+    private static var statusSession = 0
     /// TurnOver's focus when the bar was taken, said again on leaving it (MenuBarOwner.leaving).
     static var cameFrom: TurnOverObject?
 
@@ -238,7 +239,8 @@ final class MenuNavigationPlugin: GlobalPlugin {
         let me = getpid()
         if heldBar == nil { cameFrom = API.focusObject }   // (VO M M: the first M held the bar, from that focus)
         heldBar = (pid, extras.map(\.element) + [AXUIElementCreateApplication(me)], 0)
-        heldStatus = (extras.map(\.name) + ["TurnOver"], extras.map(\.pid) + [me])
+        statusSession += 1
+        heldStatus = extras
         Speech.speakMessage(String(localized: "status menus, \(String(extras.count + 1))", comment: "The status menus list opened: how many"))
         sayBarTitle()
         Hints.schedule(String(localized: "Left and Right move along the status menus. Down opens one; Escape leaves.", comment: "Spoken message"))
@@ -285,8 +287,9 @@ final class MenuNavigationPlugin: GlobalPlugin {
 
     private static func sayBarTitle() {
         guard let h = heldBar else { return }
-        if let st = heldStatus, st.names.indices.contains(h.index) {
-            Speech.speakItem("\(st.names[h.index]), \(Phrases.position(h.index + 1, of: h.titles.count))")
+        if let st = heldStatus {
+            let name = st.indices.contains(h.index) ? st[h.index].name : "TurnOver"
+            Speech.speakItem("\(name), \(Phrases.position(h.index + 1, of: h.titles.count))")
             return
         }
         let t = h.titles[h.index]
@@ -296,7 +299,7 @@ final class MenuNavigationPlugin: GlobalPlugin {
 
     private static func barKey(_ g: KeyboardGesture) {
         guard var h = heldBar else { g.send(); return }
-        guard MenuBarOwner.pid == h.pid else { heldBar = nil; g.send(); return }
+        guard MenuBarOwner.pid == h.pid else { releaseBar(); g.send(); return }
         switch g.keyName {
         case "leftArrow", "rightArrow":
             let j = h.index + (g.keyName == "rightArrow" ? 1 : -1)
@@ -307,12 +310,28 @@ final class MenuNavigationPlugin: GlobalPlugin {
         case "downArrow", "space", "enter":
             let title = h.titles[h.index]
             Braille.releaseItem()   // (the bar's title came back on the display after the menu closed, 8 Oct 2026)
-            if let st = heldStatus, st.pids.indices.contains(h.index) {
-                // A status item: its own process answers (observed first), as the list did.
-                let name = st.names[h.index], owner = st.pids[h.index]
-                heldBar = nil; heldStatus = nil
-                if owner == getpid() { DispatchQueue.main.async { TurnOverMenu.shared.open() }; return }   // TurnOver's own: its menu
-                StatusMenus.press(title, owner: owner, name: name)
+            if let status = heldStatus {
+                guard status.indices.contains(h.index) else {
+                    releaseBar()
+                    DispatchQueue.main.async { TurnOverMenu.shared.open() }
+                    return
+                }
+                let item = status[h.index]
+                if item.overflow != nil {
+                    let session = statusSession, owner = h.pid
+                    StatusMenus.toggleOverflow(item, from: status, isCurrent: {
+                        statusSession == session && heldStatus != nil && heldBar?.pid == owner && MenuBarOwner.pid == owner
+                    }, refreshed: { row in
+                        guard let bar = heldBar else { return }
+                        let selection = StatusMenus.refreshedSelection(old: status, new: row, selected: bar.index, toggle: item)
+                        heldBar = (bar.pid, row.map(\.element) + [AXUIElementCreateApplication(getpid())], selection)
+                        heldStatus = row
+                        sayBarTitle()
+                    })
+                } else {
+                    releaseBar()
+                    StatusMenus.press(title, owner: item.pid, name: item.name)
+                }
                 return
             }
             heldBar = nil

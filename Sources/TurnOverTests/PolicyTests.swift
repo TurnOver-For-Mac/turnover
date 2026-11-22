@@ -9,6 +9,27 @@ import TurnOverControl
 import AXFixtures
 
 func policyTests() {
+
+    test("spoken lists: refreshing status items preserves the open list and cannot replace a newer list") {
+        let menu = TurnOverMenu.shared
+        let show = MenuItem(verbatim: "Show hidden items", .select {})
+        let hidden = MenuItem(verbatim: "Revealed item", .action {})
+        menu.openList(verbatim: "Status menus", items: [show])
+        let generation = menu.listGeneration
+        menu.refreshList(generation: generation, items: [show, hidden]) { _ in 1 }
+        expect(menu.debugPosition?.title, "Revealed item", "announces the newly revealed item")
+        expect(menu.debugPosition?.index, 1, "cursor moved to the revealed item")
+        expect(menu.debugPosition?.count, 2, "both items are reachable")
+        let other = MenuItem(verbatim: "Other item", .action {})
+        menu.openList(verbatim: "Another list", items: [other])
+        menu.refreshList(generation: generation, items: [show, hidden]) { _ in 1 }
+        expect(menu.debugPosition?.title, "Other item", "stale refresh did not reopen the old list")
+        expect(menu.debugPosition?.count, 1, "stale refresh did not replace the newer items")
+        menu.close()
+        menu.refreshList(generation: generation, items: [show, hidden]) { _ in 1 }
+        expect(menu.isOpen, false, "an asynchronous refresh cannot reopen a closed list")
+    }
+
     test("mode speech: complete readiness matrix selects only an exclusive ready reader") {
         for coexisting in [false, true] {
             for active in [false, true] {
