@@ -59,6 +59,8 @@ final class LeadWatcher {
 
     private(set) var locked = false
     private var sleepTokens: [NSObjectProtocol] = []
+    private var sessionLock = SessionLockObservation()
+    private var wakeAwaitingSessionState = false
 
     private func watchSleepAndLock() {
         let ws = NSWorkspace.shared.notificationCenter
@@ -66,20 +68,50 @@ final class LeadWatcher {
         sleepTokens.append(ws.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.goingAway("sleep") } })
         sleepTokens.append(ws.addObserver(forName: NSWorkspace.screensDidSleepNotification, object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.goingAway("display sleep") } })
         sleepTokens.append(ws.addObserver(forName: NSWorkspace.sessionDidResignActiveNotification, object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.goingAway("user switch") } })
-        sleepTokens.append(dnc.addObserver(forName: NSNotification.Name("com.apple.screenIsLocked"), object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.goingAway("lock") } })
-        sleepTokens.append(dnc.addObserver(forName: NSNotification.Name("com.apple.screenIsUnlocked"), object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.back("unlocked") } })
+        sleepTokens.append(dnc.addObserver(forName: NSNotification.Name("com.apple.screenIsLocked"), object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.sessionLock.noteLockNotification()
+                self.goingAway("lock")
+            }
+        })
+        sleepTokens.append(dnc.addObserver(forName: NSNotification.Name("com.apple.screenIsUnlocked"), object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                // A verified unlock resets the observation so a quick relock can be picked up between polls.
+                if Self.sessionScreenLock == false { _ = self.sessionLock.observe(false, watcherLocked: false) }
+                self.back("unlocked")
+            }
+        })
         sleepTokens.append(ws.addObserver(forName: NSWorkspace.sessionDidBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.back("session active") } })
         // The display waking without a lock (no unlock will come): back at once, unless the lock screen is up.
         for name in [NSWorkspace.screensDidWakeNotification, NSWorkspace.didWakeNotification] {
             sleepTokens.append(ws.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if !Self.screenIsLocked { self?.back("woke, not locked") } }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self?.pollScreenLock(woke: true) }
             })
         }
     }
 
-    static var screenIsLocked: Bool {
-        guard let d = CGSessionCopyCurrentDictionary() as? [String: Any] else { return false }
-        return (d["CGSSessionScreenIsLocked"] as? Bool) ?? (d["CGSSessionScreenIsLocked"] as? Int).map { $0 != 0 } ?? false
+    private static var sessionScreenLock: Bool? {
+        guard let session = CGSessionCopyCurrentDictionary() as? [String: Any] else { return nil }
+        return (session["CGSSessionScreenIsLocked"] as? NSNumber)?.boolValue ?? false
+    }
+
+    static var screenIsLocked: Bool { sessionScreenLock ?? false }
+
+    /// The lock window appeared without a TurnOver lock notice on 22 Nov 2026 (#361).
+    func pollScreenLock(woke: Bool = false) {
+        if woke { wakeAwaitingSessionState = true }
+        // The next regular poll can finish a wake check if the session is temporarily unavailable.
+        guard let screenLock = Self.sessionScreenLock else { return }
+        let checkingWake = wakeAwaitingSessionState
+        wakeAwaitingSessionState = false
+        switch sessionLock.observe(screenLock, watcherLocked: locked) {
+        case .lock: goingAway("lock detected by session")
+        case .unlock: back("unlock detected by session")
+        case nil:
+            if checkingWake, !screenLock { back("woke, not locked") }
+        }
     }
 
     /// The lock turned VoiceOver on (not the user): the notice of it may arrive only after the wake, minutes later,
@@ -178,6 +210,7 @@ final class LeadWatcher {
     private var lockRequest = LockVoiceOverRequest()
 
     private func goingAway(_ why: String) {
+        wakeAwaitingSessionState = false
         // Find's prompt does not wait behind the lock for letters typed after it (18 Nov 2026).
         FindPrompt.shared.close(because: why)
         // Sleep's second notice, while the first one's request for VoiceOver is under way: toggled again, VoiceOver went
@@ -191,11 +224,15 @@ final class LeadWatcher {
         // Retire a pending off-toggle even if VoiceOver is already on and the early return below is taken.
         retireWakeHandover()
         wakeWatchGeneration = nil
-        wakeRestoration.lock(readerWasActive: turnOverActive(), voiceOverAlreadyOn: NSWorkspace.shared.isVoiceOverEnabled, suspended: suspended)
+        let voiceOverWasEnabled = NSWorkspace.shared.isVoiceOverEnabled
+        wakeRestoration.lock(readerWasActive: turnOverActive(), voiceOverAlreadyOn: voiceOverWasEnabled, suspended: suspended)
         Watchdog.shared.noteAsleepOrLocked()
-        guard !NSWorkspace.shared.isVoiceOverEnabled else { Log.info("lead watcher: \(why); VoiceOver already on"); return }
+        if voiceOverWasEnabled, HandOver.voiceOverRunning {
+            Log.info("lead watcher: \(why); VoiceOver already on")
+            return
+        }
         Log.info("lead watcher: \(why); VoiceOver on for the lock screen")
-        lockTurnedVoiceOverOn = true
+        if !voiceOverWasEnabled { lockTurnedVoiceOverOn = true }
         lockRequest.start(now: ProcessInfo.processInfo.systemUptime)
         handOver(voiceOverOn: true, preservingWakeIntent: true, completion: { [weak self] _ in self?.lockRequest.answered() })
     }
@@ -492,7 +529,8 @@ final class LeadWatcher {
             // way, and on again as the next app does.
             let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
             let gameOff = !voiceOverOn && Games.leads(front)
-            let bringBack = voiceOverOn && !NSWorkspace.shared.isVoiceOverEnabled
+            let bringBack = voiceOverOn && (!NSWorkspace.shared.isVoiceOverEnabled
+                || (preservingWakeIntent && !HandOver.voiceOverRunning))
             if gameOff { gameAtToggle = NSWorkspace.shared.frontmostApplication; gameToggleAt = Date() }
             onCoexistLead?(!voiceOverOn)
             guard gameOff || bringBack else { Log.info("coexist: TurnOver \(voiceOverOn ? "steps back" : "takes the keys"); VoiceOver stays on"); return }
