@@ -415,6 +415,14 @@ public final class GlobalCommands: ScriptableObject {
         }
     }
 
+    /// Says where TurnOver's own cursor is, as the current line command does (once, not spelled): in browse mode the
+    /// browse cursor's line. Escape from the held menu bar uses it (issue 353).
+    static func sayBrowseCursor() {
+        guard let obj = API.caretObject, let info = try? obj.makeTextInfo(.caret) else { return }
+        info.expand(.line)
+        Speech.speakTextInfo(info, unit: .line, reason: .caret)
+    }
+
     /// JAWS's Insert+Home and Insert+Page Up: the line up to the cursor, or from it to the end. Twice spells it.
     static func reportLinePart(toCursor: Bool) {
         guard let obj = API.caretObject, let caret = try? obj.makeTextInfo(.caret) else { Speech.speakMessage(String(localized: "no text", comment: "No text at the cursor")); return }

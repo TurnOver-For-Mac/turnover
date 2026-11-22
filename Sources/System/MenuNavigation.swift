@@ -31,13 +31,28 @@ public enum MenuBarOwner {
     public static var pid: pid_t? { current() }
 
     /// What leaving the held bar without a choice says (Escape, or VO-M again).
-    public enum Leaving: Equatable { case focus, window, app }
+    public enum Leaving: Equatable { case focus, window, app, browse }
+
+    /// Whether an event is a real move of the focus, which lets go of the held bar (22 Nov 2026, issue 353): an app
+    /// activated or a new foreground window, or the focus gained by anything but the element the bar was taken
+    /// from. Holding the bar moves no system focus, so the hold itself never counts, and a focus event for the
+    /// element it came from (an app saying its focus again) is not a move. VoiceOver's cursor leaves the bar the same way.
+    public static func letsGoOfBar(_ kind: EventKind, isWhereItCameFrom: Bool) -> Bool {
+        switch kind {
+        case .foreground: return true
+        case .gainFocus: return !isWhereItCameFrom
+        default: return false
+        }
+    }
 
     /// The held bar never moves the keys, so the focus TurnOver had when the bar was taken is said again when it is
     /// still the focus and in another app than the bar's: in the Dock (its list has no name), Escape read the front
     /// app's window instead of the Dock item (a review, 6 Nov 2026). In the bar's own app, as before: a named focus,
     /// else the window's name, else the app is asked (refocus alone was silent when nothing had changed, 8 Oct 2026).
-    public static func leaving(focusPid: pid_t?, focusNamed: Bool, focusIsWhereItCameFrom: Bool, barPid: pid_t, windowNamed: Bool) -> Leaving {
+    public static func leaving(focusPid: pid_t?, focusNamed: Bool, focusIsWhereItCameFrom: Bool, barPid: pid_t, windowNamed: Bool, browseCursorInFocusApp: Bool = false) -> Leaving {
+        // TurnOver's cursor is on the page in browse mode while the keyboard focus sits elsewhere in the same app (the
+        // Claude app's Prompt field with the conversation read in browse mode): say the browse cursor, not the focus.
+        if focusPid != nil, browseCursorInFocusApp { return .browse }
         if let p = focusPid, focusIsWhereItCameFrom, p != barPid { return .focus }
         if let p = focusPid, p == barPid, focusNamed { return .focus }
         return windowNamed ? .window : .app
@@ -242,16 +257,30 @@ final class MenuNavigationPlugin: GlobalPlugin {
 
     static func releaseBar() { heldBar = nil; heldStatus = nil }
 
+    /// The focus moved for real while the bar was held: the bar goes, with nothing said, and the new focus is read as usual.
+    static func letGoOfBar() {
+        heldBar = nil; heldStatus = nil; cameFrom = nil
+        Braille.releaseItem()
+    }
+
     /// Leaving the bar of the app `pid`: where the keyboard still is, said (MenuBarOwner.leaving).
     static func backFromBar(pid: pid_t) {
         let f = API.focusObject, from = cameFrom
         cameFrom = nil
         switch MenuBarOwner.leaving(focusPid: f?.pid, focusNamed: !(f?.name.isEmpty ?? true), focusIsWhereItCameFrom: f?.isSameElement(as: from) ?? false,
-                                    barPid: pid, windowNamed: !(API.foregroundObject?.name.isEmpty ?? true)) {
+                                    barPid: pid, windowNamed: !(API.foregroundObject?.name.isEmpty ?? true),
+                                    browseCursorInFocusApp: browseCursorIsInFocusApp(focusPid: f?.pid)) {
+        case .browse: GlobalCommands.sayBrowseCursor()
         case .focus: if let f { Speech.speakObject(f, reason: .focus) }
         case .window: if let w = API.foregroundObject { Speech.speakMessage(w.name + ", " + Role.window.displayString) }
         case .app: AXHandler.shared.refocus(pid: pid)
         }
+    }
+
+    /// TurnOver is in browse mode (not focus mode) on the document of the app that has the focus.
+    private static func browseCursorIsInFocusApp(focusPid: pid_t?) -> Bool {
+        guard let p = focusPid, let d = API.focusTreeInterceptor, !d.passThrough else { return false }
+        return d.webArea.pid == p
     }
 
     private static func sayBarTitle() {
@@ -674,6 +703,11 @@ final class MenuNavigationPlugin: GlobalPlugin {
     private var settleScheduled = false
 
     override func handleEvent(_ event: Event, next: () -> Void) {
+        // A real move of the focus lets go of the held bar, silently; the event is then handled as always (issue 353).
+        if Self.heldBar != nil,
+           MenuBarOwner.letsGoOfBar(event.kind, isWhereItCameFrom: event.kind == .gainFocus && event.obj.isSameElement(as: Self.cameFrom)) {
+            Self.letGoOfBar()
+        }
         // The arrows stepping round a menu to wrap: the items passed are not spoken, only the one landed on.
         if event.kind == .selection, Date() < quietUntil { return }
         if event.kind == .menuEnd {

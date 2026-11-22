@@ -258,6 +258,30 @@ func policyTests() {
             expect(MenuBarOwner.leaving(focusPid: pid, focusNamed: named, focusIsWhereItCameFrom: cameFrom, barPid: bar, windowNamed: window), want, what)
         }
     }
+    test("menu bar: leaving the held bar in browse mode on the focus's app says the browse cursor, not the focus (issue 353)") {
+        let browse = MenuBarOwner.leaving(focusPid: 1352, focusNamed: true, focusIsWhereItCameFrom: true, barPid: 1352, windowNamed: true, browseCursorInFocusApp: true)
+        expect(browse, .browse, "Prompt has the focus, the browse cursor is on a heading")
+        let focusMode = MenuBarOwner.leaving(focusPid: 1352, focusNamed: true, focusIsWhereItCameFrom: true, barPid: 1352, windowNamed: true, browseCursorInFocusApp: false)
+        expect(focusMode, .focus, "focus mode or no document: the focus, as before")
+        let noFocus = MenuBarOwner.leaving(focusPid: nil, focusNamed: false, focusIsWhereItCameFrom: false, barPid: 1352, windowNamed: true, browseCursorInFocusApp: true)
+        expect(noFocus, .window, "no focus to be in the app of: as before")
+    }
+    test("menu bar: a real move of the focus lets go of the held bar, holding it and quiet events do not (issue 353)") {
+        // (what, the event, it is where the bar was taken from, lets go)
+        let table: [(String, EventKind, Bool, Bool)] = [
+            ("an app came to the front", .foreground, false, true),
+            ("a new foreground window of the same app", .foreground, true, true),
+            ("the focus landed on another element", .gainFocus, false, true),
+            ("the app said its focus again: the element the bar came from", .gainFocus, true, false),
+            ("the focus left something", .loseFocus, false, false),
+            ("a value changed", .valueChange, false, false),
+            ("a caret moved", .caret, false, false),
+            ("a menu opened", .menuStart, false, false),
+        ]
+        for (what, kind, same, want) in table {
+            expect(MenuBarOwner.letsGoOfBar(kind, isWhereItCameFrom: same), want, what)
+        }
+    }
     test("menu bar: after Escape closes a status menu the front app's focus is read, not the menu owner's (16 Nov 2026)") {
         // (what, the menu's pid, the front app's pid, the key, whose focus is asked)
         let table: [(String, pid_t, pid_t, String, pid_t)] = [
