@@ -81,7 +81,20 @@ public enum StatusMenus {
     }
 
     /// A spoken name: the item's label, else its owner's name, with the tooltip when it says more ("a Bluetooth device, Disconnected").
-    nonisolated static func name(of item: AXUIElement, app: NSRunningApplication) -> String {
+    /// 22 Nov 2026, issue 298: the item's value follows its name, as VoiceOver says it ("Battery, 100%, charging"); the
+    /// battery item said no level because only the label was read. With no value, the battery says what the power
+    /// source says (GlobalCommands.batteryText).
+    public nonisolated static func name(of item: AXUIElement, app: NSRunningApplication) -> String {
+        let base = labelName(of: item, app: app)
+        // Words only: a bare number (a third-party item's 0 or 1) would be said as a meaningless "Name, 1".
+        var value = (item.attr(kAXValueAttribute) as? String) ?? ""
+        value = value.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "\n", with: ", ")
+        if value.isEmpty, (item.string(kAXIdentifierAttribute) ?? "").hasSuffix(".battery") { value = GlobalCommands.batteryText() }
+        guard !value.isEmpty, !base.localizedCaseInsensitiveContains(value) else { return base }
+        return "\(base), \(value)"
+    }
+
+    nonisolated static func labelName(of item: AXUIElement, app: NSRunningApplication) -> String {
         func clean(_ s: String?) -> String? {
             let t = (s ?? "").trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "-–")))
             return t.isEmpty || t.lowercased() == "menu" ? nil : t
