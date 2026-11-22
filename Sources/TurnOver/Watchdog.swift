@@ -186,6 +186,7 @@ final class Watchdog: @unchecked Sendable {   // its state is under `lock`
                     }
                     guard let fresh = attempt.takeForInstallation() else { return }
                     Speech.player = fresh
+                    old.retire()   // 22 Nov 2026, issue 350: kept alive for good, and its audio shut down on its own queue once that is free; this returns at once. Not in Speech.player's didSet: tests swap players back.
                     Log.error("speech: the speech queue was stuck for \(Int(seconds)) s; a fresh speech player in its place")
                 } }
             } catch { Log.error("speech: no fresh speech player (\(error)); restarting TurnOver") }
