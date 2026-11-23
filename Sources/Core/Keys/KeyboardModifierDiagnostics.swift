@@ -25,7 +25,8 @@ public enum KeyboardModifierDiagnostics {
 
     /// From the main thread, as each key is decided (InputManager.handleKeyDown).
     public static func record(_ gesture: KeyboardGesture) {
-        let switcherOpen = API.focusObject is AppSwitcherList
+        // Open only while Command is held (22 Nov 2026, issue 351): the list can stay the focus after the switcher closes.
+        let switcherOpen = API.focusObject is AppSwitcherList && SwitcherCloseWatcher.commandHeld
         let keyboardFlags = CGEventSource.flagsState(.hidSystemState)
         let controlOptionIsTurnOver = KeySettings.current.controlOptionIsTurnOver
         if let line = line(for: gesture, keyboardFlags: keyboardFlags, controlOptionIsTurnOver: controlOptionIsTurnOver,

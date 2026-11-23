@@ -94,24 +94,9 @@ extension AXHandler {
         guard commandHeld else { return .go(target) }
         Log.io("focus from pid \(pid) while the app switcher is up; set aside")
         // Escape can close the switcher with Command still held, and the app's focus then comes back with no further
-        // news (Codex's second review, 14 Nov 2026): once Command is let go, if the switcher is still what TurnOver
-        // has as the focus, the app's own focus is asked for and read.
-        reconcileAfterSwitcher(pid: pid, waited: 0)
+        // news: the watcher started when the list gained the focus reads it again (SwitcherCloseWatcher, 22 Nov 2026,
+        // issue 351; it replaced reconcileAfterSwitcher, which only covered this one app and this one case).
         return .ignore
-    }
-
-    func reconcileAfterSwitcher(pid: pid_t, waited: Double) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-            guard let self, API.focusObject is AppSwitcherList else { return }
-            let commandHeld = CGEventSource.flagsState(.combinedSessionState).contains(.maskCommand)
-            if commandHeld, waited < 10 { self.reconcileAfterSwitcher(pid: pid, waited: waited + 0.2); return }
-            guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { return }
-            let app = AXUIElementCreateApplication(pid)
-            AXUIElementSetMessagingTimeout(app, 0.25)
-            guard let f = app.element(kAXFocusedUIElementAttribute) else { return }
-            Log.io("focus: the app switcher went without news; the app's own focus, \(f.role)")
-            self.focusChanged(f, pid: pid)
-        }
     }
 
     /// An ordinary application in the background (Safari's page reloading behind Mail, 2 Oct 2026) can post focus
@@ -412,6 +397,8 @@ extension AXHandler {
                 Log.io("focus on a nameless AXUnknown in a new app; held quietly, asking again shortly")
                 let obj = ObjectFactory.make(target)
                 API.setFocusObject(obj, ancestors: obj.ancestors)
+                // The cursor goes to the new app too, not left in the one that was left (22 Nov 2026, issue 351).
+                ObjectNavigator.shared.focusMoved(to: target, pid: pid)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
                     guard let self, API.focusPid == pid, let f = AXUIElementCreateApplication(pid).element(kAXFocusedUIElementAttribute),
                           !f.isSame(target), f.role != "AXUnknown" else { return }
@@ -664,6 +651,9 @@ extension AXHandler {
             let obj = ObjectFactory.make(target)
             focusWindow = target
             API.setFocusObject(obj, ancestors: obj.ancestors)
+            // The review cursor goes with it (22 Nov 2026, issue 351): PS Remote Play's focus is its window, said as the
+            // foreground, and with no cursor move TurnOver Right read the app left behind.
+            ObjectNavigator.shared.focusMoved(to: target, pid: pid)
             return .done
         }
         return .go(target)

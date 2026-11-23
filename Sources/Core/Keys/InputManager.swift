@@ -116,6 +116,8 @@ public enum InputManager {
         FormattingFeedback.shared.cancel()
         lastKeyDownAt = Date()
         // A log line only, with the switcher open or a TurnOver key seemingly lost (16 Nov 2026).
+        // The switcher gone but still TurnOver's focus: read the app in front first, so this key acts on it (22 Nov 2026, issue 351).
+        SwitcherCloseWatcher.reconcileBeforeKey(gesture)
         KeyboardModifierDiagnostics.record(gesture)
         AppSwitcherDiagnostics.keyDown(gesture)
         // The keyboard commands editor is waiting for a key: this one is it (Escape cancels). Nothing else runs.

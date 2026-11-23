@@ -43,7 +43,12 @@ public final class ObjectNavigator {
         // toolbar buttons hand it back to the page): the cursor stays on the item. Following the bounce put the
         // cursor on the page, so VO-Right from the toolbar's first button bumped at an edge, or landed on the window's
         // close button (issue 106, 26 Oct 2026).
-        if let f = followed, Date().timeIntervalSince(f.at) < 1.5, !CFEqual(f.element, e) {
+        // Only a bounce inside the same app: a focus in another app is the user having switched, and the cursor goes
+        // with it (22 Nov 2026, issue 351: PS Remote Play's window came forward and TurnOver Right still read the app
+        // left behind, and even moved its keyboard focus). `currentPid` is set wherever `current` is, bar the two places
+        // that clear `current` to nil; with no cursor there is nothing to keep, so it is not asked then.
+        if let f = followed, Self.keepsCursorAfterFollowing(cursorPid: current == nil ? nil : currentPid, focusPid: pid),
+           Date().timeIntervalSince(f.at) < 1.5, !CFEqual(f.element, e) {
             var p: AXUIElement? = e; var hops = 0; var inside = false
             while let x = p, hops < 10 { if x.isSame(f.element) { inside = true; break }; p = x.element(kAXParentAttribute); hops += 1 }
             if !inside { Log.io("review: the focus moved on to \(e.role) after following the cursor; the cursor stays"); return }
@@ -52,8 +57,15 @@ public final class ObjectNavigator {
     }
     private var keepHoldUntil = Date.distantPast
 
+    /// Whether the "focus moved on after following the cursor" rule may keep the cursor: only when the new focus is in
+    /// the app the cursor is in (22 Nov 2026, issue 351). No cursor, or a focus in another app, always moves it.
+    nonisolated package static func keepsCursorAfterFollowing(cursorPid: pid_t?, focusPid: pid_t) -> Bool {
+        guard let cursorPid else { return false }
+        return cursorPid == focusPid
+    }
+
     /// The focus TurnOver gave to what its cursor landed on, and when.
-    private var followed: (element: AXUIElement, at: Date)?
+    package var followed: (element: AXUIElement, at: Date)?   // package, not private: the tests set it (22 Nov 2026)
     public func isFollowedFocus(_ e: AXUIElement) -> Bool {
         guard let f = followed, Date().timeIntervalSince(f.at) < 1.5 else { return false }
         return CFEqual(f.element, e)
@@ -727,7 +739,8 @@ public final class ObjectNavigator {
     }
 
     private static func speakSearchNotice(_ stop: WindowSearchStopKind) {
-        let inSwitcher = API.focusObject is AppSwitcherList || API.focusObject is AppSwitcherItem
+        // Open only while Command is held: the list can stay TurnOver's focus after it closes (22 Nov 2026, issue 351).
+        let inSwitcher = (API.focusObject is AppSwitcherList || API.focusObject is AppSwitcherItem) && SwitcherCloseWatcher.commandHeld
         switch WindowSearchNotice.notice(for: stop, focusInSwitcher: inSwitcher) {
         case .switcherOpen: Speech.speakMessage(String(localized: "application switcher is open", comment: "Spoken message: a heading or link search was asked for while Command-Tab's list is showing"))
         case .nothingToSearch: Speech.speakMessage(String(localized: "nothing to search", comment: "Spoken message"))
