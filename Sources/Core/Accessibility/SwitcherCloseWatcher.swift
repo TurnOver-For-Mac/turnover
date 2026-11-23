@@ -55,20 +55,39 @@ package enum SwitcherCloseWatcher {
         return waited >= activationSeconds ? .recoverActivation : .keepWaiting
     }
 
-    private static var generation = 0   // main actor, like the rest of Core: start, the polls and reconcile all run there
+    private(set) static var generation = 0
+    private static let focusRead = AXWalkRunner<AXUIElement?>()
+    private static var recovery: Recovery?
+    nonisolated package static let isWatching = Locked(false)
+
+    @MainActor private final class Recovery {
+        let pid: pid_t
+        let opening: Int
+        weak var list: AppSwitcherList?
+        var keys: [() -> Void] = []
+
+        init(pid: pid_t, opening: Int, list: AppSwitcherList) {
+            self.pid = pid
+            self.opening = opening
+            self.list = list
+        }
+    }
 
     static var commandHeld: Bool { CGEventSource.flagsState(.combinedSessionState).contains(.maskCommand) }
 
     /// Called when the switcher's list gains the focus. A newer opening replaces an older watcher.
     package static func start() {
+        cancelRecovery()
         generation &+= 1
+        isWatching.value = true
         poll(generation: generation, firstClosedAt: nil)
     }
 
     private static func poll(generation gen: Int, firstClosedAt: Date?, destinationFocusPid: pid_t? = nil) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             let handler = AXHandler.shared
-            guard gen == generation, handler.running else { return }
+            guard gen == generation else { return }
+            guard handler.running else { isWatching.value = recovery != nil; return }
             let focus = API.focusObject
             let list = focus as? AppSwitcherList
             let held = commandHeld
@@ -76,7 +95,10 @@ package enum SwitcherCloseWatcher {
             let open = role.map { !$0.isEmpty && $0 != "?" } ?? false
             let closedAt = open ? nil : (firstClosedAt ?? Date())
             let front = NSWorkspace.shared.frontmostApplication
-            if let destinationFocusPid, front?.processIdentifier != destinationFocusPid { return }
+            if let destinationFocusPid, front?.processIdentifier != destinationFocusPid {
+                isWatching.value = recovery != nil
+                return
+            }
             let step = decide(commandHeld: held, frontPid: front?.processIdentifier,
                               activePid: handler.activePid, lastAnnounced: AppSwitcherDiagnostics.lastAnnounced,
                               frontName: front?.localizedName, closedFor: closedAt.map { Date().timeIntervalSince($0) },
@@ -85,13 +107,17 @@ package enum SwitcherCloseWatcher {
             case .keepWaiting:
                 poll(generation: gen, firstClosedAt: closedAt, destinationFocusPid: list == nil ? focus?.pid : nil)
             case .stop:
+                isWatching.value = recovery != nil
                 if list != nil { Log.io("application switcher closed; no app in front to read") }
             case .refocusActive:
-                generation &+= 1
-                reconcile(pid: front?.processIdentifier ?? 0, why: "the app switcher went without news")
+                if let pid = front?.processIdentifier, let list {
+                    beginRecovery(pid: pid, list: list)
+                } else {
+                    isWatching.value = recovery != nil
+                }
             case .recoverActivation:
+                isWatching.value = recovery != nil
                 guard let front, front.processIdentifier != getpid() else { return }
-                generation &+= 1
                 let pid = front.processIdentifier
                 Log.io("focus: the app switcher went without activation; recovering pid \(pid)")
                 let finish = fallbackFocus(pid: pid)
@@ -101,14 +127,99 @@ package enum SwitcherCloseWatcher {
         }
     }
 
-    /// The second line of defence, from the key decision (InputManager): a list still the focus with Command not held
-    /// and the key not a Command key means the switcher has gone, so the app in front is read before the key is handled.
-    static func reconcileBeforeKey(_ gesture: KeyboardGesture) {
-        guard API.focusObject is AppSwitcherList, !commandHeld, !gesture.modifiers.contains(.command),
-              let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier else { return }
-        // A different front app still needs the workspace activation, even if this read recovers its focus.
-        if pid == AXHandler.shared.activePid { generation &+= 1 }
-        reconcile(pid: pid, why: "a key came after the app switcher went", immediate: true)
+    /// Give the focus read a head start when the keyboard tap sees Command released.
+    package static func commandReleased() {
+        guard let list = API.focusObject as? AppSwitcherList, !commandHeld,
+              let front = NSWorkspace.shared.frontmostApplication,
+              front.processIdentifier == AppSwitcherList.openedOver,
+              let chosen = AppSwitcherDiagnostics.lastAnnounced, !chosen.isEmpty, chosen == front.localizedName,
+              recovery == nil else { return }
+        beginRecovery(pid: front.processIdentifier, list: list)
+    }
+
+    /// Retain the normal input decision until a destination is available. The tap returns before any AX work.
+    static func holdInput(_ gesture: KeyboardGesture, run: @escaping () -> Void) -> Bool {
+        // Decide Command-Tab normally so capture, input help and user bindings still take precedence.
+        if isSwitcherGesture(gesture) { return false }
+        guard (isWatching.value || recovery != nil), let front = NSWorkspace.shared.frontmostApplication else { return false }
+        let pid = front.processIdentifier
+        if let pending = recovery, pending.pid != pid { cancelRecovery() }
+        if recovery == nil, !commandHeld, !gesture.modifiers.contains(.command), let list = API.focusObject as? AppSwitcherList {
+            beginRecovery(pid: pid, list: list)
+        }
+        guard let recovery else { return false }
+        recovery.keys.append(run)
+        return true
+    }
+
+    static func passedThrough(_ gesture: KeyboardGesture) {
+        if recovery != nil, isSwitcherGesture(gesture) { cancelRecovery() }
+    }
+
+    private static func isSwitcherGesture(_ gesture: KeyboardGesture) -> Bool {
+        gesture.keyName == "tab" && gesture.modifiers.contains(.command)
+    }
+
+    private static func beginRecovery(pid: pid_t, list: AppSwitcherList) {
+        guard pid > 0, AXHandler.shared.running, MenuNavigationPlugin.heldBar == nil,
+              MenuNavigationPlugin.heldStatus == nil else { return }
+        if let recovery, recovery.pid == pid { return }
+        cancelRecovery()
+        let pending = Recovery(pid: pid, opening: generation, list: list)
+        recovery = pending
+        isWatching.value = true
+        focusRead.submit(collect: { _ in
+            let app = AXUIElementCreateApplication(pid)
+            AXUIElementSetMessagingTimeout(app, 0.12)
+            return app.element(kAXFocusedUIElementAttribute)
+        }, publish: { [weak pending] focus in
+            if let pending { finishRecovery(pending, focus: focus) }
+        })
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.13) { [weak pending] in
+            if let pending { finishRecovery(pending, focus: nil) }
+        }
+    }
+
+    private static func cancelRecovery() {
+        if recovery?.keys.isEmpty == false { Log.io("focus: superseded switcher input was discarded") }
+        recovery = nil
+        focusRead.cancel()
+    }
+
+    private static func finishRecovery(_ pending: Recovery, focus: AXUIElement?) {
+        guard recovery === pending else { return }
+        let handler = AXHandler.shared
+        guard handler.running, pending.opening == generation,
+              NSWorkspace.shared.frontmostApplication?.processIdentifier == pending.pid else {
+            cancelRecovery()
+            isWatching.value = handler.running && API.focusObject is AppSwitcherList
+            return
+        }
+        // Command may have been pressed again while the read was on its way. A new Command-Tab cancels
+        // this recovery; for another shortcut, wait for release before restoring the original app's focus.
+        if commandHeld {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.025) { [weak pending] in
+                if let pending { finishRecovery(pending, focus: focus) }
+            }
+            return
+        }
+        focusRead.cancel()
+        defer {
+            if recovery === pending { recovery = nil }
+            if generation == pending.opening, recovery == nil {
+                isWatching.value = API.focusObject is AppSwitcherList
+            }
+        }
+        if let list = pending.list, API.focusObject === list,
+           MenuNavigationPlugin.heldBar == nil, MenuNavigationPlugin.heldStatus == nil {
+            if let focus { handler.focusChanged(focus, pid: pending.pid) }
+            if API.focusObject === list { fallbackFocus(pid: pending.pid)() }
+        }
+        guard recovery === pending, pending.opening == generation,
+              NSWorkspace.shared.frontmostApplication?.processIdentifier == pending.pid else { return }
+        let keys = pending.keys
+        recovery = nil
+        for run in keys { run() }
     }
 
     /// A second Command Tab can open the same list over the same app before the old close finishes.
@@ -121,19 +232,6 @@ package enum SwitcherCloseWatcher {
         }
     }
 
-    /// Reads the app's own focus again, quietly for the app switcher's sake: nothing extra is said unless the app's
-    /// focus is something new, as for any refocus. If the app gives no focused element (it is not answering) the list
-    /// must still stop being the focus: the app itself becomes the focus, quietly, as after its last window closes.
-    private static func reconcile(pid: pid_t, why: String, immediate: Bool = false) {
-        guard pid > 0 else { return }
-        Log.io("focus: \(why); reading the app's own focus (pid \(pid))")
-        // The focus change may be handled a moment later, so the check waits a little, except before a key, which
-        // must act on the app now.
-        let finish = fallbackFocus(pid: pid)
-        AXHandler.shared.refocus(pid: pid)
-        if immediate { finish() } else { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { finish() } }
-    }
-
     private static func fallbackFocus(pid: pid_t) -> () -> Void {
         unlessReopened {
             guard AXHandler.shared.running, API.focusObject is AppSwitcherList else { return }
@@ -142,7 +240,7 @@ package enum SwitcherCloseWatcher {
             guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { return }
             Log.io("focus: pid \(pid) gave no focus; the app itself is the focus")
             let app = AXUIElementCreateApplication(pid)
-            let obj = ObjectFactory.make(app)
+            let obj = TurnOverObject(knownApplication: app, pid: pid)
             API.setFocusObject(obj, ancestors: [])
             ObjectNavigator.shared.focusMoved(to: app, pid: pid)
         }

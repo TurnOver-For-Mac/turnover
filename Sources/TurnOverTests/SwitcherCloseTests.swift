@@ -3,6 +3,7 @@ import Foundation
 import ApplicationServices
 import AXFixtures
 import TurnOverCore
+import TurnOverAX
 
 /// The application switcher closing without news (issue 351, 22 Nov 2026). The decision is pure; the review cursor's
 /// rule is tested on recorded elements (logic only: the timing and the real switcher were not tried here).
@@ -13,6 +14,44 @@ func switcherCloseTests() {
                 focusedPid: pid_t? = nil) -> SwitcherCloseStep {
         W.decide(commandHeld: held, frontPid: front, activePid: active, lastAnnounced: said,
                  frontName: name, closedFor: closed, switcherFocused: switcherFocused, focusedPid: focusedPid)
+    }
+
+    test("switcher input: a decision's outputs stay in order before the next decision") {
+        let savedPoster = KeyboardGesture.orderedPoster
+        let posted = Locked<[String]>([])
+        KeyboardGesture.orderedPoster = { posted.value.append($0.identifier) }
+        defer {
+            ScriptHandler.resetOrderedLane()
+            KeyboardGesture.orderedPoster = savedPoster
+        }
+        func gesture(_ key: String) -> KeyboardGesture { KeyboardGesture(identifier: "kb:" + key)! }
+        func pump() { RunLoop.current.run(until: Date().addingTimeInterval(0.025)) }
+
+        var decisions = [String]()
+        ScriptHandler.queueInput(gesture("a"), isCurrent: { true }) { key in
+            decisions.append(key.identifier)
+            ScriptHandler.queueInOrder(key, lookUp: false, notes: false, masked: true)
+            ScriptHandler.queueInOrder(gesture("b"), lookUp: false, notes: false, masked: true)
+        }
+        ScriptHandler.queueInput(gesture("c"), isCurrent: { true }) { key in
+            decisions.append(key.identifier)
+            ScriptHandler.queueInOrder(key, lookUp: false, notes: false, masked: true)
+        }
+        ScriptHandler.queueInput(gesture("d"), isCurrent: { false }) { decisions.append($0.identifier) }
+
+        pump()
+        expect(posted.value, ["kb:a"], "the first output reaches the tap first")
+        expect(decisions, ["kb:a"], "the next key has not been decided")
+        ScriptHandler.orderedKeySeen()
+        pump()
+        expect(posted.value, ["kb:a", "kb:b"], "the second output is next")
+        expect(decisions, ["kb:a"], "the next key still waits")
+        ScriptHandler.orderedKeySeen()
+        pump()
+        expect(posted.value, ["kb:a", "kb:b", "kb:c"], "the next decision's key follows both outputs")
+        ScriptHandler.orderedKeySeen()
+        pump()
+        expect(decisions, ["kb:a", "kb:c"], "the stale gesture never reaches the input decision")
     }
 
     test("switcher close: nothing is read while Command is held, however long") {

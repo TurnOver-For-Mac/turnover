@@ -441,7 +441,12 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         // to the app in front while coexisting, every key to a game TurnOver leads), since it was posted unrouted so as
         // to come through here in its place.
         if event.getIntegerValueField(.eventSourceUserData) == Self.orderedMarker {
-            if type == .keyDown { ScriptHandler.orderedKeySeen() }
+            if type == .keyDown {
+                if event.getIntegerValueField(.keyboardEventKeycode) == 48, event.flags.contains(.maskCommand) {
+                    clearLeftoverModifiers(before: "Command Tab")
+                }
+                ScriptHandler.orderedKeySeen()
+            }
             return passOrRedirect(event)
         }
         let code = event.getIntegerValueField(.keyboardEventKeycode)
@@ -500,6 +505,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
                 if event.flags.contains(.maskCommand) {
                     loneCommand.down(alone: event.flags.intersection(others).isEmpty && !capsDown, secureInput: secure)
                 } else {
+                    onMain { SwitcherCloseWatcher.commandReleased() }
                     let tapped = loneCommand.up(secureInput: secure)
                     if loneCommand.setAsideForSecureInput, settings.windowsKeys { Log.io("command released alone with secure input on: not taken") }
                     if tapped, settings.windowsKeys {
@@ -609,17 +615,26 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         // same (Control C to Command C, Control Left to Option Left). TurnOver's own bindings (browse mode's Home,
         // Control Home) keep their keys. The key's release is translated to match.
         // The lookup happens once, here, and is handed on; a TurnOver chord is not looked up on this thread at all.
-        if settings.windowsKeys, !mods.contains(.turnover), ScriptHandler.mainHasScript(for: gesture) == false, WindowsRemap.apply(.keyDown, event) {
-            remapped.insert(code)
-            let c2 = event.getIntegerValueField(.keyboardEventKeycode)
-            var m2 = Modifiers()
-            if event.flags.contains(.maskShift) { m2.insert(.shift) }
-            if event.flags.contains(.maskControl) { m2.insert(.control) }
-            if event.flags.contains(.maskAlternate) { m2.insert(.option) }
-            if event.flags.contains(.maskCommand) { m2.insert(.command) }
-            gesture = KeyboardGesture(keyCode: c2, modifiers: m2, characters: Self.characters(of: event), timestamp: gesture.timestamp, isRepeat: gesture.isRepeat, flags: event.flags)
+        let prepareAfterSwitcher: (@MainActor @Sendable (KeyboardGesture) -> KeyboardGesture)?
+        if settings.windowsKeys, !mods.contains(.turnover), !mods.contains(.command),
+           SwitcherCloseWatcher.isWatching.value || ScriptHandler.hasDeferredInput.value {
+            prepareAfterSwitcher = { g in
+                let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
+                guard ScriptHandler.findScript(for: g) == nil,
+                      let key = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(g.keyCode), keyDown: true) else { return g }
+                key.flags = g.flags
+                guard WindowsRemap.apply(.keyDown, key, frontApp: front) else { return g }
+                return Self.remappedGesture(g, event: key)
+            }
+        } else {
+            prepareAfterSwitcher = nil
         }
-        switch ScriptHandler.askMain(gesture) {
+        if prepareAfterSwitcher == nil, settings.windowsKeys, !mods.contains(.turnover),
+           ScriptHandler.mainHasScript(for: gesture) == false, WindowsRemap.apply(.keyDown, event) {
+            remapped.insert(code)
+            gesture = Self.remappedGesture(gesture, event: event)
+        }
+        switch ScriptHandler.askMain(gesture, prepareAfterSwitcher: prepareAfterSwitcher) {
         case .taken, .deferred:
             quarantined.insert(code)
             return nil
@@ -627,6 +642,17 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
             if code == 48, event.flags.contains(.maskCommand) { clearLeftoverModifiers(before: "Command Tab") }
             return passOrRedirect(event)
         }
+    }
+
+    private static func remappedGesture(_ gesture: KeyboardGesture, event: CGEvent) -> KeyboardGesture {
+        let code = event.getIntegerValueField(.keyboardEventKeycode)
+        var modifiers = Modifiers()
+        if event.flags.contains(.maskShift) { modifiers.insert(.shift) }
+        if event.flags.contains(.maskControl) { modifiers.insert(.control) }
+        if event.flags.contains(.maskAlternate) { modifiers.insert(.option) }
+        if event.flags.contains(.maskCommand) { modifiers.insert(.command) }
+        return KeyboardGesture(keyCode: code, modifiers: modifiers, characters: characters(of: event),
+                               timestamp: gesture.timestamp, isRepeat: gesture.isRepeat, flags: event.flags)
     }
 
     /// VoiceOver's arrow-key Quick Nav: while it is on and the arrows are its (ArrowQuickNav.applies), a bare arrow
