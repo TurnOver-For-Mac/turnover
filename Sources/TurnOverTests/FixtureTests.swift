@@ -1826,6 +1826,40 @@ func focusRuleTests() {
         guard let module = pagesModule() else { return Harness.fail("Pages' module is registered") }
         expect(module.redirectFocus(AXReplay.element(2)).flatMap { AXReplay.id(of: $0) }, 6, "the second page's body text is the focus")
     }
+    test("Pages: coming to Pages, the body text's focus is no hop from another page") {
+        guard let kind = pagesBodyClass() else { return Harness.fail("Pages' body text has its class") }
+        AXReplay.load(pages(caret: true)); defer { AXReplay.unload(); API.setFocusObject(nil, ancestors: []); InputManager.lastKeyDownAt = .distantPast }
+        guard let module = pagesModule(for: 4) else { return Harness.fail("Pages' module is registered") }
+        let body = kind.init(element: AXReplay.element(4))
+        // As present() leaves it: the new focus is TurnOver's already, Command-Tab has just gone down, and the focus
+        // that left was another app's.
+        API.setFocusObject(body, ancestors: [])
+        InputManager.lastKeyDownAt = Date()
+        check(!module.ignoresFocus(Event(.gainFocus, body)), "the first focus in Pages is read")
+    }
+    test("Pages: coming back to Pages within a second of leaving it, the body text's focus is no hop") {
+        guard let kind = pagesBodyClass() else { return Harness.fail("Pages' body text has its class") }
+        AXReplay.load(pages(caret: true)); defer { AXReplay.unload(); API.setFocusObject(nil, ancestors: []); InputManager.lastKeyDownAt = .distantPast }
+        guard let module = pagesModule(for: 4) else { return Harness.fail("Pages' module is registered") }
+        let body = kind.init(element: AXReplay.element(4))
+        // Command-Tab away: the body text's loseFocus comes to Pages as the other app's focus is presented. Command-Tab
+        // back at once: Pages comes to the front, and its body text has the focus again (a code review, 29 Oct 2026).
+        module.handleEvent(Event(.loseFocus, body)) {}
+        module.event_appModuleGainFocus()
+        API.setFocusObject(body, ancestors: [])
+        InputManager.lastKeyDownAt = Date()
+        check(!module.ignoresFocus(Event(.gainFocus, body)), "the focus on coming back is read")
+    }
+    test("Pages: a hop from one page's body text to another's just after a key is quiet") {
+        guard let kind = pagesBodyClass() else { return Harness.fail("Pages' body text has its class") }
+        AXReplay.load(pages(caret: true)); defer { AXReplay.unload(); API.setFocusObject(nil, ancestors: []); InputManager.lastKeyDownAt = .distantPast }
+        guard let module = pagesModule(for: 6) else { return Harness.fail("Pages' module is registered") }
+        let old = kind.init(element: AXReplay.element(4)), new = kind.init(element: AXReplay.element(6))
+        module.handleEvent(Event(.loseFocus, old)) {}
+        API.setFocusObject(new, ancestors: [])
+        InputManager.lastKeyDownAt = Date()
+        check(module.ignoresFocus(Event(.gainFocus, new)), "the hop is quiet: the key's own reading stands")
+    }
     test("Pages: after a key the copy of the text that gives the caret stays the focus") {
         guard let kind = pagesBodyClass() else { return Harness.fail("Pages' body text has its class") }
         AXReplay.load(pages(caret: true)); defer { AXReplay.unload(); API.setFocusObject(nil, ancestors: []) }
