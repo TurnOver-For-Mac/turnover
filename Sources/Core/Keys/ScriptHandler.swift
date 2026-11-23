@@ -8,6 +8,7 @@
 // on the main thread, one script at a time; a script that is still waiting
 // for the caret gives way when another gesture arrives.
 import Foundation
+import AppKit
 import TurnOverAX
 
 public enum ScriptHandler {
@@ -15,12 +16,13 @@ public enum ScriptHandler {
     /// A queued key: a script to run, or (16 Nov 2026, review) a key in the ordered lane, looked up when its turn
     /// comes or sent on to the application in its turn (`queueInOrder`).
     private struct Queued {
-        enum Kind { case script(Script), lookUp, send }
+        enum Kind { case script(Script), lookUp, send, input(isCurrent: () -> Bool, route: (KeyboardGesture) -> Void) }
         let kind: Kind
         let gesture: KeyboardGesture
         let wasInSayAll: Bool
         /// In the ordered lane: the keys the script sends are sent in order too (`sendInOrder`).
         var inOrder = false
+        var fromDeferredInput = false
         /// A key typed for a field: the log names its command, never the key.
         var masked = false
         /// After it is sent: the watchers and the typed character's echo (a key that was not noted on its way in).
@@ -32,6 +34,13 @@ public enum ScriptHandler {
     private static var queued: [Queued] = []
     /// An entry of the ordered lane is running (a script that waits for the caret lets keys in meanwhile).
     private static var runningInOrder = false
+    /// A normal input decision in the lane can enqueue its own script or pass-through ahead of the next input.
+    private struct InputRoute {
+        let isCurrent: () -> Bool
+        var nextInsertion = 0
+    }
+    private static var routingInput: InputRoute?
+    nonisolated package static let hasDeferredInput = Locked(false)
     private static var _running = false
     private static var lastScript: Script?
     private static var lastScriptTime = Date.distantPast
@@ -139,7 +148,10 @@ public enum ScriptHandler {
         supersedingKeys.lock.lock(); supersedingKeys.unsafeValue &+= 1; supersedingKeys.lock.unlock()
     }
 
-    nonisolated public static func askMain(_ gesture: KeyboardGesture) -> KeyDecision {
+    nonisolated public static func askMain(
+        _ gesture: KeyboardGesture,
+        prepareAfterSwitcher: (@MainActor @Sendable (KeyboardGesture) -> KeyboardGesture)? = nil
+    ) -> KeyDecision {
         noteKeyArrived(gesture)
         guard !(mainStuck?() ?? false) else { Log.warning("keyboard: the main thread is not beating; \(gesture.logDescription()) goes through"); return .passed }
         let state = Locked(Wait.waiting); let done = DispatchSemaphore(value: 0)
@@ -148,7 +160,28 @@ public enum ScriptHandler {
             // What the main thread had begun before this key got its turn: the likely cause of a late answer (17 Nov 2026,
             // WhatsApp's first activation held two keys for 0.8 and 1.0 s with nothing in the log to say what).
             let busyWith = Core.mainWork.value, turnCameAt = DispatchTime.now().uptimeNanoseconds   // formatted only if it is late
-            let taken = InputManager.handleKeyDown(gesture)
+            let routeLater = {
+                let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier
+                let opening = SwitcherCloseWatcher.generation
+                queueInput(gesture, isCurrent: {
+                    opening == SwitcherCloseWatcher.generation &&
+                        pid == NSWorkspace.shared.frontmostApplication?.processIdentifier
+                }) { original in
+                    let key = prepareAfterSwitcher?(original) ?? original
+                    _ = InputManager.handleKeyDown(key)
+                }
+            }
+            let taken: Bool
+            if SwitcherCloseWatcher.holdInput(gesture, run: routeLater) {
+                taken = true
+            } else if prepareAfterSwitcher != nil || hasDeferredInput.value {
+                // Keep subsequent key decisions behind the deferred keys, including pass-next, capture and Find.
+                routeLater()
+                taken = true
+            } else {
+                taken = InputManager.handleKeyDown(gesture)
+                if !taken { SwitcherCloseWatcher.passedThrough(gesture) }
+            }
             var late = false
             state.lock.lock()
             if case .timedOut = state.unsafeValue { late = true } else { state.unsafeValue = .answered(taken) }
@@ -190,7 +223,7 @@ public enum ScriptHandler {
         lock.lock()
         // Queued while the ordered lane is busy: in it, so that what the script sends keeps its place (16 Nov 2026, review).
         let inOrder = laneBusyLocked
-        queued.append(Queued(kind: .script(script), gesture: gesture, wasInSayAll: wasInSayAll, inOrder: inOrder))
+        enqueue(Queued(kind: .script(script), gesture: gesture, wasInSayAll: wasInSayAll, inOrder: inOrder))
         lock.unlock()
         DispatchQueue.main.async { runQueued() }
     }
@@ -258,8 +291,36 @@ public enum ScriptHandler {
     package static func queueInOrder(_ gesture: KeyboardGesture, lookUp: Bool, notes: Bool, masked: Bool,
                                      refusal: ((Script?) -> String?)? = nil) {
         lock.lock()
-        queued.append(Queued(kind: lookUp ? .lookUp : .send, gesture: gesture, wasInSayAll: SayAll.isRunning,
-                             inOrder: true, masked: masked, notes: notes, refusal: refusal))
+        enqueue(Queued(kind: lookUp ? .lookUp : .send, gesture: gesture, wasInSayAll: SayAll.isRunning,
+                       inOrder: true, masked: masked, notes: notes, refusal: refusal))
+        lock.unlock()
+        DispatchQueue.main.async { runQueued() }
+    }
+
+    /// Under lock. Work created by this input on main precedes later queued input.
+    private static func enqueue(_ entry: Queued) {
+        guard Thread.isMainThread, var route = routingInput else {
+            queued.append(entry)
+            return
+        }
+        var routed = entry
+        routed.fromDeferredInput = true
+        let isCurrent = route.isCurrent
+        routed.refusal = { script in
+            guard isCurrent() else { return "the switcher's destination changed" }
+            return entry.refusal?(script)
+        }
+        queued.insert(routed, at: route.nextInsertion)
+        route.nextInsertion += 1
+        routingInput = route
+    }
+
+    package static func queueInput(_ gesture: KeyboardGesture, isCurrent: @escaping () -> Bool,
+                                   route: @escaping (KeyboardGesture) -> Void) {
+        lock.lock()
+        queued.append(Queued(kind: .input(isCurrent: isCurrent, route: route), gesture: gesture,
+                             wasInSayAll: false, inOrder: true, fromDeferredInput: true))
+        hasDeferredInput.value = true
         lock.unlock()
         DispatchQueue.main.async { runQueued() }
     }
@@ -268,20 +329,30 @@ public enum ScriptHandler {
     package static func resetOrderedLane() {
         orderedKeys.value = OrderedKeys()
         lock.lock(); queued.removeAll { $0.inOrder }; runningInOrder = false; lock.unlock()
+        hasDeferredInput.value = false
     }
 
     private static var lastRefusalEdge = Date.distantPast
 
     private static func runQueued() {
-        guard !_running else { return }
+        guard !_running, routingInput == nil else { return }
         while true {
             // Keys sent in order still on their way: whatever is queued waits for them (`orderedKeySeen` or the limit).
             if keysOnTheirWay { break }
             lock.lock()
+            hasDeferredInput.value = queued.contains(where: \.fromDeferredInput)
             guard !queued.isEmpty else { lock.unlock(); break }
             let entry = queued.removeFirst()
             runningInOrder = entry.inOrder
             lock.unlock()
+            if case .input(let isCurrent, let route) = entry.kind {
+                lock.lock(); routingInput = InputRoute(isCurrent: isCurrent); lock.unlock()
+                if isCurrent() { route(entry.gesture) }
+                lock.lock(); routingInput = nil; runningInOrder = false; lock.unlock()
+                // The normal input decision scheduled its speech and menu handling before its script.
+                DispatchQueue.main.async { runQueued() }
+                return
+            }
             run(entry)
             lock.lock(); runningInOrder = false; lock.unlock()
         }
@@ -295,6 +366,7 @@ public enum ScriptHandler {
         case .script(let s): script = s
         case .lookUp: script = findScript(for: gesture)
         case .send: script = nil
+        case .input: return
         }
         if let why = entry.refusal?(script) {
             // Never typed into another application or field, nor run on another page: dropped, with the edge sound.

@@ -48,7 +48,7 @@ nonisolated enum WindowsRemap {
 
     /// Rewrite a key down or up in place. True if it was changed.
     @discardableResult
-    static func apply(_ type: CGEventType, _ event: CGEvent) -> Bool {
+    static func apply(_ type: CGEventType, _ event: CGEvent, frontApp: String? = nil) -> Bool {
         guard type == .keyDown || type == .keyUp, KeySettings.current.windowsKeys else { return false }
         var flags = event.flags
         let ctrl = flags.contains(.maskControl), opt = flags.contains(.maskAlternate), cmd = flags.contains(.maskCommand)
@@ -67,7 +67,7 @@ nonisolated enum WindowsRemap {
         if isF4, cmd, !ctrl { return set(letterQ, add: [], remove: [.maskSecondaryFn]) }
         if isF4, ctrl, !cmd { return set(letterW, add: .maskCommand, remove: [.maskControl, .maskSecondaryFn]) }
         if cmd { return false }   // a Mac shortcut already
-        let app = front
+        let app = frontApp ?? front
         let terminal = keepControl.contains(app)
         // Home and End: line start and end (Command Left, Right), with Control the document's (Command Up, Down). Not in
         // a browser: Command Left there is Back, and on a page Home and End already go to the top and bottom.

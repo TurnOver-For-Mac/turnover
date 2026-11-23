@@ -27,6 +27,15 @@ open class TurnOverObject: ScriptableObject {
         initOverlay()
     }
 
+    /// The switcher can fall back to an app whose accessibility server did not answer.
+    package init(knownApplication element: AXUIElement, pid: pid_t) {
+        self.element = element
+        self.pid = pid
+        axRole = "AXApplication"
+        axSubrole = nil
+        super.init()
+    }
+
     /// Where subclasses declare their scripts (NVDA: initOverlayClass).
     open func initOverlay() {}
 

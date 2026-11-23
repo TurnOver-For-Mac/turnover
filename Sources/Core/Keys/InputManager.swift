@@ -223,8 +223,10 @@ public enum InputManager {
             return true
         }
         if isInputHelpActive {
-            DispatchQueue.main.async {
-                if let script, script.bypassInputHelp { ScriptHandler.queueScript(script, gesture: gesture) } else { handleInputHelp(gesture, script: script) }
+            if let script, script.bypassInputHelp {
+                ScriptHandler.queueScript(script, gesture: gesture)
+            } else {
+                DispatchQueue.main.async { handleInputHelp(gesture, script: script) }
             }
             return true
         }

@@ -61,6 +61,8 @@ package final class DockAppModule: AppModule {
         }
         if event.kind == .gainFocus, event.obj is AppSwitcherList {
             AppSwitcherList.openedOver = AXHandler.shared.activePid   // the app the switcher came up over (focus rules)
+            // Letting go on the app already in front, or Escape, posts no activation: watch for the close (issue 351).
+            SwitcherCloseWatcher.start()
             // As VoiceOver does: just the highlighted application's name, not "application switcher, list" first.
             // (The first highlighted item is marked before the list reports focus.)
             AppSwitcherDiagnostics.lastAnnounced = nil

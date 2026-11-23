@@ -37,7 +37,7 @@ extension AXHandler {
         return pid > 0
     }
 
-    func appActivated(_ app: NSRunningApplication) {
+    func appActivated(_ app: NSRunningApplication, preservingFocus observedFocus: TurnOverObject? = nil) {
         let pid = app.processIdentifier
         guard Self.activationNamesApplication(pid: pid) else {
             Log.io("app activation ignored: it names no running application (pid \(pid))")
@@ -103,13 +103,23 @@ extension AXHandler {
             let launching = app.launchDate.map { Date().timeIntervalSince($0) < 10 } ?? false
             Speech.speakOnly((app.localizedName ?? Role.application.displayString) + (launching ? ", " + String(localized: "starting", comment: "An app being launched") : ""))   // the display shows the focus
         }
-        if let focused = appEl.element(kAXFocusedUIElementAttribute) { focusChanged(focused, pid: pid) }
-        else if let win = firstWindow { focusChanged(win, pid: pid) }
-        else { waitForFirstWindow(pid: pid, name: app.localizedName, tries: 12) }
+        // A switcher close can recover activation after the destination already reported real focus. Keep that
+        // focus and its browse cursor. A provisional application object still needs the usual focus/window read.
+        if !Self.keepsObservedActivationFocus(pid: pid, observed: observedFocus, current: API.focusObject, app: appEl) {
+            if let focused = appEl.element(kAXFocusedUIElementAttribute) { focusChanged(focused, pid: pid) }
+            else if let win = firstWindow { focusChanged(win, pid: pid) }
+            else { waitForFirstWindow(pid: pid, name: app.localizedName, tries: 12) }
+        }
         took("focus")
         if API.focusObject?.pid == pid, API.focusObject?.role == .window { settleFocus(pid: pid, tries: 6) }
         // A system prompt still open behind this app: said after the app, with the way back to it.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { SystemPrompts.shared.remindIfWaiting(activated: pid) }
+    }
+
+    package static func keepsObservedActivationFocus(pid: pid_t, observed: TurnOverObject?,
+                                                     current: TurnOverObject?, app: AXUIElement) -> Bool {
+        guard let observed, observed.pid == pid, observed === current else { return false }
+        return !CFEqual(observed.element, app)
     }
 
     /// An application just launched (Safari restoring its windows) has no window yet and may say nothing when one
@@ -117,8 +127,10 @@ extension AXHandler {
     func waitForFirstWindow(pid: pid_t, name: String?, tries: Int) {
         guard tries > 0 else { Log.io("no window appeared in \(name ?? "pid \(pid)")"); EmptyWindowNotice.checkNoWindow(pid: pid); return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
-            guard let self, self.activePid == pid, API.focusObject?.pid != pid else { return }
+            guard let self, self.activePid == pid else { return }
             let appEl = AXUIElementCreateApplication(pid)
+            // Switcher recovery may hold the application itself while it launches. Its first window is still to come.
+            if let focus = API.focusObject, focus.pid == pid, !CFEqual(focus.element, appEl) { return }
             AXUIElementSetMessagingTimeout(appEl, 1.0)
             guard let win = appEl.element(kAXFocusedWindowAttribute) ?? appEl.elements(kAXWindowsAttribute).first else { self.waitForFirstWindow(pid: pid, name: name, tries: tries - 1); return }
             Log.io("first window of \(name ?? "pid \(pid)") appeared")
