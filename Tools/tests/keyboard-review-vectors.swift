@@ -335,6 +335,8 @@ do {
  Audit.asleep.value = true
  let h = KeyboardHandler(); h.auditPrepare()
  _ = h.tapEvent(.keyDown, event(.keyDown, 82))
+ // Exceed the 32-event synchronous batch so this is genuinely queued output.
+ for _ in 0..<100 { _ = h.tapEvent(.keyDown, event(.keyDown, 82, repeatKey: true)) }
  _ = h.tapEvent(.keyUp, event(.keyUp, 82))
  check(KeypadApplicationDelivery.hasPendingOutput, "U4 ordered Command Tab has a keypad backlog")
  for type in [CGEventType.keyDown, .keyUp] {
@@ -345,8 +347,8 @@ do {
  check(Audit.orderedTrace.value == ["clear", "ack"], "U4 Command Tab clears modifiers before acknowledgement exactly once")
  check(Audit.deliveries.value.isEmpty, "U4 acknowledgement does not overtake replay with immediate delivery")
  while KeypadApplicationDelivery.hasPendingOutput { KeypadApplicationDelivery.auditDrainBatch() }
- check(Audit.deliveries.value.map { $0.code } == [82, 82, 48, 48], "U4 Command Tab output follows keypad down and up")
- check(Audit.deliveries.value.map { $0.type } == [.keyDown, .keyUp, .keyDown, .keyUp], "U4 Command Tab preserves both complete key pairs")
+ check(Audit.deliveries.value.map { $0.code } == Array(repeating: Int64(82), count: 102) + [48, 48], "U4 Command Tab output follows keypad down and up")
+ check(Audit.deliveries.value.map { $0.type } == Array(repeating: CGEventType.keyDown, count: 101) + [.keyUp, .keyDown, .keyUp], "U4 Command Tab preserves both complete key pairs")
 }
 settings()
 do {
