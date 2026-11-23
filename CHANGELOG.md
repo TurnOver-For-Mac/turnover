@@ -10,7 +10,6 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
   "muted", "video on", "hand raised", or the reaction sent. Command Shift 2 says who is speaking. Zoom itself
   said nothing for any of them.
 
-
 ### Fixed
 
 - App Switcher now follows focus to the app you choose and handles the first navigation or typing key in order.
@@ -20,6 +19,8 @@ The newest build is first. "Reported by a tester" marks a fix for something a te
 - The battery menu bar item now reads its charge level.
 - Dismissing a Google Drive alert opened through the Application Chooser returns you to the previous app.
 - Speech can recover from a stuck audio player without crashing TurnOver.
+- TurnOver reads past the previous limit when Codex automatically announces a long reply.
+- Plain Space, Return, keypad Enter and Escape go directly to macOS when a protected system prompt is in front.
 
 ## 2.0, build 25
 

@@ -1,8 +1,56 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import Foundation
 import TurnOverCore
+import AXFixtures
 
 func systemPromptReminderTests() {
+    test("system prompts: plain action keys reach the frontmost protected agent in both keyboard styles") {
+        let savedFocus = API.focusObject, savedAncestors = API.focusAncestors, savedPage = API.focusTreeInterceptor
+        let savedStyle = config.general.keyboardStyle
+        let savedPluginTypes = GlobalPluginHandler.shared.plugins.map { type(of: $0) }
+        let ordinaryBundle = "com.apple.TextEdit"
+        let protectedBundle = "com.apple.UserNotificationCenter"
+        AXReplay.load(.init(app: "Save sheet", bundle: ordinaryBundle, recorded: "synthetic", root: 1, application: nil,
+                            focus: 2, nodes: [
+            .init(id: 1, attrs: ["AXRole": .string("AXSheet"), "AXDefaultButton": .element(3)]),
+            .init(id: 2, attrs: ["AXRole": .string("AXButton"), "AXTitle": .string("Cancel"), "AXParent": .element(1),
+                                 "AXFocused": .bool(true)], actions: ["AXPress"]),
+            .init(id: 3, attrs: ["AXRole": .string("AXButton"), "AXTitle": .string("Save"), "AXParent": .element(1)],
+                  actions: ["AXPress"])
+        ]))
+        GlobalPluginHandler.shared.terminateAll()
+        GlobalPluginHandler.shared.register(SettingsPanePlugin.self)
+        GlobalPluginHandler.shared.register(VoiceOverKeysPlugin.self)
+        defer {
+            config.general.keyboardStyle = savedStyle
+            GlobalPluginHandler.shared.terminateAll()
+            for pluginType in savedPluginTypes { GlobalPluginHandler.shared.register(pluginType) }
+            API.setFocusObject(savedFocus, ancestors: savedAncestors, interceptor: savedPage)
+            AXReplay.unload()
+        }
+        @MainActor
+        func command(_ key: String, front bundle: String) -> String? {
+            ScriptHandler.findScript(for: KeyboardGesture(identifier: "kb:" + key)!) { bundle }?.name
+        }
+        for style in ["mac", "windows"] {
+            config.general.keyboardStyle = style
+            API.setFocusObject(ObjectFactory.make(AXReplay.element(2)), ancestors: [])
+            for key in ["enter", "numpadEnter"] {
+                expect(command(key, front: ordinaryBundle), "dialog_pressFocused", "\(style): ordinary Return override is available")
+                check(command(key, front: protectedBundle) == nil, "\(style): the foreground prompt owns \(key)")
+            }
+            API.setFocusObject(Dialog(element: AXReplay.element(1)), ancestors: [])
+            for (key, script) in [("space", "dialog_press"), ("escape", "dialog_cancel")] {
+                expect(command(key, front: ordinaryBundle), script, "\(style): ordinary dialog keeps \(key)")
+                check(command(key, front: protectedBundle) == nil, "\(style): the foreground prompt owns \(key)")
+            }
+        }
+        config.general.keyboardStyle = "mac"
+        let readerCommand = command("turnover+space", front: ordinaryBundle)
+        check(readerCommand != nil, "VO-Space resolves as an explicit reader command")
+        expect(command("turnover+space", front: protectedBundle), readerCommand, "VO-Space stays available in the prompt")
+    }
+
     test("system prompts: repeated application switches allow only two reminders five minutes apart") {
         var reminders = SystemPromptReminders<Int>(isSame: ==)
         let prompts: [(window: Int, pid: pid_t)] = [(1, 10)]

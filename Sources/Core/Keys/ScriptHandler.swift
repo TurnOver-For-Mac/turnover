@@ -48,6 +48,15 @@ public enum ScriptHandler {
 
     /// Find the script for a gesture (NVDA: findScript). Any thread.
     public static func findScript(for gesture: KeyboardGesture, styleTable: Bool = true) -> Script? {
+        findScript(for: gesture, styleTable: styleTable) { NSWorkspace.shared.frontmostApplication?.bundleIdentifier }
+    }
+
+    package static func findScript(for gesture: KeyboardGesture, styleTable: Bool = true,
+                                   frontmostBundle: () -> String?) -> Script? {
+        // A protected prompt can ignore an Accessibility press even when it reports success (issue 352).
+        // Give its plain action keys back to macOS even when TurnOver still reports focus in another app.
+        if SystemPrompts.keepsActionKey(gesture, frontmostBundle: frontmostBundle) { return nil }
+
         // The user's own keys first (the keyboard commands editor): a key given to a command or an app, or taken away.
         switch UserGestures.lookup(gesture) {
         case .script(let s)?: return s
