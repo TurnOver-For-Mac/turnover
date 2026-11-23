@@ -9,9 +9,10 @@ import TurnOverCore
 func switcherCloseTests() {
     typealias W = SwitcherCloseWatcher
     func decide(held: Bool = false, front: pid_t? = 10, active: pid_t = 10, said: String? = nil,
-                name: String? = "Safari", closed: Double? = 0) -> SwitcherCloseStep {
+                name: String? = "Safari", closed: Double? = 0, switcherFocused: Bool = true,
+                focusedPid: pid_t? = nil) -> SwitcherCloseStep {
         W.decide(commandHeld: held, frontPid: front, activePid: active, lastAnnounced: said,
-                 frontName: name, closedFor: closed)
+                 frontName: name, closedFor: closed, switcherFocused: switcherFocused, focusedPid: focusedPid)
     }
 
     test("switcher close: nothing is read while Command is held, however long") {
@@ -33,7 +34,19 @@ func switcherCloseTests() {
     test("switcher close: a different app on its way is waited for, and read if it never arrives") {
         expect(decide(front: 20, active: 10, said: "Mail", name: "Mail", closed: 0.8), .keepWaiting, "the activation is coming")
         expect(decide(front: 20, active: 10, said: "Mail", name: "Mail", closed: 1.49), .keepWaiting, "not yet")
-        expect(decide(front: 20, active: 10, said: "Mail", name: "Mail", closed: 1.5), .refocusFront, "never arrived: the front app's focus")
+        expect(decide(front: 20, active: 10, said: "Mail", name: "Mail", closed: 1.5), .recoverActivation, "never arrived: recover the activation")
+    }
+    test("switcher close: destination focus alone does not end the activation watch") {
+        expect(decide(front: 20, closed: 0.8, switcherFocused: false, focusedPid: 20), .keepWaiting,
+               "the workspace notification still has time to arrive")
+        expect(decide(front: 20, closed: 1.5, switcherFocused: false, focusedPid: 20), .recoverActivation,
+               "focus arrived but activation did not")
+        expect(decide(front: 20, active: 20, closed: 1.5, switcherFocused: false, focusedPid: 20), .stop,
+               "the workspace notification already handled this activation")
+        expect(decide(front: 30, closed: 1.5, switcherFocused: false, focusedPid: 20), .stop,
+               "the foreground changed again")
+        expect(decide(front: 20, closed: 1.5, switcherFocused: false, focusedPid: 40), .stop,
+               "a different process has the focus")
     }
     test("switcher close: no app in front stops the watcher after the wait") {
         expect(decide(front: nil, closed: 0.5), .keepWaiting, "not yet")
@@ -41,7 +54,7 @@ func switcherCloseTests() {
     }
     test("switcher close: Command held with another app in front still waits for Command") {
         expect(decide(held: true, front: 20, active: 10, closed: 5), .keepWaiting, "nothing read while Command is held")
-        expect(decide(front: 20, active: 10, closed: 5), .refocusFront, "let go, and no activation came: the front app")
+        expect(decide(front: 20, active: 10, closed: 5), .recoverActivation, "let go, and no activation came: recover it")
     }
 
     test("switcher close: reopening cancels the previous fallback over the same app") {
@@ -54,6 +67,29 @@ func switcherCloseTests() {
         expect(finishes, 0, "the old callback leaves the new switcher alone")
         newFallback()
         expect(finishes, 1, "the current callback still runs")
+    }
+
+    test("switcher close: activation recovery keeps real destination focus and replaces an app placeholder") {
+        guard AXReplay.isAvailable else { return }
+        AXReplay.load(.init(app: "Fixture", bundle: "org.example.fixture", recorded: "synthetic", root: 0,
+                            application: 0, focus: 1, nodes: [
+            .init(id: 0, attrs: ["AXRole": .string("AXApplication")]),
+            .init(id: 1, attrs: ["AXRole": .string("AXButton")]),
+        ]))
+        defer { AXReplay.unload() }
+        let app = AXReplay.element(0)
+        let placeholder = TurnOverObject(element: app)
+        let control = TurnOverObject(element: AXReplay.element(1))
+        let replacement = TurnOverObject(element: control.element)
+        let pid = control.pid
+        check(AXHandler.keepsObservedActivationFocus(pid: pid, observed: control, current: control, app: app),
+              "the destination focus already arrived")
+        check(!AXHandler.keepsObservedActivationFocus(pid: placeholder.pid, observed: placeholder, current: placeholder, app: app),
+              "the application object still needs its first real focus")
+        check(!AXHandler.keepsObservedActivationFocus(pid: pid + 1, observed: control, current: control, app: app),
+              "the focus belongs to a different process")
+        check(!AXHandler.keepsObservedActivationFocus(pid: pid, observed: control, current: replacement, app: app),
+              "the captured focus no longer matches the current object")
     }
 
     test("review cursor: a focus in another app always moves it; the bounce rule is for the same app") {
