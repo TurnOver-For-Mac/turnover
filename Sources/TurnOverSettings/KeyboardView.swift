@@ -12,9 +12,16 @@ struct KeyboardView: View {
             Text("On, Caps Lock is the NVDA key in every app, whichever reader is speaking. Off, VoiceOver's own Caps Lock keys work in the apps VoiceOver reads.").font(.caption)
             Picker("TurnOver key", selection: model.string("general", "bosunKey", "both")) {
                 Text("Caps Lock or Control Option").tag("both"); Text("Caps Lock").tag("caps"); Text("Control Option").tag("controlOption")
+                // Keep a selected Insert visible if the layout changes; do not silently change the user's modifier.
+                if model.get("keyboard", "layout") as? String == "desktop" || model.get("general", "bosunKey") as? String == "insert" {
+                    Text("Insert (number-pad 0)").tag("insert")
+                }
             }
             Picker("Keyboard layout", selection: model.string("keyboard", "layout", "laptop")) {
                 Text("Laptop").tag("laptop"); Text("Desktop, the number pad has its NVDA keys").tag("desktop")
+            }
+            if model.get("general", "bosunKey") as? String == "insert" {
+                Text("Hold number-pad 0 with another key to use TurnOver commands. In NVDA and JAWS styles, Clear switches the number pad between commands and numbers. A separate Insert key works too.").font(.caption)
             }
             Section("Typing echo") {
                 Picker("Characters", selection: model.int("keyboard", "speakTypedCharacters")) {

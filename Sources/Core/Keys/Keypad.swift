@@ -87,13 +87,13 @@ public enum Keypad {
     }
 
     /// The keypad key's action in this style, if it has one (any thread: the key tap asks before swallowing a key).
-    nonisolated public static func action(for g: KeyboardGesture, windows: Bool) -> String? {
-        (windows ? Self.windows : mac)["\(layer(g.modifiers, windows: windows)):\(g.keyName)"]
+    nonisolated public static func action(for g: KeyboardGesture, windows: Bool, jawsDesktop: Bool = false) -> String? {
+        (jawsDesktop ? JAWSKeypad.actions : windows ? Self.windows : mac)["\(layer(g.modifiers, windows: windows)):\(g.keyName)"]
     }
 
     /// Runs the keypad key's action (main thread). In keyboard help, says what it does instead.
-    public static func run(_ g: KeyboardGesture, windows: Bool) {
-        guard let a = action(for: g, windows: windows) else { return }
+    public static func run(_ g: KeyboardGesture, windows: Bool, action a: String? = nil) {
+        guard let a = a ?? action(for: g, windows: windows) else { return }
         guard !TurnOverMenu.shared.isOpen else { return }   // the menu has the keys: the keypad does nothing there
         let parts = a.split(separator: ":", maxSplits: 1).map(String.init)
         guard parts.count == 2 else { return }
@@ -101,7 +101,7 @@ public enum Keypad {
         // As every key: what was being said stops (the code review: keypad 9 pressed fast queued lines).
         Speech.cancel(); SayAll.stop(byGesture: true)
         // The first keypad key in the Windows style says once what the keypad does now (12 Oct 2026).
-        if windows, !UserDefaults.standard.bool(forKey: "keypadHintGiven") {
+        if windows, config.general.style != .jaws, !UserDefaults.standard.bool(forKey: "keypadHintGiven") {
             UserDefaults.standard.set(true, forKey: "keypadHintGiven")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { Speech.speakMessage(String(localized: "Keypad commands, as NVDA with Num Lock off. Clear switches to numbers.", comment: "Spoken message")) }
         }
@@ -127,7 +127,7 @@ public enum Keypad {
         let saved = config.general.keyboardStyle
         defer { config.general.keyboardStyle = saved }
         var bad: [String] = []
-        for (style, table) in [("mac", mac), ("windows", windows)] {
+        for (style, table) in [("mac", mac), ("windows", windows), ("jaws", JAWSKeypad.actions)] {
             config.general.keyboardStyle = style
             let vo = VoiceOverKeysPlugin()
             for (key, a) in table.sorted(by: { $0.key < $1.key }) {
@@ -159,9 +159,9 @@ public enum Keypad {
     }
 
     /// Clear, in Num Lock's place (Windows style).
-    public static func toggleWindows() {
+    public static func toggleWindows(announce: (String) -> Void = { Speech.speakMessage($0) }) {
         config.keyboard.keypadCommands.toggle(); config.save(); KeySettings.refresh()
-        Speech.speakMessage(config.keyboard.keypadCommands ? String(localized: "keypad commands", comment: "Spoken message") : String(localized: "keypad numbers", comment: "Spoken message"))
+        announce(config.keyboard.keypadCommands ? String(localized: "keypad commands", comment: "Spoken message") : String(localized: "keypad numbers", comment: "Spoken message"))
     }
 }
 
