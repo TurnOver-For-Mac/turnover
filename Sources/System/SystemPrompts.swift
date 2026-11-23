@@ -24,6 +24,12 @@ public final class SystemPrompts {
         return agents.contains(b)
     }
 
+    static func keepsActionKey(_ gesture: KeyboardGesture, frontmostBundle: () -> String?) -> Bool {
+        guard gesture.modifiers.isEmpty, ["space", "enter", "numpadEnter", "escape"].contains(gesture.keyName),
+              let bundle = frontmostBundle() else { return false }
+        return agents.contains(bundle)
+    }
+
     /// After TurnOver pressed a button in a protected prompt: if the prompt is still there a moment later, macOS
     /// refused the press. The focus goes back onto the button and the user is asked for a real Space, which macOS takes.
     public static func checkPress(of button: AXUIElement, name: String) {

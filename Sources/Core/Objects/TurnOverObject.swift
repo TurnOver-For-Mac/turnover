@@ -680,7 +680,32 @@ public enum ObjectFactory {
 /// Repeats of the same live text within a moment are one announcement (Chromium posts a change per node).
 public enum LiveRegions {
     private static var last: (String, Date) = ("", .distantPast)
+
+    package struct ReplyProgress {
+        private var delivered = ""
+
+        package init() {}
+
+        package mutating func pendingText(_ text: String) -> String {
+            if delivered.hasPrefix(text) { return "" }
+            let news = text.hasPrefix(delivered) ? String(text.dropFirst(delivered.count)) : text
+            delivered = text
+            return news.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+    }
+
+    private static var reply: (element: AXUIElement, text: String, progress: ReplyProgress)?
+    private static var replyTimer: DispatchWorkItem?
+
     public static func speak(_ text: String, from element: AXUIElement, assertive: Bool) {
+        let isCodex = !assertive && NSRunningApplication(processIdentifier: element.pid)?.bundleIdentifier == "com.openai.codex"
+        let continuesReply = reply.map {
+            $0.element.isSame(element) && ($0.text.count > 500 || text.hasPrefix($0.text))
+        } ?? false
+        if isCodex && (text.count > 500 || continuesReply) {
+            readCodexReply(text, element: element)
+            return
+        }
         let t = String(text.prefix(500))
         // A streaming page re-posts the same text many times; it is news once (again only after a long quiet).
         if t == last.0, Date().timeIntervalSince(last.1) < 30 { last.1 = Date(); return }
@@ -688,8 +713,38 @@ public enum LiveRegions {
         // (The Playroom's Uno, a tester, 9 Oct 2026). Within a second and a half, a part of what was just said is not news.
         if Date().timeIntervalSince(last.1) < 1.5, !last.0.isEmpty, last.0.contains(t) { Log.io("live region: repeat of a part, not said"); return }
         last = (t, Date())
+        if isCodex {
+            var progress = ReplyProgress()
+            _ = progress.pendingText(t)
+            reply = (element, t, progress)
+        }
         if assertive { Speech.cancel() }
         Log.io("live region: \(Log.words(String(t.prefix(80))))")
         Speech.speakNews(t)
+    }
+
+    private static func readCodexReply(_ text: String, element: AXUIElement) {
+        if let old = reply, old.element.isSame(element) || text.hasPrefix(old.text) || old.text.hasPrefix(text) {
+            guard text != old.text, !old.text.hasPrefix(text) else { return }
+            reply = (element, text, old.progress)
+        } else {
+            reply = (element, text, ReplyProgress())
+        }
+
+        replyTimer?.cancel()
+        let work = DispatchWorkItem {
+            guard var current = reply, current.element.isSame(element), current.text == text else { return }
+            guard NSWorkspace.shared.frontmostApplication?.processIdentifier == element.pid else {
+                reply = nil
+                return
+            }
+            let news = current.progress.pendingText(text)
+            reply = current
+            guard !news.isEmpty else { return }
+            Log.io("live region: Codex reply continuation, \(news.count) characters")
+            Speech.speakNews(news)
+        }
+        replyTimer = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: work)
     }
 }

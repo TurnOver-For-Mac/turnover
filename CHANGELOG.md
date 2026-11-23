@@ -2,13 +2,25 @@
 
 The newest build is first. "Reported by a tester" marks a fix for something a tester sent in. Thank you.
 
-## 2.0, build 26
+## 2.0, build 25.1
 
 ### New to try
 
 - Zoom: in a meeting, Zoom's own keys speak. Mute, video, raising your hand and reactions say what they did:
   "muted", "video on", "hand raised", or the reaction sent. Command Shift 2 says who is speaking. Zoom itself
   said nothing for any of them.
+
+### Fixed
+
+- App Switcher now follows focus to the app you choose and handles the first navigation or typing key in order.
+- VoiceOver starts on the lock screen even if macOS misses a lock notification. TurnOver resumes after unlock.
+- The menu bar keeps its place when you show hidden items and reads the expanded list. Moving focus away releases
+  the held menu bar, and Escape announces the item where you return in browse mode.
+- The battery menu bar item now reads its charge level.
+- Dismissing a Google Drive alert opened through the Application Chooser returns you to the previous app.
+- Speech can recover from a stuck audio player without crashing TurnOver.
+- TurnOver reads past the previous limit when Codex automatically announces a long reply.
+- Plain Space, Return, keypad Enter and Escape go directly to macOS when a protected system prompt is in front.
 
 ## 2.0, build 25
 

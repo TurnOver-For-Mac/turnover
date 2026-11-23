@@ -30,6 +30,19 @@ func policyTests() {
         expect(menu.isOpen, false, "an asynchronous refresh cannot reopen a closed list")
     }
 
+    test("live regions: a growing Codex reply speaks past the old cap without repeating the prefix") {
+        var progress = LiveRegions.ReplyProgress()
+        let start = String(repeating: "word ", count: 100).trimmingCharacters(in: .whitespaces)
+        let long = start + " " + String(repeating: "another sentence. ", count: 160) + "The final marker."
+        expect(progress.pendingText(start), start, "first announcement")
+        let tail = progress.pendingText(long)
+        expect(tail.hasSuffix("The final marker."), true, "the end survives")
+        expect(tail.hasPrefix("another sentence."), true, "only new text is spoken")
+        expect(progress.pendingText(long), "", "a duplicate is not spoken")
+        expect(progress.pendingText(start), "", "an older prefix is not spoken")
+        expect(progress.pendingText("A different reply."), "A different reply.", "a new reply is read")
+    }
+
     test("mode speech: complete readiness matrix selects only an exclusive ready reader") {
         for coexisting in [false, true] {
             for active in [false, true] {
