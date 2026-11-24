@@ -30,10 +30,18 @@ with tempfile.TemporaryDirectory(prefix='probe-', dir=probe_build) as tmp:
         lifecycle.lock.unlock()
         layer = Layer(g)
     }
+    func auditFinishWorker() {
+        lifecycle.lock.lock()
+        if let worker = lifecycle.unsafeValue.session.worker { _ = lifecycle.unsafeValue.session.finished(worker) }
+        lifecycle.lock.unlock()
+        layer = nil
+    }
     func auditPassNext() { passNext = true }
     func auditCapsDown(_ down: Bool) { capsDown = down }
 ''')
     windows=windows.replace('static var frontApp: FrontApp { foreground.value }', 'static var frontApp: FrontApp { get { foreground.value } set { foreground.value = newValue } }')
+    windows=body(windows,'static func sendVoiceOverMessage(_ text:', 'Audit.messages.value.append(text)') if 'static func sendVoiceOverMessage(_ text:' in windows else windows
+    windows=windows.replace('DispatchQueue.global(qos: .userInitiated).async { [self] in', 'Audit.pendingAvailability.value.append { [self] in')
     p.joinpath('WindowsKeys.swift').write_text(windows)
     handler=(repo/'Sources/TurnOver/KeyboardHandler.swift').read_text()
     handler=body(handler,'    init()', '')
@@ -78,6 +86,11 @@ with tempfile.TemporaryDirectory(prefix='probe-', dir=probe_build) as tmp:
     if recovery.exists():
         s=recovery.read_text().replace('replay.event.postToPid(replay.pid)', 'Audit.record(replay.event, replay.pid)').replace('event.postToPid(release.pid)', 'Audit.record(event, release.pid)')
         p.joinpath('KeyboardRecovery.swift').write_text(s)
+    hardware=(repo/'Sources/TurnOver/InsertHardware.swift').read_text()
+    hardware=body(hardware,'static func start()', '')
+    hardware=body(hardware,'static func overlapsDown(', 'return Audit.physicalHistory.value.overlapsDown(code:code,at:timestamp)')
+    hardware=body(hardware,'static func observedDown(', 'return Audit.physicalHistory.value.observedDown(code:code,at:timestamp,currentDown:currentDown,after:capturedAt)')
+    p.joinpath('InsertHardware.swift').write_text(hardware)
     modifier = repo/'Sources/TurnOver/InsertModifier.swift'
     if modifier.exists():
         text = modifier.read_text().replace('CGEventSource.keyState(.hidSystemState, key: CGKeyCode(code))', 'Audit.hardwareDown.value.contains(code)')
@@ -96,6 +109,9 @@ nonisolated enum Audit {
  static let messages = Locked<[String]>([])
  static let asleep = Locked(false)
  static let hardwareDown = Locked<Set<Int64>>([82,114])
+ static let voiceOverReading = Locked(true)
+ static let pendingAvailability = Locked<[@Sendable () -> Void]>([])
+ static let turnOverMessages = Locked<[String]>([])
  static let keyTime = Locked<UInt64?>(nil)
  static let lockStates = Locked<[Bool]>([])
  static let physicalHistory = Locked(InsertHardwareHistory())
@@ -117,13 +133,8 @@ nonisolated enum Audit {
   deliveries.unsafeValue.append(Delivery(code:e.getIntegerValueField(.keyboardEventKeycode), type:e.type, pid:pid))
  }
 }
-nonisolated enum InsertHardware {
- static func start() {}
- static func nanoseconds(_ ticks: UInt64) -> UInt64 { ticks }
- static func overlapsDown(_ code: Int64, at timestamp: UInt64) -> Bool { Audit.physicalHistory.value.overlapsDown(code:code,at:timestamp) }
- static func observedDown(_ code: Int64, at timestamp: UInt64, currentDown: Bool, after capturedAt: UInt64) -> Bool? { Audit.physicalHistory.value.observedDown(code: code, at: timestamp, currentDown: currentDown, after: capturedAt) }
-}
 nonisolated enum HandOver {
+ static var voiceOverReading: Bool { Audit.voiceOverReading.value }
  struct Shortcut { let keyCode: UInt16 = 96; let flags: CGEventFlags = [.maskCommand] }
  struct PersonToggle: Sendable {
   func listening(_ enabled: Bool) { Audit.callbacks.value.append(enabled ? "listening" : "stopped") }

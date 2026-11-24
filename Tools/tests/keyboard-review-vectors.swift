@@ -606,3 +606,47 @@ do {
  check(!invalid.value, "U9 concurrent availability publication preserves configured modifier snapshots")
  check(KeySettings.current.capsIsTurnOver, "U9 final disconnected publication restores fallback")
 }
+
+// Availability messages use only the reader that currently owns output.
+settings()
+do {
+ let oldMode = Speech.mode; let oldSink = Speech.sink
+ defer { Speech.mode = oldMode; Speech.sink = oldSink; WindowsKeyLayer.shared.stop() }
+ Speech.mode = .off
+ Speech.sink = { Audit.turnOverMessages.value.append($0) }
+ func clearMessages() { Audit.turnOverMessages.value=[]; Audit.messages.value=[]; Audit.pendingAvailability.value=[] }
+ func deliver() { let pending=Audit.pendingAvailability.value; Audit.pendingAvailability.value=[]; pending.forEach { $0() } }
+ clearMessages()
+ InsertHardware.announceAvailability("primary",turnOverActive:true,fallback:KeySettings.current.capsIsTurnOver)
+ deliver()
+ check(Audit.turnOverMessages.value == ["primary"] && Audit.messages.value.isEmpty, "U10 active TurnOver owns availability output")
+ clearMessages()
+ config.general.keysWhereVoiceOverReads=true
+ WindowsKeyLayer.shared.auditFinishWorker(); WindowsKeyLayer.shared.auditPrepare()
+ InsertHardware.announceAvailability("optional",turnOverActive:false,fallback:KeySettings.current.capsIsTurnOver)
+ deliver()
+ check(Audit.messages.value == ["optional"] && Audit.turnOverMessages.value.isEmpty, "U10 VoiceOver owns output when optional layer is active")
+ clearMessages()
+ WindowsKeyLayer.shared.stop()
+ InsertHardware.announceAvailability("disabled",turnOverActive:false,fallback:KeySettings.current.capsIsTurnOver)
+ deliver()
+ check(Audit.messages.value.isEmpty && Audit.turnOverMessages.value.isEmpty, "U10 no active keyboard layer means no announcement")
+ clearMessages()
+ WindowsKeyLayer.shared.auditFinishWorker(); WindowsKeyLayer.shared.auditPrepare()
+ InsertHardware.announceAvailability("retired",turnOverActive:false,fallback:KeySettings.current.capsIsTurnOver)
+ WindowsKeyLayer.shared.stop()
+ deliver()
+ check(Audit.messages.value.isEmpty && Audit.turnOverMessages.value.isEmpty, "U10 layer retirement cancels queued availability speech")
+ clearMessages()
+ WindowsKeyLayer.shared.auditFinishWorker(); WindowsKeyLayer.shared.auditPrepare(); config.general.keysWhereVoiceOverReads=false
+ InsertHardware.announceAvailability("opted out",turnOverActive:false,fallback:KeySettings.current.capsIsTurnOver)
+ deliver()
+ check(Audit.messages.value.isEmpty && Audit.turnOverMessages.value.isEmpty, "U10 optional-layer opt-out stays silent")
+ clearMessages(); config.general.keysWhereVoiceOverReads=true
+ InsertHardware.announceAvailability("obsolete fallback",turnOverActive:false,fallback:KeySettings.current.capsIsTurnOver)
+ check(Audit.pendingAvailability.value.count == 1, "U10 stale-speech fixture actually queues output")
+ var restored=InsertAvailability(); restored.connect(1); restored.observePress(connection:1,code:114)
+ InsertAvailability.current.value=restored
+ deliver()
+ check(Audit.messages.value.isEmpty && Audit.turnOverMessages.value.isEmpty, "U10 recovered Insert cancels queued fallback announcement")
+}

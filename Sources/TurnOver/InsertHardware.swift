@@ -97,9 +97,18 @@ nonisolated enum InsertHardware {
         onMain {
             let current = KeySettings.current
             guard current.insertIsTurnOver, current.capsIsTurnOver == !after else { return }
-            Speech.speakMessage(current.capsIsTurnOver
+            announceAvailability(current.capsIsTurnOver
                 ? String(localized: "Caps Lock is now the TurnOver key", comment: "Insert is unavailable; recovery modifier")
-                : String(localized: "Insert is available. Caps Lock is now a lock key", comment: "Insert recovered; modifier fallback ended"))
+                : String(localized: "Insert is available. Caps Lock is now a lock key", comment: "Insert recovered; modifier fallback ended"), turnOverActive: Core.active, fallback: current.capsIsTurnOver)
+        }
+    }
+
+    @MainActor static func announceAvailability(_ message: String, turnOverActive: Bool, fallback: Bool) {
+        if turnOverActive {
+            Speech.speakMessage(message)
+        } else if KeySettings.current.windowsKeys, config.general.keysWhereVoiceOverReads,
+                  HandOver.voiceOverReading {
+            WindowsKeyLayer.shared.sayAvailability(message, fallback: fallback)
         }
     }
 

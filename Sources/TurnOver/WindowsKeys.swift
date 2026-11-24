@@ -601,15 +601,28 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // callbacks an
         return Unmanaged.passUnretained(event)
     }
 
+    /// Availability reports belong to this reader generation, not to a later handover.
+    @MainActor func sayAvailability(_ text: String, fallback: Bool) {
+        guard let generation = lifecycle.value.session.requested else { return }
+        DispatchQueue.global(qos: .userInitiated).async { [self] in
+            let settings = KeySettings.current
+            guard isRequested(generation), settings.insertIsTurnOver, settings.windowsKeys,
+                  settings.capsIsTurnOver == fallback, HandOver.voiceOverReading else { return }
+            Self.sendVoiceOverMessage(text)
+        }
+    }
+
     /// Words said through VoiceOver, the reader here: its own `output` command, as a bare Apple event.
     static func say(_ text: String) {
-        DispatchQueue.global(qos: .userInitiated).async {
-            let target = NSAppleEventDescriptor(bundleIdentifier: "com.apple.VoiceOver")
-            let event = NSAppleEventDescriptor(eventClass: 0x564F4153 /* VOAS */, eventID: 0x6F757470 /* outp */, targetDescriptor: target,
-                                               returnID: AEReturnID(kAutoGenerateReturnID), transactionID: AETransactionID(kAnyTransactionID))
-            event.setParam(NSAppleEventDescriptor(string: text), forKeyword: AEKeyword(keyDirectObject))
-            _ = try? event.sendEvent(options: [.noReply, .neverInteract, .dontRecord], timeout: 1)
-        }
+        DispatchQueue.global(qos: .userInitiated).async { sendVoiceOverMessage(text) }
+    }
+
+    private static func sendVoiceOverMessage(_ text: String) {
+        let target = NSAppleEventDescriptor(bundleIdentifier: "com.apple.VoiceOver")
+        let event = NSAppleEventDescriptor(eventClass: 0x564F4153 /* VOAS */, eventID: 0x6F757470 /* outp */, targetDescriptor: target,
+                                           returnID: AEReturnID(kAutoGenerateReturnID), transactionID: AETransactionID(kAnyTransactionID))
+        event.setParam(NSAppleEventDescriptor(string: text), forKeyword: AEKeyword(keyDirectObject))
+        _ = try? event.sendEvent(options: [.noReply, .neverInteract, .dontRecord], timeout: 1)
     }
 
     private static let posting = DispatchQueue(label: "turnover.windowskeys.post")
