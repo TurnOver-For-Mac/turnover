@@ -53,6 +53,14 @@ extension BrowseModeDocument {
             sayPageNotResponding()
             return
         }
+        // The keyboard is on a control hidden inside the container at the reading position, and it could not be named:
+        // the real key goes to it. A press through accessibility would press the container.
+        if let h = currentHiddenFocus, h.control == nil, let f = API.focusObject, f.pid == webArea.pid, f.isSameElement(as: h.container),
+           isAtReadingPositionInCopy(f) {
+            Log.io("browse mode: \(gesture.keyName) sent to the hidden control that has the keyboard inside the \(h.container.role)")
+            gesture.send()
+            return
+        }
         var e: AXUIElement? = nil
         if let t = lastQuickNavTarget, buffer.offset(of: t) == position {
             e = BrowseModeDocument.actionable(t) ? t : t.firstDescendant(role: "AXLink", maxVisited: 60) ?? t.firstDescendant(role: "AXButton", maxVisited: 60) ?? t
@@ -148,9 +156,11 @@ extension BrowseModeDocument {
     /// Whether `f` is the item at the reading position, by the copy of the page alone (identity, nothing asked): the
     /// text's own element, its line's, or a container the copy holds around the position.
     func isAtReadingPositionInCopy(_ f: TurnOverObject) -> Bool {
-        if let s = buffer.segment(at: position), f.isSameElement(as: s.element) { return true }
-        if let i = buffer.lineIndex(at: position), let e = buffer.lines[i].element, f.isSameElement(as: e) { return true }
-        return buffer.containers.contains { $0.start <= position && position < $0.end && f.isSameElement(as: $0.element) }
+        // A control hidden inside a container is at the reading position where the container is (24 Nov 2026).
+        let place = focusPlace(of: f.element)
+        if let s = buffer.segment(at: position), place.isSame(s.element) { return true }
+        if let i = buffer.lineIndex(at: position), let e = buffer.lines[i].element, place.isSame(e) { return true }
+        return buffer.containers.contains { $0.start <= position && position < $0.end && place.isSame($0.element) }
     }
 
     /// Whether a control's value is a check state, by TurnOver's own role (the subrole counts: a web switch is an

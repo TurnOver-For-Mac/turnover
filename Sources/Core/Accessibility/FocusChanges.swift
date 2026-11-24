@@ -688,6 +688,19 @@ extension AXHandler {
         madeForFocus = nil
         let window = target.element(kAXWindowAttribute)
         let old = API.focusObject
+        // 24 Nov 2026: the browser reports a button-like container as the focus while the keyboard is on a control it
+        // hides inside it (Steam's wishlist rows). Arriving at such a container (Shift+Tab lands on the row's last
+        // hidden control; a window coming forward repeats the news of the row) the control is looked for before the
+        // container is spoken, and it is the focus in the container's place.
+        if let doc = BrowseModeHandler.shared.document(for: obj, ancestors: ancestors),
+           let hidden = doc.hiddenControlOnArrival(at: target, old: old) {
+            if let old, old.element.isSame(hidden) {
+                Log.io("focus: the browser repeated its news of a \(target.role) while the keyboard is on a control inside it; not spoken again")
+                return
+            }
+            present(hidden, pid: pid)
+            return
+        }
         let oldAncestors = API.focusAncestors
         focusWindow = window
         // The focus TurnOver moved itself, after its cursor (VoiceOver's "keyboard focus follows the cursor"): the

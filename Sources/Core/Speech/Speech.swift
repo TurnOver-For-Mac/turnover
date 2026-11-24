@@ -352,9 +352,15 @@ public enum Speech {
     private static var lastFocusRow: AXUIElement?
     /// Whether a focus is the one just said, reported again: the same words within half a second, unless they are
     /// another row's.
-    public static func focusRepeated(words: String, last: String, after seconds: TimeInterval, anotherRow: Bool) -> Bool {
-        words == last && seconds < 0.5 && !anotherRow
+    /// `anotherByTab` (24 Nov 2026): a focus on another element than the last one spoken, reached by Tab, always speaks. Two
+    /// hidden controls with the same words reached by quick Tabs (two "Remove" buttons) were the second one dropped.
+    /// The same element twice (Excel) and the same element with new words (Finder's outlines) keep the rule.
+    public static func focusRepeated(words: String, last: String, after seconds: TimeInterval, anotherRow: Bool, anotherByTab: Bool = false) -> Bool {
+        words == last && seconds < 0.5 && !anotherRow && !anotherByTab
     }
+    /// Set while a focus is reported on purpose (Tab read the control that already has the keyboard): never dropped as a repeat.
+    nonisolated(unsafe) public static var explicitFocusReport = false
+    private static var lastFocusSpokenElement: AXUIElement?
     public static func speakObject(_ obj: TurnOverObject, reason: OutputReason) {
         var parts = objectPropertiesSpeech(obj, reason: reason)
         // A table or list that takes focus on macOS keeps its selection inside it: say the selected row too,
@@ -404,8 +410,11 @@ public enum Speech {
         if reason == .focus {
             let row = obj.element.role == "AXRow" ? obj.element : nil
             let anotherRow = row.map { r in lastFocusRow.map { !r.isSame($0) } ?? false } ?? false
-            if focusRepeated(words: words, last: lastFocusWords, after: Date().timeIntervalSince(lastFocusWordsAt), anotherRow: anotherRow) { Log.io("focus: the same words again within 0.5 s; not repeated"); return }
-            lastFocusWords = words; lastFocusWordsAt = Date(); lastFocusRow = row
+            let anotherByTab = Date().timeIntervalSince(BrowseModeDocument.lastPageTabAt) < 1.0
+                && (lastFocusSpokenElement.map { !obj.element.isSame($0) } ?? false)
+            if !explicitFocusReport,
+               focusRepeated(words: words, last: lastFocusWords, after: Date().timeIntervalSince(lastFocusWordsAt), anotherRow: anotherRow, anotherByTab: anotherByTab) { Log.io("focus: the same words again within 0.5 s; not repeated"); return }
+            lastFocusWords = words; lastFocusWordsAt = Date(); lastFocusRow = row; lastFocusSpokenElement = obj.element
         }
         if reason == .focus, let until = dropForFocusUntil {
             dropForFocusUntil = nil

@@ -316,16 +316,21 @@ extension BrowseModeDocument {
 
     /// The element, or a parent of it up to five levels, that takes the keyboard: the first one of a Tab role whose
     /// focus can be set. A link's text is found by its words: the link itself is a parent. Nothing is changed.
-    static func focusTarget(from el: AXUIElement) -> AXUIElement? {
+    static func focusTarget(from el: AXUIElement) -> AXUIElement? { focusTargets(from: el).first }
+
+    /// All of them, nearest first: when the focus write on one fails, the walk goes on to the parent that can take it
+    /// (Codex's review, 24 Nov 2026: the candidate was skipped after one failed write).
+    static func focusTargets(from el: AXUIElement) -> [AXUIElement] {
+        var found: [AXUIElement] = []
         var x: AXUIElement? = el; var hops = 0
         while let y = x, hops < 5 {
             var settable: DarwinBoolean = false
             let takesKeyboard = tabRoles.contains(y.role)
             let canSetFocus = takesKeyboard && AXUIElementIsAttributeSettable(y, kAXFocusedAttribute as CFString, &settable) == .success && settable.boolValue
-            if canSetFocus { return y }
+            if canSetFocus { found.append(y) }
             x = y.element(kAXParentAttribute); hops += 1
         }
-        return nil
+        return found
     }
 
     /// NVDA: Tab in browse mode goes on from the reading position, not from wherever the page's focus was left (the
@@ -337,24 +342,32 @@ extension BrowseModeDocument {
         guard !pageSilent else { return false }
         // As NVDA's _tabOverride: a reading position inside the control that has the focus leaves Tab to the browser.
         let current = API.focusObject.flatMap { $0.pid == webArea.pid && !$0.isSameElement(as: webArea) ? $0.element : nil }
-        let own = current.flatMap { span(ofFocus: $0) }
+        // A control hidden inside a container has the container's place in the copy.
+        let own = current.flatMap { span(ofFocus: focusPlace(of: $0)) }
         if let own, Self.offset(position, isInside: own) { return false }
         var from = position
         for _ in 0..<30 {
             guard let (at, el) = buffer.find(from: from, forward: forward, roles: Self.tabRoles) else { return false }
             // One walk for this candidate: the control that takes the keyboard. If it is the one that has the focus,
             // setting the focus would bring no event and nothing would be said (24 Nov 2026, 06:51:49; 23 Nov, 12:17:08).
-            let target = Self.focusTarget(from: el)
-            if let current, let target, target.isSame(current) {
+            let targets = Self.focusTargets(from: el)
+            let target = targets.first
+            // Only a control that says it has the keyboard is read without a focus write (Codex's review, 24 Nov 2026: the
+            // cached focus can be stale, and the write is what moves the keyboard).
+            if let current, let target, target.isSame(current), (current.attr(kAXFocusedAttribute) as? Bool) == true {
                 Log.io("browse mode: Tab from the reading position to the control that has the focus, at \(at); read here")
                 position = at
                 positionAtFocus = at
                 // Spoken as the focus event speaks an object, not through the focus news, whose duplicate rule would drop it.
+                // An explicit report: the repeat rule must not drop it either (Codex's review: arrows away and Tab back
+                // within half a second said nothing).
+                Speech.explicitFocusReport = true
                 ObjectFactory.make(current).reportFocus()
+                Speech.explicitFocusReport = false
                 return true
             }
-            if let target {
-                // The focus write, on its own.
+            for target in targets {
+                // The focus write, on its own; if it fails, the next parent that can take the keyboard.
                 let written = target.set(kAXFocusedAttribute, kCFBooleanTrue)
                 if written == .success {
                     Log.io("browse mode: Tab from the reading position to \(target.role) at \(at)")

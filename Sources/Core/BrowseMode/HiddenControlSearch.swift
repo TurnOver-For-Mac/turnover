@@ -262,3 +262,5 @@ nonisolated package struct WebHiddenControlPage: HiddenControlPage {
         return element(at: unsafeDowncast(m as AnyObject, to: AXTextMarker.self))
     }
 }
+
+extension HiddenSearchResult: Sendable where Element: Sendable {}

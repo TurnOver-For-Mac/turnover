@@ -330,7 +330,7 @@ public final class BrowseModeDocument: ScriptableObject {
         }
         lastURL = now
         endPageOnItsWay(because: "the address changed in this web area")
-        rootRunner.cancel(); discoveringRoot = false; followingRootFailure = false; watchingFor = nil
+        rootRunner.cancel(); hiddenRunner.cancel(); hiddenFocus = nil; hiddenKnown = nil; discoveringRoot = false; followingRootFailure = false; watchingFor = nil
         buffer.newPage()
         pageGeneration += 1
         buffer.build()
@@ -537,6 +537,7 @@ public final class BrowseModeDocument: ScriptableObject {
         script("tabFromCaret", String(localized: "Next link or control; moves to the next link or control after the reading position (Shift: before it)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:tab", "kb:shift+tab"], category: nav) { [weak self] g in
             guard let self else { return }
             BrowseModeDocument.lastTabFromCaretAt = Date()
+            BrowseModeDocument.lastPageTabAt = Date()
             if focusFromCaret(forward: !g.modifiers.contains(.shift)) { return }
             if AppModuleHandler.shared.appModule(for: webArea.pid).browseTabMovesReadingPosition {
                 guard ensureContent() else { return }
@@ -545,6 +546,7 @@ public final class BrowseModeDocument: ScriptableObject {
                 else { Tones.edge() }
                 return
             }
+            noteFocusBeforeTab()
             g.send(); PageWatch.keySent(to: webArea.pid)
             askFocusIfNoNews()
         }
@@ -898,7 +900,11 @@ public final class BrowseModeDocument: ScriptableObject {
             guard ScriptHandler.keysArrivedCount == keys,
                   API.focusTreeInterceptor === self,
                   pageGeneration == epoch else { return }
-            if let current = API.focusObject?.element, f.isSame(current) {
+            // Where it was: the container, while the focus object is the control hidden inside it.
+            let wasOn = API.focusObject.map { focusPlace(of: $0.element) }
+            if let wasOn, f.isSame(wasOn) {
+                // The app's answer is where it was, but the keyboard may be on a control it hides inside that element.
+                if handleSameFocusAfterTab(reported: f, sentAt: sentAt, keys: keys, epoch: epoch) { return }
                 // Not moved yet: ask again until the ceiling, as the page may be slow to move it.
                 if Date().timeIntervalSince(sentAt) + Self.focusPollInterval < Self.focusPollCeiling {
                     pollFocusAfterTab(sentAt: sentAt, pid: pid, keys: keys, epoch: epoch)
@@ -1152,7 +1158,10 @@ public final class BrowseModeDocument: ScriptableObject {
         // typed while a page field still had the keyboard resumed focus mode quietly (8 Oct 2026); the Safari stress
         // test of 23 Oct 2026 showed both typing h into a field the user had just left with Escape, on four pages.
         if let s = super.script(for: gesture) {
-            if passThrough && s.name != "disablePassThrough" { return nil }
+            if passThrough && s.name != "disablePassThrough" {
+                if s.name == "tabFromCaret" { tabInFocusMode() }
+                return nil
+            }
             return contentScript(s)
         }
         // A key that would type a character and has no command of its own (z, 0, comma, dash, an Option symbol) is
@@ -1214,4 +1223,14 @@ public final class BrowseModeDocument: ScriptableObject {
     /// the document (set as the focus is presented). Returns keep the browse position unless automatic editing resumes.
     var lastFocusElement: AXUIElement?
     public var focusFromOutside = false
+    /// Where the keyboard is when it is on a control that WebKit hides inside a button-like container (24 Nov 2026).
+    var hiddenFocus: HiddenFocusRecord?
+    /// The controls found in each such container on this page, and the containers that held none.
+    var hiddenKnown: HiddenKnownControls?
+    /// Whether the focus's place said it had the keyboard just before the last Tab was sent (evidence for the search).
+    var focusedBeforeTab: (element: AXUIElement, focused: Bool?, keys: Int)?
+    /// The search for a hidden control, off the main thread: one at a time, the newest replacing the one waiting.
+    let hiddenRunner = AXWalkRunner<(HiddenSearchResult<AXUIElement>, Int)>()
+    /// When Tab was last sent to a page, in browse mode or in focus mode (the repeat rule for spoken focus reads it).
+    public static var lastPageTabAt = Date.distantPast
 }

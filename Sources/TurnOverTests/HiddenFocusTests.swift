@@ -148,4 +148,9 @@ func hiddenFocusTests() {
         expect(r.hops, HiddenControlSearch.hopCap)
         check(r.cutShort, "cut short at the cap")
     }
+    test("hidden focus: the repeat rule lets another element through when it is reached by Tab, and keeps the same element twice") {
+        check(!Speech.focusRepeated(words: "Remove, button", last: "Remove, button", after: 0.1, anotherRow: false, anotherByTab: true), "two Remove buttons by quick Tabs")
+        check(Speech.focusRepeated(words: "Remove, button", last: "Remove, button", after: 0.1, anotherRow: false, anotherByTab: false), "the same element twice")
+        check(Speech.focusRepeated(words: "12, A1", last: "12, A1", after: 0.1, anotherRow: false), "the old call still means the old rule")
+    }
 }
