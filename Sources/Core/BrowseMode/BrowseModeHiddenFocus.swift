@@ -183,7 +183,12 @@ extension BrowseModeDocument {
             guard API.focusTreeInterceptor === self, pageGeneration == epoch else { return }
             if let f = answer.focused { hiddenLearned = (container, f, epoch) }
             let sameFocus = (focusThen == nil && API.focusObject == nil) || (focusThen != nil && API.focusObject?.element.isSame(focusThen!) == true)
-            guard HiddenFocusDecision.shouldApply(keysThen: keysThen, keysNow: ScriptHandler.keysArrivedCount, token: token, latest: hiddenToken, focusUnchanged: sameFocus) else { return }
+            let applies = HiddenFocusDecision.shouldApply(keysThen: keysThen, keysNow: ScriptHandler.keysArrivedCount, token: token, latest: hiddenToken, focusUnchanged: sameFocus)
+            // Every check says what it learned, applied or not: on Steam's wishlist the first trial was silent and left
+            // no line at all, so nothing showed which step stopped it (24 Nov 2026).
+            func said(_ b: Bool?) -> String { b.map { $0 ? "yes" : "no" } ?? "unknown" }
+            Log.io("browse mode: hidden check \(tab == nil ? "after arrival" : "after Tab") in a \(container.role): next \(answer.next), container focused \(said(answer.focused)), recorded control \(record == nil ? "none" : said(answer.recordedFocused)), focused before Tab \(said(before)), Safari reports the container \(said(answer.reported)), found \(answer.result.map { "\($0.controls.count) by \($0.stage?.rawValue ?? "nothing")" } ?? "no search"), \(answer.ms) ms, \(applies ? "applied" : "out of date (key \(ScriptHandler.keysArrivedCount != keysThen), newer check \(token != hiddenToken), focus moved \(!sameFocus))")")
+            guard applies else { return }
             switch answer.next {
             case .pollOn:
                 // The control that had the keyboard still has it: the record is sound again.
