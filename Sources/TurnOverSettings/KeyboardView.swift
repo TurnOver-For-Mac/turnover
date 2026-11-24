@@ -21,7 +21,7 @@ struct KeyboardView: View {
                 Text("Laptop").tag("laptop"); Text("Desktop, the number pad has its NVDA keys").tag("desktop")
             }
             if model.get("general", "bosunKey") as? String == "insert" {
-                Text("Hold number-pad 0 with another key to use TurnOver commands. In NVDA and JAWS styles, Clear switches the number pad between commands and numbers. A separate Insert key works too.").font(.caption)
+                Text("Hold number-pad 0 with another key to use TurnOver commands. In NVDA and JAWS styles, Clear switches the number pad between commands and numbers. A separate Insert key works too. Caps Lock is the TurnOver key until Insert or number-pad 0 is used on a connected keyboard. Caps Lock becomes the TurnOver key again if that keyboard disconnects, or if numbers mode leaves no separate Insert key.").font(.caption)
             }
             Section("Typing echo") {
                 Picker("Characters", selection: model.int("keyboard", "speakTypedCharacters")) {

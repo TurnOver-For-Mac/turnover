@@ -4,6 +4,16 @@ import CoreGraphics
 import TurnOverCore
 
 func keyboardRoutingTests() {
+    test("keyboard routing: VoiceOver layer leaves Clear alone without keypad opt-in") {
+        var s = routingSettings(); s.windowsKeys = true; s.keyboardStyle = .nvda
+        s.insertIsTurnOver = false; s.desktopLayout = false
+        var router = KeypadEventRouter()
+        for type in [CGEventType.keyDown, .keyUp] {
+            let decision = router.route(type, code: Keypad.clear, flags: [], isRepeat: false,
+                                        settings: s, modifierHeld: false, modeOnly: true)
+            if case .unhandled = decision {} else { check(false, "Clear must reach the application without choosing Insert or JAWS desktop") }
+        }
+    }
     test("keyboard routing A1: JAWS desktop reads the caret instead of navigating NVDA objects") {
         let saved = config
         defer { config = saved }
@@ -66,7 +76,7 @@ func keyboardRoutingTests() {
     }
     test("keyboard routing A3: Clear toggles once per press in both reader paths") {
         for modeOnly in [false, true] {
-            var s = routingSettings(); s.windowsKeys = true
+            var s = routingSettings(); s.windowsKeys = true; s.insertIsTurnOver = true
             var router = KeypadEventRouter(); var toggles = 0
             for (type, repeatKey) in [(CGEventType.keyDown, false), (.keyDown, true), (.keyUp, false), (.keyDown, false), (.keyUp, false)] {
                 let result = router.route(type, code: 71, flags: [], isRepeat: repeatKey, settings: s, modifierHeld: false, modeOnly: modeOnly)

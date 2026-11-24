@@ -47,7 +47,11 @@ nonisolated public struct KeypadEventRouter: Sendable {
             return .consume
         }
         let decision: Decision
-        if isRepeat || passNext || asleep || capturing {
+        // modeOnly is the optional NVDA layer in apps where VoiceOver reads. It must
+        // not acquire fresh keypad presses without explicit keypad opt-in.
+        let optedIn = !modeOnly || settings.insertIsTurnOver
+            || (settings.keyboardStyle == .jaws && settings.desktopLayout)
+        if !optedIn || isRepeat || passNext || asleep || capturing {
             decision = .unhandled
         } else if settings.windowsKeys, code == Keypad.clear, !modifierHeld,
                   flags.intersection([.maskControl, .maskAlternate, .maskCommand, .maskShift]).isEmpty {

@@ -4,6 +4,72 @@ import CoreGraphics
 import TurnOverCore
 
 func insertKeyTests() {
+    test("Insert fallback: startup without known Insert hardware keeps Caps Lock available") {
+        let saved = config
+        defer { config = saved; KeySettings.refresh() }
+        config.general.turnOverKey = "insert"
+        KeySettings.refresh()
+        check(KeySettings.current.capsIsTurnOver, "Caps is the fallback before hardware is proven available")
+        check(!KeySettings.current.controlOptionIsTurnOver, "fallback does not capture Control Option")
+        expect(config.general.turnOverKey, "insert", "fallback preserves the saved choice")
+    }
+
+    test("Insert fallback: proven keys are scoped to their connection and keypad mode") {
+        var hardware = InsertAvailability()
+        check(!hardware.isAvailable(keypadCommands: true), "unknown hardware keeps recovery")
+        hardware.connect(1)
+        check(!hardware.isAvailable(keypadCommands: true), "a descriptor alone does not prove Insert")
+        hardware.observePress(connection: 1, code: 82)
+        check(hardware.isAvailable(keypadCommands: true), "actual keypad press proves capability")
+        check(!hardware.isAvailable(keypadCommands: false), "numbers need Caps fallback")
+        hardware.connect(2); hardware.observePress(connection: 2, code: 114)
+        check(hardware.isAvailable(keypadCommands: false), "separate Insert still works in numbers")
+        hardware.disconnect(1)
+        check(hardware.isAvailable(keypadCommands: false), "another connected Insert remains usable")
+        hardware.disconnect(2)
+        check(!hardware.isAvailable(keypadCommands: true), "unplug restores recovery")
+        hardware.connect(2)
+        check(!hardware.isAvailable(keypadCommands: true), "reconnected device starts unproven")
+        hardware.observePress(connection: 99, code: 114)
+        check(!hardware.isAvailable(keypadCommands: true), "late reports from removed devices are ignored")
+    }
+    test("Insert fallback: snapshots follow numbers and connection changes without saving a new modifier") {
+        let saved = config; let devices = InsertAvailability.current.value
+        defer { config = saved; InsertAvailability.current.value = devices; KeySettings.refresh() }
+        config.general.turnOverKey = "insert"; config.keyboard.keypadCommands = true; KeySettings.refresh()
+        var hardware = InsertAvailability(); hardware.connect(1); hardware.observePress(connection: 1, code: 82)
+        InsertAvailability.current.value = hardware
+        check(!KeySettings.current.capsIsTurnOver, "proven keypad restores ordinary Caps")
+        config.keyboard.keypadCommands = false; KeySettings.refresh()
+        check(KeySettings.current.capsIsTurnOver, "numbers activate Caps")
+        config.keyboard.keypadCommands = true; KeySettings.refresh()
+        check(!KeySettings.current.capsIsTurnOver, "commands restore proven keypad")
+        hardware.disconnect(1); InsertAvailability.current.value = hardware
+        check(KeySettings.current.capsIsTurnOver, "disconnect activates Caps without a config refresh")
+        expect(config.general.turnOverKey, "insert", "choice remains Insert")
+    }
+    test("Insert fallback: Caps ownership survives availability changes and queued flags") {
+        var s = KeySettings.current; s.insertIsTurnOver = true; s.capsIsTurnOver = true
+        var caps = CapsPressState()
+        check(caps.update(down: true, timestamp: 10, settings: s), "fallback owns fresh down")
+        s.capsIsTurnOver = false
+        check(caps.retainedFallback(settings: s), "proven Insert cannot steal held fallback")
+        check(caps.update(down: false, timestamp: 20, settings: s), "release keeps ownership")
+        check(!caps.retainedFallback(settings: s), "release clears modifier")
+        check(!caps.capturesFlags(at: 30, settings: s), "next ordinary flags can precede their HID callback")
+        check(!caps.update(down: true, timestamp: 30, settings: s), "next ordinary Caps stays ordinary")
+        check(caps.capturesFlags(at: 20, settings: s), "queued old release still belongs to reader")
+        s.capsIsTurnOver = true
+        check(!caps.update(down: true, timestamp: 35, settings: s), "availability loss cannot capture a held ordinary press")
+        check(!caps.capturesFlags(at: 30, settings: s), "ordinary flags remain application-owned")
+        _ = caps.update(down: false, timestamp: 40, settings: s)
+        check(caps.capturesFlags(at: 50, settings: s), "next fallback flags can precede their HID callback")
+        check(caps.update(down: true, timestamp: 50, settings: s), "next fresh press becomes fallback")
+        s.insertIsTurnOver = false; s.capsIsTurnOver = false
+        check(!caps.retainedFallback(settings: s), "explicit selection change disables fallback")
+        check(!caps.capturesFlags(at: 50, settings: s), "explicit selection change respected")
+    }
+
     test("Insert key: persisted selection does not also capture Caps Lock or Control Option") {
         let data = Data(#"{"general":{"bosunKey":"insert"},"keyboard":{"layout":"desktop"}}"#.utf8)
         let settings = try JSONDecoder().decode(Config.self, from: data)
@@ -111,7 +177,7 @@ func insertKeyTests() {
                 defer { readers.leave() }
                 for _ in 0..<10_000 {
                     let snapshot = KeySettings.current
-                    if snapshot.insertIsTurnOver && (snapshot.capsIsTurnOver || snapshot.controlOptionIsTurnOver) {
+                    if snapshot.insertIsTurnOver && snapshot.controlOptionIsTurnOver {
                         invalid.value = true
                     }
                     if !snapshot.insertIsTurnOver && !snapshot.capsIsTurnOver && !snapshot.controlOptionIsTurnOver {

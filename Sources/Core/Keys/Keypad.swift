@@ -161,7 +161,14 @@ public enum Keypad {
     /// Clear, in Num Lock's place (Windows style).
     public static func toggleWindows(announce: (String) -> Void = { Speech.speakMessage($0) }) {
         config.keyboard.keypadCommands.toggle(); config.save(); KeySettings.refresh()
-        announce(config.keyboard.keypadCommands ? String(localized: "keypad commands", comment: "Spoken message") : String(localized: "keypad numbers", comment: "Spoken message"))
+        var message = config.keyboard.keypadCommands ? String(localized: "keypad commands", comment: "Spoken message") : String(localized: "keypad numbers", comment: "Spoken message")
+        let settings = KeySettings.current
+        if settings.insertIsTurnOver {
+            message += ". " + (settings.capsIsTurnOver
+                ? String(localized: "Caps Lock is now the TurnOver key", comment: "Insert is unavailable; recovery modifier")
+                : String(localized: "Insert is available. Caps Lock is now a lock key", comment: "Insert recovered; modifier fallback ended"))
+        }
+        announce(message)
     }
 }
 

@@ -294,6 +294,8 @@ for primary in [false, true] {
   config.general.turnOverKey = "caps"; KeySettings.refresh()
   let h = KeyboardHandler(); h.auditPrepare(); h.auditCapsDown(true)
   let w = WindowsKeyLayer(); w.auditPrepare(); w.auditCapsDown(true)
+  var proven = InsertAvailability(); proven.connect(1); proven.observePress(connection: 1, code: 114)
+  InsertAvailability.current.value = proven
   config.general.turnOverKey = choice; KeySettings.refresh()
   let title = event(.keyDown, 17)
   title.keyboardSetUnicodeString(stringLength: 1, unicodeString: [116])
@@ -477,4 +479,130 @@ for (code,pid,count) in [(Int64(82),Int32(123),10_002),(91,456,2_002),(92,789,2)
  check(stream.first?.type == .keyDown && stream.last?.type == .keyUp,"A3 async stream starts with down and ends with release for code \(code)")
  check(stream.filter { $0.type == .keyUp }.count == 1,"A3 async retirement releases exactly once for code \(code)")
  check(stream.dropLast().allSatisfy { $0.type == .keyDown },"A3 async repeats cannot overtake release for code \(code)")
+}
+
+// Maintainer PR366: the optional layer must not acquire a keypad without opt-in.
+for style in ["windows", "jaws"] {
+ for desktop in [false, true] {
+  for insert in [false, true] {
+   settings()
+   config.general.keyboardStyle = style
+   config.general.turnOverKey = insert ? "insert" : "both"
+   config.keyboard.layout = desktop ? "desktop" : "laptop"
+   KeySettings.refresh()
+   let w = WindowsKeyLayer(); w.auditPrepare()
+   let optedIn = insert || (style == "jaws" && desktop)
+   let down = w.handle(.keyDown, event(.keyDown,71))
+   check((down == nil) == optedIn, "U5 optional Clear requires explicit keypad opt-in")
+   config.general.turnOverKey = "both"; config.keyboard.layout = "laptop"; KeySettings.refresh()
+   let up = w.handle(.keyUp, event(.keyUp,71))
+   check((up == nil) == optedIn, "U5 Clear release retains original ownership after opt-out")
+  }
+ }
+}
+
+// Actual production Caps callbacks and chord routing, with only OS lock writes replaced.
+for primary in [false, true] {
+ settings()
+ let h = KeyboardHandler(); h.auditPrepare()
+ let w = WindowsKeyLayer(); w.auditPrepare()
+ func caps(_ pressed: Bool, _ time: UInt64) {
+  if primary { h.capsChanged(pressed: pressed, timestamp: time) }
+  else { w.capsChanged(pressed: pressed, timestamp: time) }
+ }
+ func title() -> Bool {
+  // Distinct human presses, not three synthetic copies inside the 8 ms echo guard.
+  Audit.keyTime.value = (Audit.keyTime.value ?? 0) + 30_000_000
+  let e = event(.keyDown,17); e.timestamp = 100
+  e.keyboardSetUnicodeString(stringLength:1, unicodeString:[116])
+  let consumed = (primary ? h.tapEvent(.keyDown,e) : w.handle(.keyDown,e)) == nil
+  e.type = .keyUp
+  _ = primary ? h.tapEvent(.keyUp,e) : w.handle(.keyUp,e)
+  return consumed
+ }
+ caps(true,10)
+ check(title(), "U6 unproven Insert has a working Caps title chord in both layers")
+ var hardware = InsertAvailability(); hardware.connect(1); hardware.observePress(connection:1,code:82)
+ InsertAvailability.current.value = hardware
+ check(!KeySettings.current.capsIsTurnOver, "U6 proven keypad changes next-press policy")
+ check(title(), "U6 held fallback still works when Insert becomes proven")
+ caps(false,20)
+ caps(true,30)
+ check(!title(), "U6 next Caps press is ordinary while Insert available")
+ hardware.disconnect(1); InsertAvailability.current.value = hardware
+ check(!title(), "U6 unplug does not capture an already-held ordinary Caps")
+ caps(false,40)
+ caps(true,50)
+ check(title(), "U6 next fresh Caps works after disconnect")
+ caps(false,60)
+ if primary { check(!KeyboardHandler.capsHeld.value.down, "U6 shared held state is cleared on release") }
+}
+for primary in [false,true] {
+ settings()
+ let h = KeyboardHandler(); h.auditPrepare()
+ let w = WindowsKeyLayer(); w.auditPrepare()
+ func caps(_ pressed: Bool, _ time: UInt64) {
+  if primary { h.capsChanged(pressed:pressed,timestamp:time) }
+  else { w.capsChanged(pressed:pressed,timestamp:time) }
+ }
+ var hardware = InsertAvailability(); hardware.connect(1); hardware.observePress(connection:1,code:114)
+ InsertAvailability.current.value = hardware
+ caps(true,10)
+ let ordinary = event(.flagsChanged,57,flags:.maskAlphaShift); ordinary.timestamp = 10
+ check((primary ? h.tapEvent(.flagsChanged,ordinary) : w.handle(.flagsChanged,ordinary)) != nil, "U7 ordinary Caps flags pass")
+ caps(false,20)
+ hardware.disconnect(1); InsertAvailability.current.value = hardware
+ caps(true,30)
+ check(Audit.lockStates.value.last == true, "U7 fallback preserves previously enabled ordinary Caps Lock")
+ caps(false,40)
+}
+
+// Quartz may arrive before the new HID down after the previous episode ended.
+for primary in [false,true] {
+ settings()
+ let h = KeyboardHandler(); h.auditPrepare()
+ let w = WindowsKeyLayer(); w.auditPrepare()
+ func caps(_ pressed: Bool, _ time: UInt64) {
+  if primary { h.capsChanged(pressed:pressed,timestamp:time) }
+  else { w.capsChanged(pressed:pressed,timestamp:time) }
+ }
+ func flags(_ time: UInt64) -> Bool {
+  let e=event(.flagsChanged,57,flags:.maskAlphaShift); e.timestamp=time
+  return (primary ? h.tapEvent(.flagsChanged,e) : w.handle(.flagsChanged,e)) == nil
+ }
+ caps(true,10); caps(false,20)
+ var hw=InsertAvailability(); hw.connect(1); hw.observePress(connection:1,code:114)
+ InsertAvailability.current.value=hw
+ check(!flags(30), "U8 ended fallback must not swallow next ordinary Caps before HID")
+ caps(true,30); caps(false,40)
+ hw.disconnect(1); InsertAvailability.current.value=hw
+ check(flags(50), "U8 ended ordinary press must not pass next fallback before HID")
+ caps(true,50); caps(false,60)
+ check(flags(20), "U8 queued old fallback release retains its original episode")
+ check(!flags(40), "U8 queued old ordinary release remains ordinary")
+}
+
+// Exercise the actual locked publication boundary under the sanitizer too.
+settings()
+do {
+ let finished = DispatchGroup()
+ let invalid = Locked(false)
+ var hardware = InsertAvailability(); hardware.connect(1); hardware.observePress(connection:1,code:82)
+ let known = hardware
+ for worker in 0..<4 {
+  finished.enter()
+  DispatchQueue.global().async {
+   defer { finished.leave() }
+   for i in 0..<2_000 {
+    if worker == 0 { InsertAvailability.current.value = i.isMultiple(of:2) ? known : InsertAvailability() }
+    else {
+     let s = KeySettings.current
+     if !s.insertIsTurnOver || s.controlOptionIsTurnOver { invalid.value = true }
+    }
+   }
+  }
+ }
+ finished.wait()
+ check(!invalid.value, "U9 concurrent availability publication preserves configured modifier snapshots")
+ check(KeySettings.current.capsIsTurnOver, "U9 final disconnected publication restores fallback")
 }

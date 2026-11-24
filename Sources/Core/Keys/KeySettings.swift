@@ -22,7 +22,13 @@ nonisolated public struct KeySettings: Sendable {
     nonisolated(unsafe) private static var _current = KeySettings()   // under `lock`
 
     /// A copy for the keyboard thread. Any thread.
-    public static var current: KeySettings { lock.lock(); defer { lock.unlock() }; return _current }
+    public static var current: KeySettings {
+        lock.lock(); var snapshot = _current; lock.unlock()
+        if snapshot.insertIsTurnOver {
+            snapshot.capsIsTurnOver = !InsertAvailability.current.value.isAvailable(keypadCommands: snapshot.keypadCommands)
+        }
+        return snapshot
+    }
 
     /// Take the values from `config`. Main thread.
     @MainActor public static func refresh() {

@@ -19,6 +19,8 @@ with tempfile.TemporaryDirectory(prefix='probe-', dir=probe_build) as tmp:
     windows=(repo/'Sources/TurnOver/WindowsKeys.swift').read_text()
     windows=body(windows,'static func post(_ t:', 'Audit.posts.value.append(t.code)')
     windows=body(windows,'static func say(_ text:', 'Audit.messages.value.append(text)')
+    windows=windows.replace('if owned, connect != 0 { IOHIDSetModifierLockState(connect, Int32(kIOHIDCapsLockState), KeySettings.current.insertIsTurnOver ? realCapsOn : false) }',
+                            'if owned { Audit.lockStates.value.append(KeySettings.current.insertIsTurnOver ? realCapsOn : false) }')
     windows=windows.replace('private func handle(_ type:', 'func handle(_ type:')
     windows=windows.replace('static let shared = WindowsKeyLayer()', '''static let shared = WindowsKeyLayer()
     func auditPrepare() {
@@ -35,6 +37,8 @@ with tempfile.TemporaryDirectory(prefix='probe-', dir=probe_build) as tmp:
     p.joinpath('WindowsKeys.swift').write_text(windows)
     handler=(repo/'Sources/TurnOver/KeyboardHandler.swift').read_text()
     handler=body(handler,'    init()', '')
+    handler=body(handler,'    func setLock(', 'Audit.lockStates.value.append(on)')
+    handler=handler.replace('let nowNs = DispatchTime.now().uptimeNanoseconds', 'let nowNs = Audit.keyTime.value ?? DispatchTime.now().uptimeNanoseconds')
     handler=handler.replace('private func tapEvent(_ type:', 'func tapEvent(_ type:')
     handler=handler.replace('    static let marker:', '''    func auditPrepare() {
         lifecycle.lock.lock()
@@ -50,7 +54,7 @@ with tempfile.TemporaryDirectory(prefix='probe-', dir=probe_build) as tmp:
     }
     static let marker:''')
     # The branches and routing are original; all external event delivery is a recording sink.
-    for name, source in [('KeyboardHandler.swift',handler), ('KeyboardInsert.swift',(repo/'Sources/TurnOver/KeyboardInsert.swift').read_text())]:
+    for name, source in [('KeyboardHandler.swift',handler), ('KeyboardInsert.swift',(repo/'Sources/TurnOver/KeyboardInsert.swift').read_text()), ('KeyboardCaps.swift',(repo/'Sources/TurnOver/KeyboardCaps.swift').read_text())]:
         source=source.replace('event.postToPid(direct)', 'Audit.record(event, direct)')
         source=source.replace('event.postToPid(pid)', 'Audit.record(event, pid)')
         source=source.replace('replay.event.postToPid(replay.pid)', 'Audit.record(replay.event, replay.pid)').replace('event.postToPid(release.pid)', 'Audit.record(event, release.pid)')
@@ -92,6 +96,8 @@ nonisolated enum Audit {
  static let messages = Locked<[String]>([])
  static let asleep = Locked(false)
  static let hardwareDown = Locked<Set<Int64>>([82,114])
+ static let keyTime = Locked<UInt64?>(nil)
+ static let lockStates = Locked<[Bool]>([])
  static let physicalHistory = Locked(InsertHardwareHistory())
  static let retireDuringBatch = Locked<ObjectIdentifier?>(nil)
  static let gateDuringBatch = Locked(false)
@@ -113,6 +119,7 @@ nonisolated enum Audit {
 }
 nonisolated enum InsertHardware {
  static func start() {}
+ static func nanoseconds(_ ticks: UInt64) -> UInt64 { ticks }
  static func overlapsDown(_ code: Int64, at timestamp: UInt64) -> Bool { Audit.physicalHistory.value.overlapsDown(code:code,at:timestamp) }
  static func observedDown(_ code: Int64, at timestamp: UInt64, currentDown: Bool, after capturedAt: UInt64) -> Bool? { Audit.physicalHistory.value.observedDown(code: code, at: timestamp, currentDown: currentDown, after: capturedAt) }
 }
@@ -226,6 +233,7 @@ nonisolated func event(_ type: CGEventType, _ code: Int64, repeatKey: Bool = fal
  SwitcherCloseWatcher.isWatching.value=false; ScriptHandler.hasDeferredInput.value=false
  Audit.orderedTrace.value=[]
  Audit.callbacks.value=[]; Audit.orderedAcknowledgements.value=0; Audit.findTimes.value=[]; ArrowQuickNav.applies.value=false
+ InsertAvailability.current.value = InsertAvailability(); Audit.lockStates.value = []; Audit.keyTime.value = nil
  InsertModifier.auditReset(); Audit.hardwareDown.value = [82,114]; Audit.physicalHistory.value = InsertHardwareHistory(); Audit.retireDuringBatch.value = nil; Audit.gateDuringBatch.value = false
  KeypadApplicationDelivery.state.value = KeypadApplicationDelivery.State()
  config.general.keyboardStyle="jaws"; config.general.turnOverKey="insert"

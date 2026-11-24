@@ -29,7 +29,7 @@ import TurnOverCore
 nonisolated final class KeyboardHandler: @unchecked Sendable {
     static let marker: Int64 = 0xB05A
     /// Caps Lock held as the TurnOver key, for the trackpad's on and off (read off the keyboard thread).
-    static let capsHeld = Locked(false)
+    static let capsHeld = Locked(CapsPressState())
     /// Keys TurnOver presses for an AI trying a plugin (PluginTry): handled as if typed, not let through like
     /// `marker`; the second also means the TurnOver key is held (Caps Lock is read from the hardware, so a posted
     /// key can't hold it; 14 Oct 2026).
@@ -62,7 +62,8 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
     private var connect: io_connect_t { layer?.connect ?? 0 }
 
     // Tap-thread state.
-    private var capsDown = false
+    var capsDown = false
+    var capsPress = CapsPressState()
     nonisolated func cancelLoneModifiers() {
         controlAlone = false
         loneShift.cancel()
@@ -72,11 +73,11 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
 
     var insertForEvent = false
     private var readerModifierDown: Bool {
-        (capsDown && KeySettings.current.capsIsTurnOver) || insertForEvent
+        (capsDown && capsAllowed(KeySettings.current)) || insertForEvent
     }
-    private var chordFired = false
-    private var lastCapsUp: UInt64 = 0
-    private var realCapsOn = false
+    var chordFired = false
+    var lastCapsUp: UInt64 = 0
+    var realCapsOn = false
     private var quarantined = Set<Int64>()
     /// Keys translated on the way down (the Windows style): their release is translated too.
     private var remapped = Set<Int64>()
@@ -149,7 +150,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         KeyboardGesture.chordPoster = { codes in KeyboardHandler.postChord(codes) }
         KeyboardGesture.turnOverHeld = {
             let settings = KeySettings.current
-            if settings.capsIsTurnOver && KeyboardHandler.capsHeld.value { return true }
+            if KeyboardHandler.capsHeld.value.modifierHeld(settings: settings) { return true }
             if InsertModifier.snapshot().isHeld { return true }
             let f = CGEventSource.flagsState(.hidSystemState)
             return KeySettings.current.controlOptionIsTurnOver && f.contains(.maskControl) && f.contains(.maskAlternate)
@@ -222,7 +223,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         lifecycle.unsafeValue.session.requestStop()
         let rl = lifecycle.unsafeValue.runLoop
         lifecycle.lock.unlock()
-        Self.capsHeld.value = false
+        Self.capsHeld.value = CapsPressState()
         guard let rl else { return }
         CFRunLoopPerformBlock(rl, CFRunLoopMode.defaultMode.rawValue) { CFRunLoopStop(CFRunLoopGetCurrent()) }
         CFRunLoopWakeUp(rl)
@@ -235,9 +236,9 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         layer = mine
         // Nothing carried over from the tap before (a restart after the watchdog): a code still in `quarantined`
         // would swallow the next real key-up, and the app would see a key held down (a code review, 14 Oct 2026).
-        quarantined.removeAll(); remapped.removeAll(); capsDown = false; chordFired = false
+        quarantined.removeAll(); remapped.removeAll(); capsDown = false; capsPress = CapsPressState(); chordFired = false
         arrowDownWhileOff.clear()
-        Self.capsHeld.value = false; keypadRouter.reset()
+        Self.capsHeld.value = CapsPressState(); keypadRouter.reset()
         controlAlone = false; loneShift.cancel(); loneOption.cancel(); loneCommand.cancel()
         let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching(kIOHIDSystemClass))
         if service != 0 {
@@ -321,7 +322,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         IOHIDGetModifierLockState(connect, Int32(kIOHIDCapsLockState), &on)
         return on
     }
-    private func setLock(_ on: Bool) {
+    func setLock(_ on: Bool) {
         guard connect != 0 else { return }
         IOHIDSetModifierLockState(connect, Int32(kIOHIDCapsLockState), on)
     }
@@ -331,26 +332,8 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         let element = IOHIDValueGetElement(value)
         guard IOHIDElementGetUsagePage(element) == UInt32(kHIDPage_KeyboardOrKeypad),
               IOHIDElementGetUsage(element) == UInt32(kHIDUsage_KeyboardCapsLock) else { return }
-        // Caps Lock is an ordinary key when the TurnOver key is Control+Option alone.
-        guard KeySettings.current.capsIsTurnOver else { capsDown = false; return }
-        let pressed = IOHIDValueGetIntegerValue(value) != 0
-        let stamp = IOHIDValueGetTimeStamp(value)
-        if pressed {
-            capsDown = true; chordFired = false; Self.capsHeld.value = true
-            setLock(realCapsOn)
-        } else {
-            capsDown = false; Self.capsHeld.value = false
-            setLock(realCapsOn)
-            let sinceLastUp = Double(stamp &- lastCapsUp) * Self.machToNs / 1_000_000
-            lastCapsUp = stamp
-            if !chordFired && sinceLastUp < 350 {
-                realCapsOn.toggle()
-                setLock(realCapsOn)
-                let on = realCapsOn
-                let toggled = onCapsLockToggled
-                onMain { toggled?(on) }
-            }
-        }
+        capsChanged(pressed: IOHIDValueGetIntegerValue(value) != 0,
+                    timestamp: InsertHardware.nanoseconds(IOHIDValueGetTimeStamp(value)))
     }
 
     /// Set by the watchdog while the main thread is stuck: every key goes through untouched.
@@ -464,8 +447,8 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         if type == .flagsChanged {
             // Keyboard help names a modifier key pressed on its own, as NVDA's input help does: it heard only keys
             // that type or run something (12 Oct 2026: "it isn't reading command, control, option").
-            if InputManager.isInputHelpActive { announceModifier(code: code, flags: event.flags, capsIsTurnOver: settings.capsIsTurnOver) }
-            if code == 57 { return settings.capsIsTurnOver ? nil : Unmanaged.passUnretained(event) }   // caps lock's own event: nobody sees it while it is the TurnOver key
+            if InputManager.isInputHelpActive { announceModifier(code: code, flags: event.flags, capsIsTurnOver: capsAllowed(settings)) }
+            if code == 57 { return capsFlags(event, settings) ? nil : Unmanaged.passUnretained(event) }   // caps lock's own event: nobody sees it while it is the TurnOver key
             // Control pressed and released alone stops speech (NVDA: the control key cancels).
             let ctrl = event.flags.contains(.maskControl)
             if code == 59 || code == 62 {
@@ -592,7 +575,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         if event.flags.contains(.maskControl) { mods.insert(.control) }
         if event.flags.contains(.maskAlternate) { mods.insert(.option) }
         if event.flags.contains(.maskCommand) { mods.insert(.command) }
-        if capsDown && settings.capsIsTurnOver { mods.insert(.turnover); chordFired = true }
+        if capsDown && capsAllowed(settings) { mods.insert(.turnover); chordFired = true }
         if insertForEvent { mods.insert(.turnover) }
         if event.getIntegerValueField(.eventSourceUserData) == Self.typedTurnOverMarker { mods.insert(.turnover) }
         // VO-Semicolon locked the TurnOver key: every key is a TurnOver key until it is unlocked (VoiceOver's own).
