@@ -288,6 +288,46 @@ extension BrowseModeDocument {
     }
 
 
+    static let tabRoles: Set<String> = ["AXLink", "AXButton", "AXTextField", "AXTextArea", "AXCheckBox", "AXRadioButton", "AXPopUpButton", "AXComboBox", "AXSlider", "AXMenuButton", "AXDisclosureTriangle"]
+
+    /// Whether an offset in the copy falls inside a span (start, end) of it. Pure.
+    package static func offset(_ at: Int, isInside span: (Int, Int)) -> Bool { at >= span.0 && at < span.1 }
+
+    /// The span of one focus element from its pieces of text, starting at its own first piece: a link's own words (pieces
+    /// that touch, as the quick-navigation search counts them), not the line they are on, so that a second link on the
+    /// same line is not inside the first, and a link on the next line is not either (24 Nov 2026: "See the Terms and the
+    /// Privacy notice"). Anything that is not a link has its lines (`lineEnd`). Pure.
+    package static func ownSpan(startingAt start: Int, pieces: [(start: Int, end: Int, isLink: Bool)], lineEnd: Int) -> (Int, Int) {
+        guard let first = pieces.first, first.start == start, first.isLink else { return (start, max(lineEnd, start + 1)) }
+        var end = first.end
+        for next in pieces.dropFirst() {
+            guard next.isLink, next.start == end else { break }
+            end = next.end
+        }
+        return (start, max(end, start + 1))
+    }
+
+    /// The span of the copy that is one element's own: its own words if it is a link, else its lines.
+    func span(ofFocus element: AXUIElement) -> (Int, Int)? {
+        guard let start = buffer.offset(of: element), let line = buffer.lineIndex(at: start) else { return nil }
+        let (_, end) = buffer.elementRange(fromLine: line)
+        return Self.ownSpan(startingAt: start, pieces: buffer.pieces(from: start), lineEnd: end)
+    }
+
+    /// The element, or a parent of it up to five levels, that takes the keyboard: the first one of a Tab role whose
+    /// focus can be set. A link's text is found by its words: the link itself is a parent. Nothing is changed.
+    static func focusTarget(from el: AXUIElement) -> AXUIElement? {
+        var x: AXUIElement? = el; var hops = 0
+        while let y = x, hops < 5 {
+            var settable: DarwinBoolean = false
+            let takesKeyboard = tabRoles.contains(y.role)
+            let canSetFocus = takesKeyboard && AXUIElementIsAttributeSettable(y, kAXFocusedAttribute as CFString, &settable) == .success && settable.boolValue
+            if canSetFocus { return y }
+            x = y.element(kAXParentAttribute); hops += 1
+        }
+        return nil
+    }
+
     /// NVDA: Tab in browse mode goes on from the reading position, not from wherever the page's focus was left (the
     /// top of a long post, 3 Oct 2026). If the caret has moved since the focus did, focus the next (or previous)
     /// link or control after (before) it; the focus event then reads it. Otherwise the browser's own Tab.
@@ -295,25 +335,36 @@ extension BrowseModeDocument {
         guard position != positionAtFocus else { return false }
         // Putting the keyboard on a control asks the page, some of it by calls that wait out the timeout each time.
         guard !pageSilent else { return false }
-        let roles: Set<String> = ["AXLink", "AXButton", "AXTextField", "AXTextArea", "AXCheckBox", "AXRadioButton", "AXPopUpButton", "AXComboBox", "AXSlider", "AXMenuButton", "AXDisclosureTriangle"]
+        // As NVDA's _tabOverride: a reading position inside the control that has the focus leaves Tab to the browser.
+        let current = API.focusObject.flatMap { $0.pid == webArea.pid && !$0.isSameElement(as: webArea) ? $0.element : nil }
+        let own = current.flatMap { span(ofFocus: $0) }
+        if let own, Self.offset(position, isInside: own) { return false }
         var from = position
         for _ in 0..<30 {
-            guard let (at, el) = buffer.find(from: from, forward: forward, roles: roles) else { return false }
-            // A link's text is found by its words: the link itself is a parent.
-            var x: AXUIElement? = el; var hops = 0
-            while let y = x, hops < 5 {
-                var settable: DarwinBoolean = false
-                if roles.contains(y.role), AXUIElementIsAttributeSettable(y, kAXFocusedAttribute as CFString, &settable) == .success, settable.boolValue,
-                   y.set(kAXFocusedAttribute, kCFBooleanTrue) == .success {
-                    Log.io("browse mode: Tab from the reading position to \(y.role) at \(at)")
+            guard let (at, el) = buffer.find(from: from, forward: forward, roles: Self.tabRoles) else { return false }
+            // One walk for this candidate: the control that takes the keyboard. If it is the one that has the focus,
+            // setting the focus would bring no event and nothing would be said (24 Nov 2026, 06:51:49; 23 Nov, 12:17:08).
+            let target = Self.focusTarget(from: el)
+            if let current, let target, target.isSame(current) {
+                Log.io("browse mode: Tab from the reading position to the control that has the focus, at \(at); read here")
+                position = at
+                positionAtFocus = at
+                // Spoken as the focus event speaks an object, not through the focus news, whose duplicate rule would drop it.
+                ObjectFactory.make(current).reportFocus()
+                return true
+            }
+            if let target {
+                // The focus write, on its own.
+                let written = target.set(kAXFocusedAttribute, kCFBooleanTrue)
+                if written == .success {
+                    Log.io("browse mode: Tab from the reading position to \(target.role) at \(at)")
                     position = at
                     positionAtFocus = at
                     // A page whose script is stuck takes the request and does nothing until it wakes (the freeze
                     // test, 4 Oct 2026: Tab after Tab was silent). If the focus has not come within a second, say so.
-                    PageWatch.keySent(to: y.pid)
+                    PageWatch.keySent(to: target.pid)
                     return true
                 }
-                x = y.element(kAXParentAttribute); hops += 1
             }
             from = at
         }

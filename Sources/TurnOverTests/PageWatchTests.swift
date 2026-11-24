@@ -6,6 +6,23 @@ import TurnOverAX
 import AXFixtures
 
 func pageWatchTests() {
+    // 24 Nov 2026: the span of a focus element is its own words, so a reading position on the next link is not inside it.
+    test("Tab: a link's own span covers its words, not the line or the next line's link") {
+        // "See the Terms and the Privacy notice": Terms at 8..13, Privacy notice at 22..36, on one line (0..36).
+        let line: [(start: Int, end: Int, isLink: Bool)] = [(0, 8, false), (8, 13, true), (13, 22, false), (22, 36, true)]
+        let terms = BrowseModeDocument.ownSpan(startingAt: 8, pieces: Array(line[1...]), lineEnd: 36)
+        expect(terms.0, 8, "Terms starts at its words")
+        expect(terms.1, 13, "Terms ends at its words")
+        expect(BrowseModeDocument.offset(22, isInside: terms), false, "Privacy notice is not inside Terms")
+        // Two links on consecutive lines, a newline between: 0..5 and 6..11.
+        let lines: [(start: Int, end: Int, isLink: Bool)] = [(0, 5, true), (6, 11, true)]
+        let first = BrowseModeDocument.ownSpan(startingAt: 0, pieces: lines, lineEnd: 5)
+        expect(first.1, 5, "the first link does not run on across the newline")
+        expect(BrowseModeDocument.offset(6, isInside: first), false, "the next line's link is not inside it")
+        // One link split over touching pieces counts once.
+        let split = BrowseModeDocument.ownSpan(startingAt: 0, pieces: [(0, 5, true), (5, 9, true), (10, 12, true)], lineEnd: 12)
+        expect(split.1, 9, "touching pieces join, a gap ends it")
+    }
     for reply in ["unchanged focus", "empty focus", "failed focus"] {
         test("page watch integration: Tab with \(reply) updates the production warning state") {
             var app: [String: AXFixture.Value] = ["AXRole": .string("AXApplication")]
