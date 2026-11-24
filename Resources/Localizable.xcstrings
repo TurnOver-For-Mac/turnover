@@ -34883,6 +34883,174 @@
         }
       }
     },
+    "key.mute" : {
+      "comment" : "A key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "mute"
+          }
+        }
+      }
+    },
+    "key.numpad0" : {
+      "comment" : "A key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad 0"
+          }
+        }
+      }
+    },
+    "key.numpad1" : {
+      "comment" : "A key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad 1"
+          }
+        }
+      }
+    },
+    "key.numpad2" : {
+      "comment" : "A key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad 2"
+          }
+        }
+      }
+    },
+    "key.numpad3" : {
+      "comment" : "A key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad 3"
+          }
+        }
+      }
+    },
+    "key.numpad4" : {
+      "comment" : "A key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad 4"
+          }
+        }
+      }
+    },
+    "key.numpad5" : {
+      "comment" : "A key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad 5"
+          }
+        }
+      }
+    },
+    "key.numpad6" : {
+      "comment" : "A key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad 6"
+          }
+        }
+      }
+    },
+    "key.numpad7" : {
+      "comment" : "A key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad 7"
+          }
+        }
+      }
+    },
+    "key.numpad8" : {
+      "comment" : "A key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad 8"
+          }
+        }
+      }
+    },
+    "key.numpad9" : {
+      "comment" : "A key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad 9"
+          }
+        }
+      }
+    },
+    "key.numpadClear" : {
+      "comment" : "A key's name (the number pad's Clear key)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad clear"
+          }
+        }
+      }
+    },
+    "key.numpadDecimal" : {
+      "comment" : "A key's name (the number pad's . key)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad decimal"
+          }
+        }
+      }
+    },
+    "key.numpadDivide" : {
+      "comment" : "A key's name (the number pad's / key)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad divide"
+          }
+        }
+      }
+    },
     "key.numpadEnter" : {
       "comment" : "A key's name",
       "extractionState" : "extracted_with_value",
@@ -34903,6 +35071,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "sayısal tuş takımı enter"
+          }
+        }
+      }
+    },
+    "key.numpadEquals" : {
+      "comment" : "A key's name (the number pad's = key)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad equals"
+          }
+        }
+      }
+    },
+    "key.numpadMinus" : {
+      "comment" : "A key's name (the number pad's - key)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad minus"
+          }
+        }
+      }
+    },
+    "key.numpadMultiply" : {
+      "comment" : "A key's name (the number pad's * key)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad multiply"
+          }
+        }
+      }
+    },
+    "key.numpadPlus" : {
+      "comment" : "A key's name (the number pad's + key)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad plus"
           }
         }
       }
@@ -34999,6 +35215,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "sağ ok"
+          }
+        }
+      }
+    },
+    "key.rightCommand" : {
+      "comment" : "A modifier key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "right command"
+          }
+        }
+      }
+    },
+    "key.rightControl" : {
+      "comment" : "A modifier key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "right control"
+          }
+        }
+      }
+    },
+    "key.rightOption" : {
+      "comment" : "A modifier key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "right option"
+          }
+        }
+      }
+    },
+    "key.rightShift" : {
+      "comment" : "A modifier key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "right shift"
           }
         }
       }
@@ -35119,6 +35383,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "yukarı ok"
+          }
+        }
+      }
+    },
+    "key.volumeDown" : {
+      "comment" : "A key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "volume down"
+          }
+        }
+      }
+    },
+    "key.volumeUp" : {
+      "comment" : "A key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "volume up"
           }
         }
       }
