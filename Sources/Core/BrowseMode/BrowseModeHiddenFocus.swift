@@ -39,6 +39,10 @@ struct HiddenSearchAnswer: Sendable {
     var reported: Bool?
     /// A control found that says it has the keyboard and has the container as its parent, checked on the worker.
     var verified: AXUIElement?
+    /// For the log: the role of each control found and of each of the container's own children, with what each says
+    /// about the keyboard (roles only, never names, as names can be private). Steam, 24 Nov 2026.
+    var foundRoles = ""
+    var childRoles = ""
 }
 
 /// What the hidden-control search found in a container, remembered for the page it was found on.
@@ -85,6 +89,16 @@ extension BrowseModeDocument {
 
     /// What `AXFocused` says. Always asked on the worker, with no change to the messaging timeout: the handle may be the
     /// document's own, shared with the main thread (Codex's review, 24 Nov 2026).
+    /// Role and focus answer of each element, for the log: "AXButton+", "AXLink-", "AXGroup?" (at most 12).
+    nonisolated static func rolesForLog(_ elements: [AXUIElement]) -> String {
+        let parts = elements.prefix(12).map { e -> String in
+            var v: CFTypeRef?
+            let role = AXUIElementCopyAttributeValue(e, kAXRoleAttribute as CFString, &v) == .success ? (v as? String ?? "?") : "?"
+            let f = boundedFocused(e)
+            return role + (f == true ? "+" : f == false ? "-" : "?")
+        }
+        return parts.isEmpty ? "none" : parts.joined(separator: " ") + (elements.count > 12 ? " and \(elements.count - 12) more" : "")
+    }
     nonisolated static func boundedFocused(_ e: AXUIElement) -> Bool? {
         var v: CFTypeRef?
         guard AXUIElementCopyAttributeValue(e, kAXFocusedAttribute as CFString, &v) == .success else { return nil }
@@ -168,7 +182,9 @@ extension BrowseModeDocument {
             guard answer.next == .search else { return answer }
             answer.evidence = HiddenFocusDecision.hasEvidence(hasRecord: record != nil, focusedBeforeTab: before, containerFocusedNow: answer.focused)
             let page = WebHiddenControlPage(web: web)
-            let result = HiddenControlSearch.search(in: container, page: page, known: known, includeGrid: answer.evidence,
+            // After a Tab the grid runs even without evidence: Steam's rows say they have the keyboard all along, so the
+            // evidence rule never let it run, and the text and styled text found nothing (24 Nov 2026).
+            let result = HiddenControlSearch.search(in: container, page: page, known: known, includeGrid: answer.evidence || tab != nil,
                                                     timeIsUp: { request.isCancelled || Date().timeIntervalSince(started) > limit })
             answer.result = result
             // Settled here: Safari still reports the container, and the control found says it has the keyboard and
@@ -176,6 +192,11 @@ extension BrowseModeDocument {
             answer.reported = Self.boundedReportedFocus(pid: pid).map { CFEqual($0, container) }
             if let x = result.focused, Self.boundedFocused(x) == true, page.parent(of: x).map({ CFEqual($0, container) }) == true { answer.verified = x }
             answer.ms = Int(Date().timeIntervalSince(started) * 1000)
+            answer.foundRoles = Self.rolesForLog(result.controls)
+            var kids: CFTypeRef?
+            if AXUIElementCopyAttributeValue(container, kAXChildrenAttribute as CFString, &kids) == .success, let list = kids as? [AXUIElement] {
+                answer.childRoles = Self.rolesForLog(list)
+            } else { answer.childRoles = "unknown" }
             return answer
         }, publish: { [weak self] answer in
             guard let self else { return }
@@ -206,7 +227,7 @@ extension BrowseModeDocument {
                 let ranOut = answer.verified == nil && result.cutShort
                 let decision = HiddenFocusDecision.afterSearch(foundFocusedControl: answer.verified != nil, hasRecord: record != nil, focusedBeforeTab: before, containerFocusedNow: answer.focused, ranOutOfTime: ranOut)
                 // Design J: which step found it, how many controls are known, the time taken, and for a miss the role.
-                Log.io("browse mode: hidden control search in a \(container.role)\(tab == nil ? " (after arrival)" : ""): \(decision), found by \(result.stage?.rawValue ?? "nothing"), \(result.controls.count) known, \(result.hops) text pieces, \(result.points) points, \(answer.ms) ms\(result.cutShort ? ", cut short" : ""), evidence \(answer.evidence)")
+                Log.io("browse mode: hidden control search in a \(container.role)\(tab == nil ? " (after arrival)" : ""): \(decision), found by \(result.stage?.rawValue ?? "nothing"), \(result.controls.count) known, \(result.hops) text pieces, \(result.points) points, \(answer.ms) ms\(result.cutShort ? ", cut short" : ""), evidence \(answer.evidence); found \(answer.foundRoles); the container's children \(answer.childRoles)")
                 // Nothing inside says it has the keyboard, and the container says it does: the keyboard is back on
                 // the container itself (the old record's control was left).
                 if decision == .silent, record != nil, answer.focused == true, !result.cutShort, tab != nil {
