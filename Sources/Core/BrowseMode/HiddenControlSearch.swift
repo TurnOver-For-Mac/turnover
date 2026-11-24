@@ -162,6 +162,8 @@ nonisolated package enum HiddenFocusDecision {
     /// - containerFocused: what the container says.
     package static func afterTabStillReported(hasRecord: Bool, recordedControlFocused: Bool?, containerFocused: Bool?) -> Next {
         if hasRecord {
+            // An answer that did not come is unknown, not a move: ask again within the ceiling.
+            if containerFocused == nil { return .pollOn }
             // Not moved yet: the control that had the keyboard still has it.
             if recordedControlFocused == true { return .pollOn }
             // The keyboard came back to the container itself.
@@ -189,8 +191,10 @@ nonisolated package enum HiddenFocusDecision {
         hasRecord || (focusedBeforeTab == true && containerFocusedNow == false)
     }
 
-    package static func afterSearch(foundFocusedControl: Bool, hasRecord: Bool, focusedBeforeTab: Bool?, containerFocusedNow: Bool?) -> Outcome {
+    package static func afterSearch(foundFocusedControl: Bool, hasRecord: Bool, focusedBeforeTab: Bool?, containerFocusedNow: Bool?, ranOutOfTime: Bool = false) -> Outcome {
         if foundFocusedControl { return .moved }
+        // A search that ran out of time has not shown that nothing is there: unknown, so nothing is said.
+        if ranOutOfTime { return .silent }
         // A container that could not be asked, or says it has the keyboard, is no ground for saying anything.
         guard containerFocusedNow == false else { return .silent }
         return hasEvidence(hasRecord: hasRecord, focusedBeforeTab: focusedBeforeTab, containerFocusedNow: containerFocusedNow) ? .fallback : .silent
@@ -198,28 +202,31 @@ nonisolated package enum HiddenFocusDecision {
 }
 
 extension HiddenFocusDecision {
-    /// Whether an answer from a background check is still the newest: a newer check (after a Tab, or after an arrival)
-    /// has bumped the token past it otherwise.
-    package static func isCurrent(token: Int, latest: Int) -> Bool { token == latest }
+    /// What Return, Space and VO-Space do at the reading position (24 Nov 2026). Only a recorded place that the focus
+    /// object stands for, with the caret on the container's own item, is taken at all. After a Tab or Shift+Tab nothing
+    /// shows yet where the keyboard went, so the record is unverified: the real key goes to the browser, which knows,
+    /// and an accessibility press (VO-Space) does nothing rather than press the old control.
+    package enum Activation: Equatable { case leaveAlone, pressRecordedControl, sendRealKey, doNothing }
+    package static func activation(focusIsRecordedPlace: Bool, caretOnContainersOwnItem: Bool, verified: Bool, byAccessibility: Bool) -> Activation {
+        guard focusIsRecordedPlace, caretOnContainersOwnItem else { return .leaveAlone }
+        if byAccessibility { return verified ? .pressRecordedControl : .doNothing }
+        return .sendRealKey
+    }
 
-    /// Whether Return, Space and VO-Space are taken from the reading position's own item and sent for the hidden control:
-    /// only with a recorded hidden stop (a verified control, or an unnamed stop that a Tab showed) that the focus object
-    /// stands for, and the caret on the container's own item, not merely somewhere inside it.
-    package static func interceptsActivation(focusIsRecordedPlace: Bool, caretOnContainersOwnItem: Bool) -> Bool {
-        focusIsRecordedPlace && caretOnContainersOwnItem
+    /// Whether an answer from a background check may be applied: no key since, no newer check, and the focus TurnOver
+    /// presented is still the one the check started from.
+    package static func shouldApply(keysThen: Int, keysNow: Int, token: Int, latest: Int, focusUnchanged: Bool) -> Bool {
+        keysThen == keysNow && token == latest && focusUnchanged
     }
 }
 
 /// The real page: a web area's text markers and elements, asked through accessibility.
 nonisolated package final class WebHiddenControlPage: HiddenControlPage {
     package let web: AXUIElement
-    /// Each question to the page waits at most this long (a tenth of a second), whatever the app's own timeout is.
-    package static let queryLimit: Float = 0.1
-    /// The page's element is the document's own, shared with the main thread: the short limit is on it only while this
-    /// search lives, and it goes back to the default after (Codex's review, 24 Nov 2026: a later buffer read timed out early).
-    package init(web: AXUIElement) { self.web = web; AXUIElementSetMessagingTimeout(web, Self.queryLimit) }
-    deinit { AXUIElementSetMessagingTimeout(web, 0) }
-    @discardableResult private func bounded(_ e: AXUIElement) -> AXUIElement { AXUIElementSetMessagingTimeout(e, Self.queryLimit); return e }
+    /// No messaging timeout is set here (Codex's review, 24 Nov 2026): the handles are shared with the main thread, and
+    /// the questions are asked on the worker, so a slow answer only delays the search, whose own deadline caps it.
+    package init(web: AXUIElement) { self.web = web }
+    private func bounded(_ e: AXUIElement) -> AXUIElement { e }
 
     package func isSame(_ a: AXUIElement, _ b: AXUIElement) -> Bool { CFEqual(a, b) }
     package func isSameMarker(_ a: AXTextMarker, _ b: AXTextMarker) -> Bool { CFEqual(a, b) }
@@ -260,7 +267,7 @@ nonisolated package final class WebHiddenControlPage: HiddenControlPage {
         return AXUIElementIsAttributeSettable(element, kAXFocusedAttribute as CFString, &settable) == .success && settable.boolValue
     }
     package func focusableAncestor(of element: AXUIElement) -> AXUIElement? { bounded(element).element("AXFocusableAncestor") }
-    package func isFocused(_ element: AXUIElement) -> Bool? { bounded(element); return BrowseModeDocument.boundedFocused(element) }
+    package func isFocused(_ element: AXUIElement) -> Bool? { return BrowseModeDocument.boundedFocused(element) }
     package func isPlainGroup(_ element: AXUIElement) -> Bool { bounded(element).role == "AXGroup" || element.role == "AXUnknown" }
     package func gridPoints(over element: AXUIElement) -> [CGPoint] {
         guard let fv = bounded(element).attr("AXFrame"), CFGetTypeID(fv) == AXValueGetTypeID() else { return [] }

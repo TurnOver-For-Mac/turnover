@@ -166,13 +166,27 @@ func hiddenFocusTests() {
         expect(D.afterSearch(foundFocusedControl: false, hasRecord: true, focusedBeforeTab: nil, containerFocusedNow: nil), .silent)
         expect(D.afterSearch(foundFocusedControl: false, hasRecord: true, focusedBeforeTab: nil, containerFocusedNow: true), .silent)
     }
-    test("hidden focus: only the newest background check is applied") {
-        check(D.isCurrent(token: 3, latest: 3), "the newest")
-        check(!D.isCurrent(token: 2, latest: 3), "a Tab decision or an arrival check started since")
+    test("hidden focus: an answer is applied only if no key, no newer check and no other focus came since") {
+        check(D.shouldApply(keysThen: 4, keysNow: 4, token: 3, latest: 3, focusUnchanged: true), "nothing changed")
+        check(!D.shouldApply(keysThen: 4, keysNow: 5, token: 3, latest: 3, focusUnchanged: true), "a key arrived")
+        check(!D.shouldApply(keysThen: 4, keysNow: 4, token: 2, latest: 3, focusUnchanged: true), "a newer check or a focus move")
+        check(!D.shouldApply(keysThen: 4, keysNow: 4, token: 3, latest: 3, focusUnchanged: false), "another focus was presented")
     }
     test("hidden focus: Return and Space are taken only at the recorded place with the caret on the container's own item") {
-        check(D.interceptsActivation(focusIsRecordedPlace: true, caretOnContainersOwnItem: true), "recorded, on the item")
-        check(!D.interceptsActivation(focusIsRecordedPlace: true, caretOnContainersOwnItem: false), "caret elsewhere in the container")
-        check(!D.interceptsActivation(focusIsRecordedPlace: false, caretOnContainersOwnItem: true), "no record for this focus")
+        typealias A = HiddenFocusDecision.Activation
+        expect(D.activation(focusIsRecordedPlace: true, caretOnContainersOwnItem: true, verified: true, byAccessibility: false), A.sendRealKey)
+        expect(D.activation(focusIsRecordedPlace: true, caretOnContainersOwnItem: true, verified: true, byAccessibility: true), A.pressRecordedControl)
+        expect(D.activation(focusIsRecordedPlace: true, caretOnContainersOwnItem: false, verified: true, byAccessibility: false), A.leaveAlone)
+        expect(D.activation(focusIsRecordedPlace: false, caretOnContainersOwnItem: true, verified: true, byAccessibility: true), A.leaveAlone)
+    }
+    test("hidden focus: after a Tab the record is unverified: real keys still go to the page, VO-Space presses nothing") {
+        typealias A = HiddenFocusDecision.Activation
+        expect(D.activation(focusIsRecordedPlace: true, caretOnContainersOwnItem: true, verified: false, byAccessibility: true), A.doNothing)
+        expect(D.activation(focusIsRecordedPlace: true, caretOnContainersOwnItem: true, verified: false, byAccessibility: false), A.sendRealKey)
+    }
+    test("hidden focus: unknown answers never count as a move, and a search out of time says nothing") {
+        expect(D.afterTabStillReported(hasRecord: true, recordedControlFocused: nil, containerFocused: nil), D.Next.pollOn)
+        expect(D.afterTabStillReported(hasRecord: true, recordedControlFocused: false, containerFocused: nil), D.Next.pollOn)
+        expect(D.afterSearch(foundFocusedControl: false, hasRecord: true, focusedBeforeTab: nil, containerFocusedNow: false, ranOutOfTime: true), .silent)
     }
 }

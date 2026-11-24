@@ -749,7 +749,7 @@ extension AXHandler {
         EventHandler.queue(Event(.gainFocus, obj))
         // 24 Nov 2026: the focus is presented as it always was; then, in the background, a check for a control that the
         // browser hides inside it and that has the keyboard (Steam's wishlist rows). Found, it is presented in turn.
-        interceptor?.checkAfterArrival(at: target)
+        interceptor?.checkAfterArrival(at: target, role: obj.axRole)
     }
 
     /// A dialog or sheet is in front in this application: its focused window is one, or has one on it (Word's Save

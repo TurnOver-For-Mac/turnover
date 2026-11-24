@@ -33,20 +33,26 @@ extension BrowseModeDocument {
         // TurnOver is not sure which: the record then has no control). Return and Space go to the browser as real keys,
         // whatever the focus object says or the order of speech and caret was; the page knows what has the keyboard.
         // A press through accessibility goes only to the control that was found and checked, never to the container.
-        if let h = currentHiddenFocus, let f = API.focusObject, f.pid == webArea.pid,
-           HiddenFocusDecision.interceptsActivation(focusIsRecordedPlace: f.isSameElement(as: h.container) || (h.control.map { f.isSameElement(as: $0) } ?? false),
-                                                    caretOnContainersOwnItem: isOnItemOfContainer(h.container)) {
-            if byAccessibility {
+        if let h = currentHiddenFocus, let f = API.focusObject, f.pid == webArea.pid {
+            switch HiddenFocusDecision.activation(focusIsRecordedPlace: f.isSameElement(as: h.container) || (h.control.map { f.isSameElement(as: $0) } ?? false),
+                                                  caretOnContainersOwnItem: isOnItemOfContainer(h.container), verified: h.verified, byAccessibility: byAccessibility) {
+            case .leaveAlone: break
+            case .pressRecordedControl:
                 if let x = h.control, AXUIElementPerformAction(x, kAXPressAction as CFString) == .success {
                     Log.io("browse mode: pressed the hidden \(x.role) that has the keyboard inside the \(h.container.role)")
                 } else {
                     Log.io("browse mode: nothing pressed: the control with the keyboard inside the \(h.container.role) is not known")
                 }
                 return
+            case .doNothing:
+                // A Tab has been sent since the control was found: it may no longer have the keyboard, so it is not pressed.
+                Log.io("browse mode: nothing pressed: the keyboard may have moved since a Tab inside the \(h.container.role)")
+                return
+            case .sendRealKey:
+                Log.io("browse mode: \(gesture.keyName) sent to the hidden control that has the keyboard inside the \(h.container.role)")
+                gesture.send()
+                return
             }
-            Log.io("browse mode: \(gesture.keyName) sent to the hidden control that has the keyboard inside the \(h.container.role)")
-            gesture.send()
-            return
         }
         // A press needs the page itself, and asks it by calls that wait out the timeout each time: on a page that is
         // not answering it is not tried, and that is said (a review, 11 Nov 2026).

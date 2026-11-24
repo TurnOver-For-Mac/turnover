@@ -330,7 +330,7 @@ public final class BrowseModeDocument: ScriptableObject {
         }
         lastURL = now
         endPageOnItsWay(because: "the address changed in this web area")
-        rootRunner.cancel(); hiddenRunner.cancel(); hiddenFocus = nil; hiddenKnown = nil; discoveringRoot = false; followingRootFailure = false; watchingFor = nil
+        rootRunner.cancel(); hiddenRunner.cancel(); hiddenFocus = nil; hiddenKnown = nil; hiddenLearned = nil; hiddenCheckUntil = .distantPast; discoveringRoot = false; followingRootFailure = false; watchingFor = nil
         buffer.newPage()
         pageGeneration += 1
         buffer.build()
@@ -882,8 +882,7 @@ public final class BrowseModeDocument: ScriptableObject {
     /// A `package static var` only so that a test can lengthen the ceiling to outlast a slow machine; nothing else sets it.
     package static var focusPollCeiling = 0.35
 
-    /// `searches`: how many hidden-control searches this Tab has had; a search that finds nothing resumes the poll.
-    func pollFocusAfterTab(sentAt: Date, pid: pid_t, keys: Int, epoch: Int, searches: Int = 0) {
+    func pollFocusAfterTab(sentAt: Date, pid: pid_t, keys: Int, epoch: Int) {
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.focusPollInterval) { [weak self] in
             guard let self,
                   API.focusTreeInterceptor === self,
@@ -908,15 +907,16 @@ public final class BrowseModeDocument: ScriptableObject {
             let wasOn = API.focusObject.map { focusPlace(of: $0.element) }
             if let wasOn, f.isSame(wasOn) {
                 // The app's answer is where it was, but the keyboard may be on a control it hides inside that element.
-                if handleSameFocusAfterTab(reported: f, sentAt: sentAt, keys: keys, epoch: epoch, searches: searches) { return }
+                handleSameFocusAfterTab(reported: f, sentAt: sentAt, keys: keys)
                 // Not moved yet: ask again until the ceiling, as the page may be slow to move it.
                 if Date().timeIntervalSince(sentAt) + Self.focusPollInterval < Self.focusPollCeiling {
-                    pollFocusAfterTab(sentAt: sentAt, pid: pid, keys: keys, epoch: epoch, searches: searches)
+                    pollFocusAfterTab(sentAt: sentAt, pid: pid, keys: keys, epoch: epoch)
                     return
                 }
                 Log.io("browse mode: Tab brought no news of the focus, and it is where it was")
                 return
             }
+            hiddenToken &+= 1   // a hidden-control check that started before this move is out of date
             AXHandler.shared.lastNewsAt[pid] = Date()
             Log.io("browse mode: Tab brought no news of the focus; the page's focus is on \(f.role), read from there (\(Int(Date().timeIntervalSince(sentAt) * 1000)) ms)")
             AXHandler.shared.focusChanged(f, pid: f.pid)
@@ -1230,6 +1230,12 @@ public final class BrowseModeDocument: ScriptableObject {
     var hiddenKnown: HiddenKnownControls?
     /// Orders the background checks for a hidden control: a newer check (after a Tab or after an arrival) supersedes an older.
     var hiddenToken = 0
+    /// A check is taken to be running until its answer comes or this time passes (a superseded job may never answer).
+    var hiddenCheckUntil = Date.distantPast
+    /// How many checks this Tab has had (at most six).
+    var hiddenTabChecks: (keys: Int, count: Int) = (-1, 0)
+    /// What the last check learned of one container's AXFocused, as evidence before the next Tab (nothing is asked then).
+    var hiddenLearned: (element: AXUIElement, focused: Bool, generation: Int)?
     /// Whether the focus's place said it had the keyboard just before the last Tab was sent (evidence for the search).
     var focusedBeforeTab: (element: AXUIElement, focused: Bool?, keys: Int)?
     /// The search for a hidden control, off the main thread: one at a time, the newest replacing the one waiting.
