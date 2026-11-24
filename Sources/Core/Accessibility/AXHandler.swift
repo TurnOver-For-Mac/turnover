@@ -38,8 +38,9 @@ public final class AXHandler {
     /// Where the focus was before it rested a moment on a nameless group (FocusChanges.present).
     var beforeNamelessStop: (ancestors: [TurnOverObject], focus: TurnOverObject?, at: Date)?
     var lastGainFocus: (AXUIElement, Date)?
-    /// Counts each focus presented, so that an answer that arrives later can tell a newer focus has come (24 Nov 2026).
-    var presentSerial = 0
+    /// Counts every focus report, duplicates and ignored ones included, so that an answer that arrives later can tell that
+    /// the browser has said something since (24 Nov 2026).
+    var focusReportSerial = 0
     var lastWebAreaFocus = Date.distantPast
     var webAreaFocusSkipped = 0
     var running = false

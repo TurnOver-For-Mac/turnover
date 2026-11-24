@@ -19,6 +19,8 @@ struct HiddenFocusRecord {
     /// TurnOver is not sure what has the keyboard (an arrival the search could not settle): Return and Space go to the
     /// browser as real keys, and this is no evidence that something hidden has it.
     var unresolved = false
+    /// The hint that the keyboard is inside the container has been said.
+    var hinted = false
 }
 
 /// What a hidden-control search answers, from the worker to the main thread.
@@ -27,6 +29,10 @@ struct HiddenSearchAnswer: Sendable {
     var focused: Bool?
     var result: HiddenSearchResult<AXUIElement>?
     var ms = 0
+    /// Whether the app still reports the container as its focus; nil when it was not asked or did not answer.
+    var reported: Bool?
+    /// A control found that says it has the keyboard and has the container as its parent, checked on the worker.
+    var verified: AXUIElement?
 }
 
 /// What the hidden-control search found in a container, remembered for the page it was found on.
@@ -84,6 +90,7 @@ extension BrowseModeDocument {
     /// page that is busy, and this is asked on the main thread before a Tab (Codex's review, 24 Nov 2026).
     nonisolated static func boundedFocused(_ e: AXUIElement) -> Bool? {
         AXUIElementSetMessagingTimeout(e, WebHiddenControlPage.queryLimit)
+        defer { AXUIElementSetMessagingTimeout(e, 0) }   // back to the default: the element may be the document's own
         var v: CFTypeRef?
         guard AXUIElementCopyAttributeValue(e, kAXFocusedAttribute as CFString, &v) == .success else { return nil }
         return v as? Bool
@@ -140,6 +147,8 @@ extension BrowseModeDocument {
         }
     }
 
+    /// What the worker answers after a search that follows a Tab: everything asked of the page is asked there, so the main
+    /// thread only compares counters (Codex's review, 24 Nov 2026).
     private func startHiddenSearch(container: AXUIElement, hasRecord: Bool, evidenceRecord: Bool, containerFocused: Bool?,
                                    sentAt: Date, keys: Int, epoch: Int, searches: Int) {
         let before = focusedBeforeTab.flatMap { $0.element.isSame(container) && $0.keys == keys ? $0.focused : nil }
@@ -147,43 +156,43 @@ extension BrowseModeDocument {
         let known = knownControls(in: container)
         let web = webArea
         let limit = Self.hiddenSearchLimit
-        let startFocus = API.focusObject?.element
         let pid = webArea.pid
+        let serial = AXHandler.shared.focusReportSerial
         hiddenRunner.submit(collect: { request in
             let started = Date()
             let page = WebHiddenControlPage(web: web)
             let result = HiddenControlSearch.search(in: container, page: page, known: known, includeGrid: evidence,
                                                     timeIsUp: { request.isCancelled || Date().timeIntervalSince(started) > limit })
-            return HiddenSearchAnswer(focused: nil, result: result, ms: Int(Date().timeIntervalSince(started) * 1000))
-        }, publish: { [weak self] outcome in
+            // Settled here, with limits: Safari still reports the container, what the container says, and whether the
+            // control found says it has the keyboard and belongs to the container.
+            let reported = Self.boundedReportedFocus(pid: pid).map { CFEqual($0, container) }
+            let containerNow = Self.boundedFocused(container)
+            var verified: AXUIElement?
+            if let x = result.focused, Self.boundedFocused(x) == true, page.parent(of: x).map({ CFEqual($0, container) }) == true { verified = x }
+            return HiddenSearchAnswer(focused: containerNow, result: result, ms: Int(Date().timeIntervalSince(started) * 1000), reported: reported, verified: verified)
+        }, publish: { [weak self] answer in
             guard let self, API.focusTreeInterceptor === self, pageGeneration == epoch, ScriptHandler.keysArrivedCount == keys else { return }
-            guard let result = outcome.result else { return }
-            let ms = outcome.ms
+            guard let result = answer.result else { return }
             remember(result.controls, in: container)
-            // Settled again on the main thread, with limits: a click or a script can have moved the focus while the
-            // search ran, and a failed question leaves the answer unresolved (Codex's review, 24 Nov 2026).
-            let stillThere = startFocus.map { s in API.focusObject.map { focusPlace(of: $0.element).isSame(s) || $0.element.isSame(s) } == true } ?? (API.focusObject == nil)
-            guard stillThere else { Log.io("browse mode: hidden control search dropped: another focus came while it ran"); return }
-            let reported = Self.boundedReportedFocus(pid: pid)
-            guard let reported, reported.isSame(container) else {
-                Log.io("browse mode: hidden control search dropped: the browser no longer reports the \(container.role)")
+            // Cheap checks only: the browser has said nothing about the focus since the search began.
+            guard AXHandler.shared.focusReportSerial == serial else { Log.io("browse mode: hidden control search dropped: the browser reported the focus again while it ran"); return }
+            guard answer.reported == true else {
+                Log.io("browse mode: hidden control search dropped: the browser does not report the \(container.role) now")
                 resumePoll(sentAt: sentAt, pid: pid, keys: keys, epoch: epoch, searches: searches)
                 return
             }
-            let containerNow = Self.boundedFocused(container)
-            if containerNow == true {
+            if answer.focused == true {
                 Log.io("browse mode: hidden control search: the keyboard is back on the \(container.role); read from there")
                 hiddenFocus = nil
                 AXHandler.shared.focusChanged(container, pid: pid)
                 return
             }
-            let verified = result.focused.flatMap { Self.boundedFocused($0) == true ? $0 : nil }
-            let decision = HiddenFocusDecision.afterSearch(foundFocusedControl: verified != nil, hasRecord: evidenceRecord, focusedBeforeTab: before, containerFocusedNow: containerNow)
+            let decision = HiddenFocusDecision.afterSearch(foundFocusedControl: answer.verified != nil, hasRecord: evidenceRecord, focusedBeforeTab: before, containerFocusedNow: answer.focused)
             // Design J: which step found it, how many controls are known, the time taken, and for a miss the role.
-            Log.io("browse mode: hidden control search in a \(container.role): \(decision), found by \(result.stage?.rawValue ?? "nothing"), \(result.controls.count) known, \(result.hops) text pieces, \(result.points) points, \(ms) ms\(result.cutShort ? ", cut short" : ""), evidence \(evidence)")
+            Log.io("browse mode: hidden control search in a \(container.role): \(decision), found by \(result.stage?.rawValue ?? "nothing"), \(result.controls.count) known, \(result.hops) text pieces, \(result.points) points, \(answer.ms) ms\(result.cutShort ? ", cut short" : ""), evidence \(evidence)")
             switch decision {
             case .moved:
-                if let x = verified { moveHiddenFocus(to: x, in: container, previous: currentHiddenFocus) }
+                if let x = answer.verified { moveHiddenFocus(to: x, in: container, previous: currentHiddenFocus) }
             case .fallback:
                 enterUnnamedStop(in: container)
             case .silent:
@@ -220,9 +229,13 @@ extension BrowseModeDocument {
             if let old = API.focusObject { EventHandler.queue(Event(.loseFocus, old)) }
             API.setFocusObject(obj, ancestors: obj.ancestors, interceptor: self)
         }
-        if passThrough { setPassThrough(false, announce: false, playSound: false) }
+        // The previous control's automatic focus mode ends; a mode chosen by hand stays (Codex's review, 24 Nov 2026).
+        if passThrough, !disableAutoPassThrough { setPassThrough(false, announce: false, playSound: false) }
         Speech.speakMessage(Self.unlabelledControlWords, remember: false)
     }
+
+    /// The words that say the keyboard is inside a container and TurnOver does not know what has it.
+    static var keyboardInsideWords: String { String(localized: "keyboard is inside it", comment: "Spoken after a button or group when the keyboard is on something inside it that TurnOver cannot name") }
 
     /// Whether arrival at `target` is looked into: a control role or a group in this page, not asked of a page that is not
     /// answering. A container that held nothing before is not searched again, but it is no longer presented as the
@@ -242,41 +255,58 @@ extension BrowseModeDocument {
         let known = knownControls(in: target)
         let emptyBefore = (hiddenKnown.flatMap { $0.generation == pageGeneration ? $0 : nil })?.empty.contains { $0.isSame(target) } == true && known.isEmpty
         let limit = Self.hiddenArrivalLimit
-        hiddenRunner.submit(collect: { request in
+        // Not the runner the Tab search uses: that one is cancelled when a page changes, and a focus that was waiting here
+        // would be lost. This always answers, and the answer presents the focus one way or the other (24 Nov 2026).
+        DispatchQueue.global(qos: .userInitiated).async { [self] in
             let started = Date()
-            guard let focused = Self.boundedFocused(target) else { return HiddenSearchAnswer(focused: nil, result: nil) }
-            if focused || emptyBefore { return HiddenSearchAnswer(focused: focused, result: nil) }
-            let result = HiddenControlSearch.search(in: target, page: WebHiddenControlPage(web: web), known: known, includeGrid: false,
-                                                    timeIsUp: { request.isCancelled || Date().timeIntervalSince(started) > limit })
-            return HiddenSearchAnswer(focused: false, result: result, ms: Int(Date().timeIntervalSince(started) * 1000))
-        }, publish: { [weak self] answer in
-            guard let self, API.focusTreeInterceptor != nil, pageGeneration == epoch, AXHandler.shared.presentSerial == serial else { return }
-            @MainActor func presentTarget(unresolved: Bool) {
-                if unresolved { hiddenFocus = HiddenFocusRecord(container: target, control: nil, generation: pageGeneration, movedInside: false, unresolved: true) }
-                AXHandler.shared.present(target, pid: pid, arrivalChecked: true)
+            var answer = HiddenSearchAnswer(focused: Self.boundedFocused(target), result: nil)
+            if answer.focused == false, !emptyBefore {
+                let page = WebHiddenControlPage(web: web)
+                let result = HiddenControlSearch.search(in: target, page: page, known: known, includeGrid: false,
+                                                        timeIsUp: { Date().timeIntervalSince(started) > limit })
+                answer.result = result
+                if let x = result.focused, Self.boundedFocused(x) == true, page.parent(of: x).map({ CFEqual($0, target) }) == true { answer.verified = x }
+                // Safari still reports the target.
+                answer.reported = Self.boundedReportedFocus(pid: pid).map { CFEqual($0, target) }
             }
-            guard let focused = answer.focused else { presentTarget(unresolved: true); return }   // the question failed: not sure
-            if focused { presentTarget(unresolved: false); return }
-            guard let result = answer.result else { presentTarget(unresolved: true); return }   // a container that held nothing before
-            remember(result.controls, in: target)
-            Log.io("browse mode: arrival at a \(target.role) that says it has no keyboard: found \(result.focused == nil ? "nothing" : "a control by \(result.stage?.rawValue ?? "?")"), \(result.controls.count) known, \(result.hops) text pieces, \(answer.ms) ms\(result.cutShort ? ", cut short" : "")")
-            guard let x = result.focused, Self.boundedFocused(x) == true else {
-                // Only the cheap steps ran: an icon-only control is not found, so the container is not marked empty for
-                // good, and the keyboard's place stays unresolved.
-                if result.controls.isEmpty, !result.cutShort { rememberEmpty(target) }
-                presentTarget(unresolved: true)
-                return
+            answer.ms = Int(Date().timeIntervalSince(started) * 1000)
+            onMain { [self] in
+                // A newer report from the browser, duplicates included: it will be presented (or not) by itself.
+                guard AXHandler.shared.focusReportSerial == serial else { Log.io("focus: arrival search dropped: the browser reported the focus again while it ran"); return }
+                @MainActor func presentTarget(unresolved: Bool, hint: Bool) {
+                    if unresolved { hiddenFocus = HiddenFocusRecord(container: target, control: nil, generation: pageGeneration, movedInside: false, unresolved: true, hinted: !hint) }
+                    else if currentHiddenFocus?.container.isSame(target) == true { hiddenFocus = nil }   // the row itself has the keyboard again
+                    AXHandler.shared.present(target, pid: pid, arrivalChecked: true)
+                }
+                // The page was replaced meanwhile, or Safari no longer reports the target: as before this check existed.
+                guard pageGeneration == epoch, answer.reported != false else { presentTarget(unresolved: false, hint: false); return }
+                if let result = answer.result {
+                    remember(result.controls, in: target)
+                    Log.io("browse mode: arrival at a \(target.role) that says it has no keyboard: found \(answer.verified == nil ? "nothing" : "a control by \(result.stage?.rawValue ?? "?")"), \(result.controls.count) known, \(result.hops) text pieces, \(answer.ms) ms\(result.cutShort ? ", cut short" : "")")
+                }
+                let searched = answer.result != nil
+                let firstMiss = !emptyBefore
+                switch HiddenFocusDecision.arrival(containerFocused: answer.focused, searched: searched, foundVerifiedControl: answer.verified != nil, firstMiss: firstMiss) {
+                case .present:
+                    presentTarget(unresolved: false, hint: false)
+                case .presentUnresolved(let hint):
+                    // Only the cheap steps ran: an icon-only control is not found, so what is known here may be partial.
+                    if let result = answer.result, result.controls.isEmpty, !result.cutShort { rememberEmpty(target) }
+                    presentTarget(unresolved: true, hint: hint)
+                case .presentHidden:
+                    guard let x = answer.verified else { presentTarget(unresolved: true, hint: true); return }
+                    let inside = old.map { o in (currentHiddenFocus?.container.isSame(target) == true) && (o.element.isSame(target) || currentHiddenFocus?.control.map { o.element.isSame($0) } == true) } ?? false
+                    if let old, old.element.isSame(x) {
+                        Log.io("focus: the browser repeated its news of a \(target.role) while the keyboard is on a control inside it; not spoken again")
+                        return
+                    }
+                    let previous = hiddenFocus
+                    hiddenFocus = HiddenFocusRecord(container: target, control: x, generation: pageGeneration, movedInside: inside)
+                    AXHandler.shared.present(x, pid: pid, arrivalChecked: true)
+                    if API.focusObject?.element.isSame(x) != true { hiddenFocus = previous }
+                }
             }
-            let inside = old.map { o in (currentHiddenFocus?.container.isSame(target) == true) && (o.element.isSame(target) || currentHiddenFocus?.control.map { o.element.isSame($0) } == true) } ?? false
-            if let old, old.element.isSame(x) {
-                Log.io("focus: the browser repeated its news of a \(target.role) while the keyboard is on a control inside it; not spoken again")
-                return
-            }
-            let previous = hiddenFocus
-            hiddenFocus = HiddenFocusRecord(container: target, control: x, generation: pageGeneration, movedInside: inside)
-            AXHandler.shared.present(x, pid: pid, arrivalChecked: true)
-            if API.focusObject?.element.isSame(x) != true { hiddenFocus = previous }
-        })
+        }
     }
     /// What can be a container for hidden controls: a control role, or a group.
     static let arrivalRoles: Set<String> = tabRoles.union(["AXGroup"])
@@ -285,12 +315,13 @@ extension BrowseModeDocument {
     /// there, so the next hidden stop would be silent again. Called from the key's pass-through, after it was not taken
     /// by Input Help or a menu.
     static func keyPassedToPage(_ gesture: KeyboardGesture) {
-        guard gesture.keyName == "tab", let d = API.focusTreeInterceptor as? BrowseModeDocument, d.passThrough else { return }
+        guard gesture.keyName == "tab", gesture.modifiers.subtracting([.shift]).isEmpty, let d = API.focusTreeInterceptor as? BrowseModeDocument, d.passThrough else { return }
         d.tabInFocusMode()
     }
     func tabInFocusMode() {
         guard currentHiddenFocus != nil, API.focusObject.map({ $0.pid == webArea.pid }) == true else { return }
         BrowseModeDocument.lastPageTabAt = Date()
+        BrowseModeDocument.lastPageTabPid = webArea.pid
         askFocusIfNoNews()
     }
 }

@@ -24,7 +24,7 @@ private struct MadeUpPage: HiddenControlPage {
     func element(at marker: Int) -> Int? { pieces.indices.contains(marker) ? pieces[marker] : nil }
     func parent(of element: Int) -> Int? { parents[element] }
     func next(after marker: Int) -> Int? { marker + 1 < pieces.count ? marker + 1 : nil }
-    func styledElements(from start: Int, to end: Int) -> [Int] { styled }
+    func styledElements(from start: Int, to end: Int, timeIsUp: () -> Bool) -> [Int] { styled }
     func canTakeFocus(_ element: Int) -> Bool { focusable.contains(element) }
     func focusableAncestor(of element: Int) -> Int? { ancestors[element] }
     func isFocused(_ element: Int) -> Bool? { focused.contains(element) }
@@ -161,5 +161,18 @@ func hiddenFocusTests() {
         let r = HiddenControlSearch.search(in: 0, page: p, known: [], includeGrid: true, timeIsUp: { asked += 1; return asked > 6 })
         check(r.cutShort, "cut short")
         expect(r.focused, nil, "the grid never ran")
+    }
+    test("hidden focus: a search that could not ask the container, or finds it focused, says nothing even with a record") {
+        expect(D.afterSearch(foundFocusedControl: false, hasRecord: true, focusedBeforeTab: nil, containerFocusedNow: nil), .silent)
+        expect(D.afterSearch(foundFocusedControl: false, hasRecord: true, focusedBeforeTab: nil, containerFocusedNow: true), .silent)
+    }
+    test("hidden focus: arrival decisions") {
+        typealias A = HiddenFocusDecision.Arrival
+        expect(D.arrival(containerFocused: true, searched: false, foundVerifiedControl: false, firstMiss: true), A.present)
+        expect(D.arrival(containerFocused: false, searched: true, foundVerifiedControl: true, firstMiss: true), A.presentHidden)
+        expect(D.arrival(containerFocused: false, searched: true, foundVerifiedControl: false, firstMiss: true), A.presentUnresolved(hint: true))
+        expect(D.arrival(containerFocused: false, searched: true, foundVerifiedControl: false, firstMiss: false), A.presentUnresolved(hint: false))
+        expect(D.arrival(containerFocused: false, searched: false, foundVerifiedControl: false, firstMiss: false), A.presentUnresolved(hint: false))
+        expect(D.arrival(containerFocused: nil, searched: false, foundVerifiedControl: false, firstMiss: true), A.presentUnresolved(hint: false))
     }
 }

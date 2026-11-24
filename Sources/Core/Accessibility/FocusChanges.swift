@@ -53,16 +53,17 @@ extension AXHandler {
         ("owned by another process", ruleOwnedByAnotherProcess),
     ]}
 
-    /// The rules a hidden control that was verified (it says it has the keyboard, and its parent is the reported focus) still
-    /// goes through: where the foreground is. The others compare by role and frame, and would take it for a duplicate or
-    /// drop a nameless one while TurnOver kept the old focus (Codex's review, 24 Nov 2026).
-    static let hiddenMoveRules: Set<String> = ["not an application", "behind the app switcher", "background application", "background window", "owned by another process"]
+    /// The rules a hidden control that was verified (it says it has the keyboard, and its parent is the reported focus)
+    /// skips: the ones that compare by role and frame, or drop a nameless one, would take it for something else while
+    /// TurnOver kept the old focus. Every other rule, the menu ones and the exact duplicate included, still applies.
+    static let hiddenSkippedRules: Set<String> = ["stand-in for a text field", "reported twice", "nameless container"]
 
     public func focusChanged(_ element: AXUIElement, pid: pid_t, verifiedHidden: Bool = false) {
+        focusReportSerial &+= 1
         let module = AppModuleHandler.shared.appModule(for: pid)
         var target = module.redirectFocus(element) ?? element
         for (name, rule) in focusRules {
-            if verifiedHidden, !Self.hiddenMoveRules.contains(name) { continue }
+            if verifiedHidden, Self.hiddenSkippedRules.contains(name) { continue }
             switch rule(target, pid, element) {
             case .ignore: Log.debug("focus rule \(name): ignored"); return
             case .done: Log.debug("focus rule \(name): handled"); return
@@ -687,7 +688,6 @@ extension AXHandler {
 
     /// The focus is `target`: the ancestors newly entered, then the focus itself, as events.
     func present(_ target: AXUIElement, pid: pid_t, arrivalChecked: Bool = false) {
-        presentSerial &+= 1
         let (obj, ancestors): (TurnOverObject, [TurnOverObject]) = {
             if let m = madeForFocus, m.element.isSame(target) { return (m.obj, m.ancestors) }
             let o = ObjectFactory.make(target); return (o, o.ancestors)
@@ -703,7 +703,7 @@ extension AXHandler {
             doc.noteFocusArrived(at: target)
             // The search runs off the main thread; the focus is presented when it answers (BrowseModeHiddenFocus.swift).
             if doc.arrivalNeedsCheck(at: target) {
-                doc.checkArrival(at: target, old: old, pid: pid, serial: presentSerial)
+                doc.checkArrival(at: target, old: old, pid: pid, serial: focusReportSerial)
                 return
             }
         }

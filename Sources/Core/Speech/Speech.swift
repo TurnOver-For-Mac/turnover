@@ -367,7 +367,8 @@ public enum Speech {
     static func focusWordsRepeated(_ words: String, for element: AXUIElement, anotherRow: Bool) -> Bool {
         if explicitFocusReport { return false }
         let tabSince = BrowseModeDocument.lastPageTabAt >= lastFocusWordsAt && Date().timeIntervalSince(BrowseModeDocument.lastPageTabAt) < 1.0
-        let anotherByTab = tabSince && (lastFocusSpokenElement.map { !element.isSame($0) } ?? false)
+        // The Tab was sent to the page this element is in, and it is not the element last spoken.
+        let anotherByTab = tabSince && element.pid == BrowseModeDocument.lastPageTabPid && (lastFocusSpokenElement.map { !element.isSame($0) } ?? false)
         return focusRepeated(words: words, last: lastFocusWords, after: Date().timeIntervalSince(lastFocusWordsAt), anotherRow: anotherRow, anotherByTab: anotherByTab)
     }
     public static func speakObject(_ obj: TurnOverObject, reason: OutputReason) {

@@ -1160,8 +1160,28 @@ public final class WebBuffer {
     public func pieces(from offset: Int, limit: Int = 400) -> [(start: Int, end: Int, isLink: Bool, owner: Int)] {
         inPublication {
             guard let k = segments.firstIndex(where: { $0.start == offset }) else { return [] }
-            return segments[k..<min(segments.count, k + limit)].map { ($0.start, $0.end, $0.isLink, Int(bitPattern: CFHash($0.element))) }
+            var out: [(start: Int, end: Int, isLink: Bool, owner: Int)] = []
+            for sg in segments[k..<min(segments.count, k + limit)] {
+                // The link's own element: the nearest link above the text, not the text child (a link of two text
+                // children is one link). Asked only for links, and the list ends at the first piece that cannot join.
+                let owner = sg.isLink ? Int(bitPattern: CFHash(Self.linkOwner(of: sg.element))) : 0
+                if let last = out.last, !(sg.isLink && last.isLink && sg.start == last.end && owner == last.owner) {
+                    out.append((sg.start, sg.end, sg.isLink, owner))
+                    break
+                }
+                out.append((sg.start, sg.end, sg.isLink, owner))
+            }
+            return out
         }
+    }
+    /// The link element a piece of text belongs to: itself if it is one, else the nearest link above it (four levels at most).
+    static func linkOwner(of element: AXUIElement) -> AXUIElement {
+        var x: AXUIElement? = element; var hops = 0
+        while let y = x, hops < 4 {
+            if y.role == "AXLink" { return y }
+            x = y.element(kAXParentAttribute); hops += 1
+        }
+        return element
     }
 
     public func offset(of element: AXUIElement) -> Int? {

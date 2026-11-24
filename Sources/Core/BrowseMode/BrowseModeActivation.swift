@@ -35,7 +35,7 @@ extension BrowseModeDocument {
         // A press through accessibility goes only to the control that was found and checked, never to the container.
         if let h = currentHiddenFocus, let f = API.focusObject, f.pid == webArea.pid,
            f.isSameElement(as: h.container) || (h.control.map { f.isSameElement(as: $0) } ?? false),
-           isAtReadingPositionInCopy(f) {
+           isOnItemOfContainer(h.container) {
             if byAccessibility {
                 if let x = h.control, AXUIElementPerformAction(x, kAXPressAction as CFString) == .success {
                     Log.io("browse mode: pressed the hidden \(x.role) that has the keyboard inside the \(h.container.role)")
@@ -162,6 +162,14 @@ extension BrowseModeDocument {
     package nonisolated static func silentPress(byAccessibility: Bool, focusRole: String?, focusAtReadingPosition: Bool, keyboardMovedAfterPosition: Bool) -> SilentPress {
         guard !byAccessibility, let role = focusRole, pressedByAKey.contains(role) else { return .notTried }
         return focusAtReadingPosition || keyboardMovedAfterPosition ? .sendKey : .notTried
+    }
+
+    /// Whether the reading position is on the container's own item (its text segment or its line), not merely somewhere
+    /// inside a landmark that holds it: a link read inside the same landmark gets its own Return (Codex's review, 24 Nov 2026).
+    func isOnItemOfContainer(_ c: AXUIElement) -> Bool {
+        if let s = buffer.segment(at: position), c.isSame(s.element) { return true }
+        if let i = buffer.lineIndex(at: position), let e = buffer.lines[i].element, c.isSame(e) { return true }
+        return false
     }
 
     /// Whether `f` is the item at the reading position, by the copy of the page alone (identity, nothing asked): the

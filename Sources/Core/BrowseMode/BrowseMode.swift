@@ -538,6 +538,7 @@ public final class BrowseModeDocument: ScriptableObject {
             guard let self else { return }
             BrowseModeDocument.lastTabFromCaretAt = Date()
             BrowseModeDocument.lastPageTabAt = Date()
+            BrowseModeDocument.lastPageTabPid = webArea.pid
             if focusFromCaret(forward: !g.modifiers.contains(.shift)) { return }
             if AppModuleHandler.shared.appModule(for: webArea.pid).browseTabMovesReadingPosition {
                 guard ensureContent() else { return }
@@ -1233,4 +1234,6 @@ public final class BrowseModeDocument: ScriptableObject {
     let hiddenRunner = AXWalkRunner<HiddenSearchAnswer>()
     /// When Tab was last sent to a page, in browse mode or in focus mode (the repeat rule for spoken focus reads it).
     public static var lastPageTabAt = Date.distantPast
+    /// The process of the page that Tab was sent to.
+    public static var lastPageTabPid: pid_t = 0
 }

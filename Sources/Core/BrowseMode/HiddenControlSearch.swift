@@ -28,7 +28,7 @@ nonisolated package protocol HiddenControlPage {
     func parent(of element: Element) -> Element?
     func next(after marker: Marker) -> Marker?
     /// The elements the styled text between two places names: links, and the placeholders for buttons, fields and pictures.
-    func styledElements(from start: Marker, to end: Marker) -> [Element]
+    func styledElements(from start: Marker, to end: Marker, timeIsUp: () -> Bool) -> [Element]
     func canTakeFocus(_ element: Element) -> Bool
     func focusableAncestor(of element: Element) -> Element?
     /// What `AXFocused` says; nil when it cannot be asked.
@@ -129,7 +129,7 @@ nonisolated package enum HiddenControlSearch {
         // The styled text of the same stretch. Its end is the place the walk left the container, as the container's
         // own range end can be wrong.
         if timeIsUp() { result.cutShort = true; return finish() }
-        for named in page.styledElements(from: range.start, to: leftAt ?? stop) {
+        for named in page.styledElements(from: range.start, to: leftAt ?? stop, timeIsUp: timeIsUp) {
             if timeIsUp() { result.cutShort = true; return finish() }
             if let x = hiddenControl(from: named, in: container, page: page) { add(x, stage: .styled) }
         }
@@ -191,16 +191,43 @@ nonisolated package enum HiddenFocusDecision {
 
     package static func afterSearch(foundFocusedControl: Bool, hasRecord: Bool, focusedBeforeTab: Bool?, containerFocusedNow: Bool?) -> Outcome {
         if foundFocusedControl { return .moved }
+        // A container that could not be asked, or says it has the keyboard, is no ground for saying anything.
+        guard containerFocusedNow == false else { return .silent }
         return hasEvidence(hasRecord: hasRecord, focusedBeforeTab: focusedBeforeTab, containerFocusedNow: containerFocusedNow) ? .fallback : .silent
     }
 }
 
+extension HiddenFocusDecision {
+    /// What to do when a focus arrives at a container that may hide the keyboard.
+    package enum Arrival: Equatable {
+        /// The container has the keyboard itself: present it as ever.
+        case present
+        /// A found hidden control has the keyboard: present it in the container's place.
+        case presentHidden
+        /// Not sure what has the keyboard: present the container, Return and Space go to the browser. `hint` says so aloud.
+        case presentUnresolved(hint: Bool)
+    }
+    /// - containerFocused: its answer; nil when the question failed.
+    /// - searched: whether the search ran (a container that held nothing before is not searched again).
+    /// - foundVerifiedControl: the search found a control that says it has the keyboard and belongs to the container.
+    /// - firstMiss: this container was not known to hold nothing before: the hint is said once.
+    package static func arrival(containerFocused: Bool?, searched: Bool, foundVerifiedControl: Bool, firstMiss: Bool) -> Arrival {
+        guard let containerFocused else { return .presentUnresolved(hint: false) }
+        if containerFocused { return .present }
+        if foundVerifiedControl { return .presentHidden }
+        return .presentUnresolved(hint: searched && firstMiss)
+    }
+}
+
 /// The real page: a web area's text markers and elements, asked through accessibility.
-nonisolated package struct WebHiddenControlPage: HiddenControlPage {
+nonisolated package final class WebHiddenControlPage: HiddenControlPage {
     package let web: AXUIElement
     /// Each question to the page waits at most this long (a tenth of a second), whatever the app's own timeout is.
     package static let queryLimit: Float = 0.1
+    /// The page's element is the document's own, shared with the main thread: the short limit is on it only while this
+    /// search lives, and it goes back to the default after (Codex's review, 24 Nov 2026: a later buffer read timed out early).
     package init(web: AXUIElement) { self.web = web; AXUIElementSetMessagingTimeout(web, Self.queryLimit) }
+    deinit { AXUIElementSetMessagingTimeout(web, 0) }
     @discardableResult private func bounded(_ e: AXUIElement) -> AXUIElement { AXUIElementSetMessagingTimeout(e, Self.queryLimit); return e }
 
     package func isSame(_ a: AXUIElement, _ b: AXUIElement) -> Bool { CFEqual(a, b) }
@@ -223,11 +250,12 @@ nonisolated package struct WebHiddenControlPage: HiddenControlPage {
         guard let v = web.param("AXNextTextMarkerForTextMarker", marker), CFGetTypeID(v) == AXTextMarkerGetTypeID() else { return nil }
         return unsafeDowncast(v as AnyObject, to: AXTextMarker.self)
     }
-    package func styledElements(from start: AXTextMarker, to end: AXTextMarker) -> [AXUIElement] {
+    package func styledElements(from start: AXTextMarker, to end: AXTextMarker, timeIsUp: () -> Bool) -> [AXUIElement] {
         let range = AXTextMarkerRangeCreate(kCFAllocatorDefault, start, end)
         guard let rich = web.param("AXAttributedStringForTextMarkerRange", range) as? NSAttributedString else { return [] }
         var named: [AXUIElement] = []
-        rich.enumerateAttributes(in: NSRange(location: 0, length: rich.length)) { attrs, _, _ in
+        rich.enumerateAttributes(in: NSRange(location: 0, length: rich.length)) { attrs, _, stop in
+            if timeIsUp() || named.count > 60 { stop.pointee = true; return }
             for (_, value) in attrs where CFGetTypeID(value as CFTypeRef) == AXUIElementGetTypeID() {
                 let x = unsafeDowncast(value as AnyObject, to: AXUIElement.self)
                 if !named.contains(where: { CFEqual($0, x) }) { named.append(x) }
