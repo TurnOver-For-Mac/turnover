@@ -38,6 +38,12 @@ extension BrowseModeDocument {
                                                   caretOnContainersOwnItem: isOnItemOfContainer(h.container), verified: h.verified, byAccessibility: byAccessibility) {
             case .leaveAlone: break
             case .pressRecordedControl:
+                // The page is not answering: said at once, as everywhere else, and no press waits out a timeout.
+                if pageSilent {
+                    Log.io("browse mode: \(gesture.keyName) not tried: the page is not answering")
+                    sayPageNotResponding()
+                    return
+                }
                 if let x = h.control, AXUIElementPerformAction(x, kAXPressAction as CFString) == .success {
                     Log.io("browse mode: pressed the hidden \(x.role) that has the keyboard inside the \(h.container.role)")
                 } else {
@@ -47,6 +53,7 @@ extension BrowseModeDocument {
             case .doNothing:
                 // A Tab has been sent since the control was found: it may no longer have the keyboard, so it is not pressed.
                 Log.io("browse mode: nothing pressed: the keyboard may have moved since a Tab inside the \(h.container.role)")
+                reverifyHiddenFocus()
                 return
             case .sendRealKey:
                 Log.io("browse mode: \(gesture.keyName) sent to the hidden control that has the keyboard inside the \(h.container.role)")

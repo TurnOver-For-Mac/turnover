@@ -59,6 +59,7 @@ extension AXHandler {
     static let hiddenSkippedRules: Set<String> = ["stand-in for a text field", "reported twice", "nameless container"]
 
     public func focusChanged(_ element: AXUIElement, pid: pid_t, verifiedHidden: Bool = false) {
+        if !verifiedHidden { lastBrowserFocusNewsAt = Date() }
         let module = AppModuleHandler.shared.appModule(for: pid)
         var target = module.redirectFocus(element) ?? element
         for (name, rule) in focusRules {

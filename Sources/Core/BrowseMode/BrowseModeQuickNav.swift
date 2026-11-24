@@ -317,22 +317,21 @@ extension BrowseModeDocument {
 
     /// The element, or a parent of it up to five levels, that takes the keyboard: the first one of a Tab role whose
     /// focus can be set. A link's text is found by its words: the link itself is a parent. Nothing is changed.
-    static func focusTarget(from el: AXUIElement) -> AXUIElement? { focusTargets(from: el).first }
-
-    /// All of them, nearest first: when the focus write on one fails, the walk goes on to the parent that can take it
-    /// (Codex's review, 24 Nov 2026: the candidate was skipped after one failed write).
-    static func focusTargets(from el: AXUIElement) -> [AXUIElement] {
-        var found: [AXUIElement] = []
+    /// `body` is called for each candidate as it is found, nearest first, and the walk goes on only while it returns
+    /// false (24 Nov 2026: the walk used to finish before the first write, and a slow parent held up a prompt button).
+    static func walkFocusTargets(from el: AXUIElement, _ body: (AXUIElement) -> Bool) {
         var x: AXUIElement? = el; var hops = 0
         while let y = x, hops < 5 {
             var settable: DarwinBoolean = false
             let takesKeyboard = tabRoles.contains(y.role)
-            let canSetFocus = takesKeyboard && AXUIElementIsAttributeSettable(y, kAXFocusedAttribute as CFString, &settable) == .success && settable.boolValue
-            if canSetFocus { found.append(y) }
+            if takesKeyboard, AXUIElementIsAttributeSettable(y, kAXFocusedAttribute as CFString, &settable) == .success, settable.boolValue, body(y) { return }
             x = y.element(kAXParentAttribute); hops += 1
         }
-        return found
     }
+
+    /// As NVDA's _tabOverride: a reading position inside the focused control's own content leaves Tab to the browser.
+    /// A group that merely holds links is not such a control (Codex's review, 24 Nov 2026).
+    package static func usesOwnSpan(focusRole: String) -> Bool { tabRoles.contains(focusRole) }
 
     /// NVDA: Tab in browse mode goes on from the reading position, not from wherever the page's focus was left (the
     /// top of a long post, 3 Oct 2026). If the caret has moved since the focus did, focus the next (or previous)
@@ -341,45 +340,45 @@ extension BrowseModeDocument {
         guard position != positionAtFocus else { return false }
         // Putting the keyboard on a control asks the page, some of it by calls that wait out the timeout each time.
         guard !pageSilent else { return false }
-        // As NVDA's _tabOverride: a reading position inside the control that has the focus leaves Tab to the browser.
-        let current = API.focusObject.flatMap { $0.pid == webArea.pid && !$0.isSameElement(as: webArea) ? $0.element : nil }
+        let focus = API.focusObject.flatMap { $0.pid == webArea.pid && !$0.isSameElement(as: webArea) ? $0 : nil }
+        let current = focus?.element
         // A control hidden inside a container has the container's place in the copy.
-        let own = current.flatMap { span(ofFocus: focusPlace(of: $0)) }
+        let own = focus.flatMap { Self.usesOwnSpan(focusRole: $0.axRole) ? current.flatMap { span(ofFocus: focusPlace(of: $0)) } : nil }
         if let own, Self.offset(position, isInside: own) { return false }
         var from = position
         for _ in 0..<30 {
             guard let (at, el) = buffer.find(from: from, forward: forward, roles: Self.tabRoles) else { return false }
-            // One walk for this candidate: the control that takes the keyboard. If it is the one that has the focus,
-            // setting the focus would bring no event and nothing would be said (24 Nov 2026, 06:51:49; 23 Nov, 12:17:08).
-            let targets = Self.focusTargets(from: el)
-            let target = targets.first
-            // Only a control that says it has the keyboard is read without a focus write (Codex's review, 24 Nov 2026: the
-            // cached focus can be stale, and the write is what moves the keyboard).
-            if let current, let target, target.isSame(current), (current.attr(kAXFocusedAttribute) as? Bool) == true {
-                Log.io("browse mode: Tab from the reading position to the control that has the focus, at \(at); read here")
-                position = at
-                positionAtFocus = at
-                // Spoken as the focus event speaks an object, not through the focus news, whose duplicate rule would drop it.
-                // An explicit report: the repeat rule must not drop it either (Codex's review: arrows away and Tab back
-                // within half a second said nothing).
-                Speech.explicitFocusReport = true
-                ObjectFactory.make(current).reportFocus()
-                Speech.explicitFocusReport = false
-                return true
-            }
-            for target in targets {
-                // The focus write, on its own; if it fails, the next parent that can take the keyboard.
-                let written = target.set(kAXFocusedAttribute, kCFBooleanTrue)
-                if written == .success {
-                    Log.io("browse mode: Tab from the reading position to \(target.role) at \(at)")
+            var moved = false
+            var first = true
+            Self.walkFocusTargets(from: el) { target in
+                defer { first = false }
+                // Only the nearest candidate is compared with the control that has the focus. If it is that one, setting
+                // the focus would bring no event and nothing would be said (24 Nov 2026, 06:51:49; 23 Nov, 12:17:08); only a
+                // control that says it has the keyboard is read without a write (the cached focus can be stale).
+                if first, let current, target.isSame(current), (current.attr(kAXFocusedAttribute) as? Bool) == true {
+                    Log.io("browse mode: Tab from the reading position to the control that has the focus, at \(at); read here")
                     position = at
                     positionAtFocus = at
-                    // A page whose script is stuck takes the request and does nothing until it wakes (the freeze
-                    // test, 4 Oct 2026: Tab after Tab was silent). If the focus has not come within a second, say so.
-                    PageWatch.keySent(to: target.pid)
+                    // Spoken as the focus event speaks an object, not through the focus news, whose duplicate rule would drop it.
+                    // An explicit report: the repeat rule must not drop it either.
+                    Speech.explicitFocusReport = true
+                    ObjectFactory.make(current).reportFocus()
+                    Speech.explicitFocusReport = false
+                    moved = true
                     return true
                 }
+                // The focus write, as soon as the candidate is found; if it fails, the walk goes on to the next parent.
+                guard target.set(kAXFocusedAttribute, kCFBooleanTrue) == .success else { return false }
+                Log.io("browse mode: Tab from the reading position to \(target.role) at \(at)")
+                position = at
+                positionAtFocus = at
+                // A page whose script is stuck takes the request and does nothing until it wakes (the freeze
+                // test, 4 Oct 2026: Tab after Tab was silent). If the focus has not come within a second, say so.
+                PageWatch.keySent(to: target.pid)
+                moved = true
+                return true
             }
+            if moved { return true }
             from = at
         }
         return false

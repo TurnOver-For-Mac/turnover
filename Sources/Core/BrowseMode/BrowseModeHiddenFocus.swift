@@ -246,8 +246,16 @@ extension BrowseModeDocument {
     /// there, so the next hidden stop would be silent again. Called from the key's pass-through, after it was not taken
     /// by Input Help or a menu.
     static func keyPassedToPage(_ gesture: KeyboardGesture) {
-        guard gesture.keyName == "tab", gesture.modifiers.subtracting([.shift]).isEmpty, let d = API.focusTreeInterceptor as? BrowseModeDocument, d.passThrough else { return }
-        d.tabInFocusMode()
+        guard gesture.keyName == "tab", gesture.modifiers.subtracting([.shift]).isEmpty, let d = API.focusTreeInterceptor as? BrowseModeDocument else { return }
+        // Any Tab that reaches the page, pass-next-key included, may move the keyboard off the recorded control.
+        d.hiddenFocus?.verified = false
+        if d.passThrough { d.tabInFocusMode() }
+    }
+    /// A press was asked for while the record is unverified: the page is asked, off the main thread, whether the recorded
+    /// control still has the keyboard; the press itself waits for the next ask (it never goes to a control not checked).
+    func reverifyHiddenFocus() {
+        guard let h = currentHiddenFocus, !pageSilent else { return }
+        startHiddenCheck(container: h.container, tab: nil)
     }
     func tabInFocusMode() {
         hiddenFocus?.verified = false

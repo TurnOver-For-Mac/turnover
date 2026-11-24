@@ -889,7 +889,8 @@ public final class BrowseModeDocument: ScriptableObject {
                   pageGeneration == epoch,
                   ScriptHandler.keysArrivedCount == keys else { return }
             guard !pageSilent else { return }
-            if let (_, at) = AXHandler.shared.lastGainFocus, at >= sentAt { return }
+            // The browser's own news of a focus move; TurnOver's announcing a hidden child is not news from the browser.
+            if AXHandler.shared.lastBrowserFocusNewsAt >= sentAt { return }
             // A quarter of a second at most: a page that has stopped answering must not hold the keys.
             let app = AXUIElementCreateApplication(pid)
             AXUIElementSetMessagingTimeout(app, 0.25)

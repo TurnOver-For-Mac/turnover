@@ -189,4 +189,9 @@ func hiddenFocusTests() {
         expect(D.afterTabStillReported(hasRecord: true, recordedControlFocused: false, containerFocused: nil), D.Next.pollOn)
         expect(D.afterSearch(foundFocusedControl: false, hasRecord: true, focusedBeforeTab: nil, containerFocusedNow: false, ranOutOfTime: true), .silent)
     }
+    test("hidden focus: only a control's own content leaves Tab to the browser, not a group that holds links") {
+        check(BrowseModeDocument.usesOwnSpan(focusRole: "AXButton"), "a button")
+        check(BrowseModeDocument.usesOwnSpan(focusRole: "AXLink"), "a link")
+        check(!BrowseModeDocument.usesOwnSpan(focusRole: "AXGroup"), "a group")
+    }
 }
