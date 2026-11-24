@@ -177,7 +177,7 @@ extension BrowseModeDocument {
         buffer.build { [weak self] in
             guard let self, pageGeneration == epoch, bufferIntent == intent, API.focusTreeInterceptor === self,
                   positionMovedAt == movedAt,
-                  !requiresFocus || API.focusObject?.element.isSame(element) == true else { return }
+                  !requiresFocus || API.focusObject.map({ focusPlace(of: $0.element).isSame(element) }) == true else { return }
             if let at = buffer.offset(of: element) { position = at }
         }
     }

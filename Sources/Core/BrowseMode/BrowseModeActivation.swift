@@ -29,6 +29,25 @@ extension BrowseModeDocument {
            earlyTitleURL != nil {
             if deferInitialContent({ [weak self] in self?.activate(gesture, byAccessibility: byAccessibility) }) { return }
         }
+        // 24 Nov 2026: the keyboard is on a control that WebKit hides inside the container at the reading position (or
+        // TurnOver is not sure which: the record then has no control). Return and Space go to the browser as real keys,
+        // whatever the focus object says or the order of speech and caret was; the page knows what has the keyboard.
+        // A press through accessibility goes only to the control that was found and checked, never to the container.
+        if let h = currentHiddenFocus, let f = API.focusObject, f.pid == webArea.pid,
+           f.isSameElement(as: h.container) || (h.control.map { f.isSameElement(as: $0) } ?? false),
+           isAtReadingPositionInCopy(f) {
+            if byAccessibility {
+                if let x = h.control, AXUIElementPerformAction(x, kAXPressAction as CFString) == .success {
+                    Log.io("browse mode: pressed the hidden \(x.role) that has the keyboard inside the \(h.container.role)")
+                } else {
+                    Log.io("browse mode: nothing pressed: the control with the keyboard inside the \(h.container.role) is not known")
+                }
+                return
+            }
+            Log.io("browse mode: \(gesture.keyName) sent to the hidden control that has the keyboard inside the \(h.container.role)")
+            gesture.send()
+            return
+        }
         // A press needs the page itself, and asks it by calls that wait out the timeout each time: on a page that is
         // not answering it is not tried, and that is said (a review, 11 Nov 2026).
         if pageSilent {
@@ -51,14 +70,6 @@ extension BrowseModeDocument {
             }
             Log.io("browse mode: \(gesture.keyName) not tried: the page is not answering")
             sayPageNotResponding()
-            return
-        }
-        // The keyboard is on a control hidden inside the container at the reading position, and it could not be named:
-        // the real key goes to it. A press through accessibility would press the container.
-        if let h = currentHiddenFocus, h.control == nil, let f = API.focusObject, f.pid == webArea.pid, f.isSameElement(as: h.container),
-           isAtReadingPositionInCopy(f) {
-            Log.io("browse mode: \(gesture.keyName) sent to the hidden control that has the keyboard inside the \(h.container.role)")
-            gesture.send()
             return
         }
         var e: AXUIElement? = nil

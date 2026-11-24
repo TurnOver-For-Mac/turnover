@@ -130,6 +130,7 @@ nonisolated package enum HiddenControlSearch {
         // own range end can be wrong.
         if timeIsUp() { result.cutShort = true; return finish() }
         for named in page.styledElements(from: range.start, to: leftAt ?? stop) {
+            if timeIsUp() { result.cutShort = true; return finish() }
             if let x = hiddenControl(from: named, in: container, page: page) { add(x, stage: .styled) }
         }
         if !focusedOnes.isEmpty || !includeGrid { return finish() }
@@ -197,7 +198,10 @@ nonisolated package enum HiddenFocusDecision {
 /// The real page: a web area's text markers and elements, asked through accessibility.
 nonisolated package struct WebHiddenControlPage: HiddenControlPage {
     package let web: AXUIElement
-    package init(web: AXUIElement) { self.web = web }
+    /// Each question to the page waits at most this long (a tenth of a second), whatever the app's own timeout is.
+    package static let queryLimit: Float = 0.1
+    package init(web: AXUIElement) { self.web = web; AXUIElementSetMessagingTimeout(web, Self.queryLimit) }
+    @discardableResult private func bounded(_ e: AXUIElement) -> AXUIElement { AXUIElementSetMessagingTimeout(e, Self.queryLimit); return e }
 
     package func isSame(_ a: AXUIElement, _ b: AXUIElement) -> Bool { CFEqual(a, b) }
     package func isSameMarker(_ a: AXTextMarker, _ b: AXTextMarker) -> Bool { CFEqual(a, b) }
@@ -212,9 +216,9 @@ nonisolated package struct WebHiddenControlPage: HiddenControlPage {
     }
     package func element(at marker: AXTextMarker) -> AXUIElement? {
         guard let v = web.param("AXUIElementForTextMarker", marker), CFGetTypeID(v) == AXUIElementGetTypeID() else { return nil }
-        return unsafeDowncast(v as AnyObject, to: AXUIElement.self)
+        return bounded(unsafeDowncast(v as AnyObject, to: AXUIElement.self))
     }
-    package func parent(of element: AXUIElement) -> AXUIElement? { element.element(kAXParentAttribute) }
+    package func parent(of element: AXUIElement) -> AXUIElement? { bounded(element).element(kAXParentAttribute) }
     package func next(after marker: AXTextMarker) -> AXTextMarker? {
         guard let v = web.param("AXNextTextMarkerForTextMarker", marker), CFGetTypeID(v) == AXTextMarkerGetTypeID() else { return nil }
         return unsafeDowncast(v as AnyObject, to: AXTextMarker.self)
@@ -232,14 +236,15 @@ nonisolated package struct WebHiddenControlPage: HiddenControlPage {
         return named
     }
     package func canTakeFocus(_ element: AXUIElement) -> Bool {
+        bounded(element)
         var settable: DarwinBoolean = false
         return AXUIElementIsAttributeSettable(element, kAXFocusedAttribute as CFString, &settable) == .success && settable.boolValue
     }
-    package func focusableAncestor(of element: AXUIElement) -> AXUIElement? { element.element("AXFocusableAncestor") }
-    package func isFocused(_ element: AXUIElement) -> Bool? { element.attr(kAXFocusedAttribute) as? Bool }
-    package func isPlainGroup(_ element: AXUIElement) -> Bool { element.role == "AXGroup" || element.role == "AXUnknown" }
+    package func focusableAncestor(of element: AXUIElement) -> AXUIElement? { bounded(element).element("AXFocusableAncestor") }
+    package func isFocused(_ element: AXUIElement) -> Bool? { bounded(element); return BrowseModeDocument.boundedFocused(element) }
+    package func isPlainGroup(_ element: AXUIElement) -> Bool { bounded(element).role == "AXGroup" || element.role == "AXUnknown" }
     package func gridPoints(over element: AXUIElement) -> [CGPoint] {
-        guard let fv = element.attr("AXFrame"), CFGetTypeID(fv) == AXValueGetTypeID() else { return [] }
+        guard let fv = bounded(element).attr("AXFrame"), CFGetTypeID(fv) == AXValueGetTypeID() else { return [] }
         var frame = CGRect.zero
         guard AXValueGetValue(unsafeDowncast(fv as AnyObject, to: AXValue.self), .cgRect, &frame), frame.width > 0, frame.height > 0 else { return [] }
         let step = max(8.0, (Double(frame.width * frame.height) / 800).squareRoot())

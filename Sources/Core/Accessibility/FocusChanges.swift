@@ -53,10 +53,16 @@ extension AXHandler {
         ("owned by another process", ruleOwnedByAnotherProcess),
     ]}
 
-    public func focusChanged(_ element: AXUIElement, pid: pid_t) {
+    /// The rules a hidden control that was verified (it says it has the keyboard, and its parent is the reported focus) still
+    /// goes through: where the foreground is. The others compare by role and frame, and would take it for a duplicate or
+    /// drop a nameless one while TurnOver kept the old focus (Codex's review, 24 Nov 2026).
+    static let hiddenMoveRules: Set<String> = ["not an application", "behind the app switcher", "background application", "background window", "owned by another process"]
+
+    public func focusChanged(_ element: AXUIElement, pid: pid_t, verifiedHidden: Bool = false) {
         let module = AppModuleHandler.shared.appModule(for: pid)
         var target = module.redirectFocus(element) ?? element
         for (name, rule) in focusRules {
+            if verifiedHidden, !Self.hiddenMoveRules.contains(name) { continue }
             switch rule(target, pid, element) {
             case .ignore: Log.debug("focus rule \(name): ignored"); return
             case .done: Log.debug("focus rule \(name): handled"); return
@@ -64,7 +70,7 @@ extension AXHandler {
             case .go(let t): target = t
             }
         }
-        present(target, pid: pid)
+        present(target, pid: pid, arrivalChecked: verifiedHidden)
     }
 
     // MARK: The rules
@@ -680,7 +686,8 @@ extension AXHandler {
     // MARK: Presenting the new focus
 
     /// The focus is `target`: the ancestors newly entered, then the focus itself, as events.
-    func present(_ target: AXUIElement, pid: pid_t) {
+    func present(_ target: AXUIElement, pid: pid_t, arrivalChecked: Bool = false) {
+        presentSerial &+= 1
         let (obj, ancestors): (TurnOverObject, [TurnOverObject]) = {
             if let m = madeForFocus, m.element.isSame(target) { return (m.obj, m.ancestors) }
             let o = ObjectFactory.make(target); return (o, o.ancestors)
@@ -692,14 +699,13 @@ extension AXHandler {
         // hides inside it (Steam's wishlist rows). Arriving at such a container (Shift+Tab lands on the row's last
         // hidden control; a window coming forward repeats the news of the row) the control is looked for before the
         // container is spoken, and it is the focus in the container's place.
-        if let doc = BrowseModeHandler.shared.document(for: obj, ancestors: ancestors),
-           let hidden = doc.hiddenControlOnArrival(at: target, old: old) {
-            if let old, old.element.isSame(hidden) {
-                Log.io("focus: the browser repeated its news of a \(target.role) while the keyboard is on a control inside it; not spoken again")
+        if !arrivalChecked, let doc = BrowseModeHandler.shared.document(for: obj, ancestors: ancestors) {
+            doc.noteFocusArrived(at: target)
+            // The search runs off the main thread; the focus is presented when it answers (BrowseModeHiddenFocus.swift).
+            if doc.arrivalNeedsCheck(at: target) {
+                doc.checkArrival(at: target, old: old, pid: pid, serial: presentSerial)
                 return
             }
-            present(hidden, pid: pid)
-            return
         }
         let oldAncestors = API.focusAncestors
         focusWindow = window

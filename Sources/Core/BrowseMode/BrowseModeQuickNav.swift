@@ -297,11 +297,12 @@ extension BrowseModeDocument {
     /// that touch, as the quick-navigation search counts them), not the line they are on, so that a second link on the
     /// same line is not inside the first, and a link on the next line is not either (24 Nov 2026: "See the Terms and the
     /// Privacy notice"). Anything that is not a link has its lines (`lineEnd`). Pure.
-    package static func ownSpan(startingAt start: Int, pieces: [(start: Int, end: Int, isLink: Bool)], lineEnd: Int) -> (Int, Int) {
+    package static func ownSpan(startingAt start: Int, pieces: [(start: Int, end: Int, isLink: Bool, owner: Int)], lineEnd: Int) -> (Int, Int) {
         guard let first = pieces.first, first.start == start, first.isLink else { return (start, max(lineEnd, start + 1)) }
         var end = first.end
         for next in pieces.dropFirst() {
-            guard next.isLink, next.start == end else { break }
+            // The same link only: two links whose texts touch are two (Codex's review, 24 Nov 2026).
+            guard next.isLink, next.start == end, next.owner == first.owner else { break }
             end = next.end
         }
         return (start, max(end, start + 1))

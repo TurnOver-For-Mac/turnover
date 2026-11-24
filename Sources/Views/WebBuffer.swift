@@ -1157,10 +1157,10 @@ public final class WebBuffer {
     }
 
     /// The text pieces that begin at `offset` and follow it, in reading order, at most `limit` of them: for the span of one link.
-    public func pieces(from offset: Int, limit: Int = 400) -> [(start: Int, end: Int, isLink: Bool)] {
+    public func pieces(from offset: Int, limit: Int = 400) -> [(start: Int, end: Int, isLink: Bool, owner: Int)] {
         inPublication {
             guard let k = segments.firstIndex(where: { $0.start == offset }) else { return [] }
-            return segments[k..<min(segments.count, k + limit)].map { ($0.start, $0.end, $0.isLink) }
+            return segments[k..<min(segments.count, k + limit)].map { ($0.start, $0.end, $0.isLink, Int(bitPattern: CFHash($0.element))) }
         }
     }
 

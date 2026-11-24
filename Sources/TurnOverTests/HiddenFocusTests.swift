@@ -153,4 +153,13 @@ func hiddenFocusTests() {
         check(Speech.focusRepeated(words: "Remove, button", last: "Remove, button", after: 0.1, anotherRow: false, anotherByTab: false), "the same element twice")
         check(Speech.focusRepeated(words: "12, A1", last: "12, A1", after: 0.1, anotherRow: false), "the old call still means the old rule")
     }
+    test("hidden search: time running out in the styled step stops it before the grid") {
+        var p = row()
+        p.focused = [4]
+        var asked = 0
+        // The known list and the pieces ask a few times; the styled loop must ask too, and stop.
+        let r = HiddenControlSearch.search(in: 0, page: p, known: [], includeGrid: true, timeIsUp: { asked += 1; return asked > 6 })
+        check(r.cutShort, "cut short")
+        expect(r.focused, nil, "the grid never ran")
+    }
 }

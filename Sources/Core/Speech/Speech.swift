@@ -361,6 +361,15 @@ public enum Speech {
     /// Set while a focus is reported on purpose (Tab read the control that already has the keyboard): never dropped as a repeat.
     nonisolated(unsafe) public static var explicitFocusReport = false
     private static var lastFocusSpokenElement: AXUIElement?
+    /// The one repeat decision, for `speakObject` and for the words a plugin gave (`speakFocusWords`): a focus on another
+    /// element than the last spoken is not a repeat when a Tab was sent to a page after the last focus was spoken and within
+    /// the second before (one Tab, one exemption; an unrelated focus event after it is dropped as before).
+    static func focusWordsRepeated(_ words: String, for element: AXUIElement, anotherRow: Bool) -> Bool {
+        if explicitFocusReport { return false }
+        let tabSince = BrowseModeDocument.lastPageTabAt >= lastFocusWordsAt && Date().timeIntervalSince(BrowseModeDocument.lastPageTabAt) < 1.0
+        let anotherByTab = tabSince && (lastFocusSpokenElement.map { !element.isSame($0) } ?? false)
+        return focusRepeated(words: words, last: lastFocusWords, after: Date().timeIntervalSince(lastFocusWordsAt), anotherRow: anotherRow, anotherByTab: anotherByTab)
+    }
     public static func speakObject(_ obj: TurnOverObject, reason: OutputReason) {
         var parts = objectPropertiesSpeech(obj, reason: reason)
         // A table or list that takes focus on macOS keeps its selection inside it: say the selected row too,
@@ -410,10 +419,7 @@ public enum Speech {
         if reason == .focus {
             let row = obj.element.role == "AXRow" ? obj.element : nil
             let anotherRow = row.map { r in lastFocusRow.map { !r.isSame($0) } ?? false } ?? false
-            let anotherByTab = Date().timeIntervalSince(BrowseModeDocument.lastPageTabAt) < 1.0
-                && (lastFocusSpokenElement.map { !obj.element.isSame($0) } ?? false)
-            if !explicitFocusReport,
-               focusRepeated(words: words, last: lastFocusWords, after: Date().timeIntervalSince(lastFocusWordsAt), anotherRow: anotherRow, anotherByTab: anotherByTab) { Log.io("focus: the same words again within 0.5 s; not repeated"); return }
+            if focusWordsRepeated(words, for: obj.element, anotherRow: anotherRow) { Log.io("focus: the same words again within 0.5 s; not repeated"); return }
             lastFocusWords = words; lastFocusWordsAt = Date(); lastFocusRow = row; lastFocusSpokenElement = obj.element
         }
         if reason == .focus, let until = dropForFocusUntil {
@@ -435,8 +441,8 @@ public enum Speech {
     /// nothing and schedule no hint.
     public static func speakFocusWords(_ words: String, for obj: TurnOverObject) {
         if !words.isEmpty {
-            if words == lastFocusWords, Date().timeIntervalSince(lastFocusWordsAt) < 0.5 { Log.io("focus: the same words again within 0.5 s; not repeated"); return }
-            lastFocusWords = words; lastFocusWordsAt = Date()
+            if focusWordsRepeated(words, for: obj.element, anotherRow: false) { Log.io("focus: the same words again within 0.5 s; not repeated"); return }
+            lastFocusWords = words; lastFocusWordsAt = Date(); lastFocusSpokenElement = obj.element
         }
         if let until = dropForFocusUntil {
             dropForFocusUntil = nil

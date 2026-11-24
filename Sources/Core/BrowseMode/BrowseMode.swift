@@ -556,8 +556,10 @@ public final class BrowseModeDocument: ScriptableObject {
                 // The virtual caret goes to the control that had focus (NVDA): on a page that was still arriving when
                 // the field took focus, the field was not in the buffer yet and the caret stayed at the top.
                 if let f = API.focusObject, f.pid == webArea.pid, !f.isSameElement(as: webArea) {
-                    let at = buffer.offset(of: f.element)
-                    if at == nil { followFocusAfterBuild(f.element) }
+                    // A control hidden in a container is not in the copy: its container is (24 Nov 2026).
+                    let place = focusPlace(of: f.element)
+                    let at = buffer.offset(of: place)
+                    if at == nil { followFocusAfterBuild(place) }
                     if let at { position = at }
                 }
                 disableAutoPassThrough = false   // Escape ends the by-hand choice too: the next field switches by itself again
@@ -879,7 +881,8 @@ public final class BrowseModeDocument: ScriptableObject {
     /// A `package static var` only so that a test can lengthen the ceiling to outlast a slow machine; nothing else sets it.
     package static var focusPollCeiling = 0.35
 
-    private func pollFocusAfterTab(sentAt: Date, pid: pid_t, keys: Int, epoch: Int) {
+    /// `searches`: how many hidden-control searches this Tab has had; a search that finds nothing resumes the poll.
+    func pollFocusAfterTab(sentAt: Date, pid: pid_t, keys: Int, epoch: Int, searches: Int = 0) {
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.focusPollInterval) { [weak self] in
             guard let self,
                   API.focusTreeInterceptor === self,
@@ -904,10 +907,10 @@ public final class BrowseModeDocument: ScriptableObject {
             let wasOn = API.focusObject.map { focusPlace(of: $0.element) }
             if let wasOn, f.isSame(wasOn) {
                 // The app's answer is where it was, but the keyboard may be on a control it hides inside that element.
-                if handleSameFocusAfterTab(reported: f, sentAt: sentAt, keys: keys, epoch: epoch) { return }
+                if handleSameFocusAfterTab(reported: f, sentAt: sentAt, keys: keys, epoch: epoch, searches: searches) { return }
                 // Not moved yet: ask again until the ceiling, as the page may be slow to move it.
                 if Date().timeIntervalSince(sentAt) + Self.focusPollInterval < Self.focusPollCeiling {
-                    pollFocusAfterTab(sentAt: sentAt, pid: pid, keys: keys, epoch: epoch)
+                    pollFocusAfterTab(sentAt: sentAt, pid: pid, keys: keys, epoch: epoch, searches: searches)
                     return
                 }
                 Log.io("browse mode: Tab brought no news of the focus, and it is where it was")
@@ -1158,10 +1161,7 @@ public final class BrowseModeDocument: ScriptableObject {
         // typed while a page field still had the keyboard resumed focus mode quietly (8 Oct 2026); the Safari stress
         // test of 23 Oct 2026 showed both typing h into a field the user had just left with Escape, on four pages.
         if let s = super.script(for: gesture) {
-            if passThrough && s.name != "disablePassThrough" {
-                if s.name == "tabFromCaret" { tabInFocusMode() }
-                return nil
-            }
+            if passThrough && s.name != "disablePassThrough" { return nil }
             return contentScript(s)
         }
         // A key that would type a character and has no command of its own (z, 0, comma, dash, an Option symbol) is
@@ -1230,7 +1230,7 @@ public final class BrowseModeDocument: ScriptableObject {
     /// Whether the focus's place said it had the keyboard just before the last Tab was sent (evidence for the search).
     var focusedBeforeTab: (element: AXUIElement, focused: Bool?, keys: Int)?
     /// The search for a hidden control, off the main thread: one at a time, the newest replacing the one waiting.
-    let hiddenRunner = AXWalkRunner<(HiddenSearchResult<AXUIElement>, Int)>()
+    let hiddenRunner = AXWalkRunner<HiddenSearchAnswer>()
     /// When Tab was last sent to a page, in browse mode or in focus mode (the repeat rule for spoken focus reads it).
     public static var lastPageTabAt = Date.distantPast
 }

@@ -204,7 +204,7 @@ extension BrowseModeDocument {
                 let place = focusPlace(of: event.obj.element)
                 let hidden = !place.isSame(event.obj.element)
                 let at = buffer.offset(of: place)
-                if at == nil, Date().timeIntervalSince(buffer.builtAt) > 1 { followFocusAfterBuild(place, requiresFocus: !hidden) }
+                if at == nil, Date().timeIntervalSince(buffer.builtAt) > 1 { followFocusAfterBuild(place) }
                 if let at, !(hidden && currentHiddenFocus?.movedInside == true) { position = at }
             }
             positionAtFocus = position

@@ -189,7 +189,11 @@ public enum ScriptHandler {
                 taken = true
             } else {
                 taken = InputManager.handleKeyDown(gesture)
-                if !taken { SwitcherCloseWatcher.passedThrough(gesture) }
+                if !taken {
+                    SwitcherCloseWatcher.passedThrough(gesture)
+                    // Tab in focus mode went to the page for real (24 Nov 2026): the hidden control it reaches is looked for.
+                    BrowseModeDocument.keyPassedToPage(gesture)
+                }
             }
             var late = false
             state.lock.lock()
