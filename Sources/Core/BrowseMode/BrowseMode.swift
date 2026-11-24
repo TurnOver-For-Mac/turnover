@@ -1228,6 +1228,8 @@ public final class BrowseModeDocument: ScriptableObject {
     var hiddenFocus: HiddenFocusRecord?
     /// The controls found in each such container on this page, and the containers that held none.
     var hiddenKnown: HiddenKnownControls?
+    /// Orders the background checks for a hidden control: a newer check (after a Tab or after an arrival) supersedes an older.
+    var hiddenToken = 0
     /// Whether the focus's place said it had the keyboard just before the last Tab was sent (evidence for the search).
     var focusedBeforeTab: (element: AXUIElement, focused: Bool?, keys: Int)?
     /// The search for a hidden control, off the main thread: one at a time, the newest replacing the one waiting.

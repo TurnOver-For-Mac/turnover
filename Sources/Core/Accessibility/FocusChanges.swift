@@ -59,7 +59,6 @@ extension AXHandler {
     static let hiddenSkippedRules: Set<String> = ["stand-in for a text field", "reported twice", "nameless container"]
 
     public func focusChanged(_ element: AXUIElement, pid: pid_t, verifiedHidden: Bool = false) {
-        focusReportSerial &+= 1
         let module = AppModuleHandler.shared.appModule(for: pid)
         var target = module.redirectFocus(element) ?? element
         for (name, rule) in focusRules {
@@ -71,7 +70,7 @@ extension AXHandler {
             case .go(let t): target = t
             }
         }
-        present(target, pid: pid, arrivalChecked: verifiedHidden)
+        present(target, pid: pid)
     }
 
     // MARK: The rules
@@ -687,7 +686,7 @@ extension AXHandler {
     // MARK: Presenting the new focus
 
     /// The focus is `target`: the ancestors newly entered, then the focus itself, as events.
-    func present(_ target: AXUIElement, pid: pid_t, arrivalChecked: Bool = false) {
+    func present(_ target: AXUIElement, pid: pid_t) {
         let (obj, ancestors): (TurnOverObject, [TurnOverObject]) = {
             if let m = madeForFocus, m.element.isSame(target) { return (m.obj, m.ancestors) }
             let o = ObjectFactory.make(target); return (o, o.ancestors)
@@ -695,18 +694,6 @@ extension AXHandler {
         madeForFocus = nil
         let window = target.element(kAXWindowAttribute)
         let old = API.focusObject
-        // 24 Nov 2026: the browser reports a button-like container as the focus while the keyboard is on a control it
-        // hides inside it (Steam's wishlist rows). Arriving at such a container (Shift+Tab lands on the row's last
-        // hidden control; a window coming forward repeats the news of the row) the control is looked for before the
-        // container is spoken, and it is the focus in the container's place.
-        if !arrivalChecked, let doc = BrowseModeHandler.shared.document(for: obj, ancestors: ancestors) {
-            doc.noteFocusArrived(at: target)
-            // The search runs off the main thread; the focus is presented when it answers (BrowseModeHiddenFocus.swift).
-            if doc.arrivalNeedsCheck(at: target) {
-                doc.checkArrival(at: target, old: old, pid: pid, serial: focusReportSerial)
-                return
-            }
-        }
         let oldAncestors = API.focusAncestors
         focusWindow = window
         // The focus TurnOver moved itself, after its cursor (VoiceOver's "keyboard focus follows the cursor"): the
@@ -734,6 +721,7 @@ extension AXHandler {
             beforeNamelessStop = nil
         }
         let interceptor = BrowseModeHandler.shared.document(for: obj, ancestors: ancestors)
+        interceptor?.noteFocusArrived(at: target)
         let fromOutside = interceptor !== API.focusTreeInterceptor
         // Automatic focus mode moving the keyboard to the field it has just named (17 Nov 2026: VO Right and F onto a
         // field in a named group said the group after the field, from the focus passing into it). The move is TurnOver's,
@@ -759,6 +747,9 @@ extension AXHandler {
         API.setFocusObject(obj, ancestors: ancestors, interceptor: interceptor)
         ObjectNavigator.shared.focusMoved(to: obj.element, pid: pid)
         EventHandler.queue(Event(.gainFocus, obj))
+        // 24 Nov 2026: the focus is presented as it always was; then, in the background, a check for a control that the
+        // browser hides inside it and that has the keyboard (Steam's wishlist rows). Found, it is presented in turn.
+        interceptor?.checkAfterArrival(at: target)
     }
 
     /// A dialog or sheet is in front in this application: its focused window is one, or has one on it (Word's Save

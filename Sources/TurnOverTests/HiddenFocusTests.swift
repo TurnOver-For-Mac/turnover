@@ -166,13 +166,13 @@ func hiddenFocusTests() {
         expect(D.afterSearch(foundFocusedControl: false, hasRecord: true, focusedBeforeTab: nil, containerFocusedNow: nil), .silent)
         expect(D.afterSearch(foundFocusedControl: false, hasRecord: true, focusedBeforeTab: nil, containerFocusedNow: true), .silent)
     }
-    test("hidden focus: arrival decisions") {
-        typealias A = HiddenFocusDecision.Arrival
-        expect(D.arrival(containerFocused: true, searched: false, foundVerifiedControl: false, firstMiss: true), A.present)
-        expect(D.arrival(containerFocused: false, searched: true, foundVerifiedControl: true, firstMiss: true), A.presentHidden)
-        expect(D.arrival(containerFocused: false, searched: true, foundVerifiedControl: false, firstMiss: true), A.presentUnresolved(hint: true))
-        expect(D.arrival(containerFocused: false, searched: true, foundVerifiedControl: false, firstMiss: false), A.presentUnresolved(hint: false))
-        expect(D.arrival(containerFocused: false, searched: false, foundVerifiedControl: false, firstMiss: false), A.presentUnresolved(hint: false))
-        expect(D.arrival(containerFocused: nil, searched: false, foundVerifiedControl: false, firstMiss: true), A.presentUnresolved(hint: false))
+    test("hidden focus: only the newest background check is applied") {
+        check(D.isCurrent(token: 3, latest: 3), "the newest")
+        check(!D.isCurrent(token: 2, latest: 3), "a Tab decision or an arrival check started since")
+    }
+    test("hidden focus: Return and Space are taken only at the recorded place with the caret on the container's own item") {
+        check(D.interceptsActivation(focusIsRecordedPlace: true, caretOnContainersOwnItem: true), "recorded, on the item")
+        check(!D.interceptsActivation(focusIsRecordedPlace: true, caretOnContainersOwnItem: false), "caret elsewhere in the container")
+        check(!D.interceptsActivation(focusIsRecordedPlace: false, caretOnContainersOwnItem: true), "no record for this focus")
     }
 }

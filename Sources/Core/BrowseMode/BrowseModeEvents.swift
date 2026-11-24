@@ -212,12 +212,6 @@ extension BrowseModeDocument {
             // Keys held for a field's focus that came on another element (16 Nov 2026, review): not left waiting.
             settleCaretHold(afterFocusOn: event.obj)
             next()
-            // An arrival that could not settle what has the keyboard: the row is said, then that the keyboard is inside it.
-            if var h = currentHiddenFocus, h.unresolved, !h.hinted, h.container.isSame(event.obj.element) {
-                h.hinted = true
-                hiddenFocus = h
-                Speech.speakMessage(Self.keyboardInsideWords, remember: false)
-            }
             // Case 3 (24 Nov 2026): a hidden control that is a nameless group says nothing on focus. Said in words.
             if let x = currentHiddenFocus?.control, x.isSame(event.obj.element), event.obj.name.isEmpty, ["AXGroup", "AXUnknown"].contains(x.role) {
                 Speech.speakMessage(Self.unlabelledControlWords, remember: false)

@@ -198,24 +198,15 @@ nonisolated package enum HiddenFocusDecision {
 }
 
 extension HiddenFocusDecision {
-    /// What to do when a focus arrives at a container that may hide the keyboard.
-    package enum Arrival: Equatable {
-        /// The container has the keyboard itself: present it as ever.
-        case present
-        /// A found hidden control has the keyboard: present it in the container's place.
-        case presentHidden
-        /// Not sure what has the keyboard: present the container, Return and Space go to the browser. `hint` says so aloud.
-        case presentUnresolved(hint: Bool)
-    }
-    /// - containerFocused: its answer; nil when the question failed.
-    /// - searched: whether the search ran (a container that held nothing before is not searched again).
-    /// - foundVerifiedControl: the search found a control that says it has the keyboard and belongs to the container.
-    /// - firstMiss: this container was not known to hold nothing before: the hint is said once.
-    package static func arrival(containerFocused: Bool?, searched: Bool, foundVerifiedControl: Bool, firstMiss: Bool) -> Arrival {
-        guard let containerFocused else { return .presentUnresolved(hint: false) }
-        if containerFocused { return .present }
-        if foundVerifiedControl { return .presentHidden }
-        return .presentUnresolved(hint: searched && firstMiss)
+    /// Whether an answer from a background check is still the newest: a newer check (after a Tab, or after an arrival)
+    /// has bumped the token past it otherwise.
+    package static func isCurrent(token: Int, latest: Int) -> Bool { token == latest }
+
+    /// Whether Return, Space and VO-Space are taken from the reading position's own item and sent for the hidden control:
+    /// only with a recorded hidden stop (a verified control, or an unnamed stop that a Tab showed) that the focus object
+    /// stands for, and the caret on the container's own item, not merely somewhere inside it.
+    package static func interceptsActivation(focusIsRecordedPlace: Bool, caretOnContainersOwnItem: Bool) -> Bool {
+        focusIsRecordedPlace && caretOnContainersOwnItem
     }
 }
 

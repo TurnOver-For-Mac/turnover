@@ -34,8 +34,8 @@ extension BrowseModeDocument {
         // whatever the focus object says or the order of speech and caret was; the page knows what has the keyboard.
         // A press through accessibility goes only to the control that was found and checked, never to the container.
         if let h = currentHiddenFocus, let f = API.focusObject, f.pid == webArea.pid,
-           f.isSameElement(as: h.container) || (h.control.map { f.isSameElement(as: $0) } ?? false),
-           isOnItemOfContainer(h.container) {
+           HiddenFocusDecision.interceptsActivation(focusIsRecordedPlace: f.isSameElement(as: h.container) || (h.control.map { f.isSameElement(as: $0) } ?? false),
+                                                    caretOnContainersOwnItem: isOnItemOfContainer(h.container)) {
             if byAccessibility {
                 if let x = h.control, AXUIElementPerformAction(x, kAXPressAction as CFString) == .success {
                     Log.io("browse mode: pressed the hidden \(x.role) that has the keyboard inside the \(h.container.role)")
