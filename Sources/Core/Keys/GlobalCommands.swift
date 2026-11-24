@@ -490,22 +490,24 @@ public final class GlobalCommands: ScriptableObject {
         let charging = desc[kIOPSIsChargingKey] as? Bool ?? false
         let onPower = (desc[kIOPSPowerSourceStateKey] as? String) == kIOPSACPowerValue
         let charged = desc[kIOPSIsChargedKey] as? Bool ?? false
-        // How long, as the menu bar's battery item says it (a tester, 14 Oct 2026): to full while charging, left
-        // on battery; -1 while the Mac is still working it out.
-        func span(_ minutes: Int) -> String? {
-            guard minutes > 0 else { return nil }
-            let h = minutes / 60, m = minutes % 60
-            let mins = String(localized: "\(m) minutes", comment: "A battery's time: minutes")
-            guard h > 0 else { return mins }
-            let hours = h == 1 ? String(localized: "1 hour", comment: "A battery's time: hours") : String(localized: "\(h) hours", comment: "A battery's time: hours")
-            return m > 0 ? String(localized: "\(hours) \(mins)", comment: "A battery's time: the hours, then the minutes") : hours
-        }
         var parts = [String(localized: "battery \(max > 0 ? current * 100 / max : current) percent", comment: "The battery's charge: %lld is the percentage")]
         if charged, onPower { parts.append(String(localized: "charged, on power", comment: "The battery")) }
-        else if charging { parts.append(String(localized: "charging", comment: "The battery")); if let t = span(desc[kIOPSTimeToFullChargeKey] as? Int ?? -1) { parts.append(String(localized: "\(t) to full", comment: "The battery: %@ is how long until it is full")) } }
+        else if charging { parts.append(String(localized: "charging", comment: "The battery")); if let t = batteryTime(minutes: desc[kIOPSTimeToFullChargeKey] as? Int ?? -1) { parts.append(String(localized: "\(t) to full", comment: "The battery: %@ is how long until it is full")) } }
         else if onPower { parts.append(String(localized: "on power, not charging", comment: "The battery")) }
-        else { parts.append(String(localized: "on battery", comment: "The battery")); if let t = span(desc[kIOPSTimeToEmptyKey] as? Int ?? -1) { parts.append(String(localized: "\(t) left", comment: "The battery: %@ is how long it will last")) } }
+        else { parts.append(String(localized: "on battery", comment: "The battery")); if let t = batteryTime(minutes: desc[kIOPSTimeToEmptyKey] as? Int ?? -1) { parts.append(String(localized: "\(t) left", comment: "The battery: %@ is how long it will last")) } }
         return parts.joined(separator: ", ")
+    }
+
+    /// How long, as the menu bar's battery item says it (a tester, 14 Oct 2026): to full while charging, left on
+    /// battery; nil for -1, while the Mac is still working it out. One minute is "1 minute" (it was "2 hours 1 minutes",
+    /// 24 Nov 2026).
+    package nonisolated static func batteryTime(minutes: Int) -> String? {
+        guard minutes > 0 else { return nil }
+        let h = minutes / 60, m = minutes % 60
+        let mins = m == 1 ? String(localized: "1 minute", comment: "A battery's time: minutes") : String(localized: "\(m) minutes", comment: "A battery's time: minutes")
+        guard h > 0 else { return mins }
+        let hours = h == 1 ? String(localized: "1 hour", comment: "A battery's time: hours") : String(localized: "\(h) hours", comment: "A battery's time: hours")
+        return m > 0 ? String(localized: "\(hours) \(mins)", comment: "A battery's time: the hours, then the minutes") : hours
     }
 
     /// The shortcuts list (NVDA: Input Gestures, spoken): every script that would answer a key right

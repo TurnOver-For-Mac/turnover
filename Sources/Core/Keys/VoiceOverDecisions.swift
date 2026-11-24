@@ -13,6 +13,16 @@ public enum NotificationHistory {
         items.append((text, Date()))
         if items.count > 50 { items.removeFirst(items.count - 50) }
     }
+
+    /// When a notification came, as VO-N says it after the notification. An hour is "1 hour ago" (it was "1 hours ago"
+    /// from 60 to 119 minutes, 24 Nov 2026).
+    package nonisolated static func when(minutesAgo mins: Int) -> String {
+        if mins < 1 { return String(localized: "just now", comment: "When a notification came") }
+        if mins == 1 { return String(localized: "1 minute ago", comment: "When a notification came") }
+        if mins < 60 { return String(localized: "\(mins) minutes ago", comment: "When a notification came") }
+        if mins / 60 == 1 { return String(localized: "1 hour ago", comment: "When a notification came") }
+        return String(localized: "\(mins / 60) hours ago", comment: "When a notification came")
+    }
 }
 
 /// VoiceOver's hot spots: ten places to come back to (VO-Shift-digit sets or removes, VO-digit goes there,
@@ -114,9 +124,7 @@ extension VoiceOverKeysPlugin {
         // 1. VO-N: the notifications heard lately. (The TurnOver menu: Command Control N.)
         add("notifications", String(localized: "The notifications heard lately (VO-N)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+n"]) { _ in
             let items = NotificationHistory.items.reversed().map { n -> MenuItem in
-                let mins = Int(Date().timeIntervalSince(n.at) / 60)
-                let when = mins < 1 ? String(localized: "just now", comment: "When a notification came") : mins == 1 ? String(localized: "1 minute ago", comment: "When a notification came")
-                    : mins < 60 ? String(localized: "\(mins) minutes ago", comment: "When a notification came") : String(localized: "\(mins / 60) hours ago", comment: "When a notification came")
+                let when = NotificationHistory.when(minutesAgo: Int(Date().timeIntervalSince(n.at) / 60))
                 return MenuItem(verbatim: "\(n.text), \(when)", .action { Speech.speakPrivate(n.text) })
             }
             guard !items.isEmpty else { Speech.speakMessage(String(localized: "no notifications", comment: "Spoken message")); return }

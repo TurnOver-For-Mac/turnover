@@ -256,7 +256,13 @@ final class PagesAppModule: AppModule {
         let v = cell.map(PagesTable.value) ?? ""
         let words = v.isEmpty ? "blank" : v
         var parts: [String] = []
-        if entering { parts.append(String(localized: "\(t.name), \(String(t.rows)) rows, \(String(t.cols)) columns", comment: "A Pages table: its name and size")) }
+        // The size as the table's own object says it, so a one-row or one-column table is "1 row", "1 column" (it was
+        // "1 rows", "1 columns", 24 Nov 2026).
+        if entering {
+            let rows = t.rows == 1 ? String(localized: "1 row", comment: "A table's size") : String(localized: "\(t.rows) rows", comment: "A table's size")
+            let cols = t.cols == 1 ? String(localized: "1 column", comment: "A table's size") : String(localized: "\(t.cols) columns", comment: "A table's size")
+            parts.append("\(t.name), \(rows), \(cols)")
+        }
         // Along a row, the column's heading (the first row); down a column, the row's (the first column).
         if t.lastMove.1 != 0 || entering, t.row > 0, let h = PagesTable.cell(t.layout, t.name, row: 0, col: t.col).map(PagesTable.value), !h.isEmpty { parts.append(h) }
         if t.lastMove.0 != 0, t.col > 0, let h = PagesTable.cell(t.layout, t.name, row: t.row, col: 0).map(PagesTable.value), !h.isEmpty { parts.append(h) }
