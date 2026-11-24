@@ -52,7 +52,7 @@ func hiddenFocusTests() {
         expect(D.afterTabStillReported(hasRecord: true, recordedControlFocused: true, containerFocused: false), .pollOn)
     }
     test("hidden focus: the keyboard back on the row speaks the row") {
-        expect(D.afterTabStillReported(hasRecord: true, recordedControlFocused: false, containerFocused: true), .backOnContainer)
+        expect(D.afterTabStillReported(hasRecord: true, recordedControlFocused: false, containerFocused: true), .search)
     }
     test("hidden focus: moved to another hidden control searches") {
         expect(D.afterTabStillReported(hasRecord: true, recordedControlFocused: false, containerFocused: false), .search)
@@ -60,7 +60,7 @@ func hiddenFocusTests() {
     }
     test("hidden focus: with nothing recorded only a row that says it has no keyboard starts a search") {
         expect(D.afterTabStillReported(hasRecord: false, recordedControlFocused: nil, containerFocused: false), .search)
-        expect(D.afterTabStillReported(hasRecord: false, recordedControlFocused: nil, containerFocused: true), .pollOn)
+        expect(D.afterTabStillReported(hasRecord: false, recordedControlFocused: nil, containerFocused: true), .search)
         expect(D.afterTabStillReported(hasRecord: false, recordedControlFocused: nil, containerFocused: nil), .pollOn)
     }
     test("hidden focus: a found control that has the keyboard is spoken, with or without evidence") {

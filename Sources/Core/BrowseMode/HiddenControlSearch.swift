@@ -166,12 +166,14 @@ nonisolated package enum HiddenFocusDecision {
             if containerFocused == nil { return .pollOn }
             // Not moved yet: the control that had the keyboard still has it.
             if recordedControlFocused == true { return .pollOn }
-            // The keyboard came back to the container itself.
-            if containerFocused == true { return .backOnContainer }
+            // Steam's wishlist rows say they have the keyboard even while it is on a control hidden inside them (24 Nov
+            // 2026, the first trial: every check said "container focused yes" and none looked inside). So a container
+            // that says focused is searched too; only when nothing inside says focused is the keyboard back on it.
             return .search
         }
-        // Nothing hidden known: only a container that says it has no keyboard starts the search.
-        return containerFocused == false ? .search : .pollOn
+        // Nothing hidden known: search whatever the container says (Steam's rows say focused). The grid and the
+        // fallback still need evidence; a found control counts only if it says it has the keyboard itself.
+        return containerFocused == nil ? .pollOn : .search
     }
 
     /// What to say when the search is over.

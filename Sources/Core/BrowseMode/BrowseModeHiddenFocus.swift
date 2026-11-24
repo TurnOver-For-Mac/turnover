@@ -207,6 +207,15 @@ extension BrowseModeDocument {
                 let decision = HiddenFocusDecision.afterSearch(foundFocusedControl: answer.verified != nil, hasRecord: record != nil, focusedBeforeTab: before, containerFocusedNow: answer.focused, ranOutOfTime: ranOut)
                 // Design J: which step found it, how many controls are known, the time taken, and for a miss the role.
                 Log.io("browse mode: hidden control search in a \(container.role)\(tab == nil ? " (after arrival)" : ""): \(decision), found by \(result.stage?.rawValue ?? "nothing"), \(result.controls.count) known, \(result.hops) text pieces, \(result.points) points, \(answer.ms) ms\(result.cutShort ? ", cut short" : ""), evidence \(answer.evidence)")
+                // Nothing inside says it has the keyboard, and the container says it does: the keyboard is back on
+                // the container itself (the old record's control was left).
+                if decision == .silent, record != nil, answer.focused == true, !result.cutShort, tab != nil {
+                    Log.io("browse mode: Tab brought the keyboard back to the \(container.role) around the hidden controls; read from there")
+                    hiddenFocus = nil
+                    AXHandler.shared.lastNewsAt[pid] = Date()
+                    AXHandler.shared.focusChanged(container, pid: pid)
+                    return
+                }
                 switch decision {
                 case .moved:
                     if let x = answer.verified { moveHiddenFocus(to: x, in: container, previous: currentHiddenFocus) }
