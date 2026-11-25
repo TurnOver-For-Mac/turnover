@@ -65,8 +65,8 @@ nonisolated public final class WebDocumentBridge: Sendable {
         guard let v = webArea.param("AXTextMarkerRangeForUIElement", element), CFGetTypeID(v) == AXTextMarkerRangeGetTypeID() else { return nil }
         return indices(of: v as! AXTextMarkerRange)
     }
-    /// WebKit's selection as it answers. A selection with an unusable index (NSNotFound, negative) at either end is
-    /// nil and logged with its raw values; anything else is returned unchanged.
+    /// WebKit's selection, lower index first, as `indices(of:)` has always answered it. A selection with an unusable
+    /// index (NSNotFound, negative) at either end is nil and logged with its raw values.
     public func selection() -> (Int, Int)? {
         guard let v = webArea.attr("AXSelectedTextMarkerRange"), CFGetTypeID(v) == AXTextMarkerRangeGetTypeID() else { return nil }
         let range = v as! AXTextMarkerRange
@@ -76,7 +76,7 @@ nonisolated public final class WebDocumentBridge: Sendable {
             Log.warning("browse mode: WebKit's selection rejected: start \(rawStart), end \(rawEnd)")
             return nil
         }
-        return checked
+        return (min(checked.0, checked.1), max(checked.0, checked.1))
     }
     public func setSelection(_ s: Int, _ e: Int) {
         guard let r = range(s, e) else { return }
