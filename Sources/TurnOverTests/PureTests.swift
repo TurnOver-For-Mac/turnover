@@ -958,6 +958,44 @@ func pureTests() {
         expect(VoiceOverCommands.commanderKey("?"), "shift+/")
         expect(VoiceOverCommands.commanderKey("é") == nil, true, "a key TurnOver can't name is left out")
     }
+    test("VoiceOver export: a Commander key opens only an application") {
+        check(UserGestures.isApplication(atPath: "/System/Applications/Calculator.app"), "an app")
+        check(!UserGestures.isApplication(atPath: "/System/Applications"), "a folder")
+        check(!UserGestures.isApplication(atPath: "/etc/hosts"), "a file")
+        check(!UserGestures.isApplication(atPath: "/Applications/No Such App \(UUID().uuidString).app"), "nothing there")
+    }
+    test("VoiceOver export: an upper case key an earlier copy put on the lower case key is taken off it") {
+        let saved = config
+        let savedPlayer = Speech.player
+        let savedPersists = Config.persists
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("voiceover-commander-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer {
+            config = saved; Speech.player = savedPlayer; Config.persists = savedPersists
+            try? FileManager.default.removeItem(at: folder)
+        }
+        Config.persists = false
+        Speech.player = nil
+        // An earlier copy: Mona ("M") saved on right Option M as a VoiceOver command, Mute speech ("S") saved on S as
+        // TurnOver's command, and Do Nothing ("X") on X. Q is the person's own key, not from a copy.
+        config.keyboard.userGestures["kb:rightoption+m"] = "vo:SCRWorkspace.customOpenApplication:/Applications/Mona.app"
+        config.keyboard.userGestures["kb:rightoption+s"] = "script:voiceOverMuteSpeech"
+        config.keyboard.userGestures["kb:rightoption+x"] = "vo:SCRWorkspace.doNothing"
+        config.keyboard.userGestures["kb:rightoption+q"] = "script:dateTime"
+        var c = try readVoiceOverDefault([flatSpeech + "SCRVoiceIdentifier": "test.default.voice"])
+        c.commanderKeys = [("shift+m", "SCRWorkspace.customOpenApplication:/Applications/Mona.app"), ("shift+s", "SCRWorkspace.muteSpeechToggle"),
+                           ("shift+x", "SCRWorkspace.doNothing"), ("shift+q", "SCRWorkspace.customOpenApplication:/Applications/Mona.app")]
+        _ = VoiceOverSettings.apply(c, undoSnapshot: folder.appendingPathComponent("before.json"))
+        let g = config.keyboard.userGestures
+        expect(g["kb:rightoption+shift+m"], "apppath:/Applications/Mona.app", "Shift M opens Mona")
+        check(g["kb:rightoption+m"] == nil, "right Option M no longer opens Mona too")
+        check(g["kb:rightoption+s"] == nil, "a key the earlier copy saved in TurnOver's own words is taken away as well")
+        check(g["kb:rightoption+x"] == nil, "an upper case Do Nothing from an earlier copy too")
+        expect(g["kb:rightoption+q"], "script:dateTime", "a key of the person's own on the lower case key stays")
+        expect(VoiceOverSettings.earlierCopyKey(forShifted: "shift+m", in: ["shift+m", "m"]), nil, "the export has its own m: it is copied, nothing to take away")
+        expect(VoiceOverSettings.earlierCopyKey(forShifted: "shift+1", in: ["shift+1"]), nil, "a shifted symbol: earlier copies kept it under the symbol")
+        expect(VoiceOverSettings.earlierCopyKey(forShifted: "m", in: ["m"]), nil, "a lower case key")
+    }
     test("VoiceOver export: Commander commands become apps, TurnOver commands, or nothing") {
         expect(VoiceOverCommands.target(for: "SCRWorkspace.customOpenApplication:/Applications/Mona.app"), .appPath("/Applications/Mona.app"), "an app by its path")
         expect(VoiceOverCommands.target(for: "SCRWorkspace.muteSpeechToggle"), .script("voiceOverMuteSpeech"), "mute speech, TurnOver's own")

@@ -937,6 +937,9 @@
         }
       }
     },
+    "%@ is not an app" : {
+      "comment" : "A key's path is not an application: %@ is its name"
+    },
     "%@ is not installed" : {
       "comment" : "An app is not installed: %@ is the app",
       "localizations" : {

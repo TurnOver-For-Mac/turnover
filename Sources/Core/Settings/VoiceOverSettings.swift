@@ -113,6 +113,22 @@ public enum VoiceOverSettings {
 import AppKit
 
 extension VoiceOverSettings {
+    /// The lower case key an earlier copy put an upper case Commander key on ("shift+m" was saved as "m"), when this
+    /// export doesn't have that lower case key itself. Letters only: earlier copies saved a shifted symbol under the
+    /// symbol, which no key answered.
+    public nonisolated static func earlierCopyKey(forShifted key: String, in keys: [String]) -> String? {
+        guard key.hasPrefix("shift+") else { return nil }
+        let plain = String(key.dropFirst(6))
+        guard plain.count == 1, plain.first?.isLetter == true, !keys.contains(plain) else { return nil }
+        return plain
+    }
+
+    /// What an earlier copy could have saved for a Commander command: the VoiceOver command itself (every copy before
+    /// 25 Nov 2026, for an app or Do Nothing), or what the copy saves now.
+    public static func earlierCopyStored(_ command: String) -> [String] {
+        [UserGestures.Target.voiceOver(command).stored, VoiceOverCommands.target(for: command).stored]
+    }
+
     public struct Copied {
         public var voiceId = "", rate: Float = 0.5, pitch: Float = 0.5, volume: Float = 1, verbosity = "", typingEcho = ""
         public var links = "", misspelled = "", textAttributes = "", punctuation = ""
@@ -293,6 +309,16 @@ extension VoiceOverSettings {
         var letters: [String] = []
         for (key, command) in c.commanderKeys.sorted(by: { ($0.key.hasPrefix("shift+") ? 1 : 0, $0.key) < ($1.key.hasPrefix("shift+") ? 1 : 0, $1.key) }) {
             let id = "kb:rightoption+" + key
+            // An upper case key ("M") was saved by an earlier copy on the lower case key, right Option M. Taken away
+            // when it is still what that copy saved and this export has no lower case key of its own (25 Nov 2026),
+            // so right Option M doesn't go on opening the Shift key's app.
+            if let plain = Self.earlierCopyKey(forShifted: key, in: c.commanderKeys.map(\.key)) {
+                let plainId = "kb:rightoption+" + plain
+                if let stored = config.keyboard.userGestures[plainId], Self.earlierCopyStored(command).contains(stored) {
+                    config.keyboard.userGestures[plainId] = nil
+                    Log.info("VoiceOver settings: \(plainId) held \(key)'s command from an earlier copy; taken away")
+                }
+            }
             if command == VoiceOverCommands.doNothing {
                 // Not copied: the key stays as it is in TurnOver. Only a Do Nothing copied before is taken away.
                 if config.keyboard.userGestures[id] == UserGestures.Target.voiceOver(command).stored { config.keyboard.userGestures[id] = nil }

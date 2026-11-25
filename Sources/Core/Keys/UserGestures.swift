@@ -163,6 +163,11 @@ public enum UserGestures {
         let last = (full as NSString).lastPathComponent
         return last.hasSuffix(".app") ? String(last.dropLast(4)) : last
     }
+    /// Whether the path is an application bundle, as Finder decides it (a .app folder, not a document or a folder).
+    public nonisolated static func isApplication(atPath path: String) -> Bool {
+        let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
+        return (try? url.resourceValues(forKeys: [.isApplicationKey]))?.isApplication == true
+    }
     /// Opened as VoiceOver opens it, by Launch Services, so the app answers for its own permissions as when opened
     /// from the Dock (as `openApp` does for a bundle identifier).
     static func openApp(atPath path: String) {
@@ -170,6 +175,12 @@ public enum UserGestures {
         guard FileManager.default.fileExists(atPath: full) else {
             Log.info("user keys: no app at \(full)")
             Speech.speakMessage(String(localized: "\(appName(atPath: path)) is not installed", comment: "An app is not installed: %@ is the app")); return
+        }
+        // Only an application: a key's path is the person's own settings, but whatever sits there now is opened by
+        // Launch Services, and a document or folder would open in another app instead (25 Nov 2026, review).
+        guard isApplication(atPath: full) else {
+            Log.info("user keys: \(full) is not an application; not opened")
+            Speech.speakMessage(String(localized: "\(appName(atPath: path)) is not an app", comment: "A key's path is not an application: %@ is its name")); return
         }
         Log.info("user keys: opening \(full)")
         NSWorkspace.shared.openApplication(at: URL(fileURLWithPath: full), configuration: NSWorkspace.OpenConfiguration()) { _, error in
