@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // VoiceOver's customisations, cloned (17 Oct 2026: "I want TurnOver to clone VoiceOver, down to all
 // customisations"). The export carries the Keyboard Commander's letters (right Option with a letter: a VoiceOver
-// command, a Shortcut, or an AppleScript file), the custom key bindings (a VO key given to a command, or taken
+// command, a Shortcut, an app to open, or an AppleScript file), the custom key bindings (a VO key given to a command, or taken
 // away), and whether the Keyboard and NumPad Commanders are on. The settings copy puts each into TurnOver's own
 // keys (UserGestures): a VoiceOver command runs the TurnOver command that answers it, a Shortcut runs by name through
-// the shortcuts tool, a script file runs through osascript (it is the person's own).
+// the shortcuts tool, an app opens by its path, a script file runs through osascript (it is the person's own).
 import Foundation
 import CryptoKit
 
@@ -41,12 +41,35 @@ public enum VoiceOverCommands {
         "toggle quick nav": "vo_arrowQuickNav", "report text attributes": "vo_attributes",
     ]
 
+    /// VoiceOver's "Do Nothing": a Commander row with no command. Not copied, so the key stays as it was in TurnOver
+    /// (it had been copied as a VoiceOver command TurnOver lacked, and said so when pressed; 25 Nov 2026).
+    public static let doNothing = "SCRWorkspace.doNothing"
+
     /// The key TurnOver gives a VoiceOver command string from the export.
     public static func target(for command: String) -> UserGestures.Target {
         if command.hasPrefix("SCRWorkspace.customRunShortcut:") { return .shortcut(String(command.dropFirst("SCRWorkspace.customRunShortcut:".count))) }
         if command.hasPrefix("SCRWorkspace.customOpenScript:") { return .file(String(command.dropFirst("SCRWorkspace.customOpenScript:".count))) }
+        // An app by its path, as VoiceOver keeps it ("/Applications/Mail.app"). It fell through to a VoiceOver command
+        // and did nothing with VoiceOver off: 31 of one person's Commander keys opened apps (25 Nov 2026).
+        if command.hasPrefix("SCRWorkspace.customOpenApplication:") { return .appPath(String(command.dropFirst("SCRWorkspace.customOpenApplication:".count))) }
         if let name = namesById[command], let script = byEnglish[name] { return .script(script) }
         return .voiceOver(command)
+    }
+
+    /// The key a Commander entry is on, as TurnOver names it after "kb:rightoption+", from the character VoiceOver
+    /// keeps (SCRKeyboardCommander_004d is "M"). VoiceOver keeps the character the key types with Shift but without
+    /// Option (VoiceOver Utility reads charactersIgnoringModifiers, which keeps Shift), so "M" and "m" are two keys:
+    /// right Option Shift M and right Option M. Both were taken as "m" and one was lost (25 Nov 2026: Mona on "M",
+    /// Mail on "m"). Shifted symbols are read on the US layout ("!" is Shift 1). Nil for a key TurnOver can't name.
+    public static func commanderKey(_ character: Character) -> String? {
+        let shifted: [Character: String] = ["!": "1", "@": "2", "#": "3", "$": "4", "%": "5", "^": "6", "&": "7", "*": "8", "(": "9", ")": "0",
+                                            "_": "-", "+": "=", "{": "[", "}": "]", "|": "\\", ":": ";", "\"": "'", "<": ",", ">": ".", "?": "/", "~": "`"]
+        if let base = shifted[character] { return "shift+" + base }
+        let s = String(character)
+        let lower = s.lowercased()
+        guard lower.count == 1, let code = KeyNames.code(for: lower), !KeyNames.isSpecial(code) else { return nil }
+        let name = KeyNames.name(for: code)
+        return s != lower ? "shift+" + name : name
     }
 
     /// A Shortcut by its identifier, run by name through the shortcuts tool.
