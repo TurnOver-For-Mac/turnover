@@ -13,6 +13,9 @@ import ApplicationServices
 
 final class KeynoteAppModule: AppModule {
     static let bundleID = "com.apple.Keynote"
+    /// The older Keynote (14.x, the iWork one) that many Macs still have: the App Store's current Keynote is
+    /// com.apple.Keynote, the old one com.apple.iWork.Keynote (Pages 14.5 got no module this way, 25 Nov 2026).
+    static let legacyBundleID = "com.apple.iWork.Keynote"
 
     required init(pid: pid_t, bundleIdentifier: String, appName: String) {
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
@@ -53,7 +56,7 @@ final class KeynoteAppModule: AppModule {
 
     private func readPlayingSlide() {
         let source = """
-        tell application id "com.apple.Keynote"
+        tell application id "\(bundleIdentifier)"
             tell front document
                 set s to current slide
                 set t to ""

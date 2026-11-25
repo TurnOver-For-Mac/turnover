@@ -8,7 +8,7 @@ import AppKit
 
 public enum Edition {
     /// Apps whose support is new and still settling: "experimental" in This app (18 Oct 2026).
-    public static let experimentalApps: Set<String> = ["com.apple.Preview", "com.apple.iCal", "com.apple.Pages", "com.apple.Numbers", "com.apple.Keynote", "com.amazon.Lassen", "com.apple.reminders", "com.apple.AddressBook", "com.apple.iBooksX", "com.apple.calculator", "com.apple.Maps", "com.apple.FaceTime", "com.apple.freeform", "com.apple.shortcuts", "com.apple.Photos"]
+    public static let experimentalApps: Set<String> = ["com.apple.Preview", "com.apple.iCal", "com.apple.Pages", "com.apple.Numbers", "com.apple.Keynote", "com.apple.iWork.Pages", "com.apple.iWork.Numbers", "com.apple.iWork.Keynote", "com.amazon.Lassen", "com.apple.reminders", "com.apple.AddressBook", "com.apple.iBooksX", "com.apple.calculator", "com.apple.Maps", "com.apple.FaceTime", "com.apple.freeform", "com.apple.shortcuts", "com.apple.Photos"]
     /// Said at start ("TurnOver on") and in the log.
     public static var editionName: String { "TurnOver" }
     /// A marker build.sh looks for in each slice of a universal binary, so a slice built from other sources or with
