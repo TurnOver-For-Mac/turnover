@@ -29,6 +29,12 @@ func countWordsTests() {
         expect(WordTableWords.size(rows: 4, columns: 1), "table with 4 rows and 1 column")
         expect(WordTableWords.size(rows: 4, columns: 3), "table with 4 rows and 3 columns", "unchanged")
     }
+    test("Count words: a Pages table with one row or one column says so in the singular") {
+        expect(PagesTableWords.size(name: "Table 1", rows: 1, columns: 1), "Table 1, 1 row, 1 column")
+        expect(PagesTableWords.size(name: "Table 1", rows: 1, columns: 3), "Table 1, 1 row, 3 columns")
+        expect(PagesTableWords.size(name: "Table 1", rows: 4, columns: 1), "Table 1, 4 rows, 1 column")
+        expect(PagesTableWords.size(name: "Table 1", rows: 4, columns: 3), "Table 1, 4 rows, 3 columns", "unchanged")
+    }
     test("Count words: a chat with fewer messages than asked for says how many, one in the singular") {
         expect(ChatView.fewerMessages(0), "no messages")
         expect(ChatView.fewerMessages(1), "only 1 message")

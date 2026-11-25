@@ -2347,6 +2347,57 @@
         }
       }
     },
+    "%@, 1 row, 1 column" : {
+      "comment" : "A Pages table: its name and size, one row and one column",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, строк: 1, столбцов: 1"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, 1 satır, 1 sütun"
+          }
+        }
+      }
+    },
+    "%@, 1 row, %@ columns" : {
+      "comment" : "A Pages table: its name and size, one row",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, строк: 1, столбцов: %2$@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, 1 satır, %2$@ sütun"
+          }
+        }
+      }
+    },
+    "%@, %@ rows, 1 column" : {
+      "comment" : "A Pages table: its name and size, one column",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, строк: %2$@, столбцов: 1"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %2$@ satır, 1 sütun"
+          }
+        }
+      }
+    },
     "%@, %@ shelves" : {
       "comment" : "An App Store page: its title, then how many shelves",
       "localizations" : {
