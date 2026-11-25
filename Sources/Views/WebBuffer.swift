@@ -1121,7 +1121,11 @@ public final class WebBuffer {
             // A line that carries on the element of the line before (a heading wrapped over two lines) is not a
             // second hit: H landed on "closed beta" after the whole heading (8 Oct 2026).
             if let el = l.element, !lineContinues(j), !seen.contains(where: { $0.isSame(el) }), matches(el) { out.append((l.start, el)) }
-            if wantsLinks, out.isEmpty {
+            // 25 Nov 2026: a Mail footer "Privacy Policy · Terms of Use · Unsubscribe" is one line whose own element is its first
+            // link, so Tab and the link keys stopped on Privacy Policy and never reached Unsubscribe. A line already offered as
+            // a link still offers the other links inside it; any other role offers what it did before.
+            let lineIsLink = out.contains { $0.1.role == "AXLink" }
+            if wantsLinks, out.isEmpty || lineIsLink {
                 // Link text inside the line; a link split over several pieces counts once.
                 var lo = 0, hi = segments.count
                 while lo < hi { let m = (lo + hi) / 2; if segments[m].end <= l.start { lo = m + 1 } else { hi = m } }
@@ -1130,7 +1134,8 @@ public final class WebBuffer {
                 while k < segments.count, segments[k].start < l.end {
                     let sg = segments[k]
                     // A link that began on an earlier piece of a wrapped line was counted there.
-                    if sg.isLink, sg.start >= l.start, sg.start > prevLinkEnd + 1 { out.append((sg.start, sg.element)) }
+                    if sg.isLink, sg.start >= l.start, sg.start > prevLinkEnd + 1,
+                       !(lineIsLink && out.contains { $0.0 == sg.start || $0.1.isSame(Self.linkOwner(of: sg.element)) }) { out.append((sg.start, sg.element)) }
                     prevLinkEnd = sg.isLink ? sg.end : -2
                     k += 1
                 }

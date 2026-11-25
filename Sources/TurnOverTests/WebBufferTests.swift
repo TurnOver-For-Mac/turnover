@@ -902,4 +902,66 @@ func webBufferTests() {
         check(!result.wasAttempted, "cancelled scroll never reaches the provider")
         expect(AXReplay.actions.count, 1)
     }
+
+    // 25 Nov 2026: a Mail footer "Privacy Policy · Terms of Use · Unsubscribe" is one line. Every link on it is a stop.
+    test("links: every link on a line is a stop; Find leaves the reading position on the match (25 Nov 2026)") {
+        /// A page of one paragraph made of the given pieces: a "link:" piece is a link with that text, any other is plain text.
+        @MainActor func page(_ pieces: [String], base: Int32) -> (WebBuffer, AXUIElement) {
+            let root = AXUIElementCreateApplication(base)
+            let buffer = WebBuffer(webArea: root, collect: { root, _, _ in
+                var nodes: [ElementKey: AXSnapshot.Node] = [:]
+                var kids: [AXUIElement] = []
+                for (k, piece) in pieces.enumerated() {
+                    let el = AXUIElementCreateApplication(base + 1 + Int32(k) * 2), t = AXUIElementCreateApplication(base + 2 + Int32(k) * 2)
+                    if piece.hasPrefix("link:") {
+                        nodes[ElementKey(el)] = .init(attributes: ["AXRole": .string("AXLink"), "AXParent": .element(root), "AXChildren": .array([.element(t)])])
+                        nodes[ElementKey(t)] = .init(attributes: ["AXRole": .string("AXStaticText"), "AXValue": .string(String(piece.dropFirst(5))), "AXParent": .element(el)])
+                        kids.append(el)
+                    } else {
+                        nodes[ElementKey(t)] = .init(attributes: ["AXRole": .string("AXStaticText"), "AXValue": .string(piece), "AXParent": .element(root)])
+                        kids.append(t)
+                    }
+                }
+                nodes[ElementKey(root)] = .init(attributes: ["AXRole": .string("AXWebArea"), "AXChildren": .array(kids.map { .element($0) })])
+                return WebBufferCollection(snapshot: AXSnapshot(nodes: nodes), documentText: "", focusedPart: nil, stop: nil, elapsedMs: 0)
+            })
+            buffer.build {}
+            waitForBuffer(buffer)
+            return (buffer, root)
+        }
+        @MainActor func stops(_ buffer: WebBuffer, forward: Bool) -> [Int] {
+            var out: [Int] = [], at = forward ? -1 : buffer.text.length + 1
+            while out.count < 20, let h = buffer.find(from: at, forward: forward, roles: ["AXLink"]) { out.append(h.offset); at = h.offset }
+            return out
+        }
+        let footer = ["link:Privacy Policy", " · ", "link:Terms of Use", " · ", "link:Unsubscribe"]
+        let (three, root3) = page(footer, base: 930_000)
+        let text = three.text as String
+        let starts = ["Privacy Policy", "Terms of Use", "Unsubscribe"].map { (text as NSString).range(of: $0).location }
+        check(three.lines.count == 1, "the footer is one line (\(three.lines.count))")
+        expect(stops(three, forward: true), starts, "three links on a line: three stops forward, in order")
+        expect(stops(three, forward: false), starts.reversed(), "and three backward")
+        let (one, _) = page(["link:Only link"], base: 931_000)
+        expect(stops(one, forward: true).count, 1, "a line that is one link gives one stop")
+        expect(stops(one, forward: false).count, 1, "and one backward")
+        let (wrapped, _) = page(["link:" + String(repeating: "wrapped link words ", count: 30)], base: 932_000)
+        check(wrapped.lines.count > 1, "the long link wraps over lines")
+        expect(stops(wrapped, forward: true).count, 1, "a link wrapped over lines is one stop forward")
+        expect(stops(wrapped, forward: false).count, 1, "and one backward")
+
+        // Find: the reading position lands on the match itself, so the press goes to the link that holds it.
+        let page3 = BrowseModeDocument(webArea: root3, buffer: three)
+        API.setFocusObject(nil, ancestors: [], interceptor: page3)
+        let sink = Speech.sink
+        Speech.sink = { _ in }
+        defer { API.setFocusObject(nil, ancestors: []); Speech.sink = sink }
+        page3.position = 0
+        check(page3.find("sub", forward: true), "sub is found")
+        expect(page3.position, starts[2] + 2, "the reading position is on the match, not the start of the line")
+        check(three.segment(at: page3.position).map { $0.start == starts[2] } ?? false, "the segment there is the third link")
+        check(page3.find("sub", forward: true), "Find Next wraps round to the same single match")
+        expect(page3.position, starts[2] + 2, "one match on the page: it wraps to it again")
+        check(page3.find("o", forward: false), "a search backward finds an earlier o")
+        check(page3.position < starts[2] + 2, "and goes backward")
+    }
 }
