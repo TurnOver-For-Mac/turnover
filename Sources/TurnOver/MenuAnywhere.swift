@@ -106,9 +106,9 @@ final class MenuAnywhere {
     func openLayerList() {
         let items = Self.listOrder.compactMap { k -> MenuItem? in
             guard let l = Self.letters[k] else { return nil }
-            return MenuItem(verbatim: "\(k == "/" ? KeyNames.slashName : k.uppercased()), \(l.spoken)", .action { DispatchQueue.main.async { l.action() } })
+            return MenuItem(verbatim: Phrases.commandAndKey(l.spoken, key: k == "/" ? KeyNames.slashName : k.uppercased()), .action { DispatchQueue.main.async { l.action() } })
         } + PluginCommands.layerCommands(bundle: PluginCommands.frontBundle()).map { c in
-            MenuItem(verbatim: "\(c.letter.uppercased()), \(c.title)", .action { DispatchQueue.main.async { c.run() } })
+            MenuItem(verbatim: Phrases.commandAndKey(c.title, key: c.letter.uppercased()), .action { DispatchQueue.main.async { c.run() } })
         }
         if steppedIn { TurnOverMenu.shared.onClose = { [weak self] in self?.handBack() } }
         TurnOverMenu.shared.openList("TurnOver commands", items: items)
@@ -307,7 +307,7 @@ final class MenuAnywhere {
     private func voItemText() -> String {
         guard voList.indices.contains(voIndex), let l = Self.letters[voList[voIndex]] else { return "" }
         let k = voList[voIndex]
-        return "\(k == "/" ? KeyNames.slashName : k.uppercased()), \(l.spoken), \(Phrases.position(voIndex + 1, of: voList.count))"
+        return "\(Phrases.commandAndKey(l.spoken, key: k == "/" ? KeyNames.slashName : k.uppercased())), \(Phrases.position(voIndex + 1, of: voList.count))"
     }
 
     private func voTouch() {

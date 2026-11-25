@@ -5,6 +5,13 @@
 import Foundation
 
 nonisolated public enum Phrases {
+    /// "Menu, M": a command in a list, its name first and then its key, as NVDA, JAWS and VoiceOver say a menu item
+    /// and its shortcut (it was "M, menu", 25 Nov 2026). The name starts with a capital.
+    public static func commandAndKey(_ name: String, key: String) -> String {
+        let n = name.prefix(1).uppercased() + name.dropFirst()
+        return String(localized: "\(n), \(key)", comment: "A command in a list and the key that runs it: Menu, M")
+    }
+
     /// "3 of 9": an item's place among the others.
     public static func position(_ index: Int, of count: Int) -> String {
         String(localized: "\(String(index)) of \(String(count))", comment: "An item's position among the others: 3 of 9")

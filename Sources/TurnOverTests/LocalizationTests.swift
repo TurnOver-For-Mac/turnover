@@ -67,6 +67,11 @@ func localizationTests() {
         expect(Symbols.name(of: "I", sayCap: true, locale: tr), "cap ı", "Turkish I")
         expect(Symbols.name(of: "İ", sayCap: true, locale: tr), "cap i", "Turkish İ")
     }
+    test("localization: a command in a list is said name first, then its key (Menu, M)") {
+        expect(Phrases.commandAndKey("menu", key: "M"), "Menu, M", "the TurnOver layer's list: name, then letter")
+        expect(Phrases.commandAndKey("copy last spoken", key: "C"), "Copy last spoken, C", "only the first letter is raised")
+        expect(Phrases.commandAndKey("Shortcuts", key: "slash"), "Shortcuts, slash", "a named key, and a name already capitalised")
+    }
     test("localization: a position is recognised in TurnOver's words and in the app's English") {
         expect(Phrases.isPosition("1 of 2"), true, "English")
         expect(Phrases.isPosition("01 of 02"), true, "English with leading zeros")
