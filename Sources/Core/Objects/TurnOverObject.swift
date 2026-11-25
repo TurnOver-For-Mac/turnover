@@ -355,14 +355,10 @@ open class TurnOverObject: ScriptableObject {
             let attr = parent.role == "AXTable" || parent.role == "AXOutline" ? "AXRows" : kAXChildrenAttribute
             if let count = parent.attributeValueCountResult(attr).value, count > 0 {
                 // A long menu (TurnOver's own Voice menu, 307 voices): AppKit answers AXIndex 0 for every menu item,
-                // so the fallback below said "1 of 307" on every one (25 Nov 2026). Its titled items are counted once
-                // and kept while it stays open.
+                // so the fallback below said "1 of 307" on every one (25 Nov 2026). Its titled items are counted in
+                // one read, kept while it stays open (LongMenuPosition, with what each case costs).
                 if count > 200, axRole == "AXMenuItem" {
-                    // Kept items that no longer compare equal (the menu opened again): read afresh once.
-                    for fresh in [false, true] {
-                        guard let items = Self.titledMenuItems(parent, count: count, fresh: fresh) else { break }
-                        if let i = items.firstIndex(where: { CFEqual($0, element) }) { p.index = i + 1; p.count = items.count; break }
-                    }
+                    if let found = LongMenuPosition.position(of: element, in: parent, childCount: count) { p.index = found.index; p.count = found.count }
                 } else if count <= 200, let siblings = parent.attr(attr) as? [AXUIElement] {
                     // Only siblings of the same role count, and a menu's separators (untitled, disabled items) don't.
                     let same = siblings.filter { s in
@@ -381,17 +377,6 @@ open class TurnOverObject: ScriptableObject {
         }
         return p.index == nil && p.level == nil ? nil : p
     }()
-
-    /// A long menu's titled items (its separators left out), read once while it's open: two calls an item on every
-    /// arrow was 600 calls a key in a menu of 300. Kept for the same menu with the same number of items.
-    private static var longMenu: (menu: AXUIElement, count: Int, at: Date, items: [AXUIElement])?
-    static func titledMenuItems(_ menu: AXUIElement, count: Int, fresh: Bool) -> [AXUIElement]? {
-        if !fresh, let c = longMenu, CFEqual(c.menu, menu), c.count == count, Date().timeIntervalSince(c.at) < 60 { return c.items }
-        guard count <= 5000, let kids = menu.attr(kAXChildrenAttribute) as? [AXUIElement] else { return nil }
-        let items = kids.filter { $0.role == "AXMenuItem" && !($0.string(kAXTitleAttribute) ?? "").isEmpty }
-        longMenu = (menu, count, Date(), items)
-        return items
-    }
 
     // MARK: - Relations
 
