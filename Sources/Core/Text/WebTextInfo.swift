@@ -29,6 +29,8 @@ nonisolated public final class WebDocumentBridge: Sendable {
     }
     public func indices(of range: AXTextMarkerRange) -> (Int, Int)? {
         guard let s = index(of: AXTextMarkerRangeCopyStartMarker(range)), let e = index(of: AXTextMarkerRangeCopyEndMarker(range)) else { return nil }
+        guard WebSelectionBounds.isUsableIndex(s) else { return nil }
+        guard WebSelectionBounds.isUsableIndex(e) else { return nil }
         return (min(s, e), max(s, e))
     }
     public func string(_ range: AXTextMarkerRange) -> String {
@@ -63,9 +65,19 @@ nonisolated public final class WebDocumentBridge: Sendable {
         guard let v = webArea.param("AXTextMarkerRangeForUIElement", element), CFGetTypeID(v) == AXTextMarkerRangeGetTypeID() else { return nil }
         return indices(of: v as! AXTextMarkerRange)
     }
+    /// WebKit's selection, kept inside the document. A selection that cannot be trusted (NSNotFound, a negative
+    /// index) is nil and logged with its raw values; one past the end is cut to the end; a reversed one is put in order.
     public func selection() -> (Int, Int)? {
         guard let v = webArea.attr("AXSelectedTextMarkerRange"), CFGetTypeID(v) == AXTextMarkerRangeGetTypeID() else { return nil }
-        return indices(of: v as! AXTextMarkerRange)
+        let range = v as! AXTextMarkerRange
+        guard let rawStart = index(of: AXTextMarkerRangeCopyStartMarker(range)),
+              let rawEnd = index(of: AXTextMarkerRangeCopyEndMarker(range)) else { return nil }
+        let length = documentLength()
+        guard let checked = WebSelectionBounds.validated(start: rawStart, end: rawEnd, length: length) else {
+            Log.warning("browse mode: WebKit's selection rejected: start \(rawStart), end \(rawEnd), document length \(length)")
+            return nil
+        }
+        return checked
     }
     public func setSelection(_ s: Int, _ e: Int) {
         guard let r = range(s, e) else { return }
@@ -80,6 +92,42 @@ nonisolated public final class WebDocumentBridge: Sendable {
         return (webArea.param("AXUIElementsForSearchPredicate", predicate as CFDictionary) as? [AXUIElement]) ?? []
     }
     public var isValid: Bool { webArea.role != "?" }
+}
+
+/// Arithmetic on WebKit's positions that cannot trap, whatever WebKit answers. (24 Nov 2026: a selection index of
+/// NSNotFound, which is Int.max, overflowed `+ 25` in browse mode and ended TurnOver.)
+nonisolated public enum WebSelectionBounds {
+    /// An index WebKit can have meant: not negative and not NSNotFound.
+    public static func isUsableIndex(_ index: Int) -> Bool {
+        if index < 0 { return false }
+        if index == NSNotFound { return false }
+        return true
+    }
+    /// A selection put in order and cut to the document, or nil when either end is not a usable index.
+    public static func validated(start: Int, end: Int, length: Int) -> (Int, Int)? {
+        guard isUsableIndex(start) else { return nil }
+        guard isUsableIndex(end) else { return nil }
+        let top = max(0, length)
+        let first = min(min(start, end), top)
+        let last = min(max(start, end), top)
+        return (first, last)
+    }
+    /// `index + delta` kept between 0 and `length`; an overflow goes to the nearer end.
+    public static func moved(_ index: Int, by delta: Int, length: Int) -> Int {
+        let top = max(0, length)
+        let (sum, overflowed) = index.addingReportingOverflow(delta)
+        if overflowed { return delta > 0 ? top : 0 }
+        return min(max(sum, 0), top)
+    }
+    /// Where `position` of `total` characters sits in a buffer of `bufferLength`, in proportion; 0 when either is empty.
+    public static func proportionalGuess(position: Int, total: Int, bufferLength: Int) -> Int {
+        guard total > 0 else { return 0 }
+        guard bufferLength > 0 else { return 0 }
+        let share = min(1.0, max(0.0, Double(position) / Double(total)))
+        let wanted = min(share * Double(bufferLength), Double(bufferLength))
+        if wanted >= Double(Int.max) { return bufferLength }
+        return min(bufferLength, Int(wanted))
+    }
 }
 
 /// An object whose text is WebKit's (read through text markers).

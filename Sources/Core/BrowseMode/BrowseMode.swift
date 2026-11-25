@@ -145,10 +145,12 @@ public final class BrowseModeDocument: ScriptableObject {
         let line = bridge.unitRange("AXLineTextMarkerRangeForTextMarker", at: sel.0) ?? sel
         let lineEnd = max(line.1, sel.1)
         func webText(_ a: Int, _ b: Int) -> String { b > a ? (bridge.range(a, b).map { bridge.string($0) } ?? "") : "" }
-        let pre = webText(max(line.0, sel.0 - 15), sel.0)
-        let post = webText(sel.0, min(lineEnd, sel.1 + 25))
-        let total = max(1, bridge.documentLength())
-        let guess = Int(Double(sel.0) / Double(total) * Double(buffer.text.length))
+        let documentLength = bridge.documentLength()
+        let preStart = WebSelectionBounds.moved(sel.0, by: -15, length: documentLength)
+        let postEnd = WebSelectionBounds.moved(sel.1, by: 25, length: documentLength)
+        let pre = webText(max(line.0, preStart), sel.0)
+        let post = webText(sel.0, min(lineEnd, postEnd))
+        let guess = WebSelectionBounds.proportionalGuess(position: sel.0, total: documentLength, bufferLength: buffer.text.length)
         func occurrences(_ needle: String) -> [Int] {
             guard !needle.isEmpty, !needle.contains("\n") else { return [] }
             var out: [Int] = []; var from = 0
