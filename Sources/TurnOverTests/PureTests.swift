@@ -12,6 +12,22 @@ import TurnOverControl
 import AXFixtures
 
 func pureTests() {
+    test("announcements: the same words again are said when a key asked for them, and once when nothing did") {
+        let said = Date(timeIntervalSinceReferenceDate: 1000)
+        let last = ("Page Menu, Reader Available", said)
+        // Safari, the same page load announcing twice with no key between.
+        check(AXHandler.announcementRepeats("Page Menu, Reader Available", last: last, lastKeyAt: said.addingTimeInterval(-2), now: said.addingTimeInterval(1)),
+              "a second post with no key in between is the same news")
+        // OSARA in REAPER: the play position asked for twice, the same answer both times.
+        let position = ("1.1.00", said)
+        check(!AXHandler.announcementRepeats("1.1.00", last: position, lastKeyAt: said.addingTimeInterval(2), now: said.addingTimeInterval(2.1)),
+              "a key pressed after the first one asked again")
+        check(!AXHandler.announcementRepeats("Armed", last: ("Armed", said), lastKeyAt: said.addingTimeInterval(0.3), now: said.addingTimeInterval(0.35)),
+              "even a quick second ask")
+        check(!AXHandler.announcementRepeats("Muted", last: last, lastKeyAt: .distantPast, now: said.addingTimeInterval(1)), "other words")
+        check(!AXHandler.announcementRepeats("Page Menu, Reader Available", last: last, lastKeyAt: .distantPast, now: said.addingTimeInterval(31)),
+              "after 30 seconds it is news again")
+    }
     test("status menus: failed AX press remembers a menu that opened and closed before the check") {
         let before = Date(timeIntervalSinceReferenceDate: 100)
         let opened = before.addingTimeInterval(0.002)

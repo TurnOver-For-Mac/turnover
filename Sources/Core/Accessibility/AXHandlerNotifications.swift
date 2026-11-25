@@ -257,9 +257,8 @@ extension AXHandler {
             API.setForegroundObject(obj)
             EventHandler.queue(Event(.focusEntered, obj))
         case kAXAnnouncementRequestedNotification:
-            // Safari announces "Page Menu, Reader Available" as each page loads, sometimes twice: the same news once.
             if let text = info?["AXAnnouncementKey"] as? String, !text.isEmpty {
-                if text == lastAnnouncement.0, Date().timeIntervalSince(lastAnnouncement.1) < 30 { Log.io("announcement repeated; skipped"); break }
+                if Self.announcementRepeats(text, last: lastAnnouncement, lastKeyAt: InputManager.lastKeyDownAt) { Log.io("announcement repeated; skipped"); break }
                 // Not into the middle of a page being read ("Page Menu, Reader Available" between its lines).
                 if SayAll.isRunning { Log.io("announcement during say all; skipped: \(Log.words(text))"); break }
                 // iTerm2 announces each piece of new output itself; TurnOver's terminal reads it already (it was heard
@@ -275,6 +274,15 @@ extension AXHandler {
         default:
             break
         }
+    }
+
+    /// Whether an app's announcement is the same news again: the same words within 30 seconds, with no key pressed
+    /// since they were said. Safari announces "Page Menu, Reader Available" as each page loads, sometimes twice: the
+    /// same news once. A key pressed in between means the person asked again, and the answer is said even when it is
+    /// the same words: OSARA in REAPER announces the play position each time it is asked, and "Armed" for each track
+    /// armed. Before, a second ask within 30 seconds said nothing (found reading the code, 25 Nov 2026).
+    public nonisolated static func announcementRepeats(_ text: String, last: (String, Date), lastKeyAt: Date, now: Date = Date()) -> Bool {
+        text == last.0 && now.timeIntervalSince(last.1) < 30 && lastKeyAt <= last.1
     }
 
     /// The object for a notification: the live focus object when it is the same element, so its state carries.
