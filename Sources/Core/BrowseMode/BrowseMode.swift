@@ -113,6 +113,7 @@ public final class BrowseModeDocument: ScriptableObject {
         // left, so Back on MacRumors started at the top (3 Oct 2026).
         didSet {
             positionMovedAt = Date()
+            itemHeardAlone = nil   // set again by landOnItem; any other move of the position makes it stale
             // A read of the page again goes on at least this far (a long chat read on past its first part, issue 227).
             buffer.readingAt = position
             if buffer.text.length > 0 { BrowseModeHandler.shared.remember(url: lastURL, position: position, text: lineText(at: position)) }
@@ -121,6 +122,9 @@ public final class BrowseModeDocument: ScriptableObject {
     /// When the reading position last moved: a keyboard focus that moved since (Tab onto a control the buffer does
     /// not hold yet) is what Enter and Space mean.
     var positionMovedAt = Date.distantPast
+    /// 25 Nov 2026: the item VO-Right or VO-Left last read alone, while the position has not moved since. VO-Space does not
+    /// press a control elsewhere on the line for text that was heard alone ("You can permanently" beside "Delete account").
+    public internal(set) var itemHeardAlone: (start: Int, end: Int, isLink: Bool)?
     /// The text of the buffer line at an offset (what Back looks for when the page comes back rearranged).
     func lineText(at offset: Int) -> String {
         guard let i = buffer.lineIndex(at: offset) else { return "" }
@@ -1097,11 +1101,21 @@ public final class BrowseModeDocument: ScriptableObject {
     /// line's end the next line is entered at its first item (the last, going back). A line with one item, or none, is
     /// moved by as before. A link that runs past its line's end is an item even alone, so its whole text is read once.
     func moveByItem(_ direction: Int) { move(.line, direction, byItem: true) }
+    typealias LineItem = (start: Int, end: Int, isLink: Bool)
+    /// The items of line j when it is moved by item (several, or a link running past the line's end); nil when it is moved by as a line.
+    func itemsToStep(line j: Int) -> [LineItem]? {
+        let items = buffer.items(inLine: j).items
+        return items.count > 1 || buffer.hasItemOwn(line: j) ? items : nil
+    }
     /// The reading position goes to the start of the item and the item alone is read, a link as a link is read in browse mode.
-    func landOnItem(_ item: (start: Int, end: Int, isLink: Bool)) {
-        position = item.start
+    /// `newLine`: the item is the first of a line just entered: the page and the marks are said before it, as for a line.
+    /// `keepPosition`: the edge was reached; the position stays where it was and the item holding it is read again.
+    func landOnItem(_ item: LineItem, newLine: Bool = false, keepPosition: Bool = false) {
+        if !keepPosition { position = item.start }
         if SayAll.resuming { return }
-        if let info = makeTextInfo(.bookmark(Bookmark(start: item.start, end: item.end))) { speak(info, unit: .line); ModeAnnouncement.readingReported(self, caretMoved: true) }
+        if newLine { announcePageIfChanged(); sayMarksOnLine() }
+        itemHeardAlone = item
+        if let info = makeTextInfo(.bookmark(Bookmark(start: item.start, end: item.end))) { speak(info, unit: .line); ModeAnnouncement.readingReported(self, caretMoved: !keepPosition) }
     }
 
     func move(_ unit: TextUnit, _ direction: Int, afterRefresh: Bool = false, byItem: Bool = false) {
@@ -1121,9 +1135,14 @@ public final class BrowseModeDocument: ScriptableObject {
         // the middle of a line (where Find left the caret) goes to the line above, not the start of this one.
         if unit != .character { info.expand(unit); info.collapse() }
         // 25 Nov 2026: inside a line of links and text, VO-Right and VO-Left go to the next or previous item first.
-        if byItem, unit == .line, let j = buffer.lineIndex(at: position) {
-            let items = buffer.items(inLine: j).items
-            if items.count > 1 || buffer.hasItemOwn(line: j), let n = direction > 0 ? items.firstIndex(where: { $0.start > position }) : items.lastIndex(where: { $0.start < position }) {
+        if byItem, unit == .line, let j = buffer.lineIndex(at: position), let items = itemsToStep(line: j) {
+            // The item holding the position: backward, the one before it; from a separator after an item, that item (25 Nov 2026).
+            let holding = items.lastIndex(where: { $0.start <= position })
+            let target: Int?
+            if direction > 0 { target = items.firstIndex(where: { $0.start > position }) }
+            else if let h = holding { target = position < items[h].end ? (h > 0 ? h - 1 : nil) : h }
+            else { target = nil }
+            if let n = target {
                 clearSelection()
                 landOnItem(items[n])
                 return
@@ -1161,16 +1180,27 @@ public final class BrowseModeDocument: ScriptableObject {
                 loadsMoreAtItsEnd != pageGeneration
             reportBufferEnd(forward: direction > 0, fromCopy: fromCopy)
         }
-        if byItem, unit == .line, moved != 0 {
-            // A line that only carries on a link begun above has no item of its own: go on past it.
-            var hops = 0
-            func lineNow() -> Int { buffer.lineIndex(at: info.start) ?? -1 }
-            while hops < 30, buffer.items(inLine: lineNow()).continued, buffer.items(inLine: lineNow()).items.isEmpty, info.move(unit, direction) != 0 { hops += 1 }
-            let its = buffer.items(inLine: lineNow()).items
-            if its.count > 1 || buffer.hasItemOwn(line: lineNow()) {
-                announcePageIfChanged()
-                landOnItem(direction > 0 ? its[0] : its[its.count - 1])
-                return
+        if byItem, unit == .line {
+            // The edge (nothing further, or a link that carries on to the page's end): the boundary is said once, the
+            // position stays where it was, and the item that holds it is read again (25 Nov 2026).
+            func stayOnItem() -> Bool {
+                guard let j = buffer.lineIndex(at: position), let items = itemsToStep(line: j) else { return false }
+                landOnItem(items.last(where: { $0.start <= position }) ?? items[0], keepPosition: true)
+                return true
+            }
+            if moved == 0 { if stayOnItem() { return } }
+            else {
+                // A line that only carries on a link begun above has no item of its own: go on past it.
+                var hops = 0
+                func lineNow() -> Int { buffer.lineIndex(at: info.start) ?? -1 }
+                while hops < 30, buffer.items(inLine: lineNow()).continued, buffer.items(inLine: lineNow()).items.isEmpty, info.move(unit, direction) != 0 { hops += 1 }
+                if buffer.items(inLine: lineNow()).continued, buffer.items(inLine: lineNow()).items.isEmpty {
+                    reportBufferEnd(forward: direction > 0)
+                    if stayOnItem() { return }
+                } else if let its = itemsToStep(line: lineNow()) {
+                    landOnItem(direction > 0 ? its[0] : its[its.count - 1], newLine: true)
+                    return
+                }
             }
         }
         position = info.start

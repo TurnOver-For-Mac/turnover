@@ -1024,7 +1024,8 @@ public final class WebBuffer {
         func text(upTo end: Int) {
             guard end > cursor else { return }
             let piece = self.text.substring(with: NSRange(location: cursor, length: min(end, self.text.length) - cursor))
-            if piece.unicodeScalars.contains(where: { CharacterSet.alphanumerics.contains($0) }) { out.append((cursor, end, false)) }
+            // A stop if it has a letter, a digit or a symbol (an emoji, a star, a currency sign); whitespace, punctuation and | or > are separators.
+            if piece.unicodeScalars.contains(where: { CharacterSet.alphanumerics.contains($0) || [.otherSymbol, .currencySymbol].contains($0.properties.generalCategory) }) { out.append((cursor, end, false)) }
         }
         while k < segments.count, segments[k].start < l.end {
             let sg = segments[k], first = k == lo
