@@ -88,11 +88,12 @@ final class MenuAnywhere {
         if Edition.isDevBuild { l["e"] = (String(localized: "screen interface: the window's controls from its pixels (experimental)", comment: "A letter's command in the TurnOver layer (Command Control Comma)"), .list, { MenuAnywhere.shared.recognizeInterface() }) }
         return l
     }
-    /// The letters in the list's order, as said when the layer is pressed twice.
+    /// The letters in the list's order, as said when the layer is pressed twice. Name first, then the key ("menu M"), as the
+    /// list says each one (25 Nov 2026); a plugin command's title is said as its plugin wrote it.
     static var letterList: String {
-        let names = ["m": String(localized: "M menu", comment: "A letter's command, as the TurnOver layer lists them"), "s": String(localized: "S settings", comment: "A letter's command, as the TurnOver layer lists them"), "t": String(localized: "T switch reader", comment: "A letter's command, as the TurnOver layer lists them"), "a": String(localized: "A ask for this app", comment: "A letter's command, as the TurnOver layer lists them"), "v": String(localized: "V copy VoiceOver settings", comment: "A letter's command, as the TurnOver layer lists them"), "k": String(localized: "K keyboard style", comment: "A letter's command, as the TurnOver layer lists them"), "j": String(localized: "J that was wrong", comment: "A letter's command, as the TurnOver layer lists them"),
-                     "h": String(localized: "H guide", comment: "A letter's command, as the TurnOver layer lists them"), "i": String(localized: "I describe image", comment: "A letter's command, as the TurnOver layer lists them"), "c": String(localized: "C copy last spoken", comment: "A letter's command, as the TurnOver layer lists them"), "g": String(localized: "G gesture control", comment: "A letter's command, as the TurnOver layer lists them"), "r": String(localized: "R recognition", comment: "A letter's command, as the TurnOver layer lists them"), "e": String(localized: "E screen interface", comment: "A letter's command, as the TurnOver layer lists them"), "d": String(localized: "D direct", comment: "A letter's command, as the TurnOver layer lists them"), "/": String(localized: "Slash shortcuts", comment: "A letter's command, as the TurnOver layer lists them")]
-        let own = listOrder.filter { letters[$0] != nil }.compactMap { names[$0] } + PluginCommands.layerCommands(bundle: PluginCommands.frontBundle()).map { "\($0.letter.uppercased()) \($0.title)" }
+        let names = ["m": String(localized: "menu M", comment: "A letter's command, as the TurnOver layer lists them"), "s": String(localized: "settings S", comment: "A letter's command, as the TurnOver layer lists them"), "t": String(localized: "switch reader T", comment: "A letter's command, as the TurnOver layer lists them"), "a": String(localized: "ask for this app A", comment: "A letter's command, as the TurnOver layer lists them"), "v": String(localized: "copy VoiceOver settings V", comment: "A letter's command, as the TurnOver layer lists them"), "k": String(localized: "keyboard style K", comment: "A letter's command, as the TurnOver layer lists them"), "j": String(localized: "that was wrong J", comment: "A letter's command, as the TurnOver layer lists them"),
+                     "h": String(localized: "guide H", comment: "A letter's command, as the TurnOver layer lists them"), "i": String(localized: "describe image I", comment: "A letter's command, as the TurnOver layer lists them"), "c": String(localized: "copy last spoken C", comment: "A letter's command, as the TurnOver layer lists them"), "g": String(localized: "gesture control G", comment: "A letter's command, as the TurnOver layer lists them"), "r": String(localized: "recognition R", comment: "A letter's command, as the TurnOver layer lists them"), "e": String(localized: "screen interface E", comment: "A letter's command, as the TurnOver layer lists them"), "d": String(localized: "direct D", comment: "A letter's command, as the TurnOver layer lists them"), "/": String(localized: "shortcuts slash", comment: "A letter's command, as the TurnOver layer lists them")]
+        let own = listOrder.filter { letters[$0] != nil }.compactMap { names[$0] } + PluginCommands.layerCommands(bundle: PluginCommands.frontBundle()).map { "\($0.title) \($0.letter.uppercased())" }
         return String(localized: "\(own.joined(separator: ", ")). Or Down Arrow for a list", comment: "The TurnOver layer's letters, then the list")
     }
 
@@ -106,7 +107,7 @@ final class MenuAnywhere {
     func openLayerList() {
         let items = Self.listOrder.compactMap { k -> MenuItem? in
             guard let l = Self.letters[k] else { return nil }
-            return MenuItem(verbatim: Phrases.commandAndKey(l.spoken, key: k == "/" ? KeyNames.slashName : k.uppercased()), .action { DispatchQueue.main.async { l.action() } })
+            return MenuItem(verbatim: Phrases.commandAndKey(Phrases.sentenceStart(l.spoken), key: k == "/" ? KeyNames.slashName : k.uppercased()), .action { DispatchQueue.main.async { l.action() } })
         } + PluginCommands.layerCommands(bundle: PluginCommands.frontBundle()).map { c in
             MenuItem(verbatim: Phrases.commandAndKey(c.title, key: c.letter.uppercased()), .action { DispatchQueue.main.async { c.run() } })
         }
@@ -307,7 +308,7 @@ final class MenuAnywhere {
     private func voItemText() -> String {
         guard voList.indices.contains(voIndex), let l = Self.letters[voList[voIndex]] else { return "" }
         let k = voList[voIndex]
-        return "\(Phrases.commandAndKey(l.spoken, key: k == "/" ? KeyNames.slashName : k.uppercased())), \(Phrases.position(voIndex + 1, of: voList.count))"
+        return "\(Phrases.commandAndKey(Phrases.sentenceStart(l.spoken), key: k == "/" ? KeyNames.slashName : k.uppercased())), \(Phrases.position(voIndex + 1, of: voList.count))"
     }
 
     private func voTouch() {
