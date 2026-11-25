@@ -951,6 +951,16 @@ func pureTests() {
         check(ms.isConversation(AXReplay.element(3)) && !ms.isConversation(AXReplay.element(0)), "Messages conversations are static texts")
         check(ms.isMessage(AXReplay.element(5)), "Messages: anything in the transcript is a message")
     }
+    test("chat: a group conversation's repeated sender rows keep their place") {
+        // Messages in a group (25 Nov 2026): a row with only the sender's name above each run of their messages.
+        let rows = ["", "Sam", "Sam, hello, 5:17 PM", "Alex", "Alex, hi, 5:18 PM", "Sam", "Sam, later, 5:19 PM", "", "Your iMessage, ok, 5:20 PM"]
+        expect(ChatView.nearest("Sam", in: rows, near: 5), 5, "the later Sam row stays where it is, not back at the first")
+        expect(ChatView.nearest("Sam", in: rows, near: 1), 1)
+        expect(ChatView.nearest("Sam", in: rows, near: 6), 5, "a message arrived below: still the nearer one")
+        expect(ChatView.nearest("", in: rows, near: 8), 7)
+        expect(ChatView.nearest("Alex", in: rows, near: 0), 3, "words said once: wherever they are")
+        expect(ChatView.nearest("gone", in: rows, near: 2), nil)
+    }
     test("recipes: a broken built-in file is reported by name, the rest load") {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("turnover-recipe-test-\(getpid())")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

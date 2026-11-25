@@ -427,15 +427,31 @@ public final class ChatView {
 
     /// The lists change under us (a message arrives, the list scrolls): read them again, keeping the place by its words.
     private func refreshItems() {
-        let keep = currentItem().map(Self.words)
+        let current = currentItem()
+        let keep = current.map(Self.words)
         let fresh = pane == .transcript ? messages() : pane == .conversations ? conversations() : pane == .sections ? sections() : []
         items = fresh
-        if let k = keep, let i = fresh.firstIndex(where: { Self.words($0) == k }) {
+        if let k = keep, let i = Self.place(of: current, words: k, in: fresh, near: index[pane] ?? 0) {
             // The list slid under us (rows dropped or added above): the numbers keep their place.
             if pane == .conversations, let j = index[pane] { listShift = max(0, listShift + j - i) }
             index[pane] = i
         }
         else if let i = index[pane] { index[pane] = min(i, max(0, fresh.count - 1)) }
+    }
+
+    /// Where an item is in a list read again: the same element if the app kept it, else the item with the same words
+    /// nearest where it was. Not simply the first with those words: in a group conversation Messages puts a row with
+    /// only the sender's name ("Sam") above each run of their messages, so the same words come many times, and the
+    /// first of them sent Down (and Up) from a later "Sam" back up the list, round and round (a tester, by ear, Messages
+    /// on macOS 26.7.3, 25 Nov 2026: "Sam, 6 of 9", then "3 of 9", "4 of 9", "5 of 9", "6 of 9" again).
+    private static func place(of element: AXUIElement?, words: String, in list: [AXUIElement], near: Int) -> Int? {
+        if let element, let i = list.firstIndex(where: { CFEqual($0, element) }) { return i }
+        return nearest(words, in: list.map(Self.words), near: near)
+    }
+
+    /// The index of the words in the list closest to near (the earlier on a tie). Nil when they aren't there.
+    public static func nearest(_ words: String, in list: [String], near: Int) -> Int? {
+        list.indices.filter { list[$0] == words }.min { abs($0 - near) < abs($1 - near) }
     }
 
     /// Up at the oldest message held: scroll the conversation back and carry on from the message before.
@@ -452,7 +468,7 @@ public final class ChatView {
     private func loadMore(forward: Bool) -> Bool {
         if loading { return true }   // the one under way answers
         guard let edge = forward ? items.last : items.first else { return false }
-        let key = Self.words(edge)
+        let key = Self.words(edge), heldCount = items.count
         if let x = exhausted, x.pane == pane, x.forward == forward, x.key == key { return false }
         let keyIndex = forward ? items.count - 1 : 0
         let action = forward ? "AXScrollDownByPage" : "AXScrollUpByPage"
@@ -487,7 +503,9 @@ public final class ChatView {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
                 guard let self, pane == p, loading else { return }
                 items = p == .transcript ? messages() : conversations()
-                if let i = items.firstIndex(where: { Self.words($0) == key }), forward ? i < items.count - 1 : i > 0 {
+                // (Older rows come in above the edge: it moved down by as many. The same element first, as in refreshItems.)
+                let at = Self.place(of: edge, words: key, in: items, near: forward ? keyIndex : keyIndex + max(0, items.count - heldCount))
+                if let i = at, forward ? i < items.count - 1 : i > 0 {
                     // (Rows found above the first ever held: the numbers start from those, never below 1.)
                     if p == .conversations { listShift = max(0, listShift + keyIndex - i) }
                     index[p] = forward ? i + 1 : i - 1
@@ -495,7 +513,7 @@ public final class ChatView {
                     announce(); return
                 }
                 if tries < 7 { look(tries + 1); return }   // up to 1.2 s for a slow list, looked at every 0.15 s
-                if let i = items.firstIndex(where: { Self.words($0) == key }) { index[p] = i }
+                if let i = at { index[p] = i }
                 loading = false
                 exhausted = (p, forward, key)
                 Tones.edge()   // nothing more
