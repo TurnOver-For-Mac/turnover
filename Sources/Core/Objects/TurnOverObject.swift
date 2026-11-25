@@ -354,7 +354,16 @@ open class TurnOverObject: ScriptableObject {
         if let parent = element.element(kAXParentAttribute) {
             let attr = parent.role == "AXTable" || parent.role == "AXOutline" ? "AXRows" : kAXChildrenAttribute
             if let count = parent.attributeValueCountResult(attr).value, count > 0 {
-                if count <= 200, let siblings = parent.attr(attr) as? [AXUIElement] {
+                // A long menu (TurnOver's own Voice menu, 307 voices): AppKit answers AXIndex 0 for every menu item,
+                // so the fallback below said "1 of 307" on every one (25 Nov 2026). Its titled items are counted once
+                // and kept while it stays open.
+                if count > 200, axRole == "AXMenuItem" {
+                    // Kept items that no longer compare equal (the menu opened again): read afresh once.
+                    for fresh in [false, true] {
+                        guard let items = Self.titledMenuItems(parent, count: count, fresh: fresh) else { break }
+                        if let i = items.firstIndex(where: { CFEqual($0, element) }) { p.index = i + 1; p.count = items.count; break }
+                    }
+                } else if count <= 200, let siblings = parent.attr(attr) as? [AXUIElement] {
                     // Only siblings of the same role count, and a menu's separators (untitled, disabled items) don't.
                     let same = siblings.filter { s in
                         guard s.role == axRole else { return false }
@@ -367,11 +376,22 @@ open class TurnOverObject: ScriptableObject {
                     else if let f = Self.frame(element), let i = same.firstIndex(where: { s in
                         Self.frame(s).map { abs($0.minX - f.minX) < 1 && abs($0.minY - f.minY) < 1 } == true && s.string(kAXTitleAttribute) == element.string(kAXTitleAttribute)
                     }) { p.index = i + 1; p.count = same.count }
-                } else if let i = element.int(kAXIndexAttribute), i < Int(count) { p.index = i + 1; p.count = Int(count) }
+                } else if axRole != "AXMenuItem", let i = element.int(kAXIndexAttribute), i < Int(count) { p.index = i + 1; p.count = Int(count) }
             }
         }
         return p.index == nil && p.level == nil ? nil : p
     }()
+
+    /// A long menu's titled items (its separators left out), read once while it's open: two calls an item on every
+    /// arrow was 600 calls a key in a menu of 300. Kept for the same menu with the same number of items.
+    private static var longMenu: (menu: AXUIElement, count: Int, at: Date, items: [AXUIElement])?
+    static func titledMenuItems(_ menu: AXUIElement, count: Int, fresh: Bool) -> [AXUIElement]? {
+        if !fresh, let c = longMenu, CFEqual(c.menu, menu), c.count == count, Date().timeIntervalSince(c.at) < 60 { return c.items }
+        guard count <= 5000, let kids = menu.attr(kAXChildrenAttribute) as? [AXUIElement] else { return nil }
+        let items = kids.filter { $0.role == "AXMenuItem" && !($0.string(kAXTitleAttribute) ?? "").isEmpty }
+        longMenu = (menu, count, Date(), items)
+        return items
+    }
 
     // MARK: - Relations
 
