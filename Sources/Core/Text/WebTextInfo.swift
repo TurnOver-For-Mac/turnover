@@ -65,16 +65,15 @@ nonisolated public final class WebDocumentBridge: Sendable {
         guard let v = webArea.param("AXTextMarkerRangeForUIElement", element), CFGetTypeID(v) == AXTextMarkerRangeGetTypeID() else { return nil }
         return indices(of: v as! AXTextMarkerRange)
     }
-    /// WebKit's selection, kept inside the document. A selection that cannot be trusted (NSNotFound, a negative
-    /// index) is nil and logged with its raw values; one past the end is cut to the end; a reversed one is put in order.
+    /// WebKit's selection as it answers. A selection with an unusable index (NSNotFound, negative) at either end is
+    /// nil and logged with its raw values; anything else is returned unchanged.
     public func selection() -> (Int, Int)? {
         guard let v = webArea.attr("AXSelectedTextMarkerRange"), CFGetTypeID(v) == AXTextMarkerRangeGetTypeID() else { return nil }
         let range = v as! AXTextMarkerRange
         guard let rawStart = index(of: AXTextMarkerRangeCopyStartMarker(range)),
               let rawEnd = index(of: AXTextMarkerRangeCopyEndMarker(range)) else { return nil }
-        let length = documentLength()
-        guard let checked = WebSelectionBounds.validated(start: rawStart, end: rawEnd, length: length) else {
-            Log.warning("browse mode: WebKit's selection rejected: start \(rawStart), end \(rawEnd), document length \(length)")
+        guard let checked = WebSelectionBounds.validated(start: rawStart, end: rawEnd) else {
+            Log.warning("browse mode: WebKit's selection rejected: start \(rawStart), end \(rawEnd)")
             return nil
         }
         return checked
@@ -103,27 +102,25 @@ nonisolated public enum WebSelectionBounds {
         if index == NSNotFound { return false }
         return true
     }
-    /// A selection put in order and cut to the document, or nil when either end is not a usable index.
-    public static func validated(start: Int, end: Int, length: Int) -> (Int, Int)? {
+    /// The selection as given when both ends are usable indices, otherwise nil. Not reordered, not cut to a length.
+    public static func validated(start: Int, end: Int) -> (Int, Int)? {
         guard isUsableIndex(start) else { return nil }
         guard isUsableIndex(end) else { return nil }
-        let top = max(0, length)
-        let first = min(min(start, end), top)
-        let last = min(max(start, end), top)
-        return (first, last)
+        return (start, end)
     }
-    /// `index + delta` kept between 0 and `length`; an overflow goes to the nearer end.
+    /// `index + delta` that cannot overflow and never goes below 0. It is cut to `length` only when the length is
+    /// known (greater than 0): a failed length lookup answers 0, which must not squash an ordinary index.
     public static func moved(_ index: Int, by delta: Int, length: Int) -> Int {
-        let top = max(0, length)
         let (sum, overflowed) = index.addingReportingOverflow(delta)
-        if overflowed { return delta > 0 ? top : 0 }
-        return min(max(sum, 0), top)
+        let saturated = overflowed ? (delta > 0 ? Int.max : 0) : max(sum, 0)
+        if length > 0 { return min(saturated, length) }
+        return saturated
     }
-    /// Where `position` of `total` characters sits in a buffer of `bufferLength`, in proportion; 0 when either is empty.
+    /// Where `position` of `total` characters sits in a buffer of `bufferLength`, in proportion; 0 when the buffer is empty; an unknown document length counts as 1, as before.
     public static func proportionalGuess(position: Int, total: Int, bufferLength: Int) -> Int {
-        guard total > 0 else { return 0 }
         guard bufferLength > 0 else { return 0 }
-        let share = min(1.0, max(0.0, Double(position) / Double(total)))
+        let wholeDocument = max(1, total)
+        let share = min(1.0, max(0.0, Double(position) / Double(wholeDocument)))
         let wanted = min(share * Double(bufferLength), Double(bufferLength))
         if wanted >= Double(Int.max) { return bufferLength }
         return min(bufferLength, Int(wanted))
