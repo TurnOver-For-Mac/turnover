@@ -66,6 +66,8 @@ func edgeBumpTests() {
     }
     test("edge bump: an empty field is empty whether it has an empty value or none at all (Messages, 25 Nov 2026)") {
         check(EditableText.isEmptyField(value: "", characterCount: 0), "an empty value")
+        check(EditableText.isEmptyField(value: "", characterCount: nil), "an empty value needs no count (only read when the value is missing)")
+        check(!EditableText.isEmptyField(value: "hi", characterCount: nil), "text needs no count either")
         check(EditableText.isEmptyField(value: "\n", characterCount: 1), "a line break alone (Claude's empty prompt)")
         check(EditableText.isEmptyField(value: nil, characterCount: 0), "no value, no characters: Messages' empty message box")
         check(!EditableText.isEmptyField(value: nil, characterCount: 4), "no value, but characters")

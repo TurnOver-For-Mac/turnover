@@ -483,8 +483,10 @@ open class EditableText: TurnOverObject {
     /// Whether the field has nothing in it, white space aside. Messages' message box, empty, has no value at all, only
     /// a character count of 0 (macOS 26.6, 25 Nov 2026): read as not empty, a Backspace there gave no edge sound and
     /// waited 100 ms for a caret that could not move (a tester by ear, 25 Nov 2026).
+    /// The character count is asked for only when there is no value, so a field with text costs one call per key.
     var isEmptyField: Bool {
-        Self.isEmptyField(value: element.attr(kAXValueAttribute), characterCount: element.attr(kAXNumberOfCharactersAttribute) as? Int)
+        let value = element.attr(kAXValueAttribute)
+        return Self.isEmptyField(value: value, characterCount: value == nil ? element.attr(kAXNumberOfCharactersAttribute) as? Int : nil)
     }
 
     public nonisolated static func isEmptyField(value: Any?, characterCount: Int?) -> Bool {
