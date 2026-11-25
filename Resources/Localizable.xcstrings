@@ -34892,6 +34892,18 @@
             "state" : "new",
             "value" : "mute"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "выключить звук"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sesi kapat"
+          }
         }
       }
     },
@@ -34903,6 +34915,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "numpad 0"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "0 на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı 0"
           }
         }
       }
@@ -34916,6 +34940,18 @@
             "state" : "new",
             "value" : "numpad 1"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı 1"
+          }
         }
       }
     },
@@ -34927,6 +34963,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "numpad 2"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2 на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı 2"
           }
         }
       }
@@ -34940,6 +34988,18 @@
             "state" : "new",
             "value" : "numpad 3"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "3 на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı 3"
+          }
         }
       }
     },
@@ -34951,6 +35011,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "numpad 4"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "4 на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı 4"
           }
         }
       }
@@ -34964,6 +35036,18 @@
             "state" : "new",
             "value" : "numpad 5"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "5 на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı 5"
+          }
         }
       }
     },
@@ -34975,6 +35059,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "numpad 6"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "6 на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı 6"
           }
         }
       }
@@ -34988,6 +35084,18 @@
             "state" : "new",
             "value" : "numpad 7"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "7 на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı 7"
+          }
         }
       }
     },
@@ -34999,6 +35107,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "numpad 8"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "8 на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı 8"
           }
         }
       }
@@ -35012,6 +35132,18 @@
             "state" : "new",
             "value" : "numpad 9"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "9 на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı 9"
+          }
         }
       }
     },
@@ -35023,6 +35155,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "numpad clear"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı clear"
           }
         }
       }
@@ -35036,6 +35180,18 @@
             "state" : "new",
             "value" : "numpad decimal"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "десятичный разделитель на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı ondalık"
+          }
         }
       }
     },
@@ -35047,6 +35203,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "numpad divide"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "деление на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı bölü"
           }
         }
       }
@@ -35084,6 +35252,18 @@
             "state" : "new",
             "value" : "numpad equals"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "равно на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı eşittir"
+          }
         }
       }
     },
@@ -35095,6 +35275,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "numpad minus"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "минус на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı eksi"
           }
         }
       }
@@ -35108,6 +35300,18 @@
             "state" : "new",
             "value" : "numpad multiply"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "умножение на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı çarpı"
+          }
         }
       }
     },
@@ -35119,6 +35323,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "numpad plus"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "плюс на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı artı"
           }
         }
       }
@@ -35228,6 +35444,18 @@
             "state" : "new",
             "value" : "right command"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "правый Command"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sağ komut"
+          }
         }
       }
     },
@@ -35239,6 +35467,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "right control"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "правый Control"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sağ kontrol"
           }
         }
       }
@@ -35252,6 +35492,18 @@
             "state" : "new",
             "value" : "right option"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "правый Option"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sağ option"
+          }
         }
       }
     },
@@ -35263,6 +35515,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "right shift"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "правый Shift"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sağ shift"
           }
         }
       }
@@ -35396,6 +35660,18 @@
             "state" : "new",
             "value" : "volume down"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "уменьшить громкость"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sesi kıs"
+          }
         }
       }
     },
@@ -35407,6 +35683,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "volume up"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "увеличить громкость"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sesi aç"
           }
         }
       }
