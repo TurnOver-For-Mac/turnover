@@ -480,6 +480,18 @@ open class EditableText: TurnOverObject {
         Speech.speakTextInfo(line, unit: .line, reason: .caret)
     }
 
+    /// Whether the field has nothing in it, white space aside. Messages' message box, empty, has no value at all, only
+    /// a character count of 0 (macOS 26.6, 25 Nov 2026): read as not empty, a Backspace there gave no edge sound and
+    /// waited 100 ms for a caret that could not move (a tester by ear, 25 Nov 2026).
+    var isEmptyField: Bool {
+        Self.isEmptyField(value: element.attr(kAXValueAttribute), characterCount: element.attr(kAXNumberOfCharactersAttribute) as? Int)
+    }
+
+    public nonisolated static func isEmptyField(value: Any?, characterCount: Int?) -> Bool {
+        if let text = value as? String { return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        return value == nil && characterCount == 0
+    }
+
     func backspaceScript(_ gesture: KeyboardGesture, _ unit: TextUnit) {
         if GoogleDocs.isEditor(element) { gesture.send(); return }   // Google says what was deleted
         if role == .passwordEdit { gesture.send(); return }   // SecureEcho hears the field get shorter
@@ -518,7 +530,7 @@ open class EditableText: TurnOverObject {
         // an empty prompt (Claude's: 127 times on 13 Nov 2026), and the next key waited behind it. A bump, as at any edge.
         // (An empty field only, by its own value, white space aside: Claude's empty prompt holds a line break. Where
         // the caret's place can't be read, it says 0 with text before it.)
-        let blank = (element.attr(kAXValueAttribute) as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true
+        let blank = isEmptyField
         if movedBack == 0, blank {
             Log.io("edge: an empty field, nothing to delete; sent unwaited")
             Tones.edge(keySent: true, sound: appModule.playsNativeCaretBoundarySound)
@@ -547,6 +559,14 @@ open class EditableText: TurnOverObject {
         if role == .passwordEdit { gesture.send(); return }   // SecureEcho hears the field get shorter
         guard let info = try? makeTextInfo(.caret) else { gesture.send(); return }
         let bookmark = info.bookmark
+        // An empty field: nothing after the caret to delete either (white space with the caret before it still goes). The edge sound, as Backspace has, not 100 ms of
+        // waiting for a caret that cannot move.
+        if isEmptyField, info.copy().move(.character, 1) == 0 {
+            gesture.send()
+            Log.io("edge: an empty field, nothing to delete; sent unwaited")
+            Tones.edge(keySent: true, sound: appModule.playsNativeCaretBoundarySound)
+            return
+        }
         let w = info.copy(); w.expand(.word)
         gesture.send()
         let (_, newInfo) = hasCaretMoved(from: bookmark, originalWord: w.text)

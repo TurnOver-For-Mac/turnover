@@ -64,6 +64,14 @@ func edgeBumpTests() {
         check(!EditableText.isOneCharacterBox(length: 1, isTextField: false, inWebContent: true, key: "downArrow"), "a text area")
         check(!EditableText.isOneCharacterBox(length: 1, isTextField: true, inWebContent: false, key: "downArrow"), "not on the web")
     }
+    test("edge bump: an empty field is empty whether it has an empty value or none at all (Messages, 25 Nov 2026)") {
+        check(EditableText.isEmptyField(value: "", characterCount: 0), "an empty value")
+        check(EditableText.isEmptyField(value: "\n", characterCount: 1), "a line break alone (Claude's empty prompt)")
+        check(EditableText.isEmptyField(value: nil, characterCount: 0), "no value, no characters: Messages' empty message box")
+        check(!EditableText.isEmptyField(value: nil, characterCount: 4), "no value, but characters")
+        check(!EditableText.isEmptyField(value: nil, characterCount: nil), "nothing readable is not taken for empty")
+        check(!EditableText.isEmptyField(value: "hi", characterCount: 2), "text")
+    }
     test("speech: a text field whose whole value is one space is blank; a space inside text is still named (18 Nov 2026)") {
         check(Speech.wholeValueIsWhitespace(lineText: " ", storyLength: 1, isField: true), "a field holding one space")
         check(!Speech.wholeValueIsWhitespace(lineText: " ", storyLength: 5, isField: true), "a space that is a line of longer text")
