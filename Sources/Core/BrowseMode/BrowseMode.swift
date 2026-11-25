@@ -1193,7 +1193,7 @@ public final class BrowseModeDocument: ScriptableObject {
                 // A line that only carries on a link begun above has no item of its own: go on past it.
                 var hops = 0
                 func lineNow() -> Int { buffer.lineIndex(at: info.start) ?? -1 }
-                while hops < 30, buffer.items(inLine: lineNow()).continued, buffer.items(inLine: lineNow()).items.isEmpty, info.move(unit, direction) != 0 { hops += 1 }
+                while hops < 500, buffer.items(inLine: lineNow()).continued, buffer.items(inLine: lineNow()).items.isEmpty, info.move(unit, direction) != 0 { hops += 1 }
                 if buffer.items(inLine: lineNow()).continued, buffer.items(inLine: lineNow()).items.isEmpty {
                     reportBufferEnd(forward: direction > 0)
                     if stayOnItem() { return }
