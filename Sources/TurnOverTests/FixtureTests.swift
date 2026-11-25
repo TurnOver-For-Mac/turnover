@@ -187,6 +187,73 @@ func fixtureTests() {
         navigator.previous()
         expect(navigator.reviewElement.flatMap { AXReplay.id(of: $0) }, 2, "and back to the button")
     }
+    // The App Store's Updates list (25 Nov 2026, by ear): a download's "22% loaded" button is re-created each time its
+    // progress moves, so the cursor held an element with no window and no parent, and every step after it said
+    // "nothing to review". Any app can do this; the cursor finds the item again and carries on.
+    test("navigation: an item re-created under the cursor is found again, and the step carries on from it") {
+        let saved = config, sink = Speech.sink
+        config.general.focusFollowsCursor = "off"
+        var said: [String] = []
+        Speech.sink = { said.append($0) }
+        func row(_ base: Int, button: String, buttonAt x: Double = 300) -> [AXFixture.Node] {
+            func n(_ id: Int, _ role: String, _ parent: Int, _ px: Double, _ extra: [String: AXFixture.Value]) -> AXFixture.Node {
+                var a: [String: AXFixture.Value] = ["AXRole": .string(role), "AXParent": .element(parent), "AXWindow": .element(0),
+                                                    "AXPosition": .point(px, 100), "AXSize": .size(80, 20)]
+                for (k, v) in extra { a[k] = v }
+                return .init(id: id, attrs: a)
+            }
+            return [n(base, "AXGroup", 0, 0, ["AXSize": .size(800, 40), "AXChildren": .elements([base + 1, base + 2, base + 3])]),
+                    n(base + 1, "AXImage", base, 10, ["AXDescription": .string("Artwork")]),
+                    n(base + 2, "AXButton", base, x, ["AXDescription": .string(button)]),
+                    n(base + 3, "AXStaticText", base, 500, ["AXValue": .string("Bug fixes")])]
+        }
+        func window(_ child: Int) -> AXFixture.Node {
+            .init(id: 0, attrs: ["AXRole": .string("AXWindow"), "AXPosition": .point(0, 0), "AXSize": .size(800, 600), "AXChildren": .elements([child])])
+        }
+        let before = AXFixture(app: "App Store", bundle: "com.apple.AppStore", recorded: "", root: 0, application: nil, focus: 3,
+                               nodes: [window(1)] + row(1, button: "22% loaded"))
+        // The row and its button are new elements; the button sits where it was and its name moved on.
+        let after = AXFixture(app: "App Store", bundle: "com.apple.AppStore", recorded: "", root: 0, application: nil, focus: nil,
+                              nodes: [window(11)] + row(11, button: "22.1% loaded"))
+        defer { AXReplay.unload(); config = saved; Speech.sink = sink }
+        let navigator = ObjectNavigator.shared
+
+        AXReplay.load(before)
+        navigator.place(AXReplay.element(3))
+        AXReplay.load(after)
+        navigator.next()
+        expect(navigator.reviewElement.flatMap { AXReplay.id(of: $0) }, 14, "VO-Right goes on to the text after the new button")
+        check(!said.contains("nothing to review"), "never \"nothing to review\"")
+
+        AXReplay.load(before)
+        navigator.place(AXReplay.element(3))
+        AXReplay.load(after)
+        navigator.groupStep(forward: false)
+        expect(navigator.reviewElement.flatMap { AXReplay.id(of: $0) }, 12, "VO-Left, the Mac style, goes back to the new artwork")
+
+        // Nothing like it where it was: the window's first item, said, and the step stops there.
+        AXReplay.load(before)
+        navigator.place(AXReplay.element(3))
+        AXReplay.load(AXFixture(app: "App Store", bundle: "com.apple.AppStore", recorded: "", root: 0, application: nil, focus: nil,
+                                nodes: [window(11)] + row(11, button: "Open", buttonAt: 600)))
+        said = []
+        navigator.next()
+        expect(navigator.reviewElement.flatMap { AXReplay.id(of: $0) }, 12, "to the window's first item")
+        check(said.contains { $0.contains("Artwork") }, "and it is said: \(said)")
+    }
+    test("navigation: a lost item is matched by its place, or by a name only one item has") {
+        let f = CGRect(x: 300, y: 100, width: 80, height: 20)
+        let mark = ReviewMark(role: "AXButton", name: "22% loaded", frame: f)
+        expect(ReviewRecovery.match(mark, among: [ReviewMark(role: "AXButton", name: "Open", frame: f.offsetBy(dx: 200, dy: 0)),
+                                                  ReviewMark(role: "AXButton", name: "22.1% loaded", frame: f.offsetBy(dx: 1, dy: 0))]), 1)
+        expect(ReviewRecovery.match(mark, among: [ReviewMark(role: "AXImage", name: "22% loaded", frame: f)]), nil, "the role must match")
+        expect(ReviewRecovery.match(mark, among: [ReviewMark(role: "AXButton", name: "22% loaded", frame: f.offsetBy(dx: 0, dy: 300))]), 0,
+               "moved, but the only one with its name")
+        let update = ReviewMark(role: "AXButton", name: "Update", frame: f)
+        expect(ReviewRecovery.match(update, among: [ReviewMark(role: "AXButton", name: "Update", frame: f.offsetBy(dx: 0, dy: 50)),
+                                                    ReviewMark(role: "AXButton", name: "Update", frame: f.offsetBy(dx: 0, dy: 100))]), nil,
+               "one of several with the same name is never guessed")
+    }
     // System Settings' password sheet on macOS 27.2 (31 Oct 2026): the application's focused element is a password field
     // of another process (every replayed element has a pid of its own, the application's is 9's).
     // VO-J between a window's panes (8 Nov 2026, a second opinion's fixtures): the sidebar is the narrow pane with
