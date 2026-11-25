@@ -16,7 +16,9 @@ func statusMenuNameTests() {
     test("Status items: the battery item says its level and charging state") {
         defer { AXReplay.unload() }
         let e = item(["AXIdentifier": .string("com.apple.menuextra.battery"), "AXDescription": .string("Battery"), "AXValue": .string("100%, charging")])
-        expect(StatusMenus.name(of: e, app: app), "Battery, 100%, charging", "label then value")
+        // On a charged Mac on mains the item's own "charging" is replaced (25 Nov 2026), so the expectation follows the power source.
+        let words = StatusMenus.batteryPowerState().chargedOnPower ? "Battery, 100%, charged, on power" : "Battery, 100%, charging"
+        expect(StatusMenus.name(of: e, app: app), words, "label then value")
     }
     test("Status items: a battery item with no value falls back to the power source's words") {
         defer { AXReplay.unload() }
@@ -29,5 +31,13 @@ func statusMenuNameTests() {
         expect(StatusMenus.name(of: item(["AXDescription": .string("Wi-Fi")]), app: app), "Wi-Fi", "no value")
         expect(StatusMenus.name(of: item(["AXDescription": .string("Wi-Fi"), "AXValue": .string("")]), app: app), "Wi-Fi", "empty value")
         expect(StatusMenus.name(of: item(["AXDescription": .string("Bluetooth"), "AXValue": .string("Bluetooth")]), app: app), "Bluetooth", "value already in the name")
+    }
+    test("Status items: a battery that is charged on mains says charged, not the item's own state (issue 298)") {
+        let words = "charged, on power"
+        expect(StatusMenus.batteryItemValue(raw: "85%, charging", chargedOnPower: false, chargedWords: words), "85%, charging", "not charged: unchanged")
+        expect(StatusMenus.batteryItemValue(raw: "100%, charging", chargedOnPower: true, chargedWords: words), "100%, charged, on power", "charged replaces charging")
+        expect(StatusMenus.batteryItemValue(raw: "", chargedOnPower: true, chargedWords: words), "", "an empty value is left for the fallback")
+        expect(StatusMenus.batteryItemValue(raw: "Charging, soon", chargedOnPower: true, chargedWords: words), "Charging, soon", "no level anywhere: unchanged")
+        expect(StatusMenus.batteryItemValue(raw: "100 %, charging", chargedOnPower: true, chargedWords: words), "100 %, charged, on power", "a localized level is kept")
     }
 }
