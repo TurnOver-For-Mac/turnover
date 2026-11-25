@@ -904,64 +904,147 @@ func webBufferTests() {
     }
 
     // 25 Nov 2026: a Mail footer "Privacy Policy · Terms of Use · Unsubscribe" is one line. Every link on it is a stop.
-    test("links: every link on a line is a stop; Find leaves the reading position on the match (25 Nov 2026)") {
-        /// A page of one paragraph made of the given pieces: a "link:" piece is a link with that text, any other is plain text.
-        @MainActor func page(_ pieces: [String], base: Int32) -> (WebBuffer, AXUIElement) {
-            let root = AXUIElementCreateApplication(base)
-            let buffer = WebBuffer(webArea: root, collect: { root, _, _ in
-                var nodes: [ElementKey: AXSnapshot.Node] = [:]
-                var kids: [AXUIElement] = []
-                for (k, piece) in pieces.enumerated() {
-                    let el = AXUIElementCreateApplication(base + 1 + Int32(k) * 2), t = AXUIElementCreateApplication(base + 2 + Int32(k) * 2)
-                    if piece.hasPrefix("link:") {
-                        nodes[ElementKey(el)] = .init(attributes: ["AXRole": .string("AXLink"), "AXParent": .element(root), "AXChildren": .array([.element(t)])])
-                        nodes[ElementKey(t)] = .init(attributes: ["AXRole": .string("AXStaticText"), "AXValue": .string(String(piece.dropFirst(5))), "AXParent": .element(el)])
-                        kids.append(el)
-                    } else {
-                        nodes[ElementKey(t)] = .init(attributes: ["AXRole": .string("AXStaticText"), "AXValue": .string(piece), "AXParent": .element(root)])
-                        kids.append(t)
-                    }
-                }
-                nodes[ElementKey(root)] = .init(attributes: ["AXRole": .string("AXWebArea"), "AXChildren": .array(kids.map { .element($0) })])
-                return WebBufferCollection(snapshot: AXSnapshot(nodes: nodes), documentText: "", focusedPart: nil, stop: nil, elapsedMs: 0)
-            })
-            buffer.build {}
-            waitForBuffer(buffer)
-            return (buffer, root)
+    /// A page of blocks: a "\n" piece ends a block (a group, so a line of its own); a "link:" piece is a link with that
+    /// text; any other piece is plain text. Runs `body` with the buffer, its page and the page's text, then unloads.
+    @MainActor func withLinksPage(_ pieces: [String], _ body: (WebBuffer, BrowseModeDocument, NSString) -> Void) {
+        var f = AXFixture(app: "Public sample", bundle: "test.links", recorded: "", root: 0, application: 1, focus: 0, nodes: [])
+        var blocks: [[Int]] = [[]]
+        var id = 100
+        for piece in pieces {
+            if piece == "\n" { blocks.append([]); continue }
+            let owner = 10 + blocks.count - 1
+            if piece.hasPrefix("link:") {
+                // "\u{1}" splits a link's text over several children (a link of several pieces).
+                let parts = String(piece.dropFirst(5)).components(separatedBy: "\u{1}")
+                let link = id, kids = Array((id + 1)...(id + parts.count)); id += parts.count + 1
+                f.nodes.append(.init(id: link, attrs: ["AXRole": .string("AXLink"), "AXParent": .element(owner), "AXChildren": .elements(kids)]))
+                for (t, part) in zip(kids, parts) { f.nodes.append(.init(id: t, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string(part), "AXParent": .element(link)])) }
+                blocks[blocks.count - 1].append(link)
+            } else {
+                let t = id; id += 1
+                f.nodes.append(.init(id: t, attrs: ["AXRole": .string("AXStaticText"), "AXValue": .string(piece), "AXParent": .element(owner)]))
+                blocks[blocks.count - 1].append(t)
+            }
         }
+        for (n, kids) in blocks.enumerated() { f.nodes.append(.init(id: 10 + n, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(0), "AXChildren": .elements(kids)])) }
+        f.nodes.append(.init(id: 0, attrs: ["AXRole": .string("AXWebArea"), "AXURL": .url("https://example.com/links"), "AXParent": .element(1), "AXChildren": .elements(blocks.indices.map { 10 + $0 })]))
+        f.nodes.append(.init(id: 1, attrs: ["AXRole": .string("AXApplication"), "AXTitle": .string("Public sample"), "AXChildren": .elements([0])]))
+        AXReplay.load(f)
+        defer { AXReplay.unload() }
+        guard let root = AXReplay.root else { return check(false, "fixture root") }
+        let buffer = WebBuffer(webArea: root, collect: { root, focus, request in WebBufferCollection.collect(root: root, focus: focus, request: request) })
+        let page = BrowseModeDocument(webArea: root, buffer: buffer)
+        BrowseModeHandler.shared.adopt(page)
+        API.setFocusObject(nil, ancestors: [], interceptor: page)
+        let sink = Speech.sink, edge = Tones.edgeSound
+        Speech.sink = { _ in }
+        Tones.edgeSound = { _ in }
+        defer { Speech.sink = sink; Tones.edgeSound = edge; API.setFocusObject(nil, ancestors: []); BrowseModeHandler.shared.forget(pid: root.pid) }
+        page.hasWebKitSearch = false
+        page.refreshIfNavigated(); waitForBuffer(buffer)
+        body(buffer, page, buffer.text)
+        waitForBuffer(buffer)   // no read of the page may outlive the fixture
+        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        waitForBuffer(buffer)
+    }
+
+    test("links: every link on a line is a stop; Find leaves the reading position on the match (25 Nov 2026)") {
         @MainActor func stops(_ buffer: WebBuffer, forward: Bool) -> [Int] {
             var out: [Int] = [], at = forward ? -1 : buffer.text.length + 1
             while out.count < 20, let h = buffer.find(from: at, forward: forward, roles: ["AXLink"]) { out.append(h.offset); at = h.offset }
             return out
         }
         let footer = ["link:Privacy Policy", " · ", "link:Terms of Use", " · ", "link:Unsubscribe"]
-        let (three, root3) = page(footer, base: 930_000)
-        let text = three.text as String
-        let starts = ["Privacy Policy", "Terms of Use", "Unsubscribe"].map { (text as NSString).range(of: $0).location }
-        check(three.lines.count == 1, "the footer is one line (\(three.lines.count))")
-        expect(stops(three, forward: true), starts, "three links on a line: three stops forward, in order")
-        expect(stops(three, forward: false), starts.reversed(), "and three backward")
-        let (one, _) = page(["link:Only link"], base: 931_000)
-        expect(stops(one, forward: true).count, 1, "a line that is one link gives one stop")
-        expect(stops(one, forward: false).count, 1, "and one backward")
-        let (wrapped, _) = page(["link:" + String(repeating: "wrapped link words ", count: 30)], base: 932_000)
-        check(wrapped.lines.count > 1, "the long link wraps over lines")
-        expect(stops(wrapped, forward: true).count, 1, "a link wrapped over lines is one stop forward")
-        expect(stops(wrapped, forward: false).count, 1, "and one backward")
+        withLinksPage(footer) { three, page3, text in
+            let starts = ["Privacy Policy", "Terms of Use", "Unsubscribe"].map { text.range(of: $0).location }
+            check(three.lines.count == 1, "the footer is one line (\(three.lines.count))")
+            expect(stops(three, forward: true), starts, "three links on a line: three stops forward, in order")
+            expect(stops(three, forward: false), starts.reversed(), "and three backward")
+            // Find: the reading position lands on the match itself, so the press goes to the link that holds it.
+            page3.position = 0
+            check(page3.find("sub", forward: true), "sub is found")
+            expect(page3.position, starts[2] + 2, "the reading position is on the match, not the start of the line")
+            check(three.segment(at: page3.position).map { $0.start == starts[2] } ?? false, "the segment there is the third link")
+            check(page3.find("sub", forward: true), "Find Next wraps round to the one match")
+            expect(page3.position, starts[2] + 2, "one match on the page: it wraps to it again")
+            check(page3.find("o", forward: false), "a search backward finds an earlier o")
+            check(page3.position < starts[2] + 2, "and goes backward")
+        }
+        withLinksPage(["link:Only link"]) { one, _, _ in
+            expect(stops(one, forward: true).count, 1, "a line that is one link gives one stop")
+            expect(stops(one, forward: false).count, 1, "and one backward")
+        }
+        withLinksPage(["link:" + String(repeating: "wrapped link words ", count: 30)]) { wrapped, _, _ in
+            check(wrapped.lines.count > 1, "the long link wraps over lines")
+            expect(stops(wrapped, forward: true).count, 1, "a link wrapped over lines is one stop forward")
+            expect(stops(wrapped, forward: false).count, 1, "and one backward")
+            expect(wrapped.items(inLine: 0).items.count, 1, "a wrapped link is one item, on the line it starts")
+            check(wrapped.items(inLine: 1).continued && wrapped.items(inLine: 1).items.isEmpty, "and its carrying-on line has no item of its own")
+        }
+    }
 
-        // Find: the reading position lands on the match itself, so the press goes to the link that holds it.
-        let page3 = BrowseModeDocument(webArea: root3, buffer: three)
-        API.setFocusObject(nil, ancestors: [], interceptor: page3)
-        let sink = Speech.sink
-        Speech.sink = { _ in }
-        defer { API.setFocusObject(nil, ancestors: []); Speech.sink = sink }
-        page3.position = 0
-        check(page3.find("sub", forward: true), "sub is found")
-        expect(page3.position, starts[2] + 2, "the reading position is on the match, not the start of the line")
-        check(three.segment(at: page3.position).map { $0.start == starts[2] } ?? false, "the segment there is the third link")
-        check(page3.find("sub", forward: true), "Find Next wraps round to the same single match")
-        expect(page3.position, starts[2] + 2, "one match on the page: it wraps to it again")
-        check(page3.find("o", forward: false), "a search backward finds an earlier o")
-        check(page3.position < starts[2] + 2, "and goes backward")
+    test("VO-Right and VO-Left: each link and each run of text is an item; a long link is read once (25 Nov 2026)") {
+        let footer = ["link:Privacy Policy", " · ", "link:Terms of Use", " · ", "link:Unsubscribe"]
+        withLinksPage(["Intro line here", "\n"] + footer + ["\n", "Closing line here"]) { rows, page, text in
+            let at = { (w: String) in text.range(of: w).location }
+            expect(rows.lines.count, 3, "intro, footer and closing are three lines")
+            @MainActor func press(_ name: String) { page.script(named: name)?.handler(KeyboardGesture(identifier: "kb:downArrow")!) }
+            page.position = 0
+            var seen: [Int] = []
+            for _ in 0..<5 { press("moveByItem_forward"); seen.append(page.position) }
+            expect(seen, [at("Privacy Policy"), at("Terms of Use"), at("Unsubscribe"), at("Closing line here"), at("Closing line here")],
+                   "forward: three links, then the closing line; the bottom stays at the bottom")
+            check(rows.segment(at: seen[1]).map { $0.isLink } ?? false, "VO Space at the second stop presses a link")
+            seen = []
+            for _ in 0..<4 { press("moveByItem_back"); seen.append(page.position) }
+            expect(seen, [at("Unsubscribe"), at("Terms of Use"), at("Privacy Policy"), 0], "backward: each link, then the line above")
+            expect(rows.items(inLine: 1).items.count, 3, "separators are not stops")
+            expect(rows.items(inLine: 0).items.count, 1, "a line with no link gives its one text item, which is moved by as a line")
+            expect(rows.items(inLine: 99).items.count, 0, "a line that is not there has none")
+        }
+        withLinksPage(["Read the ", "link:docs", " for more"]) { mixed, _, _ in
+            expect(mixed.items(inLine: 0).items.map { $0.isLink }, [false, true, false], "text, link, text is three items")
+        }
+        withLinksPage(["·  |  ·"]) { bars, _, _ in
+            expect(bars.items(inLine: 0).items.count, 0, "a line of separators only has no item")
+        }
+        withLinksPage((0..<300).flatMap { ["link:tag\($0)", " "] }) { cloud, _, _ in
+            check((0..<cloud.lines.count).reduce(0, { $0 + cloud.items(inLine: $1).items.count }) >= 290, "a tag cloud of 300 links is 300 items over its lines")
+        }
+        // A link piece with no length must not hold the walk for ever, and the other links on the line still count.
+        withLinksPage(["link:One", " · ", "link:", " · ", "link:Two"]) { gap, _, _ in
+            check(gap.items(inLine: 0).items.filter { $0.isLink }.count >= 2, "an empty link piece is passed over and the other links are items")
+        }
+        // A link whose pieces break exactly where the line does: the piece that starts the next line is its tail, not a link.
+        let width = max(20, config.virtualBuffers.maxLineLength)
+        withLinksPage(["link:" + String(repeating: "x", count: width - 1) + " \u{1}tail words of the link"]) { broken, _, _ in
+            expect(broken.items(inLine: 0).items.filter { $0.isLink }.count, 1, "the link is one item, on the line it starts")
+            check(broken.lines.count > 1 && broken.items(inLine: 1).continued && broken.items(inLine: 1).items.isEmpty, "its tail, a piece starting where the line starts, is carried over: no second stop")
+        }
+        // A link of many lines between two text lines: one stop at its start, read to its end; the tail lines are no stop.
+        let longLink = "link:" + String(repeating: "a very long web address that wraps ", count: 12)
+        withLinksPage(["Opening line", "\n", longLink, "\n", "Closing line"]) { long, page, text in
+            @MainActor func press(_ name: String) { page.script(named: name)?.handler(KeyboardGesture(identifier: "kb:downArrow")!) }
+            let linkAt = text.range(of: "a very long").location, closeAt = text.range(of: "Closing line").location
+            check(long.lines.count >= 6, "the link runs over many lines (\(long.lines.count))")
+            page.position = 0
+            var stops: [Int] = []
+            for _ in 0..<4 { press("moveByItem_forward"); stops.append(page.position) }
+            expect(stops, [linkAt, closeAt, closeAt, closeAt], "forward: the link's start, then the closing line; no stop on the link's tail lines")
+            let head = long.items(inLine: long.lineIndex(at: linkAt) ?? 0).items
+            expect(head.first?.end ?? -1, long.linkEnd(at: linkAt) ?? -2, "the item read at the link's stop reaches the link's end")
+            stops = []
+            for _ in 0..<3 { press("moveByItem_back"); stops.append(page.position) }
+            expect(stops, [linkAt, 0, 0], "backward: the link's start (not its tail lines), then the opening line")
+        }
+        // The text after the tail of a link carried over from above is the stop after the link, not the line's start.
+        withLinksPage(["Opening line", "\n", longLink, " and then some words after it", "\n", "Closing line"]) { tail, page, text in
+            @MainActor func press(_ name: String) { page.script(named: name)?.handler(KeyboardGesture(identifier: "kb:downArrow")!) }
+            let linkAt = text.range(of: "a very long").location, after = tail.linkEnd(at: text.range(of: "a very long").location) ?? -1
+            page.position = 0
+            press("moveByItem_forward"); expect(page.position, linkAt, "forward: the link first")
+            press("moveByItem_forward"); expect(page.position, after, "then the text after its tail, not the start of the tail line")
+            press("moveByItem_back"); expect(page.position, linkAt, "backward from that text: the link")
+        }
     }
 }

@@ -480,6 +480,9 @@ public final class BrowseModeDocument: ScriptableObject {
         // NVDA's cursor manager, on Mac modifiers.
         script("moveByLine_back", String(localized: "Moves to the previous line", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:upArrow"], category: nav, resumesSayAll: true) { [weak self] _ in guard let self else { return }; move(.line, -1) }
         script("moveByLine_forward", String(localized: "Moves to the next line", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:downArrow"], category: nav, resumesSayAll: true) { [weak self] _ in guard let self else { return }; move(.line, 1) }
+        // 25 Nov 2026: VO-Right and VO-Left stop on each link and each run of text between links (no keys of their own).
+        script("moveByItem_back", "Moves to the previous item on the line or page", gestures: [], category: nav, resumesSayAll: true) { [weak self] _ in self?.moveByItem(-1) }
+        script("moveByItem_forward", "Moves to the next item on the line or page", gestures: [], category: nav, resumesSayAll: true) { [weak self] _ in self?.moveByItem(1) }
         script("moveByCharacter_back", String(localized: "Moves to the previous character", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:leftArrow"], category: nav) { [weak self] _ in guard let self else { return }; move(.character, -1) }
         script("moveByCharacter_forward", String(localized: "Moves to the next character", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:rightArrow"], category: nav) { [weak self] _ in guard let self else { return }; move(.character, 1) }
         script("moveByWord_back", String(localized: "Moves to the previous word", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:option+leftArrow"], category: nav) { [weak self] _ in guard let self else { return }; move(.word, -1) }
@@ -1089,8 +1092,20 @@ public final class BrowseModeDocument: ScriptableObject {
 
     /// `afterRefresh`: the page was read again (or on) for this key already; at the end now, it is the end. A page
     /// that keeps growing is not read again and again for one key (review of #219, point 5).
-    func move(_ unit: TextUnit, _ direction: Int, afterRefresh: Bool = false) {
-        if readFromCopyIfSilent({ move(unit, direction, afterRefresh: afterRefresh) }) { return }
+    /// 25 Nov 2026: a line of links and text ("Privacy Policy · Terms of Use · Unsubscribe") was one stop for VO-Right, so
+    /// Unsubscribe could not be pressed from it. Inside a line the next item is the next link or run of text; at the
+    /// line's end the next line is entered at its first item (the last, going back). A line with one item, or none, is
+    /// moved by as before. A link that runs past its line's end is an item even alone, so its whole text is read once.
+    func moveByItem(_ direction: Int) { move(.line, direction, byItem: true) }
+    /// The reading position goes to the start of the item and the item alone is read, a link as a link is read in browse mode.
+    func landOnItem(_ item: (start: Int, end: Int, isLink: Bool)) {
+        position = item.start
+        if SayAll.resuming { return }
+        if let info = makeTextInfo(.bookmark(Bookmark(start: item.start, end: item.end))) { speak(info, unit: .line); ModeAnnouncement.readingReported(self, caretMoved: true) }
+    }
+
+    func move(_ unit: TextUnit, _ direction: Int, afterRefresh: Bool = false, byItem: Bool = false) {
+        if readFromCopyIfSilent({ move(unit, direction, afterRefresh: afterRefresh, byItem: byItem) }) { return }
         if passThrough, config.virtualBuffers.autoPassThroughOnCaretMove, !disableAutoPassThrough,
            let segment = buffer.segment(at: position) {
             position = direction > 0 ? max(segment.start, segment.end - 1) : segment.start
@@ -1099,12 +1114,21 @@ public final class BrowseModeDocument: ScriptableObject {
         positionMovedAt = Date()
         refreshIfNavigated()
         clearSelection()
-        guard ensureContent({ [weak self] in self?.move(unit, direction, afterRefresh: afterRefresh) }) else { return }
+        guard ensureContent({ [weak self] in self?.move(unit, direction, afterRefresh: afterRefresh, byItem: byItem) }) else { return }
         refreshBufferIfNeeded()
         guard let info = caretInfo() else { return }
         // NVDA's _caretMovementScriptHelper: expand to the unit and collapse to its start before moving, so Up from
         // the middle of a line (where Find left the caret) goes to the line above, not the start of this one.
         if unit != .character { info.expand(unit); info.collapse() }
+        // 25 Nov 2026: inside a line of links and text, VO-Right and VO-Left go to the next or previous item first.
+        if byItem, unit == .line, let j = buffer.lineIndex(at: position) {
+            let items = buffer.items(inLine: j).items
+            if items.count > 1 || buffer.hasItemOwn(line: j), let n = direction > 0 ? items.firstIndex(where: { $0.start > position }) : items.lastIndex(where: { $0.start < position }) {
+                clearSelection()
+                landOnItem(items[n])
+                return
+            }
+        }
         var moved = info.move(unit, direction)
         if moved != 0, unit == .line || unit == .paragraph {
             // HTML mail is full of empty lines: a run of them is one "blank", not four presses of it.
@@ -1125,7 +1149,7 @@ public final class BrowseModeDocument: ScriptableObject {
            !afterRefresh,
            reachForMore(fromCopyIfConfirmed: true, { [weak self] more in
             guard let self else { return }
-            if more { move(unit, direction, afterRefresh: true) }
+            if more { move(unit, direction, afterRefresh: true, byItem: byItem) }
             else { reportBufferEnd(forward: true) }
         }) { return }
         // Not "bottom" with more of a long page still to read (its reading on ran out of time): reportBufferEnd says so.
@@ -1136,6 +1160,18 @@ public final class BrowseModeDocument: ScriptableObject {
                 !buffer.isPartial &&
                 loadsMoreAtItsEnd != pageGeneration
             reportBufferEnd(forward: direction > 0, fromCopy: fromCopy)
+        }
+        if byItem, unit == .line, moved != 0 {
+            // A line that only carries on a link begun above has no item of its own: go on past it.
+            var hops = 0
+            func lineNow() -> Int { buffer.lineIndex(at: info.start) ?? -1 }
+            while hops < 30, buffer.items(inLine: lineNow()).continued, buffer.items(inLine: lineNow()).items.isEmpty, info.move(unit, direction) != 0 { hops += 1 }
+            let its = buffer.items(inLine: lineNow()).items
+            if its.count > 1 || buffer.hasItemOwn(line: lineNow()) {
+                announcePageIfChanged()
+                landOnItem(direction > 0 ? its[0] : its[its.count - 1])
+                return
+            }
         }
         position = info.start
         // Say all carries on from here and reads this line itself (NVDA's willSayAllResume).
