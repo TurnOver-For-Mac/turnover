@@ -4,6 +4,33 @@ import CoreGraphics
 import TurnOverCore
 
 func insertKeyTests() {
+    test("Insert proof: persistence restores only the same identified keyboard") {
+        let first = InsertDeviceProof.identity(serial: "one", vendor: 1, product: 2, transport: "Bluetooth")
+        let other = InsertDeviceProof.identity(serial: "two", vendor: 1, product: 2, transport: "Bluetooth")
+        let bluetooth = InsertDeviceProof.identity(serial: nil, vendor: 1, product: 2, transport: "Bluetooth", uniqueID: "device-address")
+        check(bluetooth != nil, "physical unique ID supports devices without a serial")
+        check(bluetooth != InsertDeviceProof.identity(serial: "device-address", vendor: 1, product: 2, transport: "Bluetooth"), "serial and physical IDs have separate namespaces")
+        var proof = InsertDeviceProof()
+        check(proof.observe(82, identity: first), "actual press establishes proof")
+        check(!proof.observe(82, identity: first), "repeated presses need no persistence write")
+        let restored = InsertDeviceProof(data: proof.data)
+        check(restored.keys(for: first) == [82], "same physical keyboard retains observed capability")
+        check(restored.keys(for: other).isEmpty, "same-model keyboard does not inherit proof")
+        check(restored.keys(for: nil).isEmpty, "anonymous hardware remains unproven")
+        var available = InsertAvailability(); available.connect(7)
+        for code in restored.keys(for: first) { available.observePress(connection: 7, code: code) }
+        check(available.isAvailable(keypadCommands: true), "restored keypad works in commands")
+        check(!available.isAvailable(keypadCommands: false), "restored keypad still needs fallback in numbers")
+        available.disconnect(7)
+        check(!available.isAvailable(keypadCommands: true), "persistence never keeps disconnected hardware available")
+        for serial in [nil, "", "  ", "0000"] as [String?] {
+            check(InsertDeviceProof.identity(serial: serial, vendor: 1, product: 2, transport: "USB") == nil,
+                  "missing or empty identity cannot transfer capability")
+        }
+        check(InsertDeviceProof(data: Data("bad".utf8)).keys(for: first).isEmpty, "invalid persisted proof fails closed")
+        check(!proof.observe(57, identity: first), "unrelated key cannot prove Insert")
+    }
+
     test("Insert fallback: startup without known Insert hardware keeps Caps Lock available") {
         let saved = config
         defer { config = saved; KeySettings.refresh() }

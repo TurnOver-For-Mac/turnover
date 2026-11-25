@@ -160,13 +160,20 @@ public enum Keypad {
 
     /// Clear, in Num Lock's place (Windows style).
     public static func toggleWindows(announce: (String) -> Void = { Speech.speakMessage($0) }) {
+        let before = KeySettings.current
+        if before.insertIsTurnOver, !before.capsIsTurnOver { CapsLockRecovery.capture() }
         config.keyboard.keypadCommands.toggle(); config.save(); KeySettings.refresh()
-        var message = config.keyboard.keypadCommands ? String(localized: "keypad commands", comment: "Spoken message") : String(localized: "keypad numbers", comment: "Spoken message")
         let settings = KeySettings.current
-        if settings.insertIsTurnOver {
-            message += ". " + (settings.capsIsTurnOver
-                ? String(localized: "Caps Lock is now the TurnOver key", comment: "Insert is unavailable; recovery modifier")
-                : String(localized: "Insert is available. Caps Lock is now a lock key", comment: "Insert recovered; modifier fallback ended"))
+        let message: String
+        if settings.insertIsTurnOver && before.capsIsTurnOver != settings.capsIsTurnOver {
+            switch (settings.keypadCommands, settings.capsIsTurnOver) {
+            case (false, true): message = String(localized: "keypad numbers. Caps Lock is now the TurnOver key", comment: "Clear changed both keypad mode and the recovery modifier")
+            case (true, false): message = String(localized: "keypad commands. Insert is available. Caps Lock is now a lock key", comment: "Clear changed both keypad mode and the recovery modifier")
+            case (true, true): message = String(localized: "keypad commands. Caps Lock is now the TurnOver key", comment: "Clear coincided with Insert removal")
+            case (false, false): message = String(localized: "keypad numbers. Insert is available. Caps Lock is now a lock key", comment: "Clear coincided with a separate Insert becoming available")
+            }
+        } else {
+            message = settings.keypadCommands ? String(localized: "keypad commands", comment: "Spoken message") : String(localized: "keypad numbers", comment: "Spoken message")
         }
         announce(message)
     }

@@ -11,6 +11,7 @@ nonisolated enum InsertHardware {
         var nextConnection: UInt64 = 0
         var connections: [ObjectIdentifier: UInt64] = [:]
         var history = InsertHardwareHistory()
+        var proof = InsertDeviceProof(data: UserDefaults.standard.data(forKey: "insertDeviceProof"))
     }
     private static let state = Locked(State())
     private static let queue = DispatchQueue(label: "turnover.insert-hardware")
@@ -45,26 +46,42 @@ nonisolated enum InsertHardware {
         }
     }
 
+    private static func persistentIdentity(_ device: IOHIDDevice) -> String? {
+        let serial = IOHIDDeviceGetProperty(device, kIOHIDSerialNumberKey as CFString) as? String
+        let uniqueID = IOHIDDeviceGetProperty(device, kIOHIDPhysicalDeviceUniqueIDKey as CFString) as? String
+        let vendor = IOHIDDeviceGetProperty(device, kIOHIDVendorIDKey as CFString) as? NSNumber
+        let product = IOHIDDeviceGetProperty(device, kIOHIDProductIDKey as CFString) as? NSNumber
+        let transport = IOHIDDeviceGetProperty(device, kIOHIDTransportKey as CFString) as? String
+        return InsertDeviceProof.identity(serial: serial, vendor: vendor?.intValue,
+                                          product: product?.intValue, transport: transport, uniqueID: uniqueID)
+    }
+
     private static func connected(_ device: IOHIDDevice) {
         state.lock.lock()
-        defer { state.lock.unlock() }
         let identity = ObjectIdentifier(device)
-        guard state.unsafeValue.connections[identity] == nil else { return }
+        guard state.unsafeValue.connections[identity] == nil else { state.lock.unlock(); return }
         state.unsafeValue.nextConnection += 1
         let connection = state.unsafeValue.nextConnection
         state.unsafeValue.connections[identity] = connection
         state.unsafeValue.history.connect(connection)
-        InsertAvailability.current.lock.lock()
-        InsertAvailability.current.unsafeValue.connect(connection)
-        InsertAvailability.current.lock.unlock()
+        let proven = state.unsafeValue.proof.keys(for: persistentIdentity(device))
+        state.lock.unlock()
+        // Restore capability only, never a held press. Known reconnects are quiet.
+        updateAvailability(announce: false) {
+            $0.connect(connection)
+            for code in proven { $0.observePress(connection: connection, code: code) }
+        }
     }
 
     private static func disconnected(_ device: IOHIDDevice) {
         state.lock.lock()
-        defer { state.lock.unlock() }
-        guard let connection = state.unsafeValue.connections.removeValue(forKey: ObjectIdentifier(device)) else { return }
+        guard let connection = state.unsafeValue.connections.removeValue(forKey: ObjectIdentifier(device)) else { state.lock.unlock(); return }
         state.unsafeValue.history.disconnect(connection)
-        updateAvailability { $0.disconnect(connection) }
+        state.lock.unlock()
+        // Bluetooth idle sleep is not distinguishable from a disconnect. Enable recovery
+        // immediately, but do not interrupt reading with a device-lifecycle notification.
+        let bluetooth = (IOHIDDeviceGetProperty(device, kIOHIDTransportKey as CFString) as? String)?.lowercased().contains("bluetooth") == true
+        updateAvailability(announce: !bluetooth) { $0.disconnect(connection) }
     }
 
     private static func observed(_ value: IOHIDValue) {
@@ -76,24 +93,29 @@ nonisolated enum InsertHardware {
         // HID is Mach absolute ticks; Quartz event timestamps already use nanoseconds.
         let timestamp = nanoseconds(ticks)
         let device = IOHIDElementGetDevice(element)
+        let down = IOHIDValueGetIntegerValue(value) != 0
         state.lock.lock()
-        defer { state.lock.unlock() }
-        guard let connection = state.unsafeValue.connections[ObjectIdentifier(device)] else { return }
-        if IOHIDValueGetIntegerValue(value) != 0 {
-            updateAvailability { $0.observePress(connection: connection, code: code) }
-        }
-        state.unsafeValue.history.record(connection: connection, code: code,
-                                        down: IOHIDValueGetIntegerValue(value) != 0, timestamp: timestamp)
+        guard let connection = state.unsafeValue.connections[ObjectIdentifier(device)] else { state.lock.unlock(); return }
+        let changed = down && state.unsafeValue.proof.observe(code, identity: persistentIdentity(device))
+        let data = changed ? state.unsafeValue.proof.data : nil
+        state.unsafeValue.history.record(connection: connection, code: code, down: down, timestamp: timestamp)
+        state.lock.unlock()
+        if down { updateAvailability { $0.observePress(connection: connection, code: code) } }
+        // No disk or IOHIDSystem work while the tap's history lock is held.
+        if let data { UserDefaults.standard.set(data, forKey: "insertDeviceProof") }
     }
 
-    private static func updateAvailability(_ update: (inout InsertAvailability) -> Void) {
+    private static func updateAvailability(announce: Bool = true, _ update: (inout InsertAvailability) -> Void) {
         let settings = KeySettings.current
-        InsertAvailability.current.lock.lock()
-        let before = InsertAvailability.current.unsafeValue.isAvailable(keypadCommands: settings.keypadCommands)
-        update(&InsertAvailability.current.unsafeValue)
-        let after = InsertAvailability.current.unsafeValue.isAvailable(keypadCommands: settings.keypadCommands)
-        InsertAvailability.current.lock.unlock()
-        guard settings.insertIsTurnOver, before != after else { return }
+        // All device callbacks run on the observer queue. Prepare the next snapshot
+        // without blocking readers while IOHIDSystem samples a real loss of Insert.
+        var next = InsertAvailability.current.value
+        let before = next.isAvailable(keypadCommands: settings.keypadCommands)
+        update(&next)
+        let after = next.isAvailable(keypadCommands: settings.keypadCommands)
+        if settings.insertIsTurnOver, before, !after { CapsLockRecovery.capture() }
+        InsertAvailability.current.value = next
+        guard announce, settings.insertIsTurnOver, before != after else { return }
         onMain {
             let current = KeySettings.current
             guard current.insertIsTurnOver, current.capsIsTurnOver == !after else { return }

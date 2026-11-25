@@ -6299,7 +6299,15 @@
       }
     },
     "Caps Lock is now the TurnOver key" : {
-      "comment" : "Insert is unavailable; recovery modifier"
+      "comment" : "Insert is unavailable; recovery modifier",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Теперь Caps Lock — клавиша TurnOver"
+          }
+        }
+      }
     },
     "Caps Lock or Control Option" : {
       "localizations" : {
@@ -11142,7 +11150,15 @@
 
     },
     "Insert is available. Caps Lock is now a lock key" : {
-      "comment" : "Insert recovered; modifier fallback ended"
+      "comment" : "Insert recovered; modifier fallback ended",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Insert доступна. Caps Lock снова переключает регистр"
+          }
+        }
+      }
     },
     "Install %@" : {
       "localizations" : {
@@ -35171,6 +35187,50 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "klavye stili: VoiceOver, NVDA ya da JAWS tuşları"
+          }
+        }
+      }
+    },
+    "keypad commands. Caps Lock is now the TurnOver key" : {
+      "comment" : "Clear coincided with Insert removal",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Команды на цифровой клавиатуре. Теперь Caps Lock — клавиша TurnOver"
+          }
+        }
+      }
+    },
+    "keypad commands. Insert is available. Caps Lock is now a lock key" : {
+      "comment" : "Clear changed both keypad mode and the recovery modifier",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Команды на цифровой клавиатуре. Insert доступна. Caps Lock снова переключает регистр"
+          }
+        }
+      }
+    },
+    "keypad numbers. Caps Lock is now the TurnOver key" : {
+      "comment" : "Clear changed both keypad mode and the recovery modifier",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цифры на цифровой клавиатуре. Теперь Caps Lock — клавиша TurnOver"
+          }
+        }
+      }
+    },
+    "keypad numbers. Insert is available. Caps Lock is now a lock key" : {
+      "comment" : "Clear coincided with a separate Insert becoming available",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цифры на цифровой клавиатуре. Insert доступна. Caps Lock снова переключает регистр"
           }
         }
       }

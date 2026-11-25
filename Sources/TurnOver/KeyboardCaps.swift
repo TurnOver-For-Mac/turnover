@@ -8,14 +8,25 @@ extension KeyboardHandler {
     }
     nonisolated func capsFlags(_ event: CGEvent, _ settings: KeySettings) -> Bool {
         let owned = capsPress.capturesFlags(at: event.timestamp, settings: settings)
-        if !owned { realCapsOn = event.flags.contains(.maskAlphaShift) }
+        if !owned, event.timestamp >= capsStateTimestamp {
+            realCapsOn = event.flags.contains(.maskAlphaShift)
+            capsStateTimestamp = event.timestamp
+        }
         return owned
     }
     nonisolated func capsChanged(pressed: Bool, timestamp: UInt64) {
-        let owned = capsPress.update(down: pressed, timestamp: timestamp, settings: KeySettings.current)
+        let settings = KeySettings.current
+        if pressed, !capsPress.down, settings.insertIsTurnOver, settings.capsIsTurnOver,
+           let snapshot = CapsLockRecovery.current.value,
+           snapshot.timestamp > capsStateTimestamp, snapshot.timestamp <= timestamp {
+            realCapsOn = snapshot.on
+            capsStateTimestamp = snapshot.timestamp
+        }
+        let owned = capsPress.update(down: pressed, timestamp: timestamp, settings: settings)
         capsDown = pressed && owned
         Self.capsHeld.value = capsPress
         guard owned else { lastCapsUp = 0; chordFired = false; return }
+        capsStateTimestamp = max(capsStateTimestamp, timestamp)
         setLock(realCapsOn)
         if pressed { chordFired = false }
         else {

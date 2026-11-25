@@ -41,6 +41,32 @@ The control-channel tests use private socket pairs and package-internal connecti
 the running reader or bypass its public peer-authentication path. Tiny socket buffers force partial writes and
 backpressure. The write-buffer test also supplies interrupted, would-block, zero and fatal write results.
 
+With Insert selected, Input Monitoring is required at startup while Caps Lock is the recovery
+modifier: without the physical HID watch TurnOver takes the existing input-unavailable path
+and leaves reading to VoiceOver. This permission gate is intentional; an event tap alone
+cannot safely implement Caps Lock recovery.
+
+## Keyboard adapter regressions
+
+After a matching no-install build, run the production keyboard adapters with:
+
+```bash
+export TURNOVER_BUILD="$HOME/Library/Developer/TurnOver/build"
+python3 Tools/tests/keyboard-adapter-tests.py
+```
+
+The harness compiles the actual keyboard callback bodies and replaces OS event posting,
+reader output and hardware inputs with recording boundaries. It never starts a tap or reader.
+A failure returns nonzero. For Thread Sanitizer, use the same build directory:
+
+```bash
+swift build -c debug --sanitize thread --scratch-path "$TURNOVER_BUILD"
+TSAN_OPTIONS=halt_on_error=1 python3 Tools/tests/keyboard-adapter-tests.py --tsan
+```
+
+These assertions do not replace an installed trial by ear, including Bluetooth
+sleep/reconnect and recovery announcements.
+
 ## Speech recovery (every build)
 
 `turnover-tests 'speech recovery' -v` drives the production queue-watch state with synthetic time: repeated grace

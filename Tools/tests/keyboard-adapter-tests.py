@@ -244,7 +244,7 @@ nonisolated func event(_ type: CGEventType, _ code: Int64, repeatKey: Bool = fal
  SwitcherCloseWatcher.isWatching.value=false; ScriptHandler.hasDeferredInput.value=false
  Audit.orderedTrace.value=[]
  Audit.callbacks.value=[]; Audit.orderedAcknowledgements.value=0; Audit.findTimes.value=[]; ArrowQuickNav.applies.value=false
- InsertAvailability.current.value = InsertAvailability(); Audit.lockStates.value = []; Audit.keyTime.value = nil
+ CapsLockRecovery.current.value = nil; InsertAvailability.current.value = InsertAvailability(); Audit.lockStates.value = []; Audit.keyTime.value = nil
  InsertModifier.auditReset(); Audit.hardwareDown.value = [82,114]; Audit.physicalHistory.value = InsertHardwareHistory(); Audit.retireDuringBatch.value = nil; Audit.gateDuringBatch.value = false
  KeypadApplicationDelivery.state.value = KeypadApplicationDelivery.State()
  config.general.keyboardStyle="jaws"; config.general.turnOverKey="insert"
@@ -437,7 +437,7 @@ print("Adapter assertions: \\(checked); failures: \\(failed)")
 exit(failed == 0 ? 0 : 1)
 ''')
     main = p/'main.swift'
-    main.write_text(main.read_text().replace('// REVIEW_VECTORS', (repo/'Tools/tests/keyboard-review-vectors.swift').read_text()))
+    main.write_text(main.read_text().replace('// REVIEW_VECTORS', (repo/'Tools/tests/keyboard-review-vectors.swift').read_text() + (repo/'Tools/tests/keyboard-followup-vectors.swift').read_text()))
     args=['swiftc','-sdk','/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk','-swift-version','6','-default-isolation','MainActor','-I',str(product),'-L',str(product),'-lTurnOverCore','-Xlinker','-rpath','-Xlinker',str(product)]
     for module in ['TurnOverObjC','TurnOverBraille']:
         args += ['-Xcc','-fmodule-map-file='+str(build/'out/Intermediates.noindex/GeneratedModuleMaps'/f'{module}.modulemap')]

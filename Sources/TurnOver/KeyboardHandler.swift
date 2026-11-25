@@ -78,6 +78,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
     var chordFired = false
     var lastCapsUp: UInt64 = 0
     var realCapsOn = false
+    var capsStateTimestamp: UInt64 = 0
     private var quarantined = Set<Int64>()
     /// Keys translated on the way down (the Windows style): their release is translated too.
     private var remapped = Set<Int64>()
@@ -246,7 +247,10 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
             IOObjectRelease(service)
             Log.info("keyboard: IOHIDSystem connection \(r == KERN_SUCCESS ? "open" : "failed \(r)")")
         }
-        realCapsOn = lockState()
+        if let on = lockState() {
+            realCapsOn = on
+            capsStateTimestamp = DispatchTime.now().uptimeNanoseconds
+        }
 
         openHIDManager(into: mine)
 
@@ -316,10 +320,10 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         Log.info("keyboard: layer down")
     }
 
-    private func lockState() -> Bool {
-        guard connect != 0 else { return false }
+    private func lockState() -> Bool? {
+        guard connect != 0 else { return nil }
         var on = false
-        IOHIDGetModifierLockState(connect, Int32(kIOHIDCapsLockState), &on)
+        guard IOHIDGetModifierLockState(connect, Int32(kIOHIDCapsLockState), &on) == KERN_SUCCESS else { return nil }
         return on
     }
     func setLock(_ on: Bool) {
@@ -420,6 +424,8 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         if event.getIntegerValueField(.eventSourceUserData) == Self.marker { return Unmanaged.passUnretained(event) }
         let code = event.getIntegerValueField(.keyboardEventKeycode)
         let sourceFlags = event.flags
+        // Observe native state even when direct-app routing bypasses reader commands.
+        if type == .flagsChanged, code == 57 { _ = capsFlags(event, KeySettings.current) }
         // VoiceOver's own on-and-off shortcut goes straight on, never held for TurnOver's decision: held for a main
         // thread that was busy, Option Apostrophe (the maintainer's) reached macOS a second late, or not at all, and
         // VoiceOver seemed not to answer its key (25 Oct 2026). TurnOver has no command on it.

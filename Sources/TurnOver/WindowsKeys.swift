@@ -127,6 +127,7 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // callbacks an
     private var capsDown = false
     private var capsPress = CapsPressState()
     private var realCapsOn = false
+    private var capsStateTimestamp: UInt64 = 0
     private var swallowedUps = Set<Int64>()
     private var browse = false
     private var passNext = false
@@ -236,7 +237,9 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // callbacks an
         IOHIDManagerScheduleWithRunLoop(m, CFRunLoopGetCurrent(), CFRunLoopMode.defaultMode.rawValue)
         IOHIDManagerOpen(m, IOOptionBits(kIOHIDOptionsTypeNone))
         mine.manager = m
-        if connect != 0 { IOHIDGetModifierLockState(connect, Int32(kIOHIDCapsLockState), &realCapsOn) }
+        if connect != 0, IOHIDGetModifierLockState(connect, Int32(kIOHIDCapsLockState), &realCapsOn) == KERN_SUCCESS {
+            capsStateTimestamp = DispatchTime.now().uptimeNanoseconds
+        }
     }
 
     private func caps(_ value: IOHIDValue) {
@@ -247,7 +250,15 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // callbacks an
     }
 
     func capsChanged(pressed: Bool, timestamp: UInt64) {
-        let owned = capsPress.update(down: pressed, timestamp: timestamp, settings: KeySettings.current)
+        let settings = KeySettings.current
+        if pressed, !capsPress.down, settings.insertIsTurnOver, settings.capsIsTurnOver,
+           let snapshot = CapsLockRecovery.current.value,
+           snapshot.timestamp > capsStateTimestamp, snapshot.timestamp <= timestamp {
+            realCapsOn = snapshot.on
+            capsStateTimestamp = snapshot.timestamp
+        }
+        let owned = capsPress.update(down: pressed, timestamp: timestamp, settings: settings)
+        if owned { capsStateTimestamp = max(capsStateTimestamp, timestamp) }
         capsDown = pressed && owned
         if owned, connect != 0 { IOHIDSetModifierLockState(connect, Int32(kIOHIDCapsLockState), KeySettings.current.insertIsTurnOver ? realCapsOn : false) }
     }
@@ -437,7 +448,10 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // callbacks an
         if type == .flagsChanged {
             if code == 57 {
                 if capsPress.capturesFlags(at: event.timestamp, settings: settings) { return nil }
-                realCapsOn = event.flags.contains(.maskAlphaShift)
+                if event.timestamp >= capsStateTimestamp {
+                    realCapsOn = event.flags.contains(.maskAlphaShift)
+                    capsStateTimestamp = event.timestamp
+                }
             }   // Caps Lock's own event: the NVDA key
             // The lone taps: Command alone the menu bar, left Option the Dock, right Option the shortcut menu. Not while
             // secure input is on: no key between is heard (LoneModifier).
