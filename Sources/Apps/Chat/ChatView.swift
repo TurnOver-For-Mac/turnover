@@ -763,8 +763,33 @@ public final class ChatView {
         // Sent from here a moment ago (the box had text and is now empty): it is your own message.
         if Date().timeIntervalSince(composerHadText) < 3 { Log.io("chat: a message was sent"); return }
         if SayAll.isRunning { return }
+        // Messages says a new message itself ("Message received: From: Faith, …", and "Faith Waters is typing") as an
+        // announcement a moment before this poll finds it, so it was heard twice, the second time as "Faith Waters, …"
+        // (Messages, macOS 26.6.2, a tester by ear, 25 Nov 2026). The app's own words came first and are kept.
+        let (said, at) = AXHandler.shared.lastAnnouncement
+        if Date().timeIntervalSince(at) < 5, Self.announced(now, in: said) { Log.io("chat: a new message arrived; the app announced it already"); return }
         Log.io("chat: a new message arrived")
         Speech.speakText(now)
+    }
+
+    /// Whether an app's own announcement already said this message: the same words, or the announcement's message
+    /// (what follows its first comma, after "Message received: From: Faith") found in the message's words.
+    public static func announced(_ message: String, in announcement: String) -> Bool {
+        func flat(_ t: String) -> String { t.lowercased().split(whereSeparator: \.isWhitespace).joined(separator: " ") }
+        let m = flat(message), a = flat(announcement)
+        guard !m.isEmpty, !a.isEmpty else { return false }
+        if m == a { return true }
+        // The first comma ends the sender's name; the next two too, for a contact saved as "Smith, John".
+        var from = a.startIndex
+        for _ in 0..<3 {
+            guard let comma = a.range(of: ", ", range: from..<a.endIndex) else { return false }
+            from = comma.upperBound
+            let body = String(a[comma.upperBound...].prefix(60))
+            guard !body.isEmpty else { return false }
+            // A short message ("Ok") must be the whole of what follows the sender, not any "ok" in a longer one.
+            if body.count < 12 ? (m.hasSuffix(", " + body) || m.contains(", " + body + ", ")) : m.contains(body) { return true }
+        }
+        return false
     }
 
     /// A message's words without its delivery status at the end ("…, 14:53, Sent to Alex, Delivered").

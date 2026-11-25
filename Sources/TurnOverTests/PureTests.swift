@@ -951,6 +951,20 @@ func pureTests() {
         check(ms.isConversation(AXReplay.element(3)) && !ms.isConversation(AXReplay.element(0)), "Messages conversations are static texts")
         check(ms.isMessage(AXReplay.element(5)), "Messages: anything in the transcript is a message")
     }
+    test("chat: a message the app announced itself is not read again") {
+        // Messages, 25 Nov 2026: its announcement, then the poll's words for the same message.
+        check(ChatView.announced("Faith Waters, Ha, yeah, he's British. Two ways to change him: Quick way, with the speech ring",
+                                 in: "Message received: From: Faith, Ha, yeah, he's British. Two ways to change him:\n\nQuick way, with the speech ring"),
+              "the same message, line breaks aside")
+        check(ChatView.announced("Faith Waters is typing", in: "Faith Waters is typing"), "the typing indicator")
+        check(ChatView.announced("Sunshine Day, Ok", in: "Message received: From: Sunshine, Ok"), "a short message")
+        check(!ChatView.announced("Faith Waters, Ok then, see you at four", in: "Message received: From: Sunshine, Ok"), "a short one is not any \"ok\"")
+        check(!ChatView.announced("Faith Waters, Lunch is at noon tomorrow by the river", in: "Message received: From: Sunshine, Are you coming to the meeting later today?"),
+              "another conversation's message is still read")
+        check(!ChatView.announced("Faith Waters, hello", in: ""), "no announcement")
+        check(ChatView.announced("John Smith, See you at the station at six", in: "Message received: From: Smith, John, See you at the station at six"),
+              "a contact saved with a comma in the name")
+    }
     test("recipes: a broken built-in file is reported by name, the rest load") {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("turnover-recipe-test-\(getpid())")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
