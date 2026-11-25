@@ -259,7 +259,8 @@ extension AXHandler {
         case kAXAnnouncementRequestedNotification:
             // Safari announces "Page Menu, Reader Available" as each page loads, sometimes twice: the same news once.
             if let text = info?["AXAnnouncementKey"] as? String, !text.isEmpty {
-                if text == lastAnnouncement.0, Date().timeIntervalSince(lastAnnouncement.1) < 30 { Log.io("announcement repeated; skipped"); break }
+                if text == lastAnnouncement.0, Date().timeIntervalSince(lastAnnouncement.1) < 30,
+                   !AppModuleHandler.shared.appModule(for: pid).announcementRepeatIsNews(text) { Log.io("announcement repeated; skipped"); break }
                 // Not into the middle of a page being read ("Page Menu, Reader Available" between its lines).
                 if SayAll.isRunning { Log.io("announcement during say all; skipped: \(Log.words(text))"); break }
                 // iTerm2 announces each piece of new output itself; TurnOver's terminal reads it already (it was heard

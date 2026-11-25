@@ -151,6 +151,17 @@ final class ChatAppModule: AppModule {
         }
     }
 
+    // Messages' own announcements, as they are about to be spoken: the chat watcher stays quiet for a message one of
+    // them already said (issue 382). Only this app's: the module is this app's, so another app's words never count.
+    override func ignoresAnnouncement(_ text: String, after key: String, elapsed: TimeInterval) -> Bool {
+        view.appAnnounced(text)
+        return false
+    }
+
+    override func announcementRepeatIsNews(_ text: String) -> Bool {
+        ChatView.isArrivalAnnouncement(text, bundle: bundleIdentifier)
+    }
+
     override func terminate() {
         view.stopWatching()
         if GlobalCommands.contextMenuHandler != nil, API.focusPid == pid { GlobalCommands.contextMenuHandler = nil }

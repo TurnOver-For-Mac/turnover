@@ -47,6 +47,11 @@ open class AppModule: ScriptableObject {
     /// Suppress native news already reported by the module. The key and elapsed time are captured at arrival.
     open func ignoresAnnouncement(_ text: String, after key: String, elapsed: TimeInterval) -> Bool { false }
 
+    /// Whether this app's announcement is news even when it is word for word the last one, within the 30 seconds a
+    /// repeat is otherwise skipped in. Messages announces each message that arrives, and two that both say "Ok" are
+    /// two messages: the second was skipped, and nothing else said it (found reading the code, 25 Nov 2026).
+    open func announcementRepeatIsNews(_ text: String) -> Bool { false }
+
     /// An app-specific hint, or nil to use the ordinary control hint. An empty string suppresses the hint.
     open func hint(for object: TurnOverObject) -> String? { nil }
 

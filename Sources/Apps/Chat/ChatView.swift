@@ -766,10 +766,35 @@ public final class ChatView {
         // Messages says a new message itself ("Message received: From: Faith, …", and "Faith Waters is typing") as an
         // announcement a moment before this poll finds it, so it was heard twice, the second time as "Faith Waters, …"
         // (Messages, macOS 26.6.2, a tester by ear, 25 Nov 2026). The app's own words came first and are kept.
-        let (said, at) = AXHandler.shared.lastAnnouncement
-        if Date().timeIntervalSince(at) < 5, Self.announced(now, in: said) { Log.io("chat: a new message arrived; the app announced it already"); return }
+        // Only this app's announcements (ChatAppModule hands them over as they are spoken), and each stands for one
+        // message: claimed by the first it matches, so a second "Ok" is not taken as said by the first one's.
+        if Self.claim(now, from: &announcements, now: Date()) { Log.io("chat: a new message arrived; the app announced it already"); return }
         Log.io("chat: a new message arrived")
         Speech.speakText(now)
+    }
+
+    /// This app's own announcements of the last few seconds, as they were spoken, not yet matched to a message.
+    private var announcements: [(text: String, at: Date)] = []
+
+    /// One of this app's announcements is being spoken (ChatAppModule.ignoresAnnouncement, the last step before it is).
+    public func appAnnounced(_ text: String) {
+        announcements.append((text, Date()))
+        if announcements.count > 10 { announcements.removeFirst(announcements.count - 10) }
+    }
+
+    /// Whether one of the app's announcements of the last 5 seconds said this message; that announcement is used up.
+    public static func claim(_ message: String, from pending: inout [(text: String, at: Date)], now: Date) -> Bool {
+        pending.removeAll { now.timeIntervalSince($0.at) >= 5 || now < $0.at }
+        guard let i = pending.firstIndex(where: { announced(message, in: $0.text) }) else { return false }
+        pending.remove(at: i)
+        return true
+    }
+
+    /// Messages' announcement of a message that arrived ("Message received: From: Faith, Ok"): each is its own news,
+    /// even word for word the last one. English only, as it is said on the Macs it was heard on; elsewhere a repeat
+    /// within 30 seconds is skipped as before. Not the typing indicator, which Messages can post twice.
+    public static func isArrivalAnnouncement(_ text: String, bundle: String) -> Bool {
+        bundle == "com.apple.MobileSMS" && text.hasPrefix("Message received: ")
     }
 
     /// Whether an app's own announcement already said this message: the same words, or the announcement's message

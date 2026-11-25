@@ -965,6 +965,29 @@ func pureTests() {
         check(ChatView.announced("John Smith, See you at the station at six", in: "Message received: From: Smith, John, See you at the station at six"),
               "a contact saved with a comma in the name")
     }
+    test("chat: each announcement stands for one message, so a second identical one is still read") {
+        let t0 = Date(timeIntervalSinceReferenceDate: 1000)
+        // Two messages that both say "Ok". The second announcement was skipped as a repeat: one announcement for two.
+        var pending: [(text: String, at: Date)] = [("Message received: From: Sunshine, Ok", t0)]
+        check(ChatView.claim("Sunshine Day, Ok", from: &pending, now: t0.addingTimeInterval(0.5)), "the first Ok: the app said it")
+        check(!ChatView.claim("Sunshine Day, Ok", from: &pending, now: t0.addingTimeInterval(1.5)), "the second Ok: nothing left that said it, so it is read")
+        // Both announced (Messages' arrivals are news even when repeated): both claimed, neither read twice.
+        pending = [("Message received: From: Sunshine, Ok", t0), ("Message received: From: Sunshine, Ok", t0.addingTimeInterval(1))]
+        check(ChatView.claim("Sunshine Day, Ok", from: &pending, now: t0.addingTimeInterval(1.2)), "the first")
+        check(ChatView.claim("Sunshine Day, Ok", from: &pending, now: t0.addingTimeInterval(2.2)), "the second")
+        check(pending.isEmpty, "both used up")
+        // Too old, and another message's announcement.
+        pending = [("Message received: From: Sunshine, Ok", t0)]
+        check(!ChatView.claim("Sunshine Day, Ok", from: &pending, now: t0.addingTimeInterval(6)), "over 5 seconds: read")
+        pending = [("Message received: From: Sunshine, Are you coming?", t0)]
+        check(!ChatView.claim("Sunshine Day, Ok", from: &pending, now: t0.addingTimeInterval(1)), "another message's announcement")
+        check(pending.count == 1, "and it stays for its own message")
+    }
+    test("chat: Messages' arrival announcements are news even word for word the last; nothing else's") {
+        check(ChatView.isArrivalAnnouncement("Message received: From: Sunshine, Ok", bundle: "com.apple.MobileSMS"), "a message arriving")
+        check(!ChatView.isArrivalAnnouncement("Faith Waters is typing", bundle: "com.apple.MobileSMS"), "the typing indicator")
+        check(!ChatView.isArrivalAnnouncement("Message received: From: Sunshine, Ok", bundle: "net.whatsapp.WhatsApp"), "another app")
+    }
     test("recipes: a broken built-in file is reported by name, the rest load") {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("turnover-recipe-test-\(getpid())")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
