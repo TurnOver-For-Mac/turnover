@@ -12,6 +12,16 @@ import TurnOverControl
 import AXFixtures
 
 func pureTests() {
+    test("announcements: only high priority cuts off what is being said") {
+        let key = NSAccessibility.NotificationUserInfoKey.priority.rawValue
+        check(key == "AXPriorityKey", "the key an app's announcement carries its priority under")
+        check(AXHandler.announcementInterrupts([key: NSNumber(value: NSAccessibilityPriorityLevel.high.rawValue)]), "high interrupts")
+        check(!AXHandler.announcementInterrupts([key: NSNumber(value: NSAccessibilityPriorityLevel.medium.rawValue)]), "medium waits its turn")
+        check(!AXHandler.announcementInterrupts([key: NSNumber(value: NSAccessibilityPriorityLevel.low.rawValue)]), "low waits its turn")
+        check(!AXHandler.announcementInterrupts(["AXAnnouncementKey": "Page Menu, Reader Available"]), "no priority waits its turn")
+        check(!AXHandler.announcementInterrupts(nil), "no information at all")
+        check(!AXHandler.announcementInterrupts([key: "high"]), "a value that is not a number")
+    }
     test("status menus: failed AX press remembers a menu that opened and closed before the check") {
         let before = Date(timeIntervalSinceReferenceDate: 100)
         let opened = before.addingTimeInterval(0.002)

@@ -270,11 +270,21 @@ extension AXHandler {
                     Log.io("app module suppressed a native announcement: \(Log.words(text))"); break
                 }
                 lastAnnouncement = (text, Date())
+                if Self.announcementInterrupts(info) { Log.io("announcement at high priority; speech interrupted"); Speech.cancel() }
                 Speech.speakMessage(text)
             }
         default:
             break
         }
+    }
+
+    /// Whether an app's announcement cuts off what is being said: only one posted at high priority
+    /// (NSAccessibilityPriorityHigh, 90, under "AXPriorityKey"), as VoiceOver does. Medium and low, and an
+    /// announcement with no priority, wait their turn as before. DAW tools such as OSARA in REAPER post their
+    /// feedback at high priority so it is heard at once, not after the last thing finishes (25 Nov 2026).
+    public nonisolated static func announcementInterrupts(_ info: [String: Any]?) -> Bool {
+        guard let level = (info?[NSAccessibility.NotificationUserInfoKey.priority.rawValue] as? NSNumber)?.intValue else { return false }
+        return level >= NSAccessibilityPriorityLevel.high.rawValue
     }
 
     /// The object for a notification: the live focus object when it is the same element, so its state carries.
