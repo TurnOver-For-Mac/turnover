@@ -913,7 +913,12 @@ func webBufferTests() {
         for piece in pieces {
             if piece == "\n" { blocks.append([]); continue }
             let owner = 10 + blocks.count - 1
-            if piece.hasPrefix("link:") {
+            if piece.hasPrefix("titled:") {
+                // A link whose words are its title, with no text inside: the line's own element is then this link.
+                let link = id; id += 1
+                f.nodes.append(.init(id: link, attrs: ["AXRole": .string("AXLink"), "AXTitle": .string(String(piece.dropFirst(7))), "AXParent": .element(owner), "AXChildren": .elements([])]))
+                blocks[blocks.count - 1].append(link)
+            } else if piece.hasPrefix("link:") {
                 // "\u{1}" splits a link's text over several children (a link of several pieces).
                 let parts = String(piece.dropFirst(5)).components(separatedBy: "\u{1}")
                 let link = id, kids = Array((id + 1)...(id + parts.count)); id += parts.count + 1
@@ -929,6 +934,10 @@ func webBufferTests() {
         for (n, kids) in blocks.enumerated() { f.nodes.append(.init(id: 10 + n, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(0), "AXChildren": .elements(kids)])) }
         f.nodes.append(.init(id: 0, attrs: ["AXRole": .string("AXWebArea"), "AXURL": .url("https://example.com/links"), "AXParent": .element(1), "AXChildren": .elements(blocks.indices.map { 10 + $0 })]))
         f.nodes.append(.init(id: 1, attrs: ["AXRole": .string("AXApplication"), "AXTitle": .string("Public sample"), "AXChildren": .elements([0])]))
+        withFixturePage(f, body)
+    }
+    /// Runs `body` on a page made from a fixture whose web area is node 0.
+    @MainActor func withFixturePage(_ f: AXFixture, _ body: (WebBuffer, BrowseModeDocument, NSString) -> Void) {
         AXReplay.load(f)
         defer { AXReplay.unload() }
         guard let root = AXReplay.root else { return check(false, "fixture root") }
@@ -1009,7 +1018,7 @@ func webBufferTests() {
             expect(bars.items(inLine: 0).items.count, 0, "a line of separators only has no item")
         }
         withLinksPage((0..<300).flatMap { ["link:tag\($0)", " "] }) { cloud, _, _ in
-            check((0..<cloud.lines.count).reduce(0, { $0 + cloud.items(inLine: $1).items.count }) >= 290, "a tag cloud of 300 links is 300 items over its lines")
+            check((0..<cloud.lines.count).reduce(0, { $0 + cloud.items(inLine: $1).items.count }) == 300, "a tag cloud of 300 links is exactly 300 items over its lines")
         }
         // A link piece with no length must not hold the walk for ever, and the other links on the line still count.
         withLinksPage(["link:One", " · ", "link:", " · ", "link:Two"]) { gap, _, _ in
@@ -1045,6 +1054,79 @@ func webBufferTests() {
             press("moveByItem_forward"); expect(page.position, linkAt, "forward: the link first")
             press("moveByItem_forward"); expect(page.position, after, "then the text after its tail, not the start of the tail line")
             press("moveByItem_back"); expect(page.position, linkAt, "backward from that text: the link")
+        }
+    }
+
+    test("VO-Right and VO-Left: the edges, the middle of an item, separators and what VO-Space may press (25 Nov 2026)") {
+        let footer = ["link:Privacy Policy", " · ", "link:Terms of Use", " · ", "link:Unsubscribe"]
+        @MainActor func press(_ page: BrowseModeDocument, _ name: String) { page.script(named: name)?.handler(KeyboardGesture(identifier: "kb:downArrow")!) }
+        // The footer ends the page: Find "sub", then VO-Right says bottom and stays inside Unsubscribe.
+        withLinksPage(["Intro line here", "\n"] + footer) { buffer, page, text in
+            var heard = ""; let saved = Speech.sink; Speech.sink = { heard += $0 + "|" }; defer { Speech.sink = saved }
+            let third = text.range(of: "Unsubscribe").location, second = text.range(of: "Terms of Use").location
+            page.position = 0
+            check(page.find("sub", forward: true), "sub is found")
+            let match = page.position
+            expect(match, third + 2, "Find is on the match")
+            heard = ""
+            press(page, "moveByItem_forward")
+            expect(page.position, match, "VO-Right at the page's end leaves the position where it was")
+            check(heard.contains("bottom"), "and says the bottom (\(heard))")
+            check(buffer.segment(at: page.position).map { $0.start == third } ?? false, "so VO-Space presses the third link")
+            expect(page.itemHeardAlone?.start ?? -1, third, "the item read again is Unsubscribe")
+            // D: VO-Left from the middle of an item goes to the item before it; from a separator, to the item before the separator.
+            press(page, "moveByItem_back")
+            expect(page.position, second, "VO-Left from the middle of Unsubscribe goes to Terms of Use")
+            page.position = text.range(of: "·").location + 1
+            press(page, "moveByItem_back")
+            expect(page.position, text.range(of: "Privacy Policy").location, "VO-Left from a separator goes to the item before it")
+        }
+        // The same at the top with VO-Left.
+        withLinksPage(footer) { buffer, page, text in
+            var heard = ""; let saved = Speech.sink; Speech.sink = { heard += $0 + "|" }; defer { Speech.sink = saved }
+            page.position = 0
+            check(page.find("pri", forward: true), "pri is found")
+            let match = page.position
+            heard = ""
+            press(page, "moveByItem_back")
+            expect(page.position, match, "VO-Left at the page's top leaves the position where it was")
+            check(heard.contains("top"), "and says the top (\(heard))")
+            check(buffer.segment(at: page.position).map { $0.start == 0 } ?? false, "so VO-Space presses the first link")
+        }
+        // A link wrapping to the page's end: VO-Right says the end and stays on the link; its tail is not read as a line.
+        let longLink = "link:" + String(repeating: "a very long web address that wraps ", count: 12)
+        withLinksPage(["Opening line", "\n", longLink]) { buffer, page, text in
+            var heard = ""; let saved = Speech.sink; Speech.sink = { heard += $0 + "|" }; defer { Speech.sink = saved }
+            let linkAt = text.range(of: "a very long").location
+            page.position = 0
+            press(page, "moveByItem_forward"); expect(page.position, linkAt, "the link is reached")
+            heard = ""
+            press(page, "moveByItem_forward")
+            expect(page.position, linkAt, "VO-Right at the end of a link that ends the page stays on the link")
+            check(heard.contains("bottom"), "and says the bottom (\(heard))")
+        }
+        // VO-Space and text read alone: the fallback along the line must not press the link beside it.
+        withLinksPage(["Header line", "\n", "You can permanently ", "link:Delete account"]) { buffer, page, text in
+            page.position = 0
+            press(page, "moveByItem_forward")
+            check(page.itemHeardAlone.map { !$0.isLink && $0.start <= page.position && page.position < $0.end } ?? false, "text read alone is recorded, so the fallback does not choose the link")
+            press(page, "moveByItem_forward")
+            check(page.itemHeardAlone?.isLink == true, "after the link is read the fallback may press it")
+            page.position = 0
+            press(page, "moveByLine_forward")
+            check(page.itemHeardAlone == nil, "after Down Arrow read the whole line the record is gone and the fallback is used")
+        }
+        // E: what is a separator.
+        withLinksPage(["link:A", " 🙂 ", "link:B"]) { b, _, _ in expect(b.items(inLine: 0).items.count, 3, "an emoji between links is a stop") }
+        withLinksPage(["link:A", " € ", "link:B"]) { b, _, _ in expect(b.items(inLine: 0).items.count, 3, "a currency sign between links is a stop") }
+        withLinksPage(["link:A", " | > · ", "link:B"]) { b, _, _ in expect(b.items(inLine: 0).items.count, 2, "a bar, an arrow sign and a dot are separators") }
+        // A footer whose first link has its words as a title and no text inside it: all three links are reached.
+        withLinksPage(["titled:Privacy Policy", " · ", "link:Terms of Use", " · ", "link:Unsubscribe"]) { buffer, _, text in
+            expect(buffer.lines.count, 1, "the footer is one line")
+            // (The line's own element came out as the web area here, not the link: the exact shape of the Mail footer is not reproduced by this fixture.)
+            var out: [Int] = [], at = -1
+            while out.count < 10, let h = buffer.find(from: at, forward: true, roles: ["AXLink"]) { out.append(h.offset); at = h.offset }
+            expect(out.count, 3, "the link keys reach all three links (\(out))")
         }
     }
 }

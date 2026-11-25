@@ -113,7 +113,9 @@ extension BrowseModeDocument {
         // inside a line as an item of its own, and VO-Space presses it; this copy reads the line whole, so VO-Space
         // looks along the line that was heard. Enter and Space keep NVDA's rule: only what is under the caret.
         let lineIndex = buffer.lineIndex(at: position)
-        if byAccessibility, let i = lineIndex, pressOrNameOnLine(i) { return }
+        // 25 Nov 2026: not for text that VO-Right read alone: the control beside it was not heard (still valid only while the position is in that text).
+        let heardTextAlone = itemHeardAlone.map { !$0.isLink && $0.start <= position && position < $0.end } ?? false
+        if byAccessibility, !heardTextAlone, let i = lineIndex, pressOrNameOnLine(i) { return }
         // 17 Nov 2026: VO-Space on plain text says so at once. Recovery is for a control the copy held and the page has
         // since rebuilt (Claude's "Copy code"); plain text never matches one, yet waited out its 150 ms to say so.
         let heldControl = lineIndex.map { i in buffer.lines[i].isControl || !linksOnLine(i).isEmpty } ?? false
