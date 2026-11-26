@@ -44,7 +44,7 @@ extension Config {
         public var focusFollowsCursor = "auto"
         public var cursorMovesFocus: Bool { focusFollowsCursor == "on" || (focusFollowsCursor == "auto" && macKeys) }
         public var macKeys: Bool { style.family == .mac }
-        /// What acts as the TurnOver key: "caps" (Caps Lock), "controlOption" (VoiceOver's VO keys), or "both".
+        /// What acts as the TurnOver key: "caps" (Caps Lock), "controlOption" (VoiceOver's VO keys), "both", or "insert" (Insert / number-pad 0).
         /// Caps Lock or Control Option by default: VoiceOver users reach for Control Option first (5 Oct 2026).
         public var turnOverKey = "both"
         /// Taking over from VoiceOver and handing back: said in words, or a rising and a falling chime.
@@ -98,10 +98,12 @@ extension Config {
         }
         /// How the TurnOver key is spoken in help and the shortcuts list.
         public var turnOverKeyName: String {
-            turnOverKey == "controlOption" ? String(localized: "V O", comment: "The VO key (Control and Option), as spoken")
+            if turnOverKey == "insert" { return String(localized: "insert", comment: "Insert as the TurnOver key, spoken before another key") }
+            return turnOverKey == "controlOption" ? String(localized: "V O", comment: "The VO key (Control and Option), as spoken")
                 : String(localized: "caps", comment: "Caps Lock as the TurnOver key, as spoken before another key")
         }
-        public var capsIsTurnOver: Bool { turnOverKey != "controlOption" }
-        public var controlOptionIsTurnOver: Bool { turnOverKey != "caps" }
+        public var capsIsTurnOver: Bool { turnOverKey != "controlOption" && turnOverKey != "insert" }
+        public var controlOptionIsTurnOver: Bool { turnOverKey != "caps" && turnOverKey != "insert" }
+        public var insertIsTurnOver: Bool { turnOverKey == "insert" }
     }
 }

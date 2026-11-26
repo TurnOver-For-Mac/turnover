@@ -6298,6 +6298,17 @@
         }
       }
     },
+    "Caps Lock is now the TurnOver key" : {
+      "comment" : "Insert is unavailable; recovery modifier",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Теперь Caps Lock — клавиша TurnOver"
+          }
+        }
+      }
+    },
     "Caps Lock or Control Option" : {
       "localizations" : {
         "ru" : {
@@ -10464,6 +10475,9 @@
         }
       }
     },
+    "Hold number-pad 0 with another key to use TurnOver commands. In NVDA and JAWS styles, Clear switches the number pad between commands and numbers. A separate Insert key works too. Caps Lock is the TurnOver key until Insert or number-pad 0 is used on a connected keyboard. Caps Lock becomes the TurnOver key again if that keyboard disconnects, or if numbers mode leaves no separate Insert key." : {
+
+    },
     "Holds the left mouse button down, or lets it go (NVDA+Control+Left Bracket)" : {
       "comment" : "A command, as the key list and keyboard help say it",
       "localizations" : {
@@ -11128,6 +11142,20 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Giriş İzleme açık. TurnOver hazır."
+          }
+        }
+      }
+    },
+    "Insert (number-pad 0)" : {
+
+    },
+    "Insert is available. Caps Lock is now a lock key" : {
+      "comment" : "Insert recovered; modifier fallback ended",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Insert доступна. Caps Lock снова переключает регистр"
           }
         }
       }
@@ -34281,6 +34309,12 @@
         }
       }
     },
+    "insert" : {
+      "comment" : "Insert as the TurnOver key, spoken before another key"
+    },
+    "insert, the TurnOver key" : {
+      "comment" : "Keyboard help: Insert or number-pad zero as the reader modifier"
+    },
     "insertion point" : {
       "comment" : "The caret, as VoiceOver calls it",
       "localizations" : {
@@ -35153,6 +35187,50 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "klavye stili: VoiceOver, NVDA ya da JAWS tuşları"
+          }
+        }
+      }
+    },
+    "keypad commands. Caps Lock is now the TurnOver key" : {
+      "comment" : "Clear coincided with Insert removal",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Команды на цифровой клавиатуре. Теперь Caps Lock — клавиша TurnOver"
+          }
+        }
+      }
+    },
+    "keypad commands. Insert is available. Caps Lock is now a lock key" : {
+      "comment" : "Clear changed both keypad mode and the recovery modifier",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Команды на цифровой клавиатуре. Insert доступна. Caps Lock снова переключает регистр"
+          }
+        }
+      }
+    },
+    "keypad numbers. Caps Lock is now the TurnOver key" : {
+      "comment" : "Clear changed both keypad mode and the recovery modifier",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цифры на цифровой клавиатуре. Теперь Caps Lock — клавиша TurnOver"
+          }
+        }
+      }
+    },
+    "keypad numbers. Insert is available. Caps Lock is now a lock key" : {
+      "comment" : "Clear coincided with a separate Insert becoming available",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цифры на цифровой клавиатуре. Insert доступна. Caps Lock снова переключает регистр"
           }
         }
       }

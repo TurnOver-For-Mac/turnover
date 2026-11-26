@@ -17,17 +17,23 @@ import TurnOverCore
 // The remap and the layer run on the key tap's own thread: nothing here is the main actor's.
 nonisolated enum WindowsRemap {
     // The application in front, kept up to date from the main thread; read on the key threads.
-    private static let lock = NSLock()
-    nonisolated(unsafe) private static var _front = ""   // under `lock`
-    static var front: String { lock.lock(); defer { lock.unlock() }; return _front }
-    nonisolated(unsafe) private static var token: NSObjectProtocol?   // main thread only
+    struct FrontApp: Sendable {
+        var bundle: String = ""
+        var pid: Int32 = 0
+    }
+    private static let foreground = Locked(FrontApp())
+    static var frontApp: FrontApp { foreground.value }
+    static var front: String { frontApp.bundle }
+    @MainActor private static var token: NSObjectProtocol?
 
-    static func watchFrontApp() {
+    @MainActor static func watchFrontApp() {
         guard token == nil else { return }
-        @Sendable func set(_ b: String?) { lock.lock(); _front = b ?? ""; lock.unlock() }
-        set(NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
+        @Sendable func set(_ app: NSRunningApplication?) {
+            foreground.value = FrontApp(bundle: app?.bundleIdentifier ?? "", pid: app?.processIdentifier ?? 0)
+        }
+        set(NSWorkspace.shared.frontmostApplication)
         token = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { n in
-            set((n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.bundleIdentifier)
+            set(n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)
         }
     }
 
@@ -96,73 +102,128 @@ nonisolated enum WindowsRemap {
 /// are posted as a hand presses them, each modifier down in turn: VoiceOver ignored a key carrying the flags alone
 /// (Windy, 17 Oct 2026). Caps Lock's presses are read from the HID manager and the system's caps state kept off.
 /// Where TurnOver reads, TurnOver's own key tap has the keys and this layer is stopped.
-nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // its state belongs to the tap thread
+nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // callbacks and key state belong to one worker; lifecycle transitions use lifecycle.lock
     static let shared = WindowsKeyLayer()
-    private var thread: Thread?
-    private var runLoop: CFRunLoop?
+    private struct Lifecycle {
+        var session = KeyboardSessionState()
+        var runLoop: CFRunLoop?
+    }
+    private let lifecycle = Locked(Lifecycle())
     /// What one tap thread set up, torn down by that thread and no other: a stop and a start at once (a style change,
     /// or the layer refreshed on activation) had the old thread's tear-down clear the new thread's tap (issue 53;
     /// KeyboardHandler's Layer did the same for TurnOver's own tap, 8 Oct 2026).
-    private final class Layer { var tap: CFMachPort?; var manager: IOHIDManager?; var connect: io_connect_t = 0 }
+    private final class Layer {
+        let generation: UInt64
+        var tap: CFMachPort?
+        var manager: IOHIDManager?
+        var connect: io_connect_t = 0
+        var keypadRouter = KeypadEventRouter()
+
+        init(_ generation: UInt64) { self.generation = generation }
+    }
     private var layer: Layer?
     private var tap: CFMachPort? { layer?.tap }
     private var connect: io_connect_t { layer?.connect ?? 0 }
     private var capsDown = false
+    private var capsPress = CapsPressState()
+    private var realCapsOn = false
+    private var capsStateTimestamp: UInt64 = 0
     private var swallowedUps = Set<Int64>()
     private var browse = false
     private var passNext = false
     private var loneCommand = LoneModifier()
     private var loneOption = LoneModifier(), optionCode: Int64 = 0
 
-    var isOn: Bool { thread != nil }
+    var isOn: Bool {
+        lifecycle.lock.lock()
+        defer { lifecycle.lock.unlock() }
+        return lifecycle.unsafeValue.session.requested != nil
+    }
 
-    func start() {
-        MainActor.assumeIsolated { Self.buildStyleChords() }   // start() is called on the main thread (refreshWindowsLayer); again on a style change while running
-        guard thread == nil else { return }
+    private func isRequested(_ generation: UInt64) -> Bool {
+        lifecycle.lock.lock()
+        defer { lifecycle.lock.unlock() }
+        return lifecycle.unsafeValue.session.isRequested(generation)
+    }
+
+    @MainActor func start() {
+        InsertHardware.start()
+        Self.buildStyleChords()
         WindowsRemap.watchFrontApp()
-        let mine = Layer()
-        layer = mine
+        lifecycle.lock.lock()
+        _ = lifecycle.unsafeValue.session.requestStart()
+        let worker = lifecycle.unsafeValue.session.beginWorker()
+        lifecycle.lock.unlock()
+        if let worker { startWorker(worker) }
+    }
+
+    private func startWorker(_ generation: UInt64) {
         let t = Thread { [self] in
-            runLoop = CFRunLoopGetCurrent()
-            let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching(kIOHIDSystemClass))
-            if service != 0 { IOServiceOpen(service, mach_task_self_, UInt32(kIOHIDParamConnectType), &mine.connect); IOObjectRelease(service) }
-            openHID(mine)
-            let mask = CGEventMask(1 << CGEventType.flagsChanged.rawValue | 1 << CGEventType.keyDown.rawValue | 1 << CGEventType.keyUp.rawValue)
-            guard let tp = CGEvent.tapCreate(tap: .cghidEventTap, place: .headInsertEventTap, options: .defaultTap, eventsOfInterest: mask, callback: { _, type, event, refcon in
-                guard let refcon else { return Unmanaged.passUnretained(event) }
-                return Unmanaged<WindowsKeyLayer>.fromOpaque(refcon).takeUnretainedValue().handle(type, event)
-            }, userInfo: Unmanaged.passUnretained(self).toOpaque()) else {
-                // What was opened is closed, and the layer let go, so the next start isn't refused (a review, 3 Nov 2026).
-                Log.error("NVDA keys where VoiceOver reads: no event tap")
-                if let m = mine.manager { IOHIDManagerClose(m, IOOptionBits(kIOHIDOptionsTypeNone)) }
-                if mine.connect != 0 { IOServiceClose(mine.connect) }
-                if layer === mine { layer = nil; thread = nil; runLoop = nil }
-                return
+            let rl = CFRunLoopGetCurrent()!   // Core Foundation always creates a run loop for the calling thread.
+            lifecycle.lock.lock()
+            lifecycle.unsafeValue.runLoop = rl
+            lifecycle.lock.unlock()
+            let mine = Layer(generation)
+            layer = mine
+            if isRequested(generation) { setUp(mine) }
+            let workerHasTap = mine.tap != nil
+            if workerHasTap,
+               isRequested(generation) { CFRunLoopRun() }
+            if let tp = mine.tap {
+                CGEvent.tapEnable(tap: tp, enable: false)
+                CFMachPortInvalidate(tp)
             }
-            mine.tap = tp
-            CFRunLoopAddSource(CFRunLoopGetCurrent(), CFMachPortCreateRunLoopSource(nil, tp, 0), .defaultMode)
-            Log.info("NVDA keys where VoiceOver reads: on")
-            CFRunLoopRun()
-            if let tp = mine.tap { CGEvent.tapEnable(tap: tp, enable: false) }
-            mine.tap = nil
-            if let m = mine.manager { IOHIDManagerClose(m, IOOptionBits(kIOHIDOptionsTypeNone)) }
-            mine.manager = nil
-            if mine.connect != 0 { IOServiceClose(mine.connect); mine.connect = 0 }
-            // The key state is the running layer's: a newer thread's is left alone.
-            if layer === mine { layer = nil; capsDown = false; browse = false; swallowedUps.removeAll() }
-            Log.info("NVDA keys where VoiceOver reads: off")
+            if let m = mine.manager {
+                IOHIDManagerUnscheduleFromRunLoop(m, rl, CFRunLoopMode.defaultMode.rawValue)
+                IOHIDManagerClose(m, IOOptionBits(kIOHIDOptionsTypeNone))
+            }
+            if mine.connect != 0 { IOServiceClose(mine.connect) }
+            layer = nil
+            capsDown = false; capsPress = CapsPressState()
+            browse = false
+            passNext = false
+            swallowedUps.removeAll()
+            loneCommand.cancel()
+            loneOption.cancel()
+            lifecycle.lock.lock()
+            lifecycle.unsafeValue.runLoop = nil
+            lifecycle.unsafeValue.session.finished(generation)
+            let next = lifecycle.unsafeValue.session.beginWorker()
+            lifecycle.lock.unlock()
+            if let next { startWorker(next) }
         }
         t.name = "turnover.windowskeys"
         t.qualityOfService = .userInteractive
-        thread = t
         t.start()
     }
 
+    private func setUp(_ mine: Layer) {
+        let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching(kIOHIDSystemClass))
+        if service != 0 {
+            IOServiceOpen(service, mach_task_self_, UInt32(kIOHIDParamConnectType), &mine.connect)
+            IOObjectRelease(service)
+        }
+        openHID(mine)
+        let mask = CGEventMask(1 << CGEventType.flagsChanged.rawValue | 1 << CGEventType.keyDown.rawValue | 1 << CGEventType.keyUp.rawValue)
+        guard let tp = CGEvent.tapCreate(tap: .cghidEventTap, place: .headInsertEventTap, options: .defaultTap, eventsOfInterest: mask, callback: { _, type, event, refcon in
+            guard let refcon else { return Unmanaged.passUnretained(event) }
+            return Unmanaged<WindowsKeyLayer>.fromOpaque(refcon).takeUnretainedValue().handle(type, event)
+        }, userInfo: Unmanaged.passUnretained(self).toOpaque()) else {
+            Log.error("NVDA keys where VoiceOver reads: no event tap")
+            return
+        }
+        mine.tap = tp
+        CFRunLoopAddSource(CFRunLoopGetCurrent(), CFMachPortCreateRunLoopSource(nil, tp, 0), .defaultMode)
+    }
+
     func stop() {
-        guard let rl = runLoop else { thread = nil; return }
+        lifecycle.lock.lock()
+        lifecycle.unsafeValue.session.requestStop()
+        let rl = lifecycle.unsafeValue.runLoop
+        lifecycle.lock.unlock()
+        guard let rl else { return }
         CFRunLoopPerformBlock(rl, CFRunLoopMode.defaultMode.rawValue) { CFRunLoopStop(rl) }
         CFRunLoopWakeUp(rl)
-        thread = nil; runLoop = nil
     }
 
     private func openHID(_ mine: Layer) {
@@ -176,13 +237,30 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // its state be
         IOHIDManagerScheduleWithRunLoop(m, CFRunLoopGetCurrent(), CFRunLoopMode.defaultMode.rawValue)
         IOHIDManagerOpen(m, IOOptionBits(kIOHIDOptionsTypeNone))
         mine.manager = m
+        if connect != 0, IOHIDGetModifierLockState(connect, Int32(kIOHIDCapsLockState), &realCapsOn) == KERN_SUCCESS {
+            capsStateTimestamp = DispatchTime.now().uptimeNanoseconds
+        }
     }
 
     private func caps(_ value: IOHIDValue) {
-        guard KeySettings.current.capsIsTurnOver else { capsDown = false; return }
-        capsDown = IOHIDValueGetIntegerValue(value) != 0
-        // The system's caps state stays off: Caps Lock is the NVDA key, not a lock.
-        if connect != 0 { IOHIDSetModifierLockState(connect, Int32(kIOHIDCapsLockState), false) }
+        guard let layer,
+              isRequested(layer.generation) else { return }
+        capsChanged(pressed: IOHIDValueGetIntegerValue(value) != 0,
+                    timestamp: KeyboardEventTime.nanoseconds(IOHIDValueGetTimeStamp(value)))
+    }
+
+    func capsChanged(pressed: Bool, timestamp: UInt64) {
+        let settings = KeySettings.current
+        if pressed, !capsPress.down, settings.insertIsTurnOver, settings.capsIsTurnOver,
+           let snapshot = CapsLockRecovery.current.value,
+           snapshot.timestamp > capsStateTimestamp, snapshot.timestamp <= timestamp {
+            realCapsOn = snapshot.on
+            capsStateTimestamp = snapshot.timestamp
+        }
+        let owned = capsPress.update(down: pressed, timestamp: timestamp, settings: settings)
+        if owned { capsStateTimestamp = max(capsStateTimestamp, timestamp) }
+        capsDown = pressed && owned
+        if owned, connect != 0 { IOHIDSetModifierLockState(connect, Int32(kIOHIDCapsLockState), KeySettings.current.insertIsTurnOver ? realCapsOn : false) }
     }
 
     // MARK: The keys
@@ -295,27 +373,109 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // its state be
     }()
 
     private func handle(_ type: CGEventType, _ event: CGEvent) -> Unmanaged<CGEvent>? {
+        if event.getIntegerValueField(.eventSourceUserData) == KeyboardHandler.marker { return Unmanaged.passUnretained(event) }
+        if InsertModifier.continueEvent(type, event: event) {
+            loneCommand.cancel()
+            loneOption.cancel()
+            return nil
+        }
+        if let continuation = KeypadApplicationDelivery.continueEvent(owner: ObjectIdentifier(self), type, event) {
+            loneCommand.cancel()
+            loneOption.cancel()
+            return continuation
+        }
+        let code = event.getIntegerValueField(.keyboardEventKeycode)
+        let flags = event.flags
+        let result = dispatchEvent(type, event)
+        if type == .keyDown,
+           let delivered = result?.takeUnretainedValue() {
+            let queued = KeypadApplicationDelivery.deliverDown(owner: ObjectIdentifier(self), code: code, flags: flags, event: delivered)
+            layer?.keypadRouter.passedToApplication(code: code)
+            if queued { return nil }
+        }
+        if let delivered = result?.takeUnretainedValue(),
+           KeypadApplicationDelivery.deferSession(delivered) { return nil }
+        return result
+    }
+
+    private func dispatchEvent(_ type: CGEventType, _ event: CGEvent) -> Unmanaged<CGEvent>? {
+        guard let generation = layer?.generation,
+              isRequested(generation) else { return Unmanaged.passUnretained(event) }
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            layer?.keypadRouter.reset()
             if let t = tap { CGEvent.tapEnable(tap: t, enable: true) }
             return Unmanaged.passUnretained(event)
         }
         if event.getIntegerValueField(.eventSourceUserData) == KeyboardHandler.marker { return Unmanaged.passUnretained(event) }
-        guard KeySettings.current.windowsKeys else { return Unmanaged.passUnretained(event) }
+        let settings = KeySettings.current
+        guard settings.windowsKeys else {
+            layer?.keypadRouter.reset()
+            return Unmanaged.passUnretained(event)
+        }
         let code = event.getIntegerValueField(.keyboardEventKeycode)
         let flags = event.flags
+        let insertEnabled = settings.insertIsTurnOver
+            && !passNext
+        let insert = InsertModifier.handle(type, event: event, enabled: insertEnabled, settings: settings)
+        if insert.consumed {
+            loneCommand.cancel()
+            loneOption.cancel()
+            return nil
+        }
+        let capsModifierDown = capsDown
+            && (settings.capsIsTurnOver || capsPress.retainedFallback(settings: settings))
+        let readerModifierDown = capsModifierDown
+            || insert.held
+        if let mine = layer {
+            let jawsDesktop = settings.keyboardStyle == .jaws
+                && settings.desktopLayout
+            switch mine.keypadRouter.route(type, code: code, flags: flags,
+                                           isRepeat: event.getIntegerValueField(.keyboardEventAutorepeat) != 0,
+                                           settings: settings, modifierHeld: readerModifierDown, passNext: passNext,
+                                           modeOnly: !jawsDesktop) {
+            case .unhandled: break
+            case .consume: return nil
+            case .toggleNumbers:
+                onMain { Keypad.toggleWindows(announce: { Self.say($0) }) }
+                return nil
+            case .command(_, let action):
+                if let key = JAWSKeypad.voiceOverKey(for: action),
+                   let target = Self.target(key) { Self.post(target) }
+                else { Self.say(String(localized: "not available here", comment: "Spoken message")) }
+                return nil
+            }
+        }
         if type == .flagsChanged {
-            if code == 57, KeySettings.current.capsIsTurnOver { return nil }   // Caps Lock's own event: the NVDA key
+            if code == 57 {
+                let timestamp = KeyboardEventTime.quartzNanoseconds(event.timestamp)
+                if capsPress.capturesFlags(at: timestamp, settings: settings) { return nil }
+                if timestamp >= capsStateTimestamp {
+                    realCapsOn = event.flags.contains(.maskAlphaShift)
+                    capsStateTimestamp = timestamp
+                }
+            }   // Caps Lock's own event: the NVDA key
             // The lone taps: Command alone the menu bar, left Option the Dock, right Option the shortcut menu. Not while
             // secure input is on: no key between is heard (LoneModifier).
             let secure = IsSecureEventInputEnabled()
-            if code == 55 || code == 54 {
-                if flags.contains(.maskCommand) { loneCommand.down(alone: flags.intersection([.maskControl, .maskAlternate, .maskShift]).isEmpty && !capsDown, secureInput: secure) }
+            let commandKey = code == 55
+                || code == 54
+            if commandKey {
+                if flags.contains(.maskCommand) {
+                    let commandAlone = flags.intersection([.maskControl, .maskAlternate, .maskShift]).isEmpty
+                        && !readerModifierDown
+                    loneCommand.down(alone: commandAlone, secureInput: secure)
+                }
                 else if loneCommand.up(secureInput: secure) { Self.post(Target(code: 120, flags: .maskControl)) }
                 else if loneCommand.setAsideForSecureInput { Log.io("NVDA keys where VoiceOver reads: command released alone with secure input on: not taken") }
             } else { loneCommand.cancel() }
-            if code == 58 || code == 61 {
+            let optionKey = code == 58
+                || code == 61
+            if optionKey {
                 if flags.contains(.maskAlternate) {
-                    loneOption.down(alone: flags.intersection([.maskControl, .maskCommand, .maskShift]).isEmpty && !capsDown && optionCode == 0, secureInput: secure)
+                    let optionAlone = flags.intersection([.maskControl, .maskCommand, .maskShift]).isEmpty
+                        && !readerModifierDown
+                        && optionCode == 0
+                    loneOption.down(alone: optionAlone, secureInput: secure)
                     optionCode = code
                 } else {
                     if loneOption.up(secureInput: secure) {
@@ -338,8 +498,21 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // its state be
         if passNext { passNext = false; return Unmanaged.passUnretained(event) }
         let shift = flags.contains(.maskShift), control = flags.contains(.maskControl)
         let plain = !flags.contains(.maskCommand) && !flags.contains(.maskAlternate)
-        if capsDown, plain {
+        if readerModifierDown,
+           plain {
             swallowedUps.insert(code)
+            var mods: Modifiers = .turnover
+            if shift { mods.insert(.shift) }
+            if control { mods.insert(.control) }
+            if let action = VoiceOverKeyPolicy.command(style: settings.keyboardStyle, code: code, modifiers: mods) {
+                switch action {
+                case .settings: onMain { TurnOverMenu.shared.openSettings() }
+                case .passNext:
+                    passNext = true
+                    Self.say(String(localized: "pass next key through", comment: "Spoken message"))
+                }
+                return nil
+            }
             switch (code, shift, control) {
             case (49, false, false):   // NVDA+Space: browse mode on and off
                 browse.toggle()
@@ -348,10 +521,6 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // its state be
             case (111, false, false):  // NVDA+F12: the time
                 let f = DateFormatter(); f.dateStyle = .none; f.timeStyle = .short
                 Self.say(f.string(from: Date()))
-                return nil
-            case (120, false, false):  // NVDA+F2: the next key passes untouched
-                passNext = true
-                Self.say(String(localized: "pass next key through", comment: "Spoken message"))
                 return nil
             case (45, false, false):   // NVDA+N: TurnOver's menu
                 DispatchQueue.main.async { MainActor.assumeIsolated { MenuAnywhere.shared.open() } }
@@ -369,13 +538,20 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // its state be
             Log.io("NVDA keys where VoiceOver reads: key \(code) has no VoiceOver twin")
             return nil
         }
-        if browse, !capsDown, plain, !control, let target = Self.letters[code] {
+        if browse,
+           !readerModifierDown,
+           plain,
+           !control,
+           let target = Self.letters[code] {
             swallowedUps.insert(code)
             Self.post(Target(code: target, flags: Self.vo.union(.maskCommand).union(shift ? .maskShift : [])))
             return nil
         }
         // The Windows key's own chords, on Option (where the PC's Windows key sits).
-        if flags.contains(.maskAlternate), !flags.contains(.maskCommand), !control, !capsDown {
+        if flags.contains(.maskAlternate),
+           !flags.contains(.maskCommand),
+           !control,
+           !readerModifierDown {
             var done = true
             switch code {
             case 14: DispatchQueue.main.async { NSWorkspace.shared.openApplication(at: URL(fileURLWithPath: "/System/Library/CoreServices/Finder.app"), configuration: NSWorkspace.OpenConfiguration()) }   // E: Finder
@@ -440,15 +616,28 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // its state be
         return Unmanaged.passUnretained(event)
     }
 
+    /// Availability reports belong to this reader generation, not to a later handover.
+    @MainActor func sayAvailability(_ text: String, fallback: Bool) {
+        guard let generation = lifecycle.value.session.requested else { return }
+        DispatchQueue.global(qos: .userInitiated).async { [self] in
+            let settings = KeySettings.current
+            guard isRequested(generation), settings.insertIsTurnOver, settings.windowsKeys,
+                  settings.capsIsTurnOver == fallback, HandOver.voiceOverReading else { return }
+            Self.sendVoiceOverMessage(text)
+        }
+    }
+
     /// Words said through VoiceOver, the reader here: its own `output` command, as a bare Apple event.
     static func say(_ text: String) {
-        DispatchQueue.global(qos: .userInitiated).async {
-            let target = NSAppleEventDescriptor(bundleIdentifier: "com.apple.VoiceOver")
-            let event = NSAppleEventDescriptor(eventClass: 0x564F4153 /* VOAS */, eventID: 0x6F757470 /* outp */, targetDescriptor: target,
-                                               returnID: AEReturnID(kAutoGenerateReturnID), transactionID: AETransactionID(kAnyTransactionID))
-            event.setParam(NSAppleEventDescriptor(string: text), forKeyword: AEKeyword(keyDirectObject))
-            _ = try? event.sendEvent(options: [.noReply, .neverInteract, .dontRecord], timeout: 1)
-        }
+        DispatchQueue.global(qos: .userInitiated).async { sendVoiceOverMessage(text) }
+    }
+
+    private static func sendVoiceOverMessage(_ text: String) {
+        let target = NSAppleEventDescriptor(bundleIdentifier: "com.apple.VoiceOver")
+        let event = NSAppleEventDescriptor(eventClass: 0x564F4153 /* VOAS */, eventID: 0x6F757470 /* outp */, targetDescriptor: target,
+                                           returnID: AEReturnID(kAutoGenerateReturnID), transactionID: AETransactionID(kAnyTransactionID))
+        event.setParam(NSAppleEventDescriptor(string: text), forKeyword: AEKeyword(keyDirectObject))
+        _ = try? event.sendEvent(options: [.noReply, .neverInteract, .dontRecord], timeout: 1)
     }
 
     private static let posting = DispatchQueue(label: "turnover.windowskeys.post")

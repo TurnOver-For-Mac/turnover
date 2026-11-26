@@ -9,7 +9,10 @@ import Foundation
 nonisolated public struct KeySettings: Sendable {
     public var capsIsTurnOver = true
     public var controlOptionIsTurnOver = true
+    public var insertIsTurnOver = false
     public var windowsKeys = false
+    public var keyboardStyle: KeyboardStyle = .voiceOver
+    public var desktopLayout = false
     public var speakCommandKeys = true
     public var optionCommander = true
     public var numpadCommander = false
@@ -19,12 +22,18 @@ nonisolated public struct KeySettings: Sendable {
     nonisolated(unsafe) private static var _current = KeySettings()   // under `lock`
 
     /// A copy for the keyboard thread. Any thread.
-    public static var current: KeySettings { lock.lock(); defer { lock.unlock() }; return _current }
+    public static var current: KeySettings {
+        lock.lock(); var snapshot = _current; lock.unlock()
+        if snapshot.insertIsTurnOver {
+            snapshot.capsIsTurnOver = !InsertAvailability.current.value.isAvailable(keypadCommands: snapshot.keypadCommands)
+        }
+        return snapshot
+    }
 
     /// Take the values from `config`. Main thread.
     @MainActor public static func refresh() {
         let s = KeySettings(capsIsTurnOver: config.general.capsIsTurnOver, controlOptionIsTurnOver: config.general.controlOptionIsTurnOver,
-                            windowsKeys: config.general.windowsKeys, speakCommandKeys: config.keyboard.speakCommandKeys,
+                            insertIsTurnOver: config.general.insertIsTurnOver, windowsKeys: config.general.windowsKeys, keyboardStyle: config.general.style, desktopLayout: config.keyboard.layout == "desktop", speakCommandKeys: config.keyboard.speakCommandKeys,
                             optionCommander: config.keyboard.optionCommander, numpadCommander: config.keyboard.numpadCommander,
                             keypadCommands: config.keyboard.keypadCommands)
         lock.lock(); _current = s; lock.unlock()

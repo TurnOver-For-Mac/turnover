@@ -222,6 +222,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         HandOver.shutdown.begin()   // first: no hand-over may turn VoiceOver off from here on (18 Nov 2026)
         ScreenCurtain.off()   // macOS would restore the displays anyway; say so in the log
         app?.shutDown()   // the tap first: nothing of TurnOver's takes a key once it is going
+        KeypadApplicationDelivery.finishForExit()
         // TurnOver gone: VoiceOver comes back so the user is never left with no speech (the guide promised it;
         // quitting used to leave VoiceOver off, 3 Oct 2026).
         Core.stop()
@@ -339,6 +340,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 CGDisplayRestoreColorSyncSettings()   // the curtain's own undo, without main
                 Log.warning("stopped from outside: the main thread didn't answer; the displays restored directly")
             }
+            // This is the emergency stop path: do not wait for queued typing before restoring speech.
+            // Ordinary application termination drains accepted output in applicationWillTerminate.
             Watchdog.shared.active = false
             // VoiceOver left off on purpose: the Key helper is told this was a quit, or it would start TurnOver
             // again (Codex review, 23 Oct 2026). A restart keeps its flag and the helper's recovery.

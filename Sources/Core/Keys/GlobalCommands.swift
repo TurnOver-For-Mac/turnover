@@ -573,7 +573,7 @@ public final class GlobalCommands: ScriptableObject {
         items += BrailleHelp.shortcutItems()
         let speechKeys = config.general.windowsKeys ? String(localized: "Control alone stops speech; Shift alone pauses it and carries on, but not while secure input is on", comment: "In the key list")
             : String(localized: "Control alone pauses speech, and again carries on", comment: "In the key list")
-        items.append(MenuItem(verbatim: speechKeys + (config.general.capsIsTurnOver ? String(localized: ". Caps Lock pressed twice toggles caps lock", comment: "In the key list, after the speech keys") : ""), .action {}))
+        items.append(MenuItem(verbatim: speechKeys + (KeySettings.current.capsIsTurnOver ? String(localized: ". Caps Lock pressed twice toggles caps lock", comment: "In the key list, after the speech keys") : ""), .action {}))
         items.append(MenuItem(verbatim: String(localized: "Command Control Comma opens the TurnOver menu in any app", comment: "In the key list"), .action {}))
         TurnOverMenu.shared.openList("Shortcuts", items: items)
     }
