@@ -319,7 +319,18 @@ public final class WebTextInfo: TextInfo {
         var prefix: [String] = []
         pendingTones.removeAll()
         chain = elementsAtStart()
+        // A data table: its size on arrival and its row as it changes (WebTableNews); both are already in the chain.
+        // Only against a last reading: without one every container here is said, "table" with them, as before.
+        let found: (table: AXUIElement?, row: AXUIElement?) = previousChain != nil && config.documentFormatting.tables != .off
+            ? WebTableNews.tableAndRow(inChainNearestFirst: chain) : (nil, nil)
+        let (table, row) = found
         for el in chain.reversed() {
+            if let t = table, el.isSame(t) {
+                let n = WebTableNews.news(table: t, row: row, previousChain: previousChain, beginsHere: false)
+                if n.tone { pendingTones.append { Tones.table() } }
+                prefix.append(contentsOf: n.words)
+                continue
+            }
             if let prev = previousChain, prev.contains(where: { $0.isSame(el) }) { continue }
             let (mode, tone) = Self.reporting(for: el)
             switch mode {

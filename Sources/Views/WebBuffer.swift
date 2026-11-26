@@ -38,8 +38,14 @@ public final class WebBuffer {
         public let fields: [String]
         /// The last piece of a wrapped line owns the break after it; earlier pieces end at a space.
         public let hasBreak: Bool
-        public init(start: Int, end: Int, element: AXUIElement?, entering: [AXUIElement], isControl: Bool, fields: [String], hasBreak: Bool) {
+        /// The data table (AXTable) and its row (AXRow) this line is inside, noted while the buffer is built so that reading a
+        /// line asks nothing up the tree (26 Nov 2026).
+        public let table: AXUIElement?
+        public let row: AXUIElement?
+        public init(start: Int, end: Int, element: AXUIElement?, entering: [AXUIElement], isControl: Bool, fields: [String], hasBreak: Bool,
+                    table: AXUIElement? = nil, row: AXUIElement? = nil) {
             self.start = start; self.end = end; self.element = element; self.entering = entering; self.isControl = isControl; self.fields = fields; self.hasBreak = hasBreak
+            self.table = table; self.row = row
         }
         public var endWithBreak: Int { end + (hasBreak ? 1 : 0) }
     }
@@ -150,6 +156,8 @@ public final class WebBuffer {
     private var currentElement: AXUIElement?
     private var pendingEntering: [AXUIElement] = []
     private var containerStack: [AXUIElement] = []
+    /// The open tables, grids and rows (outermost first), for the table and row each line is inside.
+    private var tableRowStack: [(element: AXUIElement, role: String)] = []
     private var linkDepth = 0
     private var newLines: [Line] = []
     private var newSegments: [Segment] = []
@@ -307,7 +315,7 @@ public final class WebBuffer {
         walkOmissions = collection.omittedElements
         collectionWasCut = [.visits, .deadline, .queries, .axQueries].contains(collection.stop)
         collection.snapshot.with {
-            out = ""; outLength = 0; current = []; currentElement = nil; pendingEntering = []; containerStack = []; linkDepth = 0
+            out = ""; outLength = 0; current = []; currentElement = nil; pendingEntering = []; containerStack = []; tableRowStack = []; linkDepth = 0
             newLines = []; newSegments = []; newContainers = []; visited = 0
             frames = []; resumeFrames = []; stopped = false; resumeElement = nil; resumePending = []; edgeChain = []; textPieces = 0; passes = 1
             checkpoints = []
@@ -599,6 +607,7 @@ public final class WebBuffer {
         currentElement = wasStopped ? resumeElement : nil
         pendingEntering = wasStopped ? resumePending : []
         containerStack = frames.filter(\.announced).map(\.element)
+        tableRowStack = frames.filter { Self.tableRowRoles.contains($0.role) }.map { ($0.element, $0.role) }
         linkDepth = frames.filter(\.isLink).count
         // The deepest first: from the child not read (after a stop) or after its last; then each container around it,
         // from the child after the one it was in.
@@ -662,12 +671,13 @@ public final class WebBuffer {
         resumeElement = c.resumeElement; resumePending = c.resumePending; checkpoints = c.checkpoints
         passes = c.passes; textPieces = c.textPieces; elementCount = c.elementCount
         docText = c.docText; docCursor = c.docCursor; lastTextEnd = c.lastTextEnd
-        frames = []; edgeChain = []; current = []; currentElement = nil; pendingEntering = []; containerStack = []; linkDepth = 0
+        frames = []; edgeChain = []; current = []; currentElement = nil; pendingEntering = []; containerStack = []; tableRowStack = []; linkDepth = 0
     }
 
     static let controlRoles: Set<String> = ["AXButton", "AXPopUpButton", "AXComboBox", "AXTextField", "AXTextArea", "AXCheckBox", "AXRadioButton", "AXMenuItem", "AXSlider", "AXMenuButton", "AXIncrementor", "AXDisclosureTriangle", "AXColorWell", "AXDateField", "AXTimeField"]
     static let blockRoles: Set<String> = ["AXGroup", "AXWebArea", "AXHeading", "AXList", "AXTable", "AXRow", "AXOutline", "AXScrollArea", "AXSplitGroup", "AXTabGroup", "AXToolbar", "AXLayoutArea", "AXGrid", "AXLandmark", "AXBlockQuote", "AXDocument", "AXCell"]
     static let skipRoles: Set<String> = ["AXScrollBar", "AXSplitter", "AXValueIndicator", "AXRuler", "AXHelpTag"]
+    static let tableRowRoles: Set<String> = ["AXTable", "AXGrid", "AXRow"]
     static let announcedContainers: Set<String> = ["AXHeading", "AXList", "AXTable", "AXBlockQuote", "AXMenuBar", "AXToolbar"]
     /// Group subroles announced on entering, as landmarks are: Chromium's dialogs and alerts (Day 3, 10 Oct 2026).
     static let announcedSubroles: Set<String> = ["AXApplicationDialog", "AXApplicationAlertDialog", "AXApplicationAlert"]
@@ -829,6 +839,7 @@ public final class WebBuffer {
             let block = Self.blockRoles.contains(role) || isLandmark || sub == "AXListItem" || role == "AXMenuBar" || Self.announcedSubroles.contains(sub)
             if block { flush() }
             if announced { pendingEntering.append(el); containerStack.append(el) }
+            if Self.tableRowRoles.contains(role) { tableRowStack.append((el, role)) }
             if block, currentElement == nil { currentElement = el }
             // Each item of a list is a line of its own: Chromium's listbox options are bare texts, and with no line
             // break between them on the page they ran together ("Google DocsExample Doc"; Google Drive's file list).
@@ -888,6 +899,7 @@ public final class WebBuffer {
             if frame.ownLine { flush() }
         } else {
             if frame.isBlock { flush() }
+            if Self.tableRowRoles.contains(frame.role) { tableRowStack.removeLast() }
             if frame.announced { containerStack.removeLast(); pendingEntering.removeAll { $0.isSame(frame.element) } }
             if frame.announced, frame.role != "AXHeading", outLength > frame.start {
                 // NVDA's comma; one opened again by reading on had its span cut where the pass stopped: lengthened.
@@ -941,8 +953,14 @@ public final class WebBuffer {
         // Wrap at the configured length, breaking at spaces.
         let maxLen = max(20, config.virtualBuffers.maxLineLength)
         var first = true
+        // The data table and row this line is in: the nearest table (a grid is none) and the row just inside it.
+        var table: AXUIElement?, row: AXUIElement?
+        if let t = tableRowStack.lastIndex(where: { $0.role != "AXRow" }), tableRowStack[t].role == "AXTable" {
+            table = tableRowStack[t].element
+            row = tableRowStack[(t + 1)...].last(where: { $0.role == "AXRow" })?.element
+        }
         for (a, b) in Self.wrapPieces(full as NSString, maxLen: maxLen) {
-            newLines.append(Line(start: lineStart + a, end: lineStart + b, element: currentElement, entering: first ? entering : [], isControl: control, fields: first ? fields : [], hasBreak: b == (full as NSString).length))
+            newLines.append(Line(start: lineStart + a, end: lineStart + b, element: currentElement, entering: first ? entering : [], isControl: control, fields: first ? fields : [], hasBreak: b == (full as NSString).length, table: table, row: row))
             first = false
         }
         _ = totalEnd

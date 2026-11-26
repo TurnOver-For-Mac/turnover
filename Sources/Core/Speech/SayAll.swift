@@ -4,8 +4,12 @@
 // each chunk starts to play, the caret is moved to it, so stopping leaves the
 // caret where the reading was.
 import Foundation
+import ApplicationServices
 
 public enum SayAll {
+    /// The containers the last chunk from the reading view was in, so that a chunk in a table says only what changed,
+    /// as arrowing does: with none, each chunk would say the table's size again (WebTableNews; review, 26 Nov 2026).
+    private static var lastWebChain: [AXUIElement]?
     private static var reader: TextInfo? {
         didSet { runningLock.lock(); running = reader != nil; runningLock.unlock() }
     }
@@ -48,6 +52,7 @@ public enum SayAll {
         reader = info
         buffered = 0
         generation += 1
+        lastWebChain = nil
         firstChunk = true
         hearing = nil
         Log.io("say all from \(info.start)")
@@ -62,9 +67,11 @@ public enum SayAll {
         let obj = r.obj
         let chunk = r.copy()
         let webRange = chunk as? BufferTextInfo
+        webRange?.previousChain = lastWebChain
         r.collapse(toEnd: true)
         var blank = false
         let text = Speech.textInfoSpeech(chunk, unit: .readingChunk, reason: .sayAll, onlyBlank: &blank)
+        if let webRange { lastWebChain = webRange.chain }
         nonisolated(unsafe) let tones = Speech.takeSayAllTones()   // sounded as this chunk starts, below (run on main there)
         // By TurnOver's own mark for an empty range, not by the words: a paragraph that is just "blank" is read.
         if blank || Speech.cleaned(text).isEmpty {
