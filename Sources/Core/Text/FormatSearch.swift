@@ -38,6 +38,18 @@ package enum FormatSearch {
     package static func search(kind: Kind, n: Int, caret: Int, forward: Bool, chunk: Int = FormatSearch.chunk, budget: TimeInterval = FormatSearch.budget,
                        fetch: (_ lo: Int, _ hi: Int) -> NSAttributedString?) -> Outcome {
         let started = Date()
+        // An app may answer a big range with less than was asked for (TextEdit seems to): the text read starts at `lo` and
+        // stops short. A chunk is complete only once what came back covers it, so the rest is read on from where it ended.
+        func read(_ lo: Int, _ hi: Int) -> NSAttributedString? {
+            guard let first = fetch(lo, hi), first.length > 0 else { return nil }
+            guard first.length < hi - lo else { return first }
+            let whole = NSMutableAttributedString(attributedString: first)
+            while whole.length < hi - lo {
+                guard Date().timeIntervalSince(started) <= budget, let more = fetch(lo + whole.length, hi), more.length > 0 else { return nil }
+                whole.append(more)
+            }
+            return whole
+        }
         // Forwards each chunk starts at `cursor`; backwards each chunk ends at `end`, and `probe` is a place known to lie in the
         // run the caret is in, whose start (`limit`) is found once a chunk shows that run from its start.
         var cursor = forward ? min(caret, n - 1) : 0
@@ -45,7 +57,7 @@ package enum FormatSearch {
         var limit: Int?
         while true {
             let lo = forward ? cursor : max(0, end - chunk), hi = forward ? min(n, cursor + chunk) : end
-            guard hi > lo, let a = fetch(lo, hi), a.length > 0 else { return .failed }
+            guard hi > lo, let a = read(lo, hi), a.length > 0 else { return .failed }
             var runs: [(start: Int, end: Int, key: String, format: FormatField)] = []
             a.enumerateAttributes(in: NSRange(location: 0, length: a.length)) { attrs, r, _ in
                 let f = AXTextInfo.format(from: attrs)

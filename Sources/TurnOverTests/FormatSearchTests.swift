@@ -35,4 +35,18 @@ func formatSearchTests() {
         expect(start(FormatSearch.search(kind: kind, n: m, caret: 0, forward: true, fetch: fetch2)), 19_998, "and forwards")
         }
     }
+    test("Format search: a read that comes back short is read on, never taken as the whole chunk (issue 201)") {
+        MainActor.assumeIsolated {
+            let kind = FormatSearch.kinds["AXBoldFontSearchKey"]!
+            let (n, full) = document(40_000, boldAt: [27_000, 100])
+            // An app that gives at most 8,000 characters per call, from the start of the range asked for.
+            let capped: (Int, Int) -> NSAttributedString? = { lo, hi in full(lo, min(hi, lo + 8_000)) }
+            expect(start(FormatSearch.search(kind: kind, n: n, caret: 30_000, forward: false, fetch: capped)), 27_000, "the bold run 3,000 before the caret is found")
+            expect(start(FormatSearch.search(kind: kind, n: n, caret: 28_000, forward: false, fetch: capped)), 27_000)
+            expect(start(FormatSearch.search(kind: kind, n: n, caret: 27_002, forward: false, fetch: capped)), 100, "from inside the run, the one before it")
+            expect(start(FormatSearch.search(kind: kind, n: n, caret: 5_000, forward: true, fetch: capped)), 27_000, "forwards too")
+            let none: (Int, Int) -> NSAttributedString? = { _, _ in nil }
+            check({ if case .failed = FormatSearch.search(kind: kind, n: n, caret: 30_000, forward: false, fetch: none) { return true }; return false }(), "no text at all is a failure, not a find")
+        }
+    }
 }
