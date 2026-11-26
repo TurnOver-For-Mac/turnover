@@ -524,7 +524,7 @@ public final class ChatView {
         // A list that drops rows as it scrolls (WhatsApp's Archived) keeps its numbering from before the load.
         let shift = pane == .conversations ? listShift : 0
         parts.append(Phrases.position(i + 1 + shift, of: items.count + shift))
-        Speech.speakItem(parts.joined(separator: ", "), processed: true)
+        Speech.speakItem(Speech.marked(parts), processed: true)
         Hints.schedule(pane == .transcript
             ? String(localized: "Up and Down move through the messages; the shortcut menu has reply, tapback and copy. Escape goes back to the message box.", comment: "A hint in a chat app")
             : pane == .sections ? String(localized: "Return shows that section. Tab goes on.", comment: "A hint in a chat app") : String(localized: "Return opens the conversation. Escape goes back to the message box.", comment: "A hint in a chat app"))

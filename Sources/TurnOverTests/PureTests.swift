@@ -1356,7 +1356,12 @@ func browseTextNavTests() {
         let saved = config
         defer { config = saved }
         config.general.keyboardStyle = "mac"
-        expect(Speech.joined(["Settings", "submenu", "", "3 of 9"]), "Settings, submenu, 3 of 9", "VoiceOver keys: commas, empties left out")
+        expect(Speech.unmarked(Speech.joined(["Settings", "submenu", "", "3 of 9"])), "Settings, submenu, 3 of 9", "VoiceOver keys: commas, empties left out")
+        for level in SymbolLevel.allCases {
+            expect(Speech.processed(Speech.joined(["What did you do?", "*", "edit"]), symbolLevel: level).contains("comma"), false, "the joining commas are never named (issue 401), level \(level.name)")
+        }
+        expect(Speech.processed(Speech.joined(["a, b", "edit"]), symbolLevel: .all).contains("comma"), true, "a comma inside the text still follows the level")
+        expect(Speech.processed(Speech.joined(["Name", "edit"]), symbolLevel: .all), "Name, edit", "parts still pause")
         config.general.keyboardStyle = "windows"
         expect(Speech.joined(["Settings", "submenu", "", "3 of 9"]), "Settings submenu 3 of 9", "NVDA keys: spaces, no pause at each piece")
         config.general.keyboardStyle = "jaws"
