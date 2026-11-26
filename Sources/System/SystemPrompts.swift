@@ -42,33 +42,64 @@ public final class SystemPrompts {
             Speech.speakMessage(String(localized: "macOS only takes a real key here. \(name) has the focus: press Space.", comment: "A protected macOS prompt: %@ is the button"))
         }
     }
+    private struct PromptText {
+        let lines: [String]
+        let canRestore: Bool
+        var matchingLines: [String]? { canRestore ? lines : nil }
+        var summary: String { lines.first.map { String($0.prefix(120)) } ?? "untitled" }
+    }
+
+    private struct OpenPrompt {
+        let window: AXUIElement
+        let pid: pid_t
+        let id: Int
+        var text: PromptText?
+        let quietUntil: TimeInterval?
+    }
+
     private var timer: Timer?
-    private var shown: [AXUIElement] = []
+    private var shown: [OpenPrompt] = []
+    private var continuity = SystemPromptContinuity()
     /// With VoiceOver running (CoExist), macOS's own prompts are VoiceOver's entirely (18 Oct 2026: VoiceOver
     /// "could take over in higher security dialogues, which keeps TurnOver more secure"): TurnOver neither reads them
     /// nor takes their keys. The app is told when the first opens (true) and the last closes (false), and steps aside.
     public var onPromptChange: ((Bool) -> Void)?
     public var handsToVoiceOver: Bool { Coexist.on && NSWorkspace.shared.isVoiceOverEnabled && onPromptChange != nil }
-    /// What each prompt said first, for the reminder and the application chooser.
-    private var summaries: [(window: AXUIElement, pid: pid_t, text: String)] = []
-
     /// The prompts open now, with their first line: a prompt read once while the user was away stayed open with
     /// nothing pointing to it (Command Tab and the application chooser left it out; the keychain's password prompt
     /// at build 18's publish, 14 Oct 2026, was found only by turning VoiceOver on).
     public var waiting: [(window: AXUIElement, pid: pid_t, text: String)] {
-        summaries.filter { p in shown.contains { $0.isSame(p.window) } && p.window.role != "?" && !p.window.role.isEmpty }
+        waitingPrompts.compactMap { p in p.text.map { (p.window, p.pid, $0.summary) } }
     }
-    private var reminders = SystemPromptReminders<AXUIElement>(isSame: { $0.isSame($1) })
+
+    private var waitingPrompts: [OpenPrompt] {
+        shown.filter { p in
+            guard p.text != nil else { return false }
+            let role = p.window.role
+            return role != "?" && !role.isEmpty
+        }
+    }
+
+    private func updateScreenLock(now: TimeInterval) {
+        // LeadWatcher reads the same session flag in the app target. Sample even when no prompt is listed.
+        guard let session = CGSessionCopyCurrentDictionary() as? [String: Any] else { return }
+        let locked = (session["CGSSessionScreenIsLocked"] as? NSNumber)?.boolValue ?? false
+        continuity.observeLock(locked, now: now)
+    }
 
     /// Another application came to the front while a prompt waits: say so, after the application, with the way to it.
     public func remindIfWaiting(activated pid: pid_t) {
-        let prompts = waiting
-        guard let index = reminders.next(in: prompts.map { ($0.window, $0.pid) },
-                                         activated: pid, now: ProcessInfo.processInfo.systemUptime) else { return }
+        updateScreenLock(now: ProcessInfo.processInfo.systemUptime)
+        guard !continuity.locked else { return }
+        let prompts = waitingPrompts
+        let now = ProcessInfo.processInfo.systemUptime
+        updateScreenLock(now: now)
+        guard let index = continuity.nextReminder(in: prompts.map { ($0.id, $0.pid) }, activated: pid, now: now),
+              let text = prompts[index].text else { return }
         let p = prompts[index]
         let key = config.general.windowsKeys ? String(localized: "Option Tab", comment: "Keys to reach a waiting system dialog") : String(localized: "VO-F1 twice", comment: "Keys to reach a waiting system dialog")
         Log.io("system prompt still open (pid \(p.pid)); reminded")
-        Speech.speakMessage(String(localized: "system dialog waiting: \(p.text). \(key) to go to it", comment: "A system dialog waiting: its words, then the keys to reach it"))
+        Speech.speakMessage(String(localized: "system dialog waiting: \(text.summary). \(key) to go to it", comment: "A system dialog waiting: its words, then the keys to reach it"))
     }
 
     func start() {
@@ -89,54 +120,124 @@ public final class SystemPrompts {
                 windows += ax.elements(kAXWindowsAttribute).map { ($0, pid) }
             }
         }
-        let gone = !shown.isEmpty && !shown.allSatisfy { w in windows.contains { $0.0.isSame(w) } }
-        shown.removeAll { w in !windows.contains { $0.0.isSame(w) } }
-        reminders.retainOpen(windows.map { $0.0 })
-        summaries.removeAll { p in !shown.contains { $0.isSame(p.window) } }
-        if gone, shown.isEmpty, let front = NSWorkspace.shared.frontmostApplication {
+        let now = ProcessInfo.processInfo.systemUptime
+        updateScreenLock(now: now)
+        let disappeared = shown.filter { p in !windows.contains { $0.0.isSame(p.window) } }
+        for p in disappeared {
+            continuity.park(id: p.id, pid: p.pid, lines: p.text?.matchingLines, now: now)
+        }
+        shown.removeAll { p in disappeared.contains { $0.id == p.id } }
+        let closed = continuity.discardExpired(open: shown.map(\.id), now: now)
+        guard !continuity.locked else { return }
+        if closed, shown.isEmpty, windows.isEmpty, let front = NSWorkspace.shared.frontmostApplication {
             Log.io("system prompt closed; focus back to \(front.localizedName ?? "?")")
             if handsToVoiceOver { onPromptChange?(false) }
             AXHandler.shared.refocus(pid: front.processIdentifier)
         }
-        for (w, pid) in windows where !shown.contains(where: { $0.isSame(w) }) {
-            let first = shown.isEmpty
-            shown.append(w)
-            if handsToVoiceOver {
-                // VoiceOver's: the prompt is given the keyboard (its window can open without it) and TurnOver steps aside.
-                Log.io("system prompt from pid \(pid): VoiceOver's")
-                if first { onPromptChange?(true) }
-                if let f = AXUIElementCreateApplication(pid).element(kAXFocusedUIElementAttribute) { giveKeyboard(to: f) }
-                continue
-            }
-            announce(w, pid: pid)
+        for (w, pid) in windows where !shown.contains(where: { $0.window.isSame(w) }) {
+            show(w, pid: pid, now: now, activated: false)
+        }
+    }
+
+    private func show(_ window: AXUIElement, pid: pid_t, now: TimeInterval, activated: Bool) {
+        let first = shown.isEmpty
+        let voiceOver = handsToVoiceOver
+        let text = voiceOver ? nil : readPrompt(window, pid: pid)
+        let appearance = continuity.appear(pid: pid, lines: text?.matchingLines, now: now)
+        shown.append(.init(window: window, pid: pid, id: appearance.id, text: text, quietUntil: appearance.quietUntil))
+        guard appearance.quietUntil == nil else { return }
+        if activated { Tones.dialogAppeared() }
+        if voiceOver {
+            // The prompt can open without the keyboard. Give it to VoiceOver and step aside.
+            Log.io("system prompt from pid \(pid): VoiceOver's")
+            if first { onPromptChange?(true) }
+            if let f = AXUIElementCreateApplication(pid).element(kAXFocusedUIElementAttribute) { giveKeyboard(to: f) }
+        } else {
+            announce(text, pid: pid)
         }
     }
 
     /// The agent came to the front: read its window now (the regular look comes every half second, after the focus
     /// had already been read).
     func announceFront(pid: pid_t) {
-        if handsToVoiceOver { return }
+        let now = ProcessInfo.processInfo.systemUptime
+        updateScreenLock(now: now)
+        guard !continuity.locked else { return }
         let ax = AXUIElementCreateApplication(pid)
-        guard let w = ax.element(kAXFocusedWindowAttribute) ?? ax.elements(kAXWindowsAttribute).first else { return }
-        if shown.contains(where: { $0.isSame(w) }), Date().timeIntervalSince(lastAnnounced) < 2 { return }
-        if !shown.contains(where: { $0.isSame(w) }) { shown.append(w) }
-        announce(w, pid: pid)
+        guard !handsToVoiceOver,
+              let w = ax.element(kAXFocusedWindowAttribute) ?? ax.elements(kAXWindowsAttribute).first else {
+            Tones.dialogAppeared()
+            return
+        }
+        guard let index = shown.firstIndex(where: { $0.window.isSame(w) }) else {
+            show(w, pid: pid, now: now, activated: true)
+            return
+        }
+        let previous = shown[index]
+        if let quietUntil = previous.quietUntil, now <= quietUntil {
+            let text = readPrompt(w, pid: pid)
+            if let lines = text?.matchingLines, lines == previous.text?.matchingLines { return }
+            // The agent may reuse a window for a different prompt after the unlock.
+            shown.remove(at: index)
+            let appearance = continuity.appear(pid: pid, lines: nil, now: now)
+            shown.append(.init(window: w, pid: pid, id: appearance.id, text: text, quietUntil: nil))
+            Tones.dialogAppeared()
+            announce(text, pid: pid)
+            return
+        }
+        Tones.dialogAppeared()
+        guard Date().timeIntervalSince(lastAnnounced) >= 2 else { return }
+        guard let text = readPrompt(w, pid: pid) else {
+            // A failed reread leaves the reminder's last known summary available.
+            lastAnnounced = Date()
+            return
+        }
+        var prompt = shown.remove(at: index)
+        prompt.text = text
+        shown.append(prompt)
+        announce(text, pid: pid)
     }
     private var lastAnnounced = Date.distantPast
 
-    private func announce(_ window: AXUIElement, pid: pid_t) {
-        lastAnnounced = Date()
+    private func readPrompt(_ window: AXUIElement, pid: pid_t) -> PromptText? {
         var texts: [String] = []
-        var stack = [window]; var visited = 0
-        while let e = stack.popLast(), visited < 200 {
+        var stack = [window]
+        var visited = 0
+        let bundle = NSRunningApplication(processIdentifier: pid)?.bundleIdentifier
+        // Authentication agents and prompts with text entry must be read, even if their visible words match.
+        var canRestore = bundle != nil && bundle != "com.apple.SecurityAgent" && bundle != "com.apple.LocalAuthentication.UIAgent"
+        while visited < 200, let e = stack.popLast() {
             visited += 1
-            if e.role == "AXStaticText", let v = e.string(kAXValueAttribute)?.trimmingCharacters(in: .whitespacesAndNewlines), !v.isEmpty { texts.append(v) }
-            stack.append(contentsOf: e.elements(kAXChildrenAttribute).reversed())
+            switch e.role {
+            case "AXStaticText":
+                if let value = e.string(kAXValueAttribute)?.trimmingCharacters(in: .whitespacesAndNewlines) {
+                    if !value.isEmpty { texts.append(value) }
+                } else {
+                    canRestore = false
+                }
+            case "AXTextField", "AXTextArea", "AXComboBox", "AXSecureTextField", "?", "":
+                canRestore = false
+            default:
+                break
+            }
+            let (children, error) = e.attrError(kAXChildrenAttribute)
+            if let children = children as? [AXUIElement] {
+                stack.append(contentsOf: children.reversed())
+            } else if error != .attributeUnsupported, error != .noValue {
+                canRestore = false
+            }
         }
-        guard !texts.isEmpty || window.element(kAXFocusedUIElementAttribute) != nil else { return }
+        guard !texts.isEmpty || window.element(kAXFocusedUIElementAttribute) != nil else { return nil }
+        let asksForCredentials = texts.contains {
+            $0.localizedCaseInsensitiveContains("password") || $0.localizedCaseInsensitiveContains("keychain")
+        }
+        return PromptText(lines: texts, canRestore: canRestore && stack.isEmpty && !texts.isEmpty && !asksForCredentials)
+    }
+
+    private func announce(_ text: PromptText?, pid: pid_t) {
+        lastAnnounced = Date()
+        guard let texts = text?.lines else { return }
         Log.io("system prompt from pid \(pid): \(texts.count) lines")
-        summaries.removeAll { $0.window.isSame(window) }
-        summaries.append((window, pid, texts.first.map { String($0.prefix(120)) } ?? "untitled"))
         Speech.cancel()
         Speech.speakMessage(([Self.isProtected(pid) ? String(localized: "system dialog", comment: "A role: a macOS system dialog") : Role.dialog.displayString] + texts).joined(separator: ", "))
         let ax = AXUIElementCreateApplication(pid)
@@ -204,5 +305,106 @@ package struct SystemPromptReminders<Window> {
             return index
         }
         return nil
+    }
+}
+
+/// A window can leave the agent's list just before the session reports the lock (25 Nov 2026).
+/// An internal id follows the prompt across that gap, even if the agent returns a different AX window.
+package struct SystemPromptContinuity {
+    package struct Appearance {
+        package let id: Int
+        package let quietUntil: TimeInterval?
+    }
+
+    private enum Phase {
+        case awaitingLock(until: TimeInterval)
+        case hiddenByLock
+        case awaitingReturn(until: TimeInterval)
+    }
+
+    private struct Parked {
+        let id: Int
+        let pid: pid_t
+        let lines: [String]?
+        var phase: Phase
+    }
+
+    private var parked: [Parked] = []
+    private var nextID = 0
+    private var reminders = SystemPromptReminders<Int>(isSame: ==)
+    package private(set) var locked = false
+
+    package init() {}
+
+    package mutating func observeLock(_ locked: Bool, now: TimeInterval) {
+        guard locked != self.locked else { return }
+        self.locked = locked
+        for index in parked.indices {
+            switch parked[index].phase {
+            case .awaitingLock(let until) where locked && now <= until:
+                parked[index].phase = .hiddenByLock
+            case .hiddenByLock where !locked:
+                parked[index].phase = .awaitingReturn(until: now + 30)
+            default:
+                break
+            }
+        }
+    }
+
+    package mutating func park(id: Int, pid: pid_t, lines: [String]?, now: TimeInterval) {
+        let phase: Phase = locked ? .hiddenByLock : .awaitingLock(until: now + 10)
+        parked.append(Parked(id: id, pid: pid, lines: lines, phase: phase))
+    }
+
+    package mutating func appear(pid: pid_t, lines: [String]?, now: TimeInterval) -> Appearance {
+        if !locked, let lines, !lines.isEmpty {
+            let matches = parked.indices.filter { index in
+                let prompt = parked[index]
+                guard prompt.pid == pid, prompt.lines == lines,
+                      case .awaitingReturn(let until) = prompt.phase else { return false }
+                return now <= until
+            }
+            if matches.count == 1, let index = matches.first,
+               case .awaitingReturn(let until) = parked[index].phase {
+                let prompt = parked.remove(at: index)
+                return Appearance(id: prompt.id, quietUntil: until)
+            }
+            // If the words come back before any lock, the earlier disappearance was an ordinary close.
+            parked.removeAll { prompt in
+                guard prompt.pid == pid, prompt.lines == lines, case .awaitingLock = prompt.phase else { return false }
+                return true
+            }
+        }
+        nextID += 1
+        return Appearance(id: nextID, quietUntil: nil)
+    }
+
+    /// Returns whether an ordinary disappearance has been confirmed and none still await a lock.
+    package mutating func discardExpired(open: [Int], now: TimeInterval) -> Bool {
+        var closed = false
+        var awaitingLock = false
+        parked.removeAll { prompt in
+            switch prompt.phase {
+            case .awaitingLock(let until):
+                if now > until {
+                    closed = true
+                    return true
+                }
+                awaitingLock = true
+                return false
+            case .hiddenByLock:
+                return false
+            case .awaitingReturn(let until):
+                return now > until
+            }
+        }
+        reminders.retainOpen(open + parked.map(\.id))
+        return closed && !awaitingLock
+    }
+
+    package mutating func nextReminder(in prompts: [(window: Int, pid: pid_t)], activated pid: pid_t,
+                                       now: TimeInterval) -> Int? {
+        guard !locked else { return nil }
+        return reminders.next(in: prompts, activated: pid, now: now)
     }
 }

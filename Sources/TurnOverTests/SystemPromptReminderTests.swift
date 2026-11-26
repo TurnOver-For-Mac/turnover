@@ -93,4 +93,125 @@ func systemPromptReminderTests() {
         reminders.retainOpen([])
         check(reminders.next(in: [prompts[1]], activated: 30, now: 5) == 0, "closing all dialogs clears the remaining history")
     }
+
+    let crash = ["Example quit unexpectedly.", "Click Reopen to open it again."]
+
+    test("system prompts: a lock-hidden prompt returns quietly with both reminders still spent") {
+        var prompts = SystemPromptContinuity()
+        let first = prompts.appear(pid: 10, lines: crash, now: 0)
+        check(first.quietUntil == nil, "the initial prompt is read")
+        expect(prompts.nextReminder(in: [(first.id, 10)], activated: 20, now: 0), 0, "first reminder")
+        expect(prompts.nextReminder(in: [(first.id, 10)], activated: 20, now: 300), 0, "second reminder")
+        prompts.observeLock(true, now: 310)
+        prompts.park(id: first.id, pid: 10, lines: crash, now: 311)
+        check(!prompts.discardExpired(open: [], now: 600), "a locked prompt has not closed")
+        prompts.observeLock(false, now: 620)
+        check(!prompts.discardExpired(open: [], now: 621), "unlock gives the prompt time to return")
+        let returned = prompts.appear(pid: 10, lines: crash, now: 622)
+        expect(returned.id, first.id, "the returned prompt keeps its identity")
+        expect(returned.quietUntil, 650, "the returned prompt is not announced")
+        check(prompts.nextReminder(in: [(returned.id, 10)], activated: 20, now: 950) == nil, "there is no third reminder")
+    }
+
+    test("system prompts: a lock half a second after disappearance still preserves the reminder deadline") {
+        var prompts = SystemPromptContinuity()
+        let first = prompts.appear(pid: 10, lines: crash, now: 0)
+        expect(prompts.nextReminder(in: [(first.id, 10)], activated: 20, now: 10), 0, "first reminder")
+        prompts.park(id: first.id, pid: 10, lines: crash, now: 20)
+        check(!prompts.discardExpired(open: [], now: 20), "the first missing poll cannot decide why it disappeared")
+        prompts.observeLock(true, now: 20.5)
+        prompts.observeLock(false, now: 30)
+        let returned = prompts.appear(pid: 10, lines: crash, now: 31)
+        expect(returned.id, first.id, "the lock explains the earlier disappearance")
+        check(returned.quietUntil != nil, "the returned prompt is quiet")
+        check(prompts.nextReminder(in: [(returned.id, 10)], activated: 20, now: 309.9) == nil, "the original deadline still applies")
+        expect(prompts.nextReminder(in: [(returned.id, 10)], activated: 20, now: 310), 0, "the second reminder is still due")
+    }
+
+    test("system prompts: an ordinary close lets a later prompt with the same words be read") {
+        for returnTime in [4.0, 15] {
+            var prompts = SystemPromptContinuity()
+            let first = prompts.appear(pid: 10, lines: crash, now: 0)
+            expect(prompts.nextReminder(in: [(first.id, 10)], activated: 20, now: 0), 0, "the old prompt used a reminder")
+            prompts.park(id: first.id, pid: 10, lines: crash, now: 1)
+            expect(prompts.discardExpired(open: [], now: returnTime), returnTime > 11, "the close is settled after ten seconds")
+            let reopened = prompts.appear(pid: 10, lines: crash, now: returnTime)
+            check(reopened.id != first.id && reopened.quietUntil == nil, "the prompt is read again even during the lock wait")
+            expect(prompts.nextReminder(in: [(reopened.id, 10)], activated: 20, now: returnTime), 0, "the new prompt gets its own reminder")
+        }
+    }
+
+    test("system prompts: a lock thirty seconds after disappearance cannot revive the old prompt") {
+        var prompts = SystemPromptContinuity()
+        let first = prompts.appear(pid: 10, lines: crash, now: 0)
+        prompts.park(id: first.id, pid: 10, lines: crash, now: 1)
+        prompts.observeLock(true, now: 31)
+        prompts.observeLock(false, now: 40)
+        let returned = prompts.appear(pid: 10, lines: crash, now: 41)
+        check(returned.id != first.id && returned.quietUntil == nil, "a delayed poll cannot turn a late lock into a match")
+    }
+
+    test("system prompts: a different process or changed lines after unlock are read") {
+        var prompts = SystemPromptContinuity()
+        let first = prompts.appear(pid: 10, lines: crash, now: 0)
+        prompts.observeLock(true, now: 1)
+        prompts.park(id: first.id, pid: 10, lines: crash, now: 2)
+        prompts.observeLock(false, now: 10)
+        let changed = prompts.appear(pid: 10, lines: [crash[0], "Click OK."], now: 11)
+        check(changed.id != first.id && changed.quietUntil == nil, "matching the first line alone is insufficient")
+        let otherAgent = prompts.appear(pid: 11, lines: crash, now: 12)
+        check(otherAgent.id != first.id && otherAgent.quietUntil == nil, "matching words in a different process are insufficient")
+    }
+
+    test("system prompts: a prompt that returns two minutes after unlock is read") {
+        var prompts = SystemPromptContinuity()
+        let first = prompts.appear(pid: 10, lines: crash, now: 0)
+        prompts.observeLock(true, now: 1)
+        prompts.park(id: first.id, pid: 10, lines: crash, now: 2)
+        prompts.observeLock(false, now: 10)
+        let late = prompts.appear(pid: 10, lines: crash, now: 130)
+        check(late.id != first.id && late.quietUntil == nil, "the deadline applies even before the next clean-up")
+    }
+
+    test("system prompts: two parked prompts from the same process keep separate histories") {
+        var prompts = SystemPromptContinuity()
+        let other = ["Example needs permission."]
+        let first = prompts.appear(pid: 10, lines: crash, now: 0)
+        let second = prompts.appear(pid: 10, lines: other, now: 0)
+        expect(prompts.nextReminder(in: [(first.id, 10)], activated: 20, now: 0), 0, "only the first has reminded")
+        prompts.observeLock(true, now: 1)
+        prompts.park(id: first.id, pid: 10, lines: crash, now: 2)
+        prompts.park(id: second.id, pid: 10, lines: other, now: 2)
+        prompts.observeLock(false, now: 10)
+        let secondBack = prompts.appear(pid: 10, lines: other, now: 11)
+        let firstBack = prompts.appear(pid: 10, lines: crash, now: 11)
+        expect(secondBack.id, second.id, "the second prompt can return first")
+        expect(firstBack.id, first.id, "the first prompt also keeps its identity")
+        check(secondBack.quietUntil != nil && firstBack.quietUntil != nil, "both prompts return quietly")
+        expect(prompts.nextReminder(in: [(firstBack.id, 10), (secondBack.id, 10)], activated: 20, now: 12), 1,
+               "only the second prompt has an immediate reminder left")
+    }
+
+    test("system prompts: locked switches do not speak or spend a reminder") {
+        var prompts = SystemPromptContinuity()
+        let first = prompts.appear(pid: 10, lines: crash, now: 0)
+        prompts.observeLock(true, now: 1)
+        check(prompts.nextReminder(in: [(first.id, 10)], activated: 20, now: 2) == nil, "still listed but locked")
+        prompts.observeLock(false, now: 3)
+        expect(prompts.nextReminder(in: [(first.id, 10)], activated: 20, now: 4), 0, "the unlocked switch gets the first reminder")
+    }
+
+    test("system prompts: missing and ambiguous identities are read after the unlock") {
+        var prompts = SystemPromptContinuity()
+        let first = prompts.appear(pid: 10, lines: crash, now: 0)
+        let second = prompts.appear(pid: 10, lines: crash, now: 0)
+        let unreadable = prompts.appear(pid: 11, lines: nil, now: 0)
+        prompts.observeLock(true, now: 1)
+        prompts.park(id: first.id, pid: 10, lines: crash, now: 2)
+        prompts.park(id: second.id, pid: 10, lines: crash, now: 2)
+        prompts.park(id: unreadable.id, pid: 11, lines: nil, now: 2)
+        prompts.observeLock(false, now: 3)
+        check(prompts.appear(pid: 10, lines: crash, now: 4).quietUntil == nil, "two equal parked prompts are ambiguous")
+        check(prompts.appear(pid: 11, lines: nil, now: 4).quietUntil == nil, "an unsafe or unreadable prompt cannot match")
+    }
 }

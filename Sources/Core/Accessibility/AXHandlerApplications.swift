@@ -88,7 +88,6 @@ extension AXHandler {
         // Store is trying to authenticate your Apple Account… Touch ID or enter your password"), then its button,
         // not "coreautha, Untitled, window" (7 Oct 2026).
         if let b = app.bundleIdentifier, SystemPrompts.agents.contains(b) {
-            Tones.dialogAppeared()
             SystemPrompts.shared.announceFront(pid: pid)
             return
         }
