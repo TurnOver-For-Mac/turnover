@@ -39,6 +39,9 @@ PLUGIN-GUIDE.md says how to write one.
 - **Tables in TextEdit:** moving cell by cell with the keys.
 - **Finder's icon view:** each item's position ("3 of 12").
 - **Safari:** landing on the page where VoiceOver does.
+- **A backup braille translator.** TurnOver uses the braille tables that come with macOS. A translator built into
+  TurnOver, liblouis (the one NVDA uses), will take over by itself if a macOS update ever changes them, so contracted
+  braille and typing on the display keep working.
 
 ## Later, asked for
 
