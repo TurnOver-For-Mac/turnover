@@ -54,7 +54,6 @@ public final class SystemPrompts {
         let pid: pid_t
         let id: Int
         var text: PromptText?
-        let quietUntil: TimeInterval?
     }
 
     private var timer: Timer?
@@ -89,11 +88,10 @@ public final class SystemPrompts {
 
     /// Another application came to the front while a prompt waits: say so, after the application, with the way to it.
     public func remindIfWaiting(activated pid: pid_t) {
-        updateScreenLock(now: ProcessInfo.processInfo.systemUptime)
-        guard !continuity.locked else { return }
-        let prompts = waitingPrompts
         let now = ProcessInfo.processInfo.systemUptime
         updateScreenLock(now: now)
+        guard !continuity.locked else { return }
+        let prompts = waitingPrompts
         guard let index = continuity.nextReminder(in: prompts.map { ($0.id, $0.pid) }, activated: pid, now: now),
               let text = prompts[index].text else { return }
         let p = prompts[index]
@@ -127,26 +125,41 @@ public final class SystemPrompts {
             continuity.park(id: p.id, pid: p.pid, lines: p.text?.matchingLines, now: now)
         }
         shown.removeAll { p in disappeared.contains { $0.id == p.id } }
-        let closed = continuity.discardExpired(open: shown.map(\.id), now: now)
-        guard !continuity.locked else { return }
-        if closed, shown.isEmpty, windows.isEmpty, let front = NSWorkspace.shared.frontmostApplication {
-            Log.io("system prompt closed; focus back to \(front.localizedName ?? "?")")
+        // Housekeeping only: which parked prompts have run out of time, and the reminder history that goes with them.
+        _ = continuity.discardExpired(open: shown.map(\.id), now: now)
+        // The last prompt has gone: the focus goes back at once, as it always did. Holding this until a parked prompt
+        // ran out of time (the 10 seconds it is given for a lock to follow) left the focus unread for 10 seconds after
+        // every ordinary close, then read it out of nowhere (a review, 26 Nov 2026). A lock is usually reported after
+        // the windows have gone, so this runs then too, as it did before.
+        if !disappeared.isEmpty, shown.isEmpty {
             if handsToVoiceOver { onPromptChange?(false) }
-            AXHandler.shared.refocus(pid: front.processIdentifier)
+            if !continuity.locked, let front = NSWorkspace.shared.frontmostApplication {
+                Log.io("system prompt closed; focus back to \(front.localizedName ?? "?")")
+                AXHandler.shared.refocus(pid: front.processIdentifier)
+            }
         }
+        guard !continuity.locked else { return }
+        let front = NSWorkspace.shared.frontmostApplication?.processIdentifier
         for (w, pid) in windows where !shown.contains(where: { $0.window.isSame(w) }) {
-            show(w, pid: pid, now: now, activated: false)
+            show(w, pid: pid, now: now, hasKeyboard: front == pid)
         }
     }
 
-    private func show(_ window: AXUIElement, pid: pid_t, now: TimeInterval, activated: Bool) {
+    /// `hasKeyboard`: the prompt's agent is the application in front, so the prompt is where the keys go.
+    private func show(_ window: AXUIElement, pid: pid_t, now: TimeInterval, hasKeyboard: Bool) {
         let first = shown.isEmpty
         let voiceOver = handsToVoiceOver
         let text = voiceOver ? nil : readPrompt(window, pid: pid)
         let appearance = continuity.appear(pid: pid, lines: text?.matchingLines, now: now)
-        shown.append(.init(window: window, pid: pid, id: appearance.id, text: text, quietUntil: appearance.quietUntil))
-        guard appearance.quietUntil == nil else { return }
-        if activated { Tones.dialogAppeared() }
+        shown.append(.init(window: window, pid: pid, id: appearance.id, text: text))
+        // The same prompt back after a lock keeps its reminder history, and behind another application it is not read
+        // again or given the keyboard (25 Nov 2026: one crash dialog was read in full five times in a day, at each
+        // unlock). With the keyboard it is read like any place the person lands in: silence there would leave them in
+        // a dialog without knowing it (a review, 26 Nov 2026).
+        if appearance.quietUntil != nil, !hasKeyboard {
+            Log.io("system prompt from pid \(pid): the same one back after a lock; not read again")
+            return
+        }
         if voiceOver {
             // The prompt can open without the keyboard. Give it to VoiceOver and step aside.
             Log.io("system prompt from pid \(pid): VoiceOver's")
@@ -162,30 +175,15 @@ public final class SystemPrompts {
     func announceFront(pid: pid_t) {
         let now = ProcessInfo.processInfo.systemUptime
         updateScreenLock(now: now)
-        guard !continuity.locked else { return }
+        guard !continuity.locked, !handsToVoiceOver else { return }
         let ax = AXUIElementCreateApplication(pid)
-        guard !handsToVoiceOver,
-              let w = ax.element(kAXFocusedWindowAttribute) ?? ax.elements(kAXWindowsAttribute).first else {
-            Tones.dialogAppeared()
-            return
-        }
+        guard let w = ax.element(kAXFocusedWindowAttribute) ?? ax.elements(kAXWindowsAttribute).first else { return }
+        // In front, a prompt is always read, one that came back after a lock too: the keys go to it now. (The tone is
+        // played by the caller, for every agent that comes to the front.)
         guard let index = shown.firstIndex(where: { $0.window.isSame(w) }) else {
-            show(w, pid: pid, now: now, activated: true)
+            show(w, pid: pid, now: now, hasKeyboard: true)
             return
         }
-        let previous = shown[index]
-        if let quietUntil = previous.quietUntil, now <= quietUntil {
-            let text = readPrompt(w, pid: pid)
-            if let lines = text?.matchingLines, lines == previous.text?.matchingLines { return }
-            // The agent may reuse a window for a different prompt after the unlock.
-            shown.remove(at: index)
-            let appearance = continuity.appear(pid: pid, lines: nil, now: now)
-            shown.append(.init(window: w, pid: pid, id: appearance.id, text: text, quietUntil: nil))
-            Tones.dialogAppeared()
-            announce(text, pid: pid)
-            return
-        }
-        Tones.dialogAppeared()
         guard Date().timeIntervalSince(lastAnnounced) >= 2 else { return }
         guard let text = readPrompt(w, pid: pid) else {
             // A failed reread leaves the reminder's last known summary available.
