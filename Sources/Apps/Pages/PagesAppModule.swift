@@ -256,7 +256,7 @@ final class PagesAppModule: AppModule {
         let v = cell.map(PagesTable.value) ?? ""
         let words = v.isEmpty ? "blank" : v
         var parts: [String] = []
-        if entering { parts.append(String(localized: "\(t.name), \(String(t.rows)) rows, \(String(t.cols)) columns", comment: "A Pages table: its name and size")) }
+        if entering { parts.append(PagesTableWords.size(name: t.name, rows: t.rows, columns: t.cols)) }
         // Along a row, the column's heading (the first row); down a column, the row's (the first column).
         if t.lastMove.1 != 0 || entering, t.row > 0, let h = PagesTable.cell(t.layout, t.name, row: 0, col: t.col).map(PagesTable.value), !h.isEmpty { parts.append(h) }
         if t.lastMove.0 != 0, t.col > 0, let h = PagesTable.cell(t.layout, t.name, row: t.row, col: 0).map(PagesTable.value), !h.isEmpty { parts.append(h) }
@@ -494,3 +494,16 @@ enum PagesTable {
     }
 }
 
+/// The words said of a Pages table, apart from the module so the tests can reach them.
+package enum PagesTableWords {
+    /// "Table 1, 4 rows, 3 columns": a table entered with VO-Shift-Down. One row or one column is said in the singular,
+    /// each case one whole sentence so a translator sets the order (it was "1 rows", "1 columns", 24 Nov 2026).
+    package nonisolated static func size(name: String, rows: Int, columns: Int) -> String {
+        switch (rows == 1, columns == 1) {
+        case (true, true): return String(localized: "\(name), 1 row, 1 column", comment: "A Pages table: its name and size, one row and one column")
+        case (true, false): return String(localized: "\(name), 1 row, \(String(columns)) columns", comment: "A Pages table: its name and size, one row")
+        case (false, true): return String(localized: "\(name), \(String(rows)) rows, 1 column", comment: "A Pages table: its name and size, one column")
+        case (false, false): return String(localized: "\(name), \(String(rows)) rows, \(String(columns)) columns", comment: "A Pages table: its name and size")
+        }
+    }
+}
