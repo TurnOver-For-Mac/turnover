@@ -48,6 +48,7 @@ cannot safely implement Caps Lock recovery.
 
 ## Keyboard adapter regressions
 
+This is a manual check. Neither build.sh nor GitHub Actions runs these adapters automatically.
 After a matching no-install build, run the production keyboard adapters with:
 
 ```bash
@@ -64,8 +65,16 @@ swift build -c debug --sanitize thread --scratch-path "$TURNOVER_BUILD"
 TSAN_OPTIONS=halt_on_error=1 python3 Tools/tests/keyboard-adapter-tests.py --tsan
 ```
 
-These assertions do not replace an installed trial by ear, including Bluetooth
-sleep/reconnect and recovery announcements.
+For an installed trial, check a known keyboard reconnect, an unidentified keyboard's first
+Insert press, Bluetooth sleep or power-off, and ordinary Caps Lock in a direct app before
+fallback takes over. Verify number-pad 0 in both keypad modes. Record the keyboard models
+and build, without recording device identifiers.
+
+Remembered proof requires the system's physical device ID. Keyboards that supply only a
+serial or no ID start with Caps recovery until Insert or usable keypad 0 is observed. TurnOver
+stores a SHA-256 digest and observed capability in local app preferences. Duplicate identities
+are excluded from reuse. The previous raw-identifier cache is removed instead of imported.
+The cache is not logged, spoken or sent.
 
 ## Speech recovery (every build)
 

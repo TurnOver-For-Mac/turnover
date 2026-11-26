@@ -7,10 +7,11 @@ extension KeyboardHandler {
         settings.capsIsTurnOver || capsPress.retainedFallback(settings: settings)
     }
     nonisolated func capsFlags(_ event: CGEvent, _ settings: KeySettings) -> Bool {
-        let owned = capsPress.capturesFlags(at: event.timestamp, settings: settings)
-        if !owned, event.timestamp >= capsStateTimestamp {
+        let timestamp = KeyboardEventTime.quartzNanoseconds(event.timestamp)
+        let owned = capsPress.capturesFlags(at: timestamp, settings: settings)
+        if !owned, timestamp >= capsStateTimestamp {
             realCapsOn = event.flags.contains(.maskAlphaShift)
-            capsStateTimestamp = event.timestamp
+            capsStateTimestamp = timestamp
         }
         return owned
     }

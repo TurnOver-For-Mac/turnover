@@ -14,6 +14,12 @@ def body(s, marker, replacement):
     while depth:
         depth+=(s[i]=='{')-(s[i]=='}'); i+=1
     return s[:a]+'{\n'+replacement+'\n}'+s[i:]
+def use_fixture_clock(source):
+    for method in ('quartzNanoseconds', 'quartzTicks'):
+        call = f'KeyboardEventTime.{method}(event.timestamp)'
+        source = source.replace(call, f'KeyboardEventTime.{method}(event.timestamp, uptime: Audit.clockFor(event.timestamp))')
+    return source
+
 with tempfile.TemporaryDirectory(prefix='probe-', dir=probe_build) as tmp:
     p=Path(tmp)
     windows=(repo/'Sources/TurnOver/WindowsKeys.swift').read_text()
@@ -42,7 +48,7 @@ with tempfile.TemporaryDirectory(prefix='probe-', dir=probe_build) as tmp:
     windows=windows.replace('static var frontApp: FrontApp { foreground.value }', 'static var frontApp: FrontApp { get { foreground.value } set { foreground.value = newValue } }')
     windows=body(windows,'static func sendVoiceOverMessage(_ text:', 'Audit.messages.value.append(text)') if 'static func sendVoiceOverMessage(_ text:' in windows else windows
     windows=windows.replace('DispatchQueue.global(qos: .userInitiated).async { [self] in', 'Audit.pendingAvailability.value.append { [self] in')
-    p.joinpath('WindowsKeys.swift').write_text(windows)
+    p.joinpath('WindowsKeys.swift').write_text(use_fixture_clock(windows))
     handler=(repo/'Sources/TurnOver/KeyboardHandler.swift').read_text()
     handler=body(handler,'    init()', '')
     handler=body(handler,'    func setLock(', 'Audit.lockStates.value.append(on)')
@@ -66,7 +72,7 @@ with tempfile.TemporaryDirectory(prefix='probe-', dir=probe_build) as tmp:
         source=source.replace('event.postToPid(direct)', 'Audit.record(event, direct)')
         source=source.replace('event.postToPid(pid)', 'Audit.record(event, pid)')
         source=source.replace('replay.event.postToPid(replay.pid)', 'Audit.record(replay.event, replay.pid)').replace('event.postToPid(release.pid)', 'Audit.record(event, release.pid)')
-        p.joinpath(name).write_text(source)
+        p.joinpath(name).write_text(use_fixture_clock(source))
     application=(repo/'Sources/TurnOver/KeyboardApplication.swift').read_text()
     application=application.replace('event.postToPid(pid)', 'Audit.record(event, pid)').replace('event.postToPid(owner)', 'Audit.record(event, owner)').replace('event.postToPid(destination)', 'Audit.record(event, destination)')
     application=application.replace('keypadRouter.passedToApplication(code: code)', 'if Audit.releaseAfterPublication.value { Audit.releaseAfterPublication.value=false; let up=event.copy()!; up.type = .keyUp; _=KeypadApplicationDelivery.continueEvent(owner:ObjectIdentifier(self),.keyUp,up) }; keypadRouter.passedToApplication(code: code)')
@@ -95,7 +101,7 @@ with tempfile.TemporaryDirectory(prefix='probe-', dir=probe_build) as tmp:
     if modifier.exists():
         text = modifier.read_text().replace('CGEventSource.keyState(.hidSystemState, key: CGKeyCode(code))', 'Audit.hardwareDown.value.contains(code)')
         text = text.replace('nonisolated enum InsertModifier {', 'nonisolated enum InsertModifier {\n static func auditReset() { state.value = InsertKeyState() }')
-        p.joinpath('InsertModifier.swift').write_text(text)
+        p.joinpath('InsertModifier.swift').write_text(use_fixture_clock(text))
     else:
         p.joinpath('InsertModifier.swift').write_text('nonisolated enum InsertModifier { static func auditReset() {} }')
     p.joinpath('Stubs.swift').write_text('''import Foundation
@@ -113,6 +119,9 @@ nonisolated enum Audit {
  static let pendingAvailability = Locked<[@Sendable () -> Void]>([])
  static let turnOverMessages = Locked<[String]>([])
  static let keyTime = Locked<UInt64?>(nil)
+ static let eventUptime = Locked<UInt64?>(nil)
+ // Original fixtures use explicit elapsed nanoseconds on their own timeline.
+ static func clockFor(_ timestamp: UInt64) -> UInt64 { eventUptime.value ?? timestamp }
  static let lockStates = Locked<[Bool]>([])
  static let physicalHistory = Locked(InsertHardwareHistory())
  static let retireDuringBatch = Locked<ObjectIdentifier?>(nil)
@@ -244,7 +253,7 @@ nonisolated func event(_ type: CGEventType, _ code: Int64, repeatKey: Bool = fal
  SwitcherCloseWatcher.isWatching.value=false; ScriptHandler.hasDeferredInput.value=false
  Audit.orderedTrace.value=[]
  Audit.callbacks.value=[]; Audit.orderedAcknowledgements.value=0; Audit.findTimes.value=[]; ArrowQuickNav.applies.value=false
- CapsLockRecovery.current.value = nil; InsertAvailability.current.value = InsertAvailability(); Audit.lockStates.value = []; Audit.keyTime.value = nil
+ Audit.eventUptime.value = nil; CapsLockRecovery.current.value = nil; InsertAvailability.current.value = InsertAvailability(); Audit.lockStates.value = []; Audit.keyTime.value = nil
  InsertModifier.auditReset(); Audit.hardwareDown.value = [82,114]; Audit.physicalHistory.value = InsertHardwareHistory(); Audit.retireDuringBatch.value = nil; Audit.gateDuringBatch.value = false
  KeypadApplicationDelivery.state.value = KeypadApplicationDelivery.State()
  config.general.keyboardStyle="jaws"; config.general.turnOverKey="insert"

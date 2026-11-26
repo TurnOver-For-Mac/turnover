@@ -246,7 +246,7 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // callbacks an
         guard let layer,
               isRequested(layer.generation) else { return }
         capsChanged(pressed: IOHIDValueGetIntegerValue(value) != 0,
-                    timestamp: InsertHardware.nanoseconds(IOHIDValueGetTimeStamp(value)))
+                    timestamp: KeyboardEventTime.nanoseconds(IOHIDValueGetTimeStamp(value)))
     }
 
     func capsChanged(pressed: Bool, timestamp: UInt64) {
@@ -447,10 +447,11 @@ nonisolated final class WindowsKeyLayer: @unchecked Sendable {   // callbacks an
         }
         if type == .flagsChanged {
             if code == 57 {
-                if capsPress.capturesFlags(at: event.timestamp, settings: settings) { return nil }
-                if event.timestamp >= capsStateTimestamp {
+                let timestamp = KeyboardEventTime.quartzNanoseconds(event.timestamp)
+                if capsPress.capturesFlags(at: timestamp, settings: settings) { return nil }
+                if timestamp >= capsStateTimestamp {
                     realCapsOn = event.flags.contains(.maskAlphaShift)
-                    capsStateTimestamp = event.timestamp
+                    capsStateTimestamp = timestamp
                 }
             }   // Caps Lock's own event: the NVDA key
             // The lone taps: Command alone the menu bar, left Option the Dock, right Option the shortcut menu. Not while

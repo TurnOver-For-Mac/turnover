@@ -4,31 +4,79 @@ import CoreGraphics
 import TurnOverCore
 
 func insertKeyTests() {
-    test("Insert proof: persistence restores only the same identified keyboard") {
-        let first = InsertDeviceProof.identity(serial: "one", vendor: 1, product: 2, transport: "Bluetooth")
-        let other = InsertDeviceProof.identity(serial: "two", vendor: 1, product: 2, transport: "Bluetooth")
-        let bluetooth = InsertDeviceProof.identity(serial: nil, vendor: 1, product: 2, transport: "Bluetooth", uniqueID: "device-address")
-        check(bluetooth != nil, "physical unique ID supports devices without a serial")
-        check(bluetooth != InsertDeviceProof.identity(serial: "device-address", vendor: 1, product: 2, transport: "Bluetooth"), "serial and physical IDs have separate namespaces")
-        var proof = InsertDeviceProof()
-        check(proof.observe(82, identity: first), "actual press establishes proof")
-        check(!proof.observe(82, identity: first), "repeated presses need no persistence write")
-        let restored = InsertDeviceProof(data: proof.data)
-        check(restored.keys(for: first) == [82], "same physical keyboard retains observed capability")
-        check(restored.keys(for: other).isEmpty, "same-model keyboard does not inherit proof")
-        check(restored.keys(for: nil).isEmpty, "anonymous hardware remains unproven")
-        var available = InsertAvailability(); available.connect(7)
-        for code in restored.keys(for: first) { available.observePress(connection: 7, code: code) }
-        check(available.isAvailable(keypadCommands: true), "restored keypad works in commands")
-        check(!available.isAvailable(keypadCommands: false), "restored keypad still needs fallback in numbers")
-        available.disconnect(7)
-        check(!available.isAvailable(keypadCommands: true), "persistence never keeps disconnected hardware available")
-        for serial in [nil, "", "  ", "0000"] as [String?] {
-            check(InsertDeviceProof.identity(serial: serial, vendor: 1, product: 2, transport: "USB") == nil,
-                  "missing or empty identity cannot transfer capability")
+    test("Keyboard event clocks: normalize either live Quartz timestamp representation") {
+        let ticks: UInt64 = 16_149_352_826_307
+        let ns = KeyboardEventTime.nanoseconds(ticks)
+        let uptime = ns + 5_183_916
+        check(KeyboardEventTime.quartzNanoseconds(ticks, uptime: uptime) == ns, "Mach ticks normalize to uptime nanoseconds")
+        check(KeyboardEventTime.quartzNanoseconds(ns, uptime: uptime) == ns, "nanosecond stamps stay in their domain")
+        check(KeyboardEventTime.quartzTicks(ticks, uptime: uptime) == ticks, "Mach ticks stay on the gesture clock")
+        let roundTrip = KeyboardEventTime.quartzTicks(ns, uptime: uptime)
+        check(roundTrip == ticks || roundTrip == ticks - 1, "nanosecond conversion preserves Mach ordering within one tick")
+        check(KeyboardEventTime.quartzNanoseconds(0, uptime: uptime) == 0, "unstamped synthetic events remain zero")
+    }
+
+    test("Insert proof: remember only valid physical identities") {
+        func identity(_ value: String?) -> String? {
+            InsertDeviceProof.identity(physicalID: value, vendor: 1, product: 2, transport: "USB")
         }
-        check(InsertDeviceProof(data: Data("bad".utf8)).keys(for: first).isEmpty, "invalid persisted proof fails closed")
-        check(!proof.observe(57, identity: first), "unrelated key cannot prove Insert")
+        for id in [nil, "", "  ", "0000"] as [String?] {
+            check(identity(id) == nil, "missing or placeholder ID cannot transfer capability")
+        }
+        let first = identity("first-private-hardware-id")
+        let other = identity("second-private-hardware-id")
+        check(first != nil && other != nil && first != other, "distinct physical IDs remain distinct")
+        var proof = InsertDeviceProof()
+        _ = proof.connect(1, identity: first)
+        check(proof.observe(82, connection: 1), "actual press establishes proof")
+        check(!proof.observe(82, connection: 1), "repeated presses do not write preferences")
+        check(!proof.observe(57, connection: 1), "an unrelated key cannot prove Insert")
+        let data = proof.data ?? Data()
+        check(!String(decoding: data, as: UTF8.self).contains("first-private-hardware-id"), "cache omits the raw identifier")
+        var restored = InsertDeviceProof(data: data)
+        _ = restored.connect(7, identity: first)
+        _ = restored.connect(8, identity: other)
+        _ = restored.connect(9, identity: nil)
+        check(restored.keys(for: 7) == [82], "known physical ID restores proof")
+        check(restored.keys(for: 8).isEmpty && restored.keys(for: 9).isEmpty, "other and unidentified devices remain unproven")
+        let legacy = Data(#"{"1:2:serial:USB":[114]}"#.utf8)
+        var migrated = InsertDeviceProof(data: legacy)
+        _ = migrated.connect(1, identity: first)
+        check(migrated.keys(for: 1).isEmpty, "legacy cache cannot provide proof")
+    }
+
+    test("Insert proof: collisions revoke cached proof without discarding live presses") {
+        let id = InsertDeviceProof.identity(physicalID: "duplicate", vendor: 1, product: 2, transport: "USB")
+        var proof = InsertDeviceProof()
+        _ = proof.connect(1, identity: id)
+        check(proof.observe(114, connection: 1), "seed prior proof")
+        proof.disconnect(1)
+        _ = proof.connect(2, identity: id)
+        var available = InsertAvailability()
+        available.connect(2)
+        available.restore(proof.keys(for: 2), connection: 2)
+        check(available.isAvailable(keypadCommands: false), "known device restores its separate Insert")
+        available.connect(3)
+        var alreadyLive = available
+        alreadyLive.observePress(connection: 2, code: 114)
+        let revoked = proof.connect(3, identity: id)
+        check(Set(revoked) == [2, 3], "both sides of a collision lose cached proof")
+        for peer in revoked {
+            available.revokeRemembered(peer)
+            alreadyLive.revokeRemembered(peer)
+        }
+        check(alreadyLive.isAvailable(keypadCommands: false), "revocation preserves a real press observed before the collision")
+        check(!available.isAvailable(keypadCommands: true), "duplicate identity cannot disable Caps recovery")
+        check(!proof.observe(82, connection: 3), "ambiguous identities cannot be learned again")
+        available.observePress(connection: 3, code: 82)
+        available.revokeRemembered(3)
+        check(available.isAvailable(keypadCommands: true), "physical press continues to work on its own connection")
+        check(!available.isAvailable(keypadCommands: false), "physical keypad zero still needs commands mode")
+        available.disconnect(3)
+        check(!available.isAvailable(keypadCommands: true), "disconnect removes live proof")
+        var restarted = InsertDeviceProof(data: proof.data)
+        _ = restarted.connect(4, identity: id)
+        check(restarted.keys(for: 4).isEmpty && !restarted.observe(114, connection: 4), "collision stays blocked after relaunch")
     }
 
     test("Insert fallback: startup without known Insert hardware keeps Caps Lock available") {

@@ -131,12 +131,6 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
     private var lastDisableSpoken = Date.distantPast
     private var loneCommand = LoneModifier()
 
-    private static let machToNs: Double = {
-        var info = mach_timebase_info(numer: 0, denom: 0)
-        mach_timebase_info(&info)
-        return Double(info.numer) / Double(info.denom)
-    }()
-
     init() {
         InsertHardware.start()
         KeyboardGesture.poster = { g in KeyboardHandler.post(g) }
@@ -337,7 +331,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         guard IOHIDElementGetUsagePage(element) == UInt32(kHIDPage_KeyboardOrKeypad),
               IOHIDElementGetUsage(element) == UInt32(kHIDUsage_KeyboardCapsLock) else { return }
         capsChanged(pressed: IOHIDValueGetIntegerValue(value) != 0,
-                    timestamp: InsertHardware.nanoseconds(IOHIDValueGetTimeStamp(value)))
+                    timestamp: KeyboardEventTime.nanoseconds(IOHIDValueGetTimeStamp(value)))
     }
 
     /// Set by the watchdog while the main thread is stuck: every key goes through untouched.
@@ -591,7 +585,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
             mods.remove(.control); mods.remove(.option); mods.insert(.turnover)
         }
         var gesture = KeyboardGesture(keyCode: code, modifiers: mods, characters: Self.characters(of: event),
-                                      timestamp: UInt64(Double(event.timestamp) / Self.machToNs),
+                                      timestamp: KeyboardEventTime.quartzTicks(event.timestamp),
                                       isRepeat: event.getIntegerValueField(.keyboardEventAutorepeat) != 0, flags: event.flags)
         // The Windows style: a Windows key TurnOver has no command of its own for becomes the Mac key that does the
         // same (Control C to Command C, Control Left to Option Left). TurnOver's own bindings (browse mode's Home,
@@ -645,7 +639,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         guard bare else { return nil }
         // Quick Nav's arrows never reach InputManager: an arrow closes Find's prompt here and moves (18 Nov 2026), and
         // stops an opening asked for before it and still queued (19 Nov 2026), by the arrow's time on the gestures' clock.
-        FindPrompt.shared.close(because: "a Quick Nav arrow", arrowAt: UInt64(Double(event.timestamp) / Self.machToNs))
+        FindPrompt.shared.close(because: "a Quick Nav arrow", arrowAt: KeyboardEventTime.quartzTicks(event.timestamp))
         // Nor does it reach InputManager's key time: it ends a pressed link's evidence for Safari's page host (19 Nov 2026).
         onMain { BrowseModeDocument.keyBypassedInputManager() }
         if let first = arrowHeld, first != code, let firstName = Self.arrowNames[first] {

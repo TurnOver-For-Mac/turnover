@@ -98,3 +98,45 @@ do {
  check(CapsLockRecovery.current.value?.timestamp == 2003, "F6 concurrent samples retain newest timestamp")
  check(CapsLockRecovery.current.value?.on == true, "F6 newest sample retains matching lock value")
 }
+
+// Feed both live timestamp representations through the actual Caps and Insert callbacks.
+for primary in [false,true] {
+ for useTicks in [false,true] {
+  settings()
+  let h = KeyboardHandler(); h.auditPrepare()
+  let w = WindowsKeyLayer(); w.auditPrepare()
+  let tick = mach_absolute_time()
+  let ns = KeyboardEventTime.nanoseconds(tick)
+  Audit.eventUptime.value = ns + 1_000_000
+  var hw = InsertAvailability(); hw.connect(1); hw.observePress(connection:1,code:114)
+  InsertAvailability.current.value = hw
+  CapsLockRecovery.current.value = .init(timestamp:ns-1,on:false)
+  let flags = event(.flagsChanged,57,flags:.maskAlphaShift)
+  flags.timestamp = useTicks ? tick : ns
+  let passed = primary ? h.tapEvent(.flagsChanged,flags) : w.handle(.flagsChanged,flags)
+  check(passed != nil, "F7 ordinary Caps flags pass with either Quartz timestamp domain")
+  hw.disconnect(1); InsertAvailability.current.value = hw
+  if primary { h.capsChanged(pressed:true,timestamp:ns+1) }
+  else { w.capsChanged(pressed:true,timestamp:ns+1) }
+  check(Audit.lockStates.value.last == true, "F7 recent Caps flags outrank a stale recovery sample")
+ }
+}
+for useTicks in [false,true] {
+ settings()
+ let h = KeyboardHandler(); h.auditPrepare()
+ let w = WindowsKeyLayer(); w.auditPrepare()
+ let tick = mach_absolute_time()
+ let ns = KeyboardEventTime.nanoseconds(tick)
+ Audit.eventUptime.value = ns + 1_000_000
+ var history = InsertHardwareHistory(); history.connect(1)
+ let down = event(.keyDown,114)
+ down.timestamp = useTicks ? tick-30 : KeyboardEventTime.nanoseconds(tick-30)
+ _ = h.tapEvent(.keyDown,down)
+ history.record(connection:1,code:114,down:true,timestamp:KeyboardEventTime.nanoseconds(tick-30))
+ history.record(connection:1,code:114,down:false,timestamp:KeyboardEventTime.nanoseconds(tick+30))
+ Audit.physicalHistory.value = history; Audit.hardwareDown.value = []
+ let chord = event(.keyDown,91)
+ chord.timestamp = useTicks ? tick : ns
+ _ = w.handle(.keyDown,chord)
+ check(Audit.posts.value == [37], "F8 held Insert survives handover for either Quartz timestamp domain")
+}

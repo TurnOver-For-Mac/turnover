@@ -11,21 +11,20 @@ nonisolated enum InsertHardware {
         var nextConnection: UInt64 = 0
         var connections: [ObjectIdentifier: UInt64] = [:]
         var history = InsertHardwareHistory()
-        var proof = InsertDeviceProof(data: UserDefaults.standard.data(forKey: "insertDeviceProof"))
+        var proof = InsertDeviceProof()
     }
+    private static let proofKey = "insertDeviceProofV2"
     private static let state = Locked(State())
     private static let queue = DispatchQueue(label: "turnover.insert-hardware")
-    private static let timebase: (numer: UInt64, denom: UInt64) = {
-        var value = mach_timebase_info_data_t()
-        mach_timebase_info(&value)
-        return (UInt64(value.numer), UInt64(value.denom))
-    }()
-
     static func start() {
         queue.async {
             guard state.value.manager == nil else { return }
             let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
+            let defaults = UserDefaults.standard
+            defaults.removeObject(forKey: "insertDeviceProof") // Old entries could contain raw serials or addresses.
+            let proof = InsertDeviceProof(data: defaults.data(forKey: proofKey))
             state.lock.lock()
+            state.unsafeValue.proof = proof
             state.unsafeValue.manager = manager
             state.lock.unlock()
             let matches = [kHIDUsage_GD_Keyboard, kHIDUsage_GD_Keypad].map {
@@ -47,16 +46,16 @@ nonisolated enum InsertHardware {
     }
 
     private static func persistentIdentity(_ device: IOHIDDevice) -> String? {
-        let serial = IOHIDDeviceGetProperty(device, kIOHIDSerialNumberKey as CFString) as? String
         let uniqueID = IOHIDDeviceGetProperty(device, kIOHIDPhysicalDeviceUniqueIDKey as CFString) as? String
         let vendor = IOHIDDeviceGetProperty(device, kIOHIDVendorIDKey as CFString) as? NSNumber
         let product = IOHIDDeviceGetProperty(device, kIOHIDProductIDKey as CFString) as? NSNumber
         let transport = IOHIDDeviceGetProperty(device, kIOHIDTransportKey as CFString) as? String
-        return InsertDeviceProof.identity(serial: serial, vendor: vendor?.intValue,
-                                          product: product?.intValue, transport: transport, uniqueID: uniqueID)
+        return InsertDeviceProof.identity(physicalID: uniqueID, vendor: vendor?.intValue,
+                                          product: product?.intValue, transport: transport)
     }
 
     private static func connected(_ device: IOHIDDevice) {
+        let persistentID = persistentIdentity(device)
         state.lock.lock()
         let identity = ObjectIdentifier(device)
         guard state.unsafeValue.connections[identity] == nil else { state.lock.unlock(); return }
@@ -64,19 +63,24 @@ nonisolated enum InsertHardware {
         let connection = state.unsafeValue.nextConnection
         state.unsafeValue.connections[identity] = connection
         state.unsafeValue.history.connect(connection)
-        let proven = state.unsafeValue.proof.keys(for: persistentIdentity(device))
+        let revoked = state.unsafeValue.proof.connect(connection, identity: persistentID)
+        let proven = state.unsafeValue.proof.keys(for: connection)
+        let data = revoked.isEmpty ? nil : state.unsafeValue.proof.data
         state.lock.unlock()
         // Restore capability only, never a held press. Known reconnects are quiet.
         updateAvailability(announce: false) {
             $0.connect(connection)
-            for code in proven { $0.observePress(connection: connection, code: code) }
+            $0.restore(proven, connection: connection)
+            for peer in revoked { $0.revokeRemembered(peer) }
         }
+        if let data { UserDefaults.standard.set(data, forKey: proofKey) }
     }
 
     private static func disconnected(_ device: IOHIDDevice) {
         state.lock.lock()
         guard let connection = state.unsafeValue.connections.removeValue(forKey: ObjectIdentifier(device)) else { state.lock.unlock(); return }
         state.unsafeValue.history.disconnect(connection)
+        state.unsafeValue.proof.disconnect(connection)
         state.lock.unlock()
         // Bluetooth idle sleep is not distinguishable from a disconnect. Enable recovery
         // immediately, but do not interrupt reading with a device-lifecycle notification.
@@ -90,19 +94,19 @@ nonisolated enum InsertHardware {
         guard usage == 0x49 || usage == 0x62 else { return }
         let code: Int64 = usage == 0x49 ? 114 : 82
         let ticks = IOHIDValueGetTimeStamp(value)
-        // HID is Mach absolute ticks; Quartz event timestamps already use nanoseconds.
-        let timestamp = nanoseconds(ticks)
+        // HID explicitly reports Mach absolute ticks.
+        let timestamp = KeyboardEventTime.nanoseconds(ticks)
         let device = IOHIDElementGetDevice(element)
         let down = IOHIDValueGetIntegerValue(value) != 0
         state.lock.lock()
         guard let connection = state.unsafeValue.connections[ObjectIdentifier(device)] else { state.lock.unlock(); return }
-        let changed = down && state.unsafeValue.proof.observe(code, identity: persistentIdentity(device))
+        let changed = down && state.unsafeValue.proof.observe(code, connection: connection)
         let data = changed ? state.unsafeValue.proof.data : nil
         state.unsafeValue.history.record(connection: connection, code: code, down: down, timestamp: timestamp)
         state.lock.unlock()
         if down { updateAvailability { $0.observePress(connection: connection, code: code) } }
         // No disk or IOHIDSystem work while the tap's history lock is held.
-        if let data { UserDefaults.standard.set(data, forKey: "insertDeviceProof") }
+        if let data { UserDefaults.standard.set(data, forKey: proofKey) }
     }
 
     private static func updateAvailability(announce: Bool = true, _ update: (inout InsertAvailability) -> Void) {
@@ -132,10 +136,6 @@ nonisolated enum InsertHardware {
                   HandOver.voiceOverReading {
             WindowsKeyLayer.shared.sayAvailability(message, fallback: fallback)
         }
-    }
-
-    static func nanoseconds(_ ticks: UInt64) -> UInt64 {
-        ticks / timebase.denom * timebase.numer + ticks % timebase.denom * timebase.numer / timebase.denom
     }
 
     static func overlapsDown(_ code: Int64, at timestamp: UInt64) -> Bool {

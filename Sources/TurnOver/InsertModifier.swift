@@ -19,12 +19,13 @@ nonisolated enum InsertModifier {
         let repeated = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
         let settings = KeySettings.current
         state.unsafeValue.update(enabled: settings.insertIsTurnOver, keypadEnabled: settings.keypadCommands)
+        let timestamp = KeyboardEventTime.quartzNanoseconds(event.timestamp)
         let freshDown = type == .keyDown && !repeated
-        let overlappingDown = freshDown && InsertHardware.overlapsDown(code, at: event.timestamp)
+        let overlappingDown = freshDown && InsertHardware.overlapsDown(code, at: timestamp)
         var stillHeld = false
         if type == .keyUp {
             let current = hardwareIsDown(code)
-            stillHeld = InsertHardware.observedDown(code, at: event.timestamp, currentDown: current, after: state.unsafeValue.capturedAt(code)) ?? current
+            stillHeld = InsertHardware.observedDown(code, at: timestamp, currentDown: current, after: state.unsafeValue.capturedAt(code)) ?? current
         }
         return state.unsafeValue.continuePress(type, code: code, isRepeat: repeated, stillHeld: stillHeld, overlappingDown: overlappingDown)
     }
@@ -49,17 +50,18 @@ nonisolated enum InsertModifier {
         state.lock.lock()
         defer { state.lock.unlock() }
         state.unsafeValue.update(enabled: enabled, keypadEnabled: settings.keypadCommands)
+        let timestamp = KeyboardEventTime.quartzNanoseconds(event.timestamp)
         let captured = state.unsafeValue
         state.unsafeValue.reconcile { code in
             let current = hardwareIsDown(code)
             // Incomplete history falls back to current HID state to avoid a stuck reader modifier.
-            if let observed = InsertHardware.observedDown(code, at: event.timestamp, currentDown: current, after: captured.capturedAt(code)) { return observed }
+            if let observed = InsertHardware.observedDown(code, at: timestamp, currentDown: current, after: captured.capturedAt(code)) { return observed }
             if !current { Log.io("Insert physical history incomplete: reconciling to current released state") }
             return current
         }
         let code = event.getIntegerValueField(.keyboardEventKeycode)
         let repeatKey = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
-        let consumed = state.unsafeValue.handle(type, code: code, isRepeat: repeatKey, timestamp: event.timestamp)
+        let consumed = state.unsafeValue.handle(type, code: code, isRepeat: repeatKey, timestamp: timestamp)
         return Decision(consumed: consumed, held: state.unsafeValue.isHeld)
     }
 }
