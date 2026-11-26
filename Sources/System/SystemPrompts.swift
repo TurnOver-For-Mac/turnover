@@ -30,6 +30,46 @@ public final class SystemPrompts {
         return agents.contains(bundle)
     }
 
+    /// Return in a prompt presses the default button wherever the focus is, and TurnOver's own press of the button in
+    /// hand is not to be had here: `keepsActionKey` gives the key back to macOS, which can refuse a press TurnOver
+    /// makes (issue 352). So a plain Return on a button that is not the default goes to the prompt as Space, which
+    /// presses the button the focus is on (26 Nov 2026: eleven times running, Return on Ignore in a crash dialog
+    /// pressed Report… instead, and eleven problem reports were left waiting to be sent). The key tap rewrites the
+    /// real key in place, so it stays the person's own key press. nil: the key goes on as it is.
+    static func spaceInstead(of gesture: KeyboardGesture) -> KeyboardGesture? {
+        guard !gesture.isRepeat, gesture.modifiers.isEmpty, ["enter", "numpadEnter"].contains(gesture.keyName),
+              !shared.handsToVoiceOver,
+              let front = NSWorkspace.shared.frontmostApplication, let bundle = front.bundleIdentifier,
+              agents.contains(bundle) else { return nil }
+        // The agent's own focus, not TurnOver's: TurnOver can still report its focus in the application behind.
+        let app = AXUIElementCreateApplication(front.processIdentifier)
+        AXUIElementSetMessagingTimeout(app, 0.25)
+        guard let focus = app.element(kAXFocusedUIElementAttribute) else { return nil }
+        let role = focus.role
+        let window = focus.element(kAXWindowAttribute)
+        var isDefault: Bool?
+        if role == "AXButton", let def = window?.element(kAXDefaultButtonAttribute) { isDefault = CFEqual(def, focus) }
+        guard returnGoesAsSpace(role: role, isDefault: isDefault) else { return nil }
+        Log.io("system prompt: Return on \(Log.words(focus.string(kAXTitleAttribute) ?? "")), a button that is not the default; it goes on as Space, which presses it")
+        if let window {
+            // For the log only: whether the prompt took it.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                let r = window.role
+                Log.io("system prompt: a second after Return went on as Space the prompt \(r.isEmpty || r == "?" ? "has gone" : "is still open")")
+            }
+        }
+        var flags = gesture.flags
+        flags.remove(.maskNumericPad)   // numpad Enter carries the number pad's flag; Space is not on the pad
+        return KeyboardGesture(keyCode: 49, modifiers: [], characters: " ", timestamp: gesture.timestamp, isRepeat: false, flags: flags)
+    }
+
+    /// The rule alone (tests): only from a plain button, and not from the one Return presses anyway. A window that
+    /// does not say which button is its default (nil) counts as not that one: Space presses the button in hand either
+    /// way. A text field keeps Return, and so do a checkbox and a pop-up button, where Space would do something else.
+    nonisolated package static func returnGoesAsSpace(role: String, isDefault: Bool?) -> Bool {
+        role == "AXButton" && isDefault != true
+    }
+
     /// After TurnOver pressed a button in a protected prompt: if the prompt is still there a moment later, macOS
     /// refused the press. The focus goes back onto the button and the user is asked for a real Space, which macOS takes.
     public static func checkPress(of button: AXUIElement, name: String) {
@@ -405,4 +445,16 @@ package struct SystemPromptContinuity {
         guard !locked else { return nil }
         return reminders.next(in: prompts, activated: pid, now: now)
     }
+}
+
+/// A key that went to the application as another key (Return as Space on a system prompt's button, 26 Nov 2026).
+/// While it stays down its repeats are dropped, so one press presses one button and never the default button of the
+/// prompt that comes up behind it, or whatever takes the focus next. Any fresh key ends it.
+package struct ReplacedKeyRepeats {
+    private var held: Int64?
+    package init() {}
+    /// A fresh key down. `replaced`: this one went on as another key.
+    package mutating func pressed(_ keyCode: Int64, replaced: Bool) { held = replaced ? keyCode : nil }
+    /// Whether a repeat of this key is dropped.
+    package func dropsRepeat(of keyCode: Int64) -> Bool { held == keyCode }
 }

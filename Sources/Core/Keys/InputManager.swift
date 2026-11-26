@@ -97,14 +97,30 @@ public enum InputManager {
     }
     private static var _lastKeyGesture: KeyboardGesture?
 
+    /// The key the last key down goes to the application as, when that is not the key pressed (a system prompt's
+    /// Return as Space, 26 Nov 2026). Set while the key is decided and read by whoever asked, in the same turn of the
+    /// main thread (ScriptHandler.askMain): the key tap then rewrites the real key. nil: the key goes on as itself.
+    package static var sentOnAs: KeyboardGesture?
+    /// The key that last went on as another key, while it is still held: its repeats are dropped.
+    private static var replacedKeys = ReplacedKeyRepeats()
+    /// What a key that TurnOver has no use for goes to the application as, when not as itself (tests replace it).
+    package static var keyGoesOnAs: (KeyboardGesture) -> KeyboardGesture? = { SystemPrompts.spaceInstead(of: $0) }
+
     public static func handleKeyDown(_ gesture: KeyboardGesture) -> Bool {
+        sentOnAs = nil
+        // A key that went on as another key is still held: one press presses one button, so its repeats go nowhere
+        // (as Space, they would press the same button of the next prompt, or whatever takes the focus after it).
+        if gesture.isRepeat, replacedKeys.dropsRepeat(of: gesture.keyCode) { return true }
+        if !gesture.isRepeat { replacedKeys.pressed(gesture.keyCode, replaced: false) }
         let taken = decideKeyDown(gesture)
         // A key that would go straight to the application while keys TurnOver sends on later are still ahead of it
         // (the keys held for a field's focus, 16 Nov 2026, review): let through, it would reach the app before them, as
         // it is already in the keyboard's stream ahead of what they are posted into. It takes its turn behind them.
         if !taken, ScriptHandler.keysMustWaitTheirTurn {
             Log.io("input \(gesture.logDescription()) sent on behind the keys TurnOver is still sending")
-            ScriptHandler.queueInOrder(gesture, lookUp: false, notes: false, masked: false)
+            // Sent by TurnOver here, so as the key it goes on as; the key pressed is swallowed whole.
+            ScriptHandler.queueInOrder(sentOnAs ?? gesture, lookUp: false, notes: false, masked: false)
+            sentOnAs = nil
             return true
         }
         return taken
@@ -251,7 +267,15 @@ public enum InputManager {
         FormattingFeedback.shared.keyWillPassThrough(gesture)
         DispatchQueue.main.async { notePassedThrough(gesture) }
         // An unbound TurnOver chord does nothing; the letter must not reach the document.
-        return gesture.isTurnOverModifier
+        if gesture.isTurnOverModifier { return true }
+        // The key goes to the application. A system prompt's Return on a button that is not the default goes as Space
+        // (SystemPrompts.spaceInstead); what follows a passed key, above, is still told of the key that was pressed.
+        // Only here: the pass-next key, a sleeping application and TurnOver's own screens never come this far.
+        if let other = keyGoesOnAs(gesture) {
+            sentOnAs = other
+            replacedKeys.pressed(gesture.keyCode, replaced: true)
+        }
+        return false
     }
 
     /// What follows a key that goes to the application: the watchers, and the typed character for the echo. Also for a key

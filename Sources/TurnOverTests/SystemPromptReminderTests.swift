@@ -214,4 +214,55 @@ func systemPromptReminderTests() {
         check(prompts.appear(pid: 10, lines: crash, now: 4).quietUntil == nil, "two equal parked prompts are ambiguous")
         check(prompts.appear(pid: 11, lines: nil, now: 4).quietUntil == nil, "an unsafe or unreadable prompt cannot match")
     }
+
+    // 26 Nov 2026: Return on Ignore in a crash dialog pressed Report…, the default button, eleven times running.
+    test("system prompts: Return goes on as Space only from a button that is not the default") {
+        check(SystemPrompts.returnGoesAsSpace(role: "AXButton", isDefault: false), "a button that is not the default")
+        check(SystemPrompts.returnGoesAsSpace(role: "AXButton", isDefault: nil), "a window that names no default button")
+        check(!SystemPrompts.returnGoesAsSpace(role: "AXButton", isDefault: true), "the default button keeps Return")
+        for role in ["AXTextField", "AXSecureTextField", "AXCheckBox", "AXPopUpButton", "AXRadioButton", "AXStaticText", "?", ""] {
+            check(!SystemPrompts.returnGoesAsSpace(role: role, isDefault: false), "\(role) keeps Return")
+            check(!SystemPrompts.returnGoesAsSpace(role: role, isDefault: nil), "\(role) keeps Return when no default is named")
+        }
+    }
+
+    test("system prompts: a key that went on as another key drops its repeats until a fresh key") {
+        var keys = ReplacedKeyRepeats()
+        check(!keys.dropsRepeat(of: 36), "nothing replaced yet")
+        keys.pressed(36, replaced: true)
+        check(keys.dropsRepeat(of: 36), "the replaced key's repeat is dropped")
+        check(!keys.dropsRepeat(of: 49), "another key's repeat is not")
+        keys.pressed(48, replaced: false)
+        check(!keys.dropsRepeat(of: 36), "a fresh key ends it")
+        keys.pressed(36, replaced: true)
+        keys.pressed(36, replaced: false)
+        check(!keys.dropsRepeat(of: 36), "the same key pressed afresh and not replaced repeats as usual")
+    }
+
+    test("system prompts: a key that goes on as another key reaches the key tap as that key, once") {
+        let saved = InputManager.keyGoesOnAs
+        defer { InputManager.keyGoesOnAs = saved }
+        ScriptHandler.resetOrderedLane()
+        // An unbound key stands in for Return on a prompt's button: the rule itself is tested above.
+        let pressed = KeyboardGesture(identifier: "kb:control+option+shift+f15")!
+        let held = KeyboardGesture(keyCode: pressed.keyCode, modifiers: pressed.modifiers, characters: "", timestamp: 0,
+                                   isRepeat: true, flags: pressed.flags)
+        let space = KeyboardGesture(keyCode: 49, modifiers: [], characters: " ", timestamp: 0, isRepeat: false, flags: [])
+        let answer = Locked<ScriptHandler.KeyDecision?>(nil)
+        func ask(_ key: KeyboardGesture) -> ScriptHandler.KeyDecision? {
+            answer.value = nil
+            Thread { answer.value = ScriptHandler.askMain(key) }.start()
+            RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+            return answer.value
+        }
+        InputManager.keyGoesOnAs = { $0.keyCode == pressed.keyCode ? space : nil }
+        expect(ask(pressed), .passedAs(49), "the key tap is told which key to make it")
+        expect(ask(held), .taken, "held down, its repeats go nowhere")
+        expect(ask(held), .taken, "however many")
+        // A fresh press that goes on as itself ends it.
+        InputManager.keyGoesOnAs = { _ in nil }
+        expect(ask(pressed), .passed, "a key the rule leaves alone goes on as itself")
+        expect(ask(held), .passed, "and its repeats go on with it")
+        check(InputManager.sentOnAs == nil, "nothing is left over for the next key")
+    }
 }

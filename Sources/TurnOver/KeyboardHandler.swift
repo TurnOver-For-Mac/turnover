@@ -69,6 +69,9 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
     private var quarantined = Set<Int64>()
     /// Keys translated on the way down (the Windows style): their release is translated too.
     private var remapped = Set<Int64>()
+    /// Keys that went to the application as another key (a system prompt's Return as Space, 26 Nov 2026): the key
+    /// pressed, and the key it went as. Its release goes as that key too.
+    private var sentAs: [Int64: Int64] = [:]
     /// The echo guard, then the stale release (KeyDownGate, 18 Nov 2026).
     private var keyDownGate = KeyDownGate()
     private var controlAlone = false
@@ -221,7 +224,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         layer = mine
         // Nothing carried over from the tap before (a restart after the watchdog): a code still in `quarantined`
         // would swallow the next real key-up, and the app would see a key held down (a code review, 14 Oct 2026).
-        quarantined.removeAll(); remapped.removeAll(); capsDown = false; chordFired = false; keypadZeroDown = false
+        quarantined.removeAll(); remapped.removeAll(); sentAs.removeAll(); capsDown = false; chordFired = false; keypadZeroDown = false
         arrowDownWhileOff.clear()
         Self.capsHeld.value = false
         controlAlone = false; loneShift.cancel(); loneOption.cancel(); loneCommand.cancel()
@@ -412,6 +415,7 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         guard let generation = layer?.generation, isRequested(generation) else { return Unmanaged.passUnretained(event) }
         if Self.bypass, type != .tapDisabledByTimeout, type != .tapDisabledByUserInput {
             if !quarantined.isEmpty { quarantined.removeAll() }   // their key-ups pass now; none must be swallowed later
+            if !sentAs.isEmpty { sentAs.removeAll() }             // nor rewritten later
             return Unmanaged.passUnretained(event)
         }
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
@@ -547,6 +551,14 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         if let r = keypad(type, event, code, settings) { return r }
         if let r = quickNavArrow(type, event, code, settings) { return r }
         if type == .keyUp {
+            if let other = sentAs.removeValue(forKey: code) {
+                // It went down as another key, so it comes up as that key. Its repeats were swallowed meanwhile, which
+                // put it in `quarantined`: taken out, so the next press of the key is not counted as one whose release
+                // was lost.
+                quarantined.remove(code); remapped.remove(code)
+                Self.rewrite(event, toKey: other)
+                return passOrRedirect(event)
+            }
             if quarantined.contains(code) { quarantined.remove(code); return nil }
             if remapped.contains(code) { remapped.remove(code); WindowsRemap.apply(.keyUp, event) }
             return passOrRedirect(event)
@@ -576,6 +588,8 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
             }
             return nil
         }
+        // A new press of a key whose release, due as another key, was never seen: this press is its own.
+        if !isRepeat, sentAs[code] != nil { sentAs[code] = nil }
         // Right Option+T: the date and time, as the owner has it under VoiceOver (4 Oct 2026). Right Option only, so
         // left Option+T still types its character.
         if code == 17, optionCode == 61, settings.optionCommander, event.flags.intersection([.maskControl, .maskCommand, .maskShift]).isEmpty, event.flags.contains(.maskAlternate) {
@@ -641,7 +655,21 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         case .passed:
             if code == 48, event.flags.contains(.maskCommand) { clearLeftoverModifiers(before: "Command Tab") }
             return passOrRedirect(event)
+        case .passedAs(let other):
+            // A system prompt's Return on a button that is not the default goes on as Space (SystemPrompts.spaceInstead).
+            // The real key is rewritten in place, as the Windows style's keys are, so it is still the person's own
+            // key press: macOS can refuse a key TurnOver posts to these prompts.
+            sentAs[code] = other
+            Self.rewrite(event, toKey: other)
+            return passOrRedirect(event)
         }
+    }
+
+    /// A real key made into another key, in place. The number pad's flag goes: it belongs to the key that was pressed
+    /// (numpad Enter), and the only key a key is rewritten to, Space, is not on the pad.
+    private static func rewrite(_ event: CGEvent, toKey code: Int64) {
+        event.setIntegerValueField(.keyboardEventKeycode, value: code)
+        if event.flags.contains(.maskNumericPad) { event.flags.remove(.maskNumericPad) }
     }
 
     private static func remappedGesture(_ gesture: KeyboardGesture, event: CGEvent) -> KeyboardGesture {
