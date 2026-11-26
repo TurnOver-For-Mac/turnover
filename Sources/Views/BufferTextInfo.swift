@@ -169,9 +169,9 @@ public final class BufferTextInfo: TextInfo {
             let name = textRange(start, end).trimmingCharacters(in: .whitespacesAndNewlines)
             // VoiceOver's order: "Create, button", then its states.
             if config.documentFormatting.rolesAfterText {
-                return (prefix, ([name] + role.map { Speech.ui($0) } + rest).filter { !$0.isEmpty }.joined(separator: ", "))
+                return (prefix, ([name] + role.map { Speech.ui($0) } + rest).filter { !$0.isEmpty }.joined(separator: Speech.partMark))
             }
-            return (prefix + role, (name + (rest.isEmpty ? "" : ", " + rest.joined(separator: ", "))))
+            return (prefix + role, (name + (rest.isEmpty ? "" : Speech.partMark + rest.joined(separator: Speech.partMark))))
         }
         // Links inline.
         let linkMode = config.documentFormatting.links
