@@ -69,9 +69,9 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
     private var quarantined = Set<Int64>()
     /// Keys translated on the way down (the Windows style): their release is translated too.
     private var remapped = Set<Int64>()
-    /// Keys that went to the application as another key (a system prompt's Return as Space, 26 Nov 2026): the key
-    /// pressed, and the key it went as. Its release goes as that key too.
-    private var sentAs: [Int64: Int64] = [:]
+    /// Keys that went to the application as another key (a system prompt's Return as Space, 26 Nov 2026): while one
+    /// is down its repeats go nowhere, and its release goes as that key's (KeysSentAsOthers).
+    private var sentAs = KeysSentAsOthers()
     /// The echo guard, then the stale release (KeyDownGate, 18 Nov 2026).
     private var keyDownGate = KeyDownGate()
     private var controlAlone = false
@@ -224,7 +224,11 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         layer = mine
         // Nothing carried over from the tap before (a restart after the watchdog): a code still in `quarantined`
         // would swallow the next real key-up, and the app would see a key held down (a code review, 14 Oct 2026).
-        quarantined.removeAll(); remapped.removeAll(); sentAs.removeAll(); capsDown = false; chordFired = false; keypadZeroDown = false
+        quarantined.removeAll(); remapped.removeAll(); capsDown = false; chordFired = false; keypadZeroDown = false
+        // A key that went down as another key is not forgotten with the rest: the application saw that key go down and
+        // is owed its release. One let go while there was no tap gets it now; one still held, when it is let go
+        // (a review, 26 Nov 2026).
+        settleKeysSentAsOthers()
         arrowDownWhileOff.clear()
         Self.capsHeld.value = false
         controlAlone = false; loneShift.cancel(); loneOption.cancel(); loneCommand.cancel()
@@ -412,16 +416,23 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         // The person's own press of VoiceOver's toggle, heard whatever else the tap is doing: the change of VoiceOver
         // after it is theirs, never TurnOver's (VoiceOverChangeOrigin; Codex's second review, 18 Nov 2026).
         if type == .keyDown { Self.notePersonToggle(event) }
-        guard let generation = layer?.generation, isRequested(generation) else { return Unmanaged.passUnretained(event) }
+        // Keys pass untouched once the tap is retired, and while the main thread is stuck. All but a key that went
+        // down as another key: its release still goes as that key's, or the application would be left with it held
+        // down, and its repeats still go nowhere (a review, 26 Nov 2026).
+        guard let generation = layer?.generation, isRequested(generation) else {
+            if let r = keySentAsAnother(type, event, routed: false) { return r }
+            return Unmanaged.passUnretained(event)
+        }
         if Self.bypass, type != .tapDisabledByTimeout, type != .tapDisabledByUserInput {
             if !quarantined.isEmpty { quarantined.removeAll() }   // their key-ups pass now; none must be swallowed later
-            if !sentAs.isEmpty { sentAs.removeAll() }             // nor rewritten later
+            if let r = keySentAsAnother(type, event, routed: false) { return r }
             return Unmanaged.passUnretained(event)
         }
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             Log.warning("keyboard: tap disabled (\(type.rawValue)), re-enabling")
             HandOver.personToggle.listening(true)   // keys while it was off were not heard: listening starts afresh
             arrowDownWhileOff.clear()   // a key-up may have been lost while the tap was off (15 Nov 2026)
+            settleKeysSentAsOthers()    // and with it the release of a key that went down as another key
             if let t = tap { CGEvent.tapEnable(tap: t, enable: true) }
             guard let t = tap, CGEvent.tapIsEnabled(tap: t) else {
                 Log.error("keyboard: tap could not be re-enabled; handing input back")
@@ -439,6 +450,9 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
             }
             return Unmanaged.passUnretained(event)
         }
+        // A key that went to the application as another key: its repeats and its release, before anything else has them
+        // (the keypad's commands took numpad Enter's release with Shift held, and Space stayed down: a review, 26 Nov 2026).
+        if let r = keySentAsAnother(type, event, routed: true) { return r }
         // Our own re-posted keys (gesture.send) pass untouched.
         if event.getIntegerValueField(.eventSourceUserData) == Self.marker { return Unmanaged.passUnretained(event) }
         // A key sent on in order: the keys typed after it may go now. Routed as the key typed would have been (an arrow
@@ -548,17 +562,18 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
             return Unmanaged.passUnretained(event)
         }
         controlAlone = false; loneShift.cancel(); loneOption.cancel(); loneCommand.cancel()
+        // One press of Return presses one button in a system prompt (SystemPrompts.dropsHeldReturn, 26 Nov 2026): held
+        // down, its repeats go nowhere. Decided here, where the release is seen too, and before the keypad's commands
+        // and the main thread: nothing is counted as taken, so the release goes the way the press went.
+        if type == .keyDown, code == 36 || code == 76, event.getIntegerValueField(.keyboardEventAutorepeat) != 0 {
+            let front = WindowsRemap.front
+            let plain = !capsDown && event.flags.intersection([.maskShift, .maskControl, .maskAlternate, .maskCommand]).isEmpty
+            if SystemPrompts.dropsHeldReturn(keyCode: code, isRepeat: true, plain: plain, frontBundle: front),
+               !InputManager.isAsleep(bundle: front) { return nil }
+        }
         if let r = keypad(type, event, code, settings) { return r }
         if let r = quickNavArrow(type, event, code, settings) { return r }
         if type == .keyUp {
-            if let other = sentAs.removeValue(forKey: code) {
-                // It went down as another key, so it comes up as that key. Its repeats were swallowed meanwhile, which
-                // put it in `quarantined`: taken out, so the next press of the key is not counted as one whose release
-                // was lost.
-                quarantined.remove(code); remapped.remove(code)
-                Self.rewrite(event, toKey: other)
-                return passOrRedirect(event)
-            }
             if quarantined.contains(code) { quarantined.remove(code); return nil }
             if remapped.contains(code) { remapped.remove(code); WindowsRemap.apply(.keyUp, event) }
             return passOrRedirect(event)
@@ -588,8 +603,6 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
             }
             return nil
         }
-        // A new press of a key whose release, due as another key, was never seen: this press is its own.
-        if !isRepeat, sentAs[code] != nil { sentAs[code] = nil }
         // Right Option+T: the date and time, as the owner has it under VoiceOver (4 Oct 2026). Right Option only, so
         // left Option+T still types its character.
         if code == 17, optionCode == 61, settings.optionCommander, event.flags.intersection([.maskControl, .maskCommand, .maskShift]).isEmpty, event.flags.contains(.maskAlternate) {
@@ -658,11 +671,48 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         case .passedAs(let other):
             // A system prompt's Return on a button that is not the default goes on as Space (SystemPrompts.spaceInstead).
             // The real key is rewritten in place, as the Windows style's keys are, so it is still the person's own
-            // key press: macOS can refuse a key TurnOver posts to these prompts.
-            sentAs[code] = other
+            // key press: macOS can refuse a key TurnOver posts to these prompts. From here to its release the key is
+            // `sentAs`'s (keySentAsAnother).
+            sentAs.wentDown(code, as: other)
             Self.rewrite(event, toKey: other)
             return passOrRedirect(event)
         }
+    }
+
+    /// A key that went to the application as another key (`sentAs`), asked about every real key event before anything
+    /// else: its repeats go nowhere, its release goes as that key's, and a fresh press whose earlier release was never
+    /// seen first gives the application the release it is owed. nil: not such a key, or that fresh press, which goes
+    /// on the usual way. `routed`: sent where TurnOver's keys go (false while keys pass untouched).
+    private func keySentAsAnother(_ type: CGEventType, _ event: CGEvent, routed: Bool) -> Unmanaged<CGEvent>?? {
+        guard !sentAs.isEmpty, type == .keyDown || type == .keyUp else { return nil }
+        // TurnOver's own keys are not the key in the hand.
+        let from = event.getIntegerValueField(.eventSourceUserData)
+        guard from != Self.marker, from != Self.orderedMarker else { return nil }
+        let code = event.getIntegerValueField(.keyboardEventKeycode)
+        switch sentAs.step(code: code, down: type == .keyDown, isRepeat: event.getIntegerValueField(.keyboardEventAutorepeat) != 0) {
+        case .asItIs:
+            return nil
+        case .dropped:
+            return .some(nil)
+        case .releasedAs(let other):
+            // Nothing of this press is left to act on the next one.
+            quarantined.remove(code); remapped.remove(code)
+            Self.rewrite(event, toKey: other)
+            return .some(routed ? passOrRedirect(event) : Unmanaged.passUnretained(event))
+        case .pressedAgain(let owed):
+            Log.io("keyboard: a key pressed again that had gone on as another key, its release not seen; that key's release is sent now")
+            Self.postRelease(of: owed)
+            return nil
+        }
+    }
+
+    /// After the tap was off or was replaced: a key that went down as another key and was let go unseen meanwhile is
+    /// given the release the application is owed.
+    private func settleKeysSentAsOthers() {
+        guard !sentAs.isEmpty else { return }
+        let owed = sentAs.forget { !CGEventSource.keyState(.hidSystemState, key: CGKeyCode($0)) }
+        for code in owed { Self.postRelease(of: code) }
+        if !owed.isEmpty { Log.io("keyboard: \(owed.count) key(s) that went on as another key were let go unseen; their release is sent now") }
     }
 
     /// A real key made into another key, in place. The number pad's flag goes: it belongs to the key that was pressed

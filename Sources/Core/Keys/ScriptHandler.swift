@@ -30,6 +30,9 @@ public enum ScriptHandler {
         /// Why the key may no longer go anywhere (nil: it may), asked when its turn comes with the command it would run
         /// (nil: it is to be sent on).
         var refusal: ((Script?) -> String?)?
+        /// A key to send on that may go as another key (a system prompt's Return as Space): asked when its turn comes,
+        /// where the focus is then, not when it was typed (InputManager.keyGoesOnAs; a review, 26 Nov 2026).
+        var mayGoOnAsAnother = false
     }
     private static var queued: [Queued] = []
     /// An entry of the ordered lane is running (a script that waits for the caret lets keys in meanwhile).
@@ -313,10 +316,10 @@ public enum ScriptHandler {
     /// A key into the ordered lane (main thread). `lookUp`: its command is found when its turn comes and runs, or the
     /// key is sent on if it has none, as a key typed then would; otherwise it is sent on. `refusal` is asked first.
     package static func queueInOrder(_ gesture: KeyboardGesture, lookUp: Bool, notes: Bool, masked: Bool,
-                                     refusal: ((Script?) -> String?)? = nil) {
+                                     mayGoOnAsAnother: Bool = false, refusal: ((Script?) -> String?)? = nil) {
         lock.lock()
         enqueue(Queued(kind: lookUp ? .lookUp : .send, gesture: gesture, wasInSayAll: SayAll.isRunning,
-                       inOrder: true, masked: masked, notes: notes, refusal: refusal))
+                       inOrder: true, masked: masked, notes: notes, refusal: refusal, mayGoOnAsAnother: mayGoOnAsAnother))
         lock.unlock()
         DispatchQueue.main.async { runQueued() }
     }
@@ -404,7 +407,15 @@ public enum ScriptHandler {
             defer { sendingInOrder = before }
             executeScript(script, gesture: gesture, wasInSayAll: entry.wasInSayAll, maskKey: entry.masked)
         } else {
-            sendInOrder(gesture)
+            var key = gesture
+            if entry.mayGoOnAsAnother {
+                switch InputManager.keyGoesOnAs(gesture) {
+                case .asItIs: break
+                case .asAnother(let other): key = other
+                case .nowhere: return
+                }
+            }
+            sendInOrder(key)
             if entry.notes { InputManager.notePassedThrough(gesture) }
         }
     }

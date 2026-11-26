@@ -72,6 +72,14 @@ extension KeyboardHandler {
         }
     }
 
+    /// A key's release alone, marked so the tap lets it by: owed to the application for a key that went down as
+    /// another key and whose own release was never seen (KeysSentAsOthers, 26 Nov 2026).
+    nonisolated static func postRelease(of code: Int64) {
+        guard let e = CGEvent(keyboardEventSource: CGEventSource(stateID: .hidSystemState), virtualKey: CGKeyCode(code), keyDown: false) else { return }
+        e.setIntegerValueField(.eventSourceUserData, value: marker)
+        e.post(tap: .cghidEventTap)
+    }
+
     /// NVDA's gesture.send: the key down and up, marked so the tap ignores them. `ordered`: marked so the tap counts
     /// the key and routes it (ScriptHandler.sendInOrder), and a typed character carries its own text, so a capital sent
     /// a moment after it was typed is still a capital whatever the hand now holds (16 Nov 2026, review).

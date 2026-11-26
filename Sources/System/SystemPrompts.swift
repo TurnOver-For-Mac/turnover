@@ -14,7 +14,7 @@ public final class SystemPrompts {
     /// The agents that draw the system's own prompts. UserNotificationCenter ("would like access to record your system
     /// audio") and CoreLocationAgent ("would like to use your current location") were not watched, so a prompt that
     /// came up behind Claude was never said (12 Oct 2026: VoiceOver says there is a system request).
-    static let agents = ["com.apple.LocalAuthentication.UIAgent", "com.apple.SecurityAgent", "com.apple.UserNotificationCenter",
+    nonisolated static let agents = ["com.apple.LocalAuthentication.UIAgent", "com.apple.SecurityAgent", "com.apple.UserNotificationCenter",
                          "com.apple.CoreLocationAgent", "com.apple.coreservices.uiagent"]
 
     /// Prompts macOS protects: an Accessibility press from TurnOver is refused (CoreLocationAgent put its focus back on
@@ -35,39 +35,128 @@ public final class SystemPrompts {
     /// makes (issue 352). So a plain Return on a button that is not the default goes to the prompt as Space, which
     /// presses the button the focus is on (26 Nov 2026: eleven times running, Return on Ignore in a crash dialog
     /// pressed Report… instead, and eleven problem reports were left waiting to be sent). The key tap rewrites the
-    /// real key in place, so it stays the person's own key press. nil: the key goes on as it is.
-    static func spaceInstead(of gesture: KeyboardGesture) -> KeyboardGesture? {
+    /// real key in place, so it stays the person's own key press.
+    /// A prompt that does not say where its focus is gets no Return at all, with the edge sound: sent, it would press
+    /// the default button, which may not be the one in hand. Pressed again within three seconds, the prompt is asked
+    /// again, and if it still does not say, Return goes on as it is, so nobody is left unable to answer a prompt
+    /// (a review, 26 Nov 2026).
+    static func returnGoesOn(_ gesture: KeyboardGesture) -> KeyOnward {
         guard !gesture.isRepeat, gesture.modifiers.isEmpty, ["enter", "numpadEnter"].contains(gesture.keyName),
               !shared.handsToVoiceOver,
               let front = NSWorkspace.shared.frontmostApplication, let bundle = front.bundleIdentifier,
-              agents.contains(bundle) else { return nil }
+              agents.contains(bundle) else { return .asItIs }
         // The agent's own focus, not TurnOver's: TurnOver can still report its focus in the application behind.
-        let app = AXUIElementCreateApplication(front.processIdentifier)
-        AXUIElementSetMessagingTimeout(app, 0.25)
-        guard let focus = app.element(kAXFocusedUIElementAttribute) else { return nil }
-        let role = focus.role
-        let window = focus.element(kAXWindowAttribute)
-        var isDefault: Bool?
-        if role == "AXButton", let def = window?.element(kAXDefaultButtonAttribute) { isDefault = CFEqual(def, focus) }
-        guard returnGoesAsSpace(role: role, isDefault: isDefault) else { return nil }
-        Log.io("system prompt: Return on \(Log.words(focus.string(kAXTitleAttribute) ?? "")), a button that is not the default; it goes on as Space, which presses it")
-        if let window {
-            // For the log only: whether the prompt took it.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                let r = window.role
-                Log.io("system prompt: a second after Return went on as Space the prompt \(r.isEmpty || r == "?" ? "has gone" : "is still open")")
+        let look = lookAtFocus(pid: front.processIdentifier)
+        let now = ProcessInfo.processInfo.systemUptime
+        let justBefore = now - unansweredAt < 3
+        if look.focus != .unanswered { unansweredAt = -.infinity }
+        switch returnGoes(from: look.focus, unansweredJustBefore: justBefore) {
+        case .asItIs:
+            switch look.focus {
+            case .unanswered:
+                unansweredAt = -.infinity
+                Log.io("system prompt: the prompt did not say where its focus is, twice running; Return goes on as it is")
+            case .nothing:
+                Log.io("system prompt: Return goes on as it is (nothing has the focus)")
+            case .control(let role, let isDefault):
+                Log.io("system prompt: Return goes on as it is (the focus is on \(isDefault == true ? "the default button" : role))")
             }
+            return .asItIs
+        case .nowhere:
+            unansweredAt = now
+            Log.io("system prompt: the prompt did not say where its focus is; Return is not sent, since it would press the default button whatever is in hand. Pressed again, the prompt is asked again")
+            Tones.edge()
+            return .nowhere
+        case .asSpace:
+            Log.io("system prompt: Return on \(Log.words(look.element?.string(kAXTitleAttribute) ?? "")), a button that is not the default; it goes on as Space, which presses it")
+            if let window = look.window {
+                // For the log only: whether the prompt took it.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                    let r = window.role
+                    Log.io("system prompt: a second after Return went on as Space the prompt \(r.isEmpty || r == "?" ? "has gone" : "is still open")")
+                }
+            }
+            var flags = gesture.flags
+            flags.remove(.maskNumericPad)   // numpad Enter carries the number pad's flag; Space is not on the pad
+            return .asAnother(KeyboardGesture(keyCode: 49, modifiers: [], characters: " ", timestamp: gesture.timestamp, isRepeat: false, flags: flags))
         }
-        var flags = gesture.flags
-        flags.remove(.maskNumericPad)   // numpad Enter carries the number pad's flag; Space is not on the pad
-        return KeyboardGesture(keyCode: 49, modifiers: [], characters: " ", timestamp: gesture.timestamp, isRepeat: false, flags: flags)
+    }
+    /// When a prompt last did not say where its focus is (the system's uptime).
+    private static var unansweredAt: TimeInterval = -.infinity
+
+    /// What one look at a prompt found where its keyboard focus is.
+    nonisolated package enum PromptFocus: Equatable {
+        /// A control, by its role, and for a button whether it is the window's default button (nil: the window names
+        /// none, or did not say).
+        case control(role: String, isDefault: Bool?)
+        /// Nothing has the focus.
+        case nothing
+        /// The agent did not answer.
+        case unanswered
+    }
+    nonisolated package enum ReturnGoes: Equatable { case asItIs, asSpace, nowhere }
+
+    /// The rule alone (tests). `unansweredJustBefore`: the prompt did not answer the Return before this one either.
+    nonisolated package static func returnGoes(from focus: PromptFocus, unansweredJustBefore: Bool) -> ReturnGoes {
+        switch focus {
+        case .control(let role, let isDefault): return returnGoesAsSpace(role: role, isDefault: isDefault) ? .asSpace : .asItIs
+        case .nothing: return .asItIs
+        case .unanswered: return unansweredJustBefore ? .asItIs : .nowhere
+        }
     }
 
-    /// The rule alone (tests): only from a plain button, and not from the one Return presses anyway. A window that
-    /// does not say which button is its default (nil) counts as not that one: Space presses the button in hand either
-    /// way. A text field keeps Return, and so do a checkbox and a pop-up button, where Space would do something else.
+    /// Only from a plain button, and not from the one Return presses anyway. A window that does not say which button
+    /// is its default (nil) counts as not that one: Space presses the button in hand either way. A text field keeps
+    /// Return, and so do a checkbox and a pop-up button, where Space would do something else.
     nonisolated package static func returnGoesAsSpace(role: String, isDefault: Bool?) -> Bool {
         role == "AXButton" && isDefault != true
+    }
+
+    /// One press of Return presses one button: while a system prompt's agent is in front, the repeats of a plain Return
+    /// or numpad Enter held down go nowhere (the key tap asks). Held, it pressed the default button of the prompt that
+    /// came up behind the one just answered, and of each one after it (a review, 26 Nov 2026).
+    nonisolated package static func dropsHeldReturn(keyCode: Int64, isRepeat: Bool, plain: Bool, frontBundle: String) -> Bool {
+        isRepeat && plain && (keyCode == 36 || keyCode == 76) && agents.contains(frontBundle)
+    }
+
+    /// The longest each question to the prompt may take here. The keyboard thread waits 0.15 s for the whole answer
+    /// (ScriptHandler.lookupLimit); a later answer costs the real key, and TurnOver then has to post one of its own.
+    private static let lookLimit: Float = 0.1
+
+    private struct Look {
+        var focus: PromptFocus
+        var element: AXUIElement?
+        var window: AXUIElement?
+    }
+
+    private static func lookAtFocus(pid: pid_t) -> Look {
+        let app = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(app, lookLimit)
+        let (found, error) = app.attrError(kAXFocusedUIElementAttribute)
+        guard let found, CFGetTypeID(found) == AXUIElementGetTypeID() else {
+            return Look(focus: answered(error) ? .nothing : .unanswered)
+        }
+        let focus = found as! AXUIElement
+        // A limit set on one element covers that element alone: each one asked gets its own.
+        AXUIElementSetMessagingTimeout(focus, lookLimit)
+        let (roleValue, roleError) = focus.attrError(kAXRoleAttribute)
+        guard let role = roleValue as? String else {
+            return Look(focus: answered(roleError) ? .nothing : .unanswered, element: focus)
+        }
+        guard role == "AXButton" else { return Look(focus: .control(role: role, isDefault: nil), element: focus) }
+        // Whether it is the default button. Not knowing counts as not: Space presses the button in hand either way.
+        var isDefault: Bool?
+        let window = focus.element(kAXWindowAttribute)
+        if let window {
+            AXUIElementSetMessagingTimeout(window, lookLimit)
+            if let def = window.element(kAXDefaultButtonAttribute) { isDefault = CFEqual(def, focus) }
+        }
+        return Look(focus: .control(role: role, isDefault: isDefault), element: focus, window: window)
+    }
+
+    /// Whether the agent answered: "no value" and "not supported" are answers, there is nothing there.
+    nonisolated private static func answered(_ error: AXError) -> Bool {
+        error == .success || error == .noValue || error == .attributeUnsupported
     }
 
     /// After TurnOver pressed a button in a protected prompt: if the prompt is still there a moment later, macOS
@@ -94,6 +183,12 @@ public final class SystemPrompts {
         let pid: pid_t
         let id: Int
         var text: PromptText?
+        /// When it was last read aloud, or a reading was last tried: each prompt has its own two seconds in which it
+        /// is not read again (a review, 26 Nov 2026: one clock for them all kept a prompt that had come to the front
+        /// unread, because another had just been read).
+        var announcedAt: Date?
+        /// Its words have been said (false: listed without them, as one back after a lock behind another application).
+        var wasRead = false
     }
 
     private var timer: Timer?
@@ -149,18 +244,23 @@ public final class SystemPrompts {
 
     private func check() {
         var windows: [(AXUIElement, pid_t)] = []
+        // An agent that does not answer has not closed its prompts: a question that timed out looked like every one of
+        // them closing, and each was read again as new when the agent answered (a review, 26 Nov 2026).
+        var unanswered = Set<pid_t>()
         for bundle in Self.agents {
             for app in NSRunningApplication.runningApplications(withBundleIdentifier: bundle) {
                 let pid = app.processIdentifier
                 AXHandler.shared.observe(pid)
                 let ax = AXUIElementCreateApplication(pid)
                 AXUIElementSetMessagingTimeout(ax, 0.5)
-                windows += ax.elements(kAXWindowsAttribute).map { ($0, pid) }
+                let (value, error) = ax.attrError(kAXWindowsAttribute)
+                if let found = value as? [AXUIElement] { windows += found.map { ($0, pid) } }
+                else if !Self.answered(error) { unanswered.insert(pid) }
             }
         }
         let now = ProcessInfo.processInfo.systemUptime
         updateScreenLock(now: now)
-        let disappeared = shown.filter { p in !windows.contains { $0.0.isSame(p.window) } }
+        let disappeared = shown.filter { p in !unanswered.contains(p.pid) && !windows.contains { $0.0.isSame(p.window) } }
         for p in disappeared {
             continuity.park(id: p.id, pid: p.pid, lines: p.text?.matchingLines, now: now)
         }
@@ -180,33 +280,62 @@ public final class SystemPrompts {
         }
         guard !continuity.locked else { return }
         let front = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        // Which of the front agent's windows the keys go to: asked once, and only when something turns on it.
+        var asked = false, key: AXUIElement?
+        func hasKeyboard(_ window: AXUIElement, _ pid: pid_t) -> Bool {
+            guard front == pid else { return false }
+            if !asked { asked = true; key = keyWindow(of: pid) }
+            return key.map { $0.isSame(window) } ?? false
+        }
         for (w, pid) in windows where !shown.contains(where: { $0.window.isSame(w) }) {
-            show(w, pid: pid, now: now, hasKeyboard: front == pid)
+            show(w, pid: pid, now: now, hasKeyboard: hasKeyboard(w, pid))
+        }
+        // A prompt whose words were never said (back after a lock, behind another application or another prompt) that
+        // has the keyboard now, with no activation to say so (the prompt in front of it was answered): read like any
+        // place the person lands in.
+        if !handsToVoiceOver, let index = shown.firstIndex(where: { $0.text != nil && !$0.wasRead && hasKeyboard($0.window, $0.pid) }) {
+            Log.io("system prompt from pid \(shown[index].pid): it has the keyboard now and was never read")
+            read(at: index)
         }
     }
 
-    /// `hasKeyboard`: the prompt's agent is the application in front, so the prompt is where the keys go.
+    /// The window of an agent that the keys go to while the agent is in front: its focused window, or its first when it
+    /// names none (UserNotificationCenter's prompts have a window but no focused window).
+    private func keyWindow(of pid: pid_t) -> AXUIElement? {
+        let ax = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(ax, 0.5)
+        return ax.element(kAXFocusedWindowAttribute) ?? ax.elements(kAXWindowsAttribute).first
+    }
+
+    /// `hasKeyboard`: the prompt's agent is the application in front and this is the window its keys go to. Another
+    /// window of the same agent does not have it (a review, 26 Nov 2026).
     private func show(_ window: AXUIElement, pid: pid_t, now: TimeInterval, hasKeyboard: Bool) {
         let first = shown.isEmpty
         let voiceOver = handsToVoiceOver
         let text = voiceOver ? nil : readPrompt(window, pid: pid)
         let appearance = continuity.appear(pid: pid, lines: text?.matchingLines, now: now)
-        shown.append(.init(window: window, pid: pid, id: appearance.id, text: text))
+        var prompt = OpenPrompt(window: window, pid: pid, id: appearance.id, text: text)
         // The same prompt back after a lock keeps its reminder history, and behind another application it is not read
         // again or given the keyboard (25 Nov 2026: one crash dialog was read in full five times in a day, at each
         // unlock). With the keyboard it is read like any place the person lands in: silence there would leave them in
-        // a dialog without knowing it (a review, 26 Nov 2026).
+        // a dialog without knowing it (a review, 26 Nov 2026). Should it get the keyboard later, it is read then
+        // (`check`, `announceFront`).
         if appearance.quietUntil != nil, !hasKeyboard {
+            shown.append(prompt)
             Log.io("system prompt from pid \(pid): the same one back after a lock; not read again")
             return
         }
         if voiceOver {
+            shown.append(prompt)
             // The prompt can open without the keyboard. Give it to VoiceOver and step aside.
             Log.io("system prompt from pid \(pid): VoiceOver's")
             if first { onPromptChange?(true) }
             if let f = AXUIElementCreateApplication(pid).element(kAXFocusedUIElementAttribute) { giveKeyboard(to: f) }
         } else {
-            announce(text, pid: pid)
+            prompt.announcedAt = Date()
+            prompt.wasRead = text != nil
+            shown.append(prompt)
+            announce(text, window: window, pid: pid)
         }
     }
 
@@ -216,26 +345,30 @@ public final class SystemPrompts {
         let now = ProcessInfo.processInfo.systemUptime
         updateScreenLock(now: now)
         guard !continuity.locked, !handsToVoiceOver else { return }
-        let ax = AXUIElementCreateApplication(pid)
-        guard let w = ax.element(kAXFocusedWindowAttribute) ?? ax.elements(kAXWindowsAttribute).first else { return }
+        guard let w = keyWindow(of: pid) else { return }
         // In front, a prompt is always read, one that came back after a lock too: the keys go to it now. (The tone is
         // played by the caller, for every agent that comes to the front.)
         guard let index = shown.firstIndex(where: { $0.window.isSame(w) }) else {
             show(w, pid: pid, now: now, hasKeyboard: true)
             return
         }
-        guard Date().timeIntervalSince(lastAnnounced) >= 2 else { return }
-        guard let text = readPrompt(w, pid: pid) else {
-            // A failed reread leaves the reminder's last known summary available.
-            lastAnnounced = Date()
-            return
-        }
-        var prompt = shown.remove(at: index)
-        prompt.text = text
-        shown.append(prompt)
-        announce(text, pid: pid)
+        // Not twice in two seconds, each prompt by its own clock.
+        if let at = shown[index].announcedAt, Date().timeIntervalSince(at) < 2 { return }
+        read(at: index)
     }
-    private var lastAnnounced = Date.distantPast
+
+    /// Reads a prompt already listed, with its words as they are now. A reading that fails says nothing again, and
+    /// leaves the reminder its last known summary; but a prompt never said is said from the words it was listed with.
+    private func read(at index: Int) {
+        var prompt = shown.remove(at: index)
+        let fresh = readPrompt(prompt.window, pid: prompt.pid)
+        if let fresh { prompt.text = fresh }
+        prompt.announcedAt = Date()
+        let say = fresh ?? (prompt.wasRead ? nil : prompt.text)
+        if say != nil { prompt.wasRead = true }
+        shown.append(prompt)
+        if let say { announce(say, window: prompt.window, pid: prompt.pid) }
+    }
 
     private func readPrompt(_ window: AXUIElement, pid: pid_t) -> PromptText? {
         var texts: [String] = []
@@ -272,16 +405,22 @@ public final class SystemPrompts {
         return PromptText(lines: texts, canRestore: canRestore && stack.isEmpty && !texts.isEmpty && !asksForCredentials)
     }
 
-    private func announce(_ text: PromptText?, pid: pid_t) {
-        lastAnnounced = Date()
+    private func announce(_ text: PromptText?, window: AXUIElement, pid: pid_t) {
         guard let texts = text?.lines else { return }
         Log.io("system prompt from pid \(pid): \(texts.count) lines")
         Speech.cancel()
         Speech.speakMessage(([Self.isProtected(pid) ? String(localized: "system dialog", comment: "A role: a macOS system dialog") : Role.dialog.displayString] + texts).joined(separator: ", "))
         let ax = AXUIElementCreateApplication(pid)
         if let f = ax.element(kAXFocusedUIElementAttribute) {
-            giveKeyboard(to: f)
-            AXHandler.shared.focusChanged(f, pid: pid)
+            // Into the prompt just read, never into another: with two of an agent's prompts open the focus can be in the
+            // other one, and its button was read after this one's words as if it were this one's (a review, 26 Nov 2026).
+            let home = f.element(kAXWindowAttribute)
+            if let home, !home.isSame(window), shown.contains(where: { $0.window.isSame(home) }) {
+                Log.io("system prompt from pid \(pid): the focus is in another of its prompts; the keyboard stays there")
+            } else {
+                giveKeyboard(to: f)
+                AXHandler.shared.focusChanged(f, pid: pid)
+            }
         }
         // After the button's own hint: what to do with the prompt as a whole.
         let all = texts.joined(separator: " ").lowercased()
@@ -445,16 +584,4 @@ package struct SystemPromptContinuity {
         guard !locked else { return nil }
         return reminders.next(in: prompts, activated: pid, now: now)
     }
-}
-
-/// A key that went to the application as another key (Return as Space on a system prompt's button, 26 Nov 2026).
-/// While it stays down its repeats are dropped, so one press presses one button and never the default button of the
-/// prompt that comes up behind it, or whatever takes the focus next. Any fresh key ends it.
-package struct ReplacedKeyRepeats {
-    private var held: Int64?
-    package init() {}
-    /// A fresh key down. `replaced`: this one went on as another key.
-    package mutating func pressed(_ keyCode: Int64, replaced: Bool) { held = replaced ? keyCode : nil }
-    /// Whether a repeat of this key is dropped.
-    package func dropsRepeat(of keyCode: Int64) -> Bool { held == keyCode }
 }

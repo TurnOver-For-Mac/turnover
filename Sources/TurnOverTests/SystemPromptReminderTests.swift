@@ -226,28 +226,98 @@ func systemPromptReminderTests() {
         }
     }
 
-    test("system prompts: a key that went on as another key drops its repeats until a fresh key") {
-        var keys = ReplacedKeyRepeats()
-        check(!keys.dropsRepeat(of: 36), "nothing replaced yet")
-        keys.pressed(36, replaced: true)
-        check(keys.dropsRepeat(of: 36), "the replaced key's repeat is dropped")
-        check(!keys.dropsRepeat(of: 49), "another key's repeat is not")
-        keys.pressed(48, replaced: false)
-        check(!keys.dropsRepeat(of: 36), "a fresh key ends it")
-        keys.pressed(36, replaced: true)
-        keys.pressed(36, replaced: false)
-        check(!keys.dropsRepeat(of: 36), "the same key pressed afresh and not replaced repeats as usual")
+    // A review, 26 Nov 2026: a prompt that was slow to answer was treated as a prompt with nothing in focus, and Return
+    // went on to press the default button whatever was in hand.
+    test("system prompts: a prompt that does not say where its focus is gets no Return, then Return as it is") {
+        typealias P = SystemPrompts
+        for before in [false, true] {
+            expect(P.returnGoes(from: .control(role: "AXButton", isDefault: false), unansweredJustBefore: before), .asSpace,
+                   "a button that is not the default takes Space")
+            expect(P.returnGoes(from: .control(role: "AXButton", isDefault: nil), unansweredJustBefore: before), .asSpace,
+                   "so does a button in a window that names no default")
+            expect(P.returnGoes(from: .control(role: "AXButton", isDefault: true), unansweredJustBefore: before), .asItIs,
+                   "the default button keeps Return")
+            expect(P.returnGoes(from: .control(role: "AXSecureTextField", isDefault: nil), unansweredJustBefore: before), .asItIs,
+                   "a password field keeps Return")
+            expect(P.returnGoes(from: .nothing, unansweredJustBefore: before), .asItIs, "a prompt with no focus keeps Return")
+        }
+        expect(P.returnGoes(from: .unanswered, unansweredJustBefore: false), .nowhere,
+               "the first Return to a prompt that does not answer is not sent")
+        expect(P.returnGoes(from: .unanswered, unansweredJustBefore: true), .asItIs,
+               "the second goes on as it is, so the prompt can always be answered")
     }
 
-    test("system prompts: a key that goes on as another key reaches the key tap as that key, once") {
+    // A review, 26 Nov 2026: Return held on a default button pressed the default button of each prompt queued behind it.
+    test("system prompts: a held Return presses one button") {
+        typealias P = SystemPrompts
+        let agents = ["com.apple.LocalAuthentication.UIAgent", "com.apple.SecurityAgent", "com.apple.UserNotificationCenter",
+                      "com.apple.CoreLocationAgent", "com.apple.coreservices.uiagent"]
+        for agent in agents {
+            check(P.dropsHeldReturn(keyCode: 36, isRepeat: true, plain: true, frontBundle: agent), "Return held in \(agent)")
+            check(P.dropsHeldReturn(keyCode: 76, isRepeat: true, plain: true, frontBundle: agent), "numpad Enter held in \(agent)")
+        }
+        let agent = "com.apple.UserNotificationCenter"
+        check(!P.dropsHeldReturn(keyCode: 36, isRepeat: false, plain: true, frontBundle: agent), "the press itself goes on")
+        check(!P.dropsHeldReturn(keyCode: 36, isRepeat: true, plain: false, frontBundle: agent), "with a modifier it is another key")
+        check(!P.dropsHeldReturn(keyCode: 49, isRepeat: true, plain: true, frontBundle: agent), "Space repeats as usual")
+        check(!P.dropsHeldReturn(keyCode: 48, isRepeat: true, plain: true, frontBundle: agent), "Tab repeats as usual")
+        check(!P.dropsHeldReturn(keyCode: 36, isRepeat: true, plain: true, frontBundle: "com.apple.TextEdit"),
+              "Return held in an ordinary application repeats as usual")
+        check(!P.dropsHeldReturn(keyCode: 36, isRepeat: true, plain: true, frontBundle: ""), "no application in front")
+    }
+
+    // A review, 26 Nov 2026: Shift with numpad Enter, a stopped main thread and a restarted tap each left Space held
+    // down in the application, because the record of the key was asked too late or thrown away.
+    test("keys sent as others: the repeats are dropped and the release goes as the other key") {
+        var keys = KeysSentAsOthers()
+        check(keys.isEmpty, "nothing yet")
+        expect(keys.step(code: 36, down: true, isRepeat: false), .asItIs, "a key that went as itself")
+        expect(keys.step(code: 36, down: false, isRepeat: false), .asItIs, "and its release")
+        keys.wentDown(36, as: 49)
+        check(!keys.isEmpty, "Return is down as Space")
+        expect(keys.step(code: 36, down: true, isRepeat: true), .dropped, "its repeat goes nowhere")
+        expect(keys.step(code: 36, down: true, isRepeat: true), .dropped, "however many")
+        expect(keys.step(code: 48, down: true, isRepeat: false), .asItIs, "another key pressed meanwhile is not touched")
+        expect(keys.step(code: 48, down: false, isRepeat: false), .asItIs, "nor its release")
+        expect(keys.step(code: 36, down: true, isRepeat: true), .dropped, "and the held key still repeats nowhere")
+        expect(keys.step(code: 36, down: false, isRepeat: false), .releasedAs(49), "the release is Space's release")
+        check(keys.isEmpty, "nothing is left over")
+        expect(keys.step(code: 36, down: true, isRepeat: false), .asItIs, "the next press is its own")
+        expect(keys.step(code: 36, down: true, isRepeat: true), .asItIs, "and repeats as usual")
+        expect(keys.step(code: 36, down: false, isRepeat: false), .asItIs, "and is released as itself")
+    }
+
+    test("keys sent as others: a release that was never seen is made up for") {
+        var keys = KeysSentAsOthers()
+        keys.wentDown(76, as: 49)
+        expect(keys.step(code: 76, down: true, isRepeat: false), .pressedAgain(owed: 49),
+               "pressed afresh, the key it went down as is owed its release")
+        check(keys.isEmpty, "and the fresh press is its own")
+        expect(keys.step(code: 76, down: false, isRepeat: false), .asItIs, "so its release is not rewritten")
+
+        // The tap was off for a while: the keys no longer held are forgotten, each owed its release.
+        keys.wentDown(36, as: 49)
+        keys.wentDown(76, as: 53)
+        expect(keys.forget(where: { $0 == 36 }), [49], "Return was let go while the tap was off")
+        expect(keys.step(code: 76, down: false, isRepeat: false), .releasedAs(53), "numpad Enter is still held and ends as usual")
+        check(keys.isEmpty, "nothing is left over")
+        keys.wentDown(36, as: 49)
+        expect(keys.forget(where: { _ in false }), [], "a key still held is kept")
+        expect(keys.step(code: 36, down: true, isRepeat: true), .dropped, "and still repeats nowhere")
+        expect(keys.forget(where: { _ in true }), [49], "let go, it is forgotten")
+        check(keys.isEmpty, "the record is empty again")
+    }
+
+    // An unbound key stands in for Return on a prompt's button: the rule itself is tested above.
+    let standIn = KeyboardGesture(identifier: "kb:control+option+shift+f15")!
+    let standInHeld = KeyboardGesture(keyCode: standIn.keyCode, modifiers: standIn.modifiers, characters: "", timestamp: 0,
+                                      isRepeat: true, flags: standIn.flags)
+    let space = KeyboardGesture(keyCode: 49, modifiers: [], characters: " ", timestamp: 0, isRepeat: false, flags: [])
+
+    test("system prompts: the key tap is told how a key goes on: as another key, as itself or nowhere") {
         let saved = InputManager.keyGoesOnAs
         defer { InputManager.keyGoesOnAs = saved }
         ScriptHandler.resetOrderedLane()
-        // An unbound key stands in for Return on a prompt's button: the rule itself is tested above.
-        let pressed = KeyboardGesture(identifier: "kb:control+option+shift+f15")!
-        let held = KeyboardGesture(keyCode: pressed.keyCode, modifiers: pressed.modifiers, characters: "", timestamp: 0,
-                                   isRepeat: true, flags: pressed.flags)
-        let space = KeyboardGesture(keyCode: 49, modifiers: [], characters: " ", timestamp: 0, isRepeat: false, flags: [])
         let answer = Locked<ScriptHandler.KeyDecision?>(nil)
         func ask(_ key: KeyboardGesture) -> ScriptHandler.KeyDecision? {
             answer.value = nil
@@ -255,14 +325,59 @@ func systemPromptReminderTests() {
             RunLoop.main.run(until: Date().addingTimeInterval(0.3))
             return answer.value
         }
-        InputManager.keyGoesOnAs = { $0.keyCode == pressed.keyCode ? space : nil }
-        expect(ask(pressed), .passedAs(49), "the key tap is told which key to make it")
-        expect(ask(held), .taken, "held down, its repeats go nowhere")
-        expect(ask(held), .taken, "however many")
-        // A fresh press that goes on as itself ends it.
-        InputManager.keyGoesOnAs = { _ in nil }
-        expect(ask(pressed), .passed, "a key the rule leaves alone goes on as itself")
-        expect(ask(held), .passed, "and its repeats go on with it")
+        InputManager.keyGoesOnAs = { $0.keyCode == standIn.keyCode && !$0.isRepeat ? .asAnother(space) : .asItIs }
+        expect(ask(standIn), .passedAs(49), "the key tap is told which key to make it")
+        // The keyboard thread drops the repeats of that key itself (KeysSentAsOthers); nothing is remembered here.
+        expect(ask(standInHeld), .passed, "a repeat that does reach the main thread is decided afresh")
+        check(InputManager.sentOnAs == nil, "nothing is left over from the key before")
+        InputManager.keyGoesOnAs = { _ in .nowhere }
+        expect(ask(standIn), .taken, "a key that goes nowhere is swallowed whole, its release too")
+        check(InputManager.sentOnAs == nil, "and goes on as nothing")
+        InputManager.keyGoesOnAs = { _ in .asItIs }
+        expect(ask(standIn), .passed, "a key the rule leaves alone goes on as itself")
+        expect(ask(standInHeld), .passed, "and its repeats go on with it")
         check(InputManager.sentOnAs == nil, "nothing is left over for the next key")
+    }
+
+    // A review, 26 Nov 2026: a key queued behind others was decided when it was typed, and by its turn the focus
+    // could be on another button or in another prompt.
+    test("system prompts: a key that waits its turn is asked how it goes on when its turn comes") {
+        let saved = InputManager.keyGoesOnAs, savedPoster = KeyboardGesture.orderedPoster
+        let posted = Locked<[Int64]>([])
+        KeyboardGesture.orderedPoster = { posted.value.append($0.keyCode) }
+        ScriptHandler.resetOrderedLane()
+        defer {
+            ScriptHandler.resetOrderedLane()
+            KeyboardGesture.orderedPoster = savedPoster
+            InputManager.keyGoesOnAs = saved
+        }
+        func pump() { RunLoop.current.run(until: Date().addingTimeInterval(0.025)) }
+        let a = KeyboardGesture(identifier: "kb:a")!, b = KeyboardGesture(identifier: "kb:b")!
+        var asked = 0
+        InputManager.keyGoesOnAs = { _ in asked += 1; return .asAnother(space) }
+
+        // The lane is busy with a key TurnOver is sending; the key pressed now takes its turn behind it.
+        ScriptHandler.queueInOrder(a, lookUp: false, notes: false, masked: true)
+        check(InputManager.handleKeyDown(standIn), "the key pressed is swallowed, to be sent on in its turn")
+        pump()
+        expect(posted.value, [a.keyCode], "the key ahead of it is sent first")
+        expect(asked, 0, "and nothing has been asked yet")
+        ScriptHandler.orderedKeySeen()
+        pump()
+        expect(asked, 1, "asked once, when its turn came")
+        expect(posted.value, [a.keyCode, 49], "and sent as the key it goes on as")
+        ScriptHandler.orderedKeySeen()
+        pump()
+
+        // A key that goes nowhere is not sent, and the keys behind it go on.
+        posted.value = []
+        InputManager.keyGoesOnAs = { _ in asked += 1; return .nowhere }
+        ScriptHandler.queueInOrder(standIn, lookUp: false, notes: false, masked: false, mayGoOnAsAnother: true)
+        ScriptHandler.queueInOrder(b, lookUp: false, notes: false, masked: true)
+        pump()
+        expect(asked, 2, "asked at its turn")
+        expect(posted.value, [b.keyCode], "only the key behind it is sent, and a key TurnOver sends itself is not asked about")
+        ScriptHandler.orderedKeySeen()
+        pump()
     }
 }

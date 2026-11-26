@@ -36,3 +36,44 @@ nonisolated public struct KeyDownGate {
         return .accepted(droppedStale: SwallowedReleases.dropsStale(&awaited, code: code, isRepeat: isRepeat))
     }
 }
+
+/// The keys that went to the application as another key (a system prompt's Return as Space, 26 Nov 2026), kept on the
+/// keyboard thread from the press to the release: the application saw the other key go down, so it must see that key
+/// come up, whatever the tap is doing by then (the keypad's commands, a main thread that has stopped, a tap that was
+/// off). Asked before anything else about every real key event (a review, 26 Nov 2026: the release was looked for
+/// only after the keypad had had it, and Shift with numpad Enter left Space held down in the application).
+nonisolated public struct KeysSentAsOthers {
+    public enum Step: Equatable {
+        /// Not one of these keys: the event goes the usual way.
+        case asItIs
+        /// A repeat of a key that is down as another key: it goes nowhere. One press presses one button.
+        case dropped
+        /// The key's release: it goes as the release of the key it went down as.
+        case releasedAs(Int64)
+        /// A fresh press of the key, whose earlier release was never seen (secure input hid it, or the tap was off):
+        /// the key it went down as is owed its release, and this press is its own.
+        case pressedAgain(owed: Int64)
+    }
+    private var down: [Int64: Int64] = [:]
+    public init() {}
+    public var isEmpty: Bool { down.isEmpty }
+
+    /// `code` went down as `other`.
+    public mutating func wentDown(_ code: Int64, as other: Int64) { down[code] = other }
+
+    /// A real key event, down or up.
+    public mutating func step(code: Int64, down isDown: Bool, isRepeat: Bool) -> Step {
+        guard let other = down[code] else { return .asItIs }
+        if isDown, isRepeat { return .dropped }
+        down[code] = nil
+        return isDown ? .pressedAgain(owed: other) : .releasedAs(other)
+    }
+
+    /// Forgets the keys `isGone` names (those no longer held, after the tap was off) and returns the keys they went
+    /// down as: each is owed its release.
+    public mutating func forget(where isGone: (Int64) -> Bool) -> [Int64] {
+        let gone = down.filter { isGone($0.key) }
+        for code in gone.keys { down[code] = nil }
+        return gone.values.sorted()
+    }
+}
