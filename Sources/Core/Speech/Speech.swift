@@ -761,7 +761,7 @@ public enum Speech {
                 if hasComment, m.text.isEmpty { return nil }
                 return m.text.isEmpty ? m.label : "\(m.label): \(m.text)"
             }
-            if !words.isEmpty { text = text.trimmingCharacters(in: .whitespaces) + words.map { ", " + $0 }.joined() }
+            if !words.isEmpty { text = text.trimmingCharacters(in: .whitespaces) + words.map { partMark + $0 }.joined() }
         }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {

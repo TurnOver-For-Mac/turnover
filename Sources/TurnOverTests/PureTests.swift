@@ -1393,6 +1393,10 @@ func browseTextNavTests() {
         }
         expect(Speech.processed(Speech.joined(["a, b", "edit"]), symbolLevel: .all).contains("comma"), true, "a comma inside the text still follows the level")
         expect(Speech.processed(Speech.joined(["Name", "edit"]), symbolLevel: .all), "Name, edit", "parts still pause")
+        let label = "What did you do, what happened, and what did you expect? *"
+        let said = Speech.processed(label + Speech.partMark + "edit", symbolLevel: .all)
+        check(said.hasSuffix(", edit") && !said.hasSuffix("comma edit") && !said.hasSuffix("comma, edit"), "the comma before the role is a pause (issue 401, GitHub's required field)")
+        expect(said.components(separatedBy: "comma").count - 1, 2, "the two commas inside the label are still named at All")
         config.general.keyboardStyle = "windows"
         expect(Speech.joined(["Settings", "submenu", "", "3 of 9"]), "Settings submenu 3 of 9", "NVDA keys: spaces, no pause at each piece")
         config.general.keyboardStyle = "jaws"
