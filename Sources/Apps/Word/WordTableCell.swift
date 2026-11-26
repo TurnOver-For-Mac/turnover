@@ -60,7 +60,7 @@ final class WordTableCell: WordTextArea {
         if !sameTable {
             let rows = (p.table.attr("AXRowCount") as? Int) ?? p.table.elements("AXRows").count
             let columns = (p.table.attr("AXColumnCount") as? Int) ?? p.table.elements("AXColumns").count
-            parts.append(String(localized: "table with \(String(rows)) rows and \(String(columns)) columns", comment: "A Word table reached: its size"))
+            parts.append(WordTableWords.size(rows: rows, columns: columns))
         }
         // Back in the same table within the 10 s, but with no last cell (the focus went to the page between): row and
         // column are news. The force-unwrap here crashed TurnOver in a 201-row table (a tester, 12 Oct 2026).
@@ -98,5 +98,19 @@ final class WordTableCell: WordTextArea {
         }
         _ = target.set(kAXSelectedTextRangeAttribute, axRangeValue(0, 0))
         AXHandler.shared.focusChanged(target, pid: element.pid)
+    }
+}
+
+/// The words said of a Word table, apart from the cell so the tests can reach them.
+package enum WordTableWords {
+    /// "table with 3 rows and 2 columns": a table reached. One row or one column is said in the singular (a one-column
+    /// table was "table with 4 rows and 1 columns", 24 Nov 2026).
+    package nonisolated static func size(rows: Int, columns: Int) -> String {
+        switch (rows == 1, columns == 1) {
+        case (true, true): return String(localized: "table with 1 row and 1 column", comment: "A Word table reached: its size, one row and one column")
+        case (true, false): return String(localized: "table with 1 row and \(String(columns)) columns", comment: "A Word table reached: its size, one row")
+        case (false, true): return String(localized: "table with \(String(rows)) rows and 1 column", comment: "A Word table reached: its size, one column")
+        case (false, false): return String(localized: "table with \(String(rows)) rows and \(String(columns)) columns", comment: "A Word table reached: its size")
+        }
     }
 }

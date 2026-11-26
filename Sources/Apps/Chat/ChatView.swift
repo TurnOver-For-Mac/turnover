@@ -717,8 +717,15 @@ public final class ChatView {
     /// Command Control 1 to 9: the latest messages, 1 the newest, without moving.
     public func readLatest(_ n: Int) {
         let list = messages().filter { !Self.words($0).isEmpty && $0.role != "AXHeading" && !Self.isTimeStamp($0) }
-        guard list.count >= n else { Speech.speakMessage(list.isEmpty ? String(localized: "no messages", comment: "A chat app's list is empty") : String(localized: "only \(String(list.count)) messages", comment: "Fewer messages than asked for: how many there are")); return }
+        guard list.count >= n else { Speech.speakMessage(Self.fewerMessages(list.count)); return }
         Speech.speakText(Self.words(list[list.count - n]))
+    }
+
+    /// Fewer messages than the key asked for: one is "only 1 message" (it was "only 1 messages", 24 Nov 2026).
+    package nonisolated static func fewerMessages(_ count: Int) -> String {
+        count == 0 ? String(localized: "no messages", comment: "A chat app's list is empty")
+            : count == 1 ? String(localized: "only 1 message", comment: "Fewer messages than asked for: there is one")
+            : String(localized: "only \(String(count)) messages", comment: "Fewer messages than asked for: how many there are")
     }
 
     /// Messages' nameless groups that hold only a time stamp.

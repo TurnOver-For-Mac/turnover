@@ -353,7 +353,9 @@ extension BrowseModeDocument {
         case "Tables":
             let name = el.string(kAXTitleAttribute) ?? el.string(kAXDescriptionAttribute) ?? ""
             let rows = el.attributeValueCountResult(kAXRowsAttribute).value ?? 0
-            return (name.isEmpty ? Role.table.displayString : "\(name), \(Role.table.displayString)") + (rows > 0 ? ", " + String(localized: "\(String(rows)) rows", comment: "A table's size") : "")
+            // A one-row table is "1 row", as everywhere else a table's size is said (it was "1 rows", 24 Nov 2026).
+            let size = rows == 1 ? String(localized: "1 row", comment: "A table's size") : String(localized: "\(String(rows)) rows", comment: "A table's size")
+            return (name.isEmpty ? Role.table.displayString : "\(name), \(Role.table.displayString)") + (rows > 0 ? ", " + size : "")
         case "Landmarks":
             let what = el.string(kAXRoleDescriptionAttribute) ?? Role.landmark.displayString
             let name = el.string(kAXDescriptionAttribute) ?? el.string(kAXTitleAttribute) ?? ""
