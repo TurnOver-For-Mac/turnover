@@ -721,6 +721,37 @@ func pureTests() {
         expect(Languages.detectUnmarked("مرحبا بكم في هذا البرنامج الجديد"), "ar")
         expect(Languages.detectUnmarked("Hello there, this is English text"), nil)
     }
+    test("languages: Arabic words between English words are cut out as their own runs (issue 224)") {
+        let title = "قرآن الصباح... لبداية يوم رائع بصوت الشيخ محمود خليل الحصري | Morning Quran | Mahmoud Al-Hussary"
+        let runs = Languages.scriptRuns(title)
+        expect(runs.count, 2, "Arabic then English")
+        expect(runs[0].script, "ar"); expect(runs[1].script, nil)
+        expect(runs[0].text.hasSuffix("الحصري | "), true, "spaces and the bar stay with the Arabic")
+        expect(runs.map { $0.text }.joined(), title, "nothing lost")
+        let short = Languages.scriptRuns("I said من to عن and then ok")
+        expect(short.map { $0.script }.map { $0 ?? "-" }, ["-", "ar", "-", "ar", "-"], "two-letter words")
+        expect(Languages.scriptRuns("go في the").map { $0.script ?? "-" }, ["-", "ar", "-"])
+        expect(Languages.scriptRuns("see لا now").map { $0.script ?? "-" }, ["-", "ar", "-"], "a two-letter word")
+        expect(Languages.scriptRuns("Hello, 3 of 12.").count, 1, "Latin only is one run")
+        expect(Languages.scriptRuns("12 مرحبا").map { $0.script ?? "-" }, ["ar"], "leading digits join the first run")
+        expect(Languages.isMixedScript(title), true)
+        expect(Languages.isMixedScript("مرحبا بكم"), false)
+        expect(Languages.isMixedScript("Hello there"), false)
+    }
+    test("languages: a mixed title is split by language under an English voice (issue 224)") {
+        let saved = config
+        defer { config = saved }
+        config.speech.autoLanguageSwitching = true; config.speech.voice = "com.apple.eloquence.en-GB.Reed"
+        let title = "قرآن الصباح لبداية يوم | Morning Quran"
+        expect(Languages.detectUnmarked(title), nil, "mixed text is not one language")
+        let p = Languages.splitByLanguage(title)
+        check(p.count == 2 && p[0].language?.hasPrefix("ar") == true && p[1].language == nil, "got \(p.map { "\($0.language ?? "main"): \($0.text)" })")
+        let q = Languages.splitByLanguage("I said من to عن and then ok")
+        check(q.count == 5 && q[0].language == nil && q[1].language?.hasPrefix("ar") == true && q[4].language == nil, "short words: \(q.count) pieces")
+        let t = Languages.splitByLanguage("see لا now")
+        check(t.count == 3 && t[1].language?.hasPrefix("ar") == true, "a two-letter word: \(t.count) pieces")
+        expect(Languages.splitByLanguage("Plain English, with commas").count, 1)
+    }
     test("formatting: colours in words") {
         func c(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat) -> CGColor { CGColor(srgbRed: r, green: g, blue: b, alpha: 1) }
         expect(FormatField.name(ofColour: c(0, 0, 0)), "black")
