@@ -108,7 +108,6 @@ public enum UserGestures {
         let body = id.components(separatedBy: ":").last ?? id
         return body.split(separator: "+").map { part -> String in
             switch part {
-            case "rightoption": return "right option"
             case "turnover", "bosun": return config.general.turnOverKeyName
             default:
                 if let code = KeyNames.code(for: String(part)) { return KeyNames.spoken(for: code, characters: "") }
