@@ -380,4 +380,20 @@ func systemPromptReminderTests() {
         ScriptHandler.orderedKeySeen()
         pump()
     }
+
+    test("system prompts: a new prompt is not read over the one the person is answering") {
+        check(SystemPrompts.readsNewPromptAtOnce(agentInFront: false, hasKeyboard: false), "its agent behind another application: read at once")
+        check(SystemPrompts.readsNewPromptAtOnce(agentInFront: true, hasKeyboard: true), "the new prompt has the keyboard: read at once")
+        check(!SystemPrompts.readsNewPromptAtOnce(agentInFront: true, hasKeyboard: false), "the keyboard is in another of its agent's prompts: not read over it")
+    }
+
+    test("system prompts: the prompt the keyboard is in is read when its words were not the last said") {
+        check(SystemPrompts.readsPromptWithKeyboard(wasRead: false, saidLast: false, sinceLastTry: nil), "never read: read")
+        check(SystemPrompts.readsPromptWithKeyboard(wasRead: true, saidLast: false, sinceLastTry: 30), "read when it opened, another read since (the one in front was answered): read again")
+        check(!SystemPrompts.readsPromptWithKeyboard(wasRead: true, saidLast: true, sinceLastTry: 30), "its words were the last said: not again")
+        check(!SystemPrompts.readsPromptWithKeyboard(wasRead: false, saidLast: false, sinceLastTry: 1), "tried a second ago: not yet")
+        check(SystemPrompts.readsPromptWithKeyboard(wasRead: false, saidLast: false, sinceLastTry: 2), "tried two seconds ago, its words not ready then: tried again")
+        check(SystemPrompts.unansweredLooksLimit > 1, "one look without an answer does not close an agent's prompts")
+        check(Double(SystemPrompts.unansweredLooksLimit) * 0.5 <= 5, "an agent that stops answering has its prompts closed within five seconds")
+    }
 }

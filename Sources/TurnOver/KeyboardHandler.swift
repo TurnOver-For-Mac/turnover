@@ -691,6 +691,10 @@ nonisolated final class KeyboardHandler: @unchecked Sendable {
         let code = event.getIntegerValueField(.keyboardEventKeycode)
         switch sentAs.step(code: code, down: type == .keyDown, isRepeat: event.getIntegerValueField(.keyboardEventAutorepeat) != 0) {
         case .asItIs:
+            // Another key pressed: a key that went on as another key and is no longer held had its release hidden
+            // (secure input, say), and the application is still owed that release. It is sent before this key goes on
+            // (a second review, 26 Nov 2026: before, only a press of the same key or a restart of the tap made up for it).
+            if type == .keyDown { settleKeysSentAsOthers() }
             return nil
         case .dropped:
             return .some(nil)
