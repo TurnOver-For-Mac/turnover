@@ -51,6 +51,7 @@ public enum Languages {
             guard !letters.isEmpty, mainIsLatin, latin == 0, let script = forCharacter(text, marked: nil), base(script) != base(main) else { return nil }
             return script
         }
+        if mainIsLatin, isMixedScript(text) { return nil }
         let otherScript = mainIsLatin ? letters.count - latin : latin
         guard Double(otherScript) / Double(letters.count) > 0.5 else { return nil }
         let r = NLLanguageRecognizer()
@@ -63,12 +64,78 @@ public enum Languages {
     /// main voice's), neighbours in the same language joined again.
     public static func splitByLanguage(_ text: String) -> [(text: String, language: String?)] {
         var out: [(text: String, language: String?)] = []
+        func add(_ t: String, _ lang: String?, joiner: String) {
+            if let last = out.last, last.language == lang { out[out.count - 1].text += joiner + t }
+            else { out.append((t, lang)) }
+        }
         for part in text.components(separatedBy: ", ") {
-            let lang = detectUnmarked(part)
-            if let last = out.last, last.language == lang { out[out.count - 1].text += ", " + part }
-            else { out.append((part, lang)) }
+            let joiner = out.isEmpty ? "" : ", "
+            guard mainIsLatin else { add(part, detectUnmarked(part), joiner: joiner); continue }
+            // Words of another script inside text of the main voice's (an Arabic title with an English tail, a
+            // tester, 26 Nov 2026): each run of its own script goes to that language's voice, as VoiceOver does.
+            for (i, run) in scriptRuns(part).enumerated() {
+                let lang = run.script == nil ? nil : (detectUnmarked(run.text) ?? forCharacter(run.text, marked: nil))
+                add(run.text, lang, joiner: i == 0 ? joiner : "")
+            }
         }
         return out
+    }
+
+    private static var mainIsLatin: Bool {
+        guard let main = AVSpeechSynthesisVoice(identifier: config.speech.voice)?.language else { return false }
+        return !nonLatin.contains(base(main))
+    }
+
+    /// Text cut into runs: Latin letters (script nil) and letters of one other script. Spaces, digits and marks
+    /// belong to the run they follow (to the first run, at the start). Pure; the main voice is not looked at.
+    public static func scriptRuns(_ text: String) -> [(text: String, script: String?)] {
+        var runs: [(text: String, script: String?)] = []
+        var cur = "", curScript: String? = nil, started = false
+        for u in text.unicodeScalars {
+            if CharacterSet.letters.contains(u) {
+                let sc = script(of: u.value)
+                if started, sc != curScript { runs.append((cur, curScript)); cur = "" }
+                curScript = sc; started = true
+            }
+            cur.unicodeScalars.append(u)
+        }
+        if !cur.isEmpty { runs.append((cur, curScript)) }
+        return runs
+    }
+
+    /// Letters of the main (Latin) voice's script and of another script together, as in an Arabic title that ends
+    /// in English: its language is then decided word by word (splitByLanguage), not as a whole.
+    public static func isMixedScript(_ text: String) -> Bool {
+        var latin = 0, other = 0
+        for u in text.unicodeScalars where CharacterSet.letters.contains(u) {
+            if script(of: u.value) == nil { latin += 1 } else { other += 1 }
+        }
+        return latin >= 2 && other >= 1
+    }
+
+    /// The language a letter's script stands for ("ar" for Arabic), nil for Latin and anything unlisted.
+    static func script(of v: UInt32) -> String? {
+        switch v {
+        case 0x0600...0x06FF, 0x0750...0x077F, 0x08A0...0x08FF, 0xFB50...0xFDFF, 0xFE70...0xFEFF: return "ar"
+        case 0x0590...0x05FF: return "he"
+        case 0x0400...0x04FF: return "ru"
+        case 0x0370...0x03FF: return "el"
+        case 0x0530...0x058F: return "hy"
+        case 0x10A0...0x10FF: return "ka"
+        case 0x0900...0x097F: return "hi"
+        case 0x0980...0x09FF: return "bn"
+        case 0x0A00...0x0A7F: return "pa"
+        case 0x0A80...0x0AFF: return "gu"
+        case 0x0B80...0x0BFF: return "ta"
+        case 0x0C00...0x0C7F: return "te"
+        case 0x0C80...0x0CFF: return "kn"
+        case 0x0D00...0x0D7F: return "ml"
+        case 0x0E00...0x0E7F: return "th"
+        case 0x1100...0x11FF, 0xAC00...0xD7AF: return "ko"
+        case 0x3040...0x30FF: return "ja"
+        case 0x4E00...0x9FFF: return "zh"
+        default: return nil
+        }
     }
 
     /// The language a single character belongs to by its script, for a letter not in the main voice's script: an
@@ -76,29 +143,7 @@ public enum Languages {
     /// (a tester, 8 Oct 2026). Latin-script letters answer nil (the main voice, or the text's own marking).
     public static func forCharacter(_ text: String, marked: String?) -> String? {
         guard config.speech.autoLanguageSwitching, let c = text.unicodeScalars.first(where: { CharacterSet.letters.contains($0) }) else { return nil }
-        let v = c.value
-        let script: String?
-        switch v {
-        case 0x0600...0x06FF, 0x0750...0x077F, 0x08A0...0x08FF, 0xFB50...0xFDFF, 0xFE70...0xFEFF: script = "ar"
-        case 0x0590...0x05FF: script = "he"
-        case 0x0400...0x04FF: script = "ru"
-        case 0x0370...0x03FF: script = "el"
-        case 0x0530...0x058F: script = "hy"
-        case 0x10A0...0x10FF: script = "ka"
-        case 0x0900...0x097F: script = "hi"
-        case 0x0980...0x09FF: script = "bn"
-        case 0x0A00...0x0A7F: script = "pa"
-        case 0x0A80...0x0AFF: script = "gu"
-        case 0x0B80...0x0BFF: script = "ta"
-        case 0x0C00...0x0C7F: script = "te"
-        case 0x0C80...0x0CFF: script = "kn"
-        case 0x0D00...0x0D7F: script = "ml"
-        case 0x0E00...0x0E7F: script = "th"
-        case 0x1100...0x11FF, 0xAC00...0xD7AF: script = "ko"
-        case 0x3040...0x30FF: script = "ja"
-        case 0x4E00...0x9FFF: script = "zh"
-        default: script = nil
-        }
+        let script = script(of: c.value)
         guard let script else { return nil }
         // The text's own marking wins when it names a language of that script (Persian or Urdu over "ar").
         if let marked, nonLatin.contains(base(marked)) { return marked }

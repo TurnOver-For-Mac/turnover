@@ -132,14 +132,14 @@ public enum Speech {
         // Unmarked text with no language given (a Word table cell, an object's name, a chat row): a piece in another
         // script goes to that language's voice, the rest stays in the reader's. Arabic cells in Word were silent
         // under an English voice (a tester, 12 Oct 2026). Only where letters beyond Latin appear.
-        if language == nil, !splittingLanguages, config.speech.autoLanguageSwitching,
+        if language == nil || Languages.voice(for: language) == nil, !splittingLanguages, config.speech.autoLanguageSwitching,
            text.unicodeScalars.contains(where: { $0.value > 0x024F && CharacterSet.letters.contains($0) }) {
             let pieces = Languages.splitByLanguage(text)
             if pieces.contains(where: { $0.language != nil }) {
                 splittingLanguages = true
                 defer { splittingLanguages = false }
                 for (i, piece) in pieces.enumerated() {
-                    enqueue(piece.text, language: piece.language, onStart: i == 0 ? onStart : nil, completion: i == pieces.count - 1 ? completion : nil)
+                    enqueue(piece.text, language: piece.language ?? language, onStart: i == 0 ? onStart : nil, completion: i == pieces.count - 1 ? completion : nil)
                 }
                 return
             }
