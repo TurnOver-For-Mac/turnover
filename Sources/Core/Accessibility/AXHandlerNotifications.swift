@@ -258,7 +258,9 @@ extension AXHandler {
             EventHandler.queue(Event(.focusEntered, obj))
         case kAXAnnouncementRequestedNotification:
             if let text = info?["AXAnnouncementKey"] as? String, !text.isEmpty {
-                if Self.announcementRepeats(text, last: lastAnnouncement, lastKeyAt: InputManager.lastKeyDownAt) { Log.io("announcement repeated; skipped"); break }
+                if Self.announcementRepeats(text, last: lastAnnouncement, lastKeyAt: InputManager.lastKeyDownAt, lastKeyPid: InputManager.lastKeyPid, pid: pid) {
+                    Log.io("announcement repeated; skipped"); break
+                }
                 // Not into the middle of a page being read ("Page Menu, Reader Available" between its lines).
                 if SayAll.isRunning { Log.io("announcement during say all; skipped: \(Log.words(text))"); break }
                 // iTerm2 announces each piece of new output itself; TurnOver's terminal reads it already (it was heard
@@ -276,13 +278,23 @@ extension AXHandler {
         }
     }
 
-    /// Whether an app's announcement is the same news again: the same words within 30 seconds, with no key pressed
-    /// since they were said. Safari announces "Page Menu, Reader Available" as each page loads, sometimes twice: the
-    /// same news once. A key pressed in between means the person asked again, and the answer is said even when it is
-    /// the same words: OSARA in REAPER announces the play position each time it is asked, and "Armed" for each track
-    /// armed. Before, a second ask within 30 seconds said nothing (found reading the code, 25 Nov 2026).
-    public nonisolated static func announcementRepeats(_ text: String, last: (String, Date), lastKeyAt: Date, now: Date = Date()) -> Bool {
-        text == last.0 && now.timeIntervalSince(last.1) < 30 && lastKeyAt <= last.1
+    /// Whether an app's announcement is the same news again: the same words within 30 seconds, unless the person
+    /// asked again. Safari announces "Page Menu, Reader Available" as each page loads, sometimes twice: the same news
+    /// once. OSARA in REAPER announces the play position each time it is asked, and "Armed" for each track armed, and
+    /// a second ask within 30 seconds said nothing (found reading the code, 25 Nov 2026).
+    /// Asked again: a key pressed after the last one was said, in the app that announces, and at most `askWindow`
+    /// before this one (OSARA answers within moments; a key 25 seconds ago or in another app did not ask).
+    /// The same words within `samePostWindow` are one post whatever the keys: in the logs of both Macs (Studio and
+    /// MacBook, 21-27 Nov 2026) the only double post of one notice came 1 ms apart (Safari's "This site can access
+    /// your location"), and a page's "Download has started" every 3.2 s with no key between.
+    public nonisolated static let askWindow: TimeInterval = 2
+    public nonisolated static let samePostWindow: TimeInterval = 0.5
+    public nonisolated static func announcementRepeats(_ text: String, last: (String, Date), lastKeyAt: Date, lastKeyPid: pid_t, pid: pid_t,
+                                                      now: Date = Date()) -> Bool {
+        guard text == last.0, now.timeIntervalSince(last.1) < 30 else { return false }
+        if now.timeIntervalSince(last.1) < samePostWindow { return true }
+        let asked = lastKeyPid == pid && lastKeyAt > last.1 && now.timeIntervalSince(lastKeyAt) <= askWindow
+        return !asked
     }
 
     /// The object for a notification: the live focus object when it is the same element, so its state carries.

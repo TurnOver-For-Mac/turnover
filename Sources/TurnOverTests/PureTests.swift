@@ -14,19 +14,26 @@ import AXFixtures
 func pureTests() {
     test("announcements: the same words again are said when a key asked for them, and once when nothing did") {
         let said = Date(timeIntervalSinceReferenceDate: 1000)
-        let last = ("Page Menu, Reader Available", said)
+        let reaper: pid_t = 501, safari: pid_t = 502
+        func repeats(_ text: String, _ last: (String, Date), key: TimeInterval?, in keyPid: pid_t = 501, from pid: pid_t = 501, at now: TimeInterval) -> Bool {
+            AXHandler.announcementRepeats(text, last: last, lastKeyAt: key.map { said.addingTimeInterval($0) } ?? .distantPast, lastKeyPid: keyPid, pid: pid,
+                                          now: said.addingTimeInterval(now))
+        }
+        let page = ("Page Menu, Reader Available", said)
         // Safari, the same page load announcing twice with no key between.
-        check(AXHandler.announcementRepeats("Page Menu, Reader Available", last: last, lastKeyAt: said.addingTimeInterval(-2), now: said.addingTimeInterval(1)),
-              "a second post with no key in between is the same news")
+        check(repeats("Page Menu, Reader Available", page, key: -2, in: safari, from: safari, at: 1), "a second post with no key in between is the same news")
         // OSARA in REAPER: the play position asked for twice, the same answer both times.
         let position = ("1.1.00", said)
-        check(!AXHandler.announcementRepeats("1.1.00", last: position, lastKeyAt: said.addingTimeInterval(2), now: said.addingTimeInterval(2.1)),
-              "a key pressed after the first one asked again")
-        check(!AXHandler.announcementRepeats("Armed", last: ("Armed", said), lastKeyAt: said.addingTimeInterval(0.3), now: said.addingTimeInterval(0.35)),
-              "even a quick second ask")
-        check(!AXHandler.announcementRepeats("Muted", last: last, lastKeyAt: .distantPast, now: said.addingTimeInterval(1)), "other words")
-        check(!AXHandler.announcementRepeats("Page Menu, Reader Available", last: last, lastKeyAt: .distantPast, now: said.addingTimeInterval(31)),
-              "after 30 seconds it is news again")
+        check(!repeats("1.1.00", position, key: 2, in: reaper, from: reaper, at: 2.1), "a key pressed in REAPER just before asked again")
+        check(!repeats("Armed", ("Armed", said), key: 0.6, in: reaper, from: reaper, at: 0.65), "even a quick second ask")
+        // Not asked: the key was long before, or in another app.
+        check(repeats("1.1.00", position, key: 1, in: reaper, from: reaper, at: 25), "a key 24 seconds before the second post did not ask for it")
+        check(repeats("Page Menu, Reader Available", page, key: 1.5, in: reaper, from: safari, at: 2), "a key in REAPER did not ask Safari again")
+        // One post sent twice in a moment is one, whatever the keys (Safari's location notice, 1 ms apart in the log).
+        check(repeats("This site can access your location.", ("This site can access your location.", said), key: 0.001, in: safari, from: safari, at: 0.002),
+              "the same words within half a second are one post even with a key between")
+        check(!repeats("Muted", page, key: nil, at: 1), "other words")
+        check(!repeats("Page Menu, Reader Available", page, key: nil, from: safari, at: 31), "after 30 seconds it is news again")
     }
     test("status menus: failed AX press remembers a menu that opened and closed before the check") {
         let before = Date(timeIntervalSinceReferenceDate: 100)

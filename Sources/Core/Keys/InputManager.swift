@@ -84,6 +84,13 @@ public enum InputManager {
         set { lock.lock(); _lastKeyDownAt = newValue; lock.unlock() }
     }
     private static var _lastKeyDownAt = Date.distantPast
+    /// The app in front when the last key went down: an app's announcement counts as asked for only after a key in
+    /// that app (review of #394, 27 Nov 2026).
+    public static var lastKeyPid: pid_t {
+        get { lock.lock(); defer { lock.unlock() }; return _lastKeyPid }
+        set { lock.lock(); _lastKeyPid = newValue; lock.unlock() }
+    }
+    private static var _lastKeyPid: pid_t = 0
     /// The last key pressed (its gesture identifier), for focus rules that depend on how focus came.
     public static var lastKeyIdentifier: String {
         get { lock.lock(); defer { lock.unlock() }; return _lastKeyIdentifier }
@@ -115,6 +122,7 @@ public enum InputManager {
         ObjectNavigator.shared.cancelWindowSearch()
         FormattingFeedback.shared.cancel()
         lastKeyDownAt = Date()
+        lastKeyPid = NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0
         // A log line only, with the switcher open or a TurnOver key seemingly lost (16 Nov 2026).
         KeyboardModifierDiagnostics.record(gesture)
         AppSwitcherDiagnostics.keyDown(gesture)
