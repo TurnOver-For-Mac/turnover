@@ -15,6 +15,9 @@ import ApplicationServices
 
 final class NumbersAppModule: AppModule {
     static let bundleID = "com.apple.Numbers"
+    /// The older Numbers (14.x, the iWork one) that many Macs still have: the App Store's current Numbers is
+    /// com.apple.Numbers, the old one com.apple.iWork.Numbers (Pages 14.5 got no module this way, 25 Nov 2026).
+    static let legacyBundleID = "com.apple.iWork.Numbers"
     private var lastPlace: (row: Int, col: Int)?
     private var enteredAt = Date.distantPast
 

@@ -1072,6 +1072,18 @@ func pureTests() {
         expect(words, [NSRange(location: 0, length: 5), NSRange(location: 11, length: 5)], "trimmed app mark and the additional system result")
         expect(EditableText.misspellingTarget(words, caret: 0, forward: true, placedHere: true)?.location, 11, "navigation reaches the unmarked error")
     }
+    test("iWork: Pages, Numbers and Keynote get their modules under the old iWork identifiers too") {
+        // Pages 14.5 is com.apple.iWork.Pages; the module was registered only for com.apple.Pages, so a table in its
+        // text was never found (VO-Shift-Down said "no items inside", 25 Nov 2026).
+        BuiltInModules.register()
+        for app in ["Pages", "Numbers", "Keynote"] {
+            let new = AppModuleHandler.shared.moduleType(for: "com.apple.\(app)").map { String(describing: $0) }
+            let old = AppModuleHandler.shared.moduleType(for: "com.apple.iWork.\(app)").map { String(describing: $0) }
+            expect(new, "\(app)AppModule", "\(app): the current identifier")
+            expect(old, "\(app)AppModule", "\(app): the iWork identifier")
+            expect(Edition.experimentalApps.contains("com.apple.iWork.\(app)"), true, "\(app): marked experimental under either")
+        }
+    }
     test("spelling: Word keeps its dictionary's marks in shared editing controls") {
         BuiltInModules.register()
         guard let type = AppModuleHandler.shared.moduleType(for: "com.microsoft.Word") else { return Harness.fail("Word's module is registered") }

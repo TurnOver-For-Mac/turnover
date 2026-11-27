@@ -13,6 +13,9 @@ import ApplicationServices
 
 final class PagesAppModule: AppModule {
     static let bundleID = "com.apple.Pages"
+    /// The older Pages (14.x, the iWork one) that many Macs still have: the App Store's current Pages is
+    /// com.apple.Pages, the old one com.apple.iWork.Pages (a Mac with Pages 14.5, 25 Nov 2026: no module loaded).
+    static let legacyBundleID = "com.apple.iWork.Pages"
 
     required init(pid: pid_t, bundleIdentifier: String, appName: String) {
         super.init(pid: pid, bundleIdentifier: bundleIdentifier, appName: appName)
