@@ -354,7 +354,12 @@ open class TurnOverObject: ScriptableObject {
         if let parent = element.element(kAXParentAttribute) {
             let attr = parent.role == "AXTable" || parent.role == "AXOutline" ? "AXRows" : kAXChildrenAttribute
             if let count = parent.attributeValueCountResult(attr).value, count > 0 {
-                if count <= 200, let siblings = parent.attr(attr) as? [AXUIElement] {
+                // A long menu (TurnOver's own Voice menu, 307 voices): AppKit answers AXIndex 0 for every menu item,
+                // so the fallback below said "1 of 307" on every one (25 Nov 2026). Its titled items are counted in
+                // one read, kept while it stays open (LongMenuPosition, with what each case costs).
+                if count > 200, axRole == "AXMenuItem" {
+                    if let found = LongMenuPosition.position(of: element, in: parent, childCount: count) { p.index = found.index; p.count = found.count }
+                } else if count <= 200, let siblings = parent.attr(attr) as? [AXUIElement] {
                     // Only siblings of the same role count, and a menu's separators (untitled, disabled items) don't.
                     let same = siblings.filter { s in
                         guard s.role == axRole else { return false }
@@ -367,7 +372,7 @@ open class TurnOverObject: ScriptableObject {
                     else if let f = Self.frame(element), let i = same.firstIndex(where: { s in
                         Self.frame(s).map { abs($0.minX - f.minX) < 1 && abs($0.minY - f.minY) < 1 } == true && s.string(kAXTitleAttribute) == element.string(kAXTitleAttribute)
                     }) { p.index = i + 1; p.count = same.count }
-                } else if let i = element.int(kAXIndexAttribute), i < Int(count) { p.index = i + 1; p.count = Int(count) }
+                } else if axRole != "AXMenuItem", let i = element.int(kAXIndexAttribute), i < Int(count) { p.index = i + 1; p.count = Int(count) }
             }
         }
         return p.index == nil && p.level == nil ? nil : p
