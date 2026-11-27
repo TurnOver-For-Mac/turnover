@@ -2256,6 +2256,7 @@
       }
     },
     "%@, %@" : {
+      "comment" : "A command in a list and the key that runs it: Menu, M",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4442,7 +4443,7 @@
         }
       }
     },
-    "A ask for this app" : {
+    "ask for this app A" : {
       "comment" : "A letter's command, as the TurnOver layer lists them",
       "localizations" : {
         "ru" : {
@@ -4454,7 +4455,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A bu uygulama için iste"
+            "value" : "bu uygulama için iste A"
           }
         }
       }
@@ -6232,19 +6233,19 @@
         }
       }
     },
-    "C copy last spoken" : {
+    "copy last spoken C" : {
       "comment" : "A letter's command, as the TurnOver layer lists them",
       "localizations" : {
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "C — копировать последнее сказанное"
+            "value" : "копировать последнее сказанное — C"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "C son söyleneni kopyala"
+            "value" : "son söyleneni kopyala C"
           }
         }
       }
@@ -7862,19 +7863,19 @@
         }
       }
     },
-    "D direct" : {
+    "direct D" : {
       "comment" : "A letter's command, as the TurnOver layer lists them",
       "localizations" : {
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "D — прямое управление"
+            "value" : "прямое управление — D"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "D doğrudan"
+            "value" : "doğrudan D"
           }
         }
       }
@@ -8765,19 +8766,19 @@
         }
       }
     },
-    "E screen interface" : {
+    "screen interface E" : {
       "comment" : "A letter's command, as the TurnOver layer lists them",
       "localizations" : {
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "E — интерфейс экрана"
+            "value" : "интерфейс экрана — E"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "E ekran arayüzü"
+            "value" : "ekran arayüzü E"
           }
         }
       }
@@ -9922,19 +9923,19 @@
         }
       }
     },
-    "G gesture control" : {
+    "gesture control G" : {
       "comment" : "A letter's command, as the TurnOver layer lists them",
       "localizations" : {
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "G — управление жестами"
+            "value" : "управление жестами — G"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "G hareket denetimi"
+            "value" : "hareket denetimi G"
           }
         }
       }
@@ -10348,19 +10349,19 @@
         }
       }
     },
-    "H guide" : {
+    "guide H" : {
       "comment" : "A letter's command, as the TurnOver layer lists them",
       "localizations" : {
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "H — руководства"
+            "value" : "руководства — H"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "H kılavuz"
+            "value" : "kılavuz H"
           }
         }
       }
@@ -10631,19 +10632,19 @@
         }
       }
     },
-    "I describe image" : {
+    "describe image I" : {
       "comment" : "A letter's command, as the TurnOver layer lists them",
       "localizations" : {
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "I — описать изображение"
+            "value" : "описать изображение — I"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "I resmi betimle"
+            "value" : "resmi betimle I"
           }
         }
       }
@@ -11477,19 +11478,19 @@
         }
       }
     },
-    "J that was wrong" : {
+    "that was wrong J" : {
       "comment" : "A letter's command, as the TurnOver layer lists them",
       "localizations" : {
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "J — это было неверно"
+            "value" : "это было неверно — J"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "J bu yanlıştı"
+            "value" : "bu yanlıştı J"
           }
         }
       }
@@ -11698,19 +11699,19 @@
         }
       }
     },
-    "K keyboard style" : {
+    "keyboard style K" : {
       "comment" : "A letter's command, as the TurnOver layer lists them",
       "localizations" : {
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "K — стиль клавиатуры"
+            "value" : "стиль клавиатуры — K"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "K klavye stili"
+            "value" : "klavye stili K"
           }
         }
       }
@@ -12685,19 +12686,19 @@
         }
       }
     },
-    "M menu" : {
+    "menu M" : {
       "comment" : "A letter's command, as the TurnOver layer lists them",
       "localizations" : {
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "M — меню"
+            "value" : "меню — M"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "M menü"
+            "value" : "menü M"
           }
         }
       }
@@ -18329,19 +18330,19 @@
         }
       }
     },
-    "R recognition" : {
+    "recognition R" : {
       "comment" : "A letter's command, as the TurnOver layer lists them",
       "localizations" : {
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "R — распознавание"
+            "value" : "распознавание — R"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "R tanıma"
+            "value" : "tanıma R"
           }
         }
       }
@@ -21075,19 +21076,19 @@
         }
       }
     },
-    "S settings" : {
+    "settings S" : {
       "comment" : "A letter's command, as the TurnOver layer lists them",
       "localizations" : {
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "S — настройки"
+            "value" : "настройки — S"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "S ayarlar"
+            "value" : "ayarlar S"
           }
         }
       }
@@ -22590,7 +22591,7 @@
         }
       }
     },
-    "Slash shortcuts" : {
+    "shortcuts slash" : {
       "comment" : "A letter's command, as the TurnOver layer lists them",
       "localizations" : {
         "ru" : {
@@ -22602,7 +22603,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Eğik çizgi kısayollar"
+            "value" : "kısayollar eğik çizgi"
           }
         }
       }
@@ -23911,7 +23912,7 @@
         }
       }
     },
-    "T switch reader" : {
+    "switch reader T" : {
       "comment" : "A letter's command, as the TurnOver layer lists them",
       "localizations" : {
         "ru" : {
@@ -23923,7 +23924,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "T okuyucuyu değiştir"
+            "value" : "okuyucuyu değiştir T"
           }
         }
       }
@@ -28623,19 +28624,19 @@
         }
       }
     },
-    "V copy VoiceOver settings" : {
+    "copy VoiceOver settings V" : {
       "comment" : "A letter's command, as the TurnOver layer lists them",
       "localizations" : {
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "V — копировать настройки VoiceOver"
+            "value" : "копировать настройки VoiceOver — V"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "V VoiceOver ayarlarını kopyala"
+            "value" : "VoiceOver ayarlarını kopyala V"
           }
         }
       }

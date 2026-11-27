@@ -5,6 +5,19 @@
 import Foundation
 
 nonisolated public enum Phrases {
+    /// "Menu, M": a command in a list, its name first and then its key, as NVDA, JAWS and VoiceOver say a menu item
+    /// and its shortcut (it was "M, menu", 25 Nov 2026). The name is said as given: a plugin's title keeps its own
+    /// capitals ("iTerm" must not become "ITerm"); TurnOver's own lowercase names go through `sentenceStart` first.
+    public static func commandAndKey(_ name: String, key: String) -> String {
+        String(localized: "\(name), \(key)", comment: "A command in a list and the key that runs it: Menu, M")
+    }
+
+    /// TurnOver's own lowercase phrase ("menu") as the start of a list item ("Menu"), in the reader's language
+    /// (Turkish i becomes İ). Only for TurnOver's own words; a name someone else wrote keeps its capitals.
+    public static func sentenceStart(_ phrase: String, locale: Locale = .current) -> String {
+        phrase.prefix(1).uppercased(with: locale) + phrase.dropFirst()
+    }
+
     /// "3 of 9": an item's place among the others.
     public static func position(_ index: Int, of count: Int) -> String {
         String(localized: "\(String(index)) of \(String(count))", comment: "An item's position among the others: 3 of 9")
