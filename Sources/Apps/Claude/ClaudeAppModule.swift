@@ -273,6 +273,7 @@ package final class ClaudeAppModule: AppModule {
     /// has arrived (ClaudeConversationSwitch). Every answer comes from a fresh read on the AX worker, Recents included,
     /// never from the page's published copy. A later shortcut supersedes this one.
     package func prepareConversationSwitch(_ gesture: KeyboardGesture) {
+        lastSwitchKeyAt = progressNow()
         sessionDeletion.cancel()
         guard let page = API.focusTreeInterceptor,
               page.webArea.pid == pid else { return }
@@ -767,6 +768,16 @@ package final class ClaudeAppModule: AppModule {
             let text = ClaudeTranscript.text(of: event.obj.element, skipHidden: false)
             let session = sidebarSession ?? currentConversation()
             guard !text.isEmpty else { return }
+            // 27 Nov 2026: a line that comes as he switches conversation is the page being rebuilt, not news. It came
+            // some 40 ms after Command and a number at nearly every switch, when the page's address may be either
+            // conversation's; it was kept, filed under whichever that was, and said seconds or minutes later
+            // ("Loading session" after five switches in one log, and, he said, another conversation's output in the
+            // one he was in). It is not kept. The conversation's next line is said as ever.
+            if sidebarSession == nil, Self.cameDuringSwitch(sinceSwitchKey: progressNow().timeIntervalSince(lastSwitchKeyAt)) {
+                Log.io("claude: a progress line that came during a conversation switch is not kept (\(text.count) characters)")
+                startWatching()
+                return
+            }
             if Self.isCopyResult(text: text, sincePress: ownCopyPressAt.map { progressNow().timeIntervalSince($0) }) {
                 // Said again for each copy, though the words are the same ones: a press is news every time.
                 Log.io("claude: the result of TurnOver's own Copy press is said at once")
@@ -913,7 +924,7 @@ package final class ClaudeAppModule: AppModule {
             heldProgress[session] = PendingProgress(text: text, since: pending.since, reachedCeiling: pending.reachedCeiling)
         } else {
             heldProgress[session] = PendingProgress(text: text, since: progressNow())
-            Log.io("claude: a progress line waits for quiet keys and idle speech")
+            Log.io("claude: a progress line waits for quiet keys and idle speech (conversation …\(session.suffix(6)))")
         }
         releaseProgressWhenQuiet()
     }
@@ -957,6 +968,8 @@ package final class ClaudeAppModule: AppModule {
         guard readiness == .release else { return }
         guard config.presentation.reportDynamicContentChanges else { return }
         heldProgress.removeValue(forKey: session)
+        // SHORTCOMINGS rule 3: which conversation a line said late was kept for, and how long it waited.
+        Log.io("claude: a held progress line is said, \(Int(now.timeIntervalSince(pending.since))) s after it came (conversation …\(session.suffix(6)); open …\(openSession.suffix(6)))")
         deliverProgress(pending.text, session: session)
     }
 
@@ -990,6 +1003,14 @@ package final class ClaudeAppModule: AppModule {
         let tail = String(read.suffix(60))
         guard let found = reply.range(of: tail, options: .backwards) else { return reply }
         return String(reply[found.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// When Command and a number last switched conversation.
+    private var lastSwitchKeyAt = Date.distantPast
+    /// How long after the switch key a progress line is taken for the page being rebuilt.
+    package nonisolated static let switchWindow: TimeInterval = 1.0
+    package nonisolated static func cameDuringSwitch(sinceSwitchKey: TimeInterval) -> Bool {
+        sinceSwitchKey >= 0 && sinceSwitchKey < switchWindow
     }
 
     private func sayReply(_ reply: String, session: String, tries: Int) {
