@@ -1205,6 +1205,17 @@ public final class WebBuffer {
         return (lines[i].start, lines[j].end)
     }
 
+    // 27 Nov 2026: taken unchanged from aed8de8 (branch claude/trial-1126-fixes) because the link stops use it.
+    /// The link element a piece of text belongs to: itself if it is one, else the nearest link above it (four levels at most).
+    static func linkOwner(of element: AXUIElement) -> AXUIElement {
+        var x: AXUIElement? = element; var hops = 0
+        while let y = x, hops < 4 {
+            if y.role == "AXLink" { return y }
+            x = y.element(kAXParentAttribute); hops += 1
+        }
+        return element
+    }
+
     public func offset(of element: AXUIElement) -> Int? {
         inPublication { offsetInSnapshot(of: element) }
     }
