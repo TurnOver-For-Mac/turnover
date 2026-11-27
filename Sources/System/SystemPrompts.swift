@@ -486,12 +486,99 @@ public final class SystemPrompts {
                 giveKeyboard(to: f)
                 AXHandler.shared.focusChanged(f, pid: pid)
             }
+        } else {
+            // 27 Nov 2026: the prompt has no focus yet. A UserNotificationCenter prompt is read as its agent comes to the
+            // front, before its window is made key (the window's AXWindowCreated comes after the reading): the agent
+            // was in front with no key window, so Tab went nowhere, and TurnOver's focus and review cursor stayed in
+            // Terminal (the test dialogs, and a Bluetooth "Allow … to use Bluetooth?" prompt on 26 Nov that was
+            // reached only through the application chooser). Nothing here moved the focus at all. Now the window is
+            // brought forward as the application chooser brings it, and TurnOver follows the prompt's focus once it
+            // has one, or lands on the prompt's own button, or on the window, so the keys and the review cursor are
+            // both in the dialog that was just read, as with VoiceOver.
+            bringForward(window, pid: pid)
+            landInPrompt(window, pid: pid, triesLeft: Self.landingTries, frontBefore: NSWorkspace.shared.frontmostApplication?.processIdentifier)
         }
         // After the button's own hint: what to do with the prompt as a whole.
         let all = texts.joined(separator: " ").lowercased()
         DispatchQueue.main.async {
             Hints.schedule(all.contains("touch id") ? String(localized: "Touch the Touch ID sensor, or Tab to Enter Password or Cancel.", comment: "A hint in a system dialog")
                            : Self.isProtected(pid) ? String(localized: "Tab moves between the choices; Space presses the one you are on.", comment: "A hint in a system dialog") : String(localized: "Tab moves between the choices; Return presses.", comment: "A hint in a system dialog"))
+        }
+    }
+
+    /// Where a prompt read with no focus has its focus now, on one look (27 Nov 2026).
+    nonisolated package enum FocusSeen: Equatable { case inPrompt, elsewhere, none }
+    /// What TurnOver does with it: follow the prompt's own focus, look again, land on the prompt's default (or
+    /// cancel) button, or, with neither, on the prompt's window, so the review cursor is in the dialog either way.
+    nonisolated package enum PromptLanding: Equatable { case onFocus, askAgain, onOwnButton, onWindow }
+
+    /// The rule alone (tests). Focus in another window (another prompt, or the application behind while the window is
+    /// still coming forward) is not followed: the person has just heard this prompt's words.
+    nonisolated package static func landing(_ seen: FocusSeen, triesLeft: Int, hasOwnButton: Bool) -> PromptLanding {
+        if seen == .inPrompt { return .onFocus }
+        if triesLeft > 0 { return .askAgain }
+        return hasOwnButton ? .onOwnButton : .onWindow
+    }
+    /// Looks 0.15 s apart: about a second for the prompt's window to become key and say where its focus is.
+    nonisolated package static let landingTries = 6
+
+    /// Bring a prompt's window forward and make it key, as the application chooser does (27 Nov 2026): a process with
+    /// no Dock icon is made frontmost through accessibility, and its window raised, made main and focused.
+    private func bringForward(_ window: AXUIElement, pid: pid_t) {
+        NSRunningApplication(processIdentifier: pid)?.activate(options: [.activateAllWindows])
+        let app = AXUIElementCreateApplication(pid)
+        _ = app.set(kAXFrontmostAttribute, kCFBooleanTrue)
+        AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+        _ = window.set(kAXMainAttribute, kCFBooleanTrue)
+        _ = window.set(kAXFocusedAttribute, kCFBooleanTrue)
+        AXHandler.shared.observe(pid)
+    }
+
+    /// After `bringForward`: put TurnOver's focus, and with it the review cursor, in the prompt (27 Nov 2026). Stops when
+    /// the prompt has gone, when the person has gone to another application, or when the agent's own focus event has
+    /// already brought TurnOver's focus into this prompt.
+    private func landInPrompt(_ window: AXUIElement, pid: pid_t, triesLeft: Int, frontBefore: pid_t?) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            guard let self else { return }
+            let r = window.role
+            guard !r.isEmpty, r != "?" else { Log.io("system prompt from pid \(pid): gone before it had a focus"); return }
+            if let front = NSWorkspace.shared.frontmostApplication?.processIdentifier, front != pid, front != frontBefore {
+                Log.io("system prompt from pid \(pid): another application came to the front; the focus is left there")
+                return
+            }
+            if let current = API.focusObject, current.pid == pid,
+               current.element.isSame(window) || (current.element.element(kAXWindowAttribute)?.isSame(window) ?? false) {
+                return
+            }
+            let app = AXUIElementCreateApplication(pid)
+            AXUIElementSetMessagingTimeout(app, 0.5)
+            AXUIElementSetMessagingTimeout(window, 0.5)
+            var focus = window.element(kAXFocusedUIElementAttribute)
+            var seen: FocusSeen = focus == nil ? .none : .inPrompt
+            if focus == nil, let f = app.element(kAXFocusedUIElementAttribute) {
+                focus = f
+                // A focus that does not name its window is where the agent's keys go: taken as this prompt's.
+                seen = (f.element(kAXWindowAttribute).map { $0.isSame(window) } ?? true) ? .inPrompt : .elsewhere
+            }
+            let own = window.element(kAXDefaultButtonAttribute) ?? window.element(kAXCancelButtonAttribute)
+            switch Self.landing(seen, triesLeft: triesLeft, hasOwnButton: own != nil) {
+            case .onFocus:
+                guard let focus else { return }
+                Log.io("system prompt from pid \(pid): its focus is there now; followed")
+                self.giveKeyboard(to: focus)
+                AXHandler.shared.focusChanged(focus, pid: pid)
+            case .askAgain:
+                self.landInPrompt(window, pid: pid, triesLeft: triesLeft - 1, frontBefore: frontBefore)
+            case .onOwnButton:
+                guard let own else { return }
+                Log.io("system prompt from pid \(pid): no focus of its own after a second; put on its default button")
+                self.giveKeyboard(to: own)
+                AXHandler.shared.focusChanged(own, pid: pid)
+            case .onWindow:
+                Log.io("system prompt from pid \(pid): no focus and no default button after a second; the focus is put on the window")
+                self.giveKeyboard(to: window)
+                AXHandler.shared.focusChanged(window, pid: pid)
+            }
         }
     }
 

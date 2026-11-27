@@ -387,6 +387,18 @@ func systemPromptReminderTests() {
         check(!SystemPrompts.readsNewPromptAtOnce(agentInFront: true, hasKeyboard: false), "the keyboard is in another of its agent's prompts: not read over it")
     }
 
+    test("system prompts: a prompt read before it has a focus gets the keyboard and the review cursor (27 Nov 2026)") {
+        typealias P = SystemPrompts
+        expect(P.landing(.inPrompt, triesLeft: P.landingTries, hasOwnButton: true), .onFocus, "its focus is there: followed at once")
+        expect(P.landing(.inPrompt, triesLeft: 0, hasOwnButton: false), .onFocus, "its focus is there on the last look: followed")
+        expect(P.landing(.none, triesLeft: 3, hasOwnButton: true), .askAgain, "no focus yet: asked again while the window comes forward")
+        expect(P.landing(.elsewhere, triesLeft: 3, hasOwnButton: true), .askAgain, "the focus still in another window: not followed there")
+        expect(P.landing(.none, triesLeft: 0, hasOwnButton: true), .onOwnButton, "never a focus: its default button")
+        expect(P.landing(.elsewhere, triesLeft: 0, hasOwnButton: true), .onOwnButton, "the focus stayed in another window: this prompt's own button")
+        expect(P.landing(.none, triesLeft: 0, hasOwnButton: false), .onWindow, "no focus and no button named: the window itself, never left behind")
+        check(P.landingTries > 0 && Double(P.landingTries) * 0.15 <= 1.5, "the prompt is given about a second, no more")
+    }
+
     test("system prompts: the prompt the keyboard is in is read when its words were not the last said") {
         check(SystemPrompts.readsPromptWithKeyboard(wasRead: false, saidLast: false, sinceLastTry: nil), "never read: read")
         check(SystemPrompts.readsPromptWithKeyboard(wasRead: true, saidLast: false, sinceLastTry: 30), "read when it opened, another read since (the one in front was answered): read again")
