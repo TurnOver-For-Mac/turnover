@@ -1454,7 +1454,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ не найден"
+            "value" : "Не найдено: %@"
           }
         },
         "tr" : {
@@ -5012,7 +5012,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Распознать снова после того, как Return по чему-то нажал"
+            "value" : "Распознавать снова после щелчка по Return"
           }
         },
         "tr" : {
@@ -5146,7 +5146,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Разрешено: оно может заставлять TurnOver говорить, пока находится на переднем плане."
+            "value" : "Разрешено: приложение может обращаться к речи TurnOver, пока оно на переднем плане."
           }
         },
         "tr" : {
@@ -5816,7 +5816,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Big Picture заставляет Steam открывать на этом Mac отладочный порт, пока он работает, — им могут воспользоваться и другие программы. При выключении порт закрывается. После включения Steam нужно перезапустить."
+            "value" : "Big Picture заставляет Steam открывать на этом Mac отладочный порт, пока запущен Steam, и им могут воспользоваться другие программы. При выключении порт закрывается. После включения Steam нужно перезапустить."
           }
         },
         "tr" : {
@@ -5865,7 +5865,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Блочные цитаты"
+            "value" : "Цитаты"
           }
         },
         "tr" : {
@@ -7017,7 +7017,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Клавиши Command, как вы их нажимаете"
+            "value" : "Озвучивать командные клавиши"
           }
         },
         "tr" : {
@@ -8205,7 +8205,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Рабочий стол, цифровая клавиатура имеет свои клавиши NVDA"
+            "value" : "Десктоп, цифровая клавиатура — клавиши NVDA"
           }
         },
         "tr" : {
@@ -8669,7 +8669,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Загружаю естественные голоса…"
+            "value" : "Скачиваю естественные голоса…"
           }
         },
         "tr" : {
@@ -9075,7 +9075,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Везде"
+            "value" : "Все приложения"
           }
         },
         "tr" : {
@@ -9446,7 +9446,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Шрифты, произносятся при переходе курсора в новое форматирование"
+            "value" : "Шрифты при смене форматирования"
           }
         },
         "tr" : {
@@ -9462,7 +9462,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Для"
+            "value" : "Список для"
           }
         },
         "tr" : {
@@ -10403,7 +10403,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Заголовок, ссылка и кнопка: когда их произносить"
+            "value" : "Заголовок, ссылка, кнопка — до или после слов"
           }
         },
         "tr" : {
@@ -10472,7 +10472,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Текст подсказки"
+            "value" : "Описание"
           }
         },
         "tr" : {
@@ -11007,7 +11007,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "В полях редактирования"
+            "value" : "В полях ввода"
           }
         },
         "tr" : {
@@ -11449,7 +11449,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Сведения об элементе"
+            "value" : "Режим детализации"
           }
         },
         "tr" : {
@@ -12403,7 +12403,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Строка за строкой"
+            "value" : "Построчно"
           }
         },
         "tr" : {
@@ -12536,7 +12536,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Самая длинная строка"
+            "value" : "Максимальная длина строки"
           }
         },
         "tr" : {
@@ -13152,7 +13152,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Больше всего"
+            "value" : "Большинство"
           }
         },
         "tr" : {
@@ -14646,7 +14646,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Перемещение курсора перемещает клавиатурный фокус"
+            "value" : "Фокус следует за курсором"
           }
         },
         "tr" : {
@@ -14734,7 +14734,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Клавиши NVDA и JAWS тоже перемещают по группам"
+            "value" : "Клавиши NVDA и JAWS тоже перемещают курсор по группам"
           }
         },
         "tr" : {
@@ -14750,7 +14750,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Клавиши NVDA и JAWS там, где читает и VoiceOver"
+            "value" : "Клавиши NVDA и JAWS, когда читает VoiceOver"
           }
         },
         "tr" : {
@@ -15480,7 +15480,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Пока ни одно приложение не просило говорить через TurnOver. Игра или другая программа может попросить; она появится здесь, и вы решите, можно ли ей."
+            "value" : "Пока ни одно приложение не просило говорить через TurnOver. Игра или другая программа может попросить; запрос появится здесь, и вы решите, можно ли ей."
           }
         },
         "tr" : {
@@ -15735,7 +15735,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ничего не отмечено, и VO-Command-Shift перебирает все голоса. Отметьте нужные."
+            "value" : "Ничего не отмечено — VO-Command-Shift перебирает все голоса. Отметьте нужные."
           }
         },
         "tr" : {
@@ -16430,7 +16430,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Вкл.: TurnOver выключает VoiceOver при запуске и включает при выходе, включается, когда VoiceOver выключается, и отходит в сторону, когда VoiceOver включается. Выкл.: у каждого скринридера свой переключатель, и ни один не включает и не выключает другой, — для чтения VoiceOver внутри виртуальной машины, например Parallels. В любом случае говорит один скринридер: пока включён VoiceOver, TurnOver молчит."
+            "value" : "Вкл.: TurnOver выключает VoiceOver при запуске и включает при выходе, включается, когда VoiceOver выключается, и отходит в сторону, когда VoiceOver включается. Выкл.: у каждого скринридера свой переключатель, и ни один не включает и не выключает другой — это нужно, когда VoiceOver читает внутри виртуальной машины, например Parallels. В любом случае говорит один скринридер: пока включён VoiceOver, TurnOver молчит."
           }
         },
         "tr" : {
@@ -17225,7 +17225,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Прокрутка двигает курсор"
+            "value" : "Курсор при прокрутке"
           }
         },
         "tr" : {
@@ -18490,7 +18490,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Читать Big Picture Steam"
+            "value" : "Читать режим Big Picture в Steam"
           }
         },
         "tr" : {
@@ -18506,7 +18506,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Читать страницу целиком по мере открытия"
+            "value" : "Автоматически читать страницу при открытии"
           }
         },
         "tr" : {
@@ -18668,7 +18668,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Читать весь результат по мере открытия"
+            "value" : "Читать весь результат при открытии"
           }
         },
         "tr" : {
@@ -21114,7 +21114,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Сказано"
+            "value" : "Озвучивать"
           }
         },
         "tr" : {
@@ -21362,7 +21362,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Говорить уровни заголовков"
+            "value" : "Сообщать уровни заголовков"
           }
         },
         "tr" : {
@@ -21378,7 +21378,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Говорить, какой плагин у приложения, когда оно выходит на передний план"
+            "value" : "Сообщать о плагине, когда приложение выходит на передний план"
           }
         },
         "tr" : {
@@ -21466,7 +21466,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Штора экрана"
+            "value" : "Затемнение экрана"
           }
         },
         "tr" : {
@@ -21483,7 +21483,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Штора экрана вкл. или выкл. (VO-Shift-F11)"
+            "value" : "Затемнение экрана вкл. или выкл. (VO-Shift-F11)"
           }
         },
         "tr" : {
@@ -21500,7 +21500,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Штора экрана вкл. или выкл.: экран становится чёрным, а TurnOver читает как обычно (NVDA+Control+Escape)"
+            "value" : "Затемнение экрана вкл. или выкл.: экран становится чёрным, а TurnOver читает как обычно (NVDA+Control+Escape)"
           }
         },
         "tr" : {
@@ -21517,7 +21517,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Штора экрана вкл. или выкл.: экран становится чёрным, а TurnOver читает как обычно (VO-Shift-Fn-подчёркивание)"
+            "value" : "Затемнение экрана вкл. или выкл.: экран становится чёрным, а TurnOver читает как обычно (VO-Shift-Fn-подчёркивание)"
           }
         },
         "tr" : {
@@ -21533,7 +21533,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Штора экрана, пока TurnOver читает"
+            "value" : "Затемнение экрана, пока TurnOver читает"
           }
         },
         "tr" : {
@@ -22528,7 +22528,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Клавиши-буквы идут по кругу страницы"
+            "value" : "Буквенные клавиши идут по кругу"
           }
         },
         "tr" : {
@@ -23158,7 +23158,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Запускаю"
+            "value" : "Запуск"
           }
         },
         "tr" : {
@@ -23646,7 +23646,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Переключать язык, когда текст объявлен на другом"
+            "value" : "Автоматически переключать язык"
           }
         },
         "tr" : {
@@ -24161,7 +24161,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Текст, объявленный другим языком, читается голосом этого языка, когда переключение языка включено."
+            "value" : "Текст, помеченный другим языком, читается голосом этого языка, когда автоматическое определение языка включено."
           }
         },
         "tr" : {
@@ -24358,7 +24358,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "выход Mac по умолчанию"
+            "value" : "Системное устройство вывода"
           }
         },
         "tr" : {
@@ -26183,7 +26183,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Окно проверяется каждую секунду; когда оно изменилось, новое читается."
+            "value" : "Окно проверяется каждую секунду: если оно изменилось, читается то, что появилось."
           }
         },
         "tr" : {
@@ -27729,7 +27729,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "TurnOver отказался от этого окна: вероятно, оно обновилось, пока было открыто. Закройте Настройки и откройте их снова из меню TurnOver."
+            "value" : "TurnOver закрыл это окно: вероятно, оно обновилось, пока было открыто. Закройте Настройки и откройте их снова из меню TurnOver."
           }
         },
         "tr" : {
@@ -28093,7 +28093,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Печатать в поле сразу, как только оно получит фокус"
+            "value" : "Автоматически включать режим фокуса в полях ввода"
           }
         },
         "tr" : {
@@ -28579,7 +28579,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Использовать для этого приложения список «везде»"
+            "value" : "Вернуть общий список для этого приложения"
           }
         },
         "tr" : {
@@ -28595,7 +28595,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Используется список «везде». Изменение здесь начнёт для этого приложения свой список."
+            "value" : "Сейчас действует общий список. Изменение здесь создаст отдельный список для этого приложения."
           }
         },
         "tr" : {
@@ -28882,7 +28882,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "VoiceOver приглушается звуковым перехватом там, где читает TurnOver, — включая пароли и собственные запросы macOS. Убран 24 октября 2026 года и возвращён как эксперимент: он может оставить Mac без звука, если macOS попросит разрешение на звук, пока VoiceOver приглушён. Изменение перезапускает TurnOver."
+            "value" : "Где читает TurnOver, звуковой перехват приглушает VoiceOver — в том числе для паролей и собственных запросов macOS. Убран 24 октября 2026 года и возвращён как эксперимент: он может оставить Mac без звука, если macOS попросит разрешение на звук, пока VoiceOver приглушён. Изменение перезапускает TurnOver."
           }
         },
         "tr" : {
@@ -28932,7 +28932,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Клавиши VoiceOver перемещают по группам"
+            "value" : "Клавиши VoiceOver перемещают курсор по группам"
           }
         },
         "tr" : {
@@ -29400,7 +29400,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Веб-страницы"
+            "value" : "Веб-навигация"
           }
         },
         "tr" : {
@@ -29508,7 +29508,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Что говорится об элементе и в каком порядке"
+            "value" : "Что и в каком порядке озвучивать"
           }
         },
         "tr" : {
@@ -29672,7 +29672,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Куда идёт звук речи"
+            "value" : "Устройство вывода"
           }
         },
         "tr" : {
@@ -33915,7 +33915,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "группировка"
+            "value" : "группа"
           }
         },
         "tr" : {
@@ -34968,6 +34968,342 @@
         }
       }
     },
+    "key.mute" : {
+      "comment" : "A key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "mute"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "выключить звук"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sesi kapat"
+          }
+        }
+      }
+    },
+    "key.numpad0" : {
+      "comment" : "A key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad 0"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "0 на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı 0"
+          }
+        }
+      }
+    },
+    "key.numpad1" : {
+      "comment" : "A key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad 1"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı 1"
+          }
+        }
+      }
+    },
+    "key.numpad2" : {
+      "comment" : "A key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad 2"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2 на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı 2"
+          }
+        }
+      }
+    },
+    "key.numpad3" : {
+      "comment" : "A key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad 3"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "3 на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı 3"
+          }
+        }
+      }
+    },
+    "key.numpad4" : {
+      "comment" : "A key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad 4"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "4 на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı 4"
+          }
+        }
+      }
+    },
+    "key.numpad5" : {
+      "comment" : "A key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad 5"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "5 на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı 5"
+          }
+        }
+      }
+    },
+    "key.numpad6" : {
+      "comment" : "A key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad 6"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "6 на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı 6"
+          }
+        }
+      }
+    },
+    "key.numpad7" : {
+      "comment" : "A key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad 7"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "7 на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı 7"
+          }
+        }
+      }
+    },
+    "key.numpad8" : {
+      "comment" : "A key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad 8"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "8 на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı 8"
+          }
+        }
+      }
+    },
+    "key.numpad9" : {
+      "comment" : "A key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad 9"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "9 на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı 9"
+          }
+        }
+      }
+    },
+    "key.numpadClear" : {
+      "comment" : "A key's name (the number pad's Clear key)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad clear"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı clear"
+          }
+        }
+      }
+    },
+    "key.numpadDecimal" : {
+      "comment" : "A key's name (the number pad's . key)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad decimal"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "десятичный разделитель на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı ondalık"
+          }
+        }
+      }
+    },
+    "key.numpadDivide" : {
+      "comment" : "A key's name (the number pad's / key)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad divide"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "деление на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı bölü"
+          }
+        }
+      }
+    },
     "key.numpadEnter" : {
       "comment" : "A key's name",
       "extractionState" : "extracted_with_value",
@@ -34988,6 +35324,102 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "sayısal tuş takımı enter"
+          }
+        }
+      }
+    },
+    "key.numpadEquals" : {
+      "comment" : "A key's name (the number pad's = key)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad equals"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "равно на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı eşittir"
+          }
+        }
+      }
+    },
+    "key.numpadMinus" : {
+      "comment" : "A key's name (the number pad's - key)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad minus"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "минус на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı eksi"
+          }
+        }
+      }
+    },
+    "key.numpadMultiply" : {
+      "comment" : "A key's name (the number pad's * key)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad multiply"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "умножение на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı çarpı"
+          }
+        }
+      }
+    },
+    "key.numpadPlus" : {
+      "comment" : "A key's name (the number pad's + key)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "numpad plus"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "плюс на цифровой клавиатуре"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sayısal tuş takımı artı"
           }
         }
       }
@@ -35084,6 +35516,102 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "sağ ok"
+          }
+        }
+      }
+    },
+    "key.rightCommand" : {
+      "comment" : "A modifier key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "right command"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "правый Command"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sağ komut"
+          }
+        }
+      }
+    },
+    "key.rightControl" : {
+      "comment" : "A modifier key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "right control"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "правый Control"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sağ kontrol"
+          }
+        }
+      }
+    },
+    "key.rightOption" : {
+      "comment" : "A modifier key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "right option"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "правый Option"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sağ option"
+          }
+        }
+      }
+    },
+    "key.rightShift" : {
+      "comment" : "A modifier key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "right shift"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "правый Shift"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sağ shift"
           }
         }
       }
@@ -35204,6 +35732,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "yukarı ok"
+          }
+        }
+      }
+    },
+    "key.volumeDown" : {
+      "comment" : "A key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "volume down"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "уменьшить громкость"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sesi kıs"
+          }
+        }
+      }
+    },
+    "key.volumeUp" : {
+      "comment" : "A key's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "volume up"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "увеличить громкость"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sesi aç"
           }
         }
       }
@@ -37323,7 +37899,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "следующий %@ не найден"
+            "value" : "Нет следующего: %@"
           }
         },
         "tr" : {
@@ -37493,7 +38069,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "предыдущий %@ не найден"
+            "value" : "Нет предыдущего: %@"
           }
         },
         "tr" : {
@@ -39792,7 +40368,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "кнопка с меню"
+            "value" : "всплывающее меню"
           }
         },
         "tr" : {
@@ -40863,7 +41439,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "штора экрана выключена"
+            "value" : "затемнение экрана выключено"
           }
         },
         "tr" : {
@@ -40880,7 +41456,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "штора экрана включена"
+            "value" : "затемнение экрана включено"
           }
         },
         "tr" : {

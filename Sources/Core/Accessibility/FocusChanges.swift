@@ -53,13 +53,35 @@ extension AXHandler {
         ("owned by another process", ruleOwnedByAnotherProcess),
     ]}
 
-    public func focusChanged(_ element: AXUIElement, pid: pid_t) {
+    /// The rules a hidden control that was verified (it says it has the keyboard, and its parent is the reported focus)
+    /// skips: the ones that compare by role and frame, or drop a nameless one, would take it for something else while
+    /// TurnOver kept the old focus. Every other rule, the menu ones and the exact duplicate included, still applies.
+    static let hiddenSkippedRules: Set<String> = ["stand-in for a text field", "reported twice", "nameless container"]
+
+    public func focusChanged(_ element: AXUIElement, pid: pid_t, verifiedHidden: Bool = false) {
+        let newsBefore = lastBrowserFocusNewsAt
+        if !verifiedHidden { lastBrowserFocusNewsAt = Date() }
         let module = AppModuleHandler.shared.appModule(for: pid)
         var target = module.redirectFocus(element) ?? element
         for (name, rule) in focusRules {
+            if verifiedHidden, Self.hiddenSkippedRules.contains(name) { continue }
             switch rule(target, pid, element) {
-            case .ignore: Log.debug("focus rule \(name): ignored"); return
-            case .done: Log.debug("focus rule \(name): handled"); return
+            // SHORTCOMINGS rule 3 (27 Nov 2026): in a process that holds a web page, a focus a rule set aside is said in the
+            // log, by rule and role, as many rules do not say it themselves. Seven silent Tabs on a page left nothing to
+            // tell a focus never posted from one dropped here. Elsewhere it stays a debug line, as before.
+            case .ignore:
+                // A report for an element that answers no role is not news of the focus (27 Nov 2026): it stopped the
+                // no-news polls, and the Tab was silent. Nor is the same element reported again: after one Tab on a
+                // busy page Safari reported the stop the keyboard had just left, the report was set aside here, and
+                // the stop it had moved to was never said.
+                if !BrowseModeDocument.setAsideReportIsNews(rule: name) { lastBrowserFocusNewsAt = newsBefore }
+                if BrowseModeHandler.shared.hasDocument(inProcess: pid) { Log.io("focus rule \(name): set aside the \(target.role)") }
+                else { Log.debug("focus rule \(name): ignored") }
+                return
+            case .done:
+                if BrowseModeHandler.shared.hasDocument(inProcess: pid) { Log.io("focus rule \(name): handled the \(target.role) itself") }
+                else { Log.debug("focus rule \(name): handled") }
+                return
             case .follow(let other): Log.debug("focus rule \(name): following"); focusChanged(other, pid: pid); return
             case .go(let t): target = t
             }
@@ -341,8 +363,17 @@ extension AXHandler {
 
     /// An element that answers no role is nothing to present.
     func ruleNoRole(_ target: AXUIElement, _ pid: pid_t, _ element: AXUIElement) -> FocusVerdict {
-        if target.role == "?" { Log.debug("focus on an element with no role; ignored"); return .ignore }
-        return .go(target)
+        // The role asked once, with its error kept (27 Nov 2026): Safari posted focus news four times in one walk for an
+        // element that answers no role and has no parent, each after a Tab, each followed by silence. The error is
+        // logged, and the control that has the keyboard is looked for (BrowseModeDocument.recoverFromDeadFocus).
+        let answer = target.attributeResult(kAXRoleAttribute)
+        if let role = answer.value as? String, !role.isEmpty { return .go(target) }
+        Log.debug("focus on an element with no role; ignored")
+        if BrowseModeHandler.shared.hasDocument(inProcess: pid) {
+            Log.io("focus news for an element that answers no role (\(answer.status)); the control with the keyboard is looked for")
+            BrowseModeDocument.recoverFromDeadFocus(pid: pid)
+        }
+        return .ignore
     }
 
     /// Mail hands focus to an unnamed AXUnknown (its message view host). In the list's own window the list keeps
@@ -595,16 +626,40 @@ extension AXHandler {
     func ruleMenuOpen(_ target: AXUIElement, _ pid: pid_t, _ element: AXUIElement) -> FocusVerdict {
         let role = Role.from(axRole: target.role, subrole: target.string(kAXSubroleAttribute))
         if isMenuOpen, !Self.menuRoles.contains(role), openMenus.contains(where: { $0.pid == pid }) {
-            // A page's menu reports no close: focus landing elsewhere in the page means it has gone.
-            if topMenuIsWeb, target.enclosingWebArea() != nil {
-                Log.io("focus to \(target.role) in the page while its web menu was counted open: the menu has closed")
-                openMenus.removeAll { $0.pid == pid }
+            // A page's menu reports no close, and one that never takes the focus (a search box's suggestions) holds
+            // nothing: focus landing in the page is followed. Only the top menu counted, and only when the page was
+            // found by its parents, so Tab on Reddit's Search box had the next three focus moves ignored and two more
+            // Tabs unheard; the line was in the logs hundreds of times a day (27 Nov 2026). Now any of the
+            // application's open menus that is the page's own counts, and so does a focus found to be the page's by its
+            // DOM attributes. A focus inside the page's menu is followed and keeps the menu.
+            let mine = openMenus.filter { $0.pid == pid }
+            let web = mine.filter { MenuNavigationPlugin.isWebMenu($0) }
+            switch Self.focusPastWebMenu(targetIsWeb: !web.isEmpty && target.isWebContent, webMenuOpen: !web.isEmpty,
+                                         otherMenuOpen: web.count < mine.count, targetInWebMenu: web.contains { target.isInside($0) }) {
+            case .follow:
                 return .go(target)
+            case .followAndForgetMenu:
+                Log.io("focus to \(target.role) in the page while its web menu was counted open: the menu holds no focus; no longer counted")
+                openMenus.removeAll { m in web.contains { $0.isSame(m) } }
+                return .go(target)
+            case .hold:
+                break
             }
             Log.io("focus to \(target.role) while a menu is open in its application; ignored")
             return .ignore
         }
         return .go(target)
+    }
+
+    nonisolated package enum WebMenuFocus: Equatable { case hold, follow, followAndForgetMenu }
+    /// The rule alone (tests): what a focus change does while a menu is counted open in its application. A page's own
+    /// menu holds no focus: a focus in the page goes, inside the menu keeping it, elsewhere no longer counting it. An
+    /// application's own menu (Word handing its document the focus under its menus) still holds the focus (27 Nov 2026).
+    nonisolated package static func focusPastWebMenu(targetIsWeb: Bool, webMenuOpen: Bool, otherMenuOpen: Bool,
+                                                     targetInWebMenu: Bool) -> WebMenuFocus {
+        guard webMenuOpen, targetIsWeb else { return .hold }
+        if targetInWebMenu { return .follow }
+        return otherMenuOpen ? .hold : .followAndForgetMenu
     }
 
     /// The window itself reported as the focus while a control inside it has it: a page in a tab you just left
@@ -714,7 +769,16 @@ extension AXHandler {
         } else {
             beforeNamelessStop = nil
         }
-        let interceptor = BrowseModeHandler.shared.document(for: obj, ancestors: ancestors)
+        var interceptor = BrowseModeHandler.shared.document(for: obj, ancestors: ancestors)
+        // A focus whose parents give out before any web area, window or application keeps the page that had the focus,
+        // when that page's window is still the app's focused one (27 Nov 2026; BrowseModeDocument.keepsPageForCutLoose).
+        if interceptor == nil { interceptor = BrowseModeDocument.pageForCutLooseFocus(obj, ancestors: ancestors, pid: pid) }
+        // SHORTCOMINGS rule 3 (27 Nov 2026): a focus in a process that holds a page, with no page document, says why. With
+        // no document the next Tab is a plain key and browse mode's keys are gone, and the log said nothing of it.
+        if interceptor == nil, BrowseModeHandler.shared.hasDocument(inProcess: pid) {
+            Log.io("focus on \(obj.axRole) with no page document, in a process that has a page: \(BrowseModeHandler.shared.whyNoDocument(for: obj, ancestors: ancestors))")
+        }
+        interceptor?.noteFocusArrived(at: target)
         let fromOutside = interceptor !== API.focusTreeInterceptor
         // Automatic focus mode moving the keyboard to the field it has just named (17 Nov 2026: VO Right and F onto a
         // field in a named group said the group after the field, from the focus passing into it). The move is TurnOver's,
@@ -740,6 +804,9 @@ extension AXHandler {
         API.setFocusObject(obj, ancestors: ancestors, interceptor: interceptor)
         ObjectNavigator.shared.focusMoved(to: obj.element, pid: pid)
         EventHandler.queue(Event(.gainFocus, obj))
+        // 24 Nov 2026: the focus is presented as it always was; then, in the background, a check for a control that the
+        // browser hides inside it and that has the keyboard (Steam's wishlist rows). Found, it is presented in turn.
+        interceptor?.checkAfterArrival(at: target, role: obj.axRole)
     }
 
     /// A dialog or sheet is in front in this application: its focused window is one, or has one on it (Word's Save

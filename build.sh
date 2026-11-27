@@ -194,9 +194,9 @@ cp NOTICE.md "$APP/Contents/Resources/NOTICE.md"
 rm -rf "$APP/Contents/Resources/recipes"
 # TurnOver's own sound set (make-sounds.py writes it; 17 Oct 2026).
 rm -rf "$APP/Contents/Resources/Sounds"; cp -R Resources/Sounds "$APP/Contents/Resources/Sounds"
-# The guide inside the app, made from the guides (Guides/*.md, 18 Oct 2026).
+# Make the guides from Guides/*.md and Guides/ru/*.md. They are copied into the bundle after make-strings.py.
 python3 make-guides.py --text "Resources/TurnOver Guide.txt"
-cp "Resources/TurnOver Guide.txt" "$APP/Contents/Resources/TurnOver Guide.txt"
+python3 make-guides.py --text "Resources/TurnOver Guide ru.txt" --language ru
 # The plugin maker's tool and its guide (PLUGIN-GUIDE.md), for people and their AIs (17 Oct 2026), and the plugin
 # format's schemas, for editors and AIs.
 cp "$BIN/turnover-plugin" "$APP/Contents/MacOS/turnover-plugin"
@@ -263,6 +263,11 @@ printf 'APPL????' > "$KEYAPP/Contents/PkgInfo"
 # The translations, as <language>.lproj in each of the three apps: macOS picks the person's language, and English
 # where there is none (make-strings.py).
 python3 make-strings.py compile "$APP/Contents/Resources" "$SETAPP/Contents/Resources" "$KEYAPP/Contents/Resources" || { echo "STOP: make-strings.py compile failed"; exit 1; }
+# Bundle lookup gives a non-localized resource priority, so keep both guides in language folders.
+# English is the bundle's development language and supplies the guide when the selected language has no copy.
+mkdir -p "$APP/Contents/Resources/en.lproj" "$APP/Contents/Resources/ru.lproj"
+cp "Resources/TurnOver Guide.txt" "$APP/Contents/Resources/en.lproj/TurnOver Guide.txt"
+cp "Resources/TurnOver Guide ru.txt" "$APP/Contents/Resources/ru.lproj/TurnOver Guide.txt"
 # TURNOVER_STRIP=1 (for release builds): stripped before it is signed, to keep it small. Swift keeps
 # class names, which its runtime needs. The unstripped programs are
 # kept privately, by their UUID, to read crash reports: atos -o <copy> -l <load address> <addresses>.

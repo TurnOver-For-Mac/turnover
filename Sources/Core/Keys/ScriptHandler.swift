@@ -30,6 +30,9 @@ public enum ScriptHandler {
         /// Why the key may no longer go anywhere (nil: it may), asked when its turn comes with the command it would run
         /// (nil: it is to be sent on).
         var refusal: ((Script?) -> String?)?
+        /// A key to send on that may go as another key (a system prompt's Return as Space): asked when its turn comes,
+        /// where the focus is then, not when it was typed (InputManager.keyGoesOnAs; a review, 26 Nov 2026).
+        var mayGoOnAsAnother = false
     }
     private static var queued: [Queued] = []
     /// An entry of the ordered lane is running (a script that waits for the caret lets keys in meanwhile).
@@ -112,8 +115,13 @@ public enum ScriptHandler {
     /// Whether the main thread has stopped beating (the app's watchdog says): then keys pass straight through.
     nonisolated(unsafe) public static var mainStuck: (@Sendable () -> Bool)?
 
-    public enum KeyDecision: Equatable { case taken, passed, deferred }
-    private enum Wait { case waiting, answered(Bool), timedOut }
+    public enum KeyDecision: Equatable {
+        case taken, passed, deferred
+        /// Passed, but as another key, by its key code (a system prompt's Return as Space, 26 Nov 2026): the key tap
+        /// rewrites the real key in place, and its release to match.
+        case passedAs(Int64)
+    }
+    private enum Wait { case waiting, answered(KeyDecision), timedOut }
 
     /// Whether TurnOver has a script for a gesture, asked of the main thread (the Windows style translates a key
     /// only when TurnOver has nothing of its own for it). nil: the main thread did not answer in time.
@@ -181,6 +189,8 @@ public enum ScriptHandler {
                 }
             }
             let taken: Bool
+            // The key it goes to the application as, when not as itself (InputManager.sentOnAs).
+            var other: KeyboardGesture?
             if SwitcherCloseWatcher.holdInput(gesture, run: routeLater) {
                 taken = true
             } else if prepareAfterSwitcher != nil || hasDeferredInput.value {
@@ -189,25 +199,33 @@ public enum ScriptHandler {
                 taken = true
             } else {
                 taken = InputManager.handleKeyDown(gesture)
-                if !taken { SwitcherCloseWatcher.passedThrough(gesture) }
+                if !taken {
+                    other = InputManager.sentOnAs
+                    SwitcherCloseWatcher.passedThrough(gesture)
+                    // Tab in focus mode went to the page for real (24 Nov 2026): the hidden control it reaches is looked for.
+                    BrowseModeDocument.keyPassedToPage(gesture)
+                }
             }
+            let decision: KeyDecision
+            if taken { decision = .taken } else if let other { decision = .passedAs(other.keyCode) } else { decision = .passed }
             var late = false
             state.lock.lock()
-            if case .timedOut = state.unsafeValue { late = true } else { state.unsafeValue = .answered(taken) }
+            if case .timedOut = state.unsafeValue { late = true } else { state.unsafeValue = .answered(decision) }
             state.lock.unlock()
             if late {
                 let ms = Double(DispatchTime.now().uptimeNanoseconds - started.uptimeNanoseconds) / 1e6
                 Log.warning("keyboard: \(gesture.logDescription()) answered after \(Int(ms)) ms: \(taken ? "its script runs now" : "sent on to the application now"); before it the main thread had begun: \(Core.describe(busyWith, now: turnCameAt))")
-                if !taken { gesture.send() }
+                // The key pressed was swallowed while the answer was awaited: TurnOver sends it on, as the key it goes as.
+                if !taken { (other ?? gesture).send() }
             } else { done.signal() }
         } }
         if done.wait(timeout: .now() + lookupLimit) == .timedOut {
             state.lock.lock(); defer { state.lock.unlock() }
-            if case .answered(let taken) = state.unsafeValue { return taken ? .taken : .passed }
+            if case .answered(let decision) = state.unsafeValue { return decision }
             state.unsafeValue = .timedOut
             return .deferred
         }
-        if case .answered(let taken) = state.value { return taken ? .taken : .passed }
+        if case .answered(let decision) = state.value { return decision }
         return .passed
     }
 
@@ -298,10 +316,10 @@ public enum ScriptHandler {
     /// A key into the ordered lane (main thread). `lookUp`: its command is found when its turn comes and runs, or the
     /// key is sent on if it has none, as a key typed then would; otherwise it is sent on. `refusal` is asked first.
     package static func queueInOrder(_ gesture: KeyboardGesture, lookUp: Bool, notes: Bool, masked: Bool,
-                                     refusal: ((Script?) -> String?)? = nil) {
+                                     mayGoOnAsAnother: Bool = false, refusal: ((Script?) -> String?)? = nil) {
         lock.lock()
         enqueue(Queued(kind: lookUp ? .lookUp : .send, gesture: gesture, wasInSayAll: SayAll.isRunning,
-                       inOrder: true, masked: masked, notes: notes, refusal: refusal))
+                       inOrder: true, masked: masked, notes: notes, refusal: refusal, mayGoOnAsAnother: mayGoOnAsAnother))
         lock.unlock()
         DispatchQueue.main.async { runQueued() }
     }
@@ -389,7 +407,15 @@ public enum ScriptHandler {
             defer { sendingInOrder = before }
             executeScript(script, gesture: gesture, wasInSayAll: entry.wasInSayAll, maskKey: entry.masked)
         } else {
-            sendInOrder(gesture)
+            var key = gesture
+            if entry.mayGoOnAsAnother {
+                switch InputManager.keyGoesOnAs(gesture) {
+                case .asItIs: break
+                case .asAnother(let other): key = other
+                case .nowhere: return
+                }
+            }
+            sendInOrder(key)
             if entry.notes { InputManager.notePassedThrough(gesture) }
         }
     }

@@ -29,6 +29,38 @@ extension BrowseModeDocument {
            earlyTitleURL != nil {
             if deferInitialContent({ [weak self] in self?.activate(gesture, byAccessibility: byAccessibility) }) { return }
         }
+        // 24 Nov 2026: the keyboard is on a control that WebKit hides inside the container at the reading position (or
+        // TurnOver is not sure which: the record then has no control). Return and Space go to the browser as real keys,
+        // whatever the focus object says or the order of speech and caret was; the page knows what has the keyboard.
+        // A press through accessibility goes only to the control that was found and checked, never to the container.
+        if let h = currentHiddenFocus, let f = API.focusObject, f.pid == webArea.pid {
+            switch HiddenFocusDecision.activation(focusIsRecordedPlace: f.isSameElement(as: h.container) || (h.control.map { f.isSameElement(as: $0) } ?? false),
+                                                  caretOnContainersOwnItem: isOnItemOfContainer(h.container), verified: h.verified, byAccessibility: byAccessibility) {
+            case .leaveAlone: break
+            case .pressRecordedControl:
+                // The page is not answering: said at once, as everywhere else, and no press waits out a timeout.
+                if pageSilent {
+                    Log.io("browse mode: \(gesture.keyName) not tried: the page is not answering")
+                    sayPageNotResponding()
+                    return
+                }
+                if let x = h.control, AXUIElementPerformAction(x, kAXPressAction as CFString) == .success {
+                    Log.io("browse mode: pressed the hidden \(x.role) that has the keyboard inside the \(h.container.role)")
+                } else {
+                    Log.io("browse mode: nothing pressed: the control with the keyboard inside the \(h.container.role) is not known")
+                }
+                return
+            case .doNothing:
+                // A Tab has been sent since the control was found: it may no longer have the keyboard, so it is not pressed.
+                Log.io("browse mode: nothing pressed: the keyboard may have moved since a Tab inside the \(h.container.role)")
+                reverifyHiddenFocus()
+                return
+            case .sendRealKey:
+                Log.io("browse mode: \(gesture.keyName) sent to the hidden control that has the keyboard inside the \(h.container.role)")
+                gesture.send()
+                return
+            }
+        }
         // A press needs the page itself, and asks it by calls that wait out the timeout each time: on a page that is
         // not answering it is not tried, and that is said (a review, 11 Nov 2026).
         if pageSilent {
@@ -147,12 +179,22 @@ extension BrowseModeDocument {
         return focusAtReadingPosition || keyboardMovedAfterPosition ? .sendKey : .notTried
     }
 
+    /// Whether the reading position is on the container's own item (its text segment or its line), not merely somewhere
+    /// inside a landmark that holds it: a link read inside the same landmark gets its own Return (Codex's review, 24 Nov 2026).
+    func isOnItemOfContainer(_ c: AXUIElement) -> Bool {
+        if let s = buffer.segment(at: position), c.isSame(s.element) { return true }
+        if let i = buffer.lineIndex(at: position), let e = buffer.lines[i].element, c.isSame(e) { return true }
+        return false
+    }
+
     /// Whether `f` is the item at the reading position, by the copy of the page alone (identity, nothing asked): the
     /// text's own element, its line's, or a container the copy holds around the position.
     func isAtReadingPositionInCopy(_ f: TurnOverObject) -> Bool {
-        if let s = buffer.segment(at: position), f.isSameElement(as: s.element) { return true }
-        if let i = buffer.lineIndex(at: position), let e = buffer.lines[i].element, f.isSameElement(as: e) { return true }
-        return buffer.containers.contains { $0.start <= position && position < $0.end && f.isSameElement(as: $0.element) }
+        // A control hidden inside a container is at the reading position where the container is (24 Nov 2026).
+        let place = focusPlace(of: f.element)
+        if let s = buffer.segment(at: position), place.isSame(s.element) { return true }
+        if let i = buffer.lineIndex(at: position), let e = buffer.lines[i].element, place.isSame(e) { return true }
+        return buffer.containers.contains { $0.start <= position && position < $0.end && place.isSame($0.element) }
     }
 
     /// Whether a control's value is a check state, by TurnOver's own role (the subrole counts: a web switch is an

@@ -288,6 +288,51 @@ extension BrowseModeDocument {
     }
 
 
+    static let tabRoles: Set<String> = ["AXLink", "AXButton", "AXTextField", "AXTextArea", "AXCheckBox", "AXRadioButton", "AXPopUpButton", "AXComboBox", "AXSlider", "AXMenuButton", "AXDisclosureTriangle"]
+
+    /// Whether an offset in the copy falls inside a span (start, end) of it. Pure.
+    package static func offset(_ at: Int, isInside span: (Int, Int)) -> Bool { at >= span.0 && at < span.1 }
+
+    /// The span of one focus element from its pieces of text, starting at its own first piece: a link's own words (pieces
+    /// that touch, as the quick-navigation search counts them), not the line they are on, so that a second link on the
+    /// same line is not inside the first, and a link on the next line is not either (24 Nov 2026: "See the Terms and the
+    /// Privacy notice"). Anything that is not a link has its lines (`lineEnd`). Pure.
+    package static func ownSpan(startingAt start: Int, pieces: [(start: Int, end: Int, isLink: Bool, owner: Int)], lineEnd: Int) -> (Int, Int) {
+        guard let first = pieces.first, first.start == start, first.isLink else { return (start, max(lineEnd, start + 1)) }
+        var end = first.end
+        for next in pieces.dropFirst() {
+            // The same link only: two links whose texts touch are two (Codex's review, 24 Nov 2026).
+            guard next.isLink, next.start == end, next.owner == first.owner else { break }
+            end = next.end
+        }
+        return (start, max(end, start + 1))
+    }
+
+    /// The span of the copy that is one element's own: its own words if it is a link, else its lines.
+    func span(ofFocus element: AXUIElement) -> (Int, Int)? {
+        guard let start = buffer.offset(of: element), let line = buffer.lineIndex(at: start) else { return nil }
+        let (_, end) = buffer.elementRange(fromLine: line)
+        return Self.ownSpan(startingAt: start, pieces: buffer.pieces(from: start), lineEnd: end)
+    }
+
+    /// The element, or a parent of it up to five levels, that takes the keyboard: the first one of a Tab role whose
+    /// focus can be set. A link's text is found by its words: the link itself is a parent. Nothing is changed.
+    /// `body` is called for each candidate as it is found, nearest first, and the walk goes on only while it returns
+    /// false (24 Nov 2026: the walk used to finish before the first write, and a slow parent held up a prompt button).
+    static func walkFocusTargets(from el: AXUIElement, _ body: (AXUIElement) -> Bool) {
+        var x: AXUIElement? = el; var hops = 0
+        while let y = x, hops < 5 {
+            var settable: DarwinBoolean = false
+            let takesKeyboard = tabRoles.contains(y.role)
+            if takesKeyboard, AXUIElementIsAttributeSettable(y, kAXFocusedAttribute as CFString, &settable) == .success, settable.boolValue, body(y) { return }
+            x = y.element(kAXParentAttribute); hops += 1
+        }
+    }
+
+    /// As NVDA's _tabOverride: a reading position inside the focused control's own content leaves Tab to the browser.
+    /// A group that merely holds links is not such a control (Codex's review, 24 Nov 2026).
+    package static func usesOwnSpan(focusRole: String) -> Bool { tabRoles.contains(focusRole) }
+
     /// NVDA: Tab in browse mode goes on from the reading position, not from wherever the page's focus was left (the
     /// top of a long post, 3 Oct 2026). If the caret has moved since the focus did, focus the next (or previous)
     /// link or control after (before) it; the focus event then reads it. Otherwise the browser's own Tab.
@@ -295,26 +340,45 @@ extension BrowseModeDocument {
         guard position != positionAtFocus else { return false }
         // Putting the keyboard on a control asks the page, some of it by calls that wait out the timeout each time.
         guard !pageSilent else { return false }
-        let roles: Set<String> = ["AXLink", "AXButton", "AXTextField", "AXTextArea", "AXCheckBox", "AXRadioButton", "AXPopUpButton", "AXComboBox", "AXSlider", "AXMenuButton", "AXDisclosureTriangle"]
+        let focus = API.focusObject.flatMap { $0.pid == webArea.pid && !$0.isSameElement(as: webArea) ? $0 : nil }
+        let current = focus?.element
+        // A control hidden inside a container has the container's place in the copy.
+        let own = focus.flatMap { Self.usesOwnSpan(focusRole: $0.axRole) ? current.flatMap { span(ofFocus: focusPlace(of: $0)) } : nil }
+        if let own, Self.offset(position, isInside: own) { return false }
         var from = position
         for _ in 0..<30 {
-            guard let (at, el) = buffer.find(from: from, forward: forward, roles: roles) else { return false }
-            // A link's text is found by its words: the link itself is a parent.
-            var x: AXUIElement? = el; var hops = 0
-            while let y = x, hops < 5 {
-                var settable: DarwinBoolean = false
-                if roles.contains(y.role), AXUIElementIsAttributeSettable(y, kAXFocusedAttribute as CFString, &settable) == .success, settable.boolValue,
-                   y.set(kAXFocusedAttribute, kCFBooleanTrue) == .success {
-                    Log.io("browse mode: Tab from the reading position to \(y.role) at \(at)")
+            guard let (at, el) = buffer.find(from: from, forward: forward, roles: Self.tabRoles) else { return false }
+            var moved = false
+            var first = true
+            Self.walkFocusTargets(from: el) { target in
+                defer { first = false }
+                // Only the nearest candidate is compared with the control that has the focus. If it is that one, setting
+                // the focus would bring no event and nothing would be said (24 Nov 2026, 06:51:49; 23 Nov, 12:17:08); only a
+                // control that says it has the keyboard is read without a write (the cached focus can be stale).
+                if first, let current, target.isSame(current), (current.attr(kAXFocusedAttribute) as? Bool) == true {
+                    Log.io("browse mode: Tab from the reading position to the control that has the focus, at \(at); read here")
                     position = at
                     positionAtFocus = at
-                    // A page whose script is stuck takes the request and does nothing until it wakes (the freeze
-                    // test, 4 Oct 2026: Tab after Tab was silent). If the focus has not come within a second, say so.
-                    PageWatch.keySent(to: y.pid)
+                    // Spoken as the focus event speaks an object, not through the focus news, whose duplicate rule would drop it.
+                    // An explicit report: the repeat rule must not drop it either.
+                    Speech.explicitFocusReport = true
+                    ObjectFactory.make(current).reportFocus()
+                    Speech.explicitFocusReport = false
+                    moved = true
                     return true
                 }
-                x = y.element(kAXParentAttribute); hops += 1
+                // The focus write, as soon as the candidate is found; if it fails, the walk goes on to the next parent.
+                guard target.set(kAXFocusedAttribute, kCFBooleanTrue) == .success else { return false }
+                Log.io("browse mode: Tab from the reading position to \(target.role) at \(at)")
+                position = at
+                positionAtFocus = at
+                // A page whose script is stuck takes the request and does nothing until it wakes (the freeze
+                // test, 4 Oct 2026: Tab after Tab was silent). If the focus has not come within a second, say so.
+                PageWatch.keySent(to: target.pid)
+                moved = true
+                return true
             }
+            if moved { return true }
             from = at
         }
         return false

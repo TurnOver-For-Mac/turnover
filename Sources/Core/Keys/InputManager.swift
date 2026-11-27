@@ -7,6 +7,16 @@
 import Foundation
 import AppKit
 
+/// How a key that TurnOver has no use for goes to the application (InputManager.keyGoesOnAs).
+package enum KeyOnward {
+    /// As the key it is.
+    case asItIs
+    /// As another key (a system prompt's Return as Space, 26 Nov 2026).
+    case asAnother(KeyboardGesture)
+    /// Not at all: the key is dropped whole, its release too.
+    case nowhere
+}
+
 public enum InputManager {
     nonisolated private static let lock = NSLock()
     nonisolated(unsafe) private static var _inputHelp = false   // under `lock`
@@ -97,15 +107,39 @@ public enum InputManager {
     }
     private static var _lastKeyGesture: KeyboardGesture?
 
+    /// The key the last key down goes to the application as, when that is not the key pressed (a system prompt's
+    /// Return as Space, 26 Nov 2026). Set while the key is decided and read by whoever asked, in the same turn of the
+    /// main thread (ScriptHandler.askMain): the key tap then rewrites the real key. nil: the key goes on as itself.
+    package static var sentOnAs: KeyboardGesture?
+    /// How a key that TurnOver has no use for goes to the application (tests replace it). Asked when the key goes on:
+    /// now, or when its turn comes in the ordered lane (ScriptHandler.run), never earlier, since the answer depends
+    /// on where the focus is at that moment (a review, 26 Nov 2026).
+    package static var keyGoesOnAs: (KeyboardGesture) -> KeyOnward = { SystemPrompts.returnGoesOn($0) }
+    /// Set at the end of `decideKeyDown` for a key that goes to the application in the ordinary way. Only such a key
+    /// is asked about: never the pass-next key, a key for a sleeping application or one TurnOver's own screens let go.
+    private static var goesOnOrdinarily = false
+
     public static func handleKeyDown(_ gesture: KeyboardGesture) -> Bool {
+        sentOnAs = nil
+        goesOnOrdinarily = false
         let taken = decideKeyDown(gesture)
+        let ordinary = goesOnOrdinarily
+        goesOnOrdinarily = false
         // A key that would go straight to the application while keys TurnOver sends on later are still ahead of it
         // (the keys held for a field's focus, 16 Nov 2026, review): let through, it would reach the app before them, as
-        // it is already in the keyboard's stream ahead of what they are posted into. It takes its turn behind them.
+        // it is already in the keyboard's stream ahead of what they are posted into. It takes its turn behind them, and
+        // which key it goes on as is asked then.
         if !taken, ScriptHandler.keysMustWaitTheirTurn {
             Log.io("input \(gesture.logDescription()) sent on behind the keys TurnOver is still sending")
-            ScriptHandler.queueInOrder(gesture, lookUp: false, notes: false, masked: false)
+            ScriptHandler.queueInOrder(gesture, lookUp: false, notes: false, masked: false, mayGoOnAsAnother: ordinary)
             return true
+        }
+        if !taken, ordinary {
+            switch keyGoesOnAs(gesture) {
+            case .asItIs: break
+            case .asAnother(let other): sentOnAs = other
+            case .nowhere: return true   // swallowed whole, its release too
+            }
         }
         return taken
     }
@@ -251,7 +285,13 @@ public enum InputManager {
         FormattingFeedback.shared.keyWillPassThrough(gesture)
         DispatchQueue.main.async { notePassedThrough(gesture) }
         // An unbound TurnOver chord does nothing; the letter must not reach the document.
-        return gesture.isTurnOverModifier
+        if gesture.isTurnOverModifier { return true }
+        // The key goes to the application. A system prompt's Return on a button that is not the default goes as Space
+        // (SystemPrompts.returnGoesOn, asked by `handleKeyDown` or at the key's turn in the ordered lane); what follows
+        // a passed key, above, is still told of the key that was pressed.
+        // Only here: the pass-next key, a sleeping application and TurnOver's own screens never come this far.
+        goesOnOrdinarily = true
+        return false
     }
 
     /// What follows a key that goes to the application: the watchers, and the typed character for the echo. Also for a key

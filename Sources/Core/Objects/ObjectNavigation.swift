@@ -58,6 +58,7 @@ public final class ObjectNavigator {
             if !inside { Log.io("review: the focus moved on to \(e.role) after following the cursor; the cursor stays"); return }
         }
         current = e; currentPid = pid; labelSource = nil; heldList = nil
+        remember(e)
     }
     private var keepHoldUntil = Date.distantPast
 
@@ -171,6 +172,7 @@ public final class ObjectNavigator {
 
     private func landRow(_ row: AXUIElement, index: Int, count: Int) {
         current = row; currentPid = row.pid; labelSource = nil
+        remember(row)
         var parts = Speech.objectPropertiesSpeech(ObjectFactory.make(row), reason: .query)
         // A row with no name of its own (a grid's cell holding a book's whole line): its texts, each its own phrase.
         if ObjectFactory.make(row).name.isEmpty { let t = ElementMatcher.text(of: row); if !t.isEmpty { parts.insert(t, at: 0) } }
@@ -363,6 +365,127 @@ public final class ObjectNavigator {
         return nil
     }
 
+    // MARK: An item that went away under the cursor
+
+    /// What the cursor is on, as facts that outlive the element, with the parent and window it was in: apps re-create
+    /// elements as they change (see ReviewRecovery.swift), and these are where it is looked for again. Cheap on purpose,
+    /// as it is taken at every landing and focus change: a handful of attributes, no walk.
+    private var mark: (element: AXUIElement, facts: ReviewMark, parent: AXUIElement?, window: AXUIElement?, pid: pid_t)?
+
+    private func remember(_ e: AXUIElement) {
+        let role = e.role
+        guard role != "?" else { mark = nil; return }
+        let title = e.string(kAXTitleAttribute) ?? ""
+        let name = title.isEmpty ? (e.string(kAXDescriptionAttribute) ?? "") : title
+        mark = (e, ReviewMark(role: role, name: name, frame: TurnOverObject.frame(e)),
+                e.element(kAXParentAttribute), e.element(kAXWindowAttribute), e.pid)
+    }
+
+    /// Whether an element has gone, or been cut loose from its window: it answers nothing, or its parents run out
+    /// before reaching a window or the application. An item outside any window that still leads to its application
+    /// (the menu bar, the Dock) is not.
+    nonisolated static func isCutLoose(_ e: AXUIElement) -> Bool {
+        var x: AXUIElement? = e; var hops = 0
+        while let y = x, hops < 60 {
+            let role = y.role
+            if role == "?" { return true }
+            if role == "AXWindow" || role == "AXApplication" { return false }
+            x = y.element(kAXParentAttribute); hops += 1
+        }
+        return x == nil
+    }
+
+    /// The cursor's element and what the command needs from it (its window, its group). When that cannot be had because
+    /// the element went away, the cursor is put back first (`recoverLostCursor`); `otherwise` runs when there is still
+    /// nothing, as before. Nil also when recovery has already said where the cursor is now.
+    private func resolve<T>(_ need: (AXUIElement) -> T?, otherwise: () -> Void) -> (AXUIElement, T)? {
+        let start = element
+        if let e = start, let t = need(e) { return (e, t) }
+        let lost = [current, start].compactMap { $0 }.first { Self.isCutLoose($0) }
+        guard let lost else { otherwise(); return nil }
+        switch recoverLostCursor(lost) {
+        case .same(let e):
+            if let t = need(e) { return (e, t) }
+            otherwise(); return nil
+        case .landed: return nil
+        case .nothing: otherwise(); return nil
+        }
+    }
+
+    private enum Recovered { case same(AXUIElement), landed, nothing }
+
+    /// The cursor's item went away (25 Nov 2026, the App Store's download button, re-created as its progress moved: every
+    /// VO-Left and VO-Right after it said "nothing to review"). In any app, in this order: the same item found again
+    /// where it was (same role in the same place, or its name when only one item has it), and the command carries on
+    /// from it; else the app's focus; else the window's first item. Those two are said, as any landing is, and the
+    /// command stops there, so the person hears where they are before moving on.
+    private func recoverLostCursor(_ lost: AXUIElement) -> Recovered {
+        Self.forgetGroupItems()
+        let m = mark.flatMap { CFEqual($0.element, lost) ? $0 : nil }
+        let pid = m?.pid ?? lost.pid
+        let app = AXUIElementCreateApplication(pid)
+        func usable(_ x: AXUIElement?) -> AXUIElement? {
+            guard let x, !x.isSame(lost), !Self.isCutLoose(x), window(of: x) != nil else { return nil }
+            return x
+        }
+        let appWindow = app.element(kAXFocusedWindowAttribute) ?? app.element(kAXMainWindowAttribute)
+        let liveWindow = [m?.window, appWindow].compactMap { $0 }.first { $0.role == "AXWindow" }
+        if let m {
+            var places: [AXUIElement] = []
+            if let p = m.parent, !Self.isCutLoose(p) { places.append(p) }
+            if let w = liveWindow, !(places.first.map { $0.isSame(w) } ?? false) { places.append(w) }
+            for place in places {
+                if let found = usable(Self.find(m.facts, under: place)) {
+                    Log.io("review: the cursor's \(m.facts.role) went; found again in \(place.role)")
+                    current = found; currentPid = found.pid; remember(found)
+                    return .same(found)
+                }
+            }
+        }
+        if let f = usable(app.element(kAXFocusedUIElementAttribute)) {
+            Log.io("review: the cursor's \(m?.facts.role ?? lost.role) went; to the focus, \(f.role)")
+            land(on: f, followFocus: false)
+            return .landed
+        }
+        if let w = liveWindow, let first = Self.groupItems(w).first {
+            Log.io("review: the cursor's \(m?.facts.role ?? lost.role) went; to the window's first item (the app's focus: \(Self.whyFocusUnusable(app.element(kAXFocusedUIElementAttribute), lost: lost, window: { self.window(of: $0) })))")
+            land(on: first, followFocus: false)
+            return .landed
+        }
+        Log.io("review: the cursor's \(m?.facts.role ?? lost.role) went, and nothing was found in its place")
+        return .nothing
+    }
+
+    /// Why the app's focus could not take the lost cursor, in words for the log (27 Nov 2026: after a silent Tab in a
+    /// page the cursor went to the window's close button, and the log did not say which of these it was). Asked again
+    /// for the log only; the recovery itself is unchanged.
+    private static func whyFocusUnusable(_ x: AXUIElement?, lost: AXUIElement, window: (AXUIElement) -> AXUIElement?) -> String {
+        guard let x else { return "the app reported none" }
+        if x.isSame(lost) { return "the lost item itself" }
+        if isCutLoose(x) { return "\(x.role), cut loose from its parent" }
+        if window(x) == nil { return "\(x.role), in no window" }
+        return "\(x.role), usable when asked again"
+    }
+
+    /// The element under `root` that `mark` describes, by `ReviewRecovery.match`. Bounded by count and time: it runs on
+    /// a key press, and only after the cursor's item has gone.
+    private static func find(_ mark: ReviewMark, under root: AXUIElement) -> AXUIElement? {
+        var elements: [AXUIElement] = [], facts: [ReviewMark] = []
+        var stack = [root], visited = 0
+        let deadline = Date().addingTimeInterval(0.25)
+        while let x = stack.popLast(), visited < 3000, Date() < deadline {
+            visited += 1
+            if x.role == mark.role {
+                let title = x.string(kAXTitleAttribute) ?? ""
+                elements.append(x)
+                facts.append(ReviewMark(role: mark.role, name: title.isEmpty ? (x.string(kAXDescriptionAttribute) ?? "") : title,
+                                        frame: TurnOverObject.frame(x)))
+            }
+            stack.append(contentsOf: x.elements(kAXChildrenAttribute).reversed())
+        }
+        return ReviewRecovery.match(mark, among: facts).map { elements[$0] }
+    }
+
     /// The next element in reading order (depth first) inside `root`, after `e`.
     private func nextInOrder(after e: AXUIElement, root: AXUIElement, enter: Bool) -> AXUIElement? {
         if enter, Self.descends(e), let first = e.elements(kAXChildrenAttribute).first { return first }
@@ -403,7 +526,8 @@ public final class ObjectNavigator {
     public private(set) var landedByStep = false
 
     private func step(forward: Bool) {
-        guard let start = element, let root = window(of: start) else { Speech.speakMessage(String(localized: "nothing to review", comment: "Spoken message")); return }
+        guard let resolved = resolve({ window(of: $0) }, otherwise: { Speech.speakMessage(String(localized: "nothing to review", comment: "Spoken message")) }) else { return }
+        let (start, root) = resolved
         var node: AXUIElement? = start.isSame(root) ? (forward ? root.elements(kAXChildrenAttribute).first : nil) : start
         var first = !start.isSame(root)
         var visited = 0
@@ -620,7 +744,9 @@ public final class ObjectNavigator {
 
     /// VO Right and VO Left: the next or previous item in this group; at its end, a bump, as VoiceOver.
     public func groupStep(forward: Bool) {
-        guard let cur = element, let container = cur.role == "AXWindow" || cur.role == "AXSheet" ? cur : groupContainer(of: cur) else { Speech.speakMessage(String(localized: "nothing to review", comment: "Spoken message")); return }
+        guard let resolved = resolve({ $0.role == "AXWindow" || $0.role == "AXSheet" ? $0 : groupContainer(of: $0) },
+                                             otherwise: { Speech.speakMessage(String(localized: "nothing to review", comment: "Spoken message")) }) else { return }
+        let (cur, container) = resolved
         let items = Self.groupItems(container)
         guard !items.isEmpty else { Tones.edge(); Log.io("review: edge (an empty group)"); return }
         let j: Int
@@ -650,7 +776,8 @@ public final class ObjectNavigator {
 
     /// VO Shift Up: out to the group holding this one.
     public func stopInteracting() {
-        guard let cur = element, cur.role != "AXWindow", let container = groupContainer(of: cur) else { Tones.edge(); return }
+        guard let resolved = resolve({ $0.role == "AXWindow" ? nil : groupContainer(of: $0) }, otherwise: { Tones.edge() }) else { return }
+        let (_, container) = resolved
         // The window itself is the top level: the cursor rests on it, so VO-Left and Right then move among the window's
         // own items (the toolbar, the sidebar, the document) instead of staying in the text (Word, 17 Oct 2026).
         if container.role == "AXWindow" { current = container; currentPid = container.pid; VoiceOverSounds.play("DrillOut.aiff"); Speech.speakMessage(String(localized: "top level", comment: "Spoken message")); return }
@@ -668,7 +795,8 @@ public final class ObjectNavigator {
 
     /// VO-Home and VO-End (and VO-Shift-Home, VO-Shift-End): the first or last item of this group.
     public func groupEdge(last: Bool) {
-        guard let cur = element, let container = cur.role == "AXWindow" ? cur : groupContainer(of: cur) else { Tones.edge(); return }
+        guard let resolved = resolve({ $0.role == "AXWindow" ? $0 : groupContainer(of: $0) }, otherwise: { Tones.edge() }) else { return }
+        let (_, container) = resolved
         let items = Self.groupItems(container)
         guard let target = last ? items.last : items.first else { Tones.edge(); return }
         land(on: target)
@@ -676,7 +804,8 @@ public final class ObjectNavigator {
 
     /// VO-Command-Home and VO-Command-End: the first or last item of the window.
     public func windowEdge(last: Bool) {
-        guard let cur = element, let w = window(of: cur) else { Tones.edge(); return }
+        guard let resolved = resolve({ window(of: $0) }, otherwise: { Tones.edge() }) else { return }
+        let (_, w) = resolved
         let items = Self.groupItems(w)
         guard let target = last ? items.last : items.first else { Tones.edge(); return }
         land(on: target)
@@ -765,7 +894,8 @@ public final class ObjectNavigator {
 
     /// VO-Shift-Escape: out to the top level of the window, on its first item.
     public func topLevel() {
-        guard let cur = element, let w = window(of: cur), let first = Self.groupItems(w).first else { Tones.edge(); return }
+        guard let resolved = resolve({ window(of: $0) }, otherwise: { Tones.edge() }) else { return }
+        guard let first = Self.groupItems(resolved.1).first else { Tones.edge(); return }
         if Tones.invented("jump") { Tones.beep(440, 30) }
         land(on: first)
     }
@@ -773,8 +903,9 @@ public final class ObjectNavigator {
     /// VO-Up and VO-Down outside text: the item above or below in this group (a grid of icons, a toolbar over a
     /// list), the nearest by how far across it is.
     public func verticalStep(down: Bool) {
-        guard let cur = element, let container = cur.role == "AXWindow" ? cur : groupContainer(of: cur),
-              let f = TurnOverObject.frame(cur) else { Tones.edge(); return }
+        guard let resolved = resolve({ $0.role == "AXWindow" ? $0 : groupContainer(of: $0) }, otherwise: { Tones.edge() }) else { return }
+        let (cur, container) = resolved
+        guard let f = TurnOverObject.frame(cur) else { Tones.edge(); return }
         // A row of a table or outline: the row below or above, by its place (not the frames of thousands of rows).
         if ["AXTable", "AXOutline"].contains(container.role) {
             let rows = Self.groupItems(container)
@@ -1409,6 +1540,7 @@ public final class ObjectNavigator {
     public func place(_ e: AXUIElement) {
         current = e
         currentPid = e.pid
+        remember(e)
     }
 
     private func land(on e: AXUIElement, followFocus: Bool = true) {
@@ -1416,6 +1548,7 @@ public final class ObjectNavigator {
         current = e
         currentPid = e.pid
         labelSource = ProfileStore.shared.labelDetail(for: e, pid: e.pid)?.source
+        remember(e)
         report(e)
         if followFocus { follow(e) }
     }
@@ -1428,7 +1561,8 @@ public final class ObjectNavigator {
     }
 
     public func reportCurrent() {
-        guard let e = element else { Speech.speakMessage(String(localized: "nothing to review", comment: "Spoken message")); return }
+        guard let resolved = resolve({ Self.isCutLoose($0) ? nil : $0 }, otherwise: { Speech.speakMessage(String(localized: "nothing to review", comment: "Spoken message")) }) else { return }
+        let (e, _) = resolved
         report(e)
     }
 

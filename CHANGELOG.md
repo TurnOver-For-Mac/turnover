@@ -2,6 +2,57 @@
 
 The newest build is first. "Reported by a tester" marks a fix for something a tester sent in. Thank you.
 
+## 2.0, build 25.2
+
+### New to try
+
+- Links on one line are read one at a time. Where a line holds several links, such as "Privacy Policy, Terms of
+  Use, Unsubscribe" at the foot of an email, Tab and the link keys stop on each one, and VO Right Arrow and VO
+  Left Arrow go to each link and to the text between them, so VO Space presses the link you hear.
+- Web tables say their size when you arrive in one, for example "table with 2 rows and 2 columns", and then the
+  row as it changes, as tables in TextEdit and Word already do.
+- Keys are named in words: the number pad, the right-hand modifier keys and the volume keys, in Russian and
+  Turkish too (a contributor's change).
+- The Russian guide is inside the app and is opened when your language is Russian, and the Settings window's
+  Russian wording says what each option does (a contributor's changes).
+
+### Fixed
+
+- Tab on a web page no longer falls silent. Safari sometimes reports a focus that has no role, reports the stop
+  you just left a second time, cuts the focus loose from its page, or hides the real control inside a
+  button-like group, as on Reddit. TurnOver now finds the control that has the keyboard and says it.
+- A web page's own menu, such as a search box's list of suggestions, no longer holds back the page's focus and
+  is no longer called a context menu.
+- The review cursor finds its place again when an app re-creates the item it was on, where every review key
+  used to say "nothing to review" until the focus moved (a contributor's change).
+- Moving by paragraph on a web page goes across wrapped lines, one paragraph at a time (a contributor's change).
+  Reported by a tester.
+- At punctuation level All, the commas that only join a field's label, its role and the parts of its description
+  are pauses and are no longer spoken. Commas inside a label are still said. Issue 401. Reported by a tester.
+- Selecting on a web page keeps the selection inside the document when WebKit answers with a position that
+  cannot be used.
+- Searching backwards for bold, italic or other formatted text looks as far back as searching forwards does,
+  and carries on when an app answers with less text than was asked for. It no longer says none was found when
+  there is some. Issue 201. Reported by a tester.
+- Word's font name and font size boxes, and other editable combo boxes, say the new value after Up Arrow, Down
+  Arrow, Page Up, Page Down, Home or End. Issue 323. Reported by a tester.
+- Words of another script inside mixed text are read by that language's voice. An Arabic title that ended in
+  English used to be read whole by one voice. Issue 224. Reported by a tester.
+- Typing is no longer held up for a second or two when a braille display connects.
+- System dialogs: Return presses the button the focus is on, not the default button. A dialog that is read before
+  it has the focus gets the keyboard and the review cursor, so Tab works in it. A dialog is closed at once, the
+  next one is then read, and the list of dialogs is kept across the lock screen.
+- Pages: crossing onto another page reads as a move within a page does, the page number is said at the top of
+  a page, the caret keys read again after a scroll or a jump, and the first focus is read when you come to
+  Pages (a contributor's changes).
+- Notification banners from macOS are recognised and read as they appear (a contributor's change).
+- One of something is said in the singular, such as "1 item" (a contributor's change).
+- A full battery on mains power says "charged", not "charging". Issue 298.
+- Claude app: selecting words in the message field with Option Shift Left Arrow reads them again after a
+  conversation switch. A reply that carries on after a pause is read from where the reading stopped, not from
+  the start. A progress line that arrives while you switch conversation is no longer said later, in another
+  conversation.
+
 ## 2.0, build 25.1
 
 ### New to try

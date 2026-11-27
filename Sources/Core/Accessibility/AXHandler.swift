@@ -38,6 +38,8 @@ public final class AXHandler {
     /// Where the focus was before it rested a moment on a nameless group (FocusChanges.present).
     var beforeNamelessStop: (ancestors: [TurnOverObject], focus: TurnOverObject?, at: Date)?
     var lastGainFocus: (AXUIElement, Date)?
+    /// When the browser last reported a focus move; a hidden child that TurnOver announces by itself does not count.
+    var lastBrowserFocusNewsAt = Date.distantPast
     var lastWebAreaFocus = Date.distantPast
     var webAreaFocusSkipped = 0
     var running = false
@@ -231,13 +233,22 @@ extension AXHandler {
         return nil
     }
 
+    /// The menu that opened, for the log: roles, counts and states only (27 Nov 2026). Its items' titles went into the
+    /// log until then, and a web page's menu holds what the page shows: a search field's suggestions on one site, from
+    /// what had been typed. Whether an item has a name is kept, as that is what a silent menu turns on.
     func logMenu(_ menu: AXUIElement) {
         let kids = menu.elements(kAXChildrenAttribute)
-        Log.io("menu opened: \(menu.role) \"\(Log.words(menu.string(kAXTitleAttribute) ?? ""))\" subrole \(menu.string(kAXSubroleAttribute) ?? "-") \(kids.count) children; attributes \((menu.attr(kAXSelectedChildrenAttribute) as? [AXUIElement])?.count ?? -1) selected")
+        let named = !(menu.string(kAXTitleAttribute) ?? "").isEmpty
+        let selected = (menu.attr(kAXSelectedChildrenAttribute) as? [AXUIElement])?.count ?? -1
+        Log.io("menu opened: \(menu.role) \(Self.namedWord(named)) subrole \(menu.string(kAXSubroleAttribute) ?? "-") \(kids.count) children; attributes \(selected) selected")
         for k in kids.prefix(12) {
-            Log.io("  \(k.role) \"\(Log.words(k.string(kAXTitleAttribute) ?? k.string(kAXDescriptionAttribute) ?? ""))\" selected=\(k.attr(kAXSelectedAttribute) as? Bool ?? false) focused=\(k.attr(kAXFocusedAttribute) as? Bool ?? false) enabled=\(k.attr(kAXEnabledAttribute) as? Bool ?? true)")
+            let kidNamed = !(k.string(kAXTitleAttribute) ?? k.string(kAXDescriptionAttribute) ?? "").isEmpty
+            Log.io("  \(k.role) \(Self.namedWord(kidNamed)) selected=\(k.attr(kAXSelectedAttribute) as? Bool ?? false) focused=\(k.attr(kAXFocusedAttribute) as? Bool ?? false) enabled=\(k.attr(kAXEnabledAttribute) as? Bool ?? true)")
         }
     }
+
+    /// "named" or "nameless", never the name itself (logMenu).
+    package nonisolated static func namedWord(_ named: Bool) -> String { named ? "named" : "nameless" }
 }
 
 nonisolated public extension AXUIElement {
@@ -245,6 +256,23 @@ nonisolated public extension AXUIElement {
 }
 
 nonisolated extension AXUIElement {
+    /// Whether this element is a page's own content (27 Nov 2026): inside a web area by its parents, or, where the
+    /// parents give out before the page (a page's pop-up list, deep in its shadow roots), by the DOM attributes only a
+    /// browser's elements carry.
+    public var isWebContent: Bool {
+        if enclosingWebArea() != nil { return true }
+        var names: CFArray?
+        guard AXUIElementCopyAttributeNames(self, &names) == .success, let list = names as? [String] else { return false }
+        return list.contains("AXDOMClassList") || list.contains("AXDOMIdentifier")
+    }
+
+    /// Whether `ancestor` holds this element (itself included), within 40 steps up.
+    public func isInside(_ ancestor: AXUIElement) -> Bool {
+        var p: AXUIElement? = self; var hops = 0
+        while let x = p, hops < 40 { if x.isSame(ancestor) { return true }; p = x.element(kAXParentAttribute); hops += 1 }
+        return false
+    }
+
     /// The page this element is in (itself, if it is one).
     public func enclosingWebArea() -> AXUIElement? {
         var p: AXUIElement? = self; var hops = 0

@@ -199,15 +199,23 @@ extension BrowseModeDocument {
             // Follow the focus with the virtual caret.
             if !event.obj.isSameElement(as: webArea) {
                 lastFocusElement = event.obj.element
-                let at = buffer.offset(of: event.obj.element)
-                if at == nil, Date().timeIntervalSince(buffer.builtAt) > 1 { followFocusAfterBuild(event.obj.element) }
-                if let at { position = at }
+                // A control that WebKit hides inside a container is never in the copy: its place is the container's. The
+                // reading position goes there when the keyboard arrives from outside, and stays for moves inside it.
+                let place = focusPlace(of: event.obj.element)
+                let hidden = !place.isSame(event.obj.element)
+                let at = buffer.offset(of: place)
+                if at == nil, Date().timeIntervalSince(buffer.builtAt) > 1 { followFocusAfterBuild(place) }
+                if let at, !(hidden && currentHiddenFocus?.movedInside == true) { position = at }
             }
             positionAtFocus = position
             lastChain = []
             // Keys held for a field's focus that came on another element (16 Nov 2026, review): not left waiting.
             settleCaretHold(afterFocusOn: event.obj)
             next()
+            // Case 3 (24 Nov 2026): a hidden control that is a nameless group says nothing on focus. Said in words.
+            if let x = currentHiddenFocus?.control, x.isSame(event.obj.element), event.obj.name.isEmpty, ["AXGroup", "AXUnknown"].contains(x.role) {
+                Speech.speakMessage(Self.unlabelledControlWords, remember: false)
+            }
         default:
             next()
         }

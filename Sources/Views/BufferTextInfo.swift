@@ -139,8 +139,19 @@ public final class BufferTextInfo: TextInfo {
         var entering: [AXUIElement] = []
         var j = i
         while j < buffer.lines.count, buffer.lines[j].start < end { entering.append(contentsOf: buffer.lines[j].entering); j += 1 }
-        chain = entering
+        // A data table the line is in: its size on arrival and its row as it changes (WebTableNews); the table and the row
+        // join the chain so the next reading knows them, and every reset of the chain resets them too.
+        chain = entering + [line.table, line.row].compactMap { $0 }
+        let tableBegins = line.table.map { t in entering.contains { $0.isSame(t) } } ?? false
+        func sayTable() {
+            let n = WebTableNews.news(table: line.table, row: line.row, previousChain: previousChain, beginsHere: tableBegins)
+            if n.tone { pendingTones.append { Tones.table() } }
+            prefix.append(contentsOf: n.words)
+        }
+        // A table begun on an earlier line holds everything entered on this one, so its news comes first.
+        if line.table != nil, !tableBegins { sayTable() }
         for el in entering {
+            if let t = line.table, el.isSame(t) { sayTable(); continue }
             if let prev = previousChain, prev.contains(where: { $0.isSame(el) }) { continue }
             let (mode, tone) = WebTextInfo.reporting(for: el)
             switch mode {

@@ -560,6 +560,13 @@ open class TurnOverObject: ScriptableObject {
         // (Never a submenu: it hangs off an item and is named by it, even a moment after the context menu was asked for.)
         let asked = !isSubmenu && Date().timeIntervalSince(Self.contextMenuRequestedAt) < 2
         let ownMenu: Set<String> = ["AXMenuBarItem", "AXMenuItem", "AXPopUpButton", "AXMenuButton", "AXComboBox", "AXButton"]   // a menu bar, submenu or pop-up button's menu
+        // A page's own menu that nobody asked for (a search box's suggestions, role="menu") is not a context menu: said
+        // by its name if it has one, else only by the menu sound, and the focus stays where it is (27 Nov 2026: Tab into
+        // Reddit's Search box said "context menu").
+        if !asked, !ownMenu.contains(parentRole), MenuNavigationPlugin.isWebMenu(element) {
+            if !menuName.isEmpty { Speech.speakMessage(String(localized: "\(menuName) menu", comment: "A menu bar item: %@ is its name (View menu)")) }
+            return
+        }
         if asked || (!ownMenu.contains(parentRole) && parent?.string(kAXSubroleAttribute) != "AXMenuExtra" && StatusMenus.lastOpened == nil) {
             Self.contextMenuRequestedAt = .distantPast
             Tones.contextMenuOpened()

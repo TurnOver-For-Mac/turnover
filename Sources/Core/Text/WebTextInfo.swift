@@ -29,6 +29,8 @@ nonisolated public final class WebDocumentBridge: Sendable {
     }
     public func indices(of range: AXTextMarkerRange) -> (Int, Int)? {
         guard let s = index(of: AXTextMarkerRangeCopyStartMarker(range)), let e = index(of: AXTextMarkerRangeCopyEndMarker(range)) else { return nil }
+        guard WebSelectionBounds.isUsableIndex(s) else { return nil }
+        guard WebSelectionBounds.isUsableIndex(e) else { return nil }
         return (min(s, e), max(s, e))
     }
     public func string(_ range: AXTextMarkerRange) -> String {
@@ -63,9 +65,18 @@ nonisolated public final class WebDocumentBridge: Sendable {
         guard let v = webArea.param("AXTextMarkerRangeForUIElement", element), CFGetTypeID(v) == AXTextMarkerRangeGetTypeID() else { return nil }
         return indices(of: v as! AXTextMarkerRange)
     }
+    /// WebKit's selection, lower index first, as `indices(of:)` has always answered it. A selection with an unusable
+    /// index (NSNotFound, negative) at either end is nil and logged with its raw values.
     public func selection() -> (Int, Int)? {
         guard let v = webArea.attr("AXSelectedTextMarkerRange"), CFGetTypeID(v) == AXTextMarkerRangeGetTypeID() else { return nil }
-        return indices(of: v as! AXTextMarkerRange)
+        let range = v as! AXTextMarkerRange
+        guard let rawStart = index(of: AXTextMarkerRangeCopyStartMarker(range)),
+              let rawEnd = index(of: AXTextMarkerRangeCopyEndMarker(range)) else { return nil }
+        guard let checked = WebSelectionBounds.validated(start: rawStart, end: rawEnd) else {
+            Log.warning("browse mode: WebKit's selection rejected: start \(rawStart), end \(rawEnd)")
+            return nil
+        }
+        return (min(checked.0, checked.1), max(checked.0, checked.1))
     }
     public func setSelection(_ s: Int, _ e: Int) {
         guard let r = range(s, e) else { return }
@@ -80,6 +91,40 @@ nonisolated public final class WebDocumentBridge: Sendable {
         return (webArea.param("AXUIElementsForSearchPredicate", predicate as CFDictionary) as? [AXUIElement]) ?? []
     }
     public var isValid: Bool { webArea.role != "?" }
+}
+
+/// Arithmetic on WebKit's positions that cannot trap, whatever WebKit answers. (24 Nov 2026: a selection index of
+/// NSNotFound, which is Int.max, overflowed `+ 25` in browse mode and ended TurnOver.)
+nonisolated public enum WebSelectionBounds {
+    /// An index WebKit can have meant: not negative and not NSNotFound.
+    public static func isUsableIndex(_ index: Int) -> Bool {
+        if index < 0 { return false }
+        if index == NSNotFound { return false }
+        return true
+    }
+    /// The selection as given when both ends are usable indices, otherwise nil. Not reordered, not cut to a length.
+    public static func validated(start: Int, end: Int) -> (Int, Int)? {
+        guard isUsableIndex(start) else { return nil }
+        guard isUsableIndex(end) else { return nil }
+        return (start, end)
+    }
+    /// `index + delta` that cannot overflow and never goes below 0. It is cut to `length` only when the length is
+    /// known (greater than 0): a failed length lookup answers 0, which must not squash an ordinary index.
+    public static func moved(_ index: Int, by delta: Int, length: Int) -> Int {
+        let (sum, overflowed) = index.addingReportingOverflow(delta)
+        let saturated = overflowed ? (delta > 0 ? Int.max : 0) : max(sum, 0)
+        if length > 0 { return min(saturated, length) }
+        return saturated
+    }
+    /// Where `position` of `total` characters sits in a buffer of `bufferLength`, in proportion; 0 when the buffer is empty; an unknown document length counts as 1, as before.
+    public static func proportionalGuess(position: Int, total: Int, bufferLength: Int) -> Int {
+        guard bufferLength > 0 else { return 0 }
+        let wholeDocument = max(1, total)
+        let share = min(1.0, max(0.0, Double(position) / Double(wholeDocument)))
+        let wanted = min(share * Double(bufferLength), Double(bufferLength))
+        if wanted >= Double(Int.max) { return bufferLength }
+        return min(bufferLength, Int(wanted))
+    }
 }
 
 /// An object whose text is WebKit's (read through text markers).
@@ -274,7 +319,18 @@ public final class WebTextInfo: TextInfo {
         var prefix: [String] = []
         pendingTones.removeAll()
         chain = elementsAtStart()
+        // A data table: its size on arrival and its row as it changes (WebTableNews); both are already in the chain.
+        // Only against a last reading: without one every container here is said, "table" with them, as before.
+        let found: (table: AXUIElement?, row: AXUIElement?) = previousChain != nil && config.documentFormatting.tables != .off
+            ? WebTableNews.tableAndRow(inChainNearestFirst: chain) : (nil, nil)
+        let (table, row) = found
         for el in chain.reversed() {
+            if let t = table, el.isSame(t) {
+                let n = WebTableNews.news(table: t, row: row, previousChain: previousChain, beginsHere: false)
+                if n.tone { pendingTones.append { Tones.table() } }
+                prefix.append(contentsOf: n.words)
+                continue
+            }
             if let prev = previousChain, prev.contains(where: { $0.isSame(el) }) { continue }
             let (mode, tone) = Self.reporting(for: el)
             switch mode {

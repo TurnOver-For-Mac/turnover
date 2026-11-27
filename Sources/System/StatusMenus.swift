@@ -11,6 +11,7 @@
 import Foundation
 import AppKit
 import ApplicationServices
+import IOKit.ps
 
 public enum StatusMenus {
     /// The status item just opened from the list: its menu carries no name of its own ("a VPN app's menu").
@@ -251,9 +252,44 @@ public enum StatusMenus {
         // Words only: a bare number (a third-party item's 0 or 1) would be said as a meaningless "Name, 1".
         var value = (item.attr(kAXValueAttribute) as? String) ?? ""
         value = value.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "\n", with: ", ")
+        // 25 Nov 2026, issue 298: measured on macOS 27.2 with the battery at 100 percent on mains power, and `pmset -g batt`
+        // saying "100%; charged": the menu bar's battery item still gave the value "100%, charging". So its own state
+        // word is not trusted when the power source says the battery is charged and on power; the level is kept and
+        // the shared "charged, on power" words replace the state.
+        if (item.string(kAXIdentifierAttribute) ?? "").hasSuffix(".battery") {
+            let power = batteryPowerState()
+            value = batteryItemValue(raw: value, chargedOnPower: power.chargedOnPower,
+                                     chargedWords: String(localized: "charged, on power", comment: "The battery"))
+        }
         if value.isEmpty, (item.string(kAXIdentifierAttribute) ?? "").hasSuffix(".battery") { value = GlobalCommands.batteryText() }
         guard !value.isEmpty, !base.localizedCaseInsensitiveContains(value) else { return base }
         return "\(base), \(value)"
+    }
+
+    /// The battery item's spoken value: the item's own text, unless the power source says the battery is charged and
+    /// on mains power, when the item's level is followed by `chargedWords` instead of the item's own state word. An
+    /// item with no level of its own is left alone: an empty one falls back to the power source's words in `name`.
+    public nonisolated static func batteryItemValue(raw: String, chargedOnPower: Bool, chargedWords: String) -> String {
+        guard chargedOnPower else { return raw }
+        let first = raw.split(separator: ",", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? ""
+        let level = first.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard level.contains(where: { $0.isNumber }) else { return raw }
+        return "\(level), \(chargedWords)"
+    }
+
+    /// The power source's percent, and whether it says charged while on mains power.
+    public nonisolated static func batteryPowerState() -> (percent: Int?, chargedOnPower: Bool) {
+        guard let info = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
+              let list = IOPSCopyPowerSourcesList(info)?.takeRetainedValue() as? [CFTypeRef],
+              let first = list.first,
+              let desc = IOPSGetPowerSourceDescription(info, first)?.takeUnretainedValue() as? [String: Any] else { return (nil, false) }
+        let current = desc[kIOPSCurrentCapacityKey] as? Int
+        let max = desc[kIOPSMaxCapacityKey] as? Int ?? 100
+        var percent: Int? = nil
+        if let current, max > 0 { percent = current * 100 / max }
+        let charged = desc[kIOPSIsChargedKey] as? Bool ?? false
+        let onPower = (desc[kIOPSPowerSourceStateKey] as? String) == kIOPSACPowerValue
+        return (percent, charged && onPower)
     }
 
     nonisolated static func labelName(of item: AXUIElement, app: NSRunningApplication) -> String {

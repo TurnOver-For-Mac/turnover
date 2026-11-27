@@ -149,10 +149,12 @@ public final class BrowseModeDocument: ScriptableObject {
         let line = bridge.unitRange("AXLineTextMarkerRangeForTextMarker", at: sel.0) ?? sel
         let lineEnd = max(line.1, sel.1)
         func webText(_ a: Int, _ b: Int) -> String { b > a ? (bridge.range(a, b).map { bridge.string($0) } ?? "") : "" }
-        let pre = webText(max(line.0, sel.0 - 15), sel.0)
-        let post = webText(sel.0, min(lineEnd, sel.1 + 25))
-        let total = max(1, bridge.documentLength())
-        let guess = Int(Double(sel.0) / Double(total) * Double(buffer.text.length))
+        let documentLength = bridge.documentLength()
+        let preStart = WebSelectionBounds.moved(sel.0, by: -15, length: documentLength)
+        let postEnd = WebSelectionBounds.moved(sel.1, by: 25, length: documentLength)
+        let pre = webText(max(line.0, preStart), sel.0)
+        let post = webText(sel.0, min(lineEnd, postEnd))
+        let guess = WebSelectionBounds.proportionalGuess(position: sel.0, total: documentLength, bufferLength: buffer.text.length)
         func occurrences(_ needle: String) -> [Int] {
             guard !needle.isEmpty, !needle.contains("\n") else { return [] }
             var out: [Int] = []; var from = 0
@@ -334,7 +336,7 @@ public final class BrowseModeDocument: ScriptableObject {
         }
         lastURL = now
         endPageOnItsWay(because: "the address changed in this web area")
-        rootRunner.cancel(); discoveringRoot = false; followingRootFailure = false; watchingFor = nil
+        rootRunner.cancel(); hiddenRunner.cancel(); hiddenFocus = nil; hiddenKnown = nil; hiddenLearned = nil; hiddenCheckUntil = .distantPast; discoveringRoot = false; followingRootFailure = false; watchingFor = nil
         buffer.newPage()
         pageGeneration += 1
         buffer.build()
@@ -544,6 +546,8 @@ public final class BrowseModeDocument: ScriptableObject {
         script("tabFromCaret", String(localized: "Next link or control; moves to the next link or control after the reading position (Shift: before it)", comment: "A command, as the key list and keyboard help say it"), gestures: ["kb:tab", "kb:shift+tab"], category: nav) { [weak self] g in
             guard let self else { return }
             BrowseModeDocument.lastTabFromCaretAt = Date()
+            BrowseModeDocument.lastPageTabAt = Date()
+            BrowseModeDocument.lastPageTabPid = webArea.pid
             if focusFromCaret(forward: !g.modifiers.contains(.shift)) { return }
             if AppModuleHandler.shared.appModule(for: webArea.pid).browseTabMovesReadingPosition {
                 guard ensureContent() else { return }
@@ -552,6 +556,7 @@ public final class BrowseModeDocument: ScriptableObject {
                 else { Tones.edge() }
                 return
             }
+            noteFocusBeforeTab()
             g.send(); PageWatch.keySent(to: webArea.pid)
             askFocusIfNoNews()
         }
@@ -561,8 +566,10 @@ public final class BrowseModeDocument: ScriptableObject {
                 // The virtual caret goes to the control that had focus (NVDA): on a page that was still arriving when
                 // the field took focus, the field was not in the buffer yet and the caret stayed at the top.
                 if let f = API.focusObject, f.pid == webArea.pid, !f.isSameElement(as: webArea) {
-                    let at = buffer.offset(of: f.element)
-                    if at == nil { followFocusAfterBuild(f.element) }
+                    // A control hidden in a container is not in the copy: its container is (24 Nov 2026).
+                    let place = focusPlace(of: f.element)
+                    let at = buffer.offset(of: place)
+                    if at == nil { followFocusAfterBuild(place) }
                     if let at { position = at }
                 }
                 disableAutoPassThrough = false   // Escape ends the by-hand choice too: the next field switches by itself again
@@ -884,14 +891,15 @@ public final class BrowseModeDocument: ScriptableObject {
     /// A `package static var` only so that a test can lengthen the ceiling to outlast a slow machine; nothing else sets it.
     package static var focusPollCeiling = 0.35
 
-    private func pollFocusAfterTab(sentAt: Date, pid: pid_t, keys: Int, epoch: Int) {
+    func pollFocusAfterTab(sentAt: Date, pid: pid_t, keys: Int, epoch: Int) {
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.focusPollInterval) { [weak self] in
             guard let self,
                   API.focusTreeInterceptor === self,
                   pageGeneration == epoch,
                   ScriptHandler.keysArrivedCount == keys else { return }
             guard !pageSilent else { return }
-            if let (_, at) = AXHandler.shared.lastGainFocus, at >= sentAt { return }
+            // The browser's own news of a focus move; TurnOver's announcing a hidden child is not news from the browser.
+            if AXHandler.shared.lastBrowserFocusNewsAt >= sentAt { return }
             // A quarter of a second at most: a page that has stopped answering must not hold the keys.
             let app = AXUIElementCreateApplication(pid)
             AXUIElementSetMessagingTimeout(app, 0.25)
@@ -905,7 +913,11 @@ public final class BrowseModeDocument: ScriptableObject {
             guard ScriptHandler.keysArrivedCount == keys,
                   API.focusTreeInterceptor === self,
                   pageGeneration == epoch else { return }
-            if let current = API.focusObject?.element, f.isSame(current) {
+            // Where it was: the container, while the focus object is the control hidden inside it.
+            let wasOn = API.focusObject.map { focusPlace(of: $0.element) }
+            if let wasOn, f.isSame(wasOn) {
+                // The app's answer is where it was, but the keyboard may be on a control it hides inside that element.
+                handleSameFocusAfterTab(reported: f, sentAt: sentAt, keys: keys)
                 // Not moved yet: ask again until the ceiling, as the page may be slow to move it.
                 if Date().timeIntervalSince(sentAt) + Self.focusPollInterval < Self.focusPollCeiling {
                     pollFocusAfterTab(sentAt: sentAt, pid: pid, keys: keys, epoch: epoch)
@@ -914,6 +926,7 @@ public final class BrowseModeDocument: ScriptableObject {
                 Log.io("browse mode: Tab brought no news of the focus, and it is where it was")
                 return
             }
+            hiddenToken &+= 1   // a hidden-control check that started before this move is out of date
             AXHandler.shared.lastNewsAt[pid] = Date()
             Log.io("browse mode: Tab brought no news of the focus; the page's focus is on \(f.role), read from there (\(Int(Date().timeIntervalSince(sentAt) * 1000)) ms)")
             AXHandler.shared.focusChanged(f, pid: f.pid)
@@ -1280,4 +1293,24 @@ public final class BrowseModeDocument: ScriptableObject {
     /// the document (set as the focus is presented). Returns keep the browse position unless automatic editing resumes.
     var lastFocusElement: AXUIElement?
     public var focusFromOutside = false
+    /// Where the keyboard is when it is on a control that WebKit hides inside a button-like container (24 Nov 2026).
+    var hiddenFocus: HiddenFocusRecord?
+    /// The controls found in each such container on this page, and the containers that held none.
+    var hiddenKnown: HiddenKnownControls?
+    /// Orders the background checks for a hidden control: a newer check (after a Tab or after an arrival) supersedes an older.
+    var hiddenToken = 0
+    /// A check is taken to be running until its answer comes or this time passes (a superseded job may never answer).
+    var hiddenCheckUntil = Date.distantPast
+    /// How many checks this Tab has had (at most six).
+    var hiddenTabChecks: (keys: Int, count: Int) = (-1, 0)
+    /// What the last check learned of one container's AXFocused, as evidence before the next Tab (nothing is asked then).
+    var hiddenLearned: (element: AXUIElement, focused: Bool, generation: Int)?
+    /// Whether the focus's place said it had the keyboard just before the last Tab was sent (evidence for the search).
+    var focusedBeforeTab: (element: AXUIElement, focused: Bool?, keys: Int)?
+    /// The search for a hidden control, off the main thread: one at a time, the newest replacing the one waiting.
+    let hiddenRunner = AXWalkRunner<HiddenSearchAnswer>()
+    /// When Tab was last sent to a page, in browse mode or in focus mode (the repeat rule for spoken focus reads it).
+    public static var lastPageTabAt = Date.distantPast
+    /// The process of the page that Tab was sent to.
+    public static var lastPageTabPid: pid_t = 0
 }

@@ -302,6 +302,24 @@ func progressOutputTests() {
         }
     }
 
+    test("Claude: a reply that carries on is read from where the reading stopped (27 Nov 2026)") {
+        let first = "Ran a command, messaged agent Looking at the report. Thanks, that saves a search. A helper is fetching it now."
+        let later = "Looking at the report. Thanks, that saves a search. A helper is fetching it now. Ran a subagent The helper is back, and the cause is found."
+        expect(ClaudeAppModule.unreadPart(of: first, alreadyRead: nil), first, "nothing read yet: the whole reply")
+        expect(ClaudeAppModule.unreadPart(of: later, alreadyRead: first), "Ran a subagent The helper is back, and the cause is found.",
+               "the lines before changed, the end of what was read is found: only what follows it")
+        expect(ClaudeAppModule.unreadPart(of: first, alreadyRead: first), "", "nothing new: nothing to read")
+        expect(ClaudeAppModule.unreadPart(of: "A different reply altogether, about something else.", alreadyRead: first),
+               "A different reply altogether, about something else.", "the end of what was read is not in it: the whole reply")
+        expect(ClaudeAppModule.unreadPart(of: "Thinking and then a real answer.", alreadyRead: "Thinking"), "Thinking and then a real answer.",
+               "too little was read to find again with any confidence: the whole reply")
+    }
+    test("Claude: a progress line that comes during a conversation switch is not news (27 Nov 2026)") {
+        expect(ClaudeAppModule.cameDuringSwitch(sinceSwitchKey: 0.04), true, "40 ms after Command and a number: the page being rebuilt")
+        expect(ClaudeAppModule.cameDuringSwitch(sinceSwitchKey: 0.9), true, "still within the switch")
+        expect(ClaudeAppModule.cameDuringSwitch(sinceSwitchKey: 1.0), false, "a second on: the conversation's own line")
+        expect(ClaudeAppModule.cameDuringSwitch(sinceSwitchKey: 3600), false, "no switch lately")
+    }
     test("Claude progress: quiet keys do not interrupt long reading") {
         expect(ClaudeProgressReadiness.decision(keyQuietFor: 1.5, speechBusy: true), .wait)
         expect(ClaudeProgressReadiness.decision(keyQuietFor: 20, speechBusy: true), .wait)
