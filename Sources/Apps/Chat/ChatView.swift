@@ -444,7 +444,7 @@ public final class ChatView {
     /// only the sender's name ("Sam") above each run of their messages, so the same words come many times, and the
     /// first of them sent Down (and Up) from a later "Sam" back up the list, round and round (a tester, by ear, Messages
     /// on macOS 26.7.3, 25 Nov 2026: "Sam, 6 of 9", then "3 of 9", "4 of 9", "5 of 9", "6 of 9" again).
-    private static func place(of element: AXUIElement?, words: String, in list: [AXUIElement], near: Int) -> Int? {
+    public static func place(of element: AXUIElement?, words: String, in list: [AXUIElement], near: Int) -> Int? {
         if let element, let i = list.firstIndex(where: { CFEqual($0, element) }) { return i }
         return nearest(words, in: list.map(Self.words), near: near)
     }
