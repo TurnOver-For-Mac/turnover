@@ -532,8 +532,9 @@ open class EditableText: TurnOverObject {
         // an empty prompt (Claude's: 127 times on 13 Nov 2026), and the next key waited behind it. A bump, as at any edge.
         // (An empty field only, by its own value, white space aside: Claude's empty prompt holds a line break. Where
         // the caret's place can't be read, it says 0 with text before it.)
-        let blank = isEmptyField
-        if movedBack == 0, blank {
+        // The caret first: the field's value is read only when nothing is before the caret, not on every Backspace
+        // in a long document (review of #383, 27 Nov 2026).
+        if movedBack == 0, isEmptyField {
             Log.io("edge: an empty field, nothing to delete; sent unwaited")
             Tones.edge(keySent: true, sound: appModule.playsNativeCaretBoundarySound)
             return
@@ -563,7 +564,8 @@ open class EditableText: TurnOverObject {
         let bookmark = info.bookmark
         // An empty field: nothing after the caret to delete either (white space with the caret before it still goes). The edge sound, as Backspace has, not 100 ms of
         // waiting for a caret that cannot move.
-        if isEmptyField, info.copy().move(.character, 1) == 0 {
+        // The caret first, as for Backspace: the value is read only when nothing follows the caret.
+        if info.copy().move(.character, 1) == 0, isEmptyField {
             gesture.send()
             Log.io("edge: an empty field, nothing to delete; sent unwaited")
             Tones.edge(keySent: true, sound: appModule.playsNativeCaretBoundarySound)
