@@ -653,6 +653,29 @@ open class EditableComboBox: EditableText {
         super.initOverlay()
         removeGestures(["kb:upArrow", "kb:downArrow"])
     }
+
+    /// Up, Down, Page Up, Page Down, Home or End went to the app, which moved to another item in its list: the new value
+    /// is news (Word's Font dialog: arrowing through fonts, styles and sizes was silent, issue 323). Typing letters
+    /// is not; the caret path reads those, and the completion is read by detectPossibleSelectionChange.
+    public static func keyMovesThroughList(_ key: String, secondsSinceKey: TimeInterval) -> Bool {
+        let k = key.lowercased()
+        guard secondsSinceKey < 1, !k.contains("turnover") else { return false }
+        return ["uparrow", "downarrow", "pageup", "pagedown", "home", "end"].contains { k.hasSuffix($0) }
+    }
+    open override func event_valueChange() {
+        super.event_valueChange()
+        guard API.focusObject?.isSameElement(as: self) == true,
+              Self.keyMovesThroughList(InputManager.lastKeyIdentifier, secondsSinceKey: Date().timeIntervalSince(InputManager.lastKeyDownAt)) else { return }
+        let fresh = ObjectFactory.make(element)
+        guard let text = fresh.value, !text.isEmpty else { return }
+        let now = Date()
+        // Once: not again for a repeated notification, nor when the caret path has just said the same words.
+        if Self.repeatsValueJustSaid(last: TurnOverObject.lastValueSaid, element: element, text: text, now: now, within: 0.3) { return }
+        // The same words, not words that contain them: from "Arial Black" up to "Arial" is news (review, 26 Nov 2026).
+        if Speech.lastSpoken.trimmingCharacters(in: .whitespaces) == text.trimmingCharacters(in: .whitespaces) { return }
+        TurnOverObject.lastValueSaid = (element, text, now)
+        Speech.speakObjectProperty(fresh, value: true)
+    }
 }
 
 /// Where the last spelling search put the caret, so the next search forward moves on from it.
