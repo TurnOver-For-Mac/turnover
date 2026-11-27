@@ -242,6 +242,7 @@ public enum Speech {
 
     public static func cleaned(_ raw: String) -> String {
         // Bidi isolates and marks, zero-width joiners and spaces, soft hyphens, byte order marks: e-mail previews are full of them.
+        let raw = unmarked(raw)
         let invisible: Set<UInt32> = [0x200B, 0x200C, 0x200D, 0x200E, 0x200F, 0x00AD, 0xFEFF, 0x2060, 0xFFFC, 0xF8F2]
         return String(String.UnicodeScalarView(raw.unicodeScalars.filter { !(0x2066...0x2069).contains($0.value) && !invisible.contains($0.value) && !isIconGlyph($0) }))
             .replacingOccurrences(of: "  ", with: " ")
@@ -272,6 +273,7 @@ public enum Speech {
     }
 
     package static func speakMessage(_ text: String, completion: (@Sendable (Bool) -> Void)?) {
+        let text = unmarked(text)
         lastRaw = text; rawPending = true
         enqueue(text, completion: completion)
         if Thread.isMainThread { Braille.message(text) } else { DispatchQueue.main.async { Braille.message(text) } }
@@ -288,8 +290,9 @@ public enum Speech {
     /// TurnOver's own cursor landed on an item (a held list, the menu, the VoiceOver cursor): spoken, and kept on the
     /// display until the focus or caret moves (Braille.item).
     public static func speakItem(_ text: String, processed: Bool = false) {
-        if processed { speakText(text) } else { lastRaw = text; rawPending = true; enqueue(text) }
-        if Thread.isMainThread { Braille.item(text) } else { DispatchQueue.main.async { Braille.item(text) } }
+        let braille = unmarked(text)
+        if processed { speakText(text) } else { lastRaw = braille; rawPending = true; enqueue(text) }
+        if Thread.isMainThread { Braille.item(braille) } else { DispatchQueue.main.async { Braille.item(braille) } }
     }
 
     /// TurnOver's own confirmations ("copied"): spoken, but not remembered as the last thing said.
@@ -305,7 +308,7 @@ public enum Speech {
 
     /// Text from the screen: symbols named at the user's level (NVDA: speakText).
     public static func speakText(_ text: String, symbolLevel: SymbolLevel? = nil, onStart: (@Sendable () -> Void)? = nil, completion: (@Sendable (Bool) -> Void)? = nil) {
-        lastRaw = text; rawPending = true
+        lastRaw = unmarked(text); rawPending = true
         enqueue(processed(text, symbolLevel: symbolLevel), onStart: onStart, completion: completion)
     }
 
@@ -319,6 +322,11 @@ public enum Speech {
     /// NVDA: processText — symbol processing, with lone characters and pure punctuation always named.
     /// `locale`: the language a lone character is in, for a capital (Symbols.name(of:locale:)).
     public static func processed(_ text: String, symbolLevel: SymbolLevel? = nil, locale: Locale? = nil) -> String {
+        // The separators TurnOver puts between the parts of a description are said as a pause, never as "comma", whatever
+        // the punctuation level (issue 401): each part is processed on its own and the parts are joined after.
+        if text.contains(partMark) {
+            return text.components(separatedBy: partMark).map { processed($0, symbolLevel: symbolLevel, locale: locale) }.filter { !$0.isEmpty }.joined(separator: ", ")
+        }
         let t = text.replacingOccurrences(of: "\r\n", with: "\n")
         if t.count == 1, let c = t.first { return Symbols.name(of: c, locale: locale) }
         if Symbols.isAllSymbols(t) { return Symbols.spelled(t.filter { !$0.isWhitespace }) }
@@ -343,8 +351,17 @@ public enum Speech {
     /// with commas, as VoiceOver does; the Windows family with spaces, as NVDA does, so the voice doesn't pause at
     /// each piece (a tester in the Windows style, 20 Oct 2026: the pauses after "Settings" and "submenu" in menus).
     public static func joined(_ parts: [String]) -> String {
-        parts.filter { !$0.isEmpty }.joined(separator: config.general.windowsKeys ? " " : ", ")
+        parts.filter { !$0.isEmpty }.joined(separator: config.general.windowsKeys ? " " : partMark)
     }
+
+    /// The mark between the parts of a description: a pause, not punctuation. `processed` splits on it, so the punctuation
+    /// level never names it; `cleaned` turns what is left into ", " for the voice, the display and "copy last spoken".
+    public static let partMark = "\u{F8F5}"
+    /// The parts joined with the mark; use it wherever parts of one announcement are put together and may be spoken
+    /// through `speakText` (issue 401).
+    public static func marked(_ parts: [String]) -> String { parts.joined(separator: partMark) }
+    /// The mark as the ", " that the voice and the display show.
+    public static func unmarked(_ text: String) -> String { text.contains(partMark) ? text.replacingOccurrences(of: partMark, with: ", ") : text }
 
     /// Speak an object the way NVDA does on focus: name, role, value, states, description, shortcut, position; then its text if it has any.
     private static var lastFocusWords = ""
@@ -728,7 +745,7 @@ public enum Speech {
                 if hasComment, m.text.isEmpty { return nil }
                 return m.text.isEmpty ? m.label : "\(m.label): \(m.text)"
             }
-            if !words.isEmpty { text = text.trimmingCharacters(in: .whitespaces) + words.map { ", " + $0 }.joined() }
+            if !words.isEmpty { text = text.trimmingCharacters(in: .whitespaces) + words.map { partMark + $0 }.joined() }
         }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {

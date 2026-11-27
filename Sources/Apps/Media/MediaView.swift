@@ -1266,7 +1266,7 @@ public final class MediaView {
         // Flat media items use the same Item details policy/order as ordinary objects. Shelf context remains
         // outside the item pieces; Number in list must not be hardcoded back on here (#187, 29 Oct 2026).
         parts += Speech.arranged(pieces, by: config.presentation.verbosity(for: bundleIdentifier))
-        Speech.speakItem(parts.joined(separator: ", "), processed: true)
+        Speech.speakItem(Speech.marked(parts), processed: true)
         Hints.schedule(hint(for: item))
     }
 
