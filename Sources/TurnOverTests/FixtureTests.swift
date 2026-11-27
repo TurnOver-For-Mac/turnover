@@ -4,6 +4,7 @@ import Foundation
 import ApplicationServices
 import TurnOverCore
 import AXFixtures
+import TurnOverAX
 
 func fixtureTests() {
     test("Finder open: applications say opening before sending; documents, folders and no selection stay silent") {
@@ -191,10 +192,12 @@ func fixtureTests() {
     // progress moves, so the cursor held an element with no window and no parent, and every step after it said
     // "nothing to review". Any app can do this; the cursor finds the item again and carries on.
     test("navigation: an item re-created under the cursor is found again, and the step carries on from it") {
-        let saved = config, sink = Speech.sink
+        let saved = config, sink = Speech.sink, outside = ObjectNavigator.outsideFocus
         config.general.focusFollowsCursor = "off"
         var said: [String] = []
         Speech.sink = { said.append($0) }
+        API.setFocusObject(nil, ancestors: [])
+        ObjectNavigator.outsideFocus = { (nil, nil) }
         func row(_ base: Int, button: String, buttonAt x: Double = 300) -> [AXFixture.Node] {
             func n(_ id: Int, _ role: String, _ parent: Int, _ px: Double, _ extra: [String: AXFixture.Value]) -> AXFixture.Node {
                 var a: [String: AXFixture.Value] = ["AXRole": .string(role), "AXParent": .element(parent), "AXWindow": .element(0),
@@ -210,36 +213,150 @@ func fixtureTests() {
         func window(_ child: Int) -> AXFixture.Node {
             .init(id: 0, attrs: ["AXRole": .string("AXWindow"), "AXPosition": .point(0, 0), "AXSize": .size(800, 600), "AXChildren": .elements([child])])
         }
-        let before = AXFixture(app: "App Store", bundle: "com.apple.AppStore", recorded: "", root: 0, application: nil, focus: 3,
-                               nodes: [window(1)] + row(1, button: "22% loaded"))
-        // The row and its button are new elements; the button sits where it was and its name moved on.
-        let after = AXFixture(app: "App Store", bundle: "com.apple.AppStore", recorded: "", root: 0, application: nil, focus: nil,
-                              nodes: [window(11)] + row(11, button: "22.1% loaded"))
-        defer { AXReplay.unload(); config = saved; Speech.sink = sink }
+        func store(_ nodes: [AXFixture.Node], application: Int? = nil) -> AXFixture {
+            AXFixture(app: "App Store", bundle: "com.apple.AppStore", recorded: "", root: 0, application: application, focus: nil, nodes: nodes)
+        }
+        let before = store([window(1)] + row(1, button: "22% loaded"))
+        defer { AXReplay.unload(); config = saved; Speech.sink = sink; ObjectNavigator.outsideFocus = outside }
         let navigator = ObjectNavigator.shared
 
+        // The row and its button are new elements, the button where it was with the same name: the step carries on.
         AXReplay.load(before)
         navigator.place(AXReplay.element(3))
-        AXReplay.load(after)
+        AXReplay.load(store([window(11)] + row(11, button: "22% loaded")))
         navigator.next()
         expect(navigator.reviewElement.flatMap { AXReplay.id(of: $0) }, 14, "VO-Right goes on to the text after the new button")
         check(!said.contains("nothing to review"), "never \"nothing to review\"")
 
         AXReplay.load(before)
         navigator.place(AXReplay.element(3))
-        AXReplay.load(after)
+        AXReplay.load(store([window(11)] + row(11, button: "22% loaded")))
         navigator.groupStep(forward: false)
         expect(navigator.reviewElement.flatMap { AXReplay.id(of: $0) }, 12, "VO-Left, the Mac style, goes back to the new artwork")
 
-        // Nothing like it where it was: the window's first item, said, and the step stops there.
+        // Found in its place with another name (the progress moved on, or a row slid into a deleted one's place): the
+        // cursor lands on it and says it, rather than stepping past an item never heard (review of #392).
         AXReplay.load(before)
         navigator.place(AXReplay.element(3))
-        AXReplay.load(AXFixture(app: "App Store", bundle: "com.apple.AppStore", recorded: "", root: 0, application: nil, focus: nil,
-                                nodes: [window(11)] + row(11, button: "Open", buttonAt: 600)))
+        AXReplay.load(store([window(11)] + row(11, button: "22.1% loaded")))
+        said = []
+        navigator.next()
+        expect(navigator.reviewElement.flatMap { AXReplay.id(of: $0) }, 13, "VO-Right lands on the found item with its new name")
+        check(said.contains { $0.contains("22.1% loaded") }, "and says it: \(said)")
+        navigator.next()
+        expect(navigator.reviewElement.flatMap { AXReplay.id(of: $0) }, 14, "the next VO-Right goes on from it")
+
+        // Nothing like it where it was, and no focus: the window's first item, said, and the step stops there.
+        AXReplay.load(before)
+        navigator.place(AXReplay.element(3))
+        AXReplay.load(store([window(11)] + row(11, button: "Open", buttonAt: 600)))
         said = []
         navigator.next()
         expect(navigator.reviewElement.flatMap { AXReplay.id(of: $0) }, 12, "to the window's first item")
         check(said.contains { $0.contains("Artwork") }, "and it is said: \(said)")
+    }
+    // Reddit in Safari (27 Nov 2026, by ear in a trial build): a pop-up button re-created under the cursor, and recovery
+    // went to the window's first item, the close button, so the place on the page was lost.
+    test("navigation: an item that can't be found again goes to the keyboard focus in its window before the window's first item") {
+        let saved = config, sink = Speech.sink, outside = ObjectNavigator.outsideFocus
+        config.general.focusFollowsCursor = "off"
+        var said: [String] = []
+        Speech.sink = { said.append($0) }
+        API.setFocusObject(nil, ancestors: [])
+        ObjectNavigator.outsideFocus = { (nil, nil) }
+        defer { AXReplay.unload(); config = saved; Speech.sink = sink; ObjectNavigator.outsideFocus = outside }
+        func n(_ id: Int, _ role: String, parent: Int, window: Int, x: Double, _ extra: [String: AXFixture.Value] = [:]) -> AXFixture.Node {
+            var a: [String: AXFixture.Value] = ["AXRole": .string(role), "AXParent": .element(parent), "AXWindow": .element(window),
+                                                "AXPosition": .point(x, 100), "AXSize": .size(80, 20)]
+            for (k, v) in extra { a[k] = v }
+            return .init(id: id, attrs: a)
+        }
+        let page: [AXFixture.Node] = [
+            .init(id: 0, attrs: ["AXRole": .string("AXWindow"), "AXChildren": .elements([1, 2, 4])]),
+            n(1, "AXButton", parent: 0, window: 0, x: 0, ["AXDescription": .string("close button")]),
+            n(2, "AXPopUpButton", parent: 0, window: 0, x: 200, ["AXDescription": .string("Sort by")]),
+            n(4, "AXLink", parent: 0, window: 0, x: 400, ["AXDescription": .string("Comments")]),
+            .init(id: 50, attrs: ["AXRole": .string("AXWindow"), "AXChildren": .elements([51])]),
+            n(51, "AXTextField", parent: 50, window: 50, x: 0, ["AXDescription": .string("Search other window")]),
+        ]
+        func app(focus: Int) -> AXFixture.Node {
+            .init(id: 99, attrs: ["AXRole": .string("AXApplication"), "AXFocusedUIElement": .element(focus), "AXFocusedWindow": .element(0)])
+        }
+        // Before: the pop-up button under the cursor. After: it is gone, nothing like it in its place.
+        let before = AXFixture(app: "Safari", bundle: "com.apple.Safari", recorded: "", root: 0, application: nil, focus: nil, nodes: page)
+        let gone = page.filter { $0.id != 2 }
+        let navigator = ObjectNavigator.shared
+
+        AXReplay.load(before); navigator.place(AXReplay.element(2))
+        AXReplay.load(AXFixture(app: "Safari", bundle: "com.apple.Safari", recorded: "", root: 0, application: 99, focus: 4, nodes: gone + [app(focus: 4)]))
+        said = []
+        navigator.next()
+        expect(navigator.reviewElement.flatMap { AXReplay.id(of: $0) }, 4, "the keyboard focus, in the same window")
+        check(said.contains { $0.contains("Comments") }, "and it is said: \(said)")
+
+        AXReplay.load(before); navigator.place(AXReplay.element(2))
+        AXReplay.load(AXFixture(app: "Safari", bundle: "com.apple.Safari", recorded: "", root: 0, application: 99, focus: 51, nodes: gone + [app(focus: 51)]))
+        navigator.next()
+        expect(navigator.reviewElement.flatMap { AXReplay.id(of: $0) }, 1, "a focus in another window: the window's first item instead")
+
+        AXReplay.load(before); navigator.place(AXReplay.element(2))
+        AXReplay.load(AXFixture(app: "Safari", bundle: "com.apple.Safari", recorded: "", root: 0, application: nil, focus: nil, nodes: gone))
+        navigator.next()
+        expect(navigator.reviewElement.flatMap { AXReplay.id(of: $0) }, 1, "no focus at all: the window's first item")
+
+        expect(ObjectNavigator.recoveryOrder, [.foundAgain, .focusInWindow, .windowFirstItem, .appFocus, .frontAppFocus, .systemFocus],
+               "the order recovery tries")
+    }
+    test("navigation: an item with no window that went (a status menu) goes to the focus of the app in front") {
+        let saved = config, sink = Speech.sink, outside = ObjectNavigator.outsideFocus
+        config.general.focusFollowsCursor = "off"
+        Speech.sink = { _ in }
+        API.setFocusObject(nil, ancestors: [])
+        defer { AXReplay.unload(); config = saved; Speech.sink = sink; ObjectNavigator.outsideFocus = outside }
+        // A background app's status menu: menu items under a menu under the app, no window. Then the menu closes.
+        let menu: [AXFixture.Node] = [
+            .init(id: 0, attrs: ["AXRole": .string("AXApplication"), "AXChildren": .elements([1])]),
+            .init(id: 1, attrs: ["AXRole": .string("AXMenu"), "AXParent": .element(0), "AXChildren": .elements([2])]),
+            .init(id: 2, attrs: ["AXRole": .string("AXMenuItem"), "AXTitle": .string("Quit"), "AXParent": .element(1)]),
+            // Safari in front, its focus a link in its window.
+            .init(id: 20, attrs: ["AXRole": .string("AXWindow"), "AXChildren": .elements([21])]),
+            .init(id: 21, attrs: ["AXRole": .string("AXLink"), "AXDescription": .string("Home"), "AXParent": .element(20), "AXWindow": .element(20)]),
+        ]
+        let navigator = ObjectNavigator.shared
+        AXReplay.load(AXFixture(app: "Status", bundle: "t.status", recorded: "", root: 0, application: nil, focus: nil, nodes: menu))
+        check(ObjectNavigator.liveness(AXReplay.element(2)) == .live, "a menu item that leads to its app is not lost")
+        navigator.place(AXReplay.element(2))
+        AXReplay.load(AXFixture(app: "Status", bundle: "t.status", recorded: "", root: 0, application: nil, focus: nil, nodes: menu.filter { $0.id >= 20 }))
+        ObjectNavigator.outsideFocus = { (AXReplay.element(21), nil) }
+        navigator.next()
+        expect(navigator.reviewElement.flatMap { AXReplay.id(of: $0) }, 21, "the focus of the app in front")
+        ObjectNavigator.outsideFocus = { (nil, AXReplay.element(21)) }
+        AXReplay.load(AXFixture(app: "Status", bundle: "t.status", recorded: "", root: 0, application: nil, focus: nil, nodes: menu))
+        navigator.place(AXReplay.element(2))
+        AXReplay.load(AXFixture(app: "Status", bundle: "t.status", recorded: "", root: 0, application: nil, focus: nil, nodes: menu.filter { $0.id >= 20 }))
+        navigator.reportCurrent()
+        expect(navigator.reviewElement.flatMap { AXReplay.id(of: $0) }, 21, "else the system-wide focus")
+    }
+    test("navigation: a gone item is told apart from an app that does not answer") {
+        expect(ObjectNavigator.liveness(of: .returned(.invalidUIElement)), .gone, "the app says the element is no longer valid")
+        expect(ObjectNavigator.liveness(of: .returned(.cannotComplete)), .noAnswer, "cannot complete: a hung app, not a gone item")
+        expect(ObjectNavigator.liveness(of: .returned(.apiDisabled)), .noAnswer)
+        expect(ObjectNavigator.liveness(of: .deferred(AXBackoff(reason: .timeout, remainingNanoseconds: 1))), .noAnswer, "an app left alone after a timeout")
+        expect(ObjectNavigator.liveness(of: .clientWorkStopped), .noAnswer)
+        check(ObjectNavigator.liveness(of: .returned(.success)) == nil, "an answer: what it says decides")
+        check(ObjectNavigator.liveness(of: .returned(.noValue)) == nil, "no value is still an answer")
+        let nodes: [AXFixture.Node] = [
+            .init(id: 0, attrs: ["AXRole": .string("AXWindow"), "AXChildren": .elements([1])]),
+            .init(id: 1, attrs: ["AXRole": .string("AXButton"), "AXParent": .element(0), "AXWindow": .element(0)]),
+            .init(id: 2, attrs: ["AXRole": .string("AXGroup"), "AXParent": .element(0)]),               // no AXWindow, parents lead to it
+            .init(id: 3, attrs: ["AXRole": .string("AXButton")]),                                      // cut loose: no window, no parent
+        ]
+        AXReplay.load(AXFixture(app: "T", bundle: "t", recorded: "", root: 0, application: nil, focus: nil, nodes: nodes))
+        defer { AXReplay.unload() }
+        expect(ObjectNavigator.liveness(AXReplay.element(1)), .live, "in a window")
+        expect(ObjectNavigator.liveness(AXReplay.element(2)), .live, "no AXWindow, but its parent is the window")
+        expect(ObjectNavigator.liveness(AXReplay.element(3)), .gone, "cut loose")
+        expect(ObjectNavigator.liveness(AXReplay.element(7)), .gone, "no longer there at all")
     }
     test("navigation: a lost item is matched by its place, or by a name only one item has") {
         let f = CGRect(x: 300, y: 100, width: 80, height: 20)

@@ -18,7 +18,10 @@ public final class ObjectNavigator {
     private var current: AXUIElement? { didSet { cancelWindowSearch(); movedAt = Date() } }
     /// When the review cursor last moved: VO-J starts from an app's own reader only when that reader moved since.
     private var movedAt = Date.distantPast
-    private let windowSearch = AXWalkRunner<WindowKindSearchResult<AXUIElement>>()
+    private let windowSearch = AXWalkRunner<WindowSearchOutcome>()
+    /// A window search's answer, or word that its start was the cursor's item and that item has gone (cut loose from its
+    /// window, which the preflight's invalidUIElement check does not see): the search starts again from the recovered place.
+    nonisolated private enum WindowSearchOutcome: Sendable { case search(WindowKindSearchResult<AXUIElement>), cursorLost }
     /// Where the review cursor is (for the plugin maker: the item it changes).
     public var reviewElement: AXUIElement? { current }
     private var currentPid: pid_t = 0
@@ -27,7 +30,17 @@ public final class ObjectNavigator {
     /// Whether the navigator is on this element or inside it (VO-Right follows the page only while it is in the page).
     public func isWithin(_ root: AXUIElement) -> Bool {
         guard let c = current else { return true }
-        var p: AXUIElement? = c; var hops = 0
+        if Self.leadsTo(root, from: c) { return true }
+        // A cursor whose item went away stands where the focus is, as `element` has it (review of #392, 27 Nov 2026):
+        // a dead cursor in a web page was never "in the page", so browse mode was skipped and VO-Right went to object
+        // review there. Asked only when the walk did not reach the page; a hung app's cursor is not taken for gone.
+        guard Self.isCutLoose(c) else { return false }
+        guard let f = API.focusObject?.element else { return true }
+        return Self.leadsTo(root, from: f)
+    }
+
+    private static func leadsTo(_ root: AXUIElement, from e: AXUIElement) -> Bool {
+        var p: AXUIElement? = e; var hops = 0
         while let x = p, hops < 60 { if x.isSame(root) { return true }; p = x.element(kAXParentAttribute); hops += 1 }
         return false
     }
@@ -368,32 +381,77 @@ public final class ObjectNavigator {
     // MARK: An item that went away under the cursor
 
     /// What the cursor is on, as facts that outlive the element, with the parent and window it was in: apps re-create
-    /// elements as they change (see ReviewRecovery.swift), and these are where it is looked for again. Cheap on purpose,
-    /// as it is taken at every landing and focus change: a handful of attributes, no walk.
+    /// elements as they change (see ReviewRecovery.swift), and these are where it is looked for again. Taken at every
+    /// landing and focus change, so it is one question to the app (review of #392, 27 Nov 2026: it had been seven).
+    /// The facts must be read while the element still answers; they cannot wait until recovery needs them.
     private var mark: (element: AXUIElement, facts: ReviewMark, parent: AXUIElement?, window: AXUIElement?, pid: pid_t)?
 
+    private static let markAttributes = [kAXRoleAttribute, kAXTitleAttribute, kAXDescriptionAttribute, kAXPositionAttribute,
+                                         kAXSizeAttribute, kAXParentAttribute, kAXWindowAttribute]
+
     private func remember(_ e: AXUIElement) {
-        let role = e.role
-        guard role != "?" else { mark = nil; return }
-        let title = e.string(kAXTitleAttribute) ?? ""
-        let name = title.isEmpty ? (e.string(kAXDescriptionAttribute) ?? "") : title
-        mark = (e, ReviewMark(role: role, name: name, frame: TurnOverObject.frame(e)),
-                e.element(kAXParentAttribute), e.element(kAXWindowAttribute), e.pid)
+        let batch = e.attributesResult(Self.markAttributes)
+        func value(_ name: String) -> CFTypeRef? { batch.attributes[name]?.value }
+        guard let role = value(kAXRoleAttribute) as? String else { mark = nil; return }
+        let title = value(kAXTitleAttribute) as? String ?? ""
+        let name = title.isEmpty ? (value(kAXDescriptionAttribute) as? String ?? "") : title
+        mark = (e, ReviewMark(role: role, name: name, frame: Self.frame(position: value(kAXPositionAttribute), size: value(kAXSizeAttribute))),
+                Self.asElement(value(kAXParentAttribute)), Self.asElement(value(kAXWindowAttribute)), e.pid)
     }
 
-    /// Whether an element has gone, or been cut loose from its window: it answers nothing, or its parents run out
-    /// before reaching a window or the application. An item outside any window that still leads to its application
-    /// (the menu bar, the Dock) is not.
-    nonisolated static func isCutLoose(_ e: AXUIElement) -> Bool {
-        var x: AXUIElement? = e; var hops = 0
-        while let y = x, hops < 60 {
-            let role = y.role
-            if role == "?" { return true }
-            if role == "AXWindow" || role == "AXApplication" { return false }
-            x = y.element(kAXParentAttribute); hops += 1
-        }
-        return x == nil
+    nonisolated static func asElement(_ v: CFTypeRef?) -> AXUIElement? {
+        guard let v, CFGetTypeID(v) == AXUIElementGetTypeID() else { return nil }
+        return (v as! AXUIElement)
     }
+
+    nonisolated static func frame(position: CFTypeRef?, size: CFTypeRef?) -> CGRect? {
+        guard let p = position, let z = size, CFGetTypeID(p) == AXValueGetTypeID(), CFGetTypeID(z) == AXValueGetTypeID() else { return nil }
+        var pt = CGPoint.zero, sz = CGSize.zero
+        guard AXValueGetValue(p as! AXValue, .cgPoint, &pt), AXValueGetValue(z as! AXValue, .cgSize, &sz) else { return nil }
+        return CGRect(origin: pt, size: sz)
+    }
+
+    /// Whether an element is there, has gone, or cannot be asked.
+    nonisolated package enum Liveness: Equatable, Sendable { case live, gone, noAnswer }
+
+    /// What one answer says about an element: gone only when the app says the element is no longer valid; any answer
+    /// that is not one (a timeout, an app left alone, cannot complete) is no answer. A hung app gave "?" for a role just
+    /// as a gone element did, so a live item could be swapped for another (review of #392, 27 Nov 2026). Nil: it
+    /// answered, and what it said decides.
+    nonisolated package static func liveness(of status: AXQueryStatus) -> Liveness? {
+        switch status {
+        case .returned(.success), .returned(.noValue), .returned(.attributeUnsupported): return nil
+        case .returned(.invalidUIElement): return .gone
+        default: return .noAnswer
+        }
+    }
+
+    /// Whether an element is still there: gone when the app says it is invalid, or when its parents run out before a
+    /// window or the application (cut loose); no answer when its app does not answer, which is never taken for gone.
+    /// An item outside any window that still leads to its application (the menu bar, the Dock) is live. One question
+    /// for the usual case, role and window together; the parents are walked only for an item with no window.
+    nonisolated package static func liveness(_ e: AXUIElement) -> Liveness {
+        let first = e.attributesResult([kAXRoleAttribute, kAXWindowAttribute])
+        guard let role = first.attributes[kAXRoleAttribute] else { return .noAnswer }
+        if let said = liveness(of: role.status) { return said }
+        guard let r = role.value as? String else { return .noAnswer }
+        if r == "AXWindow" || r == "AXApplication" || asElement(first.attributes[kAXWindowAttribute]?.value) != nil { return .live }
+        var x: AXUIElement = e; var hops = 0
+        while hops < 60 {
+            let up = x.attributesResult([kAXParentAttribute])
+            guard let p = up.attributes[kAXParentAttribute] else { return .noAnswer }
+            if let said = liveness(of: p.status) { return said }
+            guard let parent = asElement(p.value) else { return .gone }   // the parents ran out: cut loose
+            let pr = parent.attributesResult([kAXRoleAttribute])
+            guard let prr = pr.attributes[kAXRoleAttribute] else { return .noAnswer }
+            if let said = liveness(of: prr.status) { return said }
+            if let s = prr.value as? String, s == "AXWindow" || s == "AXApplication" { return .live }
+            x = parent; hops += 1
+        }
+        return .live   // a long chain that still answers: not taken for gone
+    }
+
+    nonisolated static func isCutLoose(_ e: AXUIElement) -> Bool { liveness(e) == .gone }
 
     /// The cursor's element and what the command needs from it (its window, its group). When that cannot be had because
     /// the element went away, the cursor is put back first (`recoverLostCursor`); `otherwise` runs when there is still
@@ -412,67 +470,138 @@ public final class ObjectNavigator {
         }
     }
 
+    /// The cursor's element for a command that acts on the item itself (parent, interact, select, help, actions...):
+    /// a gone item is recovered first, as the steps do (review of #392). Nil when there is nothing, or when recovery
+    /// put the cursor somewhere new and said it.
+    private func liveCursor(otherwise: () -> Void = {}) -> AXUIElement? {
+        resolve({ Self.isCutLoose($0) ? nil : $0 }, otherwise: otherwise)?.0
+    }
+
     private enum Recovered { case same(AXUIElement), landed, nothing }
 
+    /// Where the cursor goes when its item went, in this order (review of #392, 27 Nov 2026): the same item found
+    /// again; the keyboard focus, when it is in the same window (Reddit re-creates its pop-up buttons, and the window's
+    /// first item, the close button, lost the place on the page); the window's first item; the focus of the item's app
+    /// elsewhere; the focus of the app in front; the system-wide focus (a status menu of an app in the background
+    /// closed, and that app had no window).
+    nonisolated package enum RecoveryStep: String, CaseIterable, Sendable {
+        case foundAgain, focusInWindow, windowFirstItem, appFocus, frontAppFocus, systemFocus
+    }
+    package static let recoveryOrder: [RecoveryStep] = RecoveryStep.allCases
+
+    /// The focus of the app in front and the system-wide focus, the last places to go. Tests replace it: those are
+    /// the real Mac's, not a fixture's.
+    package static var outsideFocus: () -> (front: AXUIElement?, system: AXUIElement?) = {
+        let front = NSWorkspace.shared.frontmostApplication.flatMap { app -> AXUIElement? in
+            let a = AXUIElementCreateApplication(app.processIdentifier)
+            AXUIElementSetMessagingTimeout(a, 0.25)
+            return a.element(kAXFocusedUIElementAttribute)
+        }
+        return (front, AXUIElementCreateSystemWide().element(kAXFocusedUIElementAttribute))
+    }
+
+    /// The whole recovery is kept short on the main thread, where it runs because the key's command carries on from
+    /// what it finds (review of #392): the walks share one deadline, and every question in them may wait 0.1 s at most.
+    nonisolated static let recoveryWalkBudget: TimeInterval = 0.15
+
     /// The cursor's item went away (25 Nov 2026, the App Store's download button, re-created as its progress moved: every
-    /// VO-Left and VO-Right after it said "nothing to review"). In any app, in this order: the same item found again
-    /// where it was (same role in the same place, or its name when only one item has it), and the command carries on
-    /// from it; else the app's focus; else the window's first item. Those two are said, as any landing is, and the
-    /// command stops there, so the person hears where they are before moving on.
-    private func recoverLostCursor(_ lost: AXUIElement) -> Recovered {
+    /// VO-Left and VO-Right after it said "nothing to review"). Found again with the same name, the command carries on
+    /// from it. Found again with another name (a row deleted and the next sliding into its place), or anywhere else in
+    /// `recoveryOrder`, the cursor lands there and it is said, and the command stops, so the person hears where they
+    /// are before moving on. With `announce` false (a window search starting from the cursor), nothing is said and
+    /// the place is only handed back.
+    private func recoverLostCursor(_ lost: AXUIElement, announce: Bool = true) -> Recovered {
         Self.forgetGroupItems()
+        let started = Date()
         let m = mark.flatMap { CFEqual($0.element, lost) ? $0 : nil }
-        let pid = m?.pid ?? lost.pid
-        let app = AXUIElementCreateApplication(pid)
-        func usable(_ x: AXUIElement?) -> AXUIElement? {
-            guard let x, !x.isSame(lost), !Self.isCutLoose(x), window(of: x) != nil else { return nil }
+        let was = m?.facts.role ?? lost.role
+        func alive(_ x: AXUIElement?) -> AXUIElement? {
+            guard let x, !x.isSame(lost), Self.liveness(x) == .live else { return nil }
             return x
         }
-        let appWindow = app.element(kAXFocusedWindowAttribute) ?? app.element(kAXMainWindowAttribute)
-        let liveWindow = [m?.window, appWindow].compactMap { $0 }.first { $0.role == "AXWindow" }
-        if let m {
-            var places: [AXUIElement] = []
-            if let p = m.parent, !Self.isCutLoose(p) { places.append(p) }
-            if let w = liveWindow, !(places.first.map { $0.isSame(w) } ?? false) { places.append(w) }
-            for place in places {
-                if let found = usable(Self.find(m.facts, under: place)) {
-                    Log.io("review: the cursor's \(m.facts.role) went; found again in \(place.role)")
-                    current = found; currentPid = found.pid; remember(found)
-                    return .same(found)
+        func ms() -> Int { Int(Date().timeIntervalSince(started) * 1000) }
+        func go(_ e: AXUIElement, _ how: String) -> Recovered {
+            Log.io("review: the cursor's \(was) went; \(how), \(e.role) (\(ms()) ms)")
+            if announce { land(on: e, followFocus: false); return .landed }
+            place(e); return .same(e)
+        }
+        if let w = m?.window { AXUIElementSetMessagingTimeout(w, 0.25) }
+        let markWindow = alive(m?.window)
+        // The app is asked through the window when it still answers (a recorded window answers for its app in tests).
+        let app = AXUIElementCreateApplication(markWindow?.pid ?? m?.pid ?? lost.pid)
+        AXUIElementSetMessagingTimeout(app, 0.25)
+        let window = markWindow ?? alive(app.element(kAXFocusedWindowAttribute) ?? app.element(kAXMainWindowAttribute))
+        // The keyboard focus, asked only once a step needs it: the app's own, else TurnOver's.
+        var asked: AXUIElement??
+        func focus() -> AXUIElement? {
+            if let asked { return asked }
+            let f = alive(app.element(kAXFocusedUIElementAttribute)) ?? alive(API.focusObject?.element)
+            asked = .some(f); return f
+        }
+        let deadline = started.addingTimeInterval(Self.recoveryWalkBudget)
+        for step in Self.recoveryOrder {
+            switch step {
+            case .foundAgain:
+                guard let m else { continue }
+                var places: [AXUIElement] = []
+                if let p = alive(m.parent) { places.append(p) }
+                if let w = window, !(places.first.map { $0.isSame(w) } ?? false) { places.append(w) }
+                for place in places {
+                    guard let found = Self.find(m.facts, under: place, until: deadline) else { continue }
+                    if !m.facts.name.isEmpty, found.facts.name != m.facts.name {
+                        return go(found.element, "found again in \(place.role) with another name")
+                    }
+                    Log.io("review: the cursor's \(was) went; found again in \(place.role) (\(ms()) ms)")
+                    current = found.element; currentPid = found.element.pid; remember(found.element)
+                    return .same(found.element)
                 }
+            case .focusInWindow:
+                if let w = window, let f = focus(), Self.isIn(f, window: w) { return go(f, "to the focus in its window") }
+            case .windowFirstItem:
+                if let w = window, let first = Self.groupItems(w).first { return go(first, "to the window's first item") }
+            case .appFocus:
+                if let f = focus() { return go(f, "to its app's focus") }
+            case .frontAppFocus:
+                if let f = alive(Self.outsideFocus().front) { return go(f, "to the focus of the app in front") }
+            case .systemFocus:
+                if let f = alive(Self.outsideFocus().system) { return go(f, "to the system's focus") }
             }
         }
-        if let f = usable(app.element(kAXFocusedUIElementAttribute)) {
-            Log.io("review: the cursor's \(m?.facts.role ?? lost.role) went; to the focus, \(f.role)")
-            land(on: f, followFocus: false)
-            return .landed
-        }
-        if let w = liveWindow, let first = Self.groupItems(w).first {
-            Log.io("review: the cursor's \(m?.facts.role ?? lost.role) went; to the window's first item")
-            land(on: first, followFocus: false)
-            return .landed
-        }
-        Log.io("review: the cursor's \(m?.facts.role ?? lost.role) went, and nothing was found in its place")
+        Log.io("review: the cursor's \(was) went, and nothing was found in its place (\(ms()) ms)")
         return .nothing
     }
 
-    /// The element under `root` that `mark` describes, by `ReviewRecovery.match`. Bounded by count and time: it runs on
-    /// a key press, and only after the cursor's item has gone.
-    private static func find(_ mark: ReviewMark, under root: AXUIElement) -> AXUIElement? {
+    /// Whether `e` is in `window`: its own AXWindow, or its parents.
+    private static func isIn(_ e: AXUIElement, window: AXUIElement) -> Bool {
+        if let w = e.element(kAXWindowAttribute) { return w.isSame(window) }
+        var x: AXUIElement? = e; var hops = 0
+        while let y = x, hops < 60 { if y.isSame(window) { return true }; x = y.element(kAXParentAttribute); hops += 1 }
+        return false
+    }
+
+    /// The element under `root` that `mark` describes, by `ReviewRecovery.match`, with what it is now. Bounded by count
+    /// and by `deadline`; each element is asked one question (role, names and children together) and may take 0.1 s
+    /// at most, and an app that stops answering ends the walk.
+    private static func find(_ mark: ReviewMark, under root: AXUIElement, until deadline: Date) -> (element: AXUIElement, facts: ReviewMark)? {
         var elements: [AXUIElement] = [], facts: [ReviewMark] = []
         var stack = [root], visited = 0
-        let deadline = Date().addingTimeInterval(0.25)
+        let names = [kAXRoleAttribute, kAXTitleAttribute, kAXDescriptionAttribute, kAXChildrenAttribute]
         while let x = stack.popLast(), visited < 3000, Date() < deadline {
             visited += 1
-            if x.role == mark.role {
-                let title = x.string(kAXTitleAttribute) ?? ""
+            AXUIElementSetMessagingTimeout(x, 0.1)
+            let b = x.attributesResult(names)
+            guard let roleResult = b.attributes[kAXRoleAttribute] else { break }
+            if let said = liveness(of: roleResult.status) { if said == .gone { continue }; break }
+            if roleResult.value as? String == mark.role {
+                let title = b.attributes[kAXTitleAttribute]?.value as? String ?? ""
+                let frame = x.attributesResult([kAXPositionAttribute, kAXSizeAttribute])
                 elements.append(x)
-                facts.append(ReviewMark(role: mark.role, name: title.isEmpty ? (x.string(kAXDescriptionAttribute) ?? "") : title,
-                                        frame: TurnOverObject.frame(x)))
+                facts.append(ReviewMark(role: mark.role, name: title.isEmpty ? (b.attributes[kAXDescriptionAttribute]?.value as? String ?? "") : title,
+                                        frame: Self.frame(position: frame.attributes[kAXPositionAttribute]?.value, size: frame.attributes[kAXSizeAttribute]?.value)))
             }
-            stack.append(contentsOf: x.elements(kAXChildrenAttribute).reversed())
+            if let kids = b.attributes[kAXChildrenAttribute]?.value as? [AXUIElement] { stack.append(contentsOf: kids.reversed()) }
         }
-        return ReviewRecovery.match(mark, among: facts).map { elements[$0] }
+        return ReviewRecovery.match(mark, among: facts).map { (elements[$0], facts[$0]) }
     }
 
     /// The next element in reading order (depth first) inside `root`, after `e`.
@@ -535,7 +664,8 @@ public final class ObjectNavigator {
     }
 
     public func parent() {
-        guard let e = element, e.role != "AXWindow" else { Tones.edge(); return }
+        guard let e = liveCursor(otherwise: { Tones.edge() }) else { return }
+        guard e.role != "AXWindow" else { Tones.edge(); return }
         var p = e.element(kAXParentAttribute)
         // Skip layout no one would name, as next and previous do.
         while let x = p, x.role != "AXWindow", !Self.isItem(x), Self.layoutRoles.contains(x.role), (x.string(kAXDescriptionAttribute) ?? x.string(kAXTitleAttribute) ?? "").isEmpty {
@@ -546,7 +676,7 @@ public final class ObjectNavigator {
     }
 
     public func firstChild() {
-        guard let e = element else { return }
+        guard let e = liveCursor() else { return }
         var node = e.elements(kAXChildrenAttribute).first
         var visited = 0
         while let n = node, visited < 500 {
@@ -748,7 +878,7 @@ public final class ObjectNavigator {
 
     /// VO Shift Down: into a group, on its first item.
     public func interact() {
-        guard let cur = element else { return }
+        guard let cur = liveCursor() else { return }
         // A text area reached by a step: VO-Shift-Down goes into its text (the caret keys work from here).
         if landedByStep, ObjectFactory.make(cur).hasNavigableText {
             landedByStep = false
@@ -802,7 +932,7 @@ public final class ObjectNavigator {
 
     /// The next or previous element of a kind in the window, in reading order, from the cursor (VO-Command-H and
     /// friends outside a document).
-    public func findInWindow(roles: Set<String>, forward: Bool, kind: String) {
+    public func findInWindow(roles: Set<String>, forward: Bool, kind: String, afterRecovery: Bool = false) {
         // Take references only: even resolving the cursor's window can wait on the target application. The worker
         // retains reading-order and row-neighbour rules, with a cooperative deadline instead of thousands of main
         // thread queries. A call already in flight is not preemptible, but never blocks key resolution (28 Oct 2026).
@@ -829,21 +959,35 @@ public final class ObjectNavigator {
                                      elapsedNanoseconds: result.elapsedNanoseconds, wasAttempted: result.wasAttempted)
             }) {
             case .ready(let element): resolvedStart = element
-            case .unavailable: return .unavailable
-            case .incomplete(let reason): return .incomplete(reason)
+            case .unavailable: return .search(.unavailable)
+            case .incomplete(let reason): return .search(.incomplete(reason))
             }
             return AXReadScope.with(while: { budget.check() }, onQuery: { budget.admitAXQuery() }, onResult: { budget.record($0) }) {
+                // The cursor's item cut loose from its window (review of #392, 27 Nov 2026: VO-Command-H and its kin said
+                // "nothing to search", taking only the item's AXWindow): checked here, off the main thread, and the
+                // search starts again from where recovery puts the cursor. Once only.
+                if !afterRecovery, let c = cursor, CFEqual(c, resolvedStart), Self.isCutLoose(c) { return .cursorLost }
                 var search = WindowKindSearch(queries: queries, budget: budget)
                 let result = search.find(from: resolvedStart, forward: forward)
                 // A malformed cross-process child must never become the action target for this window's request.
-                if case .found(let target) = result, target.pid != resolvedStart.pid { return .unavailable }
-                return result
+                if case .found(let target) = result, target.pid != resolvedStart.pid { return .search(.unavailable) }
+                return .search(result)
             }
-        } publish: { [weak self] result in
+        } publish: { [weak self] outcome in
             guard let self, Core.active,
                   NSWorkspace.shared.frontmostApplication?.processIdentifier == frontmost,
                   Self.sameSnapshot(self.current, cursor), Self.sameSnapshot(API.focusObject?.element, focus),
                   Self.sameSnapshot(API.foregroundObject?.element, foreground) else { return }
+            let result: WindowKindSearchResult<AXUIElement>
+            switch outcome {
+            case .search(let r): result = r
+            case .cursorLost:
+                guard let lost = cursor, case .same = self.recoverLostCursor(lost, announce: false) else {
+                    Self.speakSearchNotice(.unavailable); return
+                }
+                self.findInWindow(roles: roles, forward: forward, kind: kind, afterRecovery: true)
+                return
+            }
             switch result {
             case .found(let target):
                 self.land(on: target)
@@ -1408,7 +1552,7 @@ public final class ObjectNavigator {
 
     /// VO-Return: select the item: a row in its list, or a menu item.
     public func selectItem() {
-        guard let cur = element else { return }
+        guard let cur = liveCursor() else { return }
         if cur.role == "AXRow", let list = cur.element(kAXParentAttribute) {
             let r = list.set(kAXSelectedRowsAttribute, [cur] as CFArray)
             Log.io("review: select row → \(r.rawValue)")
@@ -1420,7 +1564,7 @@ public final class ObjectNavigator {
 
     /// VO-Backslash: open or close the disclosure triangle (a row's, or the one in the item).
     public func toggleDisclosure() {
-        guard let cur = element else { return }
+        guard let cur = liveCursor() else { return }
         if let open = cur.attr("AXDisclosing") as? Bool {
             let r = cur.set("AXDisclosing", (!open) as CFBoolean)
             Speech.speakMessage(r == .success ? (open ? State.collapsed.displayString : State.expanded.displayString) : String(localized: "cannot open or close it", comment: "Spoken message"))
@@ -1444,7 +1588,9 @@ public final class ObjectNavigator {
     /// VO-Shift-Space: a mouse click on the item (twice: a double click), where the item really is, the pointer put
     /// back after.
     public func click(double: Bool) {
-        guard let cur = element, let f = TurnOverObject.frame(cur), f.width > 1, f.height > 1 else { Speech.speakMessage(String(localized: "nothing to click", comment: "Spoken message")); return }
+        let nothing = { Speech.speakMessage(String(localized: "nothing to click", comment: "Spoken message")) }
+        guard let cur = liveCursor(otherwise: nothing) else { return }
+        guard let f = TurnOverObject.frame(cur), f.width > 1, f.height > 1 else { nothing(); return }
         let p = CGPoint(x: f.midX, y: f.midY)
         var hit: AXUIElement?
         if AXUIElementCopyElementAtPosition(AXUIElementCreateSystemWide(), Float(p.x), Float(p.y), &hit) == .success, let h = hit {
@@ -1460,14 +1606,14 @@ public final class ObjectNavigator {
 
     /// VO-Shift-H: the item's help tag.
     public func readHelp() {
-        guard let cur = element else { return }
+        guard let cur = liveCursor() else { return }
         let h = (cur.string(kAXHelpAttribute) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         Speech.speakMessage(h.isEmpty ? String(localized: "no help tag", comment: "An item with no help tag") : h)
     }
 
     /// VO-Shift-U: a link's address.
     public func readURL() {
-        guard let cur = element else { return }
+        guard let cur = liveCursor() else { return }
         var x: AXUIElement? = cur; var hops = 0
         while let y = x, hops < 4 {
             if let u = y.attr(kAXURLAttribute) { Speech.speakPrivate((u as? URL)?.absoluteString ?? "\(u)"); return }
@@ -1478,14 +1624,14 @@ public final class ObjectNavigator {
 
     /// VO-Shift-W: everything in the window, read through without moving.
     public func readWindow() {
-        guard let cur = element, let w = window(of: cur) else { return }
+        guard let w = resolve({ window(of: $0) }, otherwise: {})?.1 else { return }
         let parts = Self.groupItems(w).prefix(80).map { Self.words($0) }.filter { !$0.isEmpty }
         Speech.speakText(([w.string(kAXTitleAttribute) ?? ""] + parts).filter { !$0.isEmpty }.joined(separator: ". "))
     }
 
     /// VO-Command-Space: the item's actions, to choose from.
     public func actionsMenu() {
-        guard let cur = element else { return }
+        guard let cur = liveCursor() else { return }
         var names: CFArray?
         AXUIElementCopyActionNames(cur, &names)
         let acts = ((names as? [String]) ?? []).filter { !$0.hasPrefix("AXScroll") && $0 != "AXShowDefaultUI" && $0 != "AXShowAlternateUI" }
@@ -1550,8 +1696,7 @@ public final class ObjectNavigator {
     }
 
     public func reportCurrent() {
-        guard let resolved = resolve({ Self.isCutLoose($0) ? nil : $0 }, otherwise: { Speech.speakMessage(String(localized: "nothing to review", comment: "Spoken message")) }) else { return }
-        let (e, _) = resolved
+        guard let e = liveCursor(otherwise: { Speech.speakMessage(String(localized: "nothing to review", comment: "Spoken message")) }) else { return }
         report(e)
     }
 
@@ -1580,7 +1725,7 @@ public final class ObjectNavigator {
 
     /// Activate the navigator object: press it, or put the keyboard focus in it when it is for typing.
     public func activate() {
-        guard let e = element else { return }
+        guard let e = liveCursor() else { return }
         let role = e.role
         if ["AXTextField", "AXTextArea", "AXComboBox", "AXSearchField"].contains(role) { moveFocusHere(); return }
         var acts: CFArray?
@@ -1619,7 +1764,7 @@ public final class ObjectNavigator {
 
     /// NVDA: move focus to the navigator object.
     public func moveFocusHere() {
-        guard let e = element else { return }
+        guard let e = liveCursor() else { return }
         let r = e.set(kAXFocusedAttribute, kCFBooleanTrue)
         Log.io("review: focus to \(e.role) → \(r.rawValue)")
         if r != .success { Speech.speakMessage(String(localized: "cannot take the focus", comment: "Spoken message")) }
