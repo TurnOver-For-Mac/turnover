@@ -798,6 +798,8 @@ package final class ClaudeAppModule: AppModule {
             next()
             if (event.obj.value ?? "").isEmpty {
                 sentAt = Date()
+                // His new message starts a new reply: nothing of it has been read yet.
+                readReplyText.removeValue(forKey: currentConversation())
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.startWatching() }
             }
         default:
@@ -974,6 +976,22 @@ package final class ClaudeAppModule: AppModule {
     /// not: the reply waits until the reading has been still for two seconds, then it is read (Codex's review: it was
     /// dropped for good). Claude's own "finished" notice still says it is done either way.
     /// Only in its own conversation (`session`, its address): after a switch it is not said (Codex's second review).
+    /// The words of each conversation's latest reply that have been read out, so a reply that carries on is read on
+    /// from there (27 Nov 2026).
+    private var readReplyText: [String: String] = [:]
+
+    /// The part of a reply not read out yet (27 Nov 2026). Claude carries one reply on when a helper reports back with
+    /// no message from him in between; the watch then found the same reply "finished" again, longer, and read it from
+    /// its top: 630 characters read at one finish were read again 72 seconds later, ahead of the new ones. The end of
+    /// what was read is looked for in the reply, as the lines before it can change (a tool summary comes and goes);
+    /// what follows it is the new part. Nothing read yet, or its end not found: the whole reply. Nothing after it: none.
+    package nonisolated static func unreadPart(of reply: String, alreadyRead: String?) -> String {
+        guard let read = alreadyRead?.trimmingCharacters(in: .whitespacesAndNewlines), read.count >= 24 else { return reply }
+        let tail = String(read.suffix(60))
+        guard let found = reply.range(of: tail, options: .backwards) else { return reply }
+        return String(reply[found.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private func sayReply(_ reply: String, session: String, tries: Int) {
         if !session.isEmpty {
             let now = currentConversation()
@@ -1016,7 +1034,12 @@ package final class ClaudeAppModule: AppModule {
             let reply = ClaudeTranscript.latestReply(chat: live)
             Log.io("claude: reply finished, \(reply.count) characters")
             guard !reply.isEmpty else { return }
-            self.sayReply(reply, session: ClaudeTranscript.session(of: live), tries: 0)
+            let session = ClaudeTranscript.session(of: live)
+            let unread = Self.unreadPart(of: reply, alreadyRead: self.readReplyText[session])
+            self.readReplyText[session] = reply
+            guard !unread.isEmpty else { Log.io("claude: nothing new in the reply since it was read; not read again"); return }
+            if unread.count < reply.count { Log.io("claude: the reply carried on; the \(unread.count) new characters are read") }
+            self.sayReply(unread, session: session, tries: 0)
         }
     }
 }
