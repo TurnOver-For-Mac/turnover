@@ -983,6 +983,22 @@ func pureTests() {
         check(!ChatView.claim("Sunshine Day, Ok", from: &pending, now: t0.addingTimeInterval(1)), "another message's announcement")
         check(pending.count == 1, "and it stays for its own message")
     }
+    test("chat: the watcher reads a message first; the app's announcement of it that follows is not said again") {
+        let t0 = Date(timeIntervalSinceReferenceDate: 2000)
+        var read: [(text: String, at: Date)] = [("Sunshine Day, Are you coming?", t0)]
+        check(ChatView.claimRead("Message received: From: Sunshine, Are you coming?", from: &read, now: t0.addingTimeInterval(0.4)),
+              "the announcement after the poll: already read, not said again")
+        check(read.isEmpty, "the reading is used up")
+        // Two Oks the watcher read: two announcements are held back, a third is said.
+        read = [("Sunshine Day, Ok", t0), ("Sunshine Day, Ok", t0.addingTimeInterval(1))]
+        check(ChatView.claimRead("Message received: From: Sunshine, Ok", from: &read, now: t0.addingTimeInterval(1.2)), "the first")
+        check(ChatView.claimRead("Message received: From: Sunshine, Ok", from: &read, now: t0.addingTimeInterval(1.5)), "the second")
+        check(!ChatView.claimRead("Message received: From: Sunshine, Ok", from: &read, now: t0.addingTimeInterval(1.8)), "a third Ok the watcher never read is said")
+        read = [("Sunshine Day, Ok", t0)]
+        check(!ChatView.claimRead("Message received: From: Sunshine, Ok", from: &read, now: t0.addingTimeInterval(6)), "over 5 seconds: said")
+        read = [("Sunshine Day, Ok", t0)]
+        check(!ChatView.claimRead("Message received: From: Faith, Lunch at noon?", from: &read, now: t0.addingTimeInterval(1)), "another message: said")
+    }
     test("chat: Messages' arrival announcements are news even word for word the last; nothing else's") {
         check(ChatView.isArrivalAnnouncement("Message received: From: Sunshine, Ok", bundle: "com.apple.MobileSMS"), "a message arriving")
         check(!ChatView.isArrivalAnnouncement("Faith Waters is typing", bundle: "com.apple.MobileSMS"), "the typing indicator")

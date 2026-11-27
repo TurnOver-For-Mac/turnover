@@ -771,12 +771,28 @@ public final class ChatView {
         if Self.claim(now, from: &announcements, now: Date()) { Log.io("chat: a new message arrived; the app announced it already"); return }
         Log.io("chat: a new message arrived")
         Speech.speakText(now)
+        readHere.append((now, Date()))
+        if readHere.count > 10 { readHere.removeFirst(readHere.count - 10) }
+    }
+
+    /// Messages the watcher read itself in the last few seconds, before the app announced them.
+    private var readHere: [(text: String, at: Date)] = []
+
+    /// Whether the app's announcement is of a message the watcher read in the last 5 seconds; that reading is used up.
+    public func watcherRead(_ announcement: String) -> Bool { Self.claimRead(announcement, from: &readHere, now: Date()) }
+
+    /// The other order of `claim`: the watcher read a message, then the app announced it.
+    public static func claimRead(_ announcement: String, from read: inout [(text: String, at: Date)], now: Date) -> Bool {
+        read.removeAll { now.timeIntervalSince($0.at) >= 5 || now < $0.at }
+        guard let i = read.firstIndex(where: { announced($0.text, in: announcement) }) else { return false }
+        read.remove(at: i)
+        return true
     }
 
     /// This app's own announcements of the last few seconds, as they were spoken, not yet matched to a message.
     private var announcements: [(text: String, at: Date)] = []
 
-    /// One of this app's announcements is being spoken (ChatAppModule.ignoresAnnouncement, the last step before it is).
+    /// One of this app's announcements has been spoken (ChatAppModule.announcementSpoken).
     public func appAnnounced(_ text: String) {
         announcements.append((text, Date()))
         if announcements.count > 10 { announcements.removeFirst(announcements.count - 10) }

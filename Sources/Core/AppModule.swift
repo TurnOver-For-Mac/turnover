@@ -52,6 +52,10 @@ open class AppModule: ScriptableObject {
     /// two messages: the second was skipped, and nothing else said it (found reading the code, 25 Nov 2026).
     open func announcementRepeatIsNews(_ text: String) -> Bool { false }
 
+    /// This app's announcement has just been spoken (AXHandlerNotifications, after every skip). For a module that
+    /// must know what the app said itself: the chat watcher stays quiet for a message one already said.
+    open func announcementSpoken(_ text: String) {}
+
     /// An app-specific hint, or nil to use the ordinary control hint. An empty string suppresses the hint.
     open func hint(for object: TurnOverObject) -> String? { nil }
 

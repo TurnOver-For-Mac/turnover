@@ -272,6 +272,8 @@ extension AXHandler {
                 }
                 lastAnnouncement = (text, Date())
                 Speech.speakMessage(text)
+                // After the speech is queued and every skip above: a module hears only what was really said.
+                AppModuleHandler.shared.appModule(for: pid).announcementSpoken(text)
             }
         default:
             break
