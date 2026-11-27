@@ -770,8 +770,74 @@ public final class ChatView {
         // Sent from here a moment ago (the box had text and is now empty): it is your own message.
         if Date().timeIntervalSince(composerHadText) < 3 { Log.io("chat: a message was sent"); return }
         if SayAll.isRunning { return }
+        // Messages says a new message itself ("Message received: From: Faith, …", and "Faith Waters is typing") as an
+        // announcement a moment before this poll finds it, so it was heard twice, the second time as "Faith Waters, …"
+        // (Messages, macOS 26.6.2, a tester by ear, 25 Nov 2026). The app's own words came first and are kept.
+        // Only this app's announcements (ChatAppModule hands them over as they are spoken), and each stands for one
+        // message: claimed by the first it matches, so a second "Ok" is not taken as said by the first one's.
+        if Self.claim(now, from: &announcements, now: Date()) { Log.io("chat: a new message arrived; the app announced it already"); return }
         Log.io("chat: a new message arrived")
         Speech.speakText(now)
+        readHere.append((now, Date()))
+        if readHere.count > 10 { readHere.removeFirst(readHere.count - 10) }
+    }
+
+    /// Messages the watcher read itself in the last few seconds, before the app announced them.
+    private var readHere: [(text: String, at: Date)] = []
+
+    /// Whether the app's announcement is of a message the watcher read in the last 5 seconds; that reading is used up.
+    public func watcherRead(_ announcement: String) -> Bool { Self.claimRead(announcement, from: &readHere, now: Date()) }
+
+    /// The other order of `claim`: the watcher read a message, then the app announced it.
+    public static func claimRead(_ announcement: String, from read: inout [(text: String, at: Date)], now: Date) -> Bool {
+        read.removeAll { now.timeIntervalSince($0.at) >= 5 || now < $0.at }
+        guard let i = read.firstIndex(where: { announced($0.text, in: announcement) }) else { return false }
+        read.remove(at: i)
+        return true
+    }
+
+    /// This app's own announcements of the last few seconds, as they were spoken, not yet matched to a message.
+    private var announcements: [(text: String, at: Date)] = []
+
+    /// One of this app's announcements has been spoken (ChatAppModule.announcementSpoken).
+    public func appAnnounced(_ text: String) {
+        announcements.append((text, Date()))
+        if announcements.count > 10 { announcements.removeFirst(announcements.count - 10) }
+    }
+
+    /// Whether one of the app's announcements of the last 5 seconds said this message; that announcement is used up.
+    public static func claim(_ message: String, from pending: inout [(text: String, at: Date)], now: Date) -> Bool {
+        pending.removeAll { now.timeIntervalSince($0.at) >= 5 || now < $0.at }
+        guard let i = pending.firstIndex(where: { announced(message, in: $0.text) }) else { return false }
+        pending.remove(at: i)
+        return true
+    }
+
+    /// Messages' announcement of a message that arrived ("Message received: From: Faith, Ok"): each is its own news,
+    /// even word for word the last one. English only, as it is said on the Macs it was heard on; elsewhere a repeat
+    /// within 30 seconds is skipped as before. Not the typing indicator, which Messages can post twice.
+    public static func isArrivalAnnouncement(_ text: String, bundle: String) -> Bool {
+        bundle == "com.apple.MobileSMS" && text.hasPrefix("Message received: ")
+    }
+
+    /// Whether an app's own announcement already said this message: the same words, or the announcement's message
+    /// (what follows its first comma, after "Message received: From: Faith") found in the message's words.
+    public static func announced(_ message: String, in announcement: String) -> Bool {
+        func flat(_ t: String) -> String { t.lowercased().split(whereSeparator: \.isWhitespace).joined(separator: " ") }
+        let m = flat(message), a = flat(announcement)
+        guard !m.isEmpty, !a.isEmpty else { return false }
+        if m == a { return true }
+        // The first comma ends the sender's name; the next two too, for a contact saved as "Smith, John".
+        var from = a.startIndex
+        for _ in 0..<3 {
+            guard let comma = a.range(of: ", ", range: from..<a.endIndex) else { return false }
+            from = comma.upperBound
+            let body = String(a[comma.upperBound...].prefix(60))
+            guard !body.isEmpty else { return false }
+            // A short message ("Ok") must be the whole of what follows the sender, not any "ok" in a longer one.
+            if body.count < 12 ? (m.hasSuffix(", " + body) || m.contains(", " + body + ", ")) : m.contains(body) { return true }
+        }
+        return false
     }
 
     /// A message's words without its delivery status at the end ("…, 14:53, Sent to Alex, Delivered").

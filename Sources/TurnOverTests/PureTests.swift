@@ -951,6 +951,59 @@ func pureTests() {
         check(ms.isConversation(AXReplay.element(3)) && !ms.isConversation(AXReplay.element(0)), "Messages conversations are static texts")
         check(ms.isMessage(AXReplay.element(5)), "Messages: anything in the transcript is a message")
     }
+    test("chat: a message the app announced itself is not read again") {
+        // Messages, 25 Nov 2026: its announcement, then the poll's words for the same message.
+        check(ChatView.announced("Faith Waters, Ha, yeah, he's British. Two ways to change him: Quick way, with the speech ring",
+                                 in: "Message received: From: Faith, Ha, yeah, he's British. Two ways to change him:\n\nQuick way, with the speech ring"),
+              "the same message, line breaks aside")
+        check(ChatView.announced("Faith Waters is typing", in: "Faith Waters is typing"), "the typing indicator")
+        check(ChatView.announced("Sunshine Day, Ok", in: "Message received: From: Sunshine, Ok"), "a short message")
+        check(!ChatView.announced("Faith Waters, Ok then, see you at four", in: "Message received: From: Sunshine, Ok"), "a short one is not any \"ok\"")
+        check(!ChatView.announced("Faith Waters, Lunch is at noon tomorrow by the river", in: "Message received: From: Sunshine, Are you coming to the meeting later today?"),
+              "another conversation's message is still read")
+        check(!ChatView.announced("Faith Waters, hello", in: ""), "no announcement")
+        check(ChatView.announced("John Smith, See you at the station at six", in: "Message received: From: Smith, John, See you at the station at six"),
+              "a contact saved with a comma in the name")
+    }
+    test("chat: each announcement stands for one message, so a second identical one is still read") {
+        let t0 = Date(timeIntervalSinceReferenceDate: 1000)
+        // Two messages that both say "Ok". The second announcement was skipped as a repeat: one announcement for two.
+        var pending: [(text: String, at: Date)] = [("Message received: From: Sunshine, Ok", t0)]
+        check(ChatView.claim("Sunshine Day, Ok", from: &pending, now: t0.addingTimeInterval(0.5)), "the first Ok: the app said it")
+        check(!ChatView.claim("Sunshine Day, Ok", from: &pending, now: t0.addingTimeInterval(1.5)), "the second Ok: nothing left that said it, so it is read")
+        // Both announced (Messages' arrivals are news even when repeated): both claimed, neither read twice.
+        pending = [("Message received: From: Sunshine, Ok", t0), ("Message received: From: Sunshine, Ok", t0.addingTimeInterval(1))]
+        check(ChatView.claim("Sunshine Day, Ok", from: &pending, now: t0.addingTimeInterval(1.2)), "the first")
+        check(ChatView.claim("Sunshine Day, Ok", from: &pending, now: t0.addingTimeInterval(2.2)), "the second")
+        check(pending.isEmpty, "both used up")
+        // Too old, and another message's announcement.
+        pending = [("Message received: From: Sunshine, Ok", t0)]
+        check(!ChatView.claim("Sunshine Day, Ok", from: &pending, now: t0.addingTimeInterval(6)), "over 5 seconds: read")
+        pending = [("Message received: From: Sunshine, Are you coming?", t0)]
+        check(!ChatView.claim("Sunshine Day, Ok", from: &pending, now: t0.addingTimeInterval(1)), "another message's announcement")
+        check(pending.count == 1, "and it stays for its own message")
+    }
+    test("chat: the watcher reads a message first; the app's announcement of it that follows is not said again") {
+        let t0 = Date(timeIntervalSinceReferenceDate: 2000)
+        var read: [(text: String, at: Date)] = [("Sunshine Day, Are you coming?", t0)]
+        check(ChatView.claimRead("Message received: From: Sunshine, Are you coming?", from: &read, now: t0.addingTimeInterval(0.4)),
+              "the announcement after the poll: already read, not said again")
+        check(read.isEmpty, "the reading is used up")
+        // Two Oks the watcher read: two announcements are held back, a third is said.
+        read = [("Sunshine Day, Ok", t0), ("Sunshine Day, Ok", t0.addingTimeInterval(1))]
+        check(ChatView.claimRead("Message received: From: Sunshine, Ok", from: &read, now: t0.addingTimeInterval(1.2)), "the first")
+        check(ChatView.claimRead("Message received: From: Sunshine, Ok", from: &read, now: t0.addingTimeInterval(1.5)), "the second")
+        check(!ChatView.claimRead("Message received: From: Sunshine, Ok", from: &read, now: t0.addingTimeInterval(1.8)), "a third Ok the watcher never read is said")
+        read = [("Sunshine Day, Ok", t0)]
+        check(!ChatView.claimRead("Message received: From: Sunshine, Ok", from: &read, now: t0.addingTimeInterval(6)), "over 5 seconds: said")
+        read = [("Sunshine Day, Ok", t0)]
+        check(!ChatView.claimRead("Message received: From: Faith, Lunch at noon?", from: &read, now: t0.addingTimeInterval(1)), "another message: said")
+    }
+    test("chat: Messages' arrival announcements are news even word for word the last; nothing else's") {
+        check(ChatView.isArrivalAnnouncement("Message received: From: Sunshine, Ok", bundle: "com.apple.MobileSMS"), "a message arriving")
+        check(!ChatView.isArrivalAnnouncement("Faith Waters is typing", bundle: "com.apple.MobileSMS"), "the typing indicator")
+        check(!ChatView.isArrivalAnnouncement("Message received: From: Sunshine, Ok", bundle: "net.whatsapp.WhatsApp"), "another app")
+    }
     test("recipes: a broken built-in file is reported by name, the rest load") {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("turnover-recipe-test-\(getpid())")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

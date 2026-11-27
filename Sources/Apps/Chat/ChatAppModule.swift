@@ -151,6 +151,23 @@ final class ChatAppModule: AppModule {
         }
     }
 
+    // The two orders of one new message (issue 382). The app announces first: the announcement is spoken, and the
+    // watcher stays quiet for it (announcementSpoken). The watcher's poll finds it first: it reads it, and the app's
+    // announcement of the same message that follows is not spoken again (here). Only this app's announcements: the
+    // module is this app's, so another app's words never count.
+    override func ignoresAnnouncement(_ text: String, after key: String, elapsed: TimeInterval) -> Bool {
+        if view.watcherRead(text) { Log.io("chat: the app announced a message the watcher read already; not said again"); return true }
+        return false
+    }
+
+    override func announcementSpoken(_ text: String) {
+        view.appAnnounced(text)
+    }
+
+    override func announcementRepeatIsNews(_ text: String) -> Bool {
+        ChatView.isArrivalAnnouncement(text, bundle: bundleIdentifier)
+    }
+
     override func terminate() {
         view.stopWatching()
         if GlobalCommands.contextMenuHandler != nil, API.focusPid == pid { GlobalCommands.contextMenuHandler = nil }
