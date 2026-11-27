@@ -1079,9 +1079,6 @@
     "%@ is responding again" : {
       "comment" : "Spoken message: an app that had stopped answering answers again"
     },
-    "%@ is speaking" : {
-      "comment" : "Zoom: the answer to who is speaking; the value is a person's name"
-    },
     "%@ is waiting for approval in the Plugins menu." : {
       "comment" : "Said when a command of a plugin whose script is not approved is chosen; the placeholder is the plugin's name"
     },
@@ -4361,6 +4358,23 @@
         }
       }
     },
+    "ask for this app A" : {
+      "comment" : "A letter's command, as the TurnOver layer lists them",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запрос для этого приложения"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bu uygulama için iste A"
+          }
+        }
+      }
+    },
     "A braille display was found, but TurnOver couldn't open it." : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -6134,6 +6148,23 @@
         }
       }
     },
+    "copy last spoken C" : {
+      "comment" : "A letter's command, as the TurnOver layer lists them",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "копировать последнее сказанное — C"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "son söyleneni kopyala C"
+          }
+        }
+      }
+    },
     "Calculator" : {
       "comment" : "A group of commands in the key list",
       "localizations" : {
@@ -7747,6 +7778,23 @@
         }
       }
     },
+    "direct D" : {
+      "comment" : "A letter's command, as the TurnOver layer lists them",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "прямое управление — D"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "doğrudan D"
+          }
+        }
+      }
+    },
     "Deleted text" : {
 
     },
@@ -8629,6 +8677,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tümünü okurken: yalnızca bu okuma için daha yavaş (JAWS: Page Down)"
+          }
+        }
+      }
+    },
+    "screen interface E" : {
+      "comment" : "A letter's command, as the TurnOver layer lists them",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "интерфейс экрана — E"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ekran arayüzü E"
           }
         }
       }
@@ -9773,6 +9838,23 @@
         }
       }
     },
+    "gesture control G" : {
+      "comment" : "A letter's command, as the TurnOver layer lists them",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "управление жестами — G"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hareket denetimi G"
+          }
+        }
+      }
+    },
     "Game speech is off." : {
       "comment" : "Spoken message",
       "extractionState" : "stale",
@@ -10182,6 +10264,23 @@
         }
       }
     },
+    "guide H" : {
+      "comment" : "A letter's command, as the TurnOver layer lists them",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "руководства — H"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kılavuz H"
+          }
+        }
+      }
+    },
     "Hand over to VoiceOver" : {
       "localizations" : {
         "ru" : {
@@ -10444,6 +10543,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ne kadar süre"
+          }
+        }
+      }
+    },
+    "describe image I" : {
+      "comment" : "A letter's command, as the TurnOver layer lists them",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "описать изображение — I"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "resmi betimle I"
           }
         }
       }
@@ -11277,6 +11393,23 @@
         }
       }
     },
+    "that was wrong J" : {
+      "comment" : "A letter's command, as the TurnOver layer lists them",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "это было неверно — J"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bu yanlıştı J"
+          }
+        }
+      }
+    },
     "JAWS keys" : {
       "comment" : "A keyboard style",
       "localizations" : {
@@ -11477,6 +11610,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "İki yana yaslar ve hizalamayı söyler"
+          }
+        }
+      }
+    },
+    "keyboard style K" : {
+      "comment" : "A letter's command, as the TurnOver layer lists them",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "стиль клавиатуры — K"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "klavye stili K"
           }
         }
       }
@@ -12447,6 +12597,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Konuşma ayarını büyük bir adımla düşürür (NVDA+Shift+Kontrol+Page Down)"
+          }
+        }
+      }
+    },
+    "menu M" : {
+      "comment" : "A letter's command, as the TurnOver layer lists them",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "меню — M"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "menü M"
           }
         }
       }
@@ -14423,9 +14590,6 @@
         }
       }
     },
-    "Mutes or unmutes your microphone in the meeting, and says which" : {
-      "comment" : "A command, as the key list and keyboard help say it"
-    },
     "My changes for %@" : {
       "localizations" : {
         "ru" : {
@@ -15362,9 +15526,6 @@
     },
     "No name given." : {
       "comment" : "Said when the credit name was left empty"
-    },
-    "No one is speaking" : {
-      "comment" : "Zoom: the answer to who is speaking, when Zoom marks nobody"
     },
     "No plugin for %@ yet: make one, or ask" : {
       "localizations" : {
@@ -18084,6 +18245,23 @@
         }
       }
     },
+    "recognition R" : {
+      "comment" : "A letter's command, as the TurnOver layer lists them",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "распознавание — R"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tanıma R"
+          }
+        }
+      }
+    },
     "Raise the pitch for a capital" : {
       "localizations" : {
         "ru" : {
@@ -18099,9 +18277,6 @@
           }
         }
       }
-    },
-    "Raises or lowers your hand in the meeting, and says which" : {
-      "comment" : "A command, as the key list and keyboard help say it"
     },
     "Raises the speech setting (NVDA+Shift+Control+Up Arrow)" : {
       "comment" : "A command, as the key list and keyboard help say it",
@@ -20816,6 +20991,23 @@
         }
       }
     },
+    "settings S" : {
+      "comment" : "A letter's command, as the TurnOver layer lists them",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "настройки — S"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ayarlar S"
+          }
+        }
+      }
+    },
     "Safari" : {
       "comment" : "A group of commands in the key list",
       "localizations" : {
@@ -21180,9 +21372,6 @@
           }
         }
       }
-    },
-    "Says who is speaking in the meeting" : {
-      "comment" : "A command, as the key list and keyboard help say it"
     },
     "Says who looks after it and copies where to write, with its name and version and TurnOver's build" : {
 
@@ -21893,9 +22082,6 @@
         }
       }
     },
-    "Sends a reaction in the meeting, and says it" : {
-      "comment" : "A command, as the key list and keyboard help say it"
-    },
     "Sends the command line to the shell" : {
       "comment" : "A command, as the key list and keyboard help say it",
       "localizations" : {
@@ -22316,6 +22502,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Eğik çizgi"
+          }
+        }
+      }
+    },
+    "shortcuts slash" : {
+      "comment" : "A letter's command, as the TurnOver layer lists them",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сочетания с косой чертой"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kısayollar eğik çizgi"
           }
         }
       }
@@ -22950,9 +23153,6 @@
           }
         }
       }
-    },
-    "Starts or stops your video in the meeting, and says which" : {
-      "comment" : "A command, as the key list and keyboard help say it"
     },
     "Starts the count again without sending anything" : {
       "localizations" : {
@@ -23623,6 +23823,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sistem"
+          }
+        }
+      }
+    },
+    "switch reader T" : {
+      "comment" : "A letter's command, as the TurnOver layer lists them",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Переключатель скринридеров: T"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "okuyucuyu değiştir T"
           }
         }
       }
@@ -28322,6 +28539,23 @@
         }
       }
     },
+    "copy VoiceOver settings V" : {
+      "comment" : "A letter's command, as the TurnOver layer lists them",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "копировать настройки VoiceOver — V"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VoiceOver ayarlarını kopyala V"
+          }
+        }
+      }
+    },
     "VO Shift Down goes in." : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -30352,23 +30586,6 @@
         }
       }
     },
-    "ask for this app A" : {
-      "comment" : "A letter's command, as the TurnOver layer lists them",
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Запрос для этого приложения"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "bu uygulama için iste A"
-          }
-        }
-      }
-    },
     "ask needs a prompt of at most %lld characters." : {
       "comment" : "Said to a plugin author; the placeholder is a number"
     },
@@ -32142,23 +32359,6 @@
         }
       }
     },
-    "copy VoiceOver settings V" : {
-      "comment" : "A letter's command, as the TurnOver layer lists them",
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "копировать настройки VoiceOver — V"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "VoiceOver ayarlarını kopyala V"
-          }
-        }
-      }
-    },
     "copy last spoken" : {
       "comment" : "A letter's command in the TurnOver layer (Command Control Comma)",
       "localizations" : {
@@ -32172,23 +32372,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "son söyleneni kopyala"
-          }
-        }
-      }
-    },
-    "copy last spoken C" : {
-      "comment" : "A letter's command, as the TurnOver layer lists them",
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "копировать последнее сказанное — C"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "son söyleneni kopyala C"
           }
         }
       }
@@ -32576,23 +32759,6 @@
         }
       }
     },
-    "describe image I" : {
-      "comment" : "A letter's command, as the TurnOver layer lists them",
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "описать изображение — I"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "resmi betimle I"
-          }
-        }
-      }
-    },
     "describing" : {
       "comment" : "Spoken message",
       "localizations" : {
@@ -32725,23 +32891,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "farklı öğe"
-          }
-        }
-      }
-    },
-    "direct D" : {
-      "comment" : "A letter's command, as the TurnOver layer lists them",
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "прямое управление — D"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "doğrudan D"
           }
         }
       }
@@ -33608,23 +33757,6 @@
         }
       }
     },
-    "gesture control G" : {
-      "comment" : "A letter's command, as the TurnOver layer lists them",
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "управление жестами — G"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "hareket denetimi G"
-          }
-        }
-      }
-    },
     "graphic" : {
       "comment" : "A kind of thing to find, after next or previous\nA role, spoken after an item's name",
       "localizations" : {
@@ -33727,23 +33859,6 @@
         }
       }
     },
-    "guide H" : {
-      "comment" : "A letter's command, as the TurnOver layer lists them",
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "руководства — H"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "kılavuz H"
-          }
-        }
-      }
-    },
     "half checked" : {
       "comment" : "A state, spoken after an item's role",
       "localizations" : {
@@ -33760,12 +33875,6 @@
           }
         }
       }
-    },
-    "hand lowered" : {
-      "comment" : "Zoom: your hand after the raise hand key"
-    },
-    "hand raised" : {
-      "comment" : "Zoom: your hand after the raise hand key, and in the state command"
     },
     "handle" : {
       "comment" : "A role, spoken after an item's name",
@@ -35032,23 +35141,6 @@
         }
       }
     },
-    "keyboard style K" : {
-      "comment" : "A letter's command, as the TurnOver layer lists them",
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "стиль клавиатуры — K"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "klavye stili K"
-          }
-        }
-      }
-    },
     "keyboard style: VoiceOver, NVDA or JAWS keys" : {
       "comment" : "A letter's command in the TurnOver layer (Command Control Comma)",
       "localizations" : {
@@ -35945,23 +36037,6 @@
         }
       }
     },
-    "menu M" : {
-      "comment" : "A letter's command, as the TurnOver layer lists them",
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "меню — M"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "menü M"
-          }
-        }
-      }
-    },
     "menu bar" : {
       "comment" : "A braille chord's command, as braille help says it\nA role, spoken after an item's name\nSpoken message",
       "localizations" : {
@@ -36395,9 +36470,6 @@
           }
         }
       }
-    },
-    "muted" : {
-      "comment" : "Zoom: your microphone after the mute key"
     },
     "navigation" : {
       "comment" : "A group of commands in the key list",
@@ -40140,23 +40212,6 @@
         }
       }
     },
-    "recognition R" : {
-      "comment" : "A letter's command, as the TurnOver layer lists them",
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "распознавание — R"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tanıma R"
-          }
-        }
-      }
-    },
     "red" : {
       "comment" : "A colour",
       "localizations" : {
@@ -40735,23 +40790,6 @@
         }
       }
     },
-    "screen interface E" : {
-      "comment" : "A letter's command, as the TurnOver layer lists them",
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "интерфейс экрана — E"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ekran arayüzü E"
-          }
-        }
-      }
-    },
     "screen interface: the window's controls from its pixels (experimental)" : {
       "comment" : "A letter's command in the TurnOver layer (Command Control Comma)",
       "localizations" : {
@@ -41211,9 +41249,6 @@
         }
       }
     },
-    "sent %@" : {
-      "comment" : "Zoom: a reaction was sent; the value is the reaction, such as a thumbs up"
-    },
     "separator" : {
       "comment" : "A kind of thing to find, after next or previous\nA role, spoken after an item's name",
       "localizations" : {
@@ -41233,23 +41268,6 @@
     },
     "setValue needs a string or a number." : {
       "comment" : "Said to a plugin author"
-    },
-    "settings S" : {
-      "comment" : "A letter's command, as the TurnOver layer lists them",
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "настройки — S"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ayarlar S"
-          }
-        }
-      }
     },
     "settings pane" : {
       "comment" : "A part of the System Settings window",
@@ -41366,23 +41384,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "buradaki kısayollar"
-          }
-        }
-      }
-    },
-    "shortcuts slash" : {
-      "comment" : "A letter's command, as the TurnOver layer lists them",
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Сочетания с косой чертой"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "kısayollar eğik çizgi"
           }
         }
       }
@@ -42208,23 +42209,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "okuyucuyu değiştir"
-          }
-        }
-      }
-    },
-    "switch reader T" : {
-      "comment" : "A letter's command, as the TurnOver layer lists them",
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Переключатель скринридеров: T"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "okuyucuyu değiştir T"
           }
         }
       }
@@ -43873,23 +43857,6 @@
         }
       }
     },
-    "that was wrong J" : {
-      "comment" : "A letter's command, as the TurnOver layer lists them",
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "это было неверно — J"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "bu yanlıştı J"
-          }
-        }
-      }
-    },
     "the %@ plugin" : {
       "comment" : "A plugin by name",
       "localizations" : {
@@ -44837,9 +44804,6 @@
         }
       }
     },
-    "unmuted" : {
-      "comment" : "Zoom: your microphone after the mute key"
-    },
     "unread" : {
       "comment" : "A Mail message not yet read",
       "localizations" : {
@@ -45044,12 +45008,6 @@
           }
         }
       }
-    },
-    "video off" : {
-      "comment" : "Zoom: your camera after the video key"
-    },
-    "video on" : {
-      "comment" : "Zoom: your camera after the video key"
     },
     "video playing. Space plays and pauses; Escape leaves the video" : {
       "comment" : "Spoken message",
@@ -45487,6 +45445,48 @@
           }
         }
       }
+    },
+    "Mutes or unmutes your microphone in the meeting, and says which" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
+    "Starts or stops your video in the meeting, and says which" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
+    "Raises or lowers your hand in the meeting, and says which" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
+    "Sends a reaction in the meeting, and says it" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
+    "muted" : {
+      "comment" : "Zoom: your microphone after the mute key"
+    },
+    "unmuted" : {
+      "comment" : "Zoom: your microphone after the mute key"
+    },
+    "video off" : {
+      "comment" : "Zoom: your camera after the video key"
+    },
+    "video on" : {
+      "comment" : "Zoom: your camera after the video key"
+    },
+    "hand raised" : {
+      "comment" : "Zoom: your hand after the raise hand key, and in the state command"
+    },
+    "hand lowered" : {
+      "comment" : "Zoom: your hand after the raise hand key"
+    },
+    "sent %@" : {
+      "comment" : "Zoom: a reaction was sent; the value is the reaction, such as a thumbs up"
+    },
+    "Says who is speaking in the meeting" : {
+      "comment" : "A command, as the key list and keyboard help say it"
+    },
+    "%@ is speaking" : {
+      "comment" : "Zoom: the answer to who is speaking; the value is a person's name"
+    },
+    "No one is speaking" : {
+      "comment" : "Zoom: the answer to who is speaking, when Zoom marks nobody"
     }
   },
   "version" : "1.0"
