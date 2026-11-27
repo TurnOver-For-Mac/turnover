@@ -680,7 +680,11 @@ package final class ClaudeAppModule: AppModule {
             return
         }
         if event.kind == .gainFocus,
-           API.focusTreeInterceptor?.navigationWaiting == true { return }
+           API.focusTreeInterceptor?.navigationWaiting == true {
+            // Not said while the page is on its way; the field still has the keyboard (EditableText.tookTheFocus).
+            Log.io("claude: focus on \(event.obj.axRole) while the page is on its way; not said")
+            return
+        }
         if isOwnCopyPressFocus(event) {
             Log.io("claude: the keyboard TurnOver put on a Copy button is not announced")
             return

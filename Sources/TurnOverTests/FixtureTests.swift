@@ -1911,6 +1911,26 @@ func focusRuleTests() {
         check((API.focusObject as? EditableText)?.isFollowingSelection == true, "ordinary focus resumes selection following too")
     }
 
+    // 27 Nov 2026 (turnover-2026-11-26T125802Z.log, 04:24:16): the Claude app's module kept the Prompt's gain focus
+    // event during a conversation switch, F found the Prompt already the focus, and Option Shift Left said nothing.
+    test("a field made the focus without its gain focus event still follows its selection") {
+        AXReplay.load(conversation())
+        defer { API.setFocusObject(nil, ancestors: []); BrowseModeHandler.shared.forget(pid: 900_060); AXReplay.unload() }
+        let page = BrowseModeHandler.shared.document(root: AXReplay.element(60))
+        let prompt = ObjectFactory.make(AXReplay.element(66))
+        guard let field = prompt as? EditableText else { check(false, "the Prompt is a text field"); return }
+        check(!field.isFollowingSelection, "a field not yet the focus does not follow")
+        // As AXHandler.present() does, with the event then kept from the field by an app module.
+        API.setFocusObject(prompt, ancestors: prompt.ancestors, interceptor: page)
+        check(field.isFollowingSelection, "the field that holds the keyboard follows its selection, with no gain focus event")
+        field.handleEvent(Event(.gainFocus, prompt))
+        check(field.isFollowingSelection, "its gain focus event, when it comes, keeps it followed")
+        let copy = ObjectFactory.make(AXReplay.element(65))
+        API.setFocusObject(copy, ancestors: copy.ancestors, interceptor: page)
+        field.handleEvent(Event(.loseFocus, prompt))
+        check(!field.isFollowingSelection, "the field the focus left stops following")
+    }
+
     /// The same document after a jump: the pages were laid out afresh, so the first page's old copy (4) is gone and
     /// answers nothing, and Pages has its focus on the new copy (7), which gives the caret.
     func pagesLaidOutAfresh() -> AXFixture {
