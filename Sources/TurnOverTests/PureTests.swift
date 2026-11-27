@@ -22,6 +22,14 @@ func pureTests() {
         check(!AXHandler.announcementInterrupts(nil), "no information at all")
         check(!AXHandler.announcementInterrupts([key: "high"]), "a value that is not a number")
     }
+    test("announcements: every announcement's priority is named for the log") {
+        let key = NSAccessibility.NotificationUserInfoKey.priority.rawValue
+        expect(AXHandler.announcementPriorityName([key: NSNumber(value: 90)]), "high (90)")
+        expect(AXHandler.announcementPriorityName([key: NSNumber(value: 50)]), "medium (50)")
+        expect(AXHandler.announcementPriorityName([key: NSNumber(value: 10)]), "low (10)")
+        expect(AXHandler.announcementPriorityName(["AXAnnouncementKey": "Ok"]), "none")
+        expect(AXHandler.announcementPriorityName(nil), "none")
+    }
     test("status menus: failed AX press remembers a menu that opened and closed before the check") {
         let before = Date(timeIntervalSinceReferenceDate: 100)
         let opened = before.addingTimeInterval(0.002)
