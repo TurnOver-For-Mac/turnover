@@ -247,6 +247,23 @@ nonisolated public extension AXUIElement {
 }
 
 nonisolated extension AXUIElement {
+    /// Whether this element is a page's own content (27 Nov 2026): inside a web area by its parents, or, where the
+    /// parents give out before the page (a page's pop-up list, deep in its shadow roots), by the DOM attributes only a
+    /// browser's elements carry.
+    public var isWebContent: Bool {
+        if enclosingWebArea() != nil { return true }
+        var names: CFArray?
+        guard AXUIElementCopyAttributeNames(self, &names) == .success, let list = names as? [String] else { return false }
+        return list.contains("AXDOMClassList") || list.contains("AXDOMIdentifier")
+    }
+
+    /// Whether `ancestor` holds this element (itself included), within 40 steps up.
+    public func isInside(_ ancestor: AXUIElement) -> Bool {
+        var p: AXUIElement? = self; var hops = 0
+        while let x = p, hops < 40 { if x.isSame(ancestor) { return true }; p = x.element(kAXParentAttribute); hops += 1 }
+        return false
+    }
+
     /// The page this element is in (itself, if it is one).
     public func enclosingWebArea() -> AXUIElement? {
         var p: AXUIElement? = self; var hops = 0

@@ -123,11 +123,9 @@ final class MenuNavigationPlugin: GlobalPlugin {
     // TurnOver walks the items itself, as VoiceOver's VO-arrows do: Up and Down read them, Enter, Space or Right
     // press the one it is on (Right only where it opens more). Escape still goes to the page.
 
-    static func isWebMenu(_ menu: AXUIElement) -> Bool {
-        var p = menu.element(kAXParentAttribute); var hops = 0
-        while let x = p, hops < 40 { if x.role == "AXWebArea" { return true }; p = x.element(kAXParentAttribute); hops += 1 }
-        return false
-    }
+    /// By its parents, or by the DOM attributes a page's elements carry (27 Nov 2026: a search box's suggestion
+    /// list was taken for an application's menu, and held the page's focus back, `AXUIElement.isWebContent`).
+    static func isWebMenu(_ menu: AXUIElement) -> Bool { menu.isWebContent }
 
     /// The menu's items in order, through the groups that hold them; separators left out.
     static func webMenuItems(_ menu: AXUIElement) -> [AXUIElement] {

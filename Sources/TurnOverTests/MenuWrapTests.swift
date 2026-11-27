@@ -41,4 +41,18 @@ func menuWrapTests() {
         expect(MenuWrap.submenusToClose(looked: [false, false], highlightedIn: 0), [], "ordinary menus: none")
         expect(MenuWrap.submenusToClose(looked: [true], highlightedIn: -1), [], "highlight not in an open menu")
     }
+
+    test("menus: a page's own menu does not hold the page's focus back (27 Nov 2026)") {
+        typealias A = AXHandler
+        expect(A.focusPastWebMenu(targetIsWeb: true, webMenuOpen: true, otherMenuOpen: false, targetInWebMenu: false), .followAndForgetMenu,
+               "Tab on past a search box's suggestions: followed, the list no longer counted open")
+        expect(A.focusPastWebMenu(targetIsWeb: true, webMenuOpen: true, otherMenuOpen: false, targetInWebMenu: true), .follow,
+               "a link inside the page's menu: followed, the menu kept")
+        expect(A.focusPastWebMenu(targetIsWeb: false, webMenuOpen: true, otherMenuOpen: false, targetInWebMenu: false), .hold,
+               "a focus outside the page (the toolbar) while the page's menu is open: held as before")
+        expect(A.focusPastWebMenu(targetIsWeb: true, webMenuOpen: false, otherMenuOpen: true, targetInWebMenu: false), .hold,
+               "an application's own menu (Word handing the document the focus under it): held as before")
+        expect(A.focusPastWebMenu(targetIsWeb: true, webMenuOpen: true, otherMenuOpen: true, targetInWebMenu: false), .hold,
+               "the application's own menu open as well: held")
+    }
 }

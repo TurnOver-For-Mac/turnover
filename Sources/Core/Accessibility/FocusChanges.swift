@@ -602,16 +602,40 @@ extension AXHandler {
     func ruleMenuOpen(_ target: AXUIElement, _ pid: pid_t, _ element: AXUIElement) -> FocusVerdict {
         let role = Role.from(axRole: target.role, subrole: target.string(kAXSubroleAttribute))
         if isMenuOpen, !Self.menuRoles.contains(role), openMenus.contains(where: { $0.pid == pid }) {
-            // A page's menu reports no close: focus landing elsewhere in the page means it has gone.
-            if topMenuIsWeb, target.enclosingWebArea() != nil {
-                Log.io("focus to \(target.role) in the page while its web menu was counted open: the menu has closed")
-                openMenus.removeAll { $0.pid == pid }
+            // A page's menu reports no close, and one that never takes the focus (a search box's suggestions) holds
+            // nothing: focus landing in the page is followed. Only the top menu counted, and only when the page was
+            // found by its parents, so Tab on Reddit's Search box had the next three focus moves ignored and two more
+            // Tabs unheard; the line was in the logs hundreds of times a day (27 Nov 2026). Now any of the
+            // application's open menus that is the page's own counts, and so does a focus found to be the page's by its
+            // DOM attributes. A focus inside the page's menu is followed and keeps the menu.
+            let mine = openMenus.filter { $0.pid == pid }
+            let web = mine.filter { MenuNavigationPlugin.isWebMenu($0) }
+            switch Self.focusPastWebMenu(targetIsWeb: !web.isEmpty && target.isWebContent, webMenuOpen: !web.isEmpty,
+                                         otherMenuOpen: web.count < mine.count, targetInWebMenu: web.contains { target.isInside($0) }) {
+            case .follow:
                 return .go(target)
+            case .followAndForgetMenu:
+                Log.io("focus to \(target.role) in the page while its web menu was counted open: the menu holds no focus; no longer counted")
+                openMenus.removeAll { m in web.contains { $0.isSame(m) } }
+                return .go(target)
+            case .hold:
+                break
             }
             Log.io("focus to \(target.role) while a menu is open in its application; ignored")
             return .ignore
         }
         return .go(target)
+    }
+
+    nonisolated package enum WebMenuFocus: Equatable { case hold, follow, followAndForgetMenu }
+    /// The rule alone (tests): what a focus change does while a menu is counted open in its application. A page's own
+    /// menu holds no focus: a focus in the page goes, inside the menu keeping it, elsewhere no longer counting it. An
+    /// application's own menu (Word handing its document the focus under its menus) still holds the focus (27 Nov 2026).
+    nonisolated package static func focusPastWebMenu(targetIsWeb: Bool, webMenuOpen: Bool, otherMenuOpen: Bool,
+                                                     targetInWebMenu: Bool) -> WebMenuFocus {
+        guard webMenuOpen, targetIsWeb else { return .hold }
+        if targetInWebMenu { return .follow }
+        return otherMenuOpen ? .hold : .followAndForgetMenu
     }
 
     /// The window itself reported as the focus while a control inside it has it: a page in a tab you just left
