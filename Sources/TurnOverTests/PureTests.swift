@@ -958,6 +958,30 @@ func pureTests() {
         expect(VoiceOverCommands.commanderKey("?"), "shift+/")
         expect(VoiceOverCommands.commanderKey("é") == nil, true, "a key TurnOver can't name is left out")
     }
+    test("VoiceOver export: a Commander key TurnOver can't name is counted, and the summary says so") {
+        let saved = config
+        let savedPlayer = Speech.player
+        let savedPersists = Config.persists
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("voiceover-commander-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer {
+            config = saved; Speech.player = savedPlayer; Config.persists = savedPersists
+            try? FileManager.default.removeItem(at: folder)
+        }
+        Config.persists = false
+        Speech.player = nil
+        // A Cyrillic ж (0436) and я (044f) beside a key TurnOver names (m).
+        let c = try readVoiceOverDefault([flatSpeech + "SCRVoiceIdentifier": "test.default.voice",
+            "custom.keyboard-commander.SCRKeyboardCommander_0436": "SCRWorkspace.customOpenApplication:/System/Applications/Mail.app",
+            "custom.keyboard-commander.SCRKeyboardCommander_044f": "SCRWorkspace.customOpenApplication:/System/Applications/Notes.app",
+            "custom.keyboard-commander.SCRKeyboardCommander_006d": "SCRWorkspace.customOpenApplication:/System/Applications/Mail.app"])
+        expect(c.commanderKeys.count, 1, "the key with a name is copied")
+        expect(c.uncopiedCommanderKeys, 2, "the two without one are counted")
+        let said = VoiceOverSettings.apply(c, undoSnapshot: folder.appendingPathComponent("before.json"))
+        check(said.contains("2 Keyboard Commander keys not copied"), "the summary says how many were left out: \(said)")
+        var one = c; one.uncopiedCommanderKeys = 1
+        check(VoiceOverSettings.apply(one, undoSnapshot: folder.appendingPathComponent("before.json")).contains("1 Keyboard Commander key not copied"), "one, in the singular")
+    }
     test("VoiceOver export: a Commander key opens only an application") {
         check(UserGestures.isApplication(atPath: "/System/Applications/Calculator.app"), "an app")
         check(!UserGestures.isApplication(atPath: "/System/Applications"), "a folder")

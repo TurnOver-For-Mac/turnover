@@ -937,8 +937,39 @@
         }
       }
     },
+    "%@ Keyboard Commander keys not copied" : {
+      "comment" : "Copying VoiceOver's settings: Commander keys TurnOver has no name for; %@ is how many",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не скопировано клавиш Keyboard Commander: %@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Klavye Komutanı tuşu kopyalanmadı"
+          }
+        }
+      }
+    },
     "%@ is not an app" : {
-      "comment" : "A key's path is not an application: %@ is its name"
+      "comment" : "A key's path is not an application: %@ is its name",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ не является приложением"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ bir uygulama değil"
+          }
+        }
+      }
     },
     "%@ is not installed" : {
       "comment" : "An app is not installed: %@ is the app",
@@ -4014,6 +4045,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "1 sütun"
+          }
+        }
+      }
+    },
+    "1 Keyboard Commander key not copied" : {
+      "comment" : "Copying VoiceOver's settings: a Commander key TurnOver has no name for",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не скопировано клавиш Keyboard Commander: 1"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 Klavye Komutanı tuşu kopyalanmadı"
           }
         }
       }

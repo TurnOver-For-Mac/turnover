@@ -138,6 +138,9 @@ extension VoiceOverSettings {
         public var keyBindings: [(key: String, shift: Bool, command: Bool, fn: Bool, target: String, removed: Bool)] = []
         public var keyboardCommander: Bool?, numpadCommander: Bool?
         public var archiveVersion = 0
+        /// Commander keys left out because TurnOver has no name for their key (a Cyrillic letter, say): counted, so
+        /// the spoken summary can say so (review of #376, 27 Nov 2026).
+        public var uncopiedCommanderKeys = 0
     }
 
     public static let key = "the TurnOver menu, Settings, Copy VoiceOver settings, Copy"
@@ -216,7 +219,7 @@ extension VoiceOverSettings {
             if k.hasPrefix("custom.keyboard-commander.SCRKeyboardCommander_"), let command = v as? String,
                let code = UInt32(k.components(separatedBy: "_").last ?? "", radix: 16), let scalar = Unicode.Scalar(code) {
                 if let key = VoiceOverCommands.commanderKey(Character(scalar)) { c.commanderKeys.append((key, command)) }
-                else { Log.info("VoiceOver settings: Commander key U+\(String(code, radix: 16)) has no key name here; not copied") }
+                else { c.uncopiedCommanderKeys += 1; Log.info("VoiceOver settings: Commander key U+\(String(code, radix: 16)) has no key name here; not copied") }
             }
             if k.hasPrefix("custom.custom-keybindings."), let b = v as? [String: Any], let key = b["key"] as? [String: Any], let chars = key["characters"] as? String, !chars.isEmpty {
                 c.keyBindings.append((chars.lowercased(), key["shifted"] as? Bool ?? false, key["commanded"] as? Bool ?? false, key["fned"] as? Bool ?? false, b["command"] as? String ?? "", b["remove"] as? Bool ?? false))
@@ -330,6 +333,9 @@ extension VoiceOverSettings {
             letters.append(shift ? KeyNames.spokenNames["shift", default: "shift"] + " " + name : name)
         }
         if !letters.isEmpty { said.append(String(localized: "Keyboard Commander keys \(letters.joined(separator: ", "))", comment: "Copying VoiceOver's settings: the letters given")) }
+        let left = c.uncopiedCommanderKeys
+        if left > 0 { said.append(left == 1 ? String(localized: "1 Keyboard Commander key not copied", comment: "Copying VoiceOver's settings: a Commander key TurnOver has no name for")
+                                             : String(localized: "\(String(left)) Keyboard Commander keys not copied", comment: "Copying VoiceOver's settings: Commander keys TurnOver has no name for; %@ is how many")) }
         var bound = 0
         for b in c.keyBindings {
             let name = KeyNames.code(for: b.key).map { KeyNames.name(for: $0) } ?? b.key
