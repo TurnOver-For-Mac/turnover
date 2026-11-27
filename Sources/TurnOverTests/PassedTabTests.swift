@@ -33,6 +33,12 @@ func passedTabTests() {
         expect(step(elapsed: 0.33), .reportSame, "where it was at the ceiling: logged only")
         expect(step(news: true, answered: false), .stop, "news comes first, whatever the answer")
     }
+    test("a set-aside focus report: no role and reported twice are not news of a move (27 Nov 2026)") {
+        expect(D.setAsideReportIsNews(rule: "no role"), false, "a dead element")
+        expect(D.setAsideReportIsNews(rule: "reported twice"), false, "the stop the keyboard just left, reported again")
+        expect(D.setAsideReportIsNews(rule: "duplicate"), true, "any other rule: the browser did report a move")
+        expect(D.setAsideReportIsNews(rule: "menu open"), true, "any other rule")
+    }
     test("dead focus: looked past forward after Tab, back after Shift Tab, not at all otherwise (27 Nov 2026)") {
         expect(D.deadFocusDirection(lastKey: "kb:tab", secondsSinceKey: 0.1), true, "Tab")
         expect(D.deadFocusDirection(lastKey: "kb:shift+tab", secondsSinceKey: 0.1), false, "Shift Tab")

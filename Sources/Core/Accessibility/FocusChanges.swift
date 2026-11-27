@@ -71,8 +71,10 @@ extension AXHandler {
             // tell a focus never posted from one dropped here. Elsewhere it stays a debug line, as before.
             case .ignore:
                 // A report for an element that answers no role is not news of the focus (27 Nov 2026): it stopped the
-                // no-news polls, and the Tab was silent.
-                if name == "no role" { lastBrowserFocusNewsAt = newsBefore }
+                // no-news polls, and the Tab was silent. Nor is the same element reported again: after one Tab on a
+                // busy page Safari reported the stop the keyboard had just left, the report was set aside here, and
+                // the stop it had moved to was never said.
+                if !BrowseModeDocument.setAsideReportIsNews(rule: name) { lastBrowserFocusNewsAt = newsBefore }
                 if BrowseModeHandler.shared.hasDocument(inProcess: pid) { Log.io("focus rule \(name): set aside the \(target.role)") }
                 else { Log.debug("focus rule \(name): ignored") }
                 return

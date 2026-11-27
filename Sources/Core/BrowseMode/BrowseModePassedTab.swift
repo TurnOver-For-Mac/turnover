@@ -304,3 +304,12 @@ extension BrowseModeDocument {
         return page
     }
 }
+
+extension BrowseModeDocument {
+    /// Whether a focus report that a focus rule set aside still counts as the browser's news of a move, which ends the
+    /// no-news checks after Tab (27 Nov 2026). An element that answers no role, and the element that already had the
+    /// focus reported a second time, say nothing of where the keyboard went, so the page is still asked.
+    package nonisolated static func setAsideReportIsNews(rule: String) -> Bool {
+        rule != "no role" && rule != "reported twice"
+    }
+}
