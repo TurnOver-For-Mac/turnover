@@ -1009,6 +1009,49 @@ public final class WebBuffer {
 
     /// The next or previous element of these roles: a line that is one, a container a line enters, or (for links)
     /// a link's text inside a line, so "k" finds the link in a heading or a paragraph. Looked at lazily, in order.
+    /// 25 Nov 2026: what VO-Right and VO-Left stop on inside line j, in reading order: each link, and the text between
+    /// links that has a letter or a digit (a separator such as a middle dot is no stop). A link wrapped from the line
+    /// before is not an item here (it was one there); `continued` says the line begins inside such a link. Needs no
+    /// accessibility call: the pieces already say whether they are links. A line with no link gives its one text item, or
+    /// none when it holds only separators.
+    public func items(inLine j: Int) -> (items: [(start: Int, end: Int, isLink: Bool)], continued: Bool) {
+        guard j >= 0, j < lines.count else { return ([], false) }
+        let l = lines[j]
+        var lo = 0, hi = segments.count
+        while lo < hi { let m = (lo + hi) / 2; if segments[m].end <= l.start { lo = m + 1 } else { hi = m } }
+        var out: [(start: Int, end: Int, isLink: Bool)] = []
+        var cursor = l.start, continued = false, k = lo
+        func text(upTo end: Int) {
+            guard end > cursor else { return }
+            let piece = self.text.substring(with: NSRange(location: cursor, length: min(end, self.text.length) - cursor))
+            // A stop if it has a letter, a digit or a symbol (an emoji, a star, a currency sign); whitespace, punctuation and | or > are separators.
+            if piece.unicodeScalars.contains(where: { CharacterSet.alphanumerics.contains($0) || [.otherSymbol, .currencySymbol].contains($0.properties.generalCategory) }) { out.append((cursor, end, false)) }
+        }
+        while k < segments.count, segments[k].start < l.end {
+            let sg = segments[k], first = k == lo
+            k += 1   // always on past the piece, so a piece with no length can never be met twice
+            guard sg.isLink, sg.end > sg.start else { continue }
+            let end = max(linkEnd(at: sg.start) ?? sg.end, sg.end)
+            // Carried over from the line above: it began there, or its pieces touch the link piece that ended the line above.
+            let carried = sg.start < l.start || (first && sg.start == l.start && lo > 0 && segments[lo - 1].isLink && segments[lo - 1].end == sg.start)
+            if carried { continued = continued || first }
+            else { text(upTo: sg.start); out.append((sg.start, end, true)) }
+            cursor = min(end, l.end)
+            while k < segments.count, segments[k].start < end { k += 1 }
+        }
+        text(upTo: l.end)
+        return (out, continued)
+    }
+
+    /// Whether line j, with a single item, must still be moved by as an item: a link that runs on past the line's end (its whole
+    /// text is read once, at its start), or the text after the tail of a link carried over from above. A line with no item,
+    /// or one item that ends within the line, is moved by as a line, as before.
+    public func hasItemOwn(line j: Int) -> Bool {
+        let r = items(inLine: j)
+        guard r.items.count == 1, let only = r.items.first else { return false }
+        return only.end > lines[j].end || r.continued
+    }
+
     /// Where the link text at an offset ends: its pieces run on while they are link pieces and touch.
     public func linkEnd(at offset: Int) -> Int? {
         var lo = 0, hi = segments.count
@@ -1121,7 +1164,12 @@ public final class WebBuffer {
             // A line that carries on the element of the line before (a heading wrapped over two lines) is not a
             // second hit: H landed on "closed beta" after the whole heading (8 Oct 2026).
             if let el = l.element, !lineContinues(j), !seen.contains(where: { $0.isSame(el) }), matches(el) { out.append((l.start, el)) }
-            if wantsLinks, out.isEmpty {
+            // 25 Nov 2026: a Mail footer "Privacy Policy · Terms of Use · Unsubscribe" is one line whose own element is its first
+            // link, so Tab and the link keys stopped on Privacy Policy and never reached Unsubscribe. A line already offered as
+            // a link still offers the other links inside it; any other role offers what it did before.
+            let lineIsLink = out.contains { $0.1.role == "AXLink" }
+            let offered = out.count   // the line's own hits; each later link is compared with these only, not with its neighbours
+            if wantsLinks, out.isEmpty || lineIsLink {
                 // Link text inside the line; a link split over several pieces counts once.
                 var lo = 0, hi = segments.count
                 while lo < hi { let m = (lo + hi) / 2; if segments[m].end <= l.start { lo = m + 1 } else { hi = m } }
@@ -1130,7 +1178,8 @@ public final class WebBuffer {
                 while k < segments.count, segments[k].start < l.end {
                     let sg = segments[k]
                     // A link that began on an earlier piece of a wrapped line was counted there.
-                    if sg.isLink, sg.start >= l.start, sg.start > prevLinkEnd + 1 { out.append((sg.start, sg.element)) }
+                    if sg.isLink, sg.start >= l.start, sg.start > prevLinkEnd + 1,
+                       !(lineIsLink && out[..<offered].contains { $0.0 == sg.start || $0.1.isSame(Self.linkOwner(of: sg.element)) }) { out.append((sg.start, sg.element)) }
                     prevLinkEnd = sg.isLink ? sg.end : -2
                     k += 1
                 }
@@ -1154,6 +1203,17 @@ public final class WebBuffer {
         var j = i
         while j + 1 < lines.count, lineContinues(j + 1) { j += 1 }
         return (lines[i].start, lines[j].end)
+    }
+
+    // 27 Nov 2026: taken unchanged from aed8de8 (branch claude/trial-1126-fixes) because the link stops use it.
+    /// The link element a piece of text belongs to: itself if it is one, else the nearest link above it (four levels at most).
+    static func linkOwner(of element: AXUIElement) -> AXUIElement {
+        var x: AXUIElement? = element; var hops = 0
+        while let y = x, hops < 4 {
+            if y.role == "AXLink" { return y }
+            x = y.element(kAXParentAttribute); hops += 1
+        }
+        return element
     }
 
     public func offset(of element: AXUIElement) -> Int? {

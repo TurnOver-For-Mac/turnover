@@ -137,7 +137,7 @@ public final class VoiceOverKeysPlugin: GlobalPlugin {
         }
         add("next", String(localized: "Next item (VO-Right)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+rightArrow"]) { g in
             if let s = tableScript("table_nextColumn") { s.handler(g); return }   // Word: the next cell in the row
-            if let d = API.focusTreeInterceptor, (!d.passThrough || (config.virtualBuffers.autoPassThroughOnCaretMove && !d.disableAutoPassThrough)), ObjectNavigator.shared.isWithin(d.webArea), let s = d.script(named: "moveByLine_forward") { s.handler(g); return }
+            if let d = API.focusTreeInterceptor, (!d.passThrough || (config.virtualBuffers.autoPassThroughOnCaretMove && !d.disableAutoPassThrough)), ObjectNavigator.shared.isWithin(d.webArea), let s = d.script(named: "moveByItem_forward") { s.handler(g); return }
             // At the end of the text, VO-Right leaves the field for the next item, as VoiceOver's cursor does (it bumped
             // for 300 ms at the end of Claude's prompt, 17 Oct 2026).
             if Self.inTextArea(), let f = API.focusObject, let s = f.script(named: "caret_moveByCharacter") {
@@ -148,7 +148,7 @@ public final class VoiceOverKeysPlugin: GlobalPlugin {
         }
         add("previous", String(localized: "Previous item (VO-Left)", comment: "A command, as the key list and keyboard help say it"), ["kb:turnover+leftArrow"]) { g in
             if let s = tableScript("table_previousColumn") { s.handler(g); return }
-            if let d = API.focusTreeInterceptor, (!d.passThrough || (config.virtualBuffers.autoPassThroughOnCaretMove && !d.disableAutoPassThrough)), ObjectNavigator.shared.isWithin(d.webArea), let s = d.script(named: "moveByLine_back") { s.handler(g); return }
+            if let d = API.focusTreeInterceptor, (!d.passThrough || (config.virtualBuffers.autoPassThroughOnCaretMove && !d.disableAutoPassThrough)), ObjectNavigator.shared.isWithin(d.webArea), let s = d.script(named: "moveByItem_back") { s.handler(g); return }
             if Self.inTextArea(), let f = API.focusObject, let s = f.script(named: "caret_moveByCharacter") {
                 if let i = try? f.makeTextInfo(.caret), i.start <= 0 { Log.io("VO-Left at the start of the text: the previous item") }
                 else { s.handler(KeyboardGesture(identifier: "kb:leftArrow")!); return }
