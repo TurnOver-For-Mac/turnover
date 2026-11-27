@@ -259,6 +259,9 @@ extension AXHandler {
         case kAXAnnouncementRequestedNotification:
             // Safari announces "Page Menu, Reader Available" as each page loads, sometimes twice: the same news once.
             if let text = info?["AXAnnouncementKey"] as? String, !text.isEmpty {
+                // Every announcement, with its app and priority, before any skip (review of #396, 27 Nov 2026): an app
+                // that posts at high priority cuts off reading anywhere, and this line shows which apps do.
+                Log.io("announcement from \(NSRunningApplication(processIdentifier: pid)?.bundleIdentifier ?? "pid \(pid)"), priority \(Self.announcementPriorityName(info))")
                 if text == lastAnnouncement.0, Date().timeIntervalSince(lastAnnouncement.1) < 30 { Log.io("announcement repeated; skipped"); break }
                 // Not into the middle of a page being read ("Page Menu, Reader Available" between its lines).
                 if SayAll.isRunning { Log.io("announcement during say all; skipped: \(Log.words(text))"); break }
@@ -270,11 +273,28 @@ extension AXHandler {
                     Log.io("app module suppressed a native announcement: \(Log.words(text))"); break
                 }
                 lastAnnouncement = (text, Date())
+                if Self.announcementInterrupts(info) { Log.io("announcement at high priority; speech interrupted"); Speech.cancel() }
                 Speech.speakMessage(text)
             }
         default:
             break
         }
+    }
+
+    /// Whether an app's announcement cuts off what is being said: only one posted at high priority
+    /// (NSAccessibilityPriorityHigh, 90, under "AXPriorityKey"), as VoiceOver does. Medium and low, and an
+    /// announcement with no priority, wait their turn as before. DAW tools such as OSARA in REAPER post their
+    /// feedback at high priority so it is heard at once, not after the last thing finishes (25 Nov 2026).
+    /// The priority an announcement was posted at, for the log: "high (90)", "medium (50)", "low (10)", or "none".
+    public nonisolated static func announcementPriorityName(_ info: [String: Any]?) -> String {
+        guard let level = (info?[NSAccessibility.NotificationUserInfoKey.priority.rawValue] as? NSNumber)?.intValue else { return "none" }
+        let word = level >= NSAccessibilityPriorityLevel.high.rawValue ? "high" : level >= NSAccessibilityPriorityLevel.medium.rawValue ? "medium" : "low"
+        return "\(word) (\(level))"
+    }
+
+    public nonisolated static func announcementInterrupts(_ info: [String: Any]?) -> Bool {
+        guard let level = (info?[NSAccessibility.NotificationUserInfoKey.priority.rawValue] as? NSNumber)?.intValue else { return false }
+        return level >= NSAccessibilityPriorityLevel.high.rawValue
     }
 
     /// The object for a notification: the live focus object when it is the same element, so its state carries.
