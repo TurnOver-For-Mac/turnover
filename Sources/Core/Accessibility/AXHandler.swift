@@ -233,13 +233,22 @@ extension AXHandler {
         return nil
     }
 
+    /// The menu that opened, for the log: roles, counts and states only (27 Nov 2026). Its items' titles went into the
+    /// log until then, and a web page's menu holds what the page shows: a search field's suggestions on one site, from
+    /// what had been typed. Whether an item has a name is kept, as that is what a silent menu turns on.
     func logMenu(_ menu: AXUIElement) {
         let kids = menu.elements(kAXChildrenAttribute)
-        Log.io("menu opened: \(menu.role) \"\(Log.words(menu.string(kAXTitleAttribute) ?? ""))\" subrole \(menu.string(kAXSubroleAttribute) ?? "-") \(kids.count) children; attributes \((menu.attr(kAXSelectedChildrenAttribute) as? [AXUIElement])?.count ?? -1) selected")
+        let named = !(menu.string(kAXTitleAttribute) ?? "").isEmpty
+        let selected = (menu.attr(kAXSelectedChildrenAttribute) as? [AXUIElement])?.count ?? -1
+        Log.io("menu opened: \(menu.role) \(Self.namedWord(named)) subrole \(menu.string(kAXSubroleAttribute) ?? "-") \(kids.count) children; attributes \(selected) selected")
         for k in kids.prefix(12) {
-            Log.io("  \(k.role) \"\(Log.words(k.string(kAXTitleAttribute) ?? k.string(kAXDescriptionAttribute) ?? ""))\" selected=\(k.attr(kAXSelectedAttribute) as? Bool ?? false) focused=\(k.attr(kAXFocusedAttribute) as? Bool ?? false) enabled=\(k.attr(kAXEnabledAttribute) as? Bool ?? true)")
+            let kidNamed = !(k.string(kAXTitleAttribute) ?? k.string(kAXDescriptionAttribute) ?? "").isEmpty
+            Log.io("  \(k.role) \(Self.namedWord(kidNamed)) selected=\(k.attr(kAXSelectedAttribute) as? Bool ?? false) focused=\(k.attr(kAXFocusedAttribute) as? Bool ?? false) enabled=\(k.attr(kAXEnabledAttribute) as? Bool ?? true)")
         }
     }
+
+    /// "named" or "nameless", never the name itself (logMenu).
+    package nonisolated static func namedWord(_ named: Bool) -> String { named ? "named" : "nameless" }
 }
 
 nonisolated public extension AXUIElement {

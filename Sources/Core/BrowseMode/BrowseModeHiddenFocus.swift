@@ -260,6 +260,9 @@ extension BrowseModeDocument {
     /// there, so the next hidden stop would be silent again. Called from the key's pass-through, after it was not taken
     /// by Input Help or a menu.
     static func keyPassedToPage(_ gesture: KeyboardGesture) {
+        // Every plain Tab that reaches a page gets the no-news check, whichever way it went (27 Nov 2026: see
+        // BrowseModePassedTab.swift). Asked after what follows, so a hidden control's own check is not doubled.
+        defer { checkPassedTab(gesture) }
         guard gesture.keyName == "tab", gesture.modifiers.subtracting([.shift]).isEmpty, let d = API.focusTreeInterceptor as? BrowseModeDocument else { return }
         // Any Tab that reaches the page, pass-next-key included, may move the keyboard off the recorded control.
         d.hiddenFocus?.verified = false

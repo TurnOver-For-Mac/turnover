@@ -448,12 +448,23 @@ public final class ObjectNavigator {
             return .landed
         }
         if let w = liveWindow, let first = Self.groupItems(w).first {
-            Log.io("review: the cursor's \(m?.facts.role ?? lost.role) went; to the window's first item")
+            Log.io("review: the cursor's \(m?.facts.role ?? lost.role) went; to the window's first item (the app's focus: \(Self.whyFocusUnusable(app.element(kAXFocusedUIElementAttribute), lost: lost, window: { self.window(of: $0) })))")
             land(on: first, followFocus: false)
             return .landed
         }
         Log.io("review: the cursor's \(m?.facts.role ?? lost.role) went, and nothing was found in its place")
         return .nothing
+    }
+
+    /// Why the app's focus could not take the lost cursor, in words for the log (27 Nov 2026: after a silent Tab in a
+    /// page the cursor went to the window's close button, and the log did not say which of these it was). Asked again
+    /// for the log only; the recovery itself is unchanged.
+    private static func whyFocusUnusable(_ x: AXUIElement?, lost: AXUIElement, window: (AXUIElement) -> AXUIElement?) -> String {
+        guard let x else { return "the app reported none" }
+        if x.isSame(lost) { return "the lost item itself" }
+        if isCutLoose(x) { return "\(x.role), cut loose from its parent" }
+        if window(x) == nil { return "\(x.role), in no window" }
+        return "\(x.role), usable when asked again"
     }
 
     /// The element under `root` that `mark` describes, by `ReviewRecovery.match`. Bounded by count and time: it runs on

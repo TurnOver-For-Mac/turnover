@@ -65,8 +65,17 @@ extension AXHandler {
         for (name, rule) in focusRules {
             if verifiedHidden, Self.hiddenSkippedRules.contains(name) { continue }
             switch rule(target, pid, element) {
-            case .ignore: Log.debug("focus rule \(name): ignored"); return
-            case .done: Log.debug("focus rule \(name): handled"); return
+            // SHORTCOMINGS rule 3 (27 Nov 2026): in a process that holds a web page, a focus a rule set aside is said in the
+            // log, by rule and role, as many rules do not say it themselves. Seven silent Tabs on a page left nothing to
+            // tell a focus never posted from one dropped here. Elsewhere it stays a debug line, as before.
+            case .ignore:
+                if BrowseModeHandler.shared.hasDocument(inProcess: pid) { Log.io("focus rule \(name): set aside the \(target.role)") }
+                else { Log.debug("focus rule \(name): ignored") }
+                return
+            case .done:
+                if BrowseModeHandler.shared.hasDocument(inProcess: pid) { Log.io("focus rule \(name): handled the \(target.role) itself") }
+                else { Log.debug("focus rule \(name): handled") }
+                return
             case .follow(let other): Log.debug("focus rule \(name): following"); focusChanged(other, pid: pid); return
             case .go(let t): target = t
             }
@@ -746,6 +755,11 @@ extension AXHandler {
             beforeNamelessStop = nil
         }
         let interceptor = BrowseModeHandler.shared.document(for: obj, ancestors: ancestors)
+        // SHORTCOMINGS rule 3 (27 Nov 2026): a focus in a process that holds a page, with no page document, says why. With
+        // no document the next Tab is a plain key and browse mode's keys are gone, and the log said nothing of it.
+        if interceptor == nil, BrowseModeHandler.shared.hasDocument(inProcess: pid) {
+            Log.io("focus on \(obj.axRole) with no page document, in a process that has a page: \(BrowseModeHandler.shared.whyNoDocument(for: obj, ancestors: ancestors))")
+        }
         interceptor?.noteFocusArrived(at: target)
         let fromOutside = interceptor !== API.focusTreeInterceptor
         // Automatic focus mode moving the keyboard to the field it has just named (17 Nov 2026: VO Right and F onto a
