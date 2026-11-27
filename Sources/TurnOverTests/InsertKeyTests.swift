@@ -67,7 +67,7 @@ func insertKeyTests() {
         }
         check(alreadyLive.isAvailable(keypadCommands: false), "revocation preserves a real press observed before the collision")
         check(!available.isAvailable(keypadCommands: true), "duplicate identity cannot disable Caps recovery")
-        check(!proof.observe(82, connection: 3), "ambiguous identities cannot be learned again")
+        check(!proof.observe(82, connection: 3), "two overlapping services cannot reestablish remembered proof")
         available.observePress(connection: 3, code: 82)
         available.revokeRemembered(3)
         check(available.isAvailable(keypadCommands: true), "physical press continues to work on its own connection")
@@ -76,7 +76,28 @@ func insertKeyTests() {
         check(!available.isAvailable(keypadCommands: true), "disconnect removes live proof")
         var restarted = InsertDeviceProof(data: proof.data)
         _ = restarted.connect(4, identity: id)
-        check(restarted.keys(for: 4).isEmpty && !restarted.observe(114, connection: 4), "collision stays blocked after relaunch")
+        check(restarted.keys(for: 4).isEmpty, "relaunch alone does not clear a collision")
+    }
+
+    test("Insert proof: a keyboard with two services can be remembered after a fresh press") {
+        let id = InsertDeviceProof.identity(physicalID: "composite", vendor: 1, product: 2, transport: "USB")
+        var proof = InsertDeviceProof()
+        _ = proof.connect(1, identity: id)
+        check(proof.observe(114, connection: 1), "first service remembers a physical Insert press")
+        check(Set(proof.connect(2, identity: id)) == [1, 2], "overlapping services revoke remembered proof")
+        check(!proof.observe(82, connection: 2), "presses during overlap do not clear the block")
+
+        proof.disconnect(1)
+        check(proof.keys(for: 2).isEmpty, "removal alone cannot restore capability to the remaining service")
+        check(!proof.observe(57, connection: 2), "an unrelated key cannot clear the block")
+        check(proof.observe(82, connection: 2), "a fresh keypad zero press on the sole remaining service clears the block")
+        check(proof.keys(for: 2) == [82], "relearning does not revive the old service's Insert proof")
+
+        var restarted = InsertDeviceProof(data: proof.data)
+        _ = restarted.connect(3, identity: id)
+        check(restarted.keys(for: 3) == [82], "new single-service proof survives relaunch")
+        check(Set(restarted.connect(4, identity: id)) == [3, 4], "another overlap can revoke relearned proof")
+        check(restarted.keys(for: 3).isEmpty && restarted.keys(for: 4).isEmpty, "neither service inherits proof in another overlap")
     }
 
     test("Insert fallback: startup without known Insert hardware keeps Caps Lock available") {

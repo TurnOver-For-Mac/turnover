@@ -140,3 +140,19 @@ for useTicks in [false,true] {
  _ = w.handle(.keyDown,chord)
  check(Audit.posts.value == [37], "F8 held Insert survives handover for either Quartz timestamp domain")
 }
+
+// Observe real handler output against the host Mach clock for both event stamp representations.
+for useTicks in [false, true] {
+ settings()
+ let h = KeyboardHandler(); h.auditPrepare()
+ let key = event(.keyDown, 0)
+ let before = mach_absolute_time()
+ let stamp = mach_absolute_time()
+ key.timestamp = useTicks ? stamp : KeyboardEventTime.nanoseconds(stamp)
+ Audit.eventUptime.value = DispatchTime.now().uptimeNanoseconds
+ _ = h.tapEvent(.keyDown, key)
+ let after = mach_absolute_time()
+ let times = Audit.gestureTimes.value
+ check(times.count == 1, "F9 the real keyboard callback dispatches one gesture")
+ check(times.allSatisfy { $0 >= before - 1 && $0 <= after }, "F9 its timestamp is on the host Mach clock")
+}

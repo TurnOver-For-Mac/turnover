@@ -45,7 +45,14 @@ nonisolated public struct InsertDeviceProof: Sendable {
     }
 
     public mutating func observe(_ code: Int64, connection: UInt64) -> Bool {
-        guard let id = connected[connection], !cache.ambiguous.contains(id), code == 82 || code == 114 else { return false }
+        guard let id = connected[connection], code == 82 || code == 114 else { return false }
+        if cache.ambiguous.contains(id) {
+            // Disconnect alone proves nothing. Relearn only from the sole remaining service's press.
+            guard !connected.contains(where: { $0.key != connection && $0.value == id }) else { return false }
+            cache.ambiguous.remove(id)
+            cache.keys[id] = [code]
+            return true
+        }
         return cache.keys[id, default: []].insert(code).inserted
     }
 }

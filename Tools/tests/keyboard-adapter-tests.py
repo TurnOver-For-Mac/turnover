@@ -136,6 +136,7 @@ nonisolated enum Audit {
  static let orderedAcknowledgements = Locked(0)
  static let orderedTrace = Locked<[String]>([])
  static let findTimes = Locked<[UInt64]>([])
+ static let gestureTimes = Locked<[UInt64]>([])
  static func record(_ e: CGEvent, _ pid: Int32) {
   deliveries.lock.lock()
   defer { deliveries.lock.unlock() }
@@ -205,6 +206,7 @@ nonisolated enum ScriptHandler {
  static func askMain(_ g: KeyboardGesture, prepareAfterSwitcher: (@MainActor @Sendable (KeyboardGesture) -> KeyboardGesture)? = nil) -> KeyDecision {
   if prepareAfterSwitcher != nil { Audit.callbacks.value.append("switcher preparation supplied") }
   Audit.calls.value += 1
+  Audit.gestureTimes.value.append(g.timestamp)
   if g.keyCode == 6 && g.modifiers == [.turnover,.shift] { Audit.asleep.value = false; return .taken }
   if InputManager.passNextKey { InputManager.passNextKey = false; return .passed }
   return Audit.help.value || g.modifiers.contains(.turnover) ? .taken : .passed
@@ -252,7 +254,7 @@ nonisolated func event(_ type: CGEventType, _ code: Int64, repeatKey: Bool = fal
 @MainActor func settings(numbers: Bool = false) {
  SwitcherCloseWatcher.isWatching.value=false; ScriptHandler.hasDeferredInput.value=false
  Audit.orderedTrace.value=[]
- Audit.callbacks.value=[]; Audit.orderedAcknowledgements.value=0; Audit.findTimes.value=[]; ArrowQuickNav.applies.value=false
+ Audit.callbacks.value=[]; Audit.orderedAcknowledgements.value=0; Audit.findTimes.value=[]; Audit.gestureTimes.value=[]; ArrowQuickNav.applies.value=false
  Audit.eventUptime.value = nil; CapsLockRecovery.current.value = nil; InsertAvailability.current.value = InsertAvailability(); Audit.lockStates.value = []; Audit.keyTime.value = nil
  InsertModifier.auditReset(); Audit.hardwareDown.value = [82,114]; Audit.physicalHistory.value = InsertHardwareHistory(); Audit.retireDuringBatch.value = nil; Audit.gateDuringBatch.value = false
  KeypadApplicationDelivery.state.value = KeypadApplicationDelivery.State()
