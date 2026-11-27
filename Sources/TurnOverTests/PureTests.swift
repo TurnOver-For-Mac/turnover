@@ -951,6 +951,39 @@ func pureTests() {
         check(ms.isConversation(AXReplay.element(3)) && !ms.isConversation(AXReplay.element(0)), "Messages conversations are static texts")
         check(ms.isMessage(AXReplay.element(5)), "Messages: anything in the transcript is a message")
     }
+    test("chat: a group conversation's repeated sender rows keep their place") {
+        // Messages in a group (25 Nov 2026): a row with only the sender's name above each run of their messages.
+        let rows = ["", "Sam", "Sam, hello, 5:17 PM", "Alex", "Alex, hi, 5:18 PM", "Sam", "Sam, later, 5:19 PM", "", "Your iMessage, ok, 5:20 PM"]
+        expect(ChatView.nearest("Sam", in: rows, near: 5), 5, "the later Sam row stays where it is, not back at the first")
+        expect(ChatView.nearest("Sam", in: rows, near: 1), 1)
+        expect(ChatView.nearest("Sam", in: rows, near: 6), 5, "a message arrived below: still the nearer one")
+        expect(ChatView.nearest("", in: rows, near: 8), 7)
+        expect(ChatView.nearest("Alex", in: rows, near: 0), 3, "words said once: wherever they are")
+        expect(ChatView.nearest("gone", in: rows, near: 2), nil)
+    }
+    test("chat: a group conversation's row is found by its element first, and by its words near its place when the app made new ones") {
+        // The same rows twice: ids 10-15 as first read, 20-25 as the app made them again (Messages makes new
+        // elements when the list changes). Sender rows "Sam" at 0 and 3.
+        let words = ["Sam", "Sam, hello, 5:17 PM", "Alex", "Sam", "Sam, later, 5:19 PM", "Your iMessage, ok, 5:20 PM"]
+        var f = AXFixture(app: "Messages", bundle: "com.apple.MobileSMS", recorded: "", root: 0, application: nil, focus: nil, nodes: [])
+        for (i, w) in words.enumerated() {
+            f.nodes.append(.init(id: 10 + i, attrs: ["AXRole": .string("AXStaticText"), "AXDescription": .string(w)]))
+            f.nodes.append(.init(id: 20 + i, attrs: ["AXRole": .string("AXStaticText"), "AXDescription": .string(w)]))
+        }
+        AXReplay.load(f); defer { AXReplay.unload() }
+        let first = (10..<16).map { AXReplay.element($0) }, remade = (20..<26).map { AXReplay.element($0) }
+        expect(ChatView.words(first[3]), "Sam", "the fixture's words are read")
+        // The app kept its elements: the same element wins, wherever the index says it was.
+        expect(ChatView.place(of: first[3], words: "Sam", in: first, near: 0), 3, "the second Sam row by its element, not the first Sam")
+        // The app made new ones: no element compares equal, so the Sam nearest the old place.
+        check(!remade.contains { CFEqual($0, first[3]) }, "the new elements are not the old ones")
+        expect(ChatView.place(of: first[3], words: "Sam", in: remade, near: 3), 3, "the later Sam row stays put")
+        expect(ChatView.place(of: first[0], words: "Sam", in: remade, near: 0), 0, "and the first one too")
+        // A message arrived above while on the later Sam (older rows loaded): the nearest Sam to where the row moved.
+        let loaded = [AXReplay.element(21), AXReplay.element(22)] + remade
+        expect(ChatView.place(of: first[3], words: "Sam", in: loaded, near: 5), 5, "two rows came in above: the Sam two further down")
+        expect(ChatView.place(of: nil, words: "gone", in: remade, near: 2), nil, "words that are not there")
+    }
     test("recipes: a broken built-in file is reported by name, the rest load") {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("turnover-recipe-test-\(getpid())")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
