@@ -185,3 +185,122 @@ extension BrowseModeHandler {
         return "its web area is not a known page (\(samePid) known in the process)"
     }
 }
+
+// Focus news Safari posts for an element that is not there (27 Nov 2026, the 06:37 log, 142 to 193 s): four times after
+// a Tab or Shift Tab the reported focus answered no role and had no parent, and nothing was said; the keyboard had gone
+// on to the next control in the page. And about seventeen focuses whose parents gave out after none, one or two steps,
+// before any web area, window or application, lost their page document, so browse mode's Tab and keys went with it.
+extension BrowseModeDocument {
+    /// Which way a dead focus report is looked past: forward after Tab, backward after Shift Tab, nil after anything else
+    /// or after more than a second and a half (then it is not the Tab's news, and nothing is looked for).
+    package nonisolated static func deadFocusDirection(lastKey: String, secondsSinceKey: TimeInterval) -> Bool? {
+        guard secondsSinceKey < 1.5 else { return nil }
+        if lastKey == "kb:tab" { return true }
+        if lastKey == "kb:shift+tab" { return false }
+        return nil
+    }
+
+    /// How many Tab stops past the last presented focus are looked at, and for how long at most.
+    static let deadFocusStops = 8
+    static let deadFocusTimeLimit = 0.15
+    /// The key count the last search ran for: one search a key, however many dead reports it brings.
+    private static var deadFocusSearchKeys = -1
+
+    /// After focus news for an element that answers no role. Bounded, on the main thread, a moment later so the page
+    /// can post the real news first; nothing is said unless a control that has the keyboard is found.
+    static func recoverFromDeadFocus(pid: pid_t) {
+        let since = Date().timeIntervalSince(InputManager.lastKeyDownAt)
+        guard let forward = deadFocusDirection(lastKey: InputManager.lastKeyIdentifier, secondsSinceKey: since) else {
+            Log.io("browse mode: the dead focus report did not follow a Tab; nothing looked for")
+            return
+        }
+        let keys = ScriptHandler.keysArrivedCount
+        guard deadFocusSearchKeys != keys else { return }
+        deadFocusSearchKeys = keys
+        let d: BrowseModeDocument?
+        if let current = API.focusTreeInterceptor, current.webArea.pid == pid { d = current }
+        else { d = BrowseModeHandler.shared.keptDocument(inProcess: pid) }
+        guard let d, !d.pageSilent else {
+            Log.io("browse mode: no page answering in the process of the dead focus report; nothing looked for")
+            return
+        }
+        let reportedAt = Date()
+        DispatchQueue.main.asyncAfter(deadline: .now() + focusPollInterval) { [weak d] in
+            d?.findLiveFocus(forward: forward, keys: keys, reportedAt: reportedAt)
+        }
+    }
+
+    private func findLiveFocus(forward: Bool, keys: Int, reportedAt: Date) {
+        guard ScriptHandler.keysArrivedCount == keys else { return }   // a newer key has its own focus
+        if AXHandler.shared.lastBrowserFocusNewsAt >= reportedAt {
+            Log.io("browse mode: after the dead focus report the page posted news of its own; nothing more looked for")
+            return
+        }
+        let pid = webArea.pid
+        let started = Date()
+        // First the app, asked again: the report may have been for an element on its way out.
+        let app = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(app, 0.25)
+        let answer = app.attributeResult(kAXFocusedUIElementAttribute)
+        let again = axElement(answer.value)
+        let againRole = again?.role ?? "none"
+        if let again, againRole != "?", !(API.focusObject.map { $0.element.isSame(again) } ?? false) {
+            Log.io("browse mode: after the dead focus report the app, asked again, has its focus on \(againRole); read from there")
+            AXHandler.shared.focusChanged(again, pid: again.pid)
+            return
+        }
+        // Then the Tab stops after (or before) the last presented focus, in the copy: the first that says it is focused.
+        let from = API.focusObject.flatMap { f in f.pid == pid ? buffer.offset(of: focusPlace(of: f.element)) : nil } ?? position
+        var at = from
+        var looked = 0
+        while looked < Self.deadFocusStops, Date().timeIntervalSince(started) < Self.deadFocusTimeLimit {
+            guard let (next, el) = buffer.find(from: at, forward: forward, roles: Self.tabRoles) else { break }
+            looked += 1
+            at = next
+            if (el.attr(kAXFocusedAttribute) as? Bool) == true, el.role != "?" {
+                Log.io("browse mode: after the dead focus report the \(el.role) \(looked) stop(s) \(forward ? "on" : "back") says it has the keyboard; read from there")
+                AXHandler.shared.lastNewsAt[pid] = Date()
+                AXHandler.shared.focusChanged(el, pid: el.pid)
+                return
+            }
+        }
+        let ms = Int(Date().timeIntervalSince(started) * 1000)
+        Log.io("browse mode: after the dead focus report nothing was found with the keyboard: the app asked again (\(answer.status), \(againRole)), \(looked) Tab stop(s) \(forward ? "on" : "back") from \(from == position ? "the reading position" : "the last focus") in the copy, \(ms) ms")
+    }
+
+    /// Whether a focus whose parents give out keeps the page document that had the focus (27 Nov 2026). Only when its
+    /// chain holds no web area and reaches neither a window nor the application (so it is cut loose, not outside the
+    /// page, as the address bar is with its 4 ancestors up to the application), a page in the same process had the focus,
+    /// and that page's window is still the app's focused window.
+    package nonisolated static func keepsPageForCutLoose(webAreaInChain: Bool,
+                                                         chainReachesWindowOrApp: Bool,
+                                                         pageHadFocusInProcess: Bool,
+                                                         pageWindowIsFocused: Bool) -> Bool {
+        guard !webAreaInChain else { return false }   // a web area in the chain: document(for:) has decided
+        guard !chainReachesWindowOrApp else { return false }   // a whole chain without a page: really outside it
+        guard pageHadFocusInProcess else { return false }
+        guard pageWindowIsFocused else { return false }   // another window (a sheet, a new tab's window) is in front
+        return true
+    }
+
+    /// The page document a cut-loose focus keeps, or nil (see keepsPageForCutLoose); logged when it is used.
+    static func pageForCutLooseFocus(_ obj: TurnOverObject, ancestors: [TurnOverObject], pid: pid_t) -> BrowseModeDocument? {
+        guard let page = API.focusTreeInterceptor, page.webArea.pid == pid else { return nil }
+        let chain = [obj] + ancestors
+        let webAreaInChain = chain.contains { $0.axRole == "AXWebArea" }
+        let reachesTop = chain.contains { ["AXWindow", "AXApplication"].contains($0.axRole) }
+        // Asked only when the chain is cut loose: nothing more is asked of an ordinary focus.
+        guard !webAreaInChain, !reachesTop else { return nil }
+        guard page.isKept else { return nil }
+        let focusedWindow = AXUIElementCreateApplication(pid).element(kAXFocusedWindowAttribute)
+        let pageWindow = page.webArea.element(kAXWindowAttribute)
+        let sameWindow = focusedWindow.flatMap { w in pageWindow.map { $0.isSame(w) } } ?? false
+        guard keepsPageForCutLoose(webAreaInChain: webAreaInChain, chainReachesWindowOrApp: reachesTop,
+                                   pageHadFocusInProcess: true, pageWindowIsFocused: sameWindow) else {
+            Log.io("focus on \(obj.axRole) cut loose (\(ancestors.count) ancestors); the page's window is not the focused one, so it is not kept in the page")
+            return nil
+        }
+        Log.io("focus on \(obj.axRole) cut loose (\(ancestors.count) ancestors, the last one \(ancestors.last?.axRole ?? "none")); kept in the page that had the focus")
+        return page
+    }
+}

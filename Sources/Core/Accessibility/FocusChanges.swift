@@ -59,6 +59,7 @@ extension AXHandler {
     static let hiddenSkippedRules: Set<String> = ["stand-in for a text field", "reported twice", "nameless container"]
 
     public func focusChanged(_ element: AXUIElement, pid: pid_t, verifiedHidden: Bool = false) {
+        let newsBefore = lastBrowserFocusNewsAt
         if !verifiedHidden { lastBrowserFocusNewsAt = Date() }
         let module = AppModuleHandler.shared.appModule(for: pid)
         var target = module.redirectFocus(element) ?? element
@@ -69,6 +70,9 @@ extension AXHandler {
             // log, by rule and role, as many rules do not say it themselves. Seven silent Tabs on a page left nothing to
             // tell a focus never posted from one dropped here. Elsewhere it stays a debug line, as before.
             case .ignore:
+                // A report for an element that answers no role is not news of the focus (27 Nov 2026): it stopped the
+                // no-news polls, and the Tab was silent.
+                if name == "no role" { lastBrowserFocusNewsAt = newsBefore }
                 if BrowseModeHandler.shared.hasDocument(inProcess: pid) { Log.io("focus rule \(name): set aside the \(target.role)") }
                 else { Log.debug("focus rule \(name): ignored") }
                 return
@@ -357,8 +361,17 @@ extension AXHandler {
 
     /// An element that answers no role is nothing to present.
     func ruleNoRole(_ target: AXUIElement, _ pid: pid_t, _ element: AXUIElement) -> FocusVerdict {
-        if target.role == "?" { Log.debug("focus on an element with no role; ignored"); return .ignore }
-        return .go(target)
+        // The role asked once, with its error kept (27 Nov 2026): Safari posted focus news four times in one walk for an
+        // element that answers no role and has no parent, each after a Tab, each followed by silence. The error is
+        // logged, and the control that has the keyboard is looked for (BrowseModeDocument.recoverFromDeadFocus).
+        let answer = target.attributeResult(kAXRoleAttribute)
+        if let role = answer.value as? String, !role.isEmpty { return .go(target) }
+        Log.debug("focus on an element with no role; ignored")
+        if BrowseModeHandler.shared.hasDocument(inProcess: pid) {
+            Log.io("focus news for an element that answers no role (\(answer.status)); the control with the keyboard is looked for")
+            BrowseModeDocument.recoverFromDeadFocus(pid: pid)
+        }
+        return .ignore
     }
 
     /// Mail hands focus to an unnamed AXUnknown (its message view host). In the list's own window the list keeps
@@ -754,7 +767,10 @@ extension AXHandler {
         } else {
             beforeNamelessStop = nil
         }
-        let interceptor = BrowseModeHandler.shared.document(for: obj, ancestors: ancestors)
+        var interceptor = BrowseModeHandler.shared.document(for: obj, ancestors: ancestors)
+        // A focus whose parents give out before any web area, window or application keeps the page that had the focus,
+        // when that page's window is still the app's focused one (27 Nov 2026; BrowseModeDocument.keepsPageForCutLoose).
+        if interceptor == nil { interceptor = BrowseModeDocument.pageForCutLooseFocus(obj, ancestors: ancestors, pid: pid) }
         // SHORTCOMINGS rule 3 (27 Nov 2026): a focus in a process that holds a page, with no page document, says why. With
         // no document the next Tab is a plain key and browse mode's keys are gone, and the log said nothing of it.
         if interceptor == nil, BrowseModeHandler.shared.hasDocument(inProcess: pid) {

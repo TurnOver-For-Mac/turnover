@@ -33,6 +33,23 @@ func passedTabTests() {
         expect(step(elapsed: 0.33), .reportSame, "where it was at the ceiling: logged only")
         expect(step(news: true, answered: false), .stop, "news comes first, whatever the answer")
     }
+    test("dead focus: looked past forward after Tab, back after Shift Tab, not at all otherwise (27 Nov 2026)") {
+        expect(D.deadFocusDirection(lastKey: "kb:tab", secondsSinceKey: 0.1), true, "Tab")
+        expect(D.deadFocusDirection(lastKey: "kb:shift+tab", secondsSinceKey: 0.1), false, "Shift Tab")
+        expect(D.deadFocusDirection(lastKey: "kb:downArrow", secondsSinceKey: 0.1), nil, "another key")
+        expect(D.deadFocusDirection(lastKey: "kb:tab", secondsSinceKey: 2), nil, "a Tab too long ago")
+        expect(D.deadFocusDirection(lastKey: "kb:control+tab", secondsSinceKey: 0.1), nil, "Control Tab changes tabs")
+    }
+    test("cut-loose focus: keeps the page that had the focus only when cut loose and in the page's window (27 Nov 2026)") {
+        func keeps(web: Bool = false, top: Bool = false, had: Bool = true, window: Bool = true) -> Bool {
+            D.keepsPageForCutLoose(webAreaInChain: web, chainReachesWindowOrApp: top, pageHadFocusInProcess: had, pageWindowIsFocused: window)
+        }
+        check(keeps(), "no parents, the page had the focus, its window in front: kept")
+        check(!keeps(web: true), "a web area in the chain: document(for:) decides")
+        check(!keeps(top: true), "a whole chain up to the application (the address bar): outside the page")
+        check(!keeps(had: false), "no page had the focus in the process")
+        check(!keeps(window: false), "another window is the focused one")
+    }
     test("menu log: whether an item is named, never its name (27 Nov 2026)") {
         expect(AXHandler.namedWord(true), "named", "a titled item")
         expect(AXHandler.namedWord(false), "nameless", "an untitled item")
