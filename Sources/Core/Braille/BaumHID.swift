@@ -235,6 +235,13 @@ final class BaumHIDDriver: BrailleDisplayDriver {
         outputSize = prop(kIOHIDMaxOutputReportSizeKey) as? Int ?? 0
         inputSize = max(prop(kIOHIDMaxInputReportSizeKey) as? Int ?? 64, 2)
         inputBuffer = .allocate(capacity: inputSize)
+        let size = outputSize
+        let box = BaumDeviceBox(device)   // IOHIDDevice calls are safe from any thread
+        writer = BaumHIDWriter(transmit: { report in
+            var report = report
+            if size > report.count { report += Array(repeating: 0, count: size - report.count) }
+            return report.withUnsafeBufferPointer { IOHIDDeviceSetReport(box.device, kIOHIDReportTypeOutput, 0, $0.baseAddress!, $0.count) }
+        }, close: { IOHIDDeviceClose(box.device, IOOptionBits(kIOHIDOptionsTypeNone)) })
         let r = IOHIDDeviceOpen(device, IOOptionBits(kIOHIDOptionsTypeNone))
         guard r == kIOReturnSuccess else {
             Log.info("braille: \(name) would not open (\(String(format: "0x%x", r))): VoiceOver may still have it")
@@ -266,16 +273,23 @@ final class BaumHIDDriver: BrailleDisplayDriver {
         closed = true
         IOHIDDeviceRegisterInputReportCallback(device, inputBuffer, inputSize, nil, nil)
         IOHIDDeviceUnscheduleFromRunLoop(device, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
-        IOHIDDeviceClose(device, IOOptionBits(kIOHIDOptionsTypeNone))
+        writer.closeDevice()   // after any report still waiting, and off the main thread
     }
 
     isolated deinit { disconnect(); inputBuffer.deallocate() }
 
+    /// Every report to the display goes through its own queue, never the main thread: IOHIDDeviceSetReport waits for
+    /// the display to take the report, and over Bluetooth a display that has only just connected can take 1 to 2 s,
+    /// which held every typed key up while the braille line was first written (26 Nov 2026).
+    private let writer: BaumHIDWriter
+
     private func send(_ bytes: [UInt8]) {
-        var report = bytes
-        if outputSize > report.count { report += Array(repeating: 0, count: outputSize - report.count) }
-        let r = report.withUnsafeBufferPointer { IOHIDDeviceSetReport(device, kIOHIDReportTypeOutput, 0, $0.baseAddress!, $0.count) }
-        if r != kIOReturnSuccess { Log.info("braille: \(name): report \(String(format: "0x%02x", bytes.first ?? 0)) refused (\(String(format: "0x%x", r)))") }
+        let name = name
+        writer.submit(bytes) { first, r in
+            DispatchQueue.main.async {
+                Log.info("braille: \(name): report \(String(format: "0x%02x", first)) refused (\(String(format: "0x%x", r)))")
+            }
+        }
     }
 
     // MARK: Keys. BAUM reports which keys are down; a press is acted on when every key is up again, so chords work.
@@ -365,3 +379,46 @@ final class BaumHIDDriver: BrailleDisplayDriver {
     /// The joystick's values as directions, once known from a log; until then its raw value.
     private static func friendly(_ k: String) -> String { k }
 }
+
+/// Sends reports to a BAUM display on a serial queue of its own, in order. A line written while an earlier line is
+/// still waiting replaces it (the next line shows the current text anyway); other reports are kept.
+public nonisolated final class BaumHIDWriter: @unchecked Sendable {
+    private let transmit: @Sendable ([UInt8]) -> Int32
+    private let closeIt: @Sendable () -> Void
+    private let queue = DispatchQueue(label: "TurnOver.braille.baum.write")
+    private let lock = NSLock()
+    private var pending: [[UInt8]] = []
+    private var closing = false
+
+    public init(transmit: @escaping @Sendable ([UInt8]) -> Int32, close: @escaping @Sendable () -> Void) {
+        self.transmit = transmit; closeIt = close
+    }
+
+    /// Never waits for the display. `failed` is called on the queue with the report's first byte and the result.
+    public func submit(_ bytes: [UInt8], failed: @escaping @Sendable (UInt8, Int32) -> Void) {
+        lock.lock()
+        if closing { lock.unlock(); return }
+        if bytes.first == 0x01, pending.last?.first == 0x01 { pending[pending.count - 1] = bytes } else { pending.append(bytes) }
+        lock.unlock()
+        queue.async { [self] in
+            lock.lock()
+            guard !pending.isEmpty else { lock.unlock(); return }
+            let report = pending.removeFirst()
+            lock.unlock()
+            let first = report.first ?? 0
+            let r = transmit(report)
+            if r != kIOReturnSuccess { failed(first, r) }
+        }
+    }
+
+    /// Waits until everything submitted has been handled (for tests).
+    public func drain() { queue.sync {} }
+
+    /// Closes the device once the reports already submitted have gone, and takes no more.
+    public func closeDevice() {
+        lock.lock(); closing = true; lock.unlock()
+        queue.async { [self] in closeIt() }
+    }
+}
+
+nonisolated final class BaumDeviceBox: @unchecked Sendable { let device: IOHIDDevice; init(_ d: IOHIDDevice) { device = d } }
