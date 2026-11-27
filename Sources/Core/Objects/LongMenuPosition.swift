@@ -47,18 +47,30 @@ public enum LongMenuPosition {
 
     /// The menu's children, each asked its role and title in one question; the titled menu items kept.
     private static func read(_ menu: AXUIElement, childCount: Int) -> [Entry]? {
-        guard childCount <= 5000, let kids = menu.attr(kAXChildrenAttribute) as? [AXUIElement] else { return nil }
+        // Each read is logged with its size and time (review of #388, 27 Nov 2026): a long menu that feels slow in
+        // some app shows here.
+        let started = Date()
+        guard childCount <= 5000, let kids = menu.attr(kAXChildrenAttribute) as? [AXUIElement] else {
+            Log.io("long menu: \(childCount) children, not read (\(ms(since: started)) ms)"); return nil
+        }
         var described: [(element: AXUIElement, role: String?, title: String?)] = []
         described.reserveCapacity(kids.count)
         for kid in kids {
             let d = kid.attrs([kAXRoleAttribute, kAXTitleAttribute])
-            if d.isEmpty { kept = nil; return nil }   // no answer: never a position from part of the menu
+            if d.isEmpty {   // no answer: never a position from part of the menu
+                kept = nil
+                Log.io("long menu: child \(described.count + 1) of \(kids.count) did not answer after \(ms(since: started)) ms; no position")
+                return nil
+            }
             described.append((kid, d[kAXRoleAttribute] as? String, d[kAXTitleAttribute] as? String))
         }
         let items = titledItems(described).map { Entry(element: $0.0, title: $0.1) }
         kept = (menu, childCount, Date(), items)
+        Log.io("long menu: read \(kids.count) children, \(items.count) titled items, in \(ms(since: started)) ms")
         return items
     }
+
+    private static func ms(since start: Date) -> Int { Int(Date().timeIntervalSince(start) * 1000) }
 
     // MARK: - The choices, without the app (tested with plain lists)
 
