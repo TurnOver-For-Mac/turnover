@@ -244,13 +244,16 @@ open class EditableText: TurnOverObject {
         // Each way out without reading says why in the log: this one was silent, and a selection that said nothing
         // could not be told apart from a key that changed nothing (11 Nov 2026).
         guard autoSelectDetection else {
-            Log.io("selection: not read, this field's selection is not being followed")
+            // Which object it was says where to look next time: a field that holds the keyboard follows (tookTheFocus).
+            Log.io("selection: not read, this field's selection is not being followed (\(API.focusObject === self ? "it is the focus object" : "it is not the focus object"))")
             gesture.send(); return
         }
         guard let old = try? makeTextInfo(.selection) else {
             Log.io("selection: not read, the field gave no selection")
             gesture.send(); return
         }
+        // Followed from taking the focus, with nothing yet to compare with: the selection before this key is that.
+        if lastSelection == nil { lastSelection = old.copy() }
         gesture.send()
         let began = Date()
         let patience = caretMoveTimeout * (isInWebContent ? 3 : 1)
@@ -561,6 +564,18 @@ open class EditableText: TurnOverObject {
         autoSelectDetection = true
     }
     public func terminateAutoSelectDetection() { lastSelection = nil; autoSelectDetection = false }
+
+    /// Holding the keyboard is what has a field's selection followed, not the arrival of its own gain focus event
+    /// (API.setFocusObject calls this). The event can be kept from the field: the Claude app's module takes the Prompt's
+    /// focus during a conversation switch, and then F from browse mode found the Prompt already the focus and put focus
+    /// mode on without any event, so Option Shift Left said nothing (five times on 26 and 27 Nov 2026,
+    /// turnover-2026-11-26T125802Z.log, 04:24:16). The focus following the cursor makes a field the focus with no event
+    /// at all. No accessibility call here: the first Shift key or selection notice takes the selection to compare with,
+    /// and the gain focus event, when it comes, starts afresh (initAutoSelectDetection).
+    func tookTheFocus() {
+        guard !autoSelectDetection else { return }
+        autoSelectDetection = true
+    }
 
     private var lastTypedAt = Date.distantPast
     private var completionWork: DispatchWorkItem?

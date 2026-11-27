@@ -39,6 +39,8 @@ public enum API {
         let pid = obj?.pid ?? 0
         lock.lock(); _focus = obj; _ancestors = ancestors; _interceptor = interceptor; lock.unlock()
         focusedPidValue.value = pid
+        // The field that holds the keyboard follows its selection, however it came to hold it (EditableText.tookTheFocus).
+        (obj as? EditableText)?.tookTheFocus()
         if let interceptor, interceptor.buffer.status == .cancelled { interceptor.buffer.build() }
     }
     nonisolated private static let focusedPidValue = Locked<pid_t>(0)
