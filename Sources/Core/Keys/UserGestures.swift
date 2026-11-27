@@ -14,6 +14,8 @@ public enum UserGestures {
         /// From VoiceOver's customisations (17 Oct 2026): a Shortcut by identifier, an AppleScript file, a VoiceOver
         /// command TurnOver has no answer for yet (said so when pressed).
         case shortcut(String), file(String), voiceOver(String)
+        /// An app by its path, as VoiceOver's Commander keeps it (25 Nov 2026). `app` stays a bundle identifier.
+        case appPath(String)
         init?(_ s: String) {
             if s == "none" { self = .removed }
             else if s.hasPrefix("script:") { self = .script(String(s.dropFirst(7))) }
@@ -21,12 +23,14 @@ public enum UserGestures {
             else if s.hasPrefix("shortcut:") { self = .shortcut(String(s.dropFirst(9))) }
             else if s.hasPrefix("file:") { self = .file(String(s.dropFirst(5))) }
             else if s.hasPrefix("vo:") { self = .voiceOver(String(s.dropFirst(3))) }
+            else if s.hasPrefix("apppath:") { self = .appPath(String(s.dropFirst(8))) }
             else { return nil }
         }
         var stored: String {
             switch self {
             case .script(let n): return "script:" + n; case .app(let b): return "app:" + b; case .removed: return "none"
             case .shortcut(let i): return "shortcut:" + i; case .file(let p): return "file:" + p; case .voiceOver(let c): return "vo:" + c
+            case .appPath(let p): return "apppath:" + p
             }
         }
     }
@@ -78,6 +82,10 @@ public enum UserGestures {
     public static func lookup(_ g: KeyboardGesture) -> Found? {
         if isProtected(g) { return nil }
         guard let t = target(for: g) else { return nil }
+        return found(t)
+    }
+    /// What a stored target runs.
+    static func found(_ t: Target) -> Found? {
         switch t {
         case .removed: return .removed
         case .script(let name):
@@ -87,9 +95,16 @@ public enum UserGestures {
             return .script(Script(name: "user_openApp", description: String(localized: "Opens \(appName(bundle))", comment: "Your own key: %@ is the app it opens"), category: "Your keys", owner: nil) { _ in openApp(bundle) })
         case .shortcut(let id):
             return .script(Script(name: "user_shortcut", description: String(localized: "Runs a Shortcut", comment: "Your own key: it runs a Shortcut"), category: "Your keys", owner: nil) { _ in VoiceOverCommands.runShortcut(id) })
+        case .appPath(let path):
+            return .script(Script(name: "user_openApp", description: String(localized: "Opens \(appName(atPath: path))", comment: "Your own key: %@ is the app it opens"), category: "Your keys", owner: nil) { _ in openApp(atPath: path) })
         case .file(let path):
             return .script(Script(name: "user_scriptFile", description: String(localized: "Runs \((path as NSString).lastPathComponent)", comment: "Your own key: %@ is the script it runs"), category: "Your keys", owner: nil) { _ in VoiceOverCommands.runScriptFile(path) })
         case .voiceOver(let command):
+            // Copied before TurnOver answered it: an app or a Shortcut copied as a VoiceOver command works without
+            // copying again, and Do Nothing leaves the key as if it had none (25 Nov 2026).
+            if command == VoiceOverCommands.doNothing { return nil }
+            let now = VoiceOverCommands.target(for: command)
+            if now != .voiceOver(command) { return found(now) }
             let name = VoiceOverCommands.englishName(of: command)
             return .script(Script(name: "user_voiceOverCommand", description: String(localized: "VoiceOver's \(name)", comment: "Your own key: %@ is a VoiceOver command's English name"), category: "Your keys", owner: nil) { _ in Speech.speakMessage(String(localized: "VoiceOver's \(name) isn't in TurnOver yet", comment: "A VoiceOver command TurnOver lacks: %@ is its English name")) })
         }
@@ -121,9 +136,12 @@ public enum UserGestures {
         switch t {
         case .removed: return String(localized: "does nothing in TurnOver (goes to the application)", comment: "What your own key does")
         case .app(let b): return String(localized: "opens \(appName(b))", comment: "What your own key does: %@ is the app")
+        case .appPath(let p): return String(localized: "opens \(appName(atPath: p))", comment: "What your own key does: %@ is the app")
         case .script(let n): return ScriptHandler.findScript(named: n)?.description ?? n
         case .shortcut: return String(localized: "runs a Shortcut", comment: "What your own key does")
         case .file(let p): return String(localized: "runs the script \((p as NSString).lastPathComponent)", comment: "What your own key does: %@ is the script")
+        case .voiceOver(let c) where c == VoiceOverCommands.doNothing: return describe(.removed)
+        case .voiceOver(let c) where VoiceOverCommands.target(for: c) != t: return describe(VoiceOverCommands.target(for: c))
         case .voiceOver(let c): return String(localized: "VoiceOver's \(VoiceOverCommands.englishName(of: c)), not in TurnOver yet", comment: "What your own key does: %@ is a VoiceOver command's English name")
         }
     }
@@ -135,6 +153,38 @@ public enum UserGestures {
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundle) else { Speech.speakMessage(String(localized: "\(appName(bundle)) is not installed", comment: "An app is not installed: %@ is the app")); return }
         NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration()) { _, error in
             if let error { onMain { Speech.speakMessage(String(localized: "could not open \(appName(bundle)): \(error.localizedDescription)", comment: "An app could not open: the app, then why")) } }
+        }
+    }
+
+    /// An app by its path: its name as Finder shows it, or from the path when it isn't there.
+    static func appName(atPath path: String) -> String {
+        let full = (path as NSString).expandingTildeInPath
+        if FileManager.default.fileExists(atPath: full) { return FileManager.default.displayName(atPath: full).replacingOccurrences(of: ".app", with: "") }
+        let last = (full as NSString).lastPathComponent
+        return last.hasSuffix(".app") ? String(last.dropLast(4)) : last
+    }
+    /// Whether the path is an application bundle, as Finder decides it (a .app folder, not a document or a folder).
+    public nonisolated static func isApplication(atPath path: String) -> Bool {
+        let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
+        return (try? url.resourceValues(forKeys: [.isApplicationKey]))?.isApplication == true
+    }
+    /// Opened as VoiceOver opens it, by Launch Services, so the app answers for its own permissions as when opened
+    /// from the Dock (as `openApp` does for a bundle identifier).
+    static func openApp(atPath path: String) {
+        let full = (path as NSString).expandingTildeInPath
+        guard FileManager.default.fileExists(atPath: full) else {
+            Log.info("user keys: no app at \(full)")
+            Speech.speakMessage(String(localized: "\(appName(atPath: path)) is not installed", comment: "An app is not installed: %@ is the app")); return
+        }
+        // Only an application: a key's path is the person's own settings, but whatever sits there now is opened by
+        // Launch Services, and a document or folder would open in another app instead (25 Nov 2026, review).
+        guard isApplication(atPath: full) else {
+            Log.info("user keys: \(full) is not an application; not opened")
+            Speech.speakMessage(String(localized: "\(appName(atPath: path)) is not an app", comment: "A key's path is not an application: %@ is its name")); return
+        }
+        Log.info("user keys: opening \(full)")
+        NSWorkspace.shared.openApplication(at: URL(fileURLWithPath: full), configuration: NSWorkspace.OpenConfiguration()) { _, error in
+            if let error { onMain { Speech.speakMessage(String(localized: "could not open \(appName(atPath: path)): \(error.localizedDescription)", comment: "An app could not open: the app, then why")) } }
         }
     }
 

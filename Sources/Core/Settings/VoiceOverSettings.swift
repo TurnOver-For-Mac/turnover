@@ -113,15 +113,34 @@ public enum VoiceOverSettings {
 import AppKit
 
 extension VoiceOverSettings {
+    /// The lower case key an earlier copy put an upper case Commander key on ("shift+m" was saved as "m"), when this
+    /// export doesn't have that lower case key itself. Letters only: earlier copies saved a shifted symbol under the
+    /// symbol, which no key answered.
+    public nonisolated static func earlierCopyKey(forShifted key: String, in keys: [String]) -> String? {
+        guard key.hasPrefix("shift+") else { return nil }
+        let plain = String(key.dropFirst(6))
+        guard plain.count == 1, plain.first?.isLetter == true, !keys.contains(plain) else { return nil }
+        return plain
+    }
+
+    /// What an earlier copy could have saved for a Commander command: the VoiceOver command itself (every copy before
+    /// 25 Nov 2026, for an app or Do Nothing), or what the copy saves now.
+    public static func earlierCopyStored(_ command: String) -> [String] {
+        [UserGestures.Target.voiceOver(command).stored, VoiceOverCommands.target(for: command).stored]
+    }
+
     public struct Copied {
         public var voiceId = "", rate: Float = 0.5, pitch: Float = 0.5, volume: Float = 1, verbosity = "", typingEcho = ""
         public var links = "", misspelled = "", textAttributes = "", punctuation = ""
-        /// VoiceOver's customisations: the Keyboard Commander's letters and their commands; the custom key bindings
-        /// (a VO key with modifiers → a command, or removed); the Commanders' on/off states.
-        public var commanderKeys: [(letter: String, command: String)] = []
+        /// VoiceOver's customisations: the Keyboard Commander's keys ("m", "shift+m", "-") and their commands; the
+        /// custom key bindings (a VO key with modifiers → a command, or removed); the Commanders' on/off states.
+        public var commanderKeys: [(key: String, command: String)] = []
         public var keyBindings: [(key: String, shift: Bool, command: Bool, fn: Bool, target: String, removed: Bool)] = []
         public var keyboardCommander: Bool?, numpadCommander: Bool?
         public var archiveVersion = 0
+        /// Commander keys left out because TurnOver has no name for their key (a Cyrillic letter, say): counted, so
+        /// the spoken summary can say so (review of #376, 27 Nov 2026).
+        public var uncopiedCommanderKeys = 0
     }
 
     public static let key = "the TurnOver menu, Settings, Copy VoiceOver settings, Copy"
@@ -199,7 +218,8 @@ extension VoiceOverSettings {
         for (k, v) in d {
             if k.hasPrefix("custom.keyboard-commander.SCRKeyboardCommander_"), let command = v as? String,
                let code = UInt32(k.components(separatedBy: "_").last ?? "", radix: 16), let scalar = Unicode.Scalar(code) {
-                c.commanderKeys.append((String(Character(scalar)).lowercased(), command))
+                if let key = VoiceOverCommands.commanderKey(Character(scalar)) { c.commanderKeys.append((key, command)) }
+                else { c.uncopiedCommanderKeys += 1; Log.info("VoiceOver settings: Commander key U+\(String(code, radix: 16)) has no key name here; not copied") }
             }
             if k.hasPrefix("custom.custom-keybindings."), let b = v as? [String: Any], let key = b["key"] as? [String: Any], let chars = key["characters"] as? String, !chars.isEmpty {
                 c.keyBindings.append((chars.lowercased(), key["shifted"] as? Bool ?? false, key["commanded"] as? Bool ?? false, key["fned"] as? Bool ?? false, b["command"] as? String ?? "", b["remove"] as? Bool ?? false))
@@ -290,11 +310,32 @@ extension VoiceOverSettings {
         if let on = c.keyboardCommander { config.keyboard.optionCommander = on }
         if let on = c.numpadCommander { config.keyboard.numpadCommander = on }
         var letters: [String] = []
-        for (letter, command) in c.commanderKeys {
-            config.keyboard.userGestures["kb:rightoption+" + letter] = VoiceOverCommands.target(for: command).stored
-            letters.append(Symbols.raised(letter))   // Turkish i is İ, not I (said ı)
+        for (key, command) in c.commanderKeys.sorted(by: { ($0.key.hasPrefix("shift+") ? 1 : 0, $0.key) < ($1.key.hasPrefix("shift+") ? 1 : 0, $1.key) }) {
+            let id = "kb:rightoption+" + key
+            // An upper case key ("M") was saved by an earlier copy on the lower case key, right Option M. Taken away
+            // when it is still what that copy saved and this export has no lower case key of its own (25 Nov 2026),
+            // so right Option M doesn't go on opening the Shift key's app.
+            if let plain = Self.earlierCopyKey(forShifted: key, in: c.commanderKeys.map(\.key)) {
+                let plainId = "kb:rightoption+" + plain
+                if let stored = config.keyboard.userGestures[plainId], Self.earlierCopyStored(command).contains(stored) {
+                    config.keyboard.userGestures[plainId] = nil
+                    Log.info("VoiceOver settings: \(plainId) held \(key)'s command from an earlier copy; taken away")
+                }
+            }
+            if command == VoiceOverCommands.doNothing {
+                // Not copied: the key stays as it is in TurnOver. Only a Do Nothing copied before is taken away.
+                if config.keyboard.userGestures[id] == UserGestures.Target.voiceOver(command).stored { config.keyboard.userGestures[id] = nil }
+                continue
+            }
+            config.keyboard.userGestures[id] = VoiceOverCommands.target(for: command).stored
+            let shift = key.hasPrefix("shift+")
+            let name = Symbols.raised(shift ? String(key.dropFirst(6)) : key)   // Turkish i is İ, not I (said ı)
+            letters.append(shift ? KeyNames.spokenNames["shift", default: "shift"] + " " + name : name)
         }
-        if !letters.isEmpty { said.append(String(localized: "Keyboard Commander keys \(letters.sorted().joined(separator: ", "))", comment: "Copying VoiceOver's settings: the letters given")) }
+        if !letters.isEmpty { said.append(String(localized: "Keyboard Commander keys \(letters.joined(separator: ", "))", comment: "Copying VoiceOver's settings: the letters given")) }
+        let left = c.uncopiedCommanderKeys
+        if left > 0 { said.append(left == 1 ? String(localized: "1 Keyboard Commander key not copied", comment: "Copying VoiceOver's settings: a Commander key TurnOver has no name for")
+                                             : String(localized: "\(String(left)) Keyboard Commander keys not copied", comment: "Copying VoiceOver's settings: Commander keys TurnOver has no name for; %@ is how many")) }
         var bound = 0
         for b in c.keyBindings {
             let name = KeyNames.code(for: b.key).map { KeyNames.name(for: $0) } ?? b.key

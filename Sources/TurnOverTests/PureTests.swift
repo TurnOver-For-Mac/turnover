@@ -919,6 +919,160 @@ func pureTests() {
         _ = VoiceOverSettings.apply(c, undoSnapshot: snapshot)
         expect(try Data(contentsOf: snapshot), data, "a later copy must not replace the original Undo snapshot")
     }
+    // A tester's Keyboard Commander, from VoiceOver 4's settings on macOS 26 (25 Nov 2026): the keys and the apps
+    // they open, nothing else. "M" (004d) and "m" (006d) are different keys, as are "D" and "d", "S" and "s".
+    let commanderFixture: [String: String] = [
+        "002d": "/Applications/Audio Hijack.app", "0030": "/Applications/Sibelius.app", "0031": "/Applications/Microsoft Teams.app",
+        "0033": "/Applications/ttaccessible.app", "0034": "/Applications/TeamViewer.app", "0036": "/Applications/iReal Pro.app",
+        "0037": "/Applications/Loopback.app", "0038": "/Applications/Amadeus Pro.app", "0039": "/Applications/SoundSource.app",
+        "003d": "/Applications/MuseScore 4.app", "0044": "/Applications/djay Pro.app", "004d": "/Applications/Mona.app",
+        "0052": "/Applications/Remote Incident Manager.app", "0054": "/Applications/Transmit.app", "0055": "/Applications/UlyssesMac.app",
+        "0056": "/Applications/VLC.app", "0063": "/Applications/Claude.app", "0064": "/Applications/Dropbox.app",
+        "0065": "/System/Applications/Messages.app", "0066": "/System/Applications/FaceTime.app", "006b": "/Applications/Skype.app",
+        "006c": "/Applications/Logic Pro.app", "006d": "/System/Applications/Mail.app", "006e": "/Applications/Microsoft Word.app",
+        "0070": "/Applications/Pages.app", "0071": "/System/Applications/System Settings.app", "0072": "/Applications/REAPER.app",
+        "0073": "/Applications/Google Chrome.app", "0076": "/System/Applications/Utilities/VoiceOver Utility.app",
+        "0077": "/Applications/Sessionwire Studio (beta).app", "007a": "/Applications/zoom.us.app",
+    ]
+    func commanderExport() throws -> VoiceOverSettings.Copied {
+        var d: [String: Any] = [flatSpeech + "SCRVoiceIdentifier": "test.default.voice", "SCRCKeyboardCommanderEnabled": true]
+        for (code, path) in commanderFixture { d["custom.keyboard-commander.SCRKeyboardCommander_" + code] = "SCRWorkspace.customOpenApplication:" + path }
+        d["custom.keyboard-commander.SCRKeyboardCommander_0053"] = "SCRWorkspace.muteSpeechToggle"
+        d["custom.keyboard-commander.SCRKeyboardCommander_0078"] = "SCRWorkspace.doNothing"
+        return try readVoiceOverDefault(d)
+    }
+    test("VoiceOver export: Commander keys keep upper and lower case apart, as right Option Shift and right Option") {
+        let c = try commanderExport()
+        let keys = Dictionary(c.commanderKeys.map { ($0.key, $0.command) }, uniquingKeysWith: { a, _ in a })
+        expect(c.commanderKeys.count, 33, "every Commander key read")
+        expect(keys.count, 33, "no two keys collide")
+        expect(keys["shift+m"], "SCRWorkspace.customOpenApplication:/Applications/Mona.app", "M is right Option Shift M")
+        expect(keys["m"], "SCRWorkspace.customOpenApplication:/System/Applications/Mail.app", "m is right Option M")
+        expect(keys["shift+d"], "SCRWorkspace.customOpenApplication:/Applications/djay Pro.app")
+        expect(keys["d"], "SCRWorkspace.customOpenApplication:/Applications/Dropbox.app")
+        expect(keys["shift+s"], "SCRWorkspace.muteSpeechToggle"); expect(keys["s"], "SCRWorkspace.customOpenApplication:/Applications/Google Chrome.app")
+        expect(keys["-"], "SCRWorkspace.customOpenApplication:/Applications/Audio Hijack.app", "a symbol key by TurnOver's name")
+        expect(keys["0"], "SCRWorkspace.customOpenApplication:/Applications/Sibelius.app", "a digit")
+        expect(keys["="], "SCRWorkspace.customOpenApplication:/Applications/MuseScore 4.app")
+        expect(VoiceOverCommands.commanderKey("!"), "shift+1", "a shifted symbol is Shift with its key")
+        expect(VoiceOverCommands.commanderKey("?"), "shift+/")
+        expect(VoiceOverCommands.commanderKey("é") == nil, true, "a key TurnOver can't name is left out")
+    }
+    test("VoiceOver export: a Commander key TurnOver can't name is counted, and the summary says so") {
+        let saved = config
+        let savedPlayer = Speech.player
+        let savedPersists = Config.persists
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("voiceover-commander-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer {
+            config = saved; Speech.player = savedPlayer; Config.persists = savedPersists
+            try? FileManager.default.removeItem(at: folder)
+        }
+        Config.persists = false
+        Speech.player = nil
+        // A Cyrillic ж (0436) and я (044f) beside a key TurnOver names (m).
+        let c = try readVoiceOverDefault([flatSpeech + "SCRVoiceIdentifier": "test.default.voice",
+            "custom.keyboard-commander.SCRKeyboardCommander_0436": "SCRWorkspace.customOpenApplication:/System/Applications/Mail.app",
+            "custom.keyboard-commander.SCRKeyboardCommander_044f": "SCRWorkspace.customOpenApplication:/System/Applications/Notes.app",
+            "custom.keyboard-commander.SCRKeyboardCommander_006d": "SCRWorkspace.customOpenApplication:/System/Applications/Mail.app"])
+        expect(c.commanderKeys.count, 1, "the key with a name is copied")
+        expect(c.uncopiedCommanderKeys, 2, "the two without one are counted")
+        let said = VoiceOverSettings.apply(c, undoSnapshot: folder.appendingPathComponent("before.json"))
+        check(said.contains("2 Keyboard Commander keys not copied"), "the summary says how many were left out: \(said)")
+        var one = c; one.uncopiedCommanderKeys = 1
+        check(VoiceOverSettings.apply(one, undoSnapshot: folder.appendingPathComponent("before.json")).contains("1 Keyboard Commander key not copied"), "one, in the singular")
+    }
+    test("VoiceOver export: a Commander key opens only an application") {
+        check(UserGestures.isApplication(atPath: "/System/Applications/Calculator.app"), "an app")
+        check(!UserGestures.isApplication(atPath: "/System/Applications"), "a folder")
+        check(!UserGestures.isApplication(atPath: "/etc/hosts"), "a file")
+        check(!UserGestures.isApplication(atPath: "/Applications/No Such App \(UUID().uuidString).app"), "nothing there")
+    }
+    test("VoiceOver export: an upper case key an earlier copy put on the lower case key is taken off it") {
+        let saved = config
+        let savedPlayer = Speech.player
+        let savedPersists = Config.persists
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("voiceover-commander-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer {
+            config = saved; Speech.player = savedPlayer; Config.persists = savedPersists
+            try? FileManager.default.removeItem(at: folder)
+        }
+        Config.persists = false
+        Speech.player = nil
+        // An earlier copy: Mona ("M") saved on right Option M as a VoiceOver command, Mute speech ("S") saved on S as
+        // TurnOver's command, and Do Nothing ("X") on X. Q is the person's own key, not from a copy.
+        config.keyboard.userGestures["kb:rightoption+m"] = "vo:SCRWorkspace.customOpenApplication:/Applications/Mona.app"
+        config.keyboard.userGestures["kb:rightoption+s"] = "script:voiceOverMuteSpeech"
+        config.keyboard.userGestures["kb:rightoption+x"] = "vo:SCRWorkspace.doNothing"
+        config.keyboard.userGestures["kb:rightoption+q"] = "script:dateTime"
+        var c = try readVoiceOverDefault([flatSpeech + "SCRVoiceIdentifier": "test.default.voice"])
+        c.commanderKeys = [("shift+m", "SCRWorkspace.customOpenApplication:/Applications/Mona.app"), ("shift+s", "SCRWorkspace.muteSpeechToggle"),
+                           ("shift+x", "SCRWorkspace.doNothing"), ("shift+q", "SCRWorkspace.customOpenApplication:/Applications/Mona.app")]
+        _ = VoiceOverSettings.apply(c, undoSnapshot: folder.appendingPathComponent("before.json"))
+        let g = config.keyboard.userGestures
+        expect(g["kb:rightoption+shift+m"], "apppath:/Applications/Mona.app", "Shift M opens Mona")
+        check(g["kb:rightoption+m"] == nil, "right Option M no longer opens Mona too")
+        check(g["kb:rightoption+s"] == nil, "a key the earlier copy saved in TurnOver's own words is taken away as well")
+        check(g["kb:rightoption+x"] == nil, "an upper case Do Nothing from an earlier copy too")
+        expect(g["kb:rightoption+q"], "script:dateTime", "a key of the person's own on the lower case key stays")
+        expect(VoiceOverSettings.earlierCopyKey(forShifted: "shift+m", in: ["shift+m", "m"]), nil, "the export has its own m: it is copied, nothing to take away")
+        expect(VoiceOverSettings.earlierCopyKey(forShifted: "shift+1", in: ["shift+1"]), nil, "a shifted symbol: earlier copies kept it under the symbol")
+        expect(VoiceOverSettings.earlierCopyKey(forShifted: "m", in: ["m"]), nil, "a lower case key")
+    }
+    test("VoiceOver export: Commander commands become apps, TurnOver commands, or nothing") {
+        expect(VoiceOverCommands.target(for: "SCRWorkspace.customOpenApplication:/Applications/Mona.app"), .appPath("/Applications/Mona.app"), "an app by its path")
+        expect(VoiceOverCommands.target(for: "SCRWorkspace.muteSpeechToggle"), .script("voiceOverMuteSpeech"), "mute speech, TurnOver's own")
+        expect(VoiceOverCommands.target(for: "SCRWorkspace.customRunShortcut:ABC"), .shortcut("ABC"), "a Shortcut as before")
+        expect(VoiceOverCommands.target(for: "SCRWorkspace.customOpenScript:/tmp/a.scpt"), .file("/tmp/a.scpt"), "a script as before")
+    }
+    test("VoiceOver export: Commander keys copy into right Option keys, apps open by path, Do Nothing copies nothing") {
+        let saved = config
+        let savedPlayer = Speech.player
+        let savedPersists = Config.persists
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("voiceover-commander-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer {
+            config = saved; Speech.player = savedPlayer; Config.persists = savedPersists
+            try? FileManager.default.removeItem(at: folder)
+        }
+        Config.persists = false
+        Speech.player = nil
+        // From an earlier copy: Mona and Mail both on "m", Do Nothing copied as a command; and a key of the person's own.
+        config.keyboard.userGestures["kb:rightoption+m"] = "vo:SCRWorkspace.customOpenApplication:/Applications/Mona.app"
+        config.keyboard.userGestures["kb:rightoption+x"] = "vo:SCRWorkspace.doNothing"
+        config.keyboard.userGestures["kb:rightoption+shift+x"] = "script:dateTime"
+        var c = try commanderExport()
+        c.commanderKeys.append(("shift+x", "SCRWorkspace.doNothing"))
+        let said = VoiceOverSettings.apply(c, undoSnapshot: folder.appendingPathComponent("before.json"))
+        let g = config.keyboard.userGestures
+        expect(g["kb:rightoption+shift+m"], "apppath:/Applications/Mona.app")
+        expect(g["kb:rightoption+m"], "apppath:/System/Applications/Mail.app", "the earlier copy's Mona on m is replaced by Mail")
+        expect(g["kb:rightoption+shift+s"], "script:voiceOverMuteSpeech")
+        expect(g["kb:rightoption+-"], "apppath:/Applications/Audio Hijack.app")
+        expect(g["kb:rightoption+x"] == nil, true, "a Do Nothing from an earlier copy is taken away")
+        expect(g["kb:rightoption+shift+x"], "script:dateTime", "Do Nothing doesn't replace a key of the person's own")
+        check(said.contains("M, ") && said.contains("shift M"), "both M keys said: \(said)")
+        // The stored keys answer as pressed.
+        let rightM = KeyboardGesture(keyCode: 46, modifiers: .option, characters: "", timestamp: 0, isRepeat: false, flags: CGEventFlags(rawValue: 0x80000 | 0x40))
+        let rightShiftM = KeyboardGesture(keyCode: 46, modifiers: [.option, .shift], characters: "", timestamp: 0, isRepeat: false,
+                                          flags: CGEventFlags(rawValue: CGEventFlags.maskAlternate.rawValue | CGEventFlags.maskShift.rawValue | 0x40 | 0x4))
+        expect(UserGestures.target(for: rightM), .appPath("/System/Applications/Mail.app"))
+        expect(UserGestures.target(for: rightShiftM), .appPath("/Applications/Mona.app"))
+        guard case .script(let s)? = UserGestures.lookup(rightShiftM) else { return Harness.fail("right Option Shift M runs nothing") }
+        expect(s.name, "user_openApp")
+        expect(UserGestures.describe(.appPath("/Applications/No Such App 0.app")), "opens No Such App 0", "an app not on this Mac, named from its path")
+    }
+    test("own keys: a VoiceOver command copied before TurnOver answered it works without copying again") {
+        let saved = config.keyboard.userGestures
+        defer { config.keyboard.userGestures = saved }
+        let rightK = KeyboardGesture(keyCode: 40, modifiers: .option, characters: "", timestamp: 0, isRepeat: false, flags: CGEventFlags(rawValue: 0x80000 | 0x40))
+        config.keyboard.userGestures["kb:rightoption+k"] = "vo:SCRWorkspace.customOpenApplication:/Applications/Skype.app"
+        guard case .script(let s)? = UserGestures.lookup(rightK) else { return Harness.fail("an app copied as a VoiceOver command runs nothing") }
+        expect(s.name, "user_openApp")
+        config.keyboard.userGestures["kb:rightoption+k"] = "vo:SCRWorkspace.doNothing"
+        expect(UserGestures.lookup(rightK) == nil, true, "Do Nothing: the key is as if it had none")
+    }
     test("recipes: the built-in recipes load and describe the apps as the code did") {
         let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         Recipes.load(builtIn: repo.appendingPathComponent("Resources/recipes"), plugins: [])
