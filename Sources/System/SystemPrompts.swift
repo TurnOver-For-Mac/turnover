@@ -495,8 +495,15 @@ public final class SystemPrompts {
             // brought forward as the application chooser brings it, and TurnOver follows the prompt's focus once it
             // has one, or lands on the prompt's own button, or on the window, so the keys and the review cursor are
             // both in the dialog that was just read, as with VoiceOver.
-            bringForward(window, pid: pid)
-            landInPrompt(window, pid: pid, triesLeft: Self.landingTries, frontBefore: NSWorkspace.shared.frontmostApplication?.processIdentifier)
+            // Only when the agent is already the front application (review, 27 Nov 2026): a prompt that opens behind
+            // the application being typed in is read and reminded, never handed the keyboard by TurnOver, or the next
+            // Space typed would press its default button.
+            if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid {
+                bringForward(window, pid: pid)
+                landInPrompt(window, pid: pid, triesLeft: Self.landingTries, frontBefore: NSWorkspace.shared.frontmostApplication?.processIdentifier)
+            } else {
+                Log.io("system prompt from pid \(pid): no focus yet and its agent is behind; left where it is")
+            }
         }
         // After the button's own hint: what to do with the prompt as a whole.
         let all = texts.joined(separator: " ").lowercased()
